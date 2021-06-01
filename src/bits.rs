@@ -35,6 +35,21 @@ pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
   res
 }
 
+pub fn usize_to_bits(mut x: usize, n_bits: usize) -> Vec<bool> {
+  let mut res = Vec::with_capacity(n_bits);
+  let mut m = (2 as usize).pow(n_bits as u32 - 1);
+  for _ in 0..n_bits {
+    if x >= m {
+      x -= m;
+      res.push(true);
+    } else {
+      res.push(false);
+    }
+    m /= 2;
+  }
+  res
+}
+
 pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
   let mut res = Vec::new();
   let mut i = 0;
@@ -74,7 +89,7 @@ pub fn u64_diff(upper: i64, lower: i64) -> u64 {
   return pos_lower - (upper.abs() as u64);
 }
 
-pub fn u64_bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
+pub fn i64_bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
   let mut res = Vec::with_capacity(64);
   for b in &bytes {
     let mut x = b.clone();

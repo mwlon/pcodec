@@ -41,7 +41,7 @@ fn main() {
     println!("compressor:\n{}", compressor);
     let fname = basename_no_ext(&path);
 
-    let output_path = format!("data/quantile_compressed/{}.qc", fname);
+    let output_path = format!("data/quantile_compressed/{}.qco", fname);
     fs::write(
       &output_path,
       bits_to_bytes(compressor.compress_series(ints)),
