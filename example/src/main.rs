@@ -37,7 +37,7 @@ fn main() {
       .split("\n")
       .map(|s| s.parse::<i64>().unwrap())
       .collect();
-    let compressor = QuantileCompressor::train(ints, 6);
+    let compressor = QuantileCompressor::train(ints, 6).expect("could not train");
     println!("compressor:\n{}", compressor);
     let fname = basename_no_ext(&path);
 

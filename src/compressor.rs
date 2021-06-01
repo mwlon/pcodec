@@ -7,6 +7,11 @@ use crate::bits::*;
 use crate::huffman;
 use crate::prefix::{Prefix, PrefixIntermediate};
 
+const MAX_MAX_DEPTH: u32 = 15;
+const BITS_TO_ENCODE_PREFIX_LEN: u32 = 4; // should be (MAX_MAX_DEPTH + 1).log2().ceil()
+const MAX_ENTRIES: u64 = (2 as u64).pow(32) - 1;
+const BITS_TO_ENCODE_N_ENTRIES: u32 = 32; // should be (MAX_ENTRIES + 1).log2().ceil()
+
 fn combine_improvement(p0: &PrefixIntermediate, p1: &PrefixIntermediate, n: usize) -> f64 {
   let p0_r_cost = base2_bits(p0.upper, p0.lower);
   let p1_r_cost = base2_bits(p1.upper, p1.lower);
@@ -72,15 +77,15 @@ impl QuantileCompressor {
   }
 
   pub fn from_bytes(bit_reader: &mut BitReader) -> QuantileCompressor {
-    let n = bits_to_usize(bit_reader.read(32));
-    let n_pref = bits_to_usize(bit_reader.read(8));
+    let n = bits_to_usize(bit_reader.read(BITS_TO_ENCODE_N_ENTRIES as usize));
+    let n_pref = bits_to_usize(bit_reader.read(MAX_MAX_DEPTH as usize));
     let mut prefixes = Vec::with_capacity(n_pref);
     for _ in 0..n_pref {
       let lower_bits = bit_reader.read(64);
       let lower = bits_to_int64(lower_bits);
       let upper_bits = bit_reader.read(64);
       let upper = bits_to_int64(upper_bits);
-      let code_len_bits = bit_reader.read(4);
+      let code_len_bits = bit_reader.read(BITS_TO_ENCODE_PREFIX_LEN as usize);
       let code_len = bits_to_usize(code_len_bits);
       let val = bit_reader.read(code_len);
       prefixes.push(Prefix::new(val, lower, upper));
@@ -91,7 +96,14 @@ impl QuantileCompressor {
     return compressor;
   }
 
-  pub fn train(ints: &Vec<i64>, max_depth: u32) -> QuantileCompressor {
+  pub fn train(ints: &Vec<i64>, max_depth: u32) -> Result<QuantileCompressor, String> {
+    if max_depth > MAX_MAX_DEPTH {
+      return Err(format!("max depth cannot exceed {}", MAX_MAX_DEPTH));
+    }
+    if ints.len() as u64 > MAX_ENTRIES {
+      return Err(format!("number of entries cannot exceed {}", MAX_ENTRIES));
+    }
+
     let mut sorted = ints.clone();
     sorted.sort();
     let n = ints.len();
@@ -159,7 +171,7 @@ impl QuantileCompressor {
       prefixes.push(Prefix::new(p.val.clone(), p.lower, upper));
     }
 
-    return QuantileCompressor::new(prefixes, ints.len());
+    return Ok(QuantileCompressor::new(prefixes, ints.len()));
   }
 
   pub fn compress_int(&self, i: i64) -> Vec<bool> {
@@ -185,21 +197,18 @@ impl QuantileCompressor {
   pub fn compress_ints(&self, ints: &Vec<i64>) -> Vec<bool> {
     return ints
       .iter()
-      .flat_map(|i| {
-        let res = self.compress_int(*i);
-        res
-      })
+      .flat_map(|i| self.compress_int(*i))
       .collect();
   }
 
   pub fn compression_data(&self) -> Vec<bool> {
     let mut res = Vec::new();
-    res.extend(usize_to_bits(self.n, 32));
-    res.extend(usize_to_bits(self.prefixes.len(), 8));
+    res.extend(u32_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
+    res.extend(u32_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
     for pref in &self.prefixes {
       res.extend(i64_bytes_to_bits(pref.lower.to_be_bytes()));
       res.extend(i64_bytes_to_bits(pref.upper.to_be_bytes()));
-      res.extend(usize_to_bits(pref.val.len(), 4));
+      res.extend(u32_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
       res.extend(&pref.val);
     }
     return res;
