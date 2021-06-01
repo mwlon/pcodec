@@ -1,7 +1,9 @@
 use crate::bits::bits_to_string;
 use crate::prefix::PrefixIntermediate;
+use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct HuffmanItem {
   id: usize,
   weight: u64,
@@ -83,25 +85,45 @@ impl HuffmanItem {
   }
 }
 
+impl Ord for HuffmanItem {
+  fn cmp(&self, other: &Self) -> Ordering {
+    if self.weight > other.weight {
+      Ordering::Less // because we actually want a min heap
+    } else if self.weight < other.weight {
+      Ordering::Greater
+    } else {
+      Ordering::Equal
+    }
+  }
+}
+
+impl PartialOrd for HuffmanItem {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
 pub fn make_huffman_code(prefix_sequence: &mut Vec<PrefixIntermediate>) {
-  let mut items = Vec::new();
-  for i in 0..prefix_sequence.len() {
-    items.push(HuffmanItem::new(prefix_sequence[i].weight, i));
+  let n = prefix_sequence.len();
+  let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
+  let mut items = Vec::with_capacity(n); // for modifying item codes
+  for i in 0..n {
+    let item = HuffmanItem::new(prefix_sequence[i].weight, i);
+    heap.push(item.clone());
+    items.push(item);
   }
 
-  let mut active_items: Vec<HuffmanItem> = items
-    .iter()
-    .map(|item| item.clone())
-    .collect();
+  let mut id = prefix_sequence.len();
   for _ in 0..(prefix_sequence.len() - 1) {
-    active_items.sort_by(|item0, item1| item0.weight.cmp(&item1.weight));
-    let new_item = HuffmanItem::from(&active_items[0], &active_items[1], items.len());
-    active_items.push(new_item.clone());
+    let small0 = heap.pop().unwrap();
+    let small1 = heap.pop().unwrap();
+    let new_item = HuffmanItem::from(&small0, &small1, id);
+    id += 1;
+    heap.push(new_item.clone());
     items.push(new_item);
-    active_items = active_items[2..].to_vec();
   }
 
-  let head_node = items.last().unwrap().clone();
+  let head_node = heap.pop().unwrap();
   head_node.create_bits(&mut items, prefix_sequence);
 }
 

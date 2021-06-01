@@ -3,3 +3,4 @@ example/target
 example/data
 example/venv
 .idea
+*.iml
