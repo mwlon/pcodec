@@ -1,5 +1,5 @@
 use std::cmp::min;
-use crate::bits::{byte_to_bits, bits_to_string};
+use crate::bits::byte_to_bits;
 
 const LEFT_MASKS: [u8; 8] = [
   0xff,

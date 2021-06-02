@@ -82,6 +82,7 @@ pub fn bits_to_string(bits: &Vec<bool>) -> String {
     .join("");
 }
 
+#[inline(always)]
 pub fn u64_diff(upper: i64, lower: i64) -> u64 {
   if lower > upper {
     panic!(format!("misuse of upper-lower diff! {} {}", upper, lower));
@@ -96,6 +97,7 @@ pub fn u64_diff(upper: i64, lower: i64) -> u64 {
   return pos_lower - (upper.abs() as u64);
 }
 
+#[inline(always)]
 pub fn i64_plus_u64(i: i64, u: u64) -> i64 {
   if i >= 0 {
     return (i as u64 + u) as i64;

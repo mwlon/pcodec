@@ -4,7 +4,7 @@ use std::io::ErrorKind;
 use std::time::SystemTime;
 use std::path::PathBuf;
 
-use quantile_compression::compressor::QuantileCompressor;
+use quantile_compression::compressor::{Compressor, Decompressor};
 use quantile_compression::bit_reader::BitReader;
 use quantile_compression::bits::{bits_to_bytes, bits_to_string};
 
@@ -47,7 +47,7 @@ fn main() {
       .split("\n")
       .map(|s| s.parse::<i64>().unwrap())
       .collect();
-    let compressor = QuantileCompressor::train(ints, max_depth).expect("could not train");
+    let compressor = Compressor::train(ints, max_depth).expect("could not train");
     println!("compressor:\n{}", compressor);
     let fname = basename_no_ext(&path);
 
@@ -62,7 +62,7 @@ fn main() {
     let bytes = fs::read(output_path).expect("couldn't read");
     let mut bit_reader = BitReader::new(bytes);
     let bit_reader_ptr = &mut bit_reader;
-    let decompressor = QuantileCompressor::from_bytes(bit_reader_ptr);
+    let decompressor = Decompressor::from_bytes(bit_reader_ptr);
     println!("decompressor:\n{}", decompressor);
     let rec_ints = decompressor.decompress(bit_reader_ptr);
     println!("{} ints: {} {}", rec_ints.len(), rec_ints.first().unwrap(), rec_ints.last().unwrap());
