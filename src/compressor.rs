@@ -227,20 +227,23 @@ impl QuantileCompressor {
     // handle the case when there's just one prefix of length 0
     let default_lower;
     let default_upper;
+    let default_k;
     match &self.prefix_map[0] {
       Some(p) if p.val.len() == 0 => {
         default_lower = p.lower;
         default_upper = p.upper;
+        default_k = p.k;
       },
       _ => {
         default_lower = 0;
         default_upper = 0;
+        default_k = 0;
       }
     };
     for _ in 0..self.n {
       let mut lower = default_lower;
       let mut upper = default_upper;
-      let mut k = 0;
+      let mut k = default_k;
       let mut prefix_idx = 0;
       let mut m = pow;
       for prefix_len in 1..self.max_depth + 1 {
@@ -279,7 +282,7 @@ impl Display for QuantileCompressor {
         bits_to_string(&p.val),
         p.lower,
         p.upper,
-        2.0_f64.powf(-(p.val.len() as f64)) / (p.upper - p.lower) as f64
+        2.0_f64.powf(-(p.val.len() as f64)) / (p.upper as f64 - p.lower as f64)
       ))
       .collect::<Vec<String>>()
       .join("\n");

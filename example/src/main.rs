@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::io::ErrorKind;
 use std::time::SystemTime;
@@ -20,14 +21,23 @@ fn basename_no_ext(path: &PathBuf) -> String {
 }
 
 fn main() {
+  let args: Vec<String> = env::args().collect();
+  let max_depth: u32 = if args.len() > 1 {
+    args[1].parse().expect("invalid max depth")
+  } else {
+    5
+  };
+
   let files = fs::read_dir("data/txt").expect("couldn't read");
-  match fs::create_dir("data/quantile_compressed") {
+  let output_dir = format!("data/quantile_compressed_{}", max_depth);
+  match fs::create_dir(&output_dir) {
     Ok(()) => (),
     Err(e) => match e.kind() {
       ErrorKind::AlreadyExists => (),
       _ => panic!(e)
     }
   }
+
   for f in files {
     // COMPRESS
     let path = f.unwrap().path();
@@ -37,11 +47,11 @@ fn main() {
       .split("\n")
       .map(|s| s.parse::<i64>().unwrap())
       .collect();
-    let compressor = QuantileCompressor::train(ints, 6).expect("could not train");
+    let compressor = QuantileCompressor::train(ints, max_depth).expect("could not train");
     println!("compressor:\n{}", compressor);
     let fname = basename_no_ext(&path);
 
-    let output_path = format!("data/quantile_compressed/{}.qco", fname);
+    let output_path = format!("{}/{}.qco", &output_dir, fname);
     fs::write(
       &output_path,
       bits_to_bytes(compressor.compress_series(ints)),
