@@ -6,10 +6,11 @@ use crate::bit_reader::BitReader;
 use crate::bits::*;
 use crate::huffman;
 use crate::prefix::{Prefix, PrefixIntermediate};
+use std::time::{SystemTime, Duration};
 
 const MAX_MAX_DEPTH: u32 = 15;
 const BITS_TO_ENCODE_PREFIX_LEN: u32 = 4; // should be (MAX_MAX_DEPTH + 1).log2().ceil()
-const MAX_ENTRIES: u64 = (2 as u64).pow(32) - 1;
+const MAX_ENTRIES: u64 = ((1 as u64) << 32) - 1;
 const BITS_TO_ENCODE_N_ENTRIES: u32 = 32; // should be (MAX_ENTRIES + 1).log2().ceil()
 
 fn combine_improvement(p0: &PrefixIntermediate, p1: &PrefixIntermediate, n: usize) -> f64 {
@@ -48,6 +49,7 @@ fn push_pref(
 pub struct QuantileCompressor {
   prefixes: Vec<Prefix>,
   prefix_map: Vec<Option<Prefix>>,
+  prefix_len_map: Vec<u32>,
   max_depth: u32,
   n: usize,
 }
@@ -58,19 +60,23 @@ impl QuantileCompressor {
     for p in &prefixes {
       max_depth = max(max_depth, p.val.len() as u32);
     }
-    let n_pref = (2 as usize).pow(max_depth);
-    let mut prefix_map = Vec::new();
+    let n_pref = (1 as usize) << max_depth;
+    let mut prefix_map = Vec::with_capacity(n_pref);
+    let mut prefix_len_map = Vec::with_capacity(n_pref);
     for _ in 0..n_pref {
       prefix_map.push(None);
+      prefix_len_map.push(u32::MAX);
     }
     for p in &prefixes {
       let i = bits_to_usize_truncated(&p.val, max_depth);
       prefix_map[i] = Some(p.clone());
+      prefix_len_map[i] = p.val.len() as u32;
     }
 
     QuantileCompressor {
       prefixes,
       prefix_map,
+      prefix_len_map,
       max_depth,
       n,
     }
@@ -107,7 +113,7 @@ impl QuantileCompressor {
     let mut sorted = ints.clone();
     sorted.sort();
     let n = ints.len();
-    let n_bucket = (2 as usize).pow(max_depth);
+    let n_bucket = (1 as usize) << max_depth;
     let mut prefix_sequence: Vec<PrefixIntermediate> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
 
@@ -178,16 +184,11 @@ impl QuantileCompressor {
     for pref in &self.prefixes {
       if pref.lower <= i && pref.upper > i {
         let mut res = pref.val.clone();
-        let off = (i - pref.lower) as u64;
-        let mut bits = i64_bytes_to_bits(off.to_be_bytes());
-        let range_bitlen;
-        if off >= pref.km1min && off < pref.km1max {
-          range_bitlen = pref.k as usize - 1;
-        } else {
-          range_bitlen = pref.k as usize;
+        let off = u64_diff(i, pref.lower);
+        res.extend(u64_to_least_significant_bits(off, pref.k));
+        if off < pref.km1min || off >= pref.km1max {
+          res.push(((off >> pref.k) & 1) > 0) // most significant bit, if necessary, comes last
         }
-        bits[64 - range_bitlen..64].reverse();
-        res.extend(&bits[64 - range_bitlen..64]);
         return res;
       }
     }
@@ -206,8 +207,8 @@ impl QuantileCompressor {
     res.extend(u32_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
     res.extend(u32_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
     for pref in &self.prefixes {
-      res.extend(i64_bytes_to_bits(pref.lower.to_be_bytes()));
-      res.extend(i64_bytes_to_bits(pref.upper.to_be_bytes()));
+      res.extend(bytes_to_bits(pref.lower.to_be_bytes()));
+      res.extend(bytes_to_bits(pref.upper.to_be_bytes()));
       res.extend(u32_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
       res.extend(&pref.val);
     }
@@ -221,49 +222,49 @@ impl QuantileCompressor {
   }
 
   pub fn decompress(&self, reader: &mut BitReader) -> Vec<i64> {
-    let bits = reader.read_rest();
-
-    let pow = (2 as usize).pow(self.max_depth);
-    let mut i = 0;
-    let mut res = Vec::new();
-    let mut last_i = 0;
+    let pow = (1 as usize) << self.max_depth;
+    let mut res = Vec::with_capacity(self.n);
+    // handle the case when there's just one prefix of length 0
+    let default_lower;
+    let default_upper;
+    match &self.prefix_map[0] {
+      Some(p) if p.val.len() == 0 => {
+        default_lower = p.lower;
+        default_upper = p.upper;
+      },
+      _ => {
+        default_lower = 0;
+        default_upper = 0;
+      }
+    };
     for _ in 0..self.n {
-      let mut maybe_p: Option<Prefix> = match &self.prefix_map[0] {
-        // handle the case when there's just one prefix of length 0
-        Some(p) if p.val.len() == 0 => Some(p.clone()),
-        _ => None,
-      };
-      let mut p_idx = 0;
+      let mut lower = default_lower;
+      let mut upper = default_upper;
+      let mut k = 0;
+      let mut prefix_idx = 0;
       let mut m = pow;
-      for _ in 0..self.max_depth {
-        m /= 2;
-        p_idx += m * (bits[i] as usize);
-        i += 1;
-        let candidate = self.prefix_map[p_idx].clone();
-        match candidate.clone() {
-          Some(p) if p.val.len() == i - last_i => {
-            maybe_p = candidate;
-            break;
-          },
-          _ => ()
+      for prefix_len in 1..self.max_depth + 1 {
+        m >>= 1;
+        if reader.read_one() {
+          prefix_idx |= m;
+        }
+        if self.prefix_len_map[prefix_idx] == prefix_len {
+          let p = self.prefix_map[prefix_idx].as_ref().unwrap();
+          lower = p.lower;
+          upper = p.upper;
+          k = p.k;
+          break;
         }
       }
-      let p = maybe_p.expect("couldn't find prefix");
-
-      let mut mult = 1 as i64;
-      let mut x = p.lower;
-      for _ in 0..p.k - 1 {
-        x += mult * (bits[i] as i64);
-        i += 1;
-        mult *= 2;
+      let range = u64_diff(upper, lower);
+      let mut offset = reader.read_u64(k as usize);
+      let most_significant = (1 as u64) << k;
+      if range - offset > most_significant {
+        if reader.read_one() {
+          offset += most_significant;
+        }
       }
-      if u64_diff(p.upper, x) > mult as u64 {
-        x += mult * (bits[i] as i64);
-        i += 1;
-      }
-
-      last_i = i;
-      res.push(x);
+      res.push(i64_plus_u64(lower, offset));
     }
     res
   }

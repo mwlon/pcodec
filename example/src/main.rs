@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use quantile_compression::compressor::QuantileCompressor;
 use quantile_compression::bit_reader::BitReader;
-use quantile_compression::bits::bits_to_bytes;
+use quantile_compression::bits::{bits_to_bytes, bits_to_string};
 
 fn basename_no_ext(path: &PathBuf) -> String {
   let basename = path
@@ -54,10 +54,22 @@ fn main() {
     let bit_reader_ptr = &mut bit_reader;
     let decompressor = QuantileCompressor::from_bytes(bit_reader_ptr);
     println!("decompressor:\n{}", decompressor);
-    let ints = decompressor.decompress(bit_reader_ptr);
-    println!("{} ints: {} {}", ints.len(), ints.first().unwrap(), ints.last().unwrap());
+    let rec_ints = decompressor.decompress(bit_reader_ptr);
+    println!("{} ints: {} {}", rec_ints.len(), rec_ints.first().unwrap(), rec_ints.last().unwrap());
     let end_t = SystemTime::now();
     let dt = end_t.duration_since(start_t).expect("can't take dt");
     println!("DECOMPRESSED IN {:?}", dt);
+    for i in 0..rec_ints.len() {
+      if rec_ints[i] != ints[i] {
+        println!(
+          "{} int {} -> {} -> {}",
+          i,
+          ints[i],
+          bits_to_string(&compressor.compress_int(ints[i])),
+          rec_ints[i]
+        );
+        panic!("failed to recover ints by compressing and decompressing!");
+      }
+    }
   }
 }

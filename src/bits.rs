@@ -1,14 +1,21 @@
 use std::convert::TryInto;
 
-pub fn byte_to_bits(mut byte: u8) -> [bool; 8] {
-  let mut res = [false; 8];
-  let mut m = 128 as u8;
-  for i in 0..8 {
-    res[i] = byte >= m;
-    byte %= m;
-    m /= 2;
+#[inline(always)]
+pub fn byte_to_bits(byte: u8) -> [bool; 8] {
+  let mut res: [bool; 8];
+  unsafe {
+    res = std::mem::MaybeUninit::uninit().assume_init();
   }
-  return res;
+  // not sure why rust doesn't unroll this when I do it as a loop with mask constants
+  res[0] = (byte & 0x80) > 0;
+  res[1] = (byte & 0x40) > 0;
+  res[2] = (byte & 0x20) > 0;
+  res[3] = (byte & 0x10) > 0;
+  res[4] = (byte & 0x08) > 0;
+  res[5] = (byte & 0x04) > 0;
+  res[6] = (byte & 0x02) > 0;
+  res[7] = (byte & 0x01) > 0;
+  res
 }
 
 pub fn bits_to_int64(bits: Vec<bool>) -> i64 {
@@ -26,7 +33,7 @@ pub fn bits_to_usize(bits: Vec<bool>) -> usize {
 }
 
 pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
-  let mut pow = (2 as usize).pow(max_depth);
+  let mut pow = (1 as usize) << max_depth;
   let mut res = 0;
   for i in 0..bits.len() {
     pow /= 2;
@@ -37,7 +44,7 @@ pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
 
 pub fn u32_to_bits(mut x: usize, n_bits: u32) -> Vec<bool> {
   let mut res = Vec::with_capacity(n_bits as usize);
-  let mut m = (2 as usize).pow(n_bits - 1);
+  let mut m = (1 as usize) << (n_bits - 1);
   for _ in 0..n_bits {
     if x >= m {
       x -= m;
@@ -77,7 +84,7 @@ pub fn bits_to_string(bits: &Vec<bool>) -> String {
 
 pub fn u64_diff(upper: i64, lower: i64) -> u64 {
   if lower > upper {
-    panic!(format!("bad! {} {}", upper, lower));
+    panic!(format!("misuse of upper-lower diff! {} {}", upper, lower));
   }
   if lower >= 0 {
     return (upper - lower) as u64;
@@ -89,7 +96,19 @@ pub fn u64_diff(upper: i64, lower: i64) -> u64 {
   return pos_lower - (upper.abs() as u64);
 }
 
-pub fn i64_bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
+pub fn i64_plus_u64(i: i64, u: u64) -> i64 {
+  if i >= 0 {
+    return (i as u64 + u) as i64;
+  }
+  let negi = (-i) as u64;
+  if negi <= u {
+    (u - negi) as i64
+  } else {
+    -((negi - u) as i64)
+  }
+}
+
+pub fn bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
   let mut res = Vec::with_capacity(64);
   for b in &bytes {
     let mut x = b.clone();
@@ -99,6 +118,17 @@ pub fn i64_bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
       x %= m;
       m /= 2;
     }
+  }
+  res
+}
+
+pub fn u64_to_least_significant_bits(mut x: u64, n: u32) -> Vec<bool> {
+  let mut res = Vec::with_capacity(n as usize);
+  let mut pow = (1 as u64) << n;
+  for _ in 0..n {
+    x %= pow;
+    pow >>= 1;
+    res.push(x >= pow);
   }
   res
 }
