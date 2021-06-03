@@ -64,7 +64,7 @@ impl I64Compressor {
     let mut sorted = ints.clone();
     sorted.sort();
     let n = ints.len();
-    let n_bucket = (1_usize) << max_depth;
+    let n_bucket = 1_usize << max_depth;
     let mut prefix_sequence: Vec<PrefixIntermediate> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
 

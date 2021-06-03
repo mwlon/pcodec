@@ -34,7 +34,7 @@ pub fn bits_to_usize(bits: Vec<bool>) -> usize {
 }
 
 pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
-  let mut pow = (1_usize) << max_depth;
+  let mut pow = 1_usize << max_depth;
   let mut res = 0;
   for i in 0..bits.len() {
     pow /= 2;
@@ -45,7 +45,7 @@ pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
 
 pub fn u32_to_bits(mut x: usize, n_bits: u32) -> Vec<bool> {
   let mut res = Vec::with_capacity(n_bits as usize);
-  let mut m = (1_usize) << (n_bits - 1);
+  let mut m = 1_usize << (n_bits - 1);
   for _ in 0..n_bits {
     if x >= m {
       x -= m;
@@ -97,21 +97,16 @@ pub fn bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
   res
 }
 
-pub fn u64_to_least_significant_bits(mut x: u64, n: u32) -> Vec<bool> {
+pub fn u64_to_least_significant_bits(x: u64, n: u32) -> Vec<bool> {
   let mut res = Vec::with_capacity(n as usize);
-  let mut pow = (1_u64) << n;
-  for _ in 0..n {
-    x %= pow;
-    pow >>= 1;
-    res.push(x >= pow);
+  for i in 1..n + 1 {
+    let shift = n - i;
+    res.push((x >> shift) & 1 == 1);
   }
   res
 }
 
 pub fn avg_base2_bits(upper: i64, lower: i64) -> f64 {
-  if upper < lower {
-    println!("wtf {} {}", upper, lower);
-  }
   let n = u64_diff(upper, lower) as f64 + 1.0;
   let k = n.log2().floor();
   let two_to_k = (2.0 as f64).powf(k);

@@ -80,3 +80,6 @@ and for the degenerate case of constant data,
 they're only 2% as big!
 With uniformly random data, there's not really an information to compress,
 so both algorithms use nearly the exact binary data size of 781KB.
+
+Also, if you pay attention to the compression/decompression times, you
+should find that quantile compression is several times faster than gzip.

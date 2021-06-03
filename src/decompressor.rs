@@ -65,7 +65,7 @@ impl I64Decompressor {
   }
 
   pub fn decompress(&self, reader: &mut BitReader) -> Vec<i64> {
-    let pow = (1_usize) << self.max_depth;
+    let pow = 1_usize << self.max_depth;
     let mut res = Vec::with_capacity(self.n);
     // handle the case when there's just one prefix of length 0
     let default_lower;
@@ -118,24 +118,9 @@ impl I64Decompressor {
   }
 }
 
-fn display_prefixes(prefixes: &Vec<Prefix>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-  let s = prefixes
-    .iter()
-    .map(|p| format!(
-      "\t{}: {} to {} (density {})",
-      bits_to_string(&p.val),
-      p.lower,
-      p.upper,
-      2.0_f64.powf(-(p.val.len() as f64)) / (p.upper as f64 - p.lower as f64)
-    ))
-    .collect::<Vec<String>>()
-    .join("\n");
-  write!(f, "{}", s)
-}
-
 impl Display for I64Decompressor {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    display_prefixes(&self.prefixes, f)
+    utils::display_prefixes(&self.prefixes, f)
   }
 }
 

@@ -5,9 +5,6 @@ use crate::prefix::Prefix;
 
 #[inline(always)]
 pub fn u64_diff(upper: i64, lower: i64) -> u64 {
-  if lower > upper {
-    panic!(format!("misuse of upper-lower diff! {} {}", upper, lower));
-  }
   if lower >= 0 {
     return (upper - lower) as u64;
   }
@@ -45,7 +42,7 @@ pub fn display_prefixes(prefixes: &Vec<Prefix>, f: &mut fmt::Formatter<'_>) -> f
       bits_to_string(&p.val),
       p.lower,
       p.upper,
-      2.0_f64.powf(-(p.val.len() as f64)) / (p.upper as f64 - p.lower as f64 + 1.0)
+      2.0_f64.powf(-(p.val.len() as f64)) / (p.upper as f64 - p.lower as f64 + 1.0),
     ))
     .collect::<Vec<String>>()
     .join("\n");
