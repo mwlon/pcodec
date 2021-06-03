@@ -16,4 +16,31 @@ This is NOT:
 * order-agnostic / compression for multisets
 * competing for decompression speed
 
-To get started, look at `example/`.
+# Usage
+
+See the following basic usage.
+To run something right away, see [the example](./example/example.md).
+
+```
+use q_compress:{BitReader, I64Compressor, I64Decompressor};
+
+fn main() {
+  // your data
+  let mut my_ints = Vec::new();
+  for i in 0..100000 {
+    my_ints.push(i as i64);
+  }
+  
+  // compress
+  let max_depth = 6; // basically compression level - 6 is generally good
+  let compressor = I64Compressor::train(&my_ints, max_depth).expect("failed to train");
+  let bytes = compressor.compress(&my_ints);
+  println!("compressed down to {} bytes", bytes.len());
+  
+  // decompress
+  let bit_reader = &mut BitReader::new(bytes);
+  let decompressor = I64Decompressor::from_reader(bit_reader);
+  let recovered = decompressor.decompress(bit_reader);
+  println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
+}
+```

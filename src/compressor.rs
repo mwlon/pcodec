@@ -130,7 +130,7 @@ impl I64Compressor {
     return Ok(I64Compressor::new(prefixes, ints.len()));
   }
 
-  pub fn compress_int(&self, i: i64) -> Vec<bool> {
+  pub fn compress_int_as_bits(&self, i: i64) -> Vec<bool> {
     for pref in &self.prefixes {
       if pref.lower <= i && pref.upper >= i {
         let mut res = pref.val.clone();
@@ -145,14 +145,14 @@ impl I64Compressor {
     panic!(format!("none of the ranges include i={}", i));
   }
 
-  pub fn compress_ints(&self, ints: &Vec<i64>) -> Vec<bool> {
+  pub fn compress_ints_as_bits(&self, ints: &Vec<i64>) -> Vec<bool> {
     return ints
       .iter()
-      .flat_map(|i| self.compress_int(*i))
+      .flat_map(|i| self.compress_int_as_bits(*i))
       .collect();
   }
 
-  pub fn compression_data(&self) -> Vec<bool> {
+  pub fn metadata_as_bits(&self) -> Vec<bool> {
     let mut res = Vec::new();
     res.extend(u32_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
     res.extend(u32_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
@@ -165,10 +165,14 @@ impl I64Compressor {
     return res;
   }
 
-  pub fn compress_sequence(&self, ints: &Vec<i64>) -> Vec<bool> {
-    let mut compression = self.compression_data();
-    compression.append(&mut self.compress_ints(ints));
+  pub fn compress_as_bits(&self, ints: &Vec<i64>) -> Vec<bool> {
+    let mut compression = self.metadata_as_bits();
+    compression.append(&mut self.compress_ints_as_bits(ints));
     return compression;
+  }
+
+  pub fn compress(&self, ints: &Vec<i64>) -> Vec<u8> {
+    return bits_to_bytes(self.compress_as_bits(ints));
   }
 }
 

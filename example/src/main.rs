@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use q_compress::{I64Compressor, I64Decompressor};
 use q_compress::BitReader;
-use q_compress::bits::{bits_to_bytes, bits_to_string};
+use q_compress::bits::bits_to_string;
 
 fn basename_no_ext(path: &PathBuf) -> String {
   let basename = path
@@ -64,7 +64,7 @@ fn main() {
     let output_path = format!("{}/{}.qco", &output_dir, fname);
     fs::write(
       &output_path,
-      bits_to_bytes(compressor.compress_sequence(ints)),
+      compressor.compress(ints),
     ).expect("couldn't write");
     let compress_end = SystemTime::now();
     let dt = compress_end.duration_since(compress_start).expect("can't take dt");
@@ -75,7 +75,7 @@ fn main() {
     let bytes = fs::read(output_path).expect("couldn't read");
     let mut bit_reader = BitReader::new(bytes);
     let bit_reader_ptr = &mut bit_reader;
-    let decompressor = I64Decompressor::from_bytes(bit_reader_ptr);
+    let decompressor = I64Decompressor::from_reader(bit_reader_ptr);
     println!("decompressor:\n{}", decompressor);
     let rec_ints = decompressor.decompress(bit_reader_ptr);
     println!("{} ints: {} {}", rec_ints.len(), rec_ints.first().unwrap(), rec_ints.last().unwrap());
@@ -90,7 +90,7 @@ fn main() {
           "{} int {} -> {} -> {}",
           i,
           ints[i],
-          bits_to_string(&compressor.compress_int(ints[i])),
+          bits_to_string(&compressor.compress_int_as_bits(ints[i])),
           rec_ints[i]
         );
         panic!("failed to recover ints by compressing and decompressing!");

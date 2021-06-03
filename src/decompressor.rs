@@ -44,7 +44,7 @@ impl I64Decompressor {
     }
   }
 
-  pub fn from_bytes(bit_reader: &mut BitReader) -> I64Decompressor {
+  pub fn from_reader(bit_reader: &mut BitReader) -> I64Decompressor {
     let n = bits_to_usize(bit_reader.read(BITS_TO_ENCODE_N_ENTRIES as usize));
     let n_pref = bits_to_usize(bit_reader.read(MAX_MAX_DEPTH as usize));
     let mut prefixes = Vec::with_capacity(n_pref);
