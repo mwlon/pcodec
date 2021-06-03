@@ -124,8 +124,7 @@ impl I64Compressor {
 
     let mut prefixes = Vec::new();
     for p in &prefix_sequence {
-      let upper = p.upper + 1;
-      prefixes.push(Prefix::new(p.val.clone(), p.lower, upper));
+      prefixes.push(Prefix::new(p.val.clone(), p.lower, p.upper));
     }
 
     return Ok(I64Compressor::new(prefixes, ints.len()));
@@ -133,11 +132,11 @@ impl I64Compressor {
 
   pub fn compress_int(&self, i: i64) -> Vec<bool> {
     for pref in &self.prefixes {
-      if pref.lower <= i && pref.upper > i {
+      if pref.lower <= i && pref.upper >= i {
         let mut res = pref.val.clone();
         let off = utils::u64_diff(i, pref.lower);
         res.extend(u64_to_least_significant_bits(off, pref.k));
-        if off < pref.km1min || off >= pref.km1max {
+        if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
           res.push(((off >> pref.k) & 1) > 0) // most significant bit, if necessary, comes last
         }
         return res;

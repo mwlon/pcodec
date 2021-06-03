@@ -8,7 +8,10 @@ os.makedirs('data/txt', exist_ok=True)
 os.makedirs('data/binary', exist_ok=True)
 
 def write(arr, name):
-  floored = np.floor(arr).astype(np.int64)
+  if arr.dtype != np.int64:
+    floored = np.floor(arr).astype(np.int64)
+  else:
+    floored = arr
   ints = [str(x) for x in floored]
   joined = '\n'.join(ints)
   with open(f'data/txt/{name}.txt', 'w') as f:
@@ -34,3 +37,4 @@ write(fixed_median_lomax(2.5), 'lomax25')
 write(np.random.randint(-2**63, 2**63, size=n), 'uniform')
 
 write(np.repeat(77777, n), 'constant')
+write(np.where(np.random.uniform(size=n) < 0.5, -2**63, 2**63 - 1), 'extremes')

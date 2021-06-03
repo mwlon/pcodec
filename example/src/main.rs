@@ -22,10 +22,15 @@ fn basename_no_ext(path: &PathBuf) -> String {
 
 fn main() {
   let args: Vec<String> = env::args().collect();
-  let max_depth: u32 = if args.len() > 1 {
+  let max_depth: u32 = if args.len() >= 2 {
     args[1].parse().expect("invalid max depth")
   } else {
     5
+  };
+  let substring_filter = if args.len() >= 3 {
+    args[2].clone()
+  } else {
+    "".to_string()
   };
 
   let files = fs::read_dir("data/txt").expect("couldn't read");
@@ -41,6 +46,10 @@ fn main() {
   for f in files {
     // compress
     let path = f.unwrap().path();
+    if !path.to_str().unwrap().contains(&substring_filter) {
+      println!("skipping file: {}", path.display());
+      continue;
+    }
     println!("\nfile: {}", path.display());
     let ints = &fs::read_to_string(&path)
       .expect("couldn't read")

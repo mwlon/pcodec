@@ -109,7 +109,10 @@ pub fn u64_to_least_significant_bits(mut x: u64, n: u32) -> Vec<bool> {
 }
 
 pub fn avg_base2_bits(upper: i64, lower: i64) -> f64 {
-  let n = (u64_diff(upper, lower) + 1) as f64;
+  if upper < lower {
+    println!("wtf {} {}", upper, lower);
+  }
+  let n = u64_diff(upper, lower) as f64 + 1.0;
   let k = n.log2().floor();
   let two_to_k = (2.0 as f64).powf(k);
   let overshoot = n - two_to_k;

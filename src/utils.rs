@@ -1,0 +1,53 @@
+use std::fmt;
+
+use crate::bits::bits_to_string;
+use crate::prefix::Prefix;
+
+#[inline(always)]
+pub fn u64_diff(upper: i64, lower: i64) -> u64 {
+  if lower > upper {
+    panic!(format!("misuse of upper-lower diff! {} {}", upper, lower));
+  }
+  if lower >= 0 {
+    return (upper - lower) as u64;
+  }
+  if lower == upper {
+    return 0;
+  }
+  let pos_lower_p1 = (lower + 1).abs() as u64;
+  if upper >= 0 {
+    return (upper as u64) + pos_lower_p1 + 1;
+  }
+  return (pos_lower_p1 + 1) - (upper.abs() as u64);
+}
+
+#[inline(always)]
+pub fn i64_plus_u64(i: i64, u: u64) -> i64 {
+  if i >= 0 {
+    return (i as u64 + u) as i64;
+  }
+  if u == 0 {
+    return i;
+  }
+  let negi = (-i) as u64;
+  if negi <= u {
+    (u - negi) as i64
+  } else {
+    -((negi - u) as i64)
+  }
+}
+
+pub fn display_prefixes(prefixes: &Vec<Prefix>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+  let s = prefixes
+    .iter()
+    .map(|p| format!(
+      "\t{}: {} to {} (density {})",
+      bits_to_string(&p.val),
+      p.lower,
+      p.upper,
+      2.0_f64.powf(-(p.val.len() as f64)) / (p.upper as f64 - p.lower as f64 + 1.0)
+    ))
+    .collect::<Vec<String>>()
+    .join("\n");
+  write!(f, "{}", s)
+}
