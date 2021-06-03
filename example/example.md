@@ -39,12 +39,14 @@ by default.
 
 ## Comparing vs gzip
 
-To use gzip on the same data, simply run `sh run_gzip.sh`.
+To use gzip on the same data, make sure you have `gzip` and `xargs` installed,
+then simply run `sh run_gzip.sh`.
 This will use gzip to compress the binary version of the data at compression
 levels 1 and 9.
-To compare file sizes, you can just use `ls`:
+To compare file sizes, you can just use `ls`.
 
-```% ls -lh data/q_compressed_5 
+```
+% ls -lh data/q_compressed_5 
 ...  23B ... constant.qco
 ...  12K ... extremes.qco
 ... 263K ... geo1M.qco
@@ -70,3 +72,11 @@ To compare file sizes, you can just use `ls`:
 ... 361K ... normal1M.bin.gz
 ... 782K ... uniform.bin.gz
 ```
+
+Here you can see that data is typically a good deal smaller
+as `.qco` than `.gz`.
+For most data, `.qco` files are only about 70% as big,
+and for the degenerate case of constant data, 
+they're only 2% as big!
+With uniformly random data, there's not really an information to compress,
+so both algorithms use nearly the exact binary data size of 781KB.
