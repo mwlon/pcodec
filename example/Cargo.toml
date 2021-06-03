@@ -5,4 +5,4 @@ authors = ["mwlon <m.w.loncaric@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-quantile_compression = {path=".."}
+q_compress = {path=".."}

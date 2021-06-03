@@ -1,4 +1,5 @@
 use std::convert::TryInto;
+use crate::utils::u64_diff;
 
 #[inline(always)]
 pub fn byte_to_bits(byte: u8) -> [bool; 8] {
@@ -33,7 +34,7 @@ pub fn bits_to_usize(bits: Vec<bool>) -> usize {
 }
 
 pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
-  let mut pow = (1 as usize) << max_depth;
+  let mut pow = (1_usize) << max_depth;
   let mut res = 0;
   for i in 0..bits.len() {
     pow /= 2;
@@ -44,7 +45,7 @@ pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
 
 pub fn u32_to_bits(mut x: usize, n_bits: u32) -> Vec<bool> {
   let mut res = Vec::with_capacity(n_bits as usize);
-  let mut m = (1 as usize) << (n_bits - 1);
+  let mut m = (1_usize) << (n_bits - 1);
   for _ in 0..n_bits {
     if x >= m {
       x -= m;
@@ -82,34 +83,6 @@ pub fn bits_to_string(bits: &Vec<bool>) -> String {
     .join("");
 }
 
-#[inline(always)]
-pub fn u64_diff(upper: i64, lower: i64) -> u64 {
-  if lower > upper {
-    panic!(format!("misuse of upper-lower diff! {} {}", upper, lower));
-  }
-  if lower >= 0 {
-    return (upper - lower) as u64;
-  }
-  let pos_lower = lower.abs() as u64;
-  if upper >= 0 {
-    return (upper as u64) + (pos_lower as u64);
-  }
-  return pos_lower - (upper.abs() as u64);
-}
-
-#[inline(always)]
-pub fn i64_plus_u64(i: i64, u: u64) -> i64 {
-  if i >= 0 {
-    return (i as u64 + u) as i64;
-  }
-  let negi = (-i) as u64;
-  if negi <= u {
-    (u - negi) as i64
-  } else {
-    -((negi - u) as i64)
-  }
-}
-
 pub fn bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
   let mut res = Vec::with_capacity(64);
   for b in &bytes {
@@ -126,7 +99,7 @@ pub fn bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
 
 pub fn u64_to_least_significant_bits(mut x: u64, n: u32) -> Vec<bool> {
   let mut res = Vec::with_capacity(n as usize);
-  let mut pow = (1 as u64) << n;
+  let mut pow = (1_u64) << n;
   for _ in 0..n {
     x %= pow;
     pow >>= 1;
@@ -135,7 +108,7 @@ pub fn u64_to_least_significant_bits(mut x: u64, n: u32) -> Vec<bool> {
   res
 }
 
-pub fn base2_bits(upper: i64, lower: i64) -> f64 {
+pub fn avg_base2_bits(upper: i64, lower: i64) -> f64 {
   let n = (u64_diff(upper, lower) + 1) as f64;
   let k = n.log2().floor();
   let two_to_k = (2.0 as f64).powf(k);

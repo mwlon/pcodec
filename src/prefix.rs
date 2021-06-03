@@ -1,4 +1,4 @@
-use crate::bits::u64_diff;
+use crate::utils::u64_diff;
 
 #[derive(Clone)]
 pub struct Prefix {
@@ -14,7 +14,7 @@ impl Prefix {
   pub fn new(val: Vec<bool>, lower: i64, upper: i64) -> Prefix {
     let size = u64_diff(upper, lower);
     let k = (size as f64).log2().floor() as u32;
-    let km1max = (1 as u64) << k;
+    let km1max = (1_u64) << k;
     let km1min = size - km1max;
 
     return Prefix {

@@ -4,9 +4,9 @@
 name = "example"
 version = "0.0.0"
 dependencies = [
- "quantile_compression",
+ "q_compress",
 ]
 
 [[package]]
-name = "quantile_compression"
+name = "q_compress"
 version = "0.0.0"
