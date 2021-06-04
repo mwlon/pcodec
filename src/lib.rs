@@ -1,6 +1,8 @@
 pub use crate::bit_reader::BitReader;
 pub use crate::int64::I64Decompressor;
 pub use crate::int64::I64Compressor;
+pub use crate::unsigned64::U64Compressor;
+pub use crate::unsigned64::U64Decompressor;
 
 pub mod huffman;
 pub mod bits;
@@ -11,3 +13,4 @@ mod bit_reader;
 mod compressor;
 mod decompressor;
 mod int64;
+mod unsigned64;
