@@ -4,6 +4,7 @@ This rust library compresses and decompresses sequences of
 numerical data very well.
 It currently supports the following data types: `i32`, `i64`, `u32`, `u64`.
 Floating point and timestamp support may come soon in the future.
+
 For natural data, it typically compresses down to files 25-40% smaller than
 ones produced by `gzip -9`, and decompresses several times faster.
 
@@ -15,10 +16,10 @@ This IS:
 This is NOT:
 * lossy
 * for multisets
-* designed for time series with high correlation between consecutive elements
+* optimal for time series with high mutual information between consecutive elements
 * competing for decompression speed
 
-# Usage
+## Usage
 
 See the following basic usage.
 To run something right away, see [the example](./example/example.md).
@@ -46,3 +47,14 @@ fn main() {
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```
+
+## Method
+
+This works by describing each number with a _bucket_ and an _offset_.
+The bucket specifies an inclusive range `[lower, upper]` that the
+number might be in, and the offset specifies the exact position within that
+range.
+
+For data sampled from a random distribution, this compression algorithm can
+reduce byte size to near the theoretical limit of the distribution's Shannon
+entropy.

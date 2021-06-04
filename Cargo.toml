@@ -1,7 +1,11 @@
 [package]
 name = "q_compress"
 version = "0.0.0"
-authors = ["mwlon <m.w.loncaric@gmail.com>"]
 edition = "2018"
+
+authors = ["mwlon <m.w.loncaric@gmail.com>"]
+description = "Good data compression for numerical sequences"
+license-file = "LICENSE"
+repository = "https://github.com/mwlon/quantile-compression"
 
 [dependencies]
