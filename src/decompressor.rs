@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
-use crate::bits::*;
+use crate::bits;
 use crate::prefix::Prefix;
 use crate::types::{DataType, NumberLike};
 use crate::utils;
@@ -33,7 +33,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       prefix_len_map.push(u32::MAX);
     }
     for p in &prefixes {
-      let i = bits_to_usize_truncated(&p.val, max_depth);
+      let i = bits::bits_to_usize_truncated(&p.val, max_depth);
       prefix_map[i] = Some(p.clone());
       prefix_len_map[i] = p.val.len() as u32;
     }
@@ -69,9 +69,9 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let mut prefixes = Vec::with_capacity(n_pref);
     for _ in 0..n_pref {
       let lower_bits = bit_reader.read(DT::BIT_SIZE);
-      let lower = DT::from_bytes(bits_to_bytes(lower_bits));
+      let lower = DT::from_bytes(bits::bits_to_bytes(lower_bits));
       let upper_bits = bit_reader.read(DT::BIT_SIZE);
-      let upper = DT::from_bytes(bits_to_bytes(upper_bits));
+      let upper = DT::from_bytes(bits::bits_to_bytes(upper_bits));
       let code_len = bit_reader.read_u64(BITS_TO_ENCODE_PREFIX_LEN as usize) as usize;
       let val = bit_reader.read(code_len);
       prefixes.push(Prefix::new(val, lower, upper, DT::u64_diff(upper, lower)));
@@ -111,11 +111,9 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       let mut upper = default_upper;
       let mut k = default_k;
       let mut prefix_idx = 0;
-      let mut m = pow;
       for prefix_len in 1..self.max_depth + 1 {
-        m >>= 1;
         if reader.read_one() {
-          prefix_idx |= m;
+          prefix_idx |= pow >> prefix_len;
         }
         if self.prefix_len_map[prefix_idx] == prefix_len {
           let p = self.prefix_map[prefix_idx].as_ref().unwrap();

@@ -156,9 +156,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
   pub fn metadata_as_bits(&self) -> Vec<bool> {
     let mut res = Vec::new();
-    for byte in &MAGIC_HEADER {
-      res.extend(byte_to_bits(*byte).iter());
-    }
+    res.extend(bytes_to_bits(MAGIC_HEADER.to_vec()));
     res.extend(usize_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
     res.extend(usize_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
     for pref in &self.prefixes {

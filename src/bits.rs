@@ -21,24 +21,10 @@ pub fn byte_to_bits(byte: u8) -> [bool; 8] {
   res
 }
 
-pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
-  let mut pow = 1_usize << max_depth;
-  let mut res = 0;
-  for i in 0..bits.len() {
-    pow >>= 1;
-    if bits[i] {
-      res += pow;
-    }
-  }
-  res
-}
-
-pub fn usize_to_bits(x: usize, n_bits: u32) -> Vec<bool> {
-  let mut res = Vec::with_capacity(n_bits as usize);
-  let mut m = 1_usize << (n_bits - 1);
-  for _ in 0..n_bits {
-    res.push(x & m > 0);
-    m >>= 1;
+pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
+  let mut res = Vec::with_capacity(8 * bytes.len());
+  for b in &bytes {
+    res.extend(&byte_to_bits(*b));
   }
   res
 }
@@ -62,6 +48,26 @@ pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
   return res;
 }
 
+pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
+  let pow = 1_usize << (max_depth - 1);
+  let mut res = 0;
+  for i in 0..bits.len() {
+    if bits[i] {
+      res |= pow >> i;
+    }
+  }
+  res
+}
+
+pub fn usize_to_bits(x: usize, n_bits: u32) -> Vec<bool> {
+  let mut res = Vec::with_capacity(n_bits as usize);
+  let pow = 1_usize << (n_bits - 1);
+  for shift in 0..n_bits {
+    res.push((x & (pow >> shift)) > 0);
+  }
+  res
+}
+
 pub fn bits_to_string(bits: &Vec<bool>) -> String {
   return bits
     .iter()
@@ -70,19 +76,11 @@ pub fn bits_to_string(bits: &Vec<bool>) -> String {
     .join("");
 }
 
-pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
-  let mut res = Vec::with_capacity(8 * bytes.len());
-  for b in &bytes {
-    res.extend(&byte_to_bits(*b));
-  }
-  res
-}
-
 pub fn u64_to_least_significant_bits(x: u64, n: u32) -> Vec<bool> {
   let mut res = Vec::with_capacity(n as usize);
   for i in 1..n + 1 {
     let shift = n - i;
-    res.push((x >> shift) & 1 == 1);
+    res.push(((x >> shift) & 1) > 0);
   }
   res
 }
