@@ -1,14 +1,14 @@
 use std::cmp::max;
 use std::fmt;
 use std::fmt::Display;
+use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
 use crate::bits::*;
 use crate::prefix::Prefix;
+use crate::types::{DataType, NumberLike};
 use crate::utils;
-use crate::utils::{BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_PREFIX_LEN, MAX_MAX_DEPTH, MAGIC_HEADER};
-use crate::data_type::{DataType, NumberLike};
-use std::marker::PhantomData;
+use crate::utils::{BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_PREFIX_LEN, MAGIC_HEADER, MAX_MAX_DEPTH};
 
 pub struct Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
   prefixes: Vec<Prefix<T>>,

@@ -1,6 +1,7 @@
 # Quantile Compression Example
 
-This example generates a wide variety of common integer distributions,
+This example generates a wide variety of common integer distributions
+with the `i64` data type,
 compresses them, and decompresses them.
 We also compare vs `gzip` on the binary data of these integers.
 

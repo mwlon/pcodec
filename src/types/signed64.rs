@@ -1,4 +1,4 @@
-use crate::data_type::{DataType, NumberLike};
+use crate::types::{NumberLike, DataType};
 use std::convert::TryInto;
 use crate::compressor::Compressor;
 use crate::decompressor::Decompressor;

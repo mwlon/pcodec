@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::bits::bits_to_string;
 use crate::prefix::Prefix;
-use crate::data_type::NumberLike;
+use crate::types::NumberLike;
 
 pub const MAGIC_HEADER: [u8; 4] = [113, 99, 111, 33]; // ascii for qco!
 pub const MAX_ENTRIES: u64 = (1_u64 << 32) - 1;

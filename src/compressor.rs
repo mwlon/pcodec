@@ -1,14 +1,14 @@
 use std::cmp::max;
 use std::fmt;
 use std::fmt::Display;
+use std::marker::PhantomData;
 
 use crate::bits::*;
-use crate::data_type::{DataType, NumberLike};
 use crate::huffman;
 use crate::prefix::{Prefix, PrefixIntermediate};
+use crate::types::{DataType, NumberLike};
 use crate::utils;
 use crate::utils::{BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_PREFIX_LEN, MAGIC_HEADER, MAX_ENTRIES, MAX_MAX_DEPTH};
-use std::marker::PhantomData;
 
 fn push_pref<T: Copy>(
   seq: &mut Vec<PrefixIntermediate<T>>,

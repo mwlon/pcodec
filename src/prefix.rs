@@ -1,4 +1,4 @@
-use crate::data_type::NumberLike;
+use crate::types::NumberLike;
 
 #[derive(Clone)]
 pub struct Prefix<T> where T: NumberLike {
