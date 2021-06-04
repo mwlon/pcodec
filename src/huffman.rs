@@ -36,15 +36,15 @@ impl HuffmanItem {
     }
   }
 
-  pub fn create_bits(&self, item_index: &mut Vec<HuffmanItem>, leaf_index: &mut Vec<PrefixIntermediate>) {
+  pub fn create_bits<T>(&self, item_index: &mut Vec<HuffmanItem>, leaf_index: &mut Vec<PrefixIntermediate<T>>) {
     self.create_bits_from(Vec::new(), item_index, leaf_index);
   }
 
-  fn create_bits_from(
+  fn create_bits_from<T>(
     &self,
     bits: Vec<bool>,
     item_index: &mut Vec<HuffmanItem>,
-    leaf_index: &mut Vec<PrefixIntermediate>,
+    leaf_index: &mut Vec<PrefixIntermediate<T>>,
   ) {
     item_index[self.id].bits = bits.clone();
     if self.leaf_id.is_some() {
@@ -103,7 +103,7 @@ impl PartialOrd for HuffmanItem {
   }
 }
 
-pub fn make_huffman_code(prefix_sequence: &mut Vec<PrefixIntermediate>) {
+pub fn make_huffman_code<T>(prefix_sequence: &mut Vec<PrefixIntermediate<T>>) {
   let n = prefix_sequence.len();
   let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
   let mut items = Vec::with_capacity(n); // for modifying item codes

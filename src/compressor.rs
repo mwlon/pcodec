@@ -3,69 +3,46 @@ use std::fmt;
 use std::fmt::Display;
 
 use crate::bits::*;
+use crate::data_type::{DataType, NumberLike};
 use crate::huffman;
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::utils;
 use crate::utils::{BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_PREFIX_LEN, MAGIC_HEADER, MAX_ENTRIES, MAX_MAX_DEPTH};
+use std::marker::PhantomData;
 
-fn combine_improvement(p0: &PrefixIntermediate, p1: &PrefixIntermediate, n: usize) -> f64 {
-  let p0_r_cost = avg_base2_bits(p0.upper, p0.lower);
-  let p1_r_cost = avg_base2_bits(p1.upper, p1.lower);
-  let combined_r_cost = avg_base2_bits(p1.upper, p0.lower);
-  let p0_d_cost = depth_bits(p0.weight, n);
-  let p1_d_cost = depth_bits(p1.weight, n);
-  let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
-  let meta_cost = 136.0;
-
-  let separate_cost = 2.0 * meta_cost +
-    (p0_r_cost + p0_d_cost) * p0.weight as f64+
-    (p1_r_cost + p1_d_cost) * p1.weight as f64;
-  let combined_cost = meta_cost +
-    (combined_r_cost + combined_d_cost) * (p0.weight + p1.weight) as f64;
-  let bits_saved = separate_cost - combined_cost;
-  let improvement = bits_saved / (p0.weight + p1.weight) as f64;
-  return improvement;
-}
-
-fn push_pref(
-  seq: &mut Vec<PrefixIntermediate>,
+fn push_pref<T: Copy>(
+  seq: &mut Vec<PrefixIntermediate<T>>,
   bucket_idx: &mut usize,
   i: usize,
   j: usize,
   n_bucket: usize,
   n: usize,
-  sorted: &Vec<i64>,
+  sorted: &Vec<T>,
 ) {
   seq.push(PrefixIntermediate::new((j - i) as u64, sorted[i], sorted[j - 1]));
   *bucket_idx = max(*bucket_idx + 1, (j * n_bucket) / n);
 }
 
-pub struct I64Compressor {
-  prefixes: Vec<Prefix>,
+pub struct Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
+  prefixes: Vec<Prefix<T>>,
   n: usize,
+  data_type: PhantomData<DT>,
 }
 
-impl I64Compressor {
-  pub fn new(prefixes: Vec<Prefix>, n: usize) -> I64Compressor {
-    I64Compressor {
-      prefixes,
-      n,
-    }
-  }
-
-  pub fn train(ints: &Vec<i64>, max_depth: u32) -> Result<I64Compressor, String> {
+impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
+  pub fn train(nums: &Vec<T>, max_depth: u32) -> Result<Self, String> {
     if max_depth > MAX_MAX_DEPTH {
       return Err(format!("max depth cannot exceed {}", MAX_MAX_DEPTH));
     }
-    if ints.len() as u64 > MAX_ENTRIES {
+    if nums.len() as u64 > MAX_ENTRIES {
       return Err(format!("number of entries cannot exceed {}", MAX_ENTRIES));
     }
 
-    let mut sorted = ints.clone();
+    let mut sorted = nums.clone();
     sorted.sort();
-    let n = ints.len();
+    let n = nums.len();
     let n_bucket = 1_usize << max_depth;
-    let mut prefix_sequence: Vec<PrefixIntermediate> = Vec::new();
+    let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
 
     let mut bucket_idx = 0 as usize;
@@ -99,7 +76,7 @@ impl I64Compressor {
         let pref0 = &prefix_sequence[i];
         let pref1 = &prefix_sequence[i + 1];
 
-        let improvement = combine_improvement(pref0, pref1, n);
+        let improvement = Self::combine_improvement(pref0, pref1, n);
         if improvement > best_improvement {
           can_improve = true;
           best_i = i as i32;
@@ -124,17 +101,41 @@ impl I64Compressor {
 
     let mut prefixes = Vec::new();
     for p in &prefix_sequence {
-      prefixes.push(Prefix::new(p.val.clone(), p.lower, p.upper));
+      prefixes.push(Prefix::new(p.val.clone(), p.lower, p.upper, DT::u64_diff(p.upper, p.lower)));
     }
 
-    return Ok(I64Compressor::new(prefixes, ints.len()));
+    let res = Compressor::<T, DT> {
+      prefixes,
+      n: nums.len(),
+      data_type: PhantomData,
+    };
+    return Ok(res);
   }
 
-  pub fn compress_int_as_bits(&self, i: i64) -> Vec<bool> {
+  pub fn combine_improvement(p0: &PrefixIntermediate<T>, p1: &PrefixIntermediate<T>, n: usize) -> f64 {
+    let p0_r_cost = avg_base2_bits(DT::u64_diff(p0.upper, p0.lower));
+    let p1_r_cost = avg_base2_bits(DT::u64_diff(p1.upper, p1.lower));
+    let combined_r_cost = avg_base2_bits(DT::u64_diff(p1.upper, p0.lower));
+    let p0_d_cost = depth_bits(p0.weight, n);
+    let p1_d_cost = depth_bits(p1.weight, n);
+    let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
+    let meta_cost = 136.0;
+
+    let separate_cost = 2.0 * meta_cost +
+      (p0_r_cost + p0_d_cost) * p0.weight as f64+
+      (p1_r_cost + p1_d_cost) * p1.weight as f64;
+    let combined_cost = meta_cost +
+      (combined_r_cost + combined_d_cost) * (p0.weight + p1.weight) as f64;
+    let bits_saved = separate_cost - combined_cost;
+    let improvement = bits_saved / (p0.weight + p1.weight) as f64;
+    return improvement;
+  }
+
+  pub fn compress_num_as_bits(&self, num: T) -> Vec<bool> {
     for pref in &self.prefixes {
-      if pref.lower <= i && pref.upper >= i {
+      if pref.lower <= num && pref.upper >= num {
         let mut res = pref.val.clone();
-        let off = utils::u64_diff(i, pref.lower);
+        let off = DT::u64_diff(num, pref.lower);
         res.extend(u64_to_least_significant_bits(off, pref.k));
         if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
           res.push(((off >> pref.k) & 1) > 0) // most significant bit, if necessary, comes last
@@ -142,13 +143,14 @@ impl I64Compressor {
         return res;
       }
     }
-    panic!(format!("none of the ranges include i={}", i));
+    panic!(format!("none of the ranges include i={}", num));
   }
 
-  pub fn compress_ints_as_bits(&self, ints: &Vec<i64>) -> Vec<bool> {
-    return ints
+
+  pub fn compress_nums_as_bits(&self, nums: &Vec<T>) -> Vec<bool> {
+    return nums
       .iter()
-      .flat_map(|i| self.compress_int_as_bits(*i))
+      .flat_map(|i| self.compress_num_as_bits(*i))
       .collect();
   }
 
@@ -160,26 +162,26 @@ impl I64Compressor {
     res.extend(u32_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
     res.extend(u32_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
     for pref in &self.prefixes {
-      res.extend(bytes_to_bits(pref.lower.to_be_bytes()));
-      res.extend(bytes_to_bits(pref.upper.to_be_bytes()));
+      res.extend(bytes_to_bits(DT::bytes_from(pref.lower)));
+      res.extend(bytes_to_bits(DT::bytes_from(pref.upper)));
       res.extend(u32_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
       res.extend(&pref.val);
     }
     return res;
   }
 
-  pub fn compress_as_bits(&self, ints: &Vec<i64>) -> Vec<bool> {
+  pub fn compress_as_bits(&self, ints: &Vec<T>) -> Vec<bool> {
     let mut compression = self.metadata_as_bits();
-    compression.append(&mut self.compress_ints_as_bits(ints));
+    compression.append(&mut self.compress_nums_as_bits(ints));
     return compression;
   }
 
-  pub fn compress(&self, ints: &Vec<i64>) -> Vec<u8> {
+  pub fn compress(&self, ints: &Vec<T>) -> Vec<u8> {
     return bits_to_bytes(self.compress_as_bits(ints));
   }
 }
 
-impl Display for I64Compressor {
+impl<T, DT> Display for Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     utils::display_prefixes(&self.prefixes, f)
   }

@@ -90,7 +90,7 @@ fn main() {
           "{} int {} -> {} -> {}",
           i,
           ints[i],
-          bits_to_string(&compressor.compress_int_as_bits(ints[i])),
+          bits_to_string(&compressor.compress_num_as_bits(ints[i])),
           rec_ints[i]
         );
         panic!("failed to recover ints by compressing and decompressing!");

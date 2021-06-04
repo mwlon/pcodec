@@ -1,5 +1,4 @@
 use std::convert::TryInto;
-use crate::utils::u64_diff;
 
 #[inline(always)]
 pub fn byte_to_bits(byte: u8) -> [bool; 8] {
@@ -83,8 +82,8 @@ pub fn bits_to_string(bits: &Vec<bool>) -> String {
     .join("");
 }
 
-pub fn bytes_to_bits(bytes: [u8; 8]) -> Vec<bool> {
-  let mut res = Vec::with_capacity(64);
+pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
+  let mut res = Vec::with_capacity(8 * bytes.len());
   for b in &bytes {
     let mut x = b.clone();
     let mut m = 128;
@@ -106,8 +105,8 @@ pub fn u64_to_least_significant_bits(x: u64, n: u32) -> Vec<bool> {
   res
 }
 
-pub fn avg_base2_bits(upper: i64, lower: i64) -> f64 {
-  let n = u64_diff(upper, lower) as f64 + 1.0;
+pub fn avg_base2_bits(upper_lower_diff: u64) -> f64 {
+  let n = upper_lower_diff as f64 + 1.0;
   let k = n.log2().floor();
   let two_to_k = (2.0 as f64).powf(k);
   let overshoot = n - two_to_k;
