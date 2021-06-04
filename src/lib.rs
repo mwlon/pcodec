@@ -9,4 +9,4 @@ pub mod utils;
 mod bit_reader;
 mod compressor;
 mod decompressor;
-mod int64;
+mod dtypes;

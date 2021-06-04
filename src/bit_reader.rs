@@ -40,6 +40,28 @@ impl BitReader {
     }
   }
 
+  #[inline(always)]
+  fn refresh_if_needed(&mut self) {
+    if self.j == 8 {
+      self.i += 1;
+      self.current_bits = byte_to_bits(self.bytes[self.i]);
+      self.j = 0;
+    }
+  }
+
+  pub fn read_bytes(&mut self, n: usize) -> Result<&[u8], String> {
+    self.refresh_if_needed();
+
+    if self.j == 0 {
+      let res = &self.bytes[self.i..self.i + n];
+      self.i += n - 1;
+      self.j = 8;
+      Ok(res)
+    } else {
+      Err("cannot read_bytes on misaligned bit reader".to_string())
+    }
+  }
+
   pub fn read(&mut self, n: usize) -> Vec<bool> {
     let mut res = Vec::with_capacity(n);
 
@@ -66,11 +88,7 @@ impl BitReader {
       return 0;
     }
 
-    if self.j == 8 {
-      self.i += 1;
-      self.current_bits = byte_to_bits(self.bytes[self.i]);
-      self.j = 0;
-    }
+    self.refresh_if_needed();
 
     let mut res;
     if n + self.j < 8 {
@@ -104,11 +122,7 @@ impl BitReader {
   }
 
   pub fn read_one(&mut self) -> bool {
-    if self.j == 8 {
-      self.i += 1;
-      self.current_bits = byte_to_bits(self.bytes[self.i]);
-      self.j = 0;
-    }
+    self.refresh_if_needed();
 
     let res = self.current_bits[self.j];
     self.j += 1;

@@ -4,9 +4,9 @@ use std::fmt::Display;
 
 use crate::bit_reader::BitReader;
 use crate::bits::*;
-use crate::int64::*;
 use crate::prefix::Prefix;
 use crate::utils;
+use crate::utils::{BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_PREFIX_LEN, MAX_MAX_DEPTH, MAGIC_HEADER};
 
 pub struct I64Decompressor {
   prefixes: Vec<Prefix>,
@@ -44,7 +44,22 @@ impl I64Decompressor {
     }
   }
 
-  pub fn from_reader(bit_reader: &mut BitReader) -> I64Decompressor {
+  pub fn from_reader(bit_reader: &mut BitReader) -> Result<I64Decompressor, String> {
+    match bit_reader.read_bytes(MAGIC_HEADER.len()) {
+      Ok(bytes) => {
+        if bytes != MAGIC_HEADER {
+          return Err(format!(
+            "file header '{:?}' does not match expected magic header '{:?}'",
+            bytes,
+            MAGIC_HEADER,
+          ))
+        }
+      },
+      Err(s) => {
+        return Err(s);
+      },
+    }
+
     let n = bits_to_usize(bit_reader.read(BITS_TO_ENCODE_N_ENTRIES as usize));
     let n_pref = bits_to_usize(bit_reader.read(MAX_MAX_DEPTH as usize));
     let mut prefixes = Vec::with_capacity(n_pref);
@@ -61,7 +76,7 @@ impl I64Decompressor {
 
     let decompressor = I64Decompressor::new(prefixes, n);
 
-    return decompressor;
+    return Ok(decompressor);
   }
 
   pub fn decompress(&self, reader: &mut BitReader) -> Vec<i64> {

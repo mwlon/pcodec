@@ -75,7 +75,7 @@ fn main() {
     let bytes = fs::read(output_path).expect("couldn't read");
     let mut bit_reader = BitReader::new(bytes);
     let bit_reader_ptr = &mut bit_reader;
-    let decompressor = I64Decompressor::from_reader(bit_reader_ptr);
+    let decompressor = I64Decompressor::from_reader(bit_reader_ptr).expect("invalid header");
     println!("decompressor:\n{}", decompressor);
     let rec_ints = decompressor.decompress(bit_reader_ptr);
     println!("{} ints: {} {}", rec_ints.len(), rec_ints.first().unwrap(), rec_ints.last().unwrap());

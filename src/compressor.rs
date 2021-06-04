@@ -4,9 +4,9 @@ use std::fmt::Display;
 
 use crate::bits::*;
 use crate::huffman;
-use crate::int64::*;
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::utils;
+use crate::utils::{BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_PREFIX_LEN, MAGIC_HEADER, MAX_ENTRIES, MAX_MAX_DEPTH};
 
 fn combine_improvement(p0: &PrefixIntermediate, p1: &PrefixIntermediate, n: usize) -> f64 {
   let p0_r_cost = avg_base2_bits(p0.upper, p0.lower);
@@ -154,6 +154,9 @@ impl I64Compressor {
 
   pub fn metadata_as_bits(&self) -> Vec<bool> {
     let mut res = Vec::new();
+    for byte in &MAGIC_HEADER {
+      res.extend(byte_to_bits(*byte).iter());
+    }
     res.extend(u32_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
     res.extend(u32_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
     for pref in &self.prefixes {
