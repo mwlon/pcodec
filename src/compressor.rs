@@ -159,12 +159,12 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     for byte in &MAGIC_HEADER {
       res.extend(byte_to_bits(*byte).iter());
     }
-    res.extend(u32_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
-    res.extend(u32_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
+    res.extend(usize_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
+    res.extend(usize_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
     for pref in &self.prefixes {
       res.extend(bytes_to_bits(DT::bytes_from(pref.lower)));
       res.extend(bytes_to_bits(DT::bytes_from(pref.upper)));
-      res.extend(u32_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
+      res.extend(usize_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
       res.extend(&pref.val);
     }
     return res;
