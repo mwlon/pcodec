@@ -4,7 +4,9 @@ version = "0.0.0"
 edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
+categories = ["compression", "encoding"]
 description = "Good data compression for numerical sequences"
+keywords = ["compression", "numerical", "quantile"]
 license-file = "LICENSE"
 repository = "https://github.com/mwlon/quantile-compression"
 
