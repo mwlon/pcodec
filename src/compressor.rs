@@ -133,8 +133,9 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
   pub fn compress_num_as_bits(&self, num: T) -> Vec<bool> {
     for pref in &self.prefixes {
-      if pref.lower <= num && pref.upper >= num {
-        let mut res = pref.val.clone();
+      if pref.upper >= num && pref.lower <= num {
+        let mut res = Vec::with_capacity(pref.max_bits);
+        res.clone_from(&pref.val);
         let off = DT::u64_diff(num, pref.lower);
         res.extend(u64_to_least_significant_bits(off, pref.k));
         if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
@@ -145,7 +146,6 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     }
     panic!(format!("none of the ranges include i={}", num));
   }
-
 
   pub fn compress_nums_as_bits(&self, nums: &Vec<T>) -> Vec<bool> {
     return nums

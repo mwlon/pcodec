@@ -64,16 +64,15 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       },
     }
 
-    let n = bits_to_usize(bit_reader.read(BITS_TO_ENCODE_N_ENTRIES as usize));
-    let n_pref = bits_to_usize(bit_reader.read(MAX_MAX_DEPTH as usize));
+    let n = bit_reader.read_u64(BITS_TO_ENCODE_N_ENTRIES as usize) as usize;
+    let n_pref = bit_reader.read_u64(MAX_MAX_DEPTH as usize) as usize;
     let mut prefixes = Vec::with_capacity(n_pref);
     for _ in 0..n_pref {
       let lower_bits = bit_reader.read(DT::BIT_SIZE);
       let lower = DT::from_bytes(bits_to_bytes(lower_bits));
       let upper_bits = bit_reader.read(DT::BIT_SIZE);
       let upper = DT::from_bytes(bits_to_bytes(upper_bits));
-      let code_len_bits = bit_reader.read(BITS_TO_ENCODE_PREFIX_LEN as usize);
-      let code_len = bits_to_usize(code_len_bits);
+      let code_len = bit_reader.read_u64(BITS_TO_ENCODE_PREFIX_LEN as usize) as usize;
       let val = bit_reader.read(code_len);
       prefixes.push(Prefix::new(val, lower, upper, DT::u64_diff(upper, lower)));
     }
@@ -84,8 +83,12 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
   }
 
   pub fn decompress(&self, reader: &mut BitReader) -> Vec<T> {
+    self.decompress_n(reader, self.n)
+  }
+
+  pub fn decompress_n(&self, reader: &mut BitReader, n: usize) -> Vec<T> {
     let pow = 1_usize << self.max_depth;
-    let mut res = Vec::with_capacity(self.n);
+    let mut res = Vec::with_capacity(n);
     // handle the case when there's just one prefix of length 0
     let default_lower;
     let default_upper;
@@ -103,7 +106,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
         default_k = 0;
       }
     };
-    for _ in 0..self.n {
+    for _ in 0..n {
       let mut lower = default_lower;
       let mut upper = default_upper;
       let mut k = default_k;

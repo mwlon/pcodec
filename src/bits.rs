@@ -33,17 +33,6 @@ pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
   res
 }
 
-pub fn bits_to_usize(bits: Vec<bool>) -> usize {
-  let mut res = 0;
-  for i in 0..bits.len() {
-    res <<= 1;
-    if bits[i] {
-      res |= 1
-    }
-  }
-  res
-}
-
 pub fn usize_to_bits(x: usize, n_bits: u32) -> Vec<bool> {
   let mut res = Vec::with_capacity(n_bits as usize);
   let mut m = 1_usize << (n_bits - 1);

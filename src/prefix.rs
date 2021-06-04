@@ -8,6 +8,7 @@ pub struct Prefix<T> where T: NumberLike {
   pub k: u32,
   pub only_k_bits_lower: u64,
   pub only_k_bits_upper: u64,
+  pub max_bits: usize,
 }
 
 // In Prefix and PrefixIntermediate, lower and upper are always inclusive.
@@ -21,6 +22,7 @@ impl<T> Prefix<T> where T: NumberLike {
       (1_u64 << k) - 1
     };
     let only_k_bits_lower = diff - only_k_bits_upper;
+    let max_bits = val.len() + 1 + k as usize;
 
     return Prefix {
       val,
@@ -29,6 +31,7 @@ impl<T> Prefix<T> where T: NumberLike {
       k,
       only_k_bits_lower,
       only_k_bits_upper,
+      max_bits,
     }
   }
 }
