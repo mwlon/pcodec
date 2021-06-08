@@ -8,7 +8,7 @@ categories = ["compression", "encoding"]
 description = "Good data compression for numerical sequences"
 include = ["src/**/*.rs", "Cargo.toml"]
 keywords = ["compression", "numerical", "quantile"]
-license-file = "LICENSE"
+license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
 
 [dependencies]

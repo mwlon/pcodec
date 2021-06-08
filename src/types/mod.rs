@@ -1,11 +1,11 @@
-use std::fmt::Display;
+use std::fmt::{Display, Debug};
 
 pub mod signed32;
 pub mod signed64;
 pub mod unsigned32;
 pub mod unsigned64;
 
-pub trait NumberLike: Copy + Ord + Eq + Display {}
+pub trait NumberLike: Copy + Ord + Eq + Display + Debug {}
 
 pub trait DataType<T> where T: NumberLike {
   const HEADER_BYTE: u8;

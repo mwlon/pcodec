@@ -8,7 +8,7 @@ use crate::bits;
 use crate::prefix::Prefix;
 use crate::types::{DataType, NumberLike};
 use crate::utils;
-use crate::utils::{BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_PREFIX_LEN, MAGIC_HEADER, MAX_MAX_DEPTH};
+use crate::utils::*;
 
 pub struct Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
   prefixes: Vec<Prefix<T>>,
@@ -53,7 +53,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       Ok(bytes) => {
         if bytes != MAGIC_HEADER {
           return Err(format!(
-            "file header '{:?}' does not match expected magic header '{:?}'",
+            "header \"{:?}\" does not match expected magic header \"{:?}\"",
             bytes,
             MAGIC_HEADER,
           ));
@@ -62,6 +62,21 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       Err(s) => {
         return Err(s);
       },
+    }
+    match bit_reader.read_bytes(1) {
+      Ok(bytes) => {
+        let byte = bytes[0];
+        if byte != DT::HEADER_BYTE {
+          return Err(format!(
+            "data type byte \"{}\" does not match expected data type byte \"{}\"",
+            byte,
+            DT::HEADER_BYTE,
+          ))
+        }
+      },
+      Err(s) => {
+        return Err(s);
+      }
     }
 
     let n = bit_reader.read_u64(BITS_TO_ENCODE_N_ENTRIES as usize) as usize;
@@ -74,7 +89,12 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       let upper = DT::from_bytes(bits::bits_to_bytes(upper_bits));
       let code_len = bit_reader.read_u64(BITS_TO_ENCODE_PREFIX_LEN as usize) as usize;
       let val = bit_reader.read(code_len);
-      prefixes.push(Prefix::new(val, lower, upper, DT::u64_diff(upper, lower)));
+      let reps = if bit_reader.read_one() {
+        bit_reader.read_u64(BITS_TO_ENCODE_REPS as usize) as usize
+      } else {
+        1_usize
+      };
+      prefixes.push(Prefix::new(val, lower, upper, DT::u64_diff(upper, lower), reps));
     }
 
     let decompressor = Decompressor::new(prefixes, n);
@@ -93,23 +113,28 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let default_lower;
     let default_upper;
     let default_k;
+    let default_reps;
     match &self.prefix_map[0] {
       Some(p) if p.val.len() == 0 => {
         default_lower = p.lower;
         default_upper = p.upper;
         default_k = p.k;
+        default_reps = p.reps;
       },
       _ => {
         // any usage of these should be unreachable
         default_lower = DT::ZERO;
         default_upper = DT::ZERO;
         default_k = 0;
+        default_reps = 1;
       }
     };
-    for _ in 0..n {
+    let mut i = 0;
+    while i < n {
       let mut lower = default_lower;
       let mut upper = default_upper;
       let mut k = default_k;
+      let mut reps = default_reps;
       let mut prefix_idx = 0;
       for prefix_len in 1..self.max_depth + 1 {
         if reader.read_one() {
@@ -120,20 +145,24 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
           lower = p.lower;
           upper = p.upper;
           k = p.k;
+          reps = p.reps;
           break;
         }
       }
       let range = DT::u64_diff(upper, lower);
-      let mut offset = reader.read_u64(k as usize);
-      if k < 64 {
-        let most_significant = 1_u64 << k;
-        if range - offset >= most_significant {
-          if reader.read_one() {
-            offset += most_significant;
+      for _ in 0..reps {
+        let mut offset = reader.read_u64(k as usize);
+        if k < 64 {
+          let most_significant = 1_u64 << k;
+          if range - offset >= most_significant {
+            if reader.read_one() {
+              offset += most_significant;
+            }
           }
         }
+        res.push(DT::add_u64(lower, offset));
       }
-      res.push(DT::add_u64(lower, offset));
+      i += reps;
     }
     res
   }

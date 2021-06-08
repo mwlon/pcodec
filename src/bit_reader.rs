@@ -90,26 +90,25 @@ impl BitReader {
 
     self.refresh_if_needed();
 
-    let mut res;
-    if n + self.j < 8 {
-      let shift = 8 - self.j - n;
-      res = ((self.bytes[self.i] & LEFT_MASKS[self.j] & RIGHT_MASKS[n + self.j]) >> shift) as u64;
-      self.j += n;
+    let n_plus_j = n + self.j;
+    if n_plus_j < 8 {
+      let shift = 8 - n_plus_j;
+      let res = ((self.bytes[self.i] & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift) as u64;
+      self.j = n_plus_j;
+      res
     } else {
-      res = 0;
-      let mut s = 0;
-      res |= (self.bytes[self.i] & LEFT_MASKS[self.j]) as u64;
-      s += 8 - self.j;
-      while s + 8 <= n {
+      let mut res = 0;
+      let mut remaining = n; // how many bits we still need to read
+      // let mut s = 0;  // number of bits read into the u64 so far
+      remaining -= 8 - self.j;
+      res |= ((self.bytes[self.i] & LEFT_MASKS[self.j]) as u64) << remaining;
+      while remaining >= 8 {
         self.i += 1;
-        res <<= 8;
-        res |= self.bytes[self.i] as u64;
-        s += 8;
+        remaining -= 8;
+        res |= (self.bytes[self.i] as u64) << remaining;
       }
-      let remaining = n - s;
       if remaining > 0 {
         self.i += 1;
-        res <<= remaining;
         let shift = 8 - remaining;
         res |= ((self.bytes[self.i] & RIGHT_MASKS[remaining]) >> shift) as u64;
         self.j = remaining;
@@ -117,8 +116,8 @@ impl BitReader {
         self.j = 8;
       }
       self.current_bits = byte_to_bits(self.bytes[self.i]);
+      res
     }
-    res
   }
 
   pub fn read_one(&mut self) -> bool {

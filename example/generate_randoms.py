@@ -37,4 +37,7 @@ write(fixed_median_lomax(2.5), 'lomax25')
 write(np.random.randint(-2**63, 2**63, size=n), 'uniform')
 
 write(np.repeat(77777, n), 'constant')
+
 write(np.where(np.random.uniform(size=n) < 0.5, -2**63, 2**63 - 1), 'extremes')
+
+write(np.random.binomial(1, p=0.01, size=n), 'sparse')
