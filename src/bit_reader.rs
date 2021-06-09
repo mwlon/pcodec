@@ -32,7 +32,7 @@ pub struct BitReader {
 impl BitReader {
   pub fn new(bytes: Vec<u8>) -> BitReader {
     let current_bits = byte_to_bits(bytes[0]);
-    return BitReader {
+    BitReader {
       bytes,
       current_bits,
       i: 0,
@@ -80,7 +80,7 @@ impl BitReader {
       m += additional;
       self.j = additional;
     }
-    return res;
+    res
   }
 
   pub fn read_u64(&mut self, n: usize) -> u64 {

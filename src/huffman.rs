@@ -15,18 +15,18 @@ pub struct HuffmanItem {
 
 impl HuffmanItem {
   pub fn new(weight: u64, id: usize) -> HuffmanItem {
-    return HuffmanItem {
+    HuffmanItem {
       id,
       weight,
       left_id: None,
       right_id: None,
       leaf_id: Some(id),
       bits: Vec::new(),
-    };
+    }
   }
 
   pub fn from(tree0: &HuffmanItem, tree1: &HuffmanItem, id: usize) -> HuffmanItem {
-    return HuffmanItem {
+    HuffmanItem {
       id,
       weight: tree0.weight + tree1.weight,
       left_id: Some(tree0.id),
@@ -52,18 +52,18 @@ impl HuffmanItem {
     } else {
       let mut left_bits = bits.clone();
       left_bits.push(false);
-      let mut right_bits = bits.clone();
+      let mut right_bits = bits;
       right_bits.push(true);
       item_index[self.left_id.unwrap()].clone().create_bits_from(left_bits, item_index, leaf_index);
       item_index[self.right_id.unwrap()].clone().create_bits_from(right_bits, item_index, leaf_index);
     }
   }
 
-  pub fn to_string(&self, item_index: &Vec<HuffmanItem>) -> String {
+  pub fn to_string(&self, item_index: &[HuffmanItem]) -> String {
     self.to_string_indented(0, item_index)
   }
 
-  fn to_string_indented(&self, indent: usize, item_index: &Vec<HuffmanItem>) -> String {
+  fn to_string_indented(&self, indent: usize, item_index: &[HuffmanItem]) -> String {
     let self_string = format!(
       "{}code={} w={}",
       "  ".repeat(indent),
@@ -87,13 +87,7 @@ impl HuffmanItem {
 
 impl Ord for HuffmanItem {
   fn cmp(&self, other: &Self) -> Ordering {
-    if self.weight > other.weight {
-      Ordering::Less // because we actually want a min heap
-    } else if self.weight < other.weight {
-      Ordering::Greater
-    } else {
-      Ordering::Equal
-    }
+    other.weight.cmp(&self.weight) // flipped order to make it a min heap
   }
 }
 
@@ -107,8 +101,8 @@ pub fn make_huffman_code<T>(prefix_sequence: &mut Vec<PrefixIntermediate<T>>) {
   let n = prefix_sequence.len();
   let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
   let mut items = Vec::with_capacity(n); // for modifying item codes
-  for i in 0..n {
-    let item = HuffmanItem::new(prefix_sequence[i].weight, i);
+  for (i, prefix) in prefix_sequence.iter().enumerate() {
+    let item = HuffmanItem::new(prefix.weight, i);
     heap.push(item.clone());
     items.push(item);
   }

@@ -11,7 +11,7 @@ pub const BITS_TO_ENCODE_PREFIX_LEN: u32 = 4; // should be (MAX_MAX_DEPTH + 1).l
 pub const MAX_REPS: usize = (1_usize << 16) - 1;
 pub const BITS_TO_ENCODE_REPS: u32 = 16; // should be (MAX_REPS + 1).log2().ceil()
 
-pub fn display_prefixes<T: NumberLike>(prefixes: &Vec<Prefix<T>>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+pub fn display_prefixes<T: NumberLike>(prefixes: &[Prefix<T>], f: &mut fmt::Formatter<'_>) -> fmt::Result {
   let s = prefixes
     .iter()
     .map(|p| p.to_string())

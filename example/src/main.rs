@@ -73,7 +73,7 @@ trait DtypeHandler<T, DT> where T: NumberLike, DT: DataType<T> {
           bits_to_string(&compressor.compress_num_as_bits(nums[i])),
           rec_nums[i]
         );
-        panic!("failed to recover nums by compressing and decompressing!");
+        panic!("Failed to recover nums by compressing and decompressing!");
       }
     }
   }
@@ -121,7 +121,7 @@ fn main() {
     Ok(()) => (),
     Err(e) => match e.kind() {
       ErrorKind::AlreadyExists => (),
-      _ => panic!(e)
+      _ => panic!("{}", e)
     }
   }
 
@@ -140,7 +140,7 @@ fn main() {
     } else if path_str.contains("f64") {
       F64Handler::handle(&path, max_depth, &output_dir);
     } else {
-      panic!("could not determine dtype for file");
+      panic!("Could not determine dtype for file {}!", path_str);
     };
   }
 }

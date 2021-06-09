@@ -1,4 +1,5 @@
 use std::cmp::{max, min};
+use std::cmp::Ordering::{Equal, Greater, Less};
 use std::fmt;
 use std::fmt::Display;
 use std::marker::PhantomData;
@@ -9,7 +10,6 @@ use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{DataType, NumberLike};
 use crate::utils;
 use crate::utils::*;
-use std::cmp::Ordering::{Greater, Less};
 
 const MIN_N_TO_USE_REPS: usize = 1000;
 const MIN_FREQUENCY_TO_USE_REPS: f64 = 0.8;
@@ -67,7 +67,7 @@ fn push_pref<T: Copy>(
   j: usize,
   n_bucket: usize,
   n: usize,
-  sorted: &Vec<T>,
+  sorted: &[T],
 ) {
   let weight = j - i;
   let frequency = weight as f64 / n as f64;
@@ -96,7 +96,7 @@ pub struct Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 }
 
 impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
-  pub fn train(nums: &Vec<T>, max_depth: u32) -> Result<Self, String> {
+  pub fn train(nums: &[T], max_depth: u32) -> Result<Self, String> {
     if max_depth > MAX_MAX_DEPTH {
       return Err(format!("max depth cannot exceed {}", MAX_MAX_DEPTH));
     }
@@ -104,18 +104,18 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
       return Err(format!("number of entries cannot exceed {}", MAX_ENTRIES));
     }
 
-    let mut sorted = nums.clone();
+    let mut sorted = nums.to_vec();
     sorted.sort_by(|a, b| a.num_cmp(b));
     let n = nums.len();
     let n_bucket = 1_usize << max_depth;
     let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
 
-    let mut bucket_idx = 0 as usize;
+    let mut bucket_idx = 0_usize;
     let bucket_idx_ptr = &mut bucket_idx;
 
     let mut i = 0;
-    let mut backup_j = 0 as usize;
+    let mut backup_j = 0_usize;
     for j in 0..n {
       let target_j = ((*bucket_idx_ptr + 1) * n) / n_bucket;
       if j > 0 && sorted[j].num_eq(&sorted[j - 1]) {
@@ -136,7 +136,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let mut can_improve = true;
     while can_improve {
       can_improve = false;
-      let mut best_i = -1 as i32;
+      let mut best_i = -1_i32;
       let mut best_improvement = 0.0;
       for i in 0..(prefix_sequence.len() - 1) {
         let pref0 = &prefix_sequence[i];
@@ -176,7 +176,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
       n: nums.len(),
       data_type: PhantomData,
     };
-    return Ok(res);
+    Ok(res)
   }
 
   pub fn combine_improvement(p0: &PrefixIntermediate<T>, p1: &PrefixIntermediate<T>, n: usize) -> f64 {
@@ -199,7 +199,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let combined_cost = meta_cost +
       (combined_r_cost + combined_d_cost) * (p0.weight + p1.weight) as f64;
     let bits_saved = separate_cost - combined_cost;
-    return bits_saved as f64;
+    bits_saved as f64
   }
 
   #[inline(always)]
@@ -225,25 +225,20 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
         return res;
       }
     }
-    panic!(format!("none of the ranges include i={}", num));
+    panic!("None of the ranges include number {} to compress!", num);
   }
 
-  pub fn compress_nums_as_bits(&self, nums: &Vec<T>) -> Vec<bool> {
+  pub fn compress_nums_as_bits(&self, nums: &[T]) -> Vec<bool> {
     let mut sorted_prefixes = self.prefixes.clone();
     // most reps comes first
     sorted_prefixes.sort_by(
       |p0, p1|
-        if p0.reps > p1.reps {
-          Less
-        } else if p0.reps > p1.reps {
-          Greater
-        } else { // same # of reps, order by frequency
-          if p0.val.len() < p1.val.len() {
-            Less
-          } else {
-            Greater
-          }
-        });
+        match p1.reps.cmp(&p1.reps) {
+          Less => Less,
+          Greater => Greater,
+          Equal => p0.val.len().cmp(&p1.val.len())
+        }
+    );
 
     let mut res = Vec::new();
     let res_ptr = &mut res;
@@ -257,8 +252,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
         }
 
         let mut matches = true;
-        for i_prime in i..i + reps {
-          let x = nums[i_prime];
+        for x in nums.iter().skip(i).take(reps) {
           if x.lt(&pref.lower) || x.gt(&pref.upper) {
             matches = false;
             break;
@@ -267,8 +261,8 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
         if matches {
           res_ptr.extend(&pref.val);
-          for i_prime in i..i + reps {
-            self.compress_num_offset_bits_w_prefix(nums[i_prime], &pref, res_ptr);
+          for x in nums.iter().skip(i).take(reps) {
+            self.compress_num_offset_bits_w_prefix(*x, &pref, res_ptr);
           }
           i += reps;
           success = true;
@@ -277,7 +271,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
       }
 
       if !success {
-        panic!(format!("failed to compress some numbers! {}th: {}", i, nums[i]));
+        panic!("Failed to compress some numbers! e.g. {} at idx {}", nums[i], i);
       }
     }
     res
@@ -301,17 +295,17 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
         res.extend(usize_to_bits(pref.reps, BITS_TO_ENCODE_REPS));
       }
     }
-    return res;
+    res
   }
 
-  pub fn compress_as_bits(&self, ints: &Vec<T>) -> Vec<bool> {
+  pub fn compress_as_bits(&self, nums: &[T]) -> Vec<bool> {
     let mut compression = self.metadata_as_bits();
-    compression.append(&mut self.compress_nums_as_bits(ints));
-    return compression;
+    compression.append(&mut self.compress_nums_as_bits(nums));
+    compression
   }
 
-  pub fn compress(&self, ints: &Vec<T>) -> Vec<u8> {
-    return bits_to_bytes(self.compress_as_bits(ints));
+  pub fn compress(&self, nums: &[T]) -> Vec<u8> {
+    bits_to_bytes(self.compress_as_bits(nums))
   }
 }
 

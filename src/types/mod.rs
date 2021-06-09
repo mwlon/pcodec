@@ -15,31 +15,19 @@ pub trait NumberLike: Copy + Display + Debug {
   fn num_cmp(&self, other: &Self) -> Ordering;
 
   fn le(&self, other: &Self) -> bool {
-    match self.num_cmp(other) {
-      Greater => false,
-      _ => true,
-    }
+    !matches!(self.num_cmp(other), Greater)
   }
 
   fn lt(&self, other: &Self) -> bool {
-    match self.num_cmp(other) {
-      Less => true,
-      _ => false,
-    }
+    matches!(self.num_cmp(other), Less)
   }
 
   fn ge(&self, other: &Self) -> bool {
-    match self.num_cmp(other) {
-      Less => false,
-      _ => true,
-    }
+    !matches!(self.num_cmp(other), Less)
   }
 
   fn gt(&self, other: &Self) -> bool {
-    match self.num_cmp(other) {
-      Greater => true,
-      _ => false,
-    }
+    matches!(self.num_cmp(other), Greater)
   }
 }
 

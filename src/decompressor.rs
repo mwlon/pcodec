@@ -99,7 +99,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
     let decompressor = Decompressor::new(prefixes, n);
 
-    return Ok(decompressor);
+    Ok(decompressor)
   }
 
   pub fn decompress(&self, reader: &mut BitReader) -> Vec<T> {
@@ -115,7 +115,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let default_k;
     let default_reps;
     match &self.prefix_map[0] {
-      Some(p) if p.val.len() == 0 => {
+      Some(p) if p.val.is_empty() => {
         default_lower = p.lower;
         default_upper = p.upper;
         default_k = p.k;
@@ -154,10 +154,8 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
         let mut offset = reader.read_u64(k as usize);
         if k < 64 {
           let most_significant = 1_u64 << k;
-          if range - offset >= most_significant {
-            if reader.read_one() {
-              offset += most_significant;
-            }
+          if range - offset >= most_significant && reader.read_one() {
+            offset |= most_significant;
           }
         }
         res.push(DT::add_u64(lower, offset));

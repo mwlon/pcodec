@@ -29,7 +29,7 @@ impl<T> Prefix<T> where T: NumberLike {
     let only_k_bits_lower = diff - only_k_bits_upper;
     let max_bits = val.len() + 1 + k as usize;
 
-    return Prefix {
+    Prefix {
       val,
       lower,
       upper,
@@ -71,12 +71,12 @@ pub struct PrefixIntermediate<T> {
 
 impl<T> PrefixIntermediate<T> {
   pub fn new(weight: u64, lower: T, upper: T, reps: usize) -> PrefixIntermediate<T> {
-    return PrefixIntermediate {
+    PrefixIntermediate {
       weight,
       lower,
       upper,
       val: Vec::new(),
       reps,
-    };
+    }
   }
 }

@@ -33,7 +33,7 @@ pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
   let mut res = Vec::new();
   let mut i = 0;
   while i < bits.len() {
-    let mut byte = 0 as u8;
+    let mut byte = 0_u8;
     for _ in 0..8 {
       byte <<= 1;
       if i < bits.len() {
@@ -45,14 +45,14 @@ pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
     }
     res.push(byte);
   }
-  return res;
+  res
 }
 
-pub fn bits_to_usize_truncated(bits: &Vec<bool>, max_depth: u32) -> usize {
+pub fn bits_to_usize_truncated(bits: &[bool], max_depth: u32) -> usize {
   let pow = 1_usize << (max_depth - 1);
   let mut res = 0;
-  for i in 0..bits.len() {
-    if bits[i] {
+  for (i, bit) in bits.iter().enumerate() {
+    if *bit {
       res |= pow >> i;
     }
   }
@@ -73,7 +73,7 @@ pub fn u64_to_bits(x: u64, n_bits: u32) -> Vec<bool> {
   res
 }
 
-pub fn bits_to_string(bits: &Vec<bool>) -> String {
+pub fn bits_to_string(bits: &[bool]) -> String {
   return bits
     .iter()
     .map(|b| if *b {"1"} else {"0"})
@@ -84,11 +84,11 @@ pub fn bits_to_string(bits: &Vec<bool>) -> String {
 pub fn avg_base2_bits(upper_lower_diff: u64) -> f64 {
   let n = upper_lower_diff as f64 + 1.0;
   let k = n.log2().floor();
-  let two_to_k = (2.0 as f64).powf(k);
+  let two_to_k = (2.0_f64).powf(k);
   let overshoot = n - two_to_k;
-  return k + (2.0 * overshoot) / n;
+  k + (2.0 * overshoot) / n
 }
 
 pub fn depth_bits(weight: u64, total_weight: usize) -> f64 {
-  return -(weight as f64 / total_weight as f64).log2();
+  -(weight as f64 / total_weight as f64).log2()
 }
