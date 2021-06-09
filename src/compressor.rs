@@ -105,7 +105,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     }
 
     let mut sorted = nums.clone();
-    sorted.sort();
+    sorted.sort_by(|a, b| a.num_cmp(b));
     let n = nums.len();
     let n_bucket = 1_usize << max_depth;
     let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
@@ -118,7 +118,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let mut backup_j = 0 as usize;
     for j in 0..n {
       let target_j = ((*bucket_idx_ptr + 1) * n) / n_bucket;
-      if j > 0 && sorted[j] == sorted[j - 1] {
+      if j > 0 && sorted[j].num_eq(&sorted[j - 1]) {
         if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
           push_pref(seq_ptr, bucket_idx_ptr, i, backup_j, n_bucket, n, &sorted);
           i = backup_j;
@@ -219,7 +219,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
   pub fn compress_num_as_bits(&self, num: T) -> Vec<bool> {
     for pref in &self.prefixes {
-      if pref.upper >= num && pref.lower <= num && pref.reps == 1 {
+      if pref.upper.ge(&num) && pref.lower.le(&num) && pref.reps == 1 {
         let mut res = Vec::new();
         self.compress_num_as_bits_w_prefix(num, &pref, &mut res);
         return res;
@@ -259,7 +259,7 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
         let mut matches = true;
         for i_prime in i..i + reps {
           let x = nums[i_prime];
-          if x < pref.lower || x > pref.upper {
+          if x.lt(&pref.lower) || x.gt(&pref.upper) {
             matches = false;
             break;
           }

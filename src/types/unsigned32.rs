@@ -1,11 +1,23 @@
-use crate::types::{NumberLike, DataType};
+use std::cmp::Ordering;
 use std::convert::TryInto;
+
 use crate::compressor::Compressor;
 use crate::decompressor::Decompressor;
+use crate::types::{DataType, NumberLike};
+
+impl NumberLike for u32 {
+  #[inline(always)]
+  fn num_eq(&self, other: &Self) -> bool {
+    self.eq(other)
+  }
+
+  #[inline(always)]
+  fn num_cmp(&self, other: &Self) -> Ordering {
+    self.cmp(other)
+  }
+}
 
 pub struct U32DataType {}
-
-impl NumberLike for u32 {}
 
 impl DataType<u32> for U32DataType {
   const HEADER_BYTE: u8 = 4;

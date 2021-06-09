@@ -1,12 +1,16 @@
+use q_compress::BitReader;
+use q_compress::bits::bits_to_string;
+use q_compress::compressor::Compressor;
+use q_compress::decompressor::Decompressor;
+use q_compress::types::{DataType, NumberLike};
+use q_compress::types::float64::F64DataType;
+use q_compress::types::signed64::I64DataType;
+use std::convert::TryInto;
 use std::env;
 use std::fs;
 use std::io::ErrorKind;
-use std::time::SystemTime;
 use std::path::PathBuf;
-
-use q_compress::{I64Compressor, I64Decompressor};
-use q_compress::BitReader;
-use q_compress::bits::bits_to_string;
+use std::time::SystemTime;
 
 fn basename_no_ext(path: &PathBuf) -> String {
   let basename = path
@@ -20,12 +24,90 @@ fn basename_no_ext(path: &PathBuf) -> String {
   }
 }
 
+trait DtypeHandler<T, DT> where T: NumberLike, DT: DataType<T> {
+  fn parse_nums(bytes: &Vec<u8>) -> Vec<T>;
+  fn train_compressor(nums: &Vec<T>, max_depth: u32) -> Compressor<T, DT> {
+    Compressor::<T, DT>::train(&nums, max_depth).expect("could not train")
+  }
+  fn decompressor_from_reader(bit_reader: &mut BitReader) -> Decompressor<T, DT> {
+    Decompressor::<T, DT>::from_reader(bit_reader).expect("invalid header")
+  }
+
+  fn handle(path: &PathBuf, max_depth: u32, output_dir: &str) {
+    let bytes = fs::read(path).expect("could not read");
+    let nums = Self::parse_nums(&bytes);
+    let compress_start = SystemTime::now();
+    let compressor = Self::train_compressor(&nums, max_depth);
+    println!("compressor:\n{}", compressor);
+    let fname = basename_no_ext(&path);
+
+    let output_path = format!("{}/{}.qco", &output_dir, fname);
+    fs::write(
+      &output_path,
+      compressor.compress(&nums),
+    ).expect("couldn't write");
+    let compress_end = SystemTime::now();
+    let dt = compress_end.duration_since(compress_start).expect("can't take dt");
+    println!("COMPRESSED IN {:?}", dt);
+
+    // decompress
+    let decompress_start = SystemTime::now();
+    let bytes = fs::read(output_path).expect("couldn't read");
+    let mut bit_reader = BitReader::new(bytes);
+    let bit_reader_ptr = &mut bit_reader;
+    let decompressor = Self::decompressor_from_reader(bit_reader_ptr);
+    println!("decompressor:\n{}", decompressor);
+    let rec_nums = decompressor.decompress(bit_reader_ptr);
+    println!("{} nums: {} {}", rec_nums.len(), rec_nums.first().unwrap(), rec_nums.last().unwrap());
+    let decompress_end = SystemTime::now();
+    let dt = decompress_end.duration_since(decompress_start).expect("can't take dt");
+    println!("DECOMPRESSED IN {:?}", dt);
+
+    // make sure everything came back correct
+    for i in 0..rec_nums.len() {
+      if !rec_nums[i].num_eq(&nums[i]) {
+        println!(
+          "{} num {} -> {} -> {}",
+          i,
+          nums[i],
+          bits_to_string(&compressor.compress_num_as_bits(nums[i])),
+          rec_nums[i]
+        );
+        panic!("failed to recover nums by compressing and decompressing!");
+      }
+    }
+  }
+}
+
+struct I64Handler {}
+
+impl DtypeHandler<i64, I64DataType> for I64Handler {
+  fn parse_nums(bytes: &Vec<u8>) -> Vec<i64> {
+    bytes
+      .chunks(8)
+      // apparently numpy writes in le order
+      .map(|chunk| i64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")))
+      .collect()
+  }
+}
+
+struct F64Handler {}
+
+impl DtypeHandler<f64, F64DataType> for F64Handler {
+  fn parse_nums(bytes: &Vec<u8>) -> Vec<f64> {
+    bytes
+      .chunks(8)
+      .map(|chunk| f64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")))
+      .collect()
+  }
+}
+
 fn main() {
   let args: Vec<String> = env::args().collect();
   let max_depth: u32 = if args.len() >= 2 {
     args[1].parse().expect("invalid max depth")
   } else {
-    5
+    6
   };
   let substring_filter = if args.len() >= 3 {
     args[2].clone()
@@ -33,7 +115,7 @@ fn main() {
     "".to_string()
   };
 
-  let files = fs::read_dir("data/txt").expect("couldn't read");
+  let files = fs::read_dir("data/binary").expect("couldn't read");
   let output_dir = format!("data/q_compressed_{}", max_depth);
   match fs::create_dir(&output_dir) {
     Ok(()) => (),
@@ -46,55 +128,19 @@ fn main() {
   for f in files {
     // compress
     let path = f.unwrap().path();
-    if !path.to_str().unwrap().contains(&substring_filter) {
-      println!("skipping file: {}", path.display());
+    let path_str = path.to_str().unwrap();
+    if !path_str.contains(&substring_filter) {
+      println!("skipping file that doesn't match substring: {}", path.display());
       continue;
     }
+
     println!("\nfile: {}", path.display());
-    let ints = &fs::read_to_string(&path)
-      .expect("couldn't read")
-      .split("\n")
-      .map(|s| s.parse::<i64>().unwrap())
-      .collect();
-    let compress_start = SystemTime::now();
-    let compressor = I64Compressor::train(ints, max_depth).expect("could not train");
-    println!("compressor:\n{}", compressor);
-    let fname = basename_no_ext(&path);
-
-    let output_path = format!("{}/{}.qco", &output_dir, fname);
-    fs::write(
-      &output_path,
-      compressor.compress(ints),
-    ).expect("couldn't write");
-    let compress_end = SystemTime::now();
-    let dt = compress_end.duration_since(compress_start).expect("can't take dt");
-    println!("COMPRESSED IN {:?}", dt);
-
-    // decompress
-    let decompress_start = SystemTime::now();
-    let bytes = fs::read(output_path).expect("couldn't read");
-    let mut bit_reader = BitReader::new(bytes);
-    let bit_reader_ptr = &mut bit_reader;
-    let decompressor = I64Decompressor::from_reader(bit_reader_ptr).expect("invalid header");
-    println!("decompressor:\n{}", decompressor);
-    let rec_ints = decompressor.decompress(bit_reader_ptr);
-    println!("{} ints: {} {}", rec_ints.len(), rec_ints.first().unwrap(), rec_ints.last().unwrap());
-    let decompress_end = SystemTime::now();
-    let dt = decompress_end.duration_since(decompress_start).expect("can't take dt");
-    println!("DECOMPRESSED IN {:?}", dt);
-
-    // make sure everything came back correct
-    for i in 0..rec_ints.len() {
-      if rec_ints[i] != ints[i] {
-        println!(
-          "{} int {} -> {} -> {}",
-          i,
-          ints[i],
-          bits_to_string(&compressor.compress_num_as_bits(ints[i])),
-          rec_ints[i]
-        );
-        panic!("failed to recover ints by compressing and decompressing!");
-      }
-    }
+    if path_str.contains("i64") {
+      I64Handler::handle(&path, max_depth, &output_dir);
+    } else if path_str.contains("f64") {
+      F64Handler::handle(&path, max_depth, &output_dir);
+    } else {
+      panic!("could not determine dtype for file");
+    };
   }
 }

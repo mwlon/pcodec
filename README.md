@@ -2,8 +2,9 @@
 
 This rust library compresses and decompresses sequences of
 numerical data very well.
-It currently supports the following data types: `i32`, `i64`, `u32`, `u64`.
-Floating point and timestamp support may come soon in the future.
+It currently supports the following data types:
+`i32`, `i64`, `u32`, `u64`, `f32`, `f64`.
+Timestamp support may come soon in the future.
 
 For natural data, it typically compresses down to files 25-40% smaller than
 ones produced by `gzip -9`, and decompresses several times faster.
