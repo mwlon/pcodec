@@ -10,12 +10,12 @@ const SIGN_BIT_MASK: u64 = 1_u64 << 63;
 impl NumberLike for f64 {
   #[inline(always)]
   fn num_eq(&self, other: &f64) -> bool {
-    F64DataType::f64_to_u64(*self) == F64DataType::f64_to_u64(*other)
+    self.to_bits() == other.to_bits()
   }
 
   #[inline(always)]
   fn num_cmp(&self, other: &f64) -> Ordering {
-    F64DataType::f64_to_u64(*self).num_cmp(&F64DataType::f64_to_u64(*other))
+    F64DataType::f64_to_u64(*self).cmp(&F64DataType::f64_to_u64(*other))
   }
 }
 

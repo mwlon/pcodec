@@ -10,12 +10,12 @@ const SIGN_BIT_MASK: u32 = 1_u32 << 31;
 impl NumberLike for f32 {
   #[inline(always)]
   fn num_eq(&self, other: &f32) -> bool {
-    F32DataType::f32_to_u32(*self) == F32DataType::f32_to_u32(*other)
+    self.to_bits() == other.to_bits()
   }
 
   #[inline(always)]
   fn num_cmp(&self, other: &f32) -> Ordering {
-    F32DataType::f32_to_u32(*self).num_cmp(&F32DataType::f32_to_u32(*other))
+    F32DataType::f32_to_u32(*self).cmp(&F32DataType::f32_to_u32(*other))
   }
 }
 
