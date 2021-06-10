@@ -92,3 +92,76 @@ pub fn avg_base2_bits(upper_lower_diff: u64) -> f64 {
 pub fn depth_bits(weight: u64, total_weight: usize) -> f64 {
   -(weight as f64 / total_weight as f64).log2()
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_bits_to_string() {
+    assert_eq!(bits_to_string(&[]), "".to_string());
+    assert_eq!(bits_to_string(&[true, false, false]), "100".to_string());
+  }
+
+  #[test]
+  fn test_depth_bits() {
+    assert_eq!(depth_bits(2, 2), 0.0);
+    assert_eq!(depth_bits(2, 4), 1.0);
+    assert_eq!(depth_bits(2, 8), 2.0);
+    assert_eq!(depth_bits(4, 8), 1.0);
+  }
+
+  #[test]
+  fn test_avg_base2_bits() {
+    assert_eq!(avg_base2_bits(0), 0.0);
+    assert_eq!(avg_base2_bits(1), 1.0);
+    assert!((avg_base2_bits(2) - 5.0 / 3.0).abs() < 1E-8);
+    assert_eq!(avg_base2_bits(3), 2.0);
+    println!("{}", avg_base2_bits(4));
+    assert!((avg_base2_bits(4) - 12.0 / 5.0).abs() < 1E-8);
+  }
+
+  #[test]
+  fn test_u64_to_bits() {
+    assert_eq!(u64_to_bits(7, 0), vec![]);
+    assert_eq!(u64_to_bits(7, 4), vec![false, true, true, true]);
+  }
+
+  #[test]
+  fn test_usize_to_bits() {
+    assert_eq!(usize_to_bits(7, 5), vec![false, false, true, true, true]);
+  }
+
+  #[test]
+  fn test_bits_to_usize_truncated() {
+    assert_eq!(bits_to_usize_truncated(&[true], 4), 8);
+    assert_eq!(bits_to_usize_truncated(&[true], 3), 4);
+    assert_eq!(bits_to_usize_truncated(&[true, false, true], 4), 10);
+    assert_eq!(bits_to_usize_truncated(&[true, false, true, true], 4), 11);
+  }
+
+  #[test]
+  fn test_bits_to_bytes_to_bits() {
+    let bits_28 = vec![false, false, false, true, true, true, false, false];
+    let byte_28 = bits_to_bytes(bits_28.clone());
+    assert_eq!(
+      byte_28,
+      vec![28]
+    );
+    assert_eq!(
+      bytes_to_bits(byte_28),
+      bits_28
+    );
+
+    let bits_28_128 = vec![false, false, false, true, true, true, false, false, true];
+    let byte_28_128 = bits_to_bytes(bits_28_128.clone());
+    assert_eq!(
+      byte_28_128,
+      vec![28, 128]
+    );
+    assert_eq!(
+      bytes_to_bits(byte_28_128)[0..9],
+      bits_28_128[..],
+    )
+  }
+}
