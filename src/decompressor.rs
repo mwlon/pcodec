@@ -1,6 +1,6 @@
 use std::cmp::max;
 use std::fmt;
-use std::fmt::Display;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
@@ -12,7 +12,7 @@ use crate::utils::*;
 use std::error::Error;
 use crate::errors::{MagicHeaderError, HeaderDtypeError};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
   prefixes: Vec<Prefix<T>>,
   prefix_map: Vec<Option<Prefix<T>>>,
@@ -154,7 +154,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
   }
 }
 
-impl<T, DT> Display for Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
+impl<T, DT> Debug for Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     utils::display_prefixes(&self.prefixes, f)
   }

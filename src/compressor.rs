@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::fmt;
-use std::fmt::Display;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use crate::bits::*;
@@ -91,7 +91,7 @@ fn push_pref<T: Copy>(
   *bucket_idx = new_bucket_idx;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
   prefixes: Vec<Prefix<T>>,
   n: usize,
@@ -99,17 +99,17 @@ pub struct Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 }
 
 impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
-  pub fn train(nums: &[T], max_depth: u32) -> Result<Self, Box<dyn Error>> {
+  pub fn train(nums: Vec<T>, max_depth: u32) -> Result<Self, Box<dyn Error>> {
     if max_depth > MAX_MAX_DEPTH {
       return Err(Box::new(MaxDepthError { max_depth }));
     }
-    if nums.len() as u64 > MAX_ENTRIES {
+    let n = nums.len();
+    if n as u64 > MAX_ENTRIES {
       return Err(Box::new(MaxEntriesError { n: nums.len() }));
     }
 
-    let mut sorted = nums.to_vec();
+    let mut sorted = nums;
     sorted.sort_by(|a, b| a.num_cmp(b));
-    let n = nums.len();
     let n_bucket = 1_usize << max_depth;
     let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
@@ -176,7 +176,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
     let res = Compressor::<T, DT> {
       prefixes,
-      n: nums.len(),
+      n,
       data_type: PhantomData,
     };
     Ok(res)
@@ -317,7 +317,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
   }
 }
 
-impl<T, DT> Display for Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
+impl<T, DT> Debug for Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     utils::display_prefixes(&self.prefixes, f)
   }

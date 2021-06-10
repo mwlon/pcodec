@@ -1,5 +1,8 @@
 use std::cmp::min;
-use crate::bits::byte_to_bits;
+use std::fmt::{Debug, Formatter};
+use std::fmt;
+
+use crate::bits::{byte_to_bits, bits_to_string};
 use crate::errors::MisalignedBitReaderError;
 
 const LEFT_MASKS: [u8; 8] = [
@@ -29,6 +32,29 @@ pub struct BitReader {
   current_bits: [bool; 8],
   i: usize,
   j: usize,
+}
+
+impl Debug for BitReader {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    let current_info = if self.i < self.bytes.len() {
+      format!(
+        "current byte {}\n\tcurrent bits {}",
+        self.bytes[self.i],
+        bits_to_string(&self.current_bits),
+      )
+    } else {
+      "OOB".to_string()
+    };
+
+    write!(
+      f,
+      "BitReader(\n\tbyte {}/{} bit {}\n\t{}\n\t)",
+      self.i,
+      self.bytes.len(),
+      self.j,
+      current_info,
+    )
+  }
 }
 
 impl From<Vec<u8>> for BitReader {

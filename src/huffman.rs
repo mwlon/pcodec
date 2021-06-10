@@ -1,7 +1,7 @@
-use crate::bits::bits_to_string;
-use crate::prefix::PrefixIntermediate;
-use std::collections::BinaryHeap;
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+
+use crate::prefix::PrefixIntermediate;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
@@ -25,7 +25,7 @@ impl HuffmanItem {
     }
   }
 
-  pub fn parent_of(tree0: &HuffmanItem, tree1: &HuffmanItem, id: usize) -> HuffmanItem {
+  pub fn new_parent_of(tree0: &HuffmanItem, tree1: &HuffmanItem, id: usize) -> HuffmanItem {
     HuffmanItem {
       id,
       weight: tree0.weight + tree1.weight,
@@ -58,31 +58,6 @@ impl HuffmanItem {
       item_index[self.right_id.unwrap()].clone().create_bits_from(right_bits, item_index, leaf_index);
     }
   }
-
-  pub fn to_string(&self, item_index: &[HuffmanItem]) -> String {
-    self.to_string_indented(0, item_index)
-  }
-
-  fn to_string_indented(&self, indent: usize, item_index: &[HuffmanItem]) -> String {
-    let self_string = format!(
-      "{}code={} w={}",
-      "  ".repeat(indent),
-      bits_to_string(&self.bits),
-      self.weight,
-    );
-
-    if self.leaf_id.is_some() {
-      format!("{}**", self_string)
-    } else {
-      let next_ind = indent + 1;
-      format!(
-        "{}\n{}\n{}",
-        self_string,
-        item_index[self.left_id.unwrap()].to_string_indented(next_ind, item_index),
-        item_index[self.right_id.unwrap()].to_string_indented(next_ind, item_index),
-      )
-    }
-  }
 }
 
 impl Ord for HuffmanItem {
@@ -111,7 +86,7 @@ pub fn make_huffman_code<T>(prefix_sequence: &mut Vec<PrefixIntermediate<T>>) {
   for _ in 0..(prefix_sequence.len() - 1) {
     let small0 = heap.pop().unwrap();
     let small1 = heap.pop().unwrap();
-    let new_item = HuffmanItem::parent_of(&small0, &small1, id);
+    let new_item = HuffmanItem::new_parent_of(&small0, &small1, id);
     id += 1;
     heap.push(new_item.clone());
     items.push(new_item);
