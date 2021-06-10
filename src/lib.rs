@@ -15,6 +15,7 @@ pub use crate::bit_reader::BitReader;
 
 pub mod huffman;
 pub mod bits;
+pub mod errors;
 pub mod types;
 pub mod prefix;
 pub mod utils;

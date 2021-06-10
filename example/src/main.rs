@@ -24,7 +24,7 @@ fn basename_no_ext(path: &PathBuf) -> String {
   }
 }
 
-trait DtypeHandler<T, DT> where T: NumberLike, DT: DataType<T> {
+trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
   fn parse_nums(bytes: &Vec<u8>) -> Vec<T>;
   fn train_compressor(nums: &Vec<T>, max_depth: u32) -> Compressor<T, DT> {
     Compressor::<T, DT>::train(&nums, max_depth).expect("could not train")
@@ -44,7 +44,7 @@ trait DtypeHandler<T, DT> where T: NumberLike, DT: DataType<T> {
     let output_path = format!("{}/{}.qco", &output_dir, fname);
     fs::write(
       &output_path,
-      compressor.compress(&nums),
+      compressor.compress(&nums).expect("could not compress"),
     ).expect("couldn't write");
     let compress_end = SystemTime::now();
     let dt = compress_end.duration_since(compress_start).expect("can't take dt");
@@ -53,7 +53,7 @@ trait DtypeHandler<T, DT> where T: NumberLike, DT: DataType<T> {
     // decompress
     let decompress_start = SystemTime::now();
     let bytes = fs::read(output_path).expect("couldn't read");
-    let mut bit_reader = BitReader::new(bytes);
+    let mut bit_reader = BitReader::from(bytes);
     let bit_reader_ptr = &mut bit_reader;
     let decompressor = Self::decompressor_from_reader(bit_reader_ptr);
     println!("decompressor:\n{}", decompressor);
@@ -70,7 +70,7 @@ trait DtypeHandler<T, DT> where T: NumberLike, DT: DataType<T> {
           "{} num {} -> {} -> {}",
           i,
           nums[i],
-          bits_to_string(&compressor.compress_num_as_bits(nums[i])),
+          bits_to_string(&compressor.compress_num_as_bits(nums[i]).expect("could not compress")),
           rec_nums[i]
         );
         panic!("Failed to recover nums by compressing and decompressing!");

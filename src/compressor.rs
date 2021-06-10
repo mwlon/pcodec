@@ -10,6 +10,8 @@ use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{DataType, NumberLike};
 use crate::utils;
 use crate::utils::*;
+use crate::errors::{MaxEntriesError, MaxDepthError, OutOfRangeError};
+use std::error::Error;
 
 const MIN_N_TO_USE_REPS: usize = 1000;
 const MIN_FREQUENCY_TO_USE_REPS: f64 = 0.8;
@@ -89,19 +91,20 @@ fn push_pref<T: Copy>(
   *bucket_idx = new_bucket_idx;
 }
 
+#[derive(Clone, Debug)]
 pub struct Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
   prefixes: Vec<Prefix<T>>,
   n: usize,
   data_type: PhantomData<DT>,
 }
 
-impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
-  pub fn train(nums: &[T], max_depth: u32) -> Result<Self, String> {
+impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
+  pub fn train(nums: &[T], max_depth: u32) -> Result<Self, Box<dyn Error>> {
     if max_depth > MAX_MAX_DEPTH {
-      return Err(format!("max depth cannot exceed {}", MAX_MAX_DEPTH));
+      return Err(Box::new(MaxDepthError { max_depth }));
     }
     if nums.len() as u64 > MAX_ENTRIES {
-      return Err(format!("number of entries cannot exceed {}", MAX_ENTRIES));
+      return Err(Box::new(MaxEntriesError { n: nums.len() }));
     }
 
     let mut sorted = nums.to_vec();
@@ -217,18 +220,20 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     self.compress_num_offset_bits_w_prefix(num, pref, v);
   }
 
-  pub fn compress_num_as_bits(&self, num: T) -> Vec<bool> {
+  pub fn compress_num_as_bits(&self, num: T) -> Result<Vec<bool>, OutOfRangeError<T>> {
     for pref in &self.prefixes {
       if pref.upper.ge(&num) && pref.lower.le(&num) && pref.reps == 1 {
         let mut res = Vec::new();
         self.compress_num_as_bits_w_prefix(num, &pref, &mut res);
-        return res;
+        return Ok(res);
       }
     }
-    panic!("None of the ranges include number {} to compress!", num);
+    Err(OutOfRangeError {
+      num,
+    })
   }
 
-  pub fn compress_nums_as_bits(&self, nums: &[T]) -> Vec<bool> {
+  pub fn compress_nums_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, OutOfRangeError<T>> {
     let mut sorted_prefixes = self.prefixes.clone();
     // most reps comes first
     sorted_prefixes.sort_by(
@@ -271,10 +276,12 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
       }
 
       if !success {
-        panic!("Failed to compress some numbers! e.g. {} at idx {}", nums[i], i);
+        return Err(OutOfRangeError {
+          num: nums[i]
+        });
       }
     }
-    res
+    Ok(res)
   }
 
   pub fn metadata_as_bits(&self) -> Vec<bool> {
@@ -298,14 +305,15 @@ impl<T, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     res
   }
 
-  pub fn compress_as_bits(&self, nums: &[T]) -> Vec<bool> {
+  pub fn compress_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, Box<dyn Error>> {
     let mut compression = self.metadata_as_bits();
-    compression.append(&mut self.compress_nums_as_bits(nums));
-    compression
+    let mut num_bits = self.compress_nums_as_bits(nums)?;
+    compression.append(&mut num_bits);
+    Ok(compression)
   }
 
-  pub fn compress(&self, nums: &[T]) -> Vec<u8> {
-    bits_to_bytes(self.compress_as_bits(nums))
+  pub fn compress(&self, nums: &[T]) -> Result<Vec<u8>, Box<dyn Error>> {
+    Ok(bits_to_bytes(self.compress_as_bits(nums)?))
   }
 }
 

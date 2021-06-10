@@ -42,7 +42,7 @@ fn main() {
   println!("compressed down to {} bytes", bytes.len());
   
   // decompress
-  let bit_reader = &mut BitReader::new(bytes);
+  let bit_reader = &mut BitReader::from(bytes);
   let decompressor = I64Decompressor::from_reader(bit_reader);
   let recovered = decompressor.decompress(bit_reader);
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
@@ -51,8 +51,8 @@ fn main() {
 
 ## Method
 
-This works by describing each number with a _bucket_ and an _offset_.
-The bucket specifies an inclusive range `[lower, upper]` that the
+This works by describing each number with a _range_ and an _offset_.
+The range specifies an inclusive range `[lower, upper]` that the
 number might be in, and the offset specifies the exact position within that
 range.
 

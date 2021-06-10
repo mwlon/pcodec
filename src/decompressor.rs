@@ -9,7 +9,10 @@ use crate::prefix::Prefix;
 use crate::types::{DataType, NumberLike};
 use crate::utils;
 use crate::utils::*;
+use std::error::Error;
+use crate::errors::{MagicHeaderError, HeaderDtypeError};
 
+#[derive(Clone, Debug)]
 pub struct Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
   prefixes: Vec<Prefix<T>>,
   prefix_map: Vec<Option<Prefix<T>>>,
@@ -48,35 +51,20 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
     }
   }
 
-  pub fn from_reader(bit_reader: &mut BitReader) -> Result<Self, String> {
-    match bit_reader.read_bytes(MAGIC_HEADER.len()) {
-      Ok(bytes) => {
-        if bytes != MAGIC_HEADER {
-          return Err(format!(
-            "header \"{:?}\" does not match expected magic header \"{:?}\"",
-            bytes,
-            MAGIC_HEADER,
-          ));
-        }
-      },
-      Err(s) => {
-        return Err(s);
-      },
+  pub fn from_reader(bit_reader: &mut BitReader) -> Result<Self, Box<dyn Error>> {
+    let bytes = bit_reader.read_bytes(MAGIC_HEADER.len())?;
+    if bytes != MAGIC_HEADER {
+      return Err(Box::new(MagicHeaderError {
+        header: bytes.to_vec()
+      }));
     }
-    match bit_reader.read_bytes(1) {
-      Ok(bytes) => {
-        let byte = bytes[0];
-        if byte != DT::HEADER_BYTE {
-          return Err(format!(
-            "data type byte \"{}\" does not match expected data type byte \"{}\"",
-            byte,
-            DT::HEADER_BYTE,
-          ))
-        }
-      },
-      Err(s) => {
-        return Err(s);
-      }
+    let bytes = bit_reader.read_bytes(1)?;
+    let byte = bytes[0];
+    if byte != DT::HEADER_BYTE {
+      return Err(Box::new(HeaderDtypeError {
+        dtype_byte: byte,
+        expected_byte: DT::HEADER_BYTE,
+      }));
     }
 
     let n = bit_reader.read_u64(BITS_TO_ENCODE_N_ENTRIES as usize) as usize;

@@ -1,5 +1,6 @@
 use std::cmp::min;
 use crate::bits::byte_to_bits;
+use crate::errors::MisalignedBitReaderError;
 
 const LEFT_MASKS: [u8; 8] = [
   0xff,
@@ -22,6 +23,7 @@ const RIGHT_MASKS: [u8; 8] = [
   0xfe,
 ];
 
+#[derive(Clone)]
 pub struct BitReader {
   bytes: Vec<u8>,
   current_bits: [bool; 8],
@@ -29,8 +31,8 @@ pub struct BitReader {
   j: usize,
 }
 
-impl BitReader {
-  pub fn new(bytes: Vec<u8>) -> BitReader {
+impl From<Vec<u8>> for BitReader {
+  fn from(bytes: Vec<u8>) -> BitReader {
     let current_bits = byte_to_bits(bytes[0]);
     BitReader {
       bytes,
@@ -39,7 +41,9 @@ impl BitReader {
       j: 0,
     }
   }
+}
 
+impl BitReader {
   #[inline(always)]
   fn refresh_if_needed(&mut self) {
     if self.j == 8 {
@@ -49,7 +53,7 @@ impl BitReader {
     }
   }
 
-  pub fn read_bytes(&mut self, n: usize) -> Result<&[u8], String> {
+  pub fn read_bytes(&mut self, n: usize) -> Result<&[u8], MisalignedBitReaderError> {
     self.refresh_if_needed();
 
     if self.j == 0 {
@@ -58,7 +62,7 @@ impl BitReader {
       self.j = 8;
       Ok(res)
     } else {
-      Err("cannot read_bytes on misaligned bit reader".to_string())
+      Err(MisalignedBitReaderError {})
     }
   }
 

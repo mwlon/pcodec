@@ -3,7 +3,7 @@ use crate::prefix::PrefixIntermediate;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
   id: usize,
   weight: u64,
@@ -25,7 +25,7 @@ impl HuffmanItem {
     }
   }
 
-  pub fn from(tree0: &HuffmanItem, tree1: &HuffmanItem, id: usize) -> HuffmanItem {
+  pub fn parent_of(tree0: &HuffmanItem, tree1: &HuffmanItem, id: usize) -> HuffmanItem {
     HuffmanItem {
       id,
       weight: tree0.weight + tree1.weight,
@@ -111,7 +111,7 @@ pub fn make_huffman_code<T>(prefix_sequence: &mut Vec<PrefixIntermediate<T>>) {
   for _ in 0..(prefix_sequence.len() - 1) {
     let small0 = heap.pop().unwrap();
     let small1 = heap.pop().unwrap();
-    let new_item = HuffmanItem::from(&small0, &small1, id);
+    let new_item = HuffmanItem::parent_of(&small0, &small1, id);
     id += 1;
     heap.push(new_item.clone());
     items.push(new_item);

@@ -4,7 +4,7 @@ use std::fmt;
 use crate::bits;
 use crate::types::NumberLike;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Prefix<T> where T: NumberLike {
   pub val: Vec<bool>,
   pub lower: T,
@@ -61,6 +61,7 @@ impl<T> Display for Prefix<T> where T: NumberLike {
   }
 }
 
+#[derive(Clone, Debug)]
 pub struct PrefixIntermediate<T> {
   pub weight: u64,
   pub lower: T,
