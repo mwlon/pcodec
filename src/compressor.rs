@@ -9,7 +9,7 @@ use crate::huffman;
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{DataType, NumberLike};
 use crate::utils;
-use crate::utils::*;
+use crate::constants::*;
 use crate::errors::{MaxEntriesError, MaxDepthError, OutOfRangeError};
 use std::error::Error;
 

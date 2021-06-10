@@ -1,8 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::fmt;
-use crate::utils;
 use crate::types::NumberLike;
-use crate::utils::MAGIC_HEADER;
+use crate::constants::{MAGIC_HEADER, MAX_MAX_DEPTH, MAX_ENTRIES};
 use std::error::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -16,7 +15,7 @@ impl Display for MaxEntriesError {
       f,
       "number of elements {} exceeded max number of elements {}",
       self.n,
-      utils::MAX_ENTRIES,
+      MAX_ENTRIES,
     )
   }
 }
@@ -34,7 +33,7 @@ impl Display for MaxDepthError {
       f,
       "max depth {} exceeded max max depth of {}",
       self.max_depth,
-      utils::MAX_MAX_DEPTH,
+      MAX_MAX_DEPTH,
     )
   }
 }

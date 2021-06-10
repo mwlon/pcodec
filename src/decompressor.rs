@@ -8,7 +8,7 @@ use crate::bits;
 use crate::prefix::Prefix;
 use crate::types::{DataType, NumberLike};
 use crate::utils;
-use crate::utils::*;
+use crate::constants::*;
 use std::error::Error;
 use crate::errors::{MagicHeaderError, HeaderDtypeError};
 

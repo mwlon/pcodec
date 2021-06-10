@@ -12,7 +12,11 @@ pub use types::unsigned32::U32Decompressor;
 pub use types::unsigned64::U64Compressor;
 pub use types::unsigned64::U64Decompressor;
 
+pub use constants::MAX_ENTRIES;
+
+mod constants;
 mod huffman;
+mod utils;
 pub mod bit_reader;
 pub mod bits;
 pub mod compressor;
@@ -20,4 +24,3 @@ pub mod decompressor;
 pub mod errors;
 pub mod prefix;
 pub mod types;
-pub mod utils;
