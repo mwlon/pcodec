@@ -82,7 +82,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       } else {
         1_usize
       };
-      prefixes.push(Prefix::new(val, lower, upper, DT::u64_diff(upper, lower), reps));
+      prefixes.push(Prefix::new(val, lower, upper, DT::offset_diff(upper, lower), reps));
     }
 
     let decompressor = Decompressor::new(prefixes, n);
@@ -137,7 +137,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
           break;
         }
       }
-      let range = DT::u64_diff(upper, lower);
+      let range = DT::offset_diff(upper, lower);
       for _ in 0..reps {
         let mut offset = reader.read_u64(k as usize);
         if k < 64 {
@@ -146,7 +146,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
             offset |= most_significant;
           }
         }
-        res.push(DT::add_u64(lower, offset));
+        res.push(DT::add_offset(lower, offset));
       }
       i += reps;
     }

@@ -55,6 +55,8 @@ This works by describing each number with a _range_ and an _offset_.
 The range specifies an inclusive range `[lower, upper]` that the
 number might be in, and the offset specifies the exact position within that
 range.
+The compressor chooses a _prefix_ for each range via Huffman
+codes.
 
 For data sampled from a random distribution, this compression algorithm can
 reduce byte size to near the theoretical limit of the distribution's Shannon

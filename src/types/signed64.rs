@@ -25,7 +25,7 @@ impl DataType<i64> for I64DataType {
   const ZERO: i64 = 0;
 
   #[inline(always)]
-  fn u64_diff(upper: i64, lower: i64) -> u64 {
+  fn offset_diff(upper: i64, lower: i64) -> u64 {
     if lower >= 0 {
       (upper - lower) as u64
     } else if lower == upper {
@@ -41,7 +41,7 @@ impl DataType<i64> for I64DataType {
   }
 
   #[inline(always)]
-  fn add_u64(lower: i64, off: u64) -> i64 {
+  fn add_offset(lower: i64, off: u64) -> i64 {
     if lower >= 0 {
       (lower as u64 + off) as i64
     } else if off == 0 {

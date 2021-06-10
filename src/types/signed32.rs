@@ -25,12 +25,12 @@ impl DataType<i32> for I32DataType {
   const ZERO: i32 = 0;
 
   #[inline(always)]
-  fn u64_diff(upper: i32, lower: i32) -> u64 {
+  fn offset_diff(upper: i32, lower: i32) -> u64 {
     (upper as i64 - lower as i64) as u64
   }
 
   #[inline(always)]
-  fn add_u64(lower: i32, off: u64) -> i32 {
+  fn add_offset(lower: i32, off: u64) -> i32 {
     if lower >= 0 {
       (lower as u64 + off) as i32
     } else if off == 0 {

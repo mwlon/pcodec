@@ -25,7 +25,7 @@ struct RepConfiguration {
 fn choose_rep_configs(
   weight: u64,
   n: u64,
-  max_buckets: usize,
+  max_prefixes: usize,
 ) -> Vec<RepConfiguration> {
   // This strategy could probably be improved in the future.
   // Current idea is to simply choose the tokens that could describe a
@@ -36,15 +36,15 @@ fn choose_rep_configs(
   let mean_run_len = 1.0 / (1.0 - freq);
   let mut res = Vec::new();
 
-  // how many buckets we'll actually use
+  // how many prefixes we'll actually use
   // it's not usually efficient to make a new prefix when <4 copies
-  let n_buckets = min(
-    max_buckets,
+  let n_prefixes = min(
+    max_prefixes,
     (mean_run_len.log2() / MIN_REPS_RATIO.log2()).floor() as usize
   );
-  let ratio = mean_run_len.powf(1.0 / n_buckets as f64);
+  let ratio = mean_run_len.powf(1.0 / n_prefixes as f64);
   let mut s = 0.0;
-  for i in 0..n_buckets {
+  for i in 0..n_prefixes {
     s += ratio.powf(i as f64);
   }
   let new_weight = ((weight as f64) / s).floor() as u64;
@@ -53,7 +53,7 @@ fn choose_rep_configs(
     reps: 1,
     weight: rep_1_new_weight,
   });
-  for i in 1..n_buckets {
+  for i in 1..n_prefixes {
     res.push(RepConfiguration {
       reps: ratio.powf(i as f64).floor() as usize,
       weight: new_weight,
@@ -64,18 +64,18 @@ fn choose_rep_configs(
 
 fn push_pref<T: Copy>(
   seq: &mut Vec<PrefixIntermediate<T>>,
-  bucket_idx: &mut usize,
+  prefix_idx: &mut usize,
   i: usize,
   j: usize,
-  n_bucket: usize,
+  max_n_prefix: usize,
   n: usize,
   sorted: &[T],
 ) {
   let weight = j - i;
   let frequency = weight as f64 / n as f64;
-  let new_bucket_idx = max(*bucket_idx + 1, (j * n_bucket) / n);
-  let bucket_idx_incr = new_bucket_idx - *bucket_idx;
-  if n < MIN_N_TO_USE_REPS || frequency < MIN_FREQUENCY_TO_USE_REPS || weight == n || bucket_idx_incr == 1 {
+  let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_prefix) / n);
+  let prefix_idx_incr = new_prefix_idx - *prefix_idx;
+  if n < MIN_N_TO_USE_REPS || frequency < MIN_FREQUENCY_TO_USE_REPS || weight == n || prefix_idx_incr == 1 {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
     // This also works if there are no other ranges.
@@ -83,12 +83,12 @@ fn push_pref<T: Copy>(
   } else {
     // The weird case - a range that represents almost all (but not all) the data.
     // We create extra prefixes that can describe `reps` copies of the range at once.
-    let rep_configs = choose_rep_configs(weight as u64, n as u64, bucket_idx_incr);
+    let rep_configs = choose_rep_configs(weight as u64, n as u64, prefix_idx_incr);
     for config in &rep_configs {
       seq.push(PrefixIntermediate::new(config.weight, sorted[i], sorted[j - 1], config.reps));
     }
   }
-  *bucket_idx = new_bucket_idx;
+  *prefix_idx = new_prefix_idx;
 }
 
 #[derive(Clone)]
@@ -110,31 +110,31 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
     let mut sorted = nums;
     sorted.sort_by(|a, b| a.num_cmp(b));
-    let n_bucket = 1_usize << max_depth;
+    let n_prefix = 1_usize << max_depth;
     let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
 
-    let mut bucket_idx = 0_usize;
-    let bucket_idx_ptr = &mut bucket_idx;
+    let mut prefix_idx = 0_usize;
+    let prefix_idx_ptr = &mut prefix_idx;
 
     let mut i = 0;
     let mut backup_j = 0_usize;
     for j in 0..n {
-      let target_j = ((*bucket_idx_ptr + 1) * n) / n_bucket;
+      let target_j = ((*prefix_idx_ptr + 1) * n) / n_prefix;
       if j > 0 && sorted[j].num_eq(&sorted[j - 1]) {
         if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-          push_pref(seq_ptr, bucket_idx_ptr, i, backup_j, n_bucket, n, &sorted);
+          push_pref(seq_ptr, prefix_idx_ptr, i, backup_j, n_prefix, n, &sorted);
           i = backup_j;
         }
       } else {
         backup_j = j;
         if j >= target_j {
-          push_pref(seq_ptr, bucket_idx_ptr, i, j, n_bucket, n, &sorted);
+          push_pref(seq_ptr, prefix_idx_ptr, i, j, n_prefix, n, &sorted);
           i = j;
         }
       }
     }
-    push_pref(seq_ptr, bucket_idx_ptr, i, n, n_bucket, n, &sorted);
+    push_pref(seq_ptr, prefix_idx_ptr, i, n, n_prefix, n, &sorted);
 
     let mut can_improve = true;
     while can_improve {
@@ -171,7 +171,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
     let mut prefixes = Vec::new();
     for p in &prefix_sequence {
-      prefixes.push(Prefix::new(p.val.clone(), p.lower, p.upper, DT::u64_diff(p.upper, p.lower), p.reps));
+      prefixes.push(Prefix::new(p.val.clone(), p.lower, p.upper, DT::offset_diff(p.upper, p.lower), p.reps));
     }
 
     let res = Compressor::<T, DT> {
@@ -188,9 +188,9 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
       return f64::MIN;
     }
 
-    let p0_r_cost = avg_base2_bits(DT::u64_diff(p0.upper, p0.lower));
-    let p1_r_cost = avg_base2_bits(DT::u64_diff(p1.upper, p1.lower));
-    let combined_r_cost = avg_base2_bits(DT::u64_diff(p1.upper, p0.lower));
+    let p0_r_cost = avg_base2_bits(DT::offset_diff(p0.upper, p0.lower));
+    let p1_r_cost = avg_base2_bits(DT::offset_diff(p1.upper, p1.lower));
+    let combined_r_cost = avg_base2_bits(DT::offset_diff(p1.upper, p0.lower));
     let p0_d_cost = depth_bits(p0.weight, n);
     let p1_d_cost = depth_bits(p1.weight, n);
     let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
@@ -207,7 +207,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
   #[inline(always)]
   fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, v: &mut Vec<bool>) {
-    let off = DT::u64_diff(num, pref.lower);
+    let off = DT::offset_diff(num, pref.lower);
     v.extend(u64_to_bits(off, pref.k));
     if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
       v.push(((off >> pref.k) & 1) > 0) // most significant bit, if necessary, comes last

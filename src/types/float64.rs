@@ -55,12 +55,12 @@ impl DataType<f64> for F64DataType {
   const ZERO: f64 = 0.0;
 
   #[inline(always)]
-  fn u64_diff(upper: f64, lower: f64) -> u64 {
+  fn offset_diff(upper: f64, lower: f64) -> u64 {
     Self::f64_to_u64(upper) - Self::f64_to_u64(lower)
   }
 
   #[inline(always)]
-  fn add_u64(lower: f64, off: u64) -> f64 {
+  fn add_offset(lower: f64, off: u64) -> f64 {
     Self::from_u64(Self::f64_to_u64(lower) + off)
   }
 

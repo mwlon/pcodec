@@ -55,12 +55,12 @@ impl DataType<f32> for F32DataType {
   const ZERO: f32 = 0.0;
 
   #[inline(always)]
-  fn u64_diff(upper: f32, lower: f32) -> u64 {
+  fn offset_diff(upper: f32, lower: f32) -> u64 {
     (Self::f32_to_u32(upper) - Self::f32_to_u32(lower)) as u64
   }
 
   #[inline(always)]
-  fn add_u64(lower: f32, off: u64) -> f32 {
+  fn add_offset(lower: f32, off: u64) -> f32 {
     Self::from_u32(Self::f32_to_u32(lower) + off as u32)
   }
 
