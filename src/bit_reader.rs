@@ -1,8 +1,7 @@
-use std::cmp::min;
 use std::fmt::{Debug, Formatter};
 use std::fmt;
 
-use crate::bits::{byte_to_bits, bits_to_string};
+use crate::bits;
 use crate::errors::MisalignedBitReaderError;
 
 const LEFT_MASKS: [u8; 8] = [
@@ -29,7 +28,6 @@ const RIGHT_MASKS: [u8; 8] = [
 #[derive(Clone)]
 pub struct BitReader {
   bytes: Vec<u8>,
-  current_bits: [bool; 8],
   i: usize,
   j: usize,
 }
@@ -38,9 +36,8 @@ impl Debug for BitReader {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     let current_info = if self.i < self.bytes.len() {
       format!(
-        "current byte {}\n\tcurrent bits {}",
+        "current byte {}",
         self.bytes[self.i],
-        bits_to_string(&self.current_bits),
       )
     } else {
       "OOB".to_string()
@@ -59,10 +56,8 @@ impl Debug for BitReader {
 
 impl From<Vec<u8>> for BitReader {
   fn from(bytes: Vec<u8>) -> BitReader {
-    let current_bits = byte_to_bits(bytes[0]);
     BitReader {
       bytes,
-      current_bits,
       i: 0,
       j: 0,
     }
@@ -74,7 +69,6 @@ impl BitReader {
   fn refresh_if_needed(&mut self) {
     if self.j == 8 {
       self.i += 1;
-      self.current_bits = byte_to_bits(self.bytes[self.i]);
       self.j = 0;
     }
   }
@@ -95,20 +89,16 @@ impl BitReader {
   pub fn read(&mut self, n: usize) -> Vec<bool> {
     let mut res = Vec::with_capacity(n);
 
-    //finish current byte
-    let mut m = min(8 - self.j, n);
-    if self.j < 8 {
-      res.extend(self.current_bits[self.j..self.j + m].iter());
-      self.j += m;
-    }
-
-    while m < n {
-      self.i += 1;
-      self.current_bits = byte_to_bits(self.bytes[self.i]);
-      let additional = min(8, n - m);
-      res.extend(self.current_bits[0..additional].iter());
-      m += additional;
-      self.j = additional;
+    // implementation not well optimized because this is only used in reading header
+    let mut byte = self.bytes[self.i];
+    for _ in 0..n {
+      if self.j == 8 {
+        self.i += 1;
+        self.j = 0;
+        byte = self.bytes[self.i];
+      }
+      res.push(bits::bit_from_byte(byte, self.j));
+      self.j += 1;
     }
     res
   }
@@ -122,6 +112,7 @@ impl BitReader {
 
     let n_plus_j = n + self.j;
     if n_plus_j < 8 {
+      // it's all in the current byte
       let shift = 8 - n_plus_j;
       let res = ((self.bytes[self.i] & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift) as u64;
       self.j = n_plus_j;
@@ -145,7 +136,6 @@ impl BitReader {
       } else {
         self.j = 8;
       }
-      self.current_bits = byte_to_bits(self.bytes[self.i]);
       res
     }
   }
@@ -153,7 +143,7 @@ impl BitReader {
   pub fn read_one(&mut self) -> bool {
     self.refresh_if_needed();
 
-    let res = self.current_bits[self.j];
+    let res = bits::bit_from_byte(self.bytes[self.i], self.j);
     self.j += 1;
     res
   }

@@ -10,13 +10,18 @@ const BIT_MASKS: [u8; 8] = [
 ];
 
 #[inline(always)]
+pub fn bit_from_byte(byte: u8, j: usize) -> bool {
+  (byte & BIT_MASKS[j]) > 0
+}
+
+#[inline(always)]
 pub fn byte_to_bits(byte: u8) -> [bool; 8] {
   let mut res: [bool; 8];
   unsafe {
     res = std::mem::MaybeUninit::uninit().assume_init();
   }
-  for i in 0..8 {
-    res[i] = (byte & BIT_MASKS[i]) > 0
+  for (j, entry) in res.iter_mut().enumerate() {
+    *entry = bit_from_byte(byte, j)
   }
   res
 }
