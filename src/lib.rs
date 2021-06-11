@@ -16,11 +16,11 @@ pub use constants::MAX_ENTRIES;
 
 mod constants;
 mod huffman;
+mod prefix;
 mod utils;
 pub mod bit_reader;
 pub mod bits;
 pub mod compressor;
 pub mod decompressor;
 pub mod errors;
-pub mod prefix;
 pub mod types;
