@@ -9,7 +9,7 @@ pub mod signed64;
 pub mod unsigned32;
 pub mod unsigned64;
 
-pub trait NumberLike: Copy + Display + Debug {
+pub trait NumberLike: Copy + Display + Debug + Default {
   fn num_eq(&self, other: &Self) -> bool;
 
   fn num_cmp(&self, other: &Self) -> Ordering;
@@ -34,7 +34,6 @@ pub trait NumberLike: Copy + Display + Debug {
 pub trait DataType<T> where T: NumberLike {
   const HEADER_BYTE: u8;
   const BIT_SIZE: usize;
-  const ZERO: T; // only shows up in unreachable code, so maybe we can remove it
 
   fn offset_diff(upper: T, lower: T) -> u64;
   fn add_offset(lower: T, off: u64) -> T;

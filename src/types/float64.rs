@@ -8,12 +8,10 @@ use crate::types::{DataType, NumberLike};
 const SIGN_BIT_MASK: u64 = 1_u64 << 63;
 
 impl NumberLike for f64 {
-  #[inline(always)]
   fn num_eq(&self, other: &f64) -> bool {
     self.to_bits() == other.to_bits()
   }
 
-  #[inline(always)]
   fn num_cmp(&self, other: &f64) -> Ordering {
     F64DataType::f64_to_u64(*self).cmp(&F64DataType::f64_to_u64(*other))
   }
@@ -22,7 +20,6 @@ impl NumberLike for f64 {
 pub struct F64DataType {}
 
 impl F64DataType {
-  #[inline(always)]
   fn f64_to_u64(x: f64) -> u64 {
     let mem_layout_x_u64 = x.to_bits();
     if mem_layout_x_u64 & SIGN_BIT_MASK > 0 {
@@ -34,7 +31,6 @@ impl F64DataType {
     }
   }
 
-  #[inline(always)]
   fn from_u64(x: u64) -> f64 {
     if x & SIGN_BIT_MASK > 0 {
       // positive float
@@ -52,14 +48,11 @@ impl F64DataType {
 impl DataType<f64> for F64DataType {
   const HEADER_BYTE: u8 = 5;
   const BIT_SIZE: usize = 64;
-  const ZERO: f64 = 0.0;
 
-  #[inline(always)]
   fn offset_diff(upper: f64, lower: f64) -> u64 {
     Self::f64_to_u64(upper) - Self::f64_to_u64(lower)
   }
 
-  #[inline(always)]
   fn add_offset(lower: f64, off: u64) -> f64 {
     Self::from_u64(Self::f64_to_u64(lower) + off)
   }

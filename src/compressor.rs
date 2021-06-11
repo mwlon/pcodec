@@ -175,7 +175,6 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     bits_saved as f64
   }
 
-  #[inline(always)]
   fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, v: &mut Vec<bool>) {
     let off = DT::offset_diff(num, pref.lower);
     v.extend(u64_to_bits(off, pref.k));
@@ -184,7 +183,6 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     }
   }
 
-  #[inline(always)]
   fn in_prefix(num: T, prefix: &Prefix<T>) -> bool {
     num.ge(&prefix.lower) && num.le(&prefix.upper)
   }

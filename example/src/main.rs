@@ -34,6 +34,7 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
   }
 
   fn handle(path: &Path, max_depth: u32, output_dir: &str) {
+    // compress
     let bytes = fs::read(path).expect("could not read");
     let nums = Self::parse_nums(&bytes);
     let compress_start = SystemTime::now();
@@ -56,7 +57,7 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
     let mut bit_reader = BitReader::from(bytes);
     let bit_reader_ptr = &mut bit_reader;
     let decompressor = Self::decompressor_from_reader(bit_reader_ptr);
-    println!("decompressor:\n{:?}", decompressor);
+    println!("decompressor in {:?}:\n{:?}", SystemTime::now().duration_since(decompress_start), decompressor);
     let rec_nums = decompressor.decompress(bit_reader_ptr);
     println!("{} nums: {} {}", rec_nums.len(), rec_nums.first().unwrap(), rec_nums.last().unwrap());
     let decompress_end = SystemTime::now();
@@ -126,7 +127,6 @@ fn main() {
   }
 
   for f in files {
-    // compress
     let path = f.unwrap().path();
     let path_str = path.to_str().unwrap();
     if !path_str.contains(&substring_filter) {

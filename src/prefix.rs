@@ -4,6 +4,33 @@ use std::fmt;
 use crate::bits;
 use crate::types::NumberLike;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PrefixDecompressionInfo<T> where T: NumberLike {
+  pub lower: T,
+  pub upper: T,
+  pub k: u32,
+  pub run_len_jumpstart: Option<usize>,
+}
+
+impl<T> PrefixDecompressionInfo<T> where T: NumberLike {
+  pub fn new() -> Self {
+    PrefixDecompressionInfo {
+      ..Default::default()
+    }
+  }
+}
+
+impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T> where T: NumberLike {
+  fn from(p: &Prefix<T>) -> Self {
+    PrefixDecompressionInfo {
+      lower: p.lower,
+      upper: p.upper,
+      k: p.k,
+      run_len_jumpstart: p.run_len_jumpstart,
+    }
+  }
+}
+
 #[derive(Clone, Debug)]
 pub struct Prefix<T> where T: NumberLike {
   pub val: Vec<bool>,

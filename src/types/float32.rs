@@ -8,12 +8,10 @@ use crate::types::{DataType, NumberLike};
 const SIGN_BIT_MASK: u32 = 1_u32 << 31;
 
 impl NumberLike for f32 {
-  #[inline(always)]
   fn num_eq(&self, other: &f32) -> bool {
     self.to_bits() == other.to_bits()
   }
 
-  #[inline(always)]
   fn num_cmp(&self, other: &f32) -> Ordering {
     F32DataType::f32_to_u32(*self).cmp(&F32DataType::f32_to_u32(*other))
   }
@@ -22,7 +20,6 @@ impl NumberLike for f32 {
 pub struct F32DataType {}
 
 impl F32DataType {
-  #[inline(always)]
   fn f32_to_u32(x: f32) -> u32 {
     let mem_layout_x_u32 = x.to_bits();
     if mem_layout_x_u32 & SIGN_BIT_MASK > 0 {
@@ -34,7 +31,6 @@ impl F32DataType {
     }
   }
 
-  #[inline(always)]
   fn from_u32(x: u32) -> f32 {
     if x & SIGN_BIT_MASK > 0 {
       // positive float
@@ -52,14 +48,11 @@ impl F32DataType {
 impl DataType<f32> for F32DataType {
   const HEADER_BYTE: u8 = 6;
   const BIT_SIZE: usize = 32;
-  const ZERO: f32 = 0.0;
 
-  #[inline(always)]
   fn offset_diff(upper: f32, lower: f32) -> u64 {
     (Self::f32_to_u32(upper) - Self::f32_to_u32(lower)) as u64
   }
 
-  #[inline(always)]
   fn add_offset(lower: f32, off: u64) -> f32 {
     Self::from_u32(Self::f32_to_u32(lower) + off as u32)
   }

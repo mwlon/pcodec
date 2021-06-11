@@ -1,24 +1,25 @@
-use std::cmp::max;
+use std::cmp::{max, min};
+use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
 use crate::bits;
-use crate::prefix::Prefix;
+use crate::constants::*;
+use crate::errors::{HeaderDtypeError, MagicHeaderError};
+use crate::prefix::{Prefix, PrefixDecompressionInfo};
 use crate::types::{DataType, NumberLike};
 use crate::utils;
-use crate::constants::*;
-use std::error::Error;
-use crate::errors::{MagicHeaderError, HeaderDtypeError};
 
 #[derive(Clone)]
 pub struct Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
   prefixes: Vec<Prefix<T>>,
-  prefix_map: Vec<Option<Prefix<T>>>,
+  prefix_map: Vec<PrefixDecompressionInfo<T>>,
   prefix_len_map: Vec<u32>,
   max_depth: u32,
   n: usize,
+  is_single_prefix: bool,
   data_type: PhantomData<DT>,
 }
 
@@ -32,21 +33,23 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let mut prefix_map = Vec::with_capacity(n_pref);
     let mut prefix_len_map = Vec::with_capacity(n_pref);
     for _ in 0..n_pref {
-      prefix_map.push(None);
+      prefix_map.push(PrefixDecompressionInfo::new());
       prefix_len_map.push(u32::MAX);
     }
     for p in &prefixes {
       let i = bits::bits_to_usize_truncated(&p.val, max_depth);
-      prefix_map[i] = Some(p.clone());
+      prefix_map[i] = p.into();
       prefix_len_map[i] = p.val.len() as u32;
     }
 
+    let is_single_prefix = prefixes.len() == 1;
     Decompressor {
       prefixes,
       prefix_map,
       prefix_len_map,
       max_depth,
       n,
+      is_single_prefix,
       data_type: PhantomData,
     }
   }
@@ -94,71 +97,50 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
     self.decompress_n(reader, self.n)
   }
 
-  pub fn decompress_n(&self, reader: &mut BitReader, n: usize) -> Vec<T> {
-    let pow = 1_usize << self.max_depth;
-    let mut res = Vec::with_capacity(n);
-    // handle the case when there's just one prefix of length 0
-    let default_lower;
-    let default_upper;
-    let default_k;
-    let default_jumpstart;
-    match &self.prefix_map[0] {
-      Some(p) if p.val.is_empty() => {
-        default_lower = p.lower;
-        default_upper = p.upper;
-        default_k = p.k;
-        default_jumpstart = p.run_len_jumpstart;
-      },
-      _ => {
-        // any usage of these should be unreachable
-        default_lower = DT::ZERO;
-        default_upper = DT::ZERO;
-        default_k = 0;
-        default_jumpstart = None;
-      }
-    };
-    let mut i = 0;
-    while i < n {
-      let mut lower = default_lower;
-      let mut upper = default_upper;
-      let mut k = default_k;
-      let mut run_len_jumpstart = default_jumpstart;
+  fn next_prefix(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<T> {
+    if self.is_single_prefix {
+      self.prefix_map[0]
+    } else {
       let mut prefix_idx = 0;
       for prefix_len in 1..self.max_depth + 1 {
         if reader.read_one() {
-          prefix_idx |= pow >> prefix_len;
+          prefix_idx |= 1 << (self.max_depth - prefix_len);
         }
         if self.prefix_len_map[prefix_idx] == prefix_len {
-          let p = self.prefix_map[prefix_idx].as_ref().unwrap();
-          lower = p.lower;
-          upper = p.upper;
-          k = p.k;
-          run_len_jumpstart = p.run_len_jumpstart;
-          break;
+          return self.prefix_map[prefix_idx];
         }
       }
-      let range = DT::offset_diff(upper, lower);
+      panic!("prefixes are corrupt");
+    }
+  }
 
-      let reps = match run_len_jumpstart {
+  pub fn decompress_n(&self, reader: &mut BitReader, n: usize) -> Vec<T> {
+    let mut res = Vec::with_capacity(n);
+    let mut i = 0;
+    while i < n {
+      let p = self.next_prefix(reader);
+      let range = DT::offset_diff(p.upper, p.lower);
+
+      let reps = match p.run_len_jumpstart {
         None => {
           1
         },
         Some(jumpstart) => {
           // we stored the number of occurrences minus 1
           // because we knew it's at least 1
-          reader.read_varint(jumpstart) + 1
+          min(reader.read_varint(jumpstart) + 1, n - i)
         },
       };
 
       for _ in 0..reps {
-        let mut offset = reader.read_u64(k as usize);
-        if k < 64 {
-          let most_significant = 1_u64 << k;
+        let mut offset = reader.read_u64(p.k as usize);
+        if p.k < 64 {
+          let most_significant = 1_u64 << p.k;
           if range - offset >= most_significant && reader.read_one() {
             offset |= most_significant;
           }
         }
-        res.push(DT::add_offset(lower, offset));
+        res.push(DT::add_offset(p.lower, offset));
       }
       i += reps;
     }

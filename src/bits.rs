@@ -9,12 +9,10 @@ const BIT_MASKS: [u8; 8] = [
   0x01,
 ];
 
-#[inline(always)]
 pub fn bit_from_byte(byte: u8, j: usize) -> bool {
   (byte & BIT_MASKS[j]) > 0
 }
 
-#[inline(always)]
 pub fn byte_to_bits(byte: u8) -> [bool; 8] {
   let mut res: [bool; 8];
   unsafe {

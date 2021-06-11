@@ -65,7 +65,6 @@ impl From<Vec<u8>> for BitReader {
 }
 
 impl BitReader {
-  #[inline(always)]
   fn refresh_if_needed(&mut self) {
     if self.j == 8 {
       self.i += 1;
@@ -160,4 +159,3 @@ impl BitReader {
     res
   }
 }
-

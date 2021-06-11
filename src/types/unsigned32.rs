@@ -6,12 +6,10 @@ use crate::decompressor::Decompressor;
 use crate::types::{DataType, NumberLike};
 
 impl NumberLike for u32 {
-  #[inline(always)]
   fn num_eq(&self, other: &Self) -> bool {
     self.eq(other)
   }
 
-  #[inline(always)]
   fn num_cmp(&self, other: &Self) -> Ordering {
     self.cmp(other)
   }
@@ -22,14 +20,11 @@ pub struct U32DataType {}
 impl DataType<u32> for U32DataType {
   const HEADER_BYTE: u8 = 4;
   const BIT_SIZE: usize = 32;
-  const ZERO: u32 = 0;
 
-  #[inline(always)]
   fn offset_diff(upper: u32, lower: u32) -> u64 {
     (upper - lower) as u64
   }
 
-  #[inline(always)]
   fn add_offset(lower: u32, off: u64) -> u32 {
     lower + off as u32
   }
