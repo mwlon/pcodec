@@ -64,6 +64,19 @@ pub fn bits_to_usize_truncated(bits: &[bool], max_depth: u32) -> usize {
   res
 }
 
+pub fn usize_to_varint_bits(mut x: usize, jumpstart: usize) -> Vec<bool> {
+  let mut res = Vec::with_capacity(jumpstart + 5);
+  res.extend(usize_to_bits(x, jumpstart as u32));
+  x >>= jumpstart;
+  while x > 0 {
+    res.push(true);
+    res.push(x & 1 > 0);
+    x >>= 1;
+  }
+  res.push(false);
+  res
+}
+
 pub fn usize_to_bits(x: usize, n_bits: u32) -> Vec<bool> {
   u64_to_bits(x as u64, n_bits)
 }

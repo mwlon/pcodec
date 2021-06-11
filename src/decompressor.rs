@@ -77,12 +77,12 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       let upper = DT::from_bytes(bits::bits_to_bytes(upper_bits));
       let code_len = bit_reader.read_u64(BITS_TO_ENCODE_PREFIX_LEN as usize) as usize;
       let val = bit_reader.read(code_len);
-      let reps = if bit_reader.read_one() {
-        bit_reader.read_u64(BITS_TO_ENCODE_REPS as usize) as usize
+      let jumpstart = if bit_reader.read_one() {
+        Some(bit_reader.read_u64(BITS_TO_ENCODE_JUMPSTART as usize) as usize)
       } else {
-        1_usize
+        None
       };
-      prefixes.push(Prefix::new(val, lower, upper, DT::offset_diff(upper, lower), reps));
+      prefixes.push(Prefix::new(val, lower, upper, DT::offset_diff(upper, lower), jumpstart));
     }
 
     let decompressor = Decompressor::new(prefixes, n);
@@ -101,20 +101,20 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let default_lower;
     let default_upper;
     let default_k;
-    let default_reps;
+    let default_jumpstart;
     match &self.prefix_map[0] {
       Some(p) if p.val.is_empty() => {
         default_lower = p.lower;
         default_upper = p.upper;
         default_k = p.k;
-        default_reps = p.reps;
+        default_jumpstart = p.run_len_jumpstart;
       },
       _ => {
         // any usage of these should be unreachable
         default_lower = DT::ZERO;
         default_upper = DT::ZERO;
         default_k = 0;
-        default_reps = 1;
+        default_jumpstart = None;
       }
     };
     let mut i = 0;
@@ -122,7 +122,7 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
       let mut lower = default_lower;
       let mut upper = default_upper;
       let mut k = default_k;
-      let mut reps = default_reps;
+      let mut run_len_jumpstart = default_jumpstart;
       let mut prefix_idx = 0;
       for prefix_len in 1..self.max_depth + 1 {
         if reader.read_one() {
@@ -133,11 +133,23 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
           lower = p.lower;
           upper = p.upper;
           k = p.k;
-          reps = p.reps;
+          run_len_jumpstart = p.run_len_jumpstart;
           break;
         }
       }
       let range = DT::offset_diff(upper, lower);
+
+      let reps = match run_len_jumpstart {
+        None => {
+          1
+        },
+        Some(jumpstart) => {
+          // we stored the number of occurrences minus 1
+          // because we knew it's at least 1
+          reader.read_varint(jumpstart) + 1
+        },
+      };
+
       for _ in 0..reps {
         let mut offset = reader.read_u64(k as usize);
         if k < 64 {

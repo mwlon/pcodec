@@ -9,23 +9,23 @@ use std::convert::TryInto;
 use std::env;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::SystemTime;
 
-fn basename_no_ext(path: &PathBuf) -> String {
+fn basename_no_ext(path: &Path) -> String {
   let basename = path
     .file_name()
     .expect("weird path")
     .to_str()
     .expect("not unicode");
-  match basename.find(".") {
+  match basename.find('.') {
     Some(i) => basename[..i].to_string(),
     _ => basename.to_string(),
   }
 }
 
 trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
-  fn parse_nums(bytes: &Vec<u8>) -> Vec<T>;
+  fn parse_nums(bytes: &[u8]) -> Vec<T>;
   fn train_compressor(nums: Vec<T>, max_depth: u32) -> Compressor<T, DT> {
     Compressor::<T, DT>::train(nums, max_depth).expect("could not train")
   }
@@ -33,7 +33,7 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
     Decompressor::<T, DT>::from_reader(bit_reader).expect("invalid header")
   }
 
-  fn handle(path: &PathBuf, max_depth: u32, output_dir: &str) {
+  fn handle(path: &Path, max_depth: u32, output_dir: &str) {
     let bytes = fs::read(path).expect("could not read");
     let nums = Self::parse_nums(&bytes);
     let compress_start = SystemTime::now();
@@ -70,7 +70,7 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
           "{} num {} -> {} -> {}",
           i,
           nums[i],
-          bits_to_string(&compressor.compress_num_as_bits(nums[i]).expect("could not compress")),
+          bits_to_string(&compressor.compress_nums_as_bits(&[nums[i]]).expect("could not compress")),
           rec_nums[i]
         );
         panic!("Failed to recover nums by compressing and decompressing!");
@@ -82,7 +82,7 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
 struct I64Handler {}
 
 impl DtypeHandler<i64, I64DataType> for I64Handler {
-  fn parse_nums(bytes: &Vec<u8>) -> Vec<i64> {
+  fn parse_nums(bytes: &[u8]) -> Vec<i64> {
     bytes
       .chunks(8)
       // apparently numpy writes in le order
@@ -94,7 +94,7 @@ impl DtypeHandler<i64, I64DataType> for I64Handler {
 struct F64Handler {}
 
 impl DtypeHandler<f64, F64DataType> for F64Handler {
-  fn parse_nums(bytes: &Vec<u8>) -> Vec<f64> {
+  fn parse_nums(bytes: &[u8]) -> Vec<f64> {
     bytes
       .chunks(8)
       .map(|chunk| f64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")))

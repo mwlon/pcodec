@@ -140,6 +140,18 @@ impl BitReader {
     }
   }
 
+  pub fn read_varint(&mut self, jumpstart: usize) -> usize {
+    let mut res = self.read_u64(jumpstart) as usize;
+    let mut mask = 1 << jumpstart;
+    while self.read_one() {
+      if self.read_one() {
+        res |= mask;
+      }
+      mask <<= 1;
+    }
+    res
+  }
+
   pub fn read_one(&mut self) -> bool {
     self.refresh_if_needed();
 

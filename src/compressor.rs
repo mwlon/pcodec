@@ -1,5 +1,4 @@
 use std::cmp::{max, min};
-use std::cmp::Ordering::{Equal, Greater, Less};
 use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -13,53 +12,26 @@ use crate::constants::*;
 use crate::errors::{MaxEntriesError, MaxDepthError, OutOfRangeError};
 use std::error::Error;
 
-const MIN_N_TO_USE_REPS: usize = 1000;
-const MIN_FREQUENCY_TO_USE_REPS: f64 = 0.8;
-const MIN_REPS_RATIO: f64 = 3.0;
+const MIN_N_TO_USE_RUN_LEN: usize = 1001;
+const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
 
-struct RepConfiguration {
+struct JumpstartConfiguration {
   weight: u64,
-  reps: usize,
+  jumpstart: usize,
 }
 
-fn choose_rep_configs(
+fn choose_run_len_jumpstart(
   weight: u64,
   n: u64,
-  max_prefixes: usize,
-) -> Vec<RepConfiguration> {
-  // This strategy could probably be improved in the future.
-  // Current idea is to simply choose the tokens that could describe a
-  // run of the common number in as few tokens as possible.
-  // But this ignores that some tokens will have longer Huffman codes,
-  // so we could do better in the future by taking that into account.
+) -> JumpstartConfiguration {
   let freq = (weight as f64) / (n as f64);
-  let mean_run_len = 1.0 / (1.0 - freq);
-  let mut res = Vec::new();
-
-  // how many prefixes we'll actually use
-  // it's not usually efficient to make a new prefix when <4 copies
-  let n_prefixes = min(
-    max_prefixes,
-    (mean_run_len.log2() / MIN_REPS_RATIO.log2()).floor() as usize
-  );
-  let ratio = mean_run_len.powf(1.0 / n_prefixes as f64);
-  let mut s = 0.0;
-  for i in 0..n_prefixes {
-    s += ratio.powf(i as f64);
+  let non_freq = 1.0 - freq;
+  let jumpstart = min((-non_freq.log2()).ceil() as usize, MAX_JUMPSTART);
+  let expected_n_runs = (freq * non_freq * n as f64).ceil() as u64;
+  JumpstartConfiguration {
+    weight: expected_n_runs,
+    jumpstart,
   }
-  let new_weight = ((weight as f64) / s).floor() as u64;
-  let rep_1_new_weight = new_weight + 1;
-  res.push(RepConfiguration {
-    reps: 1,
-    weight: rep_1_new_weight,
-  });
-  for i in 1..n_prefixes {
-    res.push(RepConfiguration {
-      reps: ratio.powf(i as f64).floor() as usize,
-      weight: new_weight,
-    });
-  }
-  res
 }
 
 fn push_pref<T: Copy>(
@@ -75,18 +47,16 @@ fn push_pref<T: Copy>(
   let frequency = weight as f64 / n as f64;
   let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_prefix) / n);
   let prefix_idx_incr = new_prefix_idx - *prefix_idx;
-  if n < MIN_N_TO_USE_REPS || frequency < MIN_FREQUENCY_TO_USE_REPS || weight == n || prefix_idx_incr == 1 {
+  if n < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || weight == n || prefix_idx_incr == 1 {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
     // This also works if there are no other ranges.
-    seq.push(PrefixIntermediate::new(weight as u64, sorted[i], sorted[j - 1], 1));
+    seq.push(PrefixIntermediate::new(weight as u64, sorted[i], sorted[j - 1], None));
   } else {
     // The weird case - a range that represents almost all (but not all) the data.
     // We create extra prefixes that can describe `reps` copies of the range at once.
-    let rep_configs = choose_rep_configs(weight as u64, n as u64, prefix_idx_incr);
-    for config in &rep_configs {
-      seq.push(PrefixIntermediate::new(config.weight, sorted[i], sorted[j - 1], config.reps));
-    }
+    let config = choose_run_len_jumpstart(weight as u64, n as u64);
+    seq.push(PrefixIntermediate::new(config.weight, sorted[i], sorted[j - 1], Some(config.jumpstart)));
   }
   *prefix_idx = new_prefix_idx;
 }
@@ -160,7 +130,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
           pref0.weight + pref1.weight,
           pref0.lower,
           pref1.upper,
-          1,
+          None,
         );
         //not the most efficient but whatever
         prefix_sequence.remove(best_i as usize + 1);
@@ -171,7 +141,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
     let mut prefixes = Vec::new();
     for p in &prefix_sequence {
-      prefixes.push(Prefix::new(p.val.clone(), p.lower, p.upper, DT::offset_diff(p.upper, p.lower), p.reps));
+      prefixes.push(Prefix::new(p.val.clone(), p.lower, p.upper, DT::offset_diff(p.upper, p.lower), p.run_len_jumpstart));
     }
 
     let res = Compressor::<T, DT> {
@@ -183,8 +153,8 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
   }
 
   pub fn combine_improvement(p0: &PrefixIntermediate<T>, p1: &PrefixIntermediate<T>, n: usize) -> f64 {
-    if p0.reps != 1 || p1.reps != 1 {
-      // can never combine prefixes with multiple reps
+    if p0.run_len_jumpstart.is_some() || p1.run_len_jumpstart.is_some() {
+      // can never combine prefixes that encode run length
       return f64::MIN;
     }
 
@@ -215,22 +185,8 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
   }
 
   #[inline(always)]
-  fn compress_num_as_bits_w_prefix(&self, num: T, pref: &Prefix<T>, v: &mut Vec<bool>) {
-    v.extend(&pref.val);
-    self.compress_num_offset_bits_w_prefix(num, pref, v);
-  }
-
-  pub fn compress_num_as_bits(&self, num: T) -> Result<Vec<bool>, OutOfRangeError<T>> {
-    for pref in &self.prefixes {
-      if pref.upper.ge(&num) && pref.lower.le(&num) && pref.reps == 1 {
-        let mut res = Vec::new();
-        self.compress_num_as_bits_w_prefix(num, &pref, &mut res);
-        return Ok(res);
-      }
-    }
-    Err(OutOfRangeError {
-      num,
-    })
+  fn in_prefix(num: T, prefix: &Prefix<T>) -> bool {
+    num.ge(&prefix.lower) && num.le(&prefix.upper)
   }
 
   pub fn compress_nums_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, OutOfRangeError<T>> {
@@ -238,11 +194,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     // most reps comes first
     sorted_prefixes.sort_by(
       |p0, p1|
-        match p1.reps.cmp(&p1.reps) {
-          Less => Less,
-          Greater => Greater,
-          Equal => p0.val.len().cmp(&p1.val.len())
-        }
+        p0.val.len().cmp(&p1.val.len())
     );
 
     let mut res = Vec::new();
@@ -251,28 +203,41 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     while i < nums.len() {
       let mut success = false;
       for pref in &sorted_prefixes {
-        let reps = pref.reps;
-        if i + pref.reps > nums.len() {
+        let num = nums[i];
+        if !Self::in_prefix(num, &pref) {
           continue;
         }
 
-        let mut matches = true;
-        for x in nums.iter().skip(i).take(reps) {
-          if x.lt(&pref.lower) || x.gt(&pref.upper) {
-            matches = false;
-            break;
+        res_ptr.extend(&pref.val);
+
+        match pref.run_len_jumpstart {
+          None => {
+            self.compress_num_offset_bits_w_prefix(num, &pref, res_ptr);
+            i += 1;
+          }
+          Some(jumpstart) => {
+            let mut reps = 1;
+            for other_num in nums.iter().skip(i + 1) {
+              if Self::in_prefix(*other_num, &pref) {
+                reps += 1;
+              } else {
+                break;
+              }
+            }
+
+            // we store 1 less than the number of occurrences
+            // because the prefix already implies there is at least 1 occurrence
+            res_ptr.extend(usize_to_varint_bits(reps - 1, jumpstart));
+
+            for x in nums.iter().skip(i).take(reps) {
+              self.compress_num_offset_bits_w_prefix(*x, &pref, res_ptr);
+            }
+            i += reps;
           }
         }
 
-        if matches {
-          res_ptr.extend(&pref.val);
-          for x in nums.iter().skip(i).take(reps) {
-            self.compress_num_offset_bits_w_prefix(*x, &pref, res_ptr);
-          }
-          i += reps;
-          success = true;
-          break;
-        }
+        success = true;
+        break;
       }
 
       if !success {
@@ -295,11 +260,14 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
       res.extend(bytes_to_bits(DT::bytes_from(pref.upper)));
       res.extend(usize_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
       res.extend(&pref.val);
-      if pref.reps == 1 {
-        res.push(false);
-      } else {
-        res.push(true);
-        res.extend(usize_to_bits(pref.reps, BITS_TO_ENCODE_REPS));
+      match pref.run_len_jumpstart {
+        None => {
+          res.push(false);
+        },
+        Some(jumpstart) => {
+          res.push(true);
+          res.extend(usize_to_bits(jumpstart, BITS_TO_ENCODE_JUMPSTART))
+        },
       }
     }
     res
