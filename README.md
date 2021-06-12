@@ -61,3 +61,7 @@ codes.
 For data sampled from a random distribution, this compression algorithm can
 reduce byte size to near the theoretical limit of the distribution's Shannon
 entropy.
+
+## File Format
+
+<img src="./file_format.svg">
