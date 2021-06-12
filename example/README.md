@@ -51,7 +51,9 @@ To compare file sizes, you can just use `ls`.
 ... 439K ... f64_edge_cases.qco
 ... 681K ... f64_normal_at_0.qco
 ... 552K ... f64_normal_at_1000.qco
+...  44K ... i64_cents.bin.gz
 ...  28B ... i64_constant.qco
+...  62K ... i64_dollars.bin.gz
 ...  12K ... i64_extremes.qco
 ... 262K ... i64_geo1M.qco
 ...  25K ... i64_geo2.qco
@@ -62,12 +64,15 @@ To compare file sizes, you can just use `ls`.
 ...  67K ... i64_normal10.qco
 ... 270K ... i64_normal1M.qco
 ... 2.1K ... i64_sparse.qco
+... 133K ... i64_total_cents.bin.gz
 ... 782K ... i64_uniform.qco
 % ls -lh data/gzip_9         
 ... 505K ... f64_edge_cases.bin.gz
 ... 751K ... f64_normal_at_0.bin.gz
 ... 656K ... f64_normal_at_1000.bin.gz
+...  73K ... i64_cents.bin.gz
 ... 1.2K ... i64_constant.bin.gz
+...  98K ... i64_dollars.bin.gz
 ...  22K ... i64_extremes.bin.gz
 ... 351K ... i64_geo1M.bin.gz
 ...  44K ... i64_geo2.bin.gz
@@ -78,6 +83,7 @@ To compare file sizes, you can just use `ls`.
 ... 106K ... i64_normal10.bin.gz
 ... 361K ... i64_normal1M.bin.gz
 ... 2.4K ... i64_sparse.bin.gz
+... 169K ... i64_total_cents.bin.gz
 ... 782K ... i64_uniform.bin.gz
 ```
 
@@ -94,14 +100,22 @@ Some observations:
 they're less than 3% as big!
 * With uniformly random data, there's not really any information to compress,
 so both algorithms use nearly the exact binary data size of 781KB.
+* Particularly interesting are the `cents`, `dollars`, and `total_cents`
+distributions, which are meant to model the distribution of prices
+at a retail store.
+The cents are commonly 99, 98, 0, etc.
+Quantile compression smooths over high-frequency information like this
+when just given total cents (100 + dollars + cents), and only compresses
+down to 133K.
+But given the two columns separately, it compresses down to
+62K + 44K = 106K.
+Gzip does worth regardless, with 169K or 171K.
 * Floating point distributions can't be compressed as much as integers.
 That's because between any power of 2, 64 bit floats use 52 bits of
 information, which is already most of their 64 bits.
 In other words, even a fairly tight distribution of floats can have high
 entropy.
 Integer distributions have low entropy much more commonly.
-
-
 
 Also, if you pay attention to the compression/decompression times, you
 should find that quantile compression is several times faster than gzip.

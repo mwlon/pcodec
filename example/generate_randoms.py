@@ -4,6 +4,8 @@
 import numpy as np
 import os
 
+n = 100000
+
 os.makedirs('data/txt', exist_ok=True)
 os.makedirs('data/binary', exist_ok=True)
 
@@ -28,7 +30,6 @@ def write_f64(arr, name):
   with open(f'data/binary/f64_{name}.bin', 'wb') as f:
     f.write(arr.tobytes())
 
-n = 100000
 write_i64(np.random.normal(scale=1.0, size=n), 'normal1')
 write_i64(np.random.normal(scale=10.0, size=n), 'normal10')
 write_i64(np.random.normal(scale=1000000.0, size=n), 'normal1M')
@@ -36,12 +37,12 @@ write_i64(np.random.normal(scale=1000000.0, size=n), 'normal1M')
 write_i64(np.random.geometric(p=0.5, size=n), 'geo2')
 write_i64(np.random.geometric(p=0.000001, size=n), 'geo1M')
 
-def fixed_median_lomax(a):
+def fixed_median_lomax(a, median):
   unscaled_median = 2 ** (1 / a) - 1
-  return np.random.pareto(a=a, size=n) / unscaled_median * 1000
-write_i64(fixed_median_lomax(0.5), 'lomax05')
-write_i64(fixed_median_lomax(1.5), 'lomax15')
-write_i64(fixed_median_lomax(2.5), 'lomax25')
+  return np.random.pareto(a=a, size=n) / unscaled_median * median
+write_i64(fixed_median_lomax(0.5, 1000), 'lomax05')
+write_i64(fixed_median_lomax(1.5, 1000), 'lomax15')
+write_i64(fixed_median_lomax(2.5, 1000), 'lomax25')
 
 write_i64(np.random.randint(-2**63, 2**63, size=n), 'uniform')
 
@@ -50,6 +51,21 @@ write_i64(np.repeat(77777, n), 'constant')
 write_i64(np.where(np.random.uniform(size=n) < 0.5, -2**63, 2**63 - 1), 'extremes')
 
 write_i64(np.random.binomial(1, p=0.01, size=n), 'sparse')
+
+dollars = np.floor(fixed_median_lomax(1.5, 5)).astype(np.int64)
+cents = np.random.randint(0, 100, size=n)
+p = np.random.uniform(size=n)
+cents[p < 0.9] = 99
+cents[p < 0.75] = 98
+cents[p < 0.6] = 95
+cents[p < 0.45] = 75
+cents[p < 0.4] = 50
+cents[p < 0.25] = 25
+cents[p < 0.15] = 0
+total_cents = dollars * 100 + cents
+write_i64(dollars, 'dollars')
+write_i64(cents, 'cents')
+write_i64(total_cents, 'total_cents')
 
 write_f64(np.random.normal(size=n), 'normal_at_0')
 write_f64(np.random.normal(loc=1000.0, size=n), 'normal_at_1000')

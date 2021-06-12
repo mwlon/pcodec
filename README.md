@@ -38,12 +38,12 @@ fn main() {
   // compress
   let max_depth = 6; // basically compression level - 6 is generally good
   let compressor = I64Compressor::train(&my_ints, max_depth).expect("failed to train");
-  let bytes = compressor.compress(&my_ints);
+  let bytes = compressor.compress(&my_ints).expect("out of range");
   println!("compressed down to {} bytes", bytes.len());
   
   // decompress
   let bit_reader = &mut BitReader::from(bytes);
-  let decompressor = I64Decompressor::from_reader(bit_reader);
+  let decompressor = I64Decompressor::from_reader(bit_reader).expect("couldn't read compression scheme");
   let recovered = decompressor.decompress(bit_reader);
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
