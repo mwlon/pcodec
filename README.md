@@ -17,8 +17,8 @@ Smaller data types like `i16` can be efficiently compressed by casting
 to `i32`.
 Timestamp support may come soon in the future.
 
-For natural data, it typically shrinks data to 25-40% smaller than
-ones produced by `gzip -9`, compresses much faster, and decompresses equally
+For natural data, it typically shrinks data to 25-40% smaller than what
+`gzip -9` produces, compresses much faster, and decompresses equally
 quickly.
 
 The intended use case for this algorithm is compressing columnar
@@ -76,6 +76,17 @@ codes.
 For data sampled from a random distribution, this compression algorithm can
 reduce byte size to near the theoretical limit of the distribution's Shannon
 entropy.
+The ideal compression method would encode a number `k` in `b` bits
+if `2^-b ~= P(k)`.
+We can plot `Q(k) = 2^-b` to see how close quantile compression gets to the
+ideal in this example with `max_depth=3`:
+
+<img src="./res/distribution_approximation.svg">
+
+The inefficiency of quantile compression depends on the KL divergence between the
+data's true distribution `P(k)`
+and the approximated distribution `Q(k)`.
+
 
 ## `.qco` File Format
 
@@ -103,4 +114,3 @@ If that range uses repetitions, a varint for the exact number of repetitions
 follows, leveraging the jumpstart from earlier.
 Then an offset (for each repetition if necessary) follows,
 specifying the exact value within the range.
-
