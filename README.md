@@ -1,13 +1,25 @@
 # Quantile Compression
 
+<img src="./res/bar_dollars_cents.svg">
+<img src="./res/bar_lomax05.svg">
+<br>
+<img src="./res/bar_normal_at_0.svg">
+<img src="./res/bar_sparse.svg">
+
 This rust library compresses and decompresses sequences of
 numerical data very well.
 It currently supports the following data types:
 `i32`, `i64`, `u32`, `u64`, `f32`, `f64`.
+Smaller data types like `i16` can be efficiently compressed by casting
+to `i32`.
 Timestamp support may come soon in the future.
 
 For natural data, it typically compresses down to files 25-40% smaller than
-ones produced by `gzip -9`, and decompresses several times faster.
+ones produced by `gzip -9`, compresses much faster, and decompresses equally
+quickly.
+
+The intended use case for this algorithm is in compressing columnar
+data, especially for use by Spark and other execution engines.
 
 This IS:
 * lossless

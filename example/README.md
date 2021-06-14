@@ -116,6 +116,3 @@ information, which is already most of their 64 bits.
 In other words, even a fairly tight distribution of floats can have high
 entropy.
 Integer distributions have low entropy much more commonly.
-
-Also, if you pay attention to the compression/decompression times, you
-should find that quantile compression is several times faster than gzip.
