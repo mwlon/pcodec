@@ -1,10 +1,10 @@
 # Quantile Compression
 
-<img src="./res/bar_dollars_cents.svg">
-<img src="./res/bar_lomax05.svg">
+<img src="./res/bar_dollars_cents.svg" width="40%">
+<img src="./res/bar_lomax05.svg" width="40%">
 <br>
-<img src="./res/bar_normal_at_0.svg">
-<img src="./res/bar_sparse.svg">
+<img src="./res/bar_normal_at_0.svg" width="40%">
+<img src="./res/bar_sparse.svg" width="40%">
 
 This rust library compresses and decompresses sequences of
 numerical data very well.
