@@ -39,7 +39,11 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
     let nums = Self::parse_nums(&bytes);
     let compress_start = SystemTime::now();
     let compressor = Self::train_compressor(nums.clone(), max_depth);
-    println!("compressor:\n{:?}", compressor);
+    println!(
+      "compressor in {:?}:\n{:?}",
+      SystemTime::now().duration_since(compress_start),
+      compressor
+    );
     let fname = basename_no_ext(&path);
 
     let output_path = format!("{}/{}.qco", &output_dir, fname);
@@ -57,7 +61,11 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
     let mut bit_reader = BitReader::from(bytes);
     let bit_reader_ptr = &mut bit_reader;
     let decompressor = Self::decompressor_from_reader(bit_reader_ptr);
-    println!("decompressor in {:?}:\n{:?}", SystemTime::now().duration_since(decompress_start), decompressor);
+    println!(
+      "decompressor in {:?}:\n{:?}",
+      SystemTime::now().duration_since(decompress_start),
+      decompressor
+    );
     let rec_nums = decompressor.decompress(bit_reader_ptr);
     println!("{} nums: {} {}", rec_nums.len(), rec_nums.first().unwrap(), rec_nums.last().unwrap());
     let decompress_end = SystemTime::now();

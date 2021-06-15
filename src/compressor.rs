@@ -79,7 +79,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     }
 
     let mut sorted = nums;
-    sorted.sort_by(|a, b| a.num_cmp(b));
+    sorted.sort_unstable_by(|a, b| a.num_cmp(b));
     let n_prefix = 1_usize << max_depth;
     let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
@@ -141,7 +141,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
     let mut prefixes = Vec::new();
     for p in &prefix_sequence {
-      prefixes.push(Prefix::new(p.val.clone(), p.lower, p.upper, DT::offset_diff(p.upper, p.lower), p.run_len_jumpstart));
+      prefixes.push(Prefix::from_intermediate_and_diff(p, DT::offset_diff(p.upper, p.lower)));
     }
 
     let res = Compressor::<T, DT> {
@@ -177,7 +177,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
   fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, v: &mut Vec<bool>) {
     let off = DT::offset_diff(num, pref.lower);
-    v.extend(u64_to_bits(off, pref.k));
+    extend_with_u64_bits(off, pref.k, v);
     if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
       v.push(((off >> pref.k) & 1) > 0) // most significant bit, if necessary, comes last
     }
@@ -200,8 +200,8 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     let mut i = 0;
     while i < nums.len() {
       let mut success = false;
+      let num = nums[i];
       for pref in &sorted_prefixes {
-        let num = nums[i];
         if !Self::in_prefix(num, &pref) {
           continue;
         }

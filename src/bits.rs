@@ -80,13 +80,17 @@ pub fn usize_to_bits(x: usize, n_bits: u32) -> Vec<bool> {
 }
 
 pub fn u64_to_bits(x: u64, n_bits: u32) -> Vec<bool> {
-  // the least significant bits, but still in bigendian order
   let mut res = Vec::with_capacity(n_bits as usize);
+  extend_with_u64_bits(x, n_bits, &mut res);
+  res
+}
+
+pub fn extend_with_u64_bits(x: u64, n_bits: u32, v: &mut Vec<bool>) {
+  // the least significant bits, but still in bigendian order
   for i in 1..n_bits + 1 {
     let shift = n_bits - i;
-    res.push(((x >> shift) & 1) > 0);
+    v.push(x & (1 << shift) > 0);
   }
-  res
 }
 
 pub fn bits_to_string(bits: &[bool]) -> String {
