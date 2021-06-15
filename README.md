@@ -33,7 +33,6 @@ This is NOT:
 * lossy
 * for multisets
 * optimal for time series with high mutual information between consecutive elements
-* competing for decompression speed
 
 ## Usage
 
@@ -51,7 +50,9 @@ fn main() {
   }
   
   // compress
-  let max_depth = 6; // basically compression level - 6 is generally good
+  // max_depth is basically compression level - 6 is generally good.
+  // Max depths between 4 and 8 are reasonable.
+  let max_depth = 6;
   let compressor = I64Compressor::train(&my_ints, max_depth).expect("failed to train");
   let bytes = compressor.compress(&my_ints).expect("out of range");
   println!("compressed down to {} bytes", bytes.len());
@@ -76,17 +77,16 @@ codes.
 For data sampled from a random distribution, this compression algorithm can
 reduce byte size to near the theoretical limit of the distribution's Shannon
 entropy.
-The ideal compression method would encode a number `k` in `b` bits
+Ideally it encodes a number `k` in `b` bits
 if `2^-b ~= P(k)`.
 We can plot `Q(k) = 2^-b` to see how close quantile compression gets to the
 ideal in this example with `max_depth=3`:
 
 <img src="./res/distribution_approximation.svg">
 
-The inefficiency of quantile compression depends on the KL divergence between the
-data's true distribution `P(k)`
-and the approximated distribution `Q(k)`.
-
+The inefficiency of quantile compression in bits per number is the KL
+divergence from
+the approximated distribution `Q` to the true distribution `P`.
 
 ## `.qco` File Format
 
@@ -108,7 +108,7 @@ used for the most common range in a sparse distribution.
 If so, the file then encodes a "jumpstart", which is used in number
 blocks to describe how many repetitions of the range to use.
 
-Each number block has just 2 or 3 parts: the prefix, which indicates a range
+Each number block has just 2 or 3 parts. First comes the prefix, which indicates a range
 to use.
 If that range uses repetitions, a varint for the exact number of repetitions
 follows, leveraging the jumpstart from earlier.
