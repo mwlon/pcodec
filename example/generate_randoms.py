@@ -1,12 +1,16 @@
 # python 3
-# The only pip requirement: numpy
+# pip requirement: numpy, pyarrow
 
 import numpy as np
+import pyarrow as pa
+from pyarrow import parquet as pq
 import os
 
-n = 100000
+n = 10 ** 6
 
 os.makedirs('data/txt', exist_ok=True)
+os.makedirs('data/parquet', exist_ok=True)
+os.makedirs('data/gzip_parquet', exist_ok=True)
 os.makedirs('data/binary', exist_ok=True)
 
 def write_i64(arr, name):
@@ -20,6 +24,9 @@ def write_i64(arr, name):
     f.write(joined)
   with open(f'data/binary/i64_{name}.bin', 'wb') as f:
     f.write(floored.tobytes())
+  table = pa.Table.from_pydict({'nums': floored})
+  pq.write_table(table, f'data/parquet/i64_{name}.parquet', compression='NONE')
+  pq.write_table(table, f'data/snappy_parquet/i64_{name}.snappy.parquet', compression='snappy')
 
 def write_f64(arr, name):
   arr = arr.astype(np.float64)
@@ -29,6 +36,9 @@ def write_f64(arr, name):
     f.write(joined)
   with open(f'data/binary/f64_{name}.bin', 'wb') as f:
     f.write(arr.tobytes())
+  table = pa.Table.from_pydict({'nums': arr})
+  pq.write_table(table, f'data/parquet/f64_{name}.parquet', compression='NONE')
+  pq.write_table(table, f'data/snappy_parquet/f64_{name}.snappy.parquet', compression='snappy')
 
 write_i64(np.random.normal(scale=1.0, size=n), 'normal1')
 write_i64(np.random.normal(scale=10.0, size=n), 'normal10')

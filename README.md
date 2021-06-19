@@ -90,7 +90,7 @@ the approximated distribution `Q` to the true distribution `P`.
 
 ## `.qco` File Format
 
-<img src="./file_format.svg">
+<img src="./res/file_format.svg">
 
 Quantile-compressed files consist of a lightweight header (usually <1KB)
 and then very many short number blocks, each of which usually
