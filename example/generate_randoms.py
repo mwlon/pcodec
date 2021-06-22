@@ -10,6 +10,7 @@ n = 10 ** 6
 
 os.makedirs('data/txt', exist_ok=True)
 os.makedirs('data/parquet', exist_ok=True)
+os.makedirs('data/snappy_parquet', exist_ok=True)
 os.makedirs('data/gzip_parquet', exist_ok=True)
 os.makedirs('data/binary', exist_ok=True)
 
