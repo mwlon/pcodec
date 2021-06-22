@@ -13,7 +13,7 @@ TL;DR:
 * `cargo run --release`
 
 The script to generate the data uses python, so set up a python3
-environment with numpy installed.
+environment with `numpy` and `pyarrow` installed.
 In that environment, `cd`'d into the `example/` directory, run
 `python generate_randoms.py`.
 This will populate some human-readable data in `data/txt/` and
@@ -38,81 +38,90 @@ The timing benchmarks include time taken to write/read to disk.
 You can see the compressed files in `data/q_compressed_$DEPTH`, where `DEPTH=6`
 by default.
 
-## Comparing vs gzip
+When generating randoms, some comparison file formats were already generated,
+like `.gzip.parquet` in `data/gzip_parquet/`.
 
-To use gzip on the same data, make sure you have `gzip` and `xargs` installed,
+If you want to try out pure gzip on the same data,
+make sure you have `gzip` and `xargs` installed,
 then simply run `sh run_gzip.sh`.
 This will use gzip to compress the binary version of the data at compression
 levels 1 and 9.
-To compare file sizes, you can just use `ls`.
 
+To try pure Snappy,
+you can install the `szip` and `xargs` commands and run `sh run_snappy.sh`.
+
+
+
+## Comparing vs other algorithms
+
+You can compare file sizes with `ls`:
 ```
-% ls -lh data/q_compressed_6
-... 439K ... f64_edge_cases.qco
-... 681K ... f64_normal_at_0.qco
-... 552K ... f64_normal_at_1000.qco
-...  44K ... i64_cents.bin.gz
+% ls -lh data/q_compressed_6 
+... 4.3M ... f64_edge_cases.qco
+... 6.6M ... f64_normal_at_0.qco
+... 5.4M ... f64_normal_at_1000.qco
+... 440K ... i64_cents.qco
 ...  28B ... i64_constant.qco
-...  62K ... i64_dollars.bin.gz
-...  12K ... i64_extremes.qco
-... 262K ... i64_geo1M.qco
-...  25K ... i64_geo2.qco
-... 172K ... i64_lomax05.qco
-... 156K ... i64_lomax15.qco
-... 152K ... i64_lomax25.qco
-...  28K ... i64_normal1.qco
-...  67K ... i64_normal10.qco
-... 270K ... i64_normal1M.qco
-... 2.1K ... i64_sparse.qco
-... 133K ... i64_total_cents.bin.gz
-... 782K ... i64_uniform.qco
-% ls -lh data/gzip_9         
-... 505K ... f64_edge_cases.bin.gz
-... 751K ... f64_normal_at_0.bin.gz
-... 656K ... f64_normal_at_1000.bin.gz
-...  73K ... i64_cents.bin.gz
-... 1.2K ... i64_constant.bin.gz
-...  98K ... i64_dollars.bin.gz
-...  22K ... i64_extremes.bin.gz
-... 351K ... i64_geo1M.bin.gz
-...  44K ... i64_geo2.bin.gz
-... 245K ... i64_lomax05.bin.gz
-... 230K ... i64_lomax15.bin.gz
-... 226K ... i64_lomax25.bin.gz
-...  47K ... i64_normal1.bin.gz
-... 106K ... i64_normal10.bin.gz
-... 361K ... i64_normal1M.bin.gz
-... 2.4K ... i64_sparse.bin.gz
-... 169K ... i64_total_cents.bin.gz
-... 782K ... i64_uniform.bin.gz
+... 622K ... i64_dollars.qco
+... 122K ... i64_extremes.qco
+... 2.6M ... i64_geo1M.qco
+... 248K ... i64_geo2.qco
+... 1.7M ... i64_lomax05.qco
+... 1.5M ... i64_lomax15.qco
+... 1.5M ... i64_lomax25.qco
+... 280K ... i64_normal1.qco
+... 665K ... i64_normal10.qco
+... 2.6M ... i64_normal1M.qco
+...  13K ... i64_sparse.qco
+... 1.3M ... i64_total_cents.qco
+... 7.6M ... i64_uniform.qco
+
+% ls -lh data/gzip_parquet  
+... 5.2M ... f64_edge_cases.gzip.parquet
+... 7.6M ... f64_normal_at_0.gzip.parquet
+... 6.7M ... f64_normal_at_1000.gzip.parquet
+... 603K ... i64_cents.gzip.parquet
+... 632B ... i64_constant.gzip.parquet
+... 895K ... i64_dollars.gzip.parquet
+... 126K ... i64_extremes.gzip.parquet
+... 3.8M ... i64_geo1M.gzip.parquet
+... 348K ... i64_geo2.gzip.parquet
+... 2.3M ... i64_lomax05.gzip.parquet
+... 1.8M ... i64_lomax15.gzip.parquet
+... 1.8M ... i64_lomax25.gzip.parquet
+... 296K ... i64_normal1.gzip.parquet
+... 796K ... i64_normal10.gzip.parquet
+... 3.8M ... i64_normal1M.gzip.parquet
+...  17K ... i64_sparse.gzip.parquet
+... 1.4M ... i64_total_cents.gzip.parquet
+... 7.9M ... i64_uniform.gzip.parquet
 ```
 
 Note that the uncompressed, binary file size for each of these datasets
-is 781KB (100000 numbers * 8 bytes / number).
+is 7.6MB (1M numbers * 8 bytes / number).
 
 Here you can see that data is typically a good deal smaller
 as `.qco` than `.gz`, even though we're comparing a fast
 `.qco` compression level with the very highest
 `.gz` compresison level.
 Some observations:
-* For most data, `.qco` files are only about 70% as big.
-* For the degenerate case of constant data, 
-they're less than 3% as big!
+* In all cases `.qco` files are smaller.
+  On average about 25% smaller.
 * With uniformly random data, there's not really any information to compress,
-so both algorithms use nearly the exact binary data size of 781KB.
+  so both algorithms use close to the original file size of 7.6MB.
 * Particularly interesting are the `cents`, `dollars`, and `total_cents`
-distributions, which are meant to model the distribution of prices
-at a retail store.
-The cents are commonly 99, 98, 0, etc.
-Quantile compression smooths over high-frequency information like this
-when just given total cents (100 + dollars + cents), and only compresses
-down to 133K.
-But given the two columns separately, it compresses down to
-62K + 44K = 106K.
-Gzip does worth regardless, with 169K or 171K.
+  distributions, which are meant to model the distribution of prices
+  at a retail store.
+  The cents are commonly 99, 98, 0, etc.
+  Quantile compression smooths over high-frequency information like this
+  when just given total cents (100 + dollars + cents), and only compresses
+  down to 1.3MB.
+  But given the two columns separately, it compresses down to
+  622K + 440K = 1.06MB.
 * Floating point distributions can't be compressed as much as integers.
-That's because between any power of 2, 64 bit floats use 52 bits of
-information, which is already most of their 64 bits.
-In other words, even a fairly tight distribution of floats can have high
-entropy.
-Integer distributions have low entropy much more commonly.
+  That's because between any power of 2, 64 bit floats use 52 bits of
+  information, which is already most of their 64 bits.
+  In other words, even a fairly tight distribution of floats can have high
+  entropy.
+  Integer distributions have low entropy much more commonly.
+
