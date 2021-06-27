@@ -4,7 +4,9 @@ This example generates a wide variety of common integer distributions
 with the `i64` and `f64` data types,
 compresses them, decompresses them, and makes sure
 all the data came back bitwise identical.
-We also compare vs `gzip` on the binary data of these integers.
+We also compare vs
+gzip, Snappy, and their combinations with Parquet
+on the binary data of these numbers.
 
 ## Running
 
@@ -34,7 +36,6 @@ Then to run quantile compression and decompression on each dataset, run
 `cargo run --release`.
 This will show the quantile parameters chosen for each dataset and how long
 it took to compress and decompress.
-The timing benchmarks include time taken to write/read to disk.
 You can see the compressed files in `data/q_compressed_$DEPTH`, where `DEPTH=6`
 by default.
 

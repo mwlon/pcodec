@@ -47,19 +47,21 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
     let fname = basename_no_ext(&path);
 
     let output_path = format!("{}/{}.qco", &output_dir, fname);
-    fs::write(
-      &output_path,
-      compressor.compress(&nums).expect("could not compress"),
-    ).expect("couldn't write");
+    let compressed = compressor.compress(&nums).expect("could not compress");
     let compress_end = SystemTime::now();
     let dt = compress_end.duration_since(compress_start).expect("can't take dt");
     println!("COMPRESSED IN {:?}", dt);
 
+    fs::write(
+      &output_path,
+      compressed,
+    ).expect("couldn't write");
+
     // decompress
-    let decompress_start = SystemTime::now();
     let bytes = fs::read(output_path).expect("couldn't read");
     let mut bit_reader = BitReader::from(bytes);
     let bit_reader_ptr = &mut bit_reader;
+    let decompress_start = SystemTime::now();
     let decompressor = Self::decompressor_from_reader(bit_reader_ptr);
     println!(
       "decompressor in {:?}:\n{:?}",

@@ -26,13 +26,15 @@ data, especially for use by Spark and other execution engines.
 
 This IS:
 * lossless
-* order-preserving
+* order-preserving and bit-preserving (including `NaN` floats)
 * moderately fast
 
 This is NOT:
-* lossy
-* for multisets
-* optimal for time series with high mutual information between consecutive elements
+* optimal for sorted data or time series without first taking differences
+* competing for record-breaking decompression speed
+
+For compression and decompression speed benchmarks,
+see [benchmarks.md](./benchmarks.md).
 
 ## Usage
 
