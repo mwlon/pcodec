@@ -29,6 +29,21 @@ def write_i64(arr, name):
   pq.write_table(table, f'data/parquet/i64_{name}.parquet', compression='NONE')
   pq.write_table(table, f'data/snappy_parquet/i64_{name}.snappy.parquet', compression='snappy')
 
+def write_bool8(arr, name):
+  if arr.dtype != np.int8:
+    floored = np.floor(arr).astype(np.int8)
+  else:
+    floored = arr
+  ints = [str(x) for x in floored]
+  joined = '\n'.join(ints)
+  with open(f'data/txt/bool8_{name}.txt', 'w') as f:
+    f.write(joined)
+  with open(f'data/binary/bool8_{name}.bin', 'wb') as f:
+    f.write(floored.tobytes())
+  table = pa.Table.from_pydict({'nums': floored})
+  pq.write_table(table, f'data/parquet/bool8_{name}.parquet', compression='NONE')
+  pq.write_table(table, f'data/snappy_parquet/bool8_{name}.snappy.parquet', compression='snappy')
+
 def write_f64(arr, name):
   arr = arr.astype(np.float64)
   floats = [str(x) for x in arr]
@@ -89,3 +104,5 @@ edge_case_floats[p < 0.3] = np.nan
 edge_case_floats[p < 0.2] = -np.nan  # yes, it is different
 edge_case_floats[p < 0.1] = np.NINF
 write_f64(edge_case_floats, 'edge_cases')
+
+write_bool8(np.random.randint(2, size=n), 'random')
