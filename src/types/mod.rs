@@ -8,6 +8,7 @@ pub mod signed32;
 pub mod signed64;
 pub mod unsigned32;
 pub mod unsigned64;
+pub mod boolean8;
 
 pub trait NumberLike: Copy + Display + Debug + Default {
   fn num_eq(&self, other: &Self) -> bool;
