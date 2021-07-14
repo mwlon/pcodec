@@ -18,7 +18,7 @@ impl NumberLike for bool {
 pub struct BoolDataType {}
 
 impl DataType<bool> for BoolDataType {
-  const HEADER_BYTE: u8 = 7;
+  const HEADER_BYTE: u8 = 4;
   const BIT_SIZE: usize = 8;
 
   fn offset_diff(upper: bool, lower: bool) -> u64 {
@@ -30,11 +30,11 @@ impl DataType<bool> for BoolDataType {
   }
 
   fn bytes_from(value: bool) -> Vec<u8> {
-    vec![value as u8]
+    (value as u8).to_be_bytes().to_vec()
   }
 
   fn from_bytes(bytes: Vec<u8>) -> bool {
-    bytes[0] != 0
+    u8::from_be_bytes(bytes.try_into().unwrap()) != 0
   }
 }
 
