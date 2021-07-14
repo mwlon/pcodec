@@ -15,10 +15,10 @@ impl NumberLike for bool {
   }
 }
 
-pub struct B8DataType {}
+pub struct BoolDataType {}
 
-impl DataType<bool> for B8DataType {
-  const HEADER_BYTE: u8 = 4;
+impl DataType<bool> for BoolDataType {
+  const HEADER_BYTE: u8 = 7;
   const BIT_SIZE: usize = 8;
 
   fn offset_diff(upper: bool, lower: bool) -> u64 {
@@ -30,13 +30,13 @@ impl DataType<bool> for B8DataType {
   }
 
   fn bytes_from(value: bool) -> Vec<u8> {
-    (value as u8).to_be_bytes().to_vec()
+    vec![value as u8]
   }
 
   fn from_bytes(bytes: Vec<u8>) -> bool {
-    u8::from_be_bytes(bytes.try_into().unwrap()) != 0
+    bytes[0] != 0
   }
 }
 
-pub type B8Compressor = Compressor<u8, B8DataType>;
-pub type B8Decompressor = Decompressor<u8, B8DataType>;
+pub type BoolCompressor = Compressor<u8, BoolDataType>;
+pub type BoolDecompressor = Decompressor<u8, BoolDataType>;
