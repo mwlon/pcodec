@@ -5,7 +5,7 @@ use q_compress::decompressor::Decompressor;
 use q_compress::types::{DataType, NumberLike};
 use q_compress::types::float64::F64DataType;
 use q_compress::types::signed64::I64DataType;
-use q_compress::types::boolean8::B8DataType;
+use q_compress::types::boolean8::BoolDataType;
 use std::convert::TryInto;
 use std::env;
 use std::fs;
@@ -114,9 +114,9 @@ impl DtypeHandler<f64, F64DataType> for F64Handler {
   }
 }
 
-struct B8Handler {}
+struct BoolHandler {}
 
-impl DtypeHandler<bool, B8DataType> for B8Handler {
+impl DtypeHandler<bool, BoolDataType> for BoolHandler {
   fn parse_nums(bytes: &[u8]) -> Vec<bool> {
     bytes
       .chunks(1)
@@ -162,7 +162,7 @@ fn main() {
     } else if path_str.contains("f64") {
       F64Handler::handle(&path, max_depth, &output_dir);
     } else if path_str.contains("bool8") {
-      B8Handler::handle(&path, max_depth, &output_dir);
+      BoolHandler::handle(&path, max_depth, &output_dir);
     } else {
       panic!("Could not determine dtype for file {}!", path_str);
     };
