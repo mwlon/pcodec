@@ -5,7 +5,7 @@ use q_compress::decompressor::Decompressor;
 use q_compress::types::{DataType, NumberLike};
 use q_compress::types::float64::F64DataType;
 use q_compress::types::signed64::I64DataType;
-use q_compress::types::boolean8::BoolDataType;
+use q_compress::types::boolean::BoolDataType;
 use std::convert::TryInto;
 use std::env;
 use std::fs;
