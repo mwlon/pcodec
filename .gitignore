@@ -5,3 +5,4 @@ example/venv
 .idea
 *.iml
 temp
+**/.DS_Store
