@@ -80,7 +80,8 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 
     let mut sorted = nums;
     sorted.sort_unstable_by(|a, b| a.num_cmp(b));
-    let n_prefix = 1_usize << max_depth;
+    let safe_max_depth = min(max_depth, (n as f64).log2() as u32);
+    let n_prefix = 1_usize << safe_max_depth;
     let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
 

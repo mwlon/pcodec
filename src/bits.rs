@@ -52,7 +52,11 @@ pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
 }
 
 pub fn bits_to_usize_truncated(bits: &[bool], max_depth: u32) -> usize {
-  let pow = 1_usize << (if max_depth > 0 {max_depth - 1} else {max_depth});
+  if max_depth < 1 {
+    return 0;
+  }
+
+  let pow = 1_usize << (max_depth - 1);
   let mut res = 0;
   for (i, bit) in bits.iter().enumerate() {
     if *bit {
@@ -154,6 +158,7 @@ mod tests {
 
   #[test]
   fn test_bits_to_usize_truncated() {
+    assert_eq!(bits_to_usize_truncated(&[], 0), 0);
     assert_eq!(bits_to_usize_truncated(&[true], 4), 8);
     assert_eq!(bits_to_usize_truncated(&[true], 3), 4);
     assert_eq!(bits_to_usize_truncated(&[true, false, true], 4), 10);
