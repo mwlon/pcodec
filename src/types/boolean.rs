@@ -18,7 +18,7 @@ impl NumberLike for bool {
 pub struct BoolDataType {}
 
 impl DataType<bool> for BoolDataType {
-  const HEADER_BYTE: u8 = 4;
+  const HEADER_BYTE: u8 = 7;
   const BIT_SIZE: usize = 8;
 
   fn offset_diff(upper: bool, lower: bool) -> u64 {

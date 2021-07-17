@@ -36,15 +36,15 @@ impl HuffmanItem {
     }
   }
 
-  pub fn create_bits<T>(&self, item_index: &mut Vec<HuffmanItem>, leaf_index: &mut Vec<PrefixIntermediate<T>>) {
+  pub fn create_bits<T>(&self, item_index: &mut Vec<HuffmanItem>, leaf_index: &mut [PrefixIntermediate<T>]) {
     self.create_bits_from(Vec::new(), item_index, leaf_index);
   }
 
   fn create_bits_from<T>(
     &self,
     bits: Vec<bool>,
-    item_index: &mut Vec<HuffmanItem>,
-    leaf_index: &mut Vec<PrefixIntermediate<T>>,
+    item_index: &mut [HuffmanItem],
+    leaf_index: &mut [PrefixIntermediate<T>],
   ) {
     item_index[self.id].bits = bits.clone();
     if self.leaf_id.is_some() {
@@ -72,7 +72,7 @@ impl PartialOrd for HuffmanItem {
   }
 }
 
-pub fn make_huffman_code<T>(prefix_sequence: &mut Vec<PrefixIntermediate<T>>) {
+pub fn make_huffman_code<T>(prefix_sequence: &mut [PrefixIntermediate<T>]) {
   let n = prefix_sequence.len();
   let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
   let mut items = Vec::with_capacity(n); // for modifying item codes
@@ -96,3 +96,80 @@ pub fn make_huffman_code<T>(prefix_sequence: &mut Vec<PrefixIntermediate<T>>) {
   head_node.create_bits(&mut items, prefix_sequence);
 }
 
+#[cfg(test)]
+mod tests {
+  use crate::prefix::PrefixIntermediate;
+  use crate::huffman::make_huffman_code;
+
+  #[test]
+  fn test_make_huffman_code_single() {
+    let mut prefix_seq = vec![
+      PrefixIntermediate::<i32>::new(100, 0, 0, None),
+    ];
+    make_huffman_code(&mut prefix_seq);
+    assert_eq!(
+      prefix_seq,
+      vec![
+        PrefixIntermediate::<i32> {
+          weight: 100,
+          lower: 0,
+          upper: 0,
+          run_len_jumpstart: None,
+          val: vec![]
+        },
+      ]
+    );
+  }
+
+  #[test]
+  fn test_make_huffman_code() {
+    let mut prefix_seq = vec![
+      PrefixIntermediate::<i32>::new(1, 0, 0, None),
+      PrefixIntermediate::<i32>::new(6, 1, 1, None),
+      PrefixIntermediate::<i32>::new(2, 2, 2, None),
+      PrefixIntermediate::<i32>::new(4, 3, 3, None),
+      PrefixIntermediate::<i32>::new(5, 4, 4, None),
+    ];
+    make_huffman_code(&mut prefix_seq);
+    assert_eq!(
+      prefix_seq,
+      vec![
+        PrefixIntermediate::<i32> {
+          weight: 1,
+          lower: 0,
+          upper: 0,
+          run_len_jumpstart: None,
+          val: vec![false, false, false],
+        },
+        PrefixIntermediate::<i32> {
+          weight: 6,
+          lower: 1,
+          upper: 1,
+          run_len_jumpstart: None,
+          val: vec![true, true],
+        },
+        PrefixIntermediate::<i32> {
+          weight: 2,
+          lower: 2,
+          upper: 2,
+          run_len_jumpstart: None,
+          val: vec![false, false, true],
+        },
+        PrefixIntermediate::<i32> {
+          weight: 4,
+          lower: 3,
+          upper: 3,
+          run_len_jumpstart: None,
+          val: vec![false, true],
+        },
+        PrefixIntermediate::<i32> {
+          weight: 5,
+          lower: 4,
+          upper: 4,
+          run_len_jumpstart: None,
+          val: vec![true, false],
+        },
+      ]
+    );
+  }
+}

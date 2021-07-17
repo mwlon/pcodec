@@ -94,7 +94,7 @@ impl<T> Display for Prefix<T> where T: NumberLike {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PrefixIntermediate<T> {
   pub weight: u64,
   pub lower: T,

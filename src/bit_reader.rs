@@ -159,3 +159,40 @@ impl BitReader {
     res
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use crate::BitReader;
+  use crate::errors::MisalignedBitReaderError;
+
+  #[test]
+  fn test_bit_reader() -> Result<(), MisalignedBitReaderError>{
+    // bits: 1001 1010  0110 1011  0010 1101
+    let bytes = vec![0x9a, 0x6b, 0x2d];
+    let mut bit_reader = BitReader::from(bytes);
+    assert_eq!(
+      bit_reader.read_bytes(1)?,
+      vec![0x9a],
+    );
+    assert!(!bit_reader.read_one());
+    assert!(bit_reader.read_one());
+    assert_eq!(
+      bit_reader.read(3),
+      vec![true, false, true],
+    );
+    assert_eq!(
+      bit_reader.read_u64(2),
+      1
+    );
+    assert_eq!(
+      bit_reader.read_u64(3),
+      4
+    );
+    assert_eq!(
+      bit_reader.read_varint(2),
+      6
+    );
+    //leaves 1 bit left over
+    Ok(())
+  }
+}
