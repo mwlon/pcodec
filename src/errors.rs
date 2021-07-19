@@ -1,110 +1,57 @@
+use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fmt;
-use crate::types::NumberLike;
-use crate::constants::{MAGIC_HEADER, MAX_MAX_DEPTH, MAX_ENTRIES};
-use std::error::Error;
+
+use crate::constants::{MAGIC_HEADER, MAX_ENTRIES, MAX_MAX_DEPTH};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MaxEntriesError {
-  pub n: usize,
+pub enum QCompressError where {
+  MaxEntriesError { n: usize },
+  MaxDepthError { max_depth: u32},
+  OutOfRangeError { num_string: String },
+  MisalignedError {},
+  MagicHeaderError { header: Vec<u8> },
+  HeaderDtypeError { header_byte: u8, decompressor_byte: u8 },
 }
 
-impl Display for MaxEntriesError {
+impl Display for QCompressError {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "number of elements {} exceeded max number of elements {}",
-      self.n,
-      MAX_ENTRIES,
-    )
+    match self {
+      QCompressError::MaxEntriesError {n} => write!(
+        f,
+        "number of elements {} exceeded max number of elements {}",
+        n,
+        MAX_ENTRIES,
+      ),
+      QCompressError::MaxDepthError {max_depth} => write!(
+        f,
+        "max depth {} exceeded max max depth of {}",
+        max_depth,
+        MAX_MAX_DEPTH,
+      ),
+      QCompressError::OutOfRangeError {num_string} => write!(
+        f,
+        "number {} was not found in any range",
+        num_string,
+      ),
+      QCompressError::MisalignedError {} => write!(
+        f,
+        "cannot read_bytes on misaligned bit reader"
+      ),
+      QCompressError::MagicHeaderError { header } => write!(
+        f,
+        "header {:?} did not match qco expected header {:?}",
+        header,
+        MAGIC_HEADER,
+      ),
+      QCompressError::HeaderDtypeError {header_byte, decompressor_byte} => write!(
+        f,
+        "header byte {} did not match expected decompressor data type byte {}",
+        header_byte,
+        decompressor_byte,
+      )
+    }
   }
 }
 
-impl Error for MaxEntriesError {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MaxDepthError {
-  pub max_depth: u32,
-}
-
-impl Display for MaxDepthError {
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "max depth {} exceeded max max depth of {}",
-      self.max_depth,
-      MAX_MAX_DEPTH,
-    )
-  }
-}
-
-impl Error for MaxDepthError {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OutOfRangeError<T> where T: NumberLike {
-  pub num: T,
-}
-
-impl<T> Display for OutOfRangeError<T> where T: NumberLike{
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "number {} was not found in any range",
-      self.num,
-    )
-  }
-}
-
-impl<T> Error for OutOfRangeError<T> where T: NumberLike {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MisalignedBitReaderError {}
-
-impl Display for MisalignedBitReaderError {
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "cannot read_bytes on misaligned bit reader"
-    )
-  }
-}
-
-impl Error for MisalignedBitReaderError {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MagicHeaderError {
-  pub header: Vec<u8>,
-}
-
-impl Display for MagicHeaderError {
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "header {:?} did not match qco expected header {:?}",
-      self.header,
-      MAGIC_HEADER,
-    )
-  }
-}
-
-impl Error for MagicHeaderError {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HeaderDtypeError {
-  pub dtype_byte: u8,
-  pub expected_byte: u8,
-}
-
-impl Error for HeaderDtypeError {}
-
-impl Display for HeaderDtypeError {
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "data type byte {} did not match expected data type byte {}",
-      self.dtype_byte,
-      self.expected_byte,
-    )
-  }
-}
-
+impl Error for QCompressError {}

@@ -1,5 +1,4 @@
 use std::cmp::{max, min};
-use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -7,7 +6,7 @@ use std::marker::PhantomData;
 use crate::bit_reader::BitReader;
 use crate::bits;
 use crate::constants::*;
-use crate::errors::{HeaderDtypeError, MagicHeaderError};
+use crate::errors::QCompressError;
 use crate::prefix::{Prefix, PrefixDecompressionInfo};
 use crate::types::{DataType, NumberLike};
 use crate::utils;
@@ -54,20 +53,20 @@ impl<T, DT> Decompressor<T, DT> where T: NumberLike, DT: DataType<T> {
     }
   }
 
-  pub fn from_reader(bit_reader: &mut BitReader) -> Result<Self, Box<dyn Error>> {
+  pub fn from_reader(bit_reader: &mut BitReader) -> Result<Self, QCompressError> {
     let bytes = bit_reader.read_bytes(MAGIC_HEADER.len())?;
     if bytes != MAGIC_HEADER {
-      return Err(Box::new(MagicHeaderError {
+      return Err(QCompressError::MagicHeaderError {
         header: bytes.to_vec()
-      }));
+      });
     }
     let bytes = bit_reader.read_bytes(1)?;
     let byte = bytes[0];
     if byte != DT::HEADER_BYTE {
-      return Err(Box::new(HeaderDtypeError {
-        dtype_byte: byte,
-        expected_byte: DT::HEADER_BYTE,
-      }));
+      return Err(QCompressError::HeaderDtypeError {
+        header_byte: byte,
+        decompressor_byte: DT::HEADER_BYTE,
+      });
     }
 
     let n = bit_reader.read_u64(BITS_TO_ENCODE_N_ENTRIES as usize) as usize;

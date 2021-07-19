@@ -1,5 +1,4 @@
 use q_compress::BitReader;
-use q_compress::bits::bits_to_string;
 use q_compress::compressor::Compressor;
 use q_compress::decompressor::Decompressor;
 use q_compress::types::{DataType, NumberLike};
@@ -23,6 +22,14 @@ fn basename_no_ext(path: &Path) -> String {
     Some(i) => basename[..i].to_string(),
     _ => basename.to_string(),
   }
+}
+
+fn bits_to_string(bits: &[bool]) -> String {
+  return bits
+    .iter()
+    .map(|b| if *b {"1"} else {"0"})
+    .collect::<Vec<&str>>()
+    .join("");
 }
 
 trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {

@@ -2,7 +2,7 @@ use std::fmt::{Debug, Formatter};
 use std::fmt;
 
 use crate::bits;
-use crate::errors::MisalignedBitReaderError;
+use crate::errors::QCompressError;
 
 const LEFT_MASKS: [u8; 8] = [
   0xff,
@@ -72,7 +72,7 @@ impl BitReader {
     }
   }
 
-  pub fn read_bytes(&mut self, n: usize) -> Result<&[u8], MisalignedBitReaderError> {
+  pub fn read_bytes(&mut self, n: usize) -> Result<&[u8], QCompressError> {
     self.refresh_if_needed();
 
     if self.j == 0 {
@@ -81,7 +81,7 @@ impl BitReader {
       self.j = 8;
       Ok(res)
     } else {
-      Err(MisalignedBitReaderError {})
+      Err(QCompressError::MisalignedError {})
     }
   }
 
@@ -163,10 +163,10 @@ impl BitReader {
 #[cfg(test)]
 mod tests {
   use crate::BitReader;
-  use crate::errors::MisalignedBitReaderError;
+  use crate::errors::QCompressError;
 
   #[test]
-  fn test_bit_reader() -> Result<(), MisalignedBitReaderError>{
+  fn test_bit_reader() -> Result<(), QCompressError>{
     // bits: 1001 1010  0110 1011  0010 1101
     let bytes = vec![0x9a, 0x6b, 0x2d];
     let mut bit_reader = BitReader::from(bytes);

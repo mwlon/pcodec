@@ -9,8 +9,7 @@ use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{DataType, NumberLike};
 use crate::utils;
 use crate::constants::*;
-use crate::errors::{MaxEntriesError, MaxDepthError, OutOfRangeError};
-use std::error::Error;
+use crate::errors::QCompressError;
 
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
@@ -69,13 +68,13 @@ pub struct Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
 }
 
 impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
-  pub fn train(nums: Vec<T>, max_depth: u32) -> Result<Self, Box<dyn Error>> {
+  pub fn train(nums: Vec<T>, max_depth: u32) -> Result<Self, QCompressError> {
     if max_depth > MAX_MAX_DEPTH {
-      return Err(Box::new(MaxDepthError { max_depth }));
+      return Err(QCompressError::MaxDepthError { max_depth });
     }
     let n = nums.len();
     if n as u64 > MAX_ENTRIES {
-      return Err(Box::new(MaxEntriesError { n: nums.len() }));
+      return Err(QCompressError::MaxEntriesError { n: nums.len() });
     }
 
     let mut sorted = nums;
@@ -188,7 +187,7 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     num.ge(&prefix.lower) && num.le(&prefix.upper)
   }
 
-  pub fn compress_nums_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, OutOfRangeError<T>> {
+  pub fn compress_nums_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, QCompressError> {
     let mut sorted_prefixes = self.prefixes.clone();
     // most reps comes first
     sorted_prefixes.sort_by(
@@ -240,8 +239,8 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
       }
 
       if !success {
-        return Err(OutOfRangeError {
-          num: nums[i]
+        return Err(QCompressError::OutOfRangeError {
+          num_string: nums[i].to_string()
         });
       }
     }
@@ -272,14 +271,14 @@ impl<T: 'static, DT> Compressor<T, DT> where T: NumberLike, DT: DataType<T> {
     res
   }
 
-  pub fn compress_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, Box<dyn Error>> {
+  pub fn compress_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, QCompressError> {
     let mut compression = self.metadata_as_bits();
     let mut num_bits = self.compress_nums_as_bits(nums)?;
     compression.append(&mut num_bits);
     Ok(compression)
   }
 
-  pub fn compress(&self, nums: &[T]) -> Result<Vec<u8>, Box<dyn Error>> {
+  pub fn compress(&self, nums: &[T]) -> Result<Vec<u8>, QCompressError> {
     Ok(bits_to_bytes(self.compress_as_bits(nums)?))
   }
 }
