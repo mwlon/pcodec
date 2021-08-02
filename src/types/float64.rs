@@ -15,6 +15,8 @@ impl NumberLike for f64 {
   fn num_cmp(&self, other: &f64) -> Ordering {
     F64DataType::f64_to_u64(*self).cmp(&F64DataType::f64_to_u64(*other))
   }
+
+  type DT = F64DataType;
 }
 
 pub struct F64DataType {}
@@ -66,5 +68,5 @@ impl DataType<f64> for F64DataType {
   }
 }
 
-pub type F64Compressor = Compressor<i64, F64DataType>;
-pub type F64Decompressor = Decompressor<i64, F64DataType>;
+pub type F64Compressor = Compressor<i64>;
+pub type F64Decompressor = Decompressor<i64>;

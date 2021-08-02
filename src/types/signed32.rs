@@ -13,6 +13,8 @@ impl NumberLike for i32 {
   fn num_cmp(&self, other: &Self) -> Ordering {
     self.cmp(other)
   }
+
+  type DT = I32DataType;
 }
 
 pub struct I32DataType {}
@@ -49,5 +51,5 @@ impl DataType<i32> for I32DataType {
   }
 }
 
-pub type I32Compressor = Compressor<i32, I32DataType>;
-pub type I32Decompressor = Decompressor<i32, I32DataType>;
+pub type I32Compressor = Compressor<i32>;
+pub type I32Decompressor = Decompressor<i32>;

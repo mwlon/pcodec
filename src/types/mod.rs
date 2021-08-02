@@ -30,6 +30,8 @@ pub trait NumberLike: Copy + Display + Debug + Default {
   fn gt(&self, other: &Self) -> bool {
     matches!(self.num_cmp(other), Greater)
   }
+
+  type DT: DataType<Self>;
 }
 
 pub trait DataType<T> where T: NumberLike {

@@ -13,6 +13,8 @@ impl NumberLike for bool {
   fn num_cmp(&self, other: &Self) -> Ordering {
     self.cmp(other)
   }
+
+  type DT = BoolDataType;
 }
 
 pub struct BoolDataType {}
@@ -38,5 +40,5 @@ impl DataType<bool> for BoolDataType {
   }
 }
 
-pub type BoolCompressor = Compressor<u8, BoolDataType>;
-pub type BoolDecompressor = Decompressor<u8, BoolDataType>;
+pub type BoolCompressor = Compressor<u8>;
+pub type BoolDecompressor = Decompressor<u8>;

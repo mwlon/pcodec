@@ -1,10 +1,7 @@
 use q_compress::BitReader;
 use q_compress::compressor::Compressor;
 use q_compress::decompressor::Decompressor;
-use q_compress::types::{DataType, NumberLike};
-use q_compress::types::float64::F64DataType;
-use q_compress::types::signed64::I64DataType;
-use q_compress::types::boolean::BoolDataType;
+use q_compress::types::NumberLike;
 use std::convert::TryInto;
 use std::env;
 use std::fs;
@@ -32,13 +29,13 @@ fn bits_to_string(bits: &[bool]) -> String {
     .join("");
 }
 
-trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
+trait DtypeHandler<T: 'static> where T: NumberLike {
   fn parse_nums(bytes: &[u8]) -> Vec<T>;
-  fn train_compressor(nums: Vec<T>, max_depth: u32) -> Compressor<T, DT> {
-    Compressor::<T, DT>::train(nums, max_depth).expect("could not train")
+  fn train_compressor(nums: Vec<T>, max_depth: u32) -> Compressor<T> {
+    Compressor::<T>::train(nums, max_depth).expect("could not train")
   }
-  fn decompressor_from_reader(bit_reader: &mut BitReader) -> Decompressor<T, DT> {
-    Decompressor::<T, DT>::from_reader(bit_reader).expect("invalid header")
+  fn decompressor_from_reader(bit_reader: &mut BitReader) -> Decompressor<T> {
+    Decompressor::<T>::from_reader(bit_reader).expect("invalid header")
   }
 
   fn handle(path: &Path, max_depth: u32, output_dir: &str) {
@@ -100,7 +97,7 @@ trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
 
 struct I64Handler {}
 
-impl DtypeHandler<i64, I64DataType> for I64Handler {
+impl DtypeHandler<i64> for I64Handler {
   fn parse_nums(bytes: &[u8]) -> Vec<i64> {
     bytes
       .chunks(8)
@@ -112,7 +109,7 @@ impl DtypeHandler<i64, I64DataType> for I64Handler {
 
 struct F64Handler {}
 
-impl DtypeHandler<f64, F64DataType> for F64Handler {
+impl DtypeHandler<f64> for F64Handler {
   fn parse_nums(bytes: &[u8]) -> Vec<f64> {
     bytes
       .chunks(8)
@@ -123,7 +120,7 @@ impl DtypeHandler<f64, F64DataType> for F64Handler {
 
 struct BoolHandler {}
 
-impl DtypeHandler<bool, BoolDataType> for BoolHandler {
+impl DtypeHandler<bool> for BoolHandler {
   fn parse_nums(bytes: &[u8]) -> Vec<bool> {
     bytes
       .chunks(1)
