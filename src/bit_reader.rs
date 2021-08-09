@@ -160,16 +160,12 @@ impl BitReader {
   }
 
   pub fn drain_bytes(&mut self) -> Result<&[u8], QCompressError> {
-    self.refresh_if_needed();
-
-    if self.j == 0 {
-      let res = &self.bytes[self.i..];
-      self.i = self.bytes.len() - 1;
-      self.j = 8;
-      Ok(res)
-    } else {
-      Err(QCompressError::MisalignedError {})
+    if self.j != 0 {
+      self.i += 1;
+      self.j = 0;
     }
+    let n = self.bytes.len() - self.i;
+    self.read_bytes(n)
   }
 }
 
