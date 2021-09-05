@@ -3,9 +3,12 @@ use std::convert::TryInto;
 
 use crate::compressor::Compressor;
 use crate::decompressor::Decompressor;
-use crate::types::{DataType, NumberLike};
+use crate::types::NumberLike;
 
 impl NumberLike for i64 {
+  const HEADER_BYTE: u8 = 1;
+  const BIT_SIZE: usize = 64;
+
   fn num_eq(&self, other: &Self) -> bool {
     self.eq(other)
   }
@@ -13,15 +16,6 @@ impl NumberLike for i64 {
   fn num_cmp(&self, other: &Self) -> Ordering {
     self.cmp(other)
   }
-
-  type DT = I64DataType;
-}
-
-pub struct I64DataType {}
-
-impl DataType<i64> for I64DataType {
-  const HEADER_BYTE: u8 = 1;
-  const BIT_SIZE: usize = 64;
 
   fn offset_diff(upper: i64, lower: i64) -> u64 {
     if lower >= 0 {

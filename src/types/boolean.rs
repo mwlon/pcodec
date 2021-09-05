@@ -3,25 +3,19 @@ use std::convert::TryInto;
 
 use crate::compressor::Compressor;
 use crate::decompressor::Decompressor;
-use crate::types::{DataType, NumberLike};
+use crate::types::NumberLike;
 
 impl NumberLike for bool {
-  fn num_eq(&self, other: &Self) -> bool {    
+  const HEADER_BYTE: u8 = 7;
+  const BIT_SIZE: usize = 8;
+
+  fn num_eq(&self, other: &Self) -> bool {
     self.eq(other)
   }
 
   fn num_cmp(&self, other: &Self) -> Ordering {
     self.cmp(other)
   }
-
-  type DT = BoolDataType;
-}
-
-pub struct BoolDataType {}
-
-impl DataType<bool> for BoolDataType {
-  const HEADER_BYTE: u8 = 7;
-  const BIT_SIZE: usize = 8;
 
   fn offset_diff(upper: bool, lower: bool) -> u64 {
     (upper as u64) - (lower as u64)

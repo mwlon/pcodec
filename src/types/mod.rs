@@ -10,10 +10,21 @@ pub mod unsigned32;
 pub mod unsigned64;
 pub mod boolean;
 
-pub trait NumberLike: Copy + Display + Debug + Default {
+pub trait NumberLike: Copy + Debug + Display + Default {
+  const HEADER_BYTE: u8;
+  const BIT_SIZE: usize;
+
   fn num_eq(&self, other: &Self) -> bool;
 
   fn num_cmp(&self, other: &Self) -> Ordering;
+
+  fn offset_diff(upper: Self, lower: Self) -> u64;
+
+  fn add_offset(lower: Self, off: u64) -> Self;
+
+  fn bytes_from(num: Self) -> Vec<u8>;
+
+  fn from_bytes(bytes: Vec<u8>) -> Self;
 
   fn le(&self, other: &Self) -> bool {
     !matches!(self.num_cmp(other), Greater)
@@ -30,16 +41,4 @@ pub trait NumberLike: Copy + Display + Debug + Default {
   fn gt(&self, other: &Self) -> bool {
     matches!(self.num_cmp(other), Greater)
   }
-
-  type DT: DataType<Self>;
-}
-
-pub trait DataType<T> where T: NumberLike {
-  const HEADER_BYTE: u8;
-  const BIT_SIZE: usize;
-
-  fn offset_diff(upper: T, lower: T) -> u64;
-  fn add_offset(lower: T, off: u64) -> T;
-  fn bytes_from(num: T) -> Vec<u8>;
-  fn from_bytes(bytes: Vec<u8>) -> T;
 }

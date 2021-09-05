@@ -1,12 +1,11 @@
 use std::cmp::{max, min};
 use std::fmt;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 
 use crate::bits::*;
 use crate::huffman;
 use crate::prefix::{Prefix, PrefixIntermediate};
-use crate::types::{DataType, NumberLike};
+use crate::types::NumberLike;
 use crate::utils;
 use crate::constants::*;
 use crate::errors::QCompressError;
@@ -64,7 +63,6 @@ fn push_pref<T: Copy>(
 pub struct Compressor<T> where T: NumberLike {
   prefixes: Vec<Prefix<T>>,
   n: usize,
-  data_type: PhantomData<T::DT>,
 }
 
 impl<T: 'static> Compressor<T> where T: NumberLike {
@@ -141,13 +139,12 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
 
     let mut prefixes = Vec::new();
     for p in &prefix_sequence {
-      prefixes.push(Prefix::from_intermediate_and_diff(p, T::DT::offset_diff(p.upper, p.lower)));
+      prefixes.push(Prefix::from_intermediate_and_diff(p, T::offset_diff(p.upper, p.lower)));
     }
 
     let res = Compressor::<T> {
       prefixes,
       n,
-      data_type: PhantomData,
     };
     Ok(res)
   }
@@ -158,13 +155,13 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
       return f64::MIN;
     }
 
-    let p0_r_cost = avg_base2_bits(T::DT::offset_diff(p0.upper, p0.lower));
-    let p1_r_cost = avg_base2_bits(T::DT::offset_diff(p1.upper, p1.lower));
-    let combined_r_cost = avg_base2_bits(T::DT::offset_diff(p1.upper, p0.lower));
+    let p0_r_cost = avg_base2_bits(T::offset_diff(p0.upper, p0.lower));
+    let p1_r_cost = avg_base2_bits(T::offset_diff(p1.upper, p1.lower));
+    let combined_r_cost = avg_base2_bits(T::offset_diff(p1.upper, p0.lower));
     let p0_d_cost = depth_bits(p0.weight, n);
     let p1_d_cost = depth_bits(p1.weight, n);
     let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
-    let meta_cost = 10.0 + 2.0 * T::DT::BIT_SIZE as f64;
+    let meta_cost = 10.0 + 2.0 * T::BIT_SIZE as f64;
 
     let separate_cost = 2.0 * meta_cost +
       (p0_r_cost + p0_d_cost) * p0.weight as f64+
@@ -176,7 +173,7 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
   }
 
   fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, v: &mut Vec<bool>) {
-    let off = T::DT::offset_diff(num, pref.lower);
+    let off = T::offset_diff(num, pref.lower);
     extend_with_u64_bits(off, pref.k, v);
     if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
       v.push(((off >> pref.k) & 1) > 0) // most significant bit, if necessary, comes last
@@ -250,12 +247,12 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
   pub fn metadata_as_bits(&self) -> Vec<bool> {
     let mut res = Vec::new();
     res.extend(bytes_to_bits(MAGIC_HEADER.to_vec()));
-    res.extend(&byte_to_bits(T::DT::HEADER_BYTE));
+    res.extend(&byte_to_bits(T::HEADER_BYTE));
     res.extend(usize_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
     res.extend(usize_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
     for pref in &self.prefixes {
-      res.extend(bytes_to_bits(T::DT::bytes_from(pref.lower)));
-      res.extend(bytes_to_bits(T::DT::bytes_from(pref.upper)));
+      res.extend(bytes_to_bits(T::bytes_from(pref.lower)));
+      res.extend(bytes_to_bits(T::bytes_from(pref.upper)));
       res.extend(usize_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
       res.extend(&pref.val);
       match pref.run_len_jumpstart {

@@ -1,14 +1,13 @@
 use std::cmp::{max, min};
 use std::fmt;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
 use crate::bits;
 use crate::constants::*;
 use crate::errors::QCompressError;
 use crate::prefix::{Prefix, PrefixDecompressionInfo};
-use crate::types::{DataType, NumberLike};
+use crate::types::NumberLike;
 use crate::utils;
 
 #[derive(Clone)]
@@ -19,7 +18,6 @@ pub struct Decompressor<T> where T: NumberLike {
   max_depth: u32,
   n: usize,
   is_single_prefix: bool,
-  data_type: PhantomData<T::DT>,
 }
 
 impl<T> Decompressor<T> where T: NumberLike {
@@ -49,7 +47,6 @@ impl<T> Decompressor<T> where T: NumberLike {
       max_depth,
       n,
       is_single_prefix,
-      data_type: PhantomData,
     }
   }
 
@@ -62,10 +59,10 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
     let bytes = bit_reader.read_bytes(1)?;
     let byte = bytes[0];
-    if byte != T::DT::HEADER_BYTE {
+    if byte != T::HEADER_BYTE {
       return Err(QCompressError::HeaderDtypeError {
         header_byte: byte,
-        decompressor_byte: T::DT::HEADER_BYTE,
+        decompressor_byte: T::HEADER_BYTE,
       });
     }
 
@@ -73,10 +70,10 @@ impl<T> Decompressor<T> where T: NumberLike {
     let n_pref = bit_reader.read_u64(MAX_MAX_DEPTH as usize) as usize;
     let mut prefixes = Vec::with_capacity(n_pref);
     for _ in 0..n_pref {
-      let lower_bits = bit_reader.read(T::DT::BIT_SIZE);
-      let lower = T::DT::from_bytes(bits::bits_to_bytes(lower_bits));
-      let upper_bits = bit_reader.read(T::DT::BIT_SIZE);
-      let upper = T::DT::from_bytes(bits::bits_to_bytes(upper_bits));
+      let lower_bits = bit_reader.read(T::BIT_SIZE);
+      let lower = T::from_bytes(bits::bits_to_bytes(lower_bits));
+      let upper_bits = bit_reader.read(T::BIT_SIZE);
+      let upper = T::from_bytes(bits::bits_to_bytes(upper_bits));
       let code_len = bit_reader.read_u64(BITS_TO_ENCODE_PREFIX_LEN as usize) as usize;
       let val = bit_reader.read(code_len);
       let jumpstart = if bit_reader.read_one() {
@@ -84,7 +81,7 @@ impl<T> Decompressor<T> where T: NumberLike {
       } else {
         None
       };
-      prefixes.push(Prefix::new(val, lower, upper, T::DT::offset_diff(upper, lower), jumpstart));
+      prefixes.push(Prefix::new(val, lower, upper, T::offset_diff(upper, lower), jumpstart));
     }
 
     let decompressor = Decompressor::new(prefixes, n);
@@ -118,7 +115,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     let mut i = 0;
     while i < n {
       let p = self.next_prefix(reader);
-      let range = T::DT::offset_diff(p.upper, p.lower);
+      let range = T::offset_diff(p.upper, p.lower);
 
       let reps = match p.run_len_jumpstart {
         None => {
@@ -139,7 +136,7 @@ impl<T> Decompressor<T> where T: NumberLike {
             offset |= most_significant;
           }
         }
-        res.push(T::DT::add_offset(p.lower, offset));
+        res.push(T::add_offset(p.lower, offset));
       }
       i += reps;
     }
