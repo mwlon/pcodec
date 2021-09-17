@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 use crate::bits;
-use crate::types::NumberLike;
+use crate::types::{NumberLike, UnsignedLike};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PrefixDecompressionInfo<T> where T: NumberLike {
@@ -37,15 +37,15 @@ pub struct Prefix<T> where T: NumberLike {
   pub lower: T,
   pub upper: T,
   pub k: u32,
-  pub only_k_bits_lower: u64,
-  pub only_k_bits_upper: u64,
+  pub only_k_bits_lower: T::Diff,
+  pub only_k_bits_upper: T::Diff,
   pub run_len_jumpstart: Option<usize>,
 }
 
 // In Prefix and PrefixIntermediate, lower and upper are always inclusive.
 // This allows handling extremal values.
 impl<T> Prefix<T> where T: NumberLike {
-  pub fn from_intermediate_and_diff(intermediate: &PrefixIntermediate<T>, diff: u64) -> Prefix<T> {
+  pub fn from_intermediate_and_diff(intermediate: &PrefixIntermediate<T>, diff: T::Diff) -> Prefix<T> {
     Self::new(
       intermediate.val.clone(),
       intermediate.lower,
@@ -55,12 +55,12 @@ impl<T> Prefix<T> where T: NumberLike {
     )
   }
 
-  pub fn new(val: Vec<bool>, lower: T, upper: T, diff: u64, run_len_jumpstart: Option<usize>) -> Prefix<T> {
-    let k = ((diff as f64) + 1.0).log2().floor() as u32;
+  pub fn new(val: Vec<bool>, lower: T, upper: T, diff: T::Diff, run_len_jumpstart: Option<usize>) -> Prefix<T> {
+    let k = (diff.to_f64() + 1.0).log2().floor() as u32;
     let only_k_bits_upper = if k == 64 {
-      u64::MAX
+      T::Diff::MAX
     } else {
-      (1_u64 << k) - 1
+      (T::Diff::ONE << k) - T::Diff::ONE
     };
     let only_k_bits_lower = diff - only_k_bits_upper;
 

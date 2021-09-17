@@ -33,7 +33,10 @@ fn from_u32(x: u32) -> f32 {
 // 1.0 + (3.0 * 2.0 ^ -23).
 impl NumberLike for f32 {
   const HEADER_BYTE: u8 = 6;
-  const BIT_SIZE: usize = 32;
+  const PHYSICAL_BITS: usize = 32;
+  const LOGICAL_BITS: u32 = 32;
+
+  type Diff = u32;
 
   fn num_eq(&self, other: &f32) -> bool {
     self.to_bits() == other.to_bits()
@@ -43,12 +46,12 @@ impl NumberLike for f32 {
     f32_to_u32(*self).cmp(&f32_to_u32(*other))
   }
 
-  fn offset_diff(upper: f32, lower: f32) -> u64 {
-    (f32_to_u32(upper) - f32_to_u32(lower)) as u64
+  fn offset_diff(upper: f32, lower: f32) -> u32 {
+    f32_to_u32(upper) - f32_to_u32(lower)
   }
 
-  fn add_offset(lower: f32, off: u64) -> f32 {
-    from_u32(f32_to_u32(lower) + off as u32)
+  fn add_offset(lower: f32, off: u32) -> f32 {
+    from_u32(f32_to_u32(lower) + off)
   }
 
   fn bytes_from(num: f32) -> Vec<u8> {
@@ -60,5 +63,5 @@ impl NumberLike for f32 {
   }
 }
 
-pub type F32Compressor = Compressor<i32>;
-pub type F32Decompressor = Decompressor<i32>;
+pub type F32Compressor = Compressor<f32>;
+pub type F32Decompressor = Decompressor<f32>;

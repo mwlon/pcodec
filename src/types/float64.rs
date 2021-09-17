@@ -32,7 +32,10 @@ fn from_u64(x: u64) -> f64 {
 // 1.0 + (3.0 * 2.0 ^ -52).
 impl NumberLike for f64 {
   const HEADER_BYTE: u8 = 5;
-  const BIT_SIZE: usize = 64;
+  const PHYSICAL_BITS: usize = 64;
+  const LOGICAL_BITS: u32 = 64;
+
+  type Diff = u64;
 
   fn num_eq(&self, other: &f64) -> bool {
     self.to_bits() == other.to_bits()
@@ -59,5 +62,5 @@ impl NumberLike for f64 {
   }
 }
 
-pub type F64Compressor = Compressor<i64>;
-pub type F64Decompressor = Decompressor<i64>;
+pub type F64Compressor = Compressor<f64>;
+pub type F64Decompressor = Decompressor<f64>;

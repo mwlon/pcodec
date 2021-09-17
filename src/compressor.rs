@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use crate::bits::*;
 use crate::huffman;
 use crate::prefix::{Prefix, PrefixIntermediate};
-use crate::types::NumberLike;
+use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
 use crate::constants::*;
 use crate::errors::QCompressError;
@@ -161,7 +161,7 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
     let p0_d_cost = depth_bits(p0.weight, n);
     let p1_d_cost = depth_bits(p1.weight, n);
     let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
-    let meta_cost = 10.0 + 2.0 * T::BIT_SIZE as f64;
+    let meta_cost = 10.0 + 2.0 * T::PHYSICAL_BITS as f64;
 
     let separate_cost = 2.0 * meta_cost +
       (p0_r_cost + p0_d_cost) * p0.weight as f64+
@@ -174,9 +174,9 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
 
   fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, v: &mut Vec<bool>) {
     let off = T::offset_diff(num, pref.lower);
-    extend_with_u64_bits(off, pref.k, v);
+    extend_with_diff_bits(off, pref.k, v);
     if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
-      v.push(((off >> pref.k) & 1) > 0) // most significant bit, if necessary, comes last
+      v.push((off & (T::Diff::ONE << pref.k)) > T::Diff::ZERO) // most significant bit, if necessary, comes last
     }
   }
 

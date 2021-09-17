@@ -3,6 +3,7 @@ use std::fmt;
 
 use crate::bits;
 use crate::errors::QCompressError;
+use crate::types::UnsignedLike;
 
 const LEFT_MASKS: [u8; 8] = [
   0xff,
@@ -102,9 +103,9 @@ impl BitReader {
     res
   }
 
-  pub fn read_u64(&mut self, n: usize) -> u64 {
+  pub fn read_delta<Diff: UnsignedLike>(&mut self, n: usize) -> Diff {
     if n == 0 {
-      return 0;
+      return Diff::ZERO;
     }
 
     self.refresh_if_needed();
@@ -113,24 +114,24 @@ impl BitReader {
     if n_plus_j < 8 {
       // it's all in the current byte
       let shift = 8 - n_plus_j;
-      let res = ((self.bytes[self.i] & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift) as u64;
+      let res = Diff::from((self.bytes[self.i] & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift);
       self.j = n_plus_j;
       res
     } else {
-      let mut res = 0;
+      let mut res = Diff::ZERO;
       let mut remaining = n; // how many bits we still need to read
       // let mut s = 0;  // number of bits read into the u64 so far
       remaining -= 8 - self.j;
-      res |= ((self.bytes[self.i] & LEFT_MASKS[self.j]) as u64) << remaining;
+      res |= Diff::from(self.bytes[self.i] & LEFT_MASKS[self.j]) << remaining;
       while remaining >= 8 {
         self.i += 1;
         remaining -= 8;
-        res |= (self.bytes[self.i] as u64) << remaining;
+        res |= Diff::from(self.bytes[self.i]) << remaining;
       }
       if remaining > 0 {
         self.i += 1;
         let shift = 8 - remaining;
-        res |= ((self.bytes[self.i] & RIGHT_MASKS[remaining]) >> shift) as u64;
+        res |= Diff::from((self.bytes[self.i] & RIGHT_MASKS[remaining]) >> shift);
         self.j = remaining;
       } else {
         self.j = 8;
@@ -140,7 +141,7 @@ impl BitReader {
   }
 
   pub fn read_varint(&mut self, jumpstart: usize) -> usize {
-    let mut res = self.read_u64(jumpstart) as usize;
+    let mut res = self.read_delta::<u64>(jumpstart) as usize;
     let mut mask = 1 << jumpstart;
     while self.read_one() {
       if self.read_one() {
@@ -190,12 +191,12 @@ mod tests {
       vec![true, false, true],
     );
     assert_eq!(
-      bit_reader.read_u64(2),
-      1
+      bit_reader.read_delta::<u64>(2),
+      1_u64
     );
     assert_eq!(
-      bit_reader.read_u64(3),
-      4
+      bit_reader.read_delta::<u32>(3),
+      4_u32
     );
     assert_eq!(
       bit_reader.read_varint(2),

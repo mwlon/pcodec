@@ -7,7 +7,10 @@ use crate::types::NumberLike;
 
 impl NumberLike for i32 {
   const HEADER_BYTE: u8 = 3;
-  const BIT_SIZE: usize = 32;
+  const PHYSICAL_BITS: usize = 32;
+  const LOGICAL_BITS: u32 = 32;
+
+  type Diff = u64;
 
   fn num_eq(&self, other: &Self) -> bool {
     self.eq(other)

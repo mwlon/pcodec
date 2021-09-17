@@ -1,3 +1,5 @@
+use crate::types::UnsignedLike;
+
 const BIT_MASKS: [u8; 8] = [
   0x80,
   0x40,
@@ -80,20 +82,20 @@ pub fn usize_to_varint_bits(mut x: usize, jumpstart: usize) -> Vec<bool> {
 }
 
 pub fn usize_to_bits(x: usize, n_bits: u32) -> Vec<bool> {
-  u64_to_bits(x as u64, n_bits)
+  diff_to_bits(x as u64, n_bits)
 }
 
-pub fn u64_to_bits(x: u64, n_bits: u32) -> Vec<bool> {
+pub fn diff_to_bits<Diff: UnsignedLike>(x: Diff, n_bits: u32) -> Vec<bool> {
   let mut res = Vec::with_capacity(n_bits as usize);
-  extend_with_u64_bits(x, n_bits, &mut res);
+  extend_with_diff_bits(x, n_bits, &mut res);
   res
 }
 
-pub fn extend_with_u64_bits(x: u64, n_bits: u32, v: &mut Vec<bool>) {
+pub fn extend_with_diff_bits<Diff: UnsignedLike>(x: Diff, n_bits: u32, v: &mut Vec<bool>) {
   // the least significant bits, but still in bigendian order
   for i in 1..n_bits + 1 {
     let shift = n_bits - i;
-    v.push(x & (1 << shift) > 0);
+    v.push(x & (Diff::ONE << shift) > Diff::ZERO);
   }
 }
 
@@ -105,8 +107,8 @@ pub fn bits_to_string(bits: &[bool]) -> String {
     .join("");
 }
 
-pub fn avg_base2_bits(upper_lower_diff: u64) -> f64 {
-  let n = upper_lower_diff as f64 + 1.0;
+pub fn avg_base2_bits<Diff: UnsignedLike>(upper_lower_diff: Diff) -> f64 {
+  let n = upper_lower_diff.to_f64() + 1.0;
   let k = n.log2().floor();
   let two_to_k = (2.0_f64).powf(k);
   let overshoot = n - two_to_k;
@@ -137,18 +139,18 @@ mod tests {
 
   #[test]
   fn test_avg_base2_bits() {
-    assert_eq!(avg_base2_bits(0), 0.0);
-    assert_eq!(avg_base2_bits(1), 1.0);
-    assert!((avg_base2_bits(2) - 5.0 / 3.0).abs() < 1E-8);
-    assert_eq!(avg_base2_bits(3), 2.0);
-    println!("{}", avg_base2_bits(4));
-    assert!((avg_base2_bits(4) - 12.0 / 5.0).abs() < 1E-8);
+    assert_eq!(avg_base2_bits(0_u32), 0.0);
+    assert_eq!(avg_base2_bits(1_u32), 1.0);
+    assert!((avg_base2_bits(2_u32) - 5.0 / 3.0).abs() < 1E-8);
+    assert_eq!(avg_base2_bits(3_u32), 2.0);
+    assert!((avg_base2_bits(4_u64) - 12.0 / 5.0).abs() < 1E-8);
   }
 
   #[test]
-  fn test_u64_to_bits() {
-    assert_eq!(u64_to_bits(7, 0), vec![]);
-    assert_eq!(u64_to_bits(7, 4), vec![false, true, true, true]);
+  fn test_diff_to_bits() {
+    assert_eq!(diff_to_bits(7_u64, 0), vec![]);
+    assert_eq!(diff_to_bits(7_u64, 4), vec![false, true, true, true]);
+    assert_eq!(diff_to_bits(7_u32, 4), vec![false, true, true, true]);
   }
 
   #[test]
