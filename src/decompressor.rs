@@ -66,22 +66,22 @@ impl<T> Decompressor<T> where T: NumberLike {
       });
     }
 
-    let n = bit_reader.read_delta::<usize>(BITS_TO_ENCODE_N_ENTRIES as usize);
-    let n_pref = bit_reader.read_delta::<usize>(MAX_MAX_DEPTH as usize);
+    let n = bit_reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
+    let n_pref = bit_reader.read_usize(MAX_MAX_DEPTH as usize);
     let mut prefixes = Vec::with_capacity(n_pref);
     for _ in 0..n_pref {
       let lower_bits = bit_reader.read(T::PHYSICAL_BITS);
       let lower = T::from_bytes(bits::bits_to_bytes(lower_bits));
       let upper_bits = bit_reader.read(T::PHYSICAL_BITS);
       let upper = T::from_bytes(bits::bits_to_bytes(upper_bits));
-      let code_len = bit_reader.read_delta::<usize>(BITS_TO_ENCODE_PREFIX_LEN as usize);
+      let code_len = bit_reader.read_usize(BITS_TO_ENCODE_PREFIX_LEN as usize);
       let val = bit_reader.read(code_len);
       let jumpstart = if bit_reader.read_one() {
-        Some(bit_reader.read_delta::<usize>(BITS_TO_ENCODE_JUMPSTART as usize))
+        Some(bit_reader.read_usize(BITS_TO_ENCODE_JUMPSTART as usize))
       } else {
         None
       };
-      prefixes.push(Prefix::new(val, lower, upper, T::offset_diff(upper, lower), jumpstart));
+      prefixes.push(Prefix::new(val, lower, upper, jumpstart));
     }
 
     let decompressor = Decompressor::new(prefixes, n);
@@ -130,7 +130,7 @@ impl<T> Decompressor<T> where T: NumberLike {
 
       for _ in 0..reps {
         let mut offset = reader.read_delta(p.k as usize);
-        if p.k < T::LOGICAL_BITS {
+        if p.k < T::Diff::BITS {
           let most_significant = T::Diff::ONE << p.k;
           if range - offset >= most_significant && reader.read_one() {
             offset |= most_significant;

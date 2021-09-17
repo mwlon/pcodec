@@ -12,6 +12,7 @@ pub enum QCompressError where {
   MisalignedError {},
   MagicHeaderError { header: Vec<u8> },
   HeaderDtypeError { header_byte: u8, decompressor_byte: u8 },
+  InvalidTimestampError { nanos: i128 },
 }
 
 impl Display for QCompressError {
@@ -49,6 +50,11 @@ impl Display for QCompressError {
         "header byte {} did not match expected decompressor data type byte {}",
         header_byte,
         decompressor_byte,
+      ),
+      QCompressError::InvalidTimestampError { nanos } => write!(
+        f,
+        "invalid timestamp with {} nanos",
+        nanos,
       )
     }
   }

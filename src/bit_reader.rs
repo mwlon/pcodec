@@ -140,6 +140,10 @@ impl BitReader {
     }
   }
 
+  pub fn read_usize(&mut self, n: usize) -> usize {
+    self.read_delta::<u64>(n) as usize
+  }
+
   pub fn read_varint(&mut self, jumpstart: usize) -> usize {
     let mut res = self.read_delta::<u64>(jumpstart) as usize;
     let mut mask = 1 << jumpstart;

@@ -45,19 +45,19 @@ pub struct Prefix<T> where T: NumberLike {
 // In Prefix and PrefixIntermediate, lower and upper are always inclusive.
 // This allows handling extremal values.
 impl<T> Prefix<T> where T: NumberLike {
-  pub fn from_intermediate_and_diff(intermediate: &PrefixIntermediate<T>, diff: T::Diff) -> Prefix<T> {
+  pub fn from_intermediate_and_diff(intermediate: &PrefixIntermediate<T>,) -> Prefix<T> {
     Self::new(
       intermediate.val.clone(),
       intermediate.lower,
       intermediate.upper,
-      diff,
       intermediate.run_len_jumpstart,
     )
   }
 
-  pub fn new(val: Vec<bool>, lower: T, upper: T, diff: T::Diff, run_len_jumpstart: Option<usize>) -> Prefix<T> {
+  pub fn new(val: Vec<bool>, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> Prefix<T> {
+    let diff = T::offset_diff(upper, lower);
     let k = (diff.to_f64() + 1.0).log2().floor() as u32;
-    let only_k_bits_upper = if k == 64 {
+    let only_k_bits_upper = if k == T::Diff::BITS {
       T::Diff::MAX
     } else {
       (T::Diff::ONE << k) - T::Diff::ONE

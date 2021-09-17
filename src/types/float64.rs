@@ -33,7 +33,6 @@ fn from_u64(x: u64) -> f64 {
 impl NumberLike for f64 {
   const HEADER_BYTE: u8 = 5;
   const PHYSICAL_BITS: usize = 64;
-  const LOGICAL_BITS: u32 = 64;
 
   type Diff = u64;
 

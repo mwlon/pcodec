@@ -139,7 +139,7 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
 
     let mut prefixes = Vec::new();
     for p in &prefix_sequence {
-      prefixes.push(Prefix::from_intermediate_and_diff(p, T::offset_diff(p.upper, p.lower)));
+      prefixes.push(Prefix::from_intermediate_and_diff(p));
     }
 
     let res = Compressor::<T> {

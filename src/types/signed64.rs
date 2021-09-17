@@ -8,7 +8,6 @@ use crate::types::NumberLike;
 impl NumberLike for i64 {
   const HEADER_BYTE: u8 = 1;
   const PHYSICAL_BITS: usize = 64;
-  const LOGICAL_BITS: u32 = 64;
 
   type Diff = u64;
 

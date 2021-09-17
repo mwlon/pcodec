@@ -7,8 +7,9 @@ use crate::types::NumberLike;
 
 impl NumberLike for bool {
   const HEADER_BYTE: u8 = 7;
+  // it's easiest to use 8 bits per uncompressed boolean
+  // because that's how rust represents them too
   const PHYSICAL_BITS: usize = 8;
-  const LOGICAL_BITS: u32 = 1;
 
   type Diff = u8;
 
