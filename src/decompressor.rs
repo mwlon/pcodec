@@ -129,7 +129,7 @@ impl<T> Decompressor<T> where T: NumberLike {
       };
 
       for _ in 0..reps {
-        let mut offset = reader.read_delta(p.k as usize);
+        let mut offset = reader.read_diff(p.k as usize);
         if p.k < T::Diff::BITS {
           let most_significant = T::Diff::ONE << p.k;
           if range - offset >= most_significant && reader.read_one() {

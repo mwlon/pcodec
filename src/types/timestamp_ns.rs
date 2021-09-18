@@ -104,12 +104,12 @@ impl NumberLike for TimestampNs {
   }
 
   fn bytes_from(value: TimestampNs) -> Vec<u8> {
-    ((value.0 - MIN_NANOS) as u128).to_be_bytes()[32..].to_vec()
+    ((value.0 - MIN_NANOS) as u128).to_be_bytes()[4..].to_vec()
   }
 
   fn from_bytes(bytes: Vec<u8>) -> TimestampNs {
-    let mut full_bytes = Vec::with_capacity(128);
-    for _ in 0..32 {
+    let mut full_bytes = Vec::with_capacity(16);
+    for _ in 0..4 {
       full_bytes.push(0);
     }
     full_bytes.extend(bytes);

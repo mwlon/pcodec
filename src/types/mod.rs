@@ -46,7 +46,7 @@ impl_unsigned!(u32);
 impl_unsigned!(u64);
 impl_unsigned!(u128);
 
-pub trait NumberLike: Copy + Debug + Display + Default {
+pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   const HEADER_BYTE: u8;
   const PHYSICAL_BITS: usize;
 

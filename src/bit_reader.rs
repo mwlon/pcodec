@@ -103,7 +103,7 @@ impl BitReader {
     res
   }
 
-  pub fn read_delta<Diff: UnsignedLike>(&mut self, n: usize) -> Diff {
+  pub fn read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> Diff {
     if n == 0 {
       return Diff::ZERO;
     }
@@ -141,11 +141,11 @@ impl BitReader {
   }
 
   pub fn read_usize(&mut self, n: usize) -> usize {
-    self.read_delta::<u64>(n) as usize
+    self.read_diff::<u64>(n) as usize
   }
 
   pub fn read_varint(&mut self, jumpstart: usize) -> usize {
-    let mut res = self.read_delta::<u64>(jumpstart) as usize;
+    let mut res = self.read_diff::<u64>(jumpstart) as usize;
     let mut mask = 1 << jumpstart;
     while self.read_one() {
       if self.read_one() {
@@ -195,11 +195,11 @@ mod tests {
       vec![true, false, true],
     );
     assert_eq!(
-      bit_reader.read_delta::<u64>(2),
+      bit_reader.read_diff::<u64>(2),
       1_u64
     );
     assert_eq!(
-      bit_reader.read_delta::<u32>(3),
+      bit_reader.read_diff::<u32>(3),
       4_u32
     );
     assert_eq!(

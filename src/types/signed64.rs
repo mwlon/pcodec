@@ -20,33 +20,11 @@ impl NumberLike for i64 {
   }
 
   fn offset_diff(upper: i64, lower: i64) -> u64 {
-    if lower >= 0 {
-      (upper - lower) as u64
-    } else if lower == upper {
-      0
-    } else {
-      let pos_lower_p1 = (lower + 1).abs() as u64;
-      if upper >= 0 {
-        (upper as u64) + pos_lower_p1 + 1
-      } else {
-        (pos_lower_p1 + 1) - (upper.abs() as u64)
-      }
-    }
+    upper.wrapping_sub(lower) as u64
   }
 
   fn add_offset(lower: i64, off: u64) -> i64 {
-    if lower >= 0 {
-      (lower as u64 + off) as i64
-    } else if off == 0 {
-      lower
-    } else {
-      let negi = (-lower) as u64;
-      if negi <= off {
-        (off - negi) as i64
-      } else {
-        -((negi - off) as i64)
-      }
-    }
+    lower.wrapping_add(off as i64)
   }
 
   fn bytes_from(num: i64) -> Vec<u8> {

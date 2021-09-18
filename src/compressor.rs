@@ -71,6 +71,12 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
       return Err(QCompressError::MaxDepthError { max_depth });
     }
     let n = nums.len();
+    if n == 0 {
+      return Ok(Compressor::<T> {
+        prefixes: Vec::new(),
+        n,
+      });
+    }
     if n as u64 > MAX_ENTRIES {
       return Err(QCompressError::MaxEntriesError { n: nums.len() });
     }
