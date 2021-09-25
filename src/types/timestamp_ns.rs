@@ -33,6 +33,17 @@ impl TimestampNs {
   pub fn from_secs_and_nanos(seconds: i64, subsec_nanos: u32) -> Self {
     TimestampNs((seconds as i128) * BILLION_I128 + subsec_nanos as i128)
   }
+
+  pub fn to_secs_and_nanos(self) -> (i64, u32) {
+    let nanos = self.0;
+    let seconds = nanos.div_euclid(BILLION_I128) as i64;
+    let subsec_nanos = nanos.rem_euclid(BILLION_I128) as u32;
+    (seconds, subsec_nanos)
+  }
+
+  pub fn to_total_nanos(self) -> i128 {
+    self.0
+  }
 }
 
 impl From<SystemTime> for TimestampNs {
@@ -59,13 +70,16 @@ impl From<SystemTime> for TimestampNs {
 
 impl From<TimestampNs> for SystemTime {
   fn from(value: TimestampNs) -> SystemTime {
-    let abs = value.0.abs();
-    let seconds = (abs / BILLION_I128) as u64;
-    let subsec_nanos = (abs % BILLION_I128) as u32;
-    let dur = Duration::new(seconds, subsec_nanos);
-    if value.0 > 0 {
+    let (seconds, subsec_nanos) = value.to_secs_and_nanos();
+    if seconds >= 0 {
+      let dur = Duration::new(seconds as u64, subsec_nanos);
       UNIX_EPOCH + dur
     } else {
+      let dur = if subsec_nanos == 0 {
+        Duration::new((-seconds) as u64, 0)
+      } else {
+        Duration::new((-seconds - 1) as u64, BILLION_U32 - subsec_nanos)
+      };
       UNIX_EPOCH - dur
     }
   }
@@ -108,13 +122,16 @@ impl NumberLike for TimestampNs {
   }
 
   fn from_bytes(bytes: Vec<u8>) -> TimestampNs {
-    let mut full_bytes = Vec::with_capacity(16);
-    for _ in 0..4 {
-      full_bytes.push(0);
-    }
+    TimestampNs::from_bytes_safe(&bytes).expect("corrupt timestamp bytes")
+  }
+}
+
+impl TimestampNs {
+  pub fn from_bytes_safe(bytes: &[u8]) -> Result<TimestampNs, QCompressError> {
+    let mut full_bytes = vec![0;4];
     full_bytes.extend(bytes);
     let nanos = (u128::from_be_bytes(full_bytes.try_into().unwrap()) as i128) + MIN_NANOS;
-    TimestampNs::new(nanos).expect("corrupt timestamp bytes")
+    TimestampNs::new(nanos)
   }
 }
 
