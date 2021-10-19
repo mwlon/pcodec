@@ -12,7 +12,7 @@ pub enum QCompressError where {
   MisalignedError {},
   MagicHeaderError { header: Vec<u8> },
   HeaderDtypeError { header_byte: u8, decompressor_byte: u8 },
-  InvalidTimestampError { nanos: i128 },
+  InvalidTimestampError { parts: i128, parts_per_sec: u32 },
 }
 
 impl Display for QCompressError {
@@ -51,10 +51,11 @@ impl Display for QCompressError {
         header_byte,
         decompressor_byte,
       ),
-      QCompressError::InvalidTimestampError { nanos } => write!(
+      QCompressError::InvalidTimestampError { parts, parts_per_sec } => write!(
         f,
-        "invalid timestamp with {} nanos",
-        nanos,
+        "invalid timestamp with {}/{} nanos",
+        parts,
+        parts_per_sec
       )
     }
   }

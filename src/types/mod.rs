@@ -8,7 +8,7 @@ pub mod float32;
 pub mod float64;
 pub mod signed32;
 pub mod signed64;
-pub mod timestamp_ns;
+pub mod timestamps;
 pub mod unsigned32;
 pub mod unsigned64;
 
