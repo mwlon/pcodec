@@ -12,7 +12,7 @@
 This rust library compresses and decompresses sequences of
 numerical data very well.
 It currently supports the following data types:
-`i32`, `i64`, `u32`, `u64`, `f32`, `f64`, `q_compress::TimestampNs`.
+`i32`, `i64`, `u32`, `u64`, `f32`, `f64`, `q_compress::TimestampNs`, `q_compress::TimestampMicros`.
 Smaller data types like `i16` can be efficiently compressed by casting
 to `i32`.
 
