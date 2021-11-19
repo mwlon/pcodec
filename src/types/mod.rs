@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Greater, Less};
 use std::fmt::{Debug, Display};
-use std::ops::{BitOrAssign, BitAnd, Sub, Shl};
+use std::ops::{BitOrAssign, BitAnd, Sub, Shl, Add};
 
 pub mod boolean;
 pub mod float32;
@@ -12,13 +12,12 @@ pub mod timestamps;
 pub mod unsigned32;
 pub mod unsigned64;
 
-pub trait UnsignedLike: BitAnd<Output=Self> + BitOrAssign + Copy + Debug + Display + PartialOrd + Shl<u32, Output=Self> + Shl<usize, Output=Self> + Sub<Output=Self> + From<u8> {
+pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign + Copy + Debug + Default + Display + PartialOrd + Shl<u32, Output=Self> + Shl<usize, Output=Self> + Sub<Output=Self> + From<u8> {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
   const BITS: u32;
 
-  fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
 }
 
@@ -29,10 +28,6 @@ macro_rules! impl_unsigned {
       const ONE: Self = 1;
       const MAX: Self = Self::MAX;
       const BITS: u32 = Self::BITS;
-
-      fn from_f64(x: f64) -> Self {
-        x as Self
-      }
 
       fn to_f64(self) -> f64 {
         self as f64
@@ -50,15 +45,15 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   const HEADER_BYTE: u8;
   const PHYSICAL_BITS: usize;
 
-  type Diff: UnsignedLike;
+  type Unsigned: UnsignedLike;
 
   fn num_eq(&self, other: &Self) -> bool;
 
   fn num_cmp(&self, other: &Self) -> Ordering;
 
-  fn offset_diff(upper: Self, lower: Self) -> Self::Diff;
+  fn to_unsigned(self) -> Self::Unsigned;
 
-  fn add_offset(lower: Self, off: Self::Diff) -> Self;
+  fn from_unsigned(off: Self::Unsigned) -> Self;
 
   fn bytes_from(num: Self) -> Vec<u8>;
 

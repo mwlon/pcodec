@@ -161,9 +161,9 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
       return f64::MIN;
     }
 
-    let p0_r_cost = avg_base2_bits(T::offset_diff(p0.upper, p0.lower));
-    let p1_r_cost = avg_base2_bits(T::offset_diff(p1.upper, p1.lower));
-    let combined_r_cost = avg_base2_bits(T::offset_diff(p1.upper, p0.lower));
+    let p0_r_cost = avg_base2_bits(p0.upper.to_unsigned() - p0.lower.to_unsigned());
+    let p1_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p1.lower.to_unsigned());
+    let combined_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p0.lower.to_unsigned());
     let p0_d_cost = depth_bits(p0.weight, n);
     let p1_d_cost = depth_bits(p1.weight, n);
     let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
@@ -179,10 +179,10 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
   }
 
   fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, v: &mut Vec<bool>) {
-    let off = T::offset_diff(num, pref.lower);
+    let off = num.to_unsigned() - pref.lower_unsigned;
     extend_with_diff_bits(off, pref.k, v);
     if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
-      v.push((off & (T::Diff::ONE << pref.k)) > T::Diff::ZERO) // most significant bit, if necessary, comes last
+      v.push((off & (T::Unsigned::ONE << pref.k)) > T::Unsigned::ZERO) // most significant bit, if necessary, comes last
     }
   }
 

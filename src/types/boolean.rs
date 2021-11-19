@@ -11,7 +11,15 @@ impl NumberLike for bool {
   // because that's how rust represents them too
   const PHYSICAL_BITS: usize = 8;
 
-  type Diff = u8;
+  type Unsigned = u8;
+
+  fn to_unsigned(self) -> u8 {
+    self as u8
+  }
+
+  fn from_unsigned(off: u8) -> bool {
+    off > 0
+  }
 
   fn num_eq(&self, other: &Self) -> bool {
     self.eq(other)
@@ -19,14 +27,6 @@ impl NumberLike for bool {
 
   fn num_cmp(&self, other: &Self) -> Ordering {
     self.cmp(other)
-  }
-
-  fn offset_diff(upper: bool, lower: bool) -> u8 {
-    (upper as u8) - (lower as u8)
-  }
-
-  fn add_offset(lower: bool, off: u8) -> bool {
-    lower || (off > 0)
   }
 
   fn bytes_from(value: bool) -> Vec<u8> {

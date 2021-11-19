@@ -13,7 +13,7 @@ use crate::utils;
 #[derive(Clone)]
 pub struct Decompressor<T> where T: NumberLike {
   prefixes: Vec<Prefix<T>>,
-  prefix_map: Vec<PrefixDecompressionInfo<T>>,
+  prefix_map: Vec<PrefixDecompressionInfo<T::Unsigned>>,
   prefix_len_map: Vec<u32>,
   max_depth: u32,
   n: usize,
@@ -93,7 +93,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     self.decompress_n(reader, self.n)
   }
 
-  fn next_prefix(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<T> {
+  fn next_prefix(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<T::Unsigned> {
     if self.is_single_prefix {
       self.prefix_map[0]
     } else {
@@ -115,7 +115,6 @@ impl<T> Decompressor<T> where T: NumberLike {
     let mut i = 0;
     while i < n {
       let p = self.next_prefix(reader);
-      let range = T::offset_diff(p.upper, p.lower);
 
       let reps = match p.run_len_jumpstart {
         None => {
@@ -130,13 +129,13 @@ impl<T> Decompressor<T> where T: NumberLike {
 
       for _ in 0..reps {
         let mut offset = reader.read_diff(p.k as usize);
-        if p.k < T::Diff::BITS {
-          let most_significant = T::Diff::ONE << p.k;
-          if range - offset >= most_significant && reader.read_one() {
+        if p.k < T::Unsigned::BITS {
+          let most_significant = T::Unsigned::ONE << p.k;
+          if p.range - offset >= most_significant && reader.read_one() {
             offset |= most_significant;
           }
         }
-        res.push(T::add_offset(p.lower, offset));
+        res.push(T::from_unsigned(p.lower_unsigned + offset));
       }
       i += reps;
     }

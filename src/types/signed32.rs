@@ -9,7 +9,15 @@ impl NumberLike for i32 {
   const HEADER_BYTE: u8 = 3;
   const PHYSICAL_BITS: usize = 32;
 
-  type Diff = u32;
+  type Unsigned = u32;
+
+  fn to_unsigned(self) -> u32 {
+    self.wrapping_sub(i32::MIN) as u32
+  }
+
+  fn from_unsigned(off: u32) -> Self {
+    i32::MIN.wrapping_add(off as i32)
+  }
 
   fn num_eq(&self, other: &Self) -> bool {
     self.eq(other)
@@ -17,14 +25,6 @@ impl NumberLike for i32 {
 
   fn num_cmp(&self, other: &Self) -> Ordering {
     self.cmp(other)
-  }
-
-  fn offset_diff(upper: i32, lower: i32) -> u32 {
-    upper.wrapping_sub(lower) as u32
-  }
-
-  fn add_offset(lower: i32, off: u32) -> i32 {
-    lower.wrapping_add(off as i32)
   }
 
   fn bytes_from(num: i32) -> Vec<u8> {

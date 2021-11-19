@@ -110,7 +110,15 @@ macro_rules! impl_timestamp {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = 96;
 
-      type Diff = u128;
+      type Unsigned = u128;
+
+      fn to_unsigned(self) -> u128 {
+        self.0.wrapping_sub(i128::MIN) as u128
+      }
+
+      fn from_unsigned(off: u128) -> Self {
+        Self(i128::MIN.wrapping_add(off as i128))
+      }
 
       fn num_eq(&self, other: &Self) -> bool {
         self.0.eq(&other.0)
@@ -118,14 +126,6 @@ macro_rules! impl_timestamp {
 
       fn num_cmp(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
-      }
-
-      fn offset_diff(upper: Self, lower: Self) -> u128 {
-        (upper.0 - lower.0) as u128
-      }
-
-      fn add_offset(lower: Self, off: u128) -> Self {
-        Self(lower.0 + off as i128)
       }
 
       fn bytes_from(value: Self) -> Vec<u8> {

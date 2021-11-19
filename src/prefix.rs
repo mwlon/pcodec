@@ -5,14 +5,14 @@ use crate::bits;
 use crate::types::{NumberLike, UnsignedLike};
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct PrefixDecompressionInfo<T> where T: NumberLike {
-  pub lower: T,
-  pub upper: T,
+pub struct PrefixDecompressionInfo<T> where T: UnsignedLike {
+  pub lower_unsigned: T,
+  pub range: T,
   pub k: u32,
   pub run_len_jumpstart: Option<usize>,
 }
 
-impl<T> PrefixDecompressionInfo<T> where T: NumberLike {
+impl<T> PrefixDecompressionInfo<T> where T: UnsignedLike {
   pub fn new() -> Self {
     PrefixDecompressionInfo {
       ..Default::default()
@@ -20,11 +20,13 @@ impl<T> PrefixDecompressionInfo<T> where T: NumberLike {
   }
 }
 
-impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T> where T: NumberLike {
+impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: NumberLike {
   fn from(p: &Prefix<T>) -> Self {
+    let lower_unsigned = p.lower.to_unsigned();
+    let upper_unsigned = p.upper.to_unsigned();
     PrefixDecompressionInfo {
-      lower: p.lower,
-      upper: p.upper,
+      lower_unsigned,
+      range: upper_unsigned - lower_unsigned,
       k: p.k,
       run_len_jumpstart: p.run_len_jumpstart,
     }
@@ -36,9 +38,10 @@ pub struct Prefix<T> where T: NumberLike {
   pub val: Vec<bool>,
   pub lower: T,
   pub upper: T,
+  pub lower_unsigned: T::Unsigned,
   pub k: u32,
-  pub only_k_bits_lower: T::Diff,
-  pub only_k_bits_upper: T::Diff,
+  pub only_k_bits_lower: T::Unsigned,
+  pub only_k_bits_upper: T::Unsigned,
   pub run_len_jumpstart: Option<usize>,
 }
 
@@ -55,12 +58,13 @@ impl<T> Prefix<T> where T: NumberLike {
   }
 
   pub fn new(val: Vec<bool>, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> Prefix<T> {
-    let diff = T::offset_diff(upper, lower);
+    let lower_unsigned = lower.to_unsigned();
+    let diff = upper.to_unsigned() - lower_unsigned;
     let k = (diff.to_f64() + 1.0).log2().floor() as u32;
-    let only_k_bits_upper = if k == T::Diff::BITS {
-      T::Diff::MAX
+    let only_k_bits_upper = if k == T::Unsigned::BITS {
+      T::Unsigned::MAX
     } else {
-      (T::Diff::ONE << k) - T::Diff::ONE
+      (T::Unsigned::ONE << k) - T::Unsigned::ONE
     };
     let only_k_bits_lower = diff - only_k_bits_upper;
 
@@ -68,6 +72,7 @@ impl<T> Prefix<T> where T: NumberLike {
       val,
       lower,
       upper,
+      lower_unsigned,
       k,
       only_k_bits_lower,
       only_k_bits_upper,

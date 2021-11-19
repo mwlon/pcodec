@@ -6,26 +6,6 @@ use crate::decompressor::Decompressor;
 use crate::types::NumberLike;
 
 const SIGN_BIT_MASK: u64 = 1_u64 << 63;
-fn f64_to_u64(x: f64) -> u64 {
-  let mem_layout_x_u64 = x.to_bits();
-  if mem_layout_x_u64 & SIGN_BIT_MASK > 0 {
-    // negative float
-    !mem_layout_x_u64
-  } else {
-    // positive float
-    mem_layout_x_u64 ^ SIGN_BIT_MASK
-  }
-}
-
-fn from_u64(x: u64) -> f64 {
-  if x & SIGN_BIT_MASK > 0 {
-    // positive float
-    f64::from_bits(x ^ SIGN_BIT_MASK)
-  } else {
-    // negative float
-    f64::from_bits(!x)
-  }
-}
 
 // Note that in all conversions between float and u64, we are using the u64 to indicate an offset.
 // For instance, since f64 has 52 fraction bits, here we want 1.0 + 3_u64 to be
@@ -34,22 +14,35 @@ impl NumberLike for f64 {
   const HEADER_BYTE: u8 = 5;
   const PHYSICAL_BITS: usize = 64;
 
-  type Diff = u64;
+  type Unsigned = u64;
+
+  fn to_unsigned(self) -> u64 {
+    let mem_layout_u64 = self.to_bits();
+    if mem_layout_u64 & SIGN_BIT_MASK > 0 {
+      // negative float
+      !mem_layout_u64
+    } else {
+      // positive float
+      mem_layout_u64 ^ SIGN_BIT_MASK
+    }
+  }
+
+  fn from_unsigned(off: u64) -> Self {
+    if off & SIGN_BIT_MASK > 0 {
+      // positive float
+      f64::from_bits(off ^ SIGN_BIT_MASK)
+    } else {
+      // negative float
+      f64::from_bits(!off)
+    }
+  }
 
   fn num_eq(&self, other: &f64) -> bool {
     self.to_bits() == other.to_bits()
   }
 
   fn num_cmp(&self, other: &f64) -> Ordering {
-    f64_to_u64(*self).cmp(&f64_to_u64(*other))
-  }
-
-  fn offset_diff(upper: f64, lower: f64) -> u64 {
-    f64_to_u64(upper) - f64_to_u64(lower)
-  }
-
-  fn add_offset(lower: f64, off: u64) -> f64 {
-    from_u64(f64_to_u64(lower) + off)
+    self.to_unsigned().cmp(&other.to_unsigned())
   }
 
   fn bytes_from(num: f64) -> Vec<u8> {

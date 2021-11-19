@@ -9,7 +9,15 @@ impl NumberLike for u64 {
   const HEADER_BYTE: u8 = 2;
   const PHYSICAL_BITS: usize = 64;
 
-  type Diff = u64;
+  type Unsigned = u64;
+
+  fn to_unsigned(self) -> Self::Unsigned {
+    self
+  }
+
+  fn from_unsigned(off: Self::Unsigned) -> Self {
+    off
+  }
 
   fn num_eq(&self, other: &Self) -> bool {
     self.eq(other)
@@ -17,14 +25,6 @@ impl NumberLike for u64 {
 
   fn num_cmp(&self, other: &Self) -> Ordering {
     self.cmp(other)
-  }
-
-  fn offset_diff(upper: u64, lower: u64) -> u64 {
-    upper - lower
-  }
-
-  fn add_offset(lower: u64, off: u64) -> u64 {
-    lower + off
   }
 
   fn bytes_from(num: u64) -> Vec<u8> {

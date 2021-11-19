@@ -55,7 +55,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     let compressed = compressor.compress(&nums).expect("could not compress");
     let compress_end = SystemTime::now();
     let dt = compress_end.duration_since(compress_start).expect("can't take dt");
-    println!("COMPRESSED IN {:?}", dt);
+    println!("COMPRESSED TO {} BYTES IN {:?}", compressed.len(), dt);
 
     fs::write(
       &output_path,
