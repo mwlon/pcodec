@@ -16,7 +16,7 @@ It currently supports the following data types:
 Smaller data types like `i16` can be efficiently compressed by casting
 to `i32`.
 
-For natural data, it typically shrinks data to 25-40% smaller than what
+For natural data, it typically shrinks data to 10-40% smaller than what
 `gzip -9` produces, compresses much faster, and decompresses equally
 quickly.
 
