@@ -40,7 +40,7 @@ see [benchmarks.md](./benchmarks.md).
 See the following basic usage.
 To run something right away, see [the example](./examples/README.md).
 
-```
+```rust
 use q_compress:{BitReader, I64Compressor, I64Decompressor};
 
 fn main() {
