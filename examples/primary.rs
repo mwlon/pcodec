@@ -142,8 +142,8 @@ fn main() {
     "".to_string()
   };
 
-  let files = fs::read_dir("data/binary").expect("couldn't read");
-  let output_dir = format!("data/q_compressed_{}", max_depth);
+  let files = fs::read_dir("examples/data/binary").expect("couldn't read");
+  let output_dir = format!("examples/data/q_compressed_{}", max_depth);
   match fs::create_dir(&output_dir) {
     Ok(()) => (),
     Err(e) => match e.kind() {

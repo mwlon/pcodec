@@ -12,7 +12,7 @@ on the binary data of these numbers.
 
 TL;DR:
 * `python generate_randoms.py`
-* `cargo run --release`
+* `cargo run --release --example primary`
 
 The script to generate the data uses python, so set up a python3
 environment with `numpy` and `pyarrow` installed.
@@ -33,7 +33,7 @@ shows integers sampled from a floored normal distribution with standard
 deviation of 10.
 
 Then to run quantile compression and decompression on each dataset, run
-`cargo run --release`.
+`cargo run --release --example primary`.
 This will show the quantile parameters chosen for each dataset and how long
 it took to compress and decompress.
 You can see the compressed files in `data/q_compressed_$DEPTH`, where `DEPTH=6`

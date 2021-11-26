@@ -1,7 +1,8 @@
 /target
-example/target
-example/data
-example/venv
+examples/target
+examples/data
+examples/venv
+*.svg
 .idea
 *.iml
 temp

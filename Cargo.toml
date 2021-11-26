@@ -12,3 +12,7 @@ license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
 
 [dependencies]
+
+[[example]]
+name="primary"
+path="examples/primary.rs"

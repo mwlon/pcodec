@@ -1,8 +1,0 @@
-[package]
-name = "example"
-version = "0.0.0"
-authors = ["mwlon <m.w.loncaric@gmail.com>"]
-edition = "2018"
-
-[dependencies]
-q_compress = {path=".."}
