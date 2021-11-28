@@ -11,19 +11,28 @@ use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
 
 #[derive(Clone)]
-pub struct PrefixTrie<T> where T: NumberLike {
+pub struct PrefixTrie<T>
+where
+  T: NumberLike,
+{
   pub child0: Option<Box<PrefixTrie<T>>>,
   pub child1: Option<Box<PrefixTrie<T>>>,
   pub value: Option<PrefixDecompressionInfo<T::Unsigned>>,
 }
 
-impl<T> Default for PrefixTrie<T> where T: NumberLike {
+impl<T> Default for PrefixTrie<T>
+where
+  T: NumberLike,
+{
   fn default() -> Self {
     PrefixTrie::new()
   }
 }
 
-impl<T> PrefixTrie<T> where T: NumberLike {
+impl<T> PrefixTrie<T>
+where
+  T: NumberLike,
+{
   pub fn new() -> PrefixTrie<T> {
     PrefixTrie {
       child0: None,
@@ -33,7 +42,7 @@ impl<T> PrefixTrie<T> where T: NumberLike {
   }
 
   pub fn insert(&mut self, key: &[bool], value: &Prefix<T>) {
-    if key.is_empty(){
+    if key.is_empty() {
       self.value = Some(value.into());
     } else {
       let (head, tail) = key.split_at(1);
@@ -51,14 +60,6 @@ impl<T> PrefixTrie<T> where T: NumberLike {
     }
   }
 
-  pub fn contains_key(&self, key: &bool) -> bool {
-    if *key {
-      self.child1.is_some()
-    } else {
-      self.child0.is_some()
-    }
-  }
-
   pub fn is_leaf(&self) -> bool {
     self.child0.is_none() && self.child1.is_none()
   }
@@ -73,7 +74,10 @@ impl<T> PrefixTrie<T> where T: NumberLike {
 }
 
 #[derive(Clone)]
-pub struct Decompressor<T> where T: NumberLike {
+pub struct Decompressor<T>
+where
+  T: NumberLike,
+{
   prefixes: Vec<Prefix<T>>,
   prefix_map: Vec<PrefixDecompressionInfo<T::Unsigned>>,
   prefix_len_map: Vec<u32>,
@@ -83,7 +87,10 @@ pub struct Decompressor<T> where T: NumberLike {
   is_single_prefix: bool,
 }
 
-impl<T> Decompressor<T> where T: NumberLike {
+impl<T> Decompressor<T>
+where
+  T: NumberLike,
+{
   pub fn new(prefixes: Vec<Prefix<T>>, n: usize) -> Self {
     let mut max_depth = 0;
     for p in &prefixes {
@@ -124,7 +131,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     let bytes = bit_reader.read_bytes(MAGIC_HEADER.len())?;
     if bytes != MAGIC_HEADER {
       return Err(QCompressError::MagicHeaderError {
-        header: bytes.to_vec()
+        header: bytes.to_vec(),
       });
     }
     let bytes = bit_reader.read_bytes(1)?;
@@ -164,12 +171,12 @@ impl<T> Decompressor<T> where T: NumberLike {
   }
 
   fn next_prefix(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<T::Unsigned> {
-      let mut prefix_trie = &self.prefix_trie;
-      while !prefix_trie.is_leaf() {
-        let val = reader.read_one();
-        prefix_trie = prefix_trie.select_child(&val);
-      }
-      prefix_trie.value.unwrap()
+    let mut prefix_trie = &self.prefix_trie;
+    while !prefix_trie.is_leaf() {
+      let val = reader.read_one();
+      prefix_trie = prefix_trie.select_child(&val);
+    }
+    prefix_trie.value.unwrap()
   }
 
   pub fn decompress_n(&self, reader: &mut BitReader, n: usize) -> Vec<T> {
@@ -179,14 +186,12 @@ impl<T> Decompressor<T> where T: NumberLike {
       let p = self.next_prefix(reader);
 
       let reps = match p.run_len_jumpstart {
-        None => {
-          1
-        },
+        None => 1,
         Some(jumpstart) => {
           // we stored the number of occurrences minus 1
           // because we knew it's at least 1
           min(reader.read_varint(jumpstart) + 1, n - i)
-        },
+        }
       };
 
       for _ in 0..reps {
@@ -205,9 +210,11 @@ impl<T> Decompressor<T> where T: NumberLike {
   }
 }
 
-impl<T> Debug for Decompressor<T> where T: NumberLike {
+impl<T> Debug for Decompressor<T>
+where
+  T: NumberLike,
+{
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     utils::display_prefixes(&self.prefixes, f)
   }
 }
-
