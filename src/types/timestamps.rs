@@ -27,7 +27,7 @@ macro_rules! impl_timestamp {
 
       pub fn new(parts: i128) -> Result<Self, QCompressError> {
         if parts > Self::MAX || parts < Self::MIN {
-          Err(QCompressError::InvalidTimestampError { parts, parts_per_sec: $parts_per_sec })
+          Err(QCompressError::TimestampError { parts, parts_per_sec: $parts_per_sec })
         } else {
           Ok(Self(parts))
         }

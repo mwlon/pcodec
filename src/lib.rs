@@ -57,8 +57,8 @@ mod tests {
   #[test]
   fn test_moderate_data() {
     let mut v = Vec::new();
-    for i in -50000..50000 {
-      v.push(i);
+    for i in -20000..20000 {
+      v.push(i * i);
     }
     assert_recovers(v, 5);
   }

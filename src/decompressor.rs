@@ -9,66 +9,79 @@ use crate::errors::QCompressError;
 use crate::prefix::{Prefix, PrefixDecompressionInfo};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
+use std::collections::HashMap;
+use std::slice::SliceIndex;
 
-#[derive(Clone)]
-pub struct PrefixTrie<T>
+#[derive(Clone, Debug)]
+pub enum PrefixTrie<T>
 where
   T: NumberLike,
 {
-  pub child0: Option<Box<PrefixTrie<T>>>,
-  pub child1: Option<Box<PrefixTrie<T>>>,
-  pub value: Option<PrefixDecompressionInfo<T::Unsigned>>,
-}
+  Children(*const PrefixTrie<T>, *const PrefixTrie<T>), // vector indices for the left and right nodes
+  Value(PrefixDecompressionInfo<T::Unsigned>),
 
-impl<T> Default for PrefixTrie<T>
-where
-  T: NumberLike,
-{
-  fn default() -> Self {
-    PrefixTrie::new()
-  }
+  // pub child0: Option<&'a PrefixTrie<'a, T>>,
+  // pub child1: Option<&'a PrefixTrie<'a, T>>,
+  // pub is_leaf: bool,
+  // pub value: PrefixDecompressionInfo<T::Unsigned>,
 }
 
 impl<T> PrefixTrie<T>
 where
   T: NumberLike,
 {
-  pub fn new() -> PrefixTrie<T> {
-    PrefixTrie {
-      child0: None,
-      child1: None,
-      value: None,
+  pub fn from_prefixes(
+    max_depth: u32,
+    prefix_binary_map: HashMap<Vec<bool>, PrefixDecompressionInfo<T::Unsigned>>,
+    prefix_trie_nodes: &mut Vec<PrefixTrie<T>>,
+  ) -> Result<PrefixTrie<T>, QCompressError> {
+    if prefix_binary_map.is_empty() {
+      return Ok(PrefixTrie::Value(PrefixDecompressionInfo {
+        lower_unsigned: T::Unsigned::ZERO,
+        range: T::Unsigned::MAX,
+        k: T::PHYSICAL_BITS as u32,
+        run_len_jumpstart: None,
+      }));
     }
+
+    Self::from_prefix_tail(
+      0,
+      Vec::new(),
+      max_depth,
+      &prefix_binary_map,
+      prefix_trie_nodes,
+    )
   }
 
-  pub fn insert(&mut self, key: &[bool], value: &Prefix<T>) {
-    if key.is_empty() {
-      self.value = Some(value.into());
-    } else {
-      let (head, tail) = key.split_at(1);
-      if head[0] {
-        if self.child1.is_none() {
-          self.child1 = Some(Box::new(PrefixTrie::new()));
-        }
-        self.child1.as_mut().unwrap().insert(tail, value);
-      } else {
-        if self.child0.is_none() {
-          self.child0 = Some(Box::new(PrefixTrie::new()));
-        }
-        self.child0.as_mut().unwrap().insert(tail, value);
-      }
+  pub fn from_prefix_tail(
+    current_depth: u32,
+    current_val: Vec<bool>,
+    max_depth: u32,
+    prefix_binary_map: &HashMap<Vec<bool>, PrefixDecompressionInfo<T::Unsigned>>,
+    prefix_trie_nodes: &mut Vec<PrefixTrie<T>>,
+  ) -> Result<PrefixTrie<T>, QCompressError> {
+    if current_depth > max_depth {
+      return Err(QCompressError::PrefixesError {binary_string: current_val});
     }
-  }
 
-  pub fn is_leaf(&self) -> bool {
-    self.child0.is_none() && self.child1.is_none()
-  }
-
-  pub fn select_child(&self, key: &bool) -> &PrefixTrie<T> {
-    if *key {
-      self.child1.as_ref().unwrap()
+    if let Some(info) = prefix_binary_map.get(&current_val) {
+      let leaf = PrefixTrie::Value(*info);
+      Ok(leaf)
     } else {
-      self.child0.as_ref().unwrap()
+      let mut left_val = current_val.clone();
+      left_val.push(false);
+      let mut right_val = current_val.clone();
+      right_val.push(true);
+      let left = Self::from_prefix_tail(current_depth + 1, left_val, max_depth, prefix_binary_map, prefix_trie_nodes)?;
+      let right = Self::from_prefix_tail(current_depth + 1, right_val, max_depth, prefix_binary_map, prefix_trie_nodes)?;
+      let left_idx = prefix_trie_nodes.len();
+      prefix_trie_nodes.push(left);
+      prefix_trie_nodes.push(right);
+      // we rely on prefix_trie_nodes not resizing, having been given enough capacity to begin with
+      Ok(PrefixTrie::Children(
+        &prefix_trie_nodes[left_idx] as *const PrefixTrie<T>,
+        &prefix_trie_nodes[left_idx + 1] as *const PrefixTrie<T>
+      ))
     }
   }
 }
@@ -79,9 +92,8 @@ where
   T: NumberLike,
 {
   prefixes: Vec<Prefix<T>>,
-  prefix_map: Vec<PrefixDecompressionInfo<T::Unsigned>>,
-  prefix_len_map: Vec<u32>,
-  prefix_trie: PrefixTrie<T>,
+  prefix_trie_nodes: Vec<PrefixTrie<T>>,
+  prefix_trie_root: PrefixTrie<T>,
   max_depth: u32,
   n: usize,
   is_single_prefix: bool,
@@ -91,40 +103,30 @@ impl<T> Decompressor<T>
 where
   T: NumberLike,
 {
-  pub fn new(prefixes: Vec<Prefix<T>>, n: usize) -> Self {
+  pub fn new(prefixes: Vec<Prefix<T>>, n: usize) -> Result<Self, QCompressError> {
     let mut max_depth = 0;
+    let n_pref = prefixes.len();
+    let mut prefix_binary_map = HashMap::<Vec<bool>, PrefixDecompressionInfo<T::Unsigned>>::with_capacity(n_pref);
     for p in &prefixes {
+      prefix_binary_map.insert(p.val.clone(), p.into());
       max_depth = max(max_depth, p.val.len() as u32);
     }
-    let n_pref = 1_usize << max_depth;
-    let mut prefix_map = Vec::with_capacity(n_pref);
-    let mut prefix_len_map = Vec::with_capacity(n_pref);
-    for _ in 0..n_pref {
-      prefix_map.push(PrefixDecompressionInfo::new());
-      prefix_len_map.push(u32::MAX);
-    }
-    for p in &prefixes {
-      let i = bits::bits_to_usize_truncated(&p.val, max_depth);
-      prefix_map[i] = p.into();
-      prefix_len_map[i] = p.val.len() as u32;
-    }
-
-    let mut prefix_trie = PrefixTrie::new();
-    for p in &prefixes {
-      let vals = &p.val;
-      prefix_trie.insert(vals, p);
-    }
+    let mut prefix_trie_nodes = Vec::with_capacity(2 * n_pref);
+    let prefix_trie_root = PrefixTrie::from_prefixes(
+      max_depth,
+      prefix_binary_map,
+      &mut prefix_trie_nodes
+    )?;
 
     let is_single_prefix = prefixes.len() == 1;
-    Decompressor {
+    Ok(Decompressor {
       prefixes,
-      prefix_map,
-      prefix_len_map,
-      prefix_trie,
+      prefix_trie_nodes,
+      prefix_trie_root,
       max_depth,
       n,
       is_single_prefix,
-    }
+    })
   }
 
   pub fn from_reader(bit_reader: &mut BitReader) -> Result<Self, QCompressError> {
@@ -161,9 +163,7 @@ where
       prefixes.push(Prefix::new(val, lower, upper, jumpstart));
     }
 
-    let decompressor = Decompressor::new(prefixes, n);
-
-    Ok(decompressor)
+    Decompressor::new(prefixes, n)
   }
 
   pub fn decompress(&self, reader: &mut BitReader) -> Vec<T> {
@@ -171,12 +171,20 @@ where
   }
 
   fn next_prefix(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<T::Unsigned> {
-    let mut prefix_trie = &self.prefix_trie;
-    while !prefix_trie.is_leaf() {
-      let val = reader.read_one();
-      prefix_trie = prefix_trie.select_child(&val);
+    let mut prefix_trie = &self.prefix_trie_root as *const PrefixTrie<T>;
+    unsafe {
+      while let PrefixTrie::Children(left, right) = *prefix_trie {
+        prefix_trie = if reader.read_one() {
+          right
+        } else {
+          left
+        }
+      }
+      match *prefix_trie {
+        PrefixTrie::Value(res) => res,
+        _ => panic!("unreachable")
+      }
     }
-    prefix_trie.value.unwrap()
   }
 
   pub fn decompress_n(&self, reader: &mut BitReader, n: usize) -> Vec<T> {

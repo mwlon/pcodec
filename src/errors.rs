@@ -3,16 +3,18 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 use crate::constants::{MAGIC_HEADER, MAX_ENTRIES, MAX_MAX_DEPTH};
+use crate::bits::bits_to_string;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QCompressError where {
   MaxEntriesError { n: usize },
-  MaxDepthError { max_depth: u32},
+  MaxDepthError { max_depth: u32 },
   OutOfRangeError { num_string: String },
   MisalignedError {},
   MagicHeaderError { header: Vec<u8> },
   HeaderDtypeError { header_byte: u8, decompressor_byte: u8 },
-  InvalidTimestampError { parts: i128, parts_per_sec: u32 },
+  TimestampError { parts: i128, parts_per_sec: u32 },
+  PrefixesError { binary_string: Vec<bool> },
 }
 
 impl Display for QCompressError {
@@ -32,7 +34,7 @@ impl Display for QCompressError {
       ),
       QCompressError::OutOfRangeError {num_string} => write!(
         f,
-        "number {} was not found in any range",
+        "number {} to compress was not found in any range",
         num_string,
       ),
       QCompressError::MisalignedError {} => write!(
@@ -51,11 +53,16 @@ impl Display for QCompressError {
         header_byte,
         decompressor_byte,
       ),
-      QCompressError::InvalidTimestampError { parts, parts_per_sec } => write!(
+      QCompressError::TimestampError { parts, parts_per_sec } => write!(
         f,
         "invalid timestamp with {}/{} nanos",
         parts,
-        parts_per_sec
+        parts_per_sec,
+      ),
+      QCompressError::PrefixesError { binary_string } => write!(
+        f,
+        "corrupt data; binary string {} not covered by any prefix",
+        bits_to_string(binary_string),
       )
     }
   }
