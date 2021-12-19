@@ -70,6 +70,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     let n_pref = bit_reader.read_usize(MAX_MAX_DEPTH as usize);
     let mut prefixes = Vec::with_capacity(n_pref);
     for _ in 0..n_pref {
+      let count = bit_reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
       let lower_bits = bit_reader.read(T::PHYSICAL_BITS);
       let lower = T::from_bytes(bits::bits_to_bytes(lower_bits));
       let upper_bits = bit_reader.read(T::PHYSICAL_BITS);
@@ -81,7 +82,7 @@ impl<T> Decompressor<T> where T: NumberLike {
       } else {
         None
       };
-      prefixes.push(Prefix::new(val, lower, upper, jumpstart));
+      prefixes.push(Prefix::new(count, val, lower, upper, jumpstart));
     }
 
     let decompressor = Decompressor::new(prefixes, n);

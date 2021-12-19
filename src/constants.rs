@@ -1,10 +1,12 @@
 pub const MAGIC_HEADER: [u8; 4] = [113, 99, 111, 33]; // ascii for qco!
-pub const MAX_ENTRIES: u64 = (1_u64 << 32) - 1;
-pub const BITS_TO_ENCODE_N_ENTRIES: u32 = 32;
+pub const MAX_ENTRIES: u64 = (1_u64 << 24) - 1;
+pub const BITS_TO_ENCODE_N_ENTRIES: u32 = 24;
 pub const MAX_MAX_DEPTH: u32 = 15;
 pub const BITS_TO_ENCODE_PREFIX_LEN: u32 = 4;
 pub const MAX_JUMPSTART: usize = 31;
 pub const BITS_TO_ENCODE_JUMPSTART: u32 = 5;
+pub const MAX_CHUNKS: u64 = (1_u64 << 16) - 1;
+pub const BITS_TO_ENCODE_N_CHUNKS: u32 = 16;
 
 #[cfg(test)]
 mod tests {
@@ -28,5 +30,10 @@ mod tests {
   #[test]
   fn test_bits_to_encode_jumpstart() {
     assert_can_encode(BITS_TO_ENCODE_JUMPSTART, MAX_JUMPSTART as u64);
+  }
+
+  #[test]
+  fn test_bits_to_encode_n_chunks() {
+    assert_can_encode(BITS_TO_ENCODE_N_CHUNKS, MAX_CHUNKS);
   }
 }

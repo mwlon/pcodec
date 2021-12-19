@@ -19,10 +19,10 @@ struct JumpstartConfiguration {
 }
 
 fn choose_run_len_jumpstart(
-  weight: u64,
+  count: u64,
   n: u64,
 ) -> JumpstartConfiguration {
-  let freq = (weight as f64) / (n as f64);
+  let freq = (count as f64) / (n as f64);
   let non_freq = 1.0 - freq;
   let jumpstart = min((-non_freq.log2()).ceil() as usize, MAX_JUMPSTART);
   let expected_n_runs = (freq * non_freq * n as f64).ceil() as u64;
@@ -32,7 +32,7 @@ fn choose_run_len_jumpstart(
   }
 }
 
-fn push_pref<T: Copy>(
+fn push_pref<T: NumberLike>(
   seq: &mut Vec<PrefixIntermediate<T>>,
   prefix_idx: &mut usize,
   i: usize,
@@ -41,20 +41,31 @@ fn push_pref<T: Copy>(
   n: usize,
   sorted: &[T],
 ) {
-  let weight = j - i;
-  let frequency = weight as f64 / n as f64;
+  let count = j - i;
+  let frequency = count as f64 / n as f64;
   let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_prefix) / n);
   let prefix_idx_incr = new_prefix_idx - *prefix_idx;
-  if n < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || weight == n || prefix_idx_incr == 1 {
+  if n < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n || prefix_idx_incr == 1 {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
-    // This also works if there are no other ranges.
-    seq.push(PrefixIntermediate::new(weight as u64, sorted[i], sorted[j - 1], None));
+    seq.push(PrefixIntermediate::new(
+      count,
+      count as u64,
+      sorted[i],
+      sorted[j - 1],
+      None
+    ));
   } else {
     // The weird case - a range that represents almost all (but not all) the data.
     // We create extra prefixes that can describe `reps` copies of the range at once.
-    let config = choose_run_len_jumpstart(weight as u64, n as u64);
-    seq.push(PrefixIntermediate::new(config.weight, sorted[i], sorted[j - 1], Some(config.jumpstart)));
+    let config = choose_run_len_jumpstart(count as u64, n as u64);
+    seq.push(PrefixIntermediate::new(
+      count,
+      config.weight,
+      sorted[i],
+      sorted[j - 1],
+      Some(config.jumpstart)
+    ));
   }
   *prefix_idx = new_prefix_idx;
 }
@@ -131,6 +142,7 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
         let pref0 = &prefix_sequence[best_i as usize];
         let pref1 = &prefix_sequence[best_i as usize + 1];
         prefix_sequence[best_i as usize] = PrefixIntermediate::new(
+          pref0.count + pref1.count,
           pref0.weight + pref1.weight,
           pref0.lower,
           pref1.upper,
@@ -144,8 +156,8 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
     huffman::make_huffman_code(&mut prefix_sequence);
 
     let mut prefixes = Vec::new();
-    for p in &prefix_sequence {
-      prefixes.push(Prefix::from_intermediate_and_diff(p));
+    for p in prefix_sequence {
+      prefixes.push(Prefix::from(p));
     }
 
     let res = Compressor::<T> {
@@ -167,7 +179,9 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
     let p0_d_cost = depth_bits(p0.weight, n);
     let p1_d_cost = depth_bits(p1.weight, n);
     let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
-    let meta_cost = 10.0 + 2.0 * T::PHYSICAL_BITS as f64;
+    let meta_cost = 10.0 +
+      BITS_TO_ENCODE_N_ENTRIES as f64 +
+      2.0 * T::PHYSICAL_BITS as f64;
 
     let separate_cost = 2.0 * meta_cost +
       (p0_r_cost + p0_d_cost) * p0.weight as f64+
@@ -253,10 +267,11 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
   pub fn metadata_as_bits(&self) -> Vec<bool> {
     let mut res = Vec::new();
     res.extend(bytes_to_bits(MAGIC_HEADER.to_vec()));
-    res.extend(&byte_to_bits(T::HEADER_BYTE));
+    res.extend(byte_to_bits(T::HEADER_BYTE));
     res.extend(usize_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
     res.extend(usize_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
     for pref in &self.prefixes {
+      res.extend(usize_to_bits(pref.count, BITS_TO_ENCODE_N_ENTRIES));
       res.extend(bytes_to_bits(T::bytes_from(pref.lower)));
       res.extend(bytes_to_bits(T::bytes_from(pref.upper)));
       res.extend(usize_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
