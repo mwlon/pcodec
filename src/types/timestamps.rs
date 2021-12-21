@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::compressor::Compressor;
 use crate::decompressor::Decompressor;
-use crate::errors::QCompressError;
+use crate::errors::{QCompressError, QCompressResult};
 use crate::types::NumberLike;
 
 const BILLION_U32: u32 = 1_000_000_000;
@@ -25,7 +25,7 @@ macro_rules! impl_timestamp {
       const MIN: i128 = $parts_per_sec as i128 * (i64::MIN as i128);
       const NS_PER_PART: u32 = 1_000_000_000 / $parts_per_sec;
 
-      pub fn new(parts: i128) -> Result<Self, QCompressError> {
+      pub fn new(parts: i128) -> QCompressResult<Self> {
         if parts > Self::MAX || parts < Self::MIN {
           Err(QCompressError::InvalidTimestampError { parts, parts_per_sec: $parts_per_sec })
         } else {
@@ -48,7 +48,7 @@ macro_rules! impl_timestamp {
         self.0
       }
 
-      pub fn from_bytes_safe(bytes: &[u8]) -> Result<$t, QCompressError> {
+      pub fn from_bytes_safe(bytes: &[u8]) -> QCompressResult<$t> {
         let mut full_bytes = vec![0; 4];
         full_bytes.extend(bytes);
         let parts = (u128::from_be_bytes(full_bytes.try_into().unwrap()) as i128) + Self::MIN;

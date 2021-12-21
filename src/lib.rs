@@ -1,6 +1,9 @@
 pub use bit_reader::BitReader;
-pub use compressor::Compressor;
-pub use decompressor::Decompressor;
+pub use chunk_metadata::{ChunkMetadata, CompressedChunk, DecompressedChunk};
+pub use compressor::{Compressor, CompressorConfig};
+pub use constants::MAX_ENTRIES;
+pub use decompressor::{Decompressor, DecompressorConfig};
+pub use flags::Flags;
 pub use types::boolean::BoolCompressor;
 pub use types::boolean::BoolDecompressor;
 pub use types::float32::F32Compressor;
@@ -11,21 +14,21 @@ pub use types::signed32::I32Compressor;
 pub use types::signed32::I32Decompressor;
 pub use types::signed64::I64Compressor;
 pub use types::signed64::I64Decompressor;
-pub use types::timestamps::TimestampNs;
-pub use types::timestamps::TimestampNsCompressor;
-pub use types::timestamps::TimestampNsDecompressor;
 pub use types::timestamps::TimestampMicros;
 pub use types::timestamps::TimestampMicrosCompressor;
 pub use types::timestamps::TimestampMicrosDecompressor;
+pub use types::timestamps::TimestampNs;
+pub use types::timestamps::TimestampNsCompressor;
+pub use types::timestamps::TimestampNsDecompressor;
 pub use types::unsigned32::U32Compressor;
 pub use types::unsigned32::U32Decompressor;
 pub use types::unsigned64::U64Compressor;
 pub use types::unsigned64::U64Decompressor;
 
-pub use constants::MAX_ENTRIES;
-
 mod bits;
+mod chunk_metadata;
 mod constants;
+mod flags;
 mod huffman;
 mod prefix;
 mod utils;
@@ -37,8 +40,8 @@ pub mod types;
 
 #[cfg(test)]
 mod tests {
+  use crate::{BitReader, Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNs};
   use crate::types::NumberLike;
-  use crate::{Compressor, BitReader, Decompressor, TimestampNs, TimestampMicros};
 
   #[test]
   fn test_edge_cases() {
@@ -139,15 +142,16 @@ mod tests {
   }
 
   fn assert_recovers<T: NumberLike>(vals: Vec<T>, max_depth: u32) {
-    let compressor = Compressor::train(vals.clone(), max_depth)
-      .expect("training error");
-    let compressed = compressor.compress(&vals)
-      .expect("compression error");
+    let compressor = Compressor::<T>::from_config(
+      CompressorConfig { max_depth, ..Default::default()},
+    );
+    let compressed = compressor.simple_compress(&vals).expect("compression error");
     let mut bit_reader = BitReader::from(compressed);
-    let decompressor = Decompressor::<T>::from_reader(&mut bit_reader)
-      .expect("header error");
-    let decompressed = decompressor.decompress(&mut bit_reader);
-    // can't do assert_eq on the whole vector because floating points don't compare exactly
+    let mut decompressor = Decompressor::<T>::default();
+    let decompressed = decompressor.simple_decompress(&mut bit_reader)
+      .expect("decompression error");
+    // We can't do assert_eq on the whole vector because even bitwise identical
+    // floats sometimes aren't equal by ==.
     assert_eq!(decompressed.len(), vals.len());
     for i in 0..decompressed.len() {
       assert!(decompressed[i].num_eq(&vals[i]));

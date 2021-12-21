@@ -2,7 +2,7 @@ use std::fmt::{Debug, Formatter};
 use std::fmt;
 
 use crate::bits;
-use crate::errors::QCompressError;
+use crate::errors::{QCompressError, QCompressResult};
 use crate::types::UnsignedLike;
 
 const LEFT_MASKS: [u8; 8] = [
@@ -73,7 +73,7 @@ impl BitReader {
     }
   }
 
-  pub fn read_bytes(&mut self, n: usize) -> Result<&[u8], QCompressError> {
+  pub fn read_bytes(&mut self, n: usize) -> QCompressResult<&[u8]> {
     self.refresh_if_needed();
 
     if self.j == 0 {
@@ -164,7 +164,7 @@ impl BitReader {
     res
   }
 
-  pub fn drain_bytes(&mut self) -> Result<&[u8], QCompressError> {
+  pub fn drain_bytes(&mut self) -> QCompressResult<&[u8]> {
     if self.j != 0 {
       self.i += 1;
       self.j = 0;
@@ -172,15 +172,22 @@ impl BitReader {
     let n = self.bytes.len() - self.i;
     self.read_bytes(n)
   }
+
+  // Seek to the end of the byte.
+  // Used to skip to the next metadata or body section of the file, since they
+  // always start byte-aligned.
+  pub fn drain_byte(&mut self) {
+    self.j = 8;
+  }
 }
 
 #[cfg(test)]
 mod tests {
   use crate::BitReader;
-  use crate::errors::QCompressError;
+  use crate::errors::QCompressResult;
 
   #[test]
-  fn test_bit_reader() -> Result<(), QCompressError>{
+  fn test_bit_reader() -> QCompressResult<()>{
     // bits: 1001 1010  0110 1011  0010 1101
     let bytes = vec![0x9a, 0x6b, 0x2d];
     let mut bit_reader = BitReader::from(bytes);

@@ -1,14 +1,16 @@
 use std::cmp::{max, min};
 use std::fmt;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 
 use crate::bits::*;
-use crate::huffman;
+use crate::constants::*;
+use crate::errors::{QCompressError, QCompressResult};
+use crate::{huffman, Flags};
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
-use crate::constants::*;
-use crate::errors::QCompressError;
+use crate::chunk_metadata::{CompressedChunk, ChunkMetadata};
 
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
@@ -70,22 +72,34 @@ fn push_pref<T: NumberLike>(
   *prefix_idx = new_prefix_idx;
 }
 
-#[derive(Clone)]
-pub struct Compressor<T> where T: NumberLike {
-  prefixes: Vec<Prefix<T>>,
-  n: usize,
+#[derive(Clone, Debug)]
+pub struct CompressorConfig {
+  pub max_depth: u32,
 }
 
-impl<T: 'static> Compressor<T> where T: NumberLike {
-  pub fn train(nums: Vec<T>, max_depth: u32) -> Result<Self, QCompressError> {
+impl Default for CompressorConfig {
+  fn default() -> Self {
+    Self {
+      max_depth: 6
+    }
+  }
+}
+
+#[derive(Clone, Default)]
+struct TrainedChunkCompressor<T> where T: NumberLike {
+  prefixes: Vec<Prefix<T>>,
+}
+
+impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
+  pub fn train(nums: Vec<T>, config: CompressorConfig, _flags: Flags) -> QCompressResult<Self> {
+    let max_depth = config.max_depth;
     if max_depth > MAX_MAX_DEPTH {
       return Err(QCompressError::MaxDepthError { max_depth });
     }
     let n = nums.len();
     if n == 0 {
-      return Ok(Compressor::<T> {
-        prefixes: Vec::new(),
-        n,
+      return Ok(TrainedChunkCompressor::<T> {
+        ..Default::default()
       });
     }
     if n as u64 > MAX_ENTRIES {
@@ -160,14 +174,13 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
       prefixes.push(Prefix::from(p));
     }
 
-    let res = Compressor::<T> {
+    let res = TrainedChunkCompressor::<T> {
       prefixes,
-      n,
     };
     Ok(res)
   }
 
-  pub fn combine_improvement(p0: &PrefixIntermediate<T>, p1: &PrefixIntermediate<T>, n: usize) -> f64 {
+  fn combine_improvement(p0: &PrefixIntermediate<T>, p1: &PrefixIntermediate<T>, n: usize) -> f64 {
     if p0.run_len_jumpstart.is_some() || p1.run_len_jumpstart.is_some() {
       // can never combine prefixes that encode run length
       return f64::MIN;
@@ -204,16 +217,15 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
     num.ge(&prefix.lower) && num.le(&prefix.upper)
   }
 
-  pub fn compress_nums_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, QCompressError> {
+  fn compress_nums(&self, nums: &[T]) -> QCompressResult<Vec<u8>> {
     let mut sorted_prefixes = self.prefixes.clone();
-    // most reps comes first
+    // most common prefixes come first
     sorted_prefixes.sort_by(
       |p0, p1|
-        p0.val.len().cmp(&p1.val.len())
+        p0.count.cmp(&p1.count)
     );
 
-    let mut res = Vec::new();
-    let res_ptr = &mut res;
+    let mut bit_res = Vec::new();
     let mut i = 0;
     while i < nums.len() {
       let mut success = false;
@@ -223,11 +235,11 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
           continue;
         }
 
-        res_ptr.extend(&pref.val);
+        bit_res.extend(&pref.val);
 
         match pref.run_len_jumpstart {
           None => {
-            self.compress_num_offset_bits_w_prefix(num, &pref, res_ptr);
+            self.compress_num_offset_bits_w_prefix(num, &pref, &mut bit_res);
             i += 1;
           }
           Some(jumpstart) => {
@@ -242,10 +254,10 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
 
             // we store 1 less than the number of occurrences
             // because the prefix already implies there is at least 1 occurrence
-            res_ptr.extend(usize_to_varint_bits(reps - 1, jumpstart));
+            bit_res.extend(usize_to_varint_bits(reps - 1, jumpstart));
 
             for x in nums.iter().skip(i).take(reps) {
-              self.compress_num_offset_bits_w_prefix(*x, &pref, res_ptr);
+              self.compress_num_offset_bits_w_prefix(*x, &pref, &mut bit_res);
             }
             i += reps;
           }
@@ -261,48 +273,87 @@ impl<T: 'static> Compressor<T> where T: NumberLike {
         });
       }
     }
-    Ok(res)
+    Ok(bits_to_bytes(bit_res))
   }
 
-  pub fn metadata_as_bits(&self) -> Vec<bool> {
-    let mut res = Vec::new();
-    res.extend(bytes_to_bits(MAGIC_HEADER.to_vec()));
-    res.extend(byte_to_bits(T::HEADER_BYTE));
-    res.extend(usize_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
-    res.extend(usize_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
-    for pref in &self.prefixes {
-      res.extend(usize_to_bits(pref.count, BITS_TO_ENCODE_N_ENTRIES));
-      res.extend(bytes_to_bits(T::bytes_from(pref.lower)));
-      res.extend(bytes_to_bits(T::bytes_from(pref.upper)));
-      res.extend(usize_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
-      res.extend(&pref.val);
-      match pref.run_len_jumpstart {
-        None => {
-          res.push(false);
-        },
-        Some(jumpstart) => {
-          res.push(true);
-          res.extend(usize_to_bits(jumpstart, BITS_TO_ENCODE_JUMPSTART))
-        },
-      }
-    }
-    res
-  }
+  fn compress_chunk(&self, nums: &[T]) -> QCompressResult<CompressedChunk<T>> {
+    let body_bytes = self.compress_nums(nums)?;
 
-  pub fn compress_as_bits(&self, nums: &[T]) -> Result<Vec<bool>, QCompressError> {
-    let mut compression = self.metadata_as_bits();
-    let mut num_bits = self.compress_nums_as_bits(nums)?;
-    compression.append(&mut num_bits);
-    Ok(compression)
-  }
+    let compressed_body_size = body_bytes.len();
+    let metadata = ChunkMetadata {
+      n: nums.len(),
+      compressed_body_size,
+      prefixes: self.prefixes.clone()
+    };
 
-  pub fn compress(&self, nums: &[T]) -> Result<Vec<u8>, QCompressError> {
-    Ok(bits_to_bytes(self.compress_as_bits(nums)?))
+    let mut bytes = vec![MAGIC_CHUNK_BYTE];
+    bytes.extend(metadata.to_bytes());
+    bytes.extend(body_bytes);
+    Ok(CompressedChunk {
+      metadata,
+      bytes,
+    })
   }
 }
 
-impl<T> Debug for Compressor<T> where T: NumberLike {
+impl<T> Debug for TrainedChunkCompressor<T> where T: NumberLike {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     utils::display_prefixes(&self.prefixes, f)
+  }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Compressor<T> where T: NumberLike {
+  pub config: CompressorConfig,
+  pub flags: Flags,
+  pub phantom: PhantomData<T>,
+}
+
+impl<T> Compressor<T> where T: NumberLike + 'static {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  pub fn from_config(config: CompressorConfig) -> Self {
+    Self {
+      config,
+      ..Default::default()
+    }
+  }
+
+  pub fn from_config_and_flags(config: CompressorConfig, flags: Flags) -> Self {
+    Self {
+      config,
+      flags,
+      ..Default::default()
+    }
+  }
+
+  pub fn header(&self) -> Vec<u8> {
+    let mut res = Vec::new();
+    res.extend(&MAGIC_HEADER);
+    res.push(T::HEADER_BYTE);
+    res.extend(self.flags.to_bytes());
+    res
+  }
+
+  pub fn compress_chunk(&self, nums: &[T]) -> QCompressResult<CompressedChunk<T>> {
+    let chunk_compressor = TrainedChunkCompressor::train(
+      nums.to_vec(),
+      self.config.clone(),
+      self.flags.clone(),
+    )?;
+    chunk_compressor.compress_chunk(&nums)
+  }
+
+  pub fn footer(&self) -> Vec<u8> {
+    vec![MAGIC_TERMINATION_BYTE]
+  }
+
+  pub fn simple_compress(&self, nums: &[T]) -> QCompressResult<Vec<u8>> {
+    let mut res = self.header();
+    res.extend(self.compress_chunk(nums)?.bytes);
+    res.extend(self.footer());
+    Ok(res)
   }
 }
