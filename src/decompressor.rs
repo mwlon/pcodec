@@ -241,12 +241,22 @@ impl<T> Decompressor<T> where T: NumberLike {
   }
 
   pub fn simple_decompress(&mut self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
-    let mut res = Vec::new();
+    // cloning/extending by a single chunk's numbers can slow down by 2%
+    // so we just take ownership of the first chunk's numbers instead
+    let mut res: Option<Vec<T>> = None;
     self.apply_header(reader)?;
     while let Some(chunk) = self.decompress_chunk(reader)? {
-      res.extend(chunk.nums);
+      res = match res {
+        Some(mut existing) => {
+          existing.extend(chunk.nums);
+          Some(existing)
+        }
+        None => {
+          Some(chunk.nums)
+        }
+      };
     }
-    Ok(res)
+    Ok(res.unwrap_or(vec![]))
   }
 }
 
