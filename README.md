@@ -91,25 +91,31 @@ the approximated distribution `Q` to the true distribution `P`.
 
 <img src="./res/file_format.svg">
 
-Quantile-compressed files consist of a lightweight header (usually <1KB)
-and then very many short number blocks, each of which usually
-encodes a single number.
+Quantile-compressed files consist of a lightweight header (usually <1KB),
+then chunks containing metadata and numerical data, finished by a magic
+termination byte.
 
 The header is expected to start with a magic sequence of 4 bytes for "qco!"
 in ascii.
 The next byte encodes the data type (e.g. `i64`).
-The next few bytes encode the count of numbers in the file,
-and then the count of ranges (or prefixes) used to compress.
-It then contains metadata for each range: lower and upper bound,
-the length of its prefix in bits, the prefix.
-The next bit for each range encodes whether it uses repetitions, which are only
-used for the most common range in a sparse distribution.
-If so, the file then encodes a "jumpstart", which is used in number
-blocks to describe how many repetitions of the range to use.
+Then flags are encoded, which might affect the rest of the encoding.
 
-Each number block has just 2 or 3 parts. First comes the prefix, which indicates a range
-to use.
-If that range uses repetitions, a varint for the exact number of repetitions
+Each chunk begins with a magic "chunk" byte.
+Then the metadata section follows, containing the number of numbers,
+the byte size of the compressed body to follow, and ranges (or prefixes)
+used to compress.
+Each range has a count of numbers in the range, a lower and upper bound,
+a sequence of bits (the prefix), and optionally a "jumpstart" which is used in
+number blocks to describe how many repetitions of the range to use.
+Using the compressed body size metadata and magic chunk/termination bytes
+enables fast seeking through the whole file.
+
+Each chunk body consists of many small number blocks, each of which encodes a
+single number.
+Each number block begins with a prefix for the range the number is in.
+If that range uses repeetitions, a varint for the exact number of repetitions
 follows, leveraging the jumpstart from earlier.
 Then an offset (for each repetition if necessary) follows,
 specifying the exact value within the range.
+
+At the end of the file is a termination byte.
