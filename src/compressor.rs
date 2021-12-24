@@ -6,11 +6,12 @@ use std::marker::PhantomData;
 use crate::bits::*;
 use crate::constants::*;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::{huffman, Flags};
+use crate::{huffman, Flags, BitWriter};
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
-use crate::chunk_metadata::{CompressedChunk, ChunkMetadata};
+use crate::chunk_metadata::ChunkMetadata;
+use std::time::{Duration, Instant};
 
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
@@ -201,15 +202,16 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
       (p1_r_cost + p1_d_cost) * p1.weight as f64;
     let combined_cost = meta_cost +
       (combined_r_cost + combined_d_cost) * (p0.weight + p1.weight) as f64;
-    let bits_saved = separate_cost - combined_cost;
-    bits_saved as f64
+
+    separate_cost - combined_cost
   }
 
-  fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, v: &mut Vec<bool>) {
+  fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, writer: &mut BitWriter) {
     let off = num.to_unsigned() - pref.lower_unsigned;
-    extend_with_diff_bits(off, pref.k, v);
+    writer.write_diff(off, pref.k);
     if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
-      v.push((off & (T::Unsigned::ONE << pref.k)) > T::Unsigned::ZERO) // most significant bit, if necessary, comes last
+      // most significant bit, if necessary, comes last
+      writer.write_one((off & (T::Unsigned::ONE << pref.k)) > T::Unsigned::ZERO);
     }
   }
 
@@ -217,7 +219,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
     num.ge(&prefix.lower) && num.le(&prefix.upper)
   }
 
-  fn compress_nums(&self, nums: &[T]) -> QCompressResult<Vec<u8>> {
+  fn compress_nums(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<()> {
     let mut sorted_prefixes = self.prefixes.clone();
     // most common prefixes come first
     sorted_prefixes.sort_by(
@@ -225,7 +227,6 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
         p0.count.cmp(&p1.count)
     );
 
-    let mut bit_res = Vec::new();
     let mut i = 0;
     while i < nums.len() {
       let mut success = false;
@@ -235,11 +236,11 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
           continue;
         }
 
-        bit_res.extend(&pref.val);
+        writer.write_bits(&pref.val);
 
         match pref.run_len_jumpstart {
           None => {
-            self.compress_num_offset_bits_w_prefix(num, &pref, &mut bit_res);
+            self.compress_num_offset_bits_w_prefix(num, &pref, writer);
             i += 1;
           }
           Some(jumpstart) => {
@@ -254,10 +255,10 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
 
             // we store 1 less than the number of occurrences
             // because the prefix already implies there is at least 1 occurrence
-            bit_res.extend(usize_to_varint_bits(reps - 1, jumpstart));
+            writer.write_varint(reps - 1, jumpstart);
 
             for x in nums.iter().skip(i).take(reps) {
-              self.compress_num_offset_bits_w_prefix(*x, &pref, &mut bit_res);
+              self.compress_num_offset_bits_w_prefix(*x, &pref, writer);
             }
             i += reps;
           }
@@ -273,26 +274,28 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
         });
       }
     }
-    Ok(bits_to_bytes(bit_res))
+    writer.finish_byte();
+    Ok(())
   }
 
-  fn compress_chunk(&self, nums: &[T]) -> QCompressResult<CompressedChunk<T>> {
-    let body_bytes = self.compress_nums(nums)?;
-
-    let compressed_body_size = body_bytes.len();
-    let metadata = ChunkMetadata {
+  fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
+    writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
+    let pre_header_idx = writer.len();
+    let mut metadata = ChunkMetadata {
       n: nums.len(),
-      compressed_body_size,
+      // temporarily write compressed body size as 0; we'll fix this after
+      // actually writing the compressed body and figuring out how big it is
+      compressed_body_size: 0,
       prefixes: self.prefixes.clone()
     };
+    metadata.write_to(writer);
 
-    let mut bytes = vec![MAGIC_CHUNK_BYTE];
-    bytes.extend(metadata.to_bytes());
-    bytes.extend(body_bytes);
-    Ok(CompressedChunk {
-      metadata,
-      bytes,
-    })
+    let post_header_idx = writer.len();
+    self.compress_nums(nums, writer)?;
+
+    metadata.compressed_body_size = writer.len() - post_header_idx;
+    metadata.update_write_compressed_body_size(writer, pre_header_idx);
+    Ok(metadata)
   }
 }
 
@@ -329,31 +332,30 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     }
   }
 
-  pub fn header(&self) -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend(&MAGIC_HEADER);
-    res.push(T::HEADER_BYTE);
-    res.extend(self.flags.to_bytes());
-    res
+  pub fn header(&self, writer: &mut BitWriter) -> QCompressResult<()> {
+    writer.write_aligned_bytes(&MAGIC_HEADER)?;
+    writer.write_aligned_byte(T::HEADER_BYTE)?;
+    self.flags.write(writer)
   }
 
-  pub fn compress_chunk(&self, nums: &[T]) -> QCompressResult<CompressedChunk<T>> {
+  pub fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
     let chunk_compressor = TrainedChunkCompressor::train(
       nums.to_vec(),
       self.config.clone(),
       self.flags.clone(),
     )?;
-    chunk_compressor.compress_chunk(&nums)
+    chunk_compressor.compress_chunk(&nums, writer)
   }
 
-  pub fn footer(&self) -> Vec<u8> {
-    vec![MAGIC_TERMINATION_BYTE]
+  pub fn footer(&self, writer: &mut BitWriter) -> QCompressResult<()> {
+    writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)
   }
 
   pub fn simple_compress(&self, nums: &[T]) -> QCompressResult<Vec<u8>> {
-    let mut res = self.header();
-    res.extend(self.compress_chunk(nums)?.bytes);
-    res.extend(self.footer());
-    Ok(res)
+    let mut writer = BitWriter::default();
+    self.header(&mut writer)?;
+    self.compress_chunk(nums, &mut writer)?;
+    self.footer(&mut writer)?;
+    Ok(writer.pop())
   }
 }

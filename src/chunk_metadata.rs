@@ -1,8 +1,8 @@
 use crate::types::NumberLike;
 use crate::prefix::Prefix;
 use crate::constants::*;
-use crate::bits::{bits_to_bytes, bytes_to_bits, usize_to_bits};
-use crate::BitReader;
+use crate::bits::bits_to_bytes;
+use crate::{BitReader, BitWriter};
 use crate::errors::QCompressResult;
 
 #[derive(Clone, Debug)]
@@ -41,35 +41,37 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     })
   }
 
-  pub fn to_bytes(&self) -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend(usize_to_bits(self.n, BITS_TO_ENCODE_N_ENTRIES));
-    res.extend(usize_to_bits(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE));
-    res.extend(usize_to_bits(self.prefixes.len(), MAX_MAX_DEPTH));
+  pub fn write_to(&self, writer: &mut BitWriter) {
+    writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
+    writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
+    writer.write_usize(self.prefixes.len(), MAX_MAX_DEPTH);
     for pref in &self.prefixes {
-      res.extend(usize_to_bits(pref.count, BITS_TO_ENCODE_N_ENTRIES));
-      res.extend(bytes_to_bits(T::bytes_from(pref.lower)));
-      res.extend(bytes_to_bits(T::bytes_from(pref.upper)));
-      res.extend(usize_to_bits(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN));
-      res.extend(&pref.val);
+      writer.write_usize(pref.count, BITS_TO_ENCODE_N_ENTRIES);
+      writer.write_bytes(&T::bytes_from(pref.lower));
+      writer.write_bytes(&T::bytes_from(pref.upper));
+      writer.write_usize(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN);
+      writer.write_bits(&pref.val);
       match pref.run_len_jumpstart {
         None => {
-          res.push(false);
+          writer.write_one(false);
         },
         Some(jumpstart) => {
-          res.push(true);
-          res.extend(usize_to_bits(jumpstart, BITS_TO_ENCODE_JUMPSTART))
+          writer.write_one(true);
+          writer.write_usize(jumpstart, BITS_TO_ENCODE_JUMPSTART);
         },
       }
     }
-    bits_to_bytes(res)
+    writer.finish_byte();
   }
-}
 
-#[derive(Clone)]
-pub struct CompressedChunk<T> where T: NumberLike {
-  pub metadata: ChunkMetadata<T>,
-  pub bytes: Vec<u8>,
+  pub fn update_write_compressed_body_size(&self, writer: &mut BitWriter, initial_idx: usize) {
+    writer.assign_usize(
+      initial_idx + BITS_TO_ENCODE_N_ENTRIES as usize / 8,
+      BITS_TO_ENCODE_N_ENTRIES as usize % 8,
+      self.compressed_body_size,
+      BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
+    );
+  }
 }
 
 #[derive(Clone)]

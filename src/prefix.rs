@@ -8,7 +8,7 @@ use crate::types::{NumberLike, UnsignedLike};
 pub struct PrefixDecompressionInfo<T> where T: UnsignedLike {
   pub lower_unsigned: T,
   pub range: T,
-  pub k: u32,
+  pub k: usize,
   pub run_len_jumpstart: Option<usize>,
 }
 
@@ -40,7 +40,7 @@ pub struct Prefix<T> where T: NumberLike {
   pub lower: T,
   pub upper: T,
   pub lower_unsigned: T::Unsigned,
-  pub k: u32,
+  pub k: usize,
   pub only_k_bits_lower: T::Unsigned,
   pub only_k_bits_upper: T::Unsigned,
   pub run_len_jumpstart: Option<usize>,
@@ -64,7 +64,7 @@ impl<T> Prefix<T> where T: NumberLike {
   pub fn new(count: usize, val: Vec<bool>, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> Prefix<T> {
     let lower_unsigned = lower.to_unsigned();
     let diff = upper.to_unsigned() - lower_unsigned;
-    let k = (diff.to_f64() + 1.0).log2().floor() as u32;
+    let k = (diff.to_f64() + 1.0).log2().floor() as usize;
     let only_k_bits_upper = if k == T::Unsigned::BITS {
       T::Unsigned::MAX
     } else {

@@ -7,6 +7,7 @@ use crate::constants::*;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QCompressError where {
   CompatibilityError,
+  CompressedBodySize { expected: usize, actual: usize },
   HeaderDtypeError { header_byte: u8, decompressor_byte: u8 },
   InvalidTimestampError { parts: i128, parts_per_sec: u32 },
   MagicChunkByteError { byte: u8 },
@@ -24,6 +25,12 @@ impl Display for QCompressError {
       QCompressError::CompatibilityError => write!(
         f,
         "file contains newer flags than this version of q_compress supports",
+      ),
+      QCompressError::CompressedBodySize {expected, actual} => write!(
+        f,
+        "expected compressed body size of {} but consumed {} to read nums",
+        expected,
+        actual,
       ),
       QCompressError::HeaderDtypeError {header_byte, decompressor_byte} => write!(
         f,
@@ -64,7 +71,7 @@ impl Display for QCompressError {
       ),
       QCompressError::MisalignedError => write!(
         f,
-        "cannot read_bytes on misaligned bit reader"
+        "cannot perform byte-wise operation on misaligned bit reader or writer"
       ),
       QCompressError::OutOfRangeError {num_string} => write!(
         f,

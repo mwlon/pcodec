@@ -43,7 +43,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
   fn decompress(bit_reader: &mut BitReader) -> Vec<T> {
     Decompressor::<T>::new()
       .simple_decompress(bit_reader)
-      .expect("invalid header")
+      .expect("could not decompress")
   }
 
   fn handle(path: &Path, max_depth: u32, output_dir: &str) {

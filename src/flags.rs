@@ -2,7 +2,7 @@
 // of the .qco file.
 // New flags may be added in over time in a backward-compatible way.
 
-use crate::BitReader;
+use crate::{BitReader, BitWriter};
 use crate::errors::{QCompressResult, QCompressError};
 
 #[derive(Clone, Debug, Default)]
@@ -19,7 +19,7 @@ impl Flags {
     Ok(Self {})
   }
 
-  pub fn to_bytes(&self) -> Vec<u8> {
-    vec![0]
+  pub fn write(&self, writer: &mut BitWriter) -> QCompressResult<()> {
+    writer.write_aligned_byte(0)
   }
 }

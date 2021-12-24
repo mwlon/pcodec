@@ -23,6 +23,7 @@ struct ChunkDecompressor<T> where T: NumberLike {
   max_depth: u32,
   n: usize,
   is_single_prefix: bool,
+  compressed_body_size: usize,
 }
 
 impl<T> ChunkDecompressor<T> where T: NumberLike {
@@ -64,6 +65,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
       max_depth,
       n,
       is_single_prefix,
+      compressed_body_size: metadata.compressed_body_size,
     })
   }
 
@@ -84,7 +86,8 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     }
   }
 
-  pub fn decompress(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+    let (start_byte_idx, _) = reader.inds();
     let n = self.n;
     let mut res = Vec::with_capacity(n);
     let mut i = 0;
@@ -110,10 +113,21 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
             offset |= most_significant;
           }
         }
-        res.push(T::from_unsigned(p.lower_unsigned + offset));
+        let num = T::from_unsigned(p.lower_unsigned + offset);
+        res.push(num);
       }
       i += reps;
     }
+
+    let (end_byte_idx, _) = reader.inds();
+    let real_compressed_body_size = end_byte_idx - start_byte_idx;
+    if self.compressed_body_size != real_compressed_body_size {
+      return Err(QCompressError::CompressedBodySize {
+        expected: self.compressed_body_size,
+        actual: real_compressed_body_size,
+      });
+    }
+
     reader.drain_byte();
     Ok(res)
   }
@@ -217,7 +231,7 @@ impl<T> Decompressor<T> where T: NumberLike {
         self.config.clone(),
         flags,
       )?;
-      chunk_decompressor.decompress(reader)
+      chunk_decompressor.decompress_chunk(reader)
     } else {
       Err(QCompressError::UninitializedError)
     }

@@ -2,29 +2,10 @@ use std::fmt::{Debug, Formatter};
 use std::fmt;
 
 use crate::bits;
+use crate::bits::{LEFT_MASKS, RIGHT_MASKS};
 use crate::errors::{QCompressError, QCompressResult};
 use crate::types::UnsignedLike;
 
-const LEFT_MASKS: [u8; 8] = [
-  0xff,
-  0x7f,
-  0x3f,
-  0x1f,
-  0x0f,
-  0x07,
-  0x03,
-  0x01,
-];
-const RIGHT_MASKS: [u8; 8] = [
-  0x00,
-  0x80,
-  0xc0,
-  0xe0,
-  0xf0,
-  0xf8,
-  0xfc,
-  0xfe,
-];
 
 #[derive(Clone)]
 pub struct BitReader {
@@ -178,6 +159,14 @@ impl BitReader {
   // always start byte-aligned.
   pub fn drain_byte(&mut self) {
     self.j = 8;
+  }
+
+  pub fn inds(&self) -> (usize, usize) {
+    (self.i, self.j)
+  }
+
+  pub fn len(&self) -> usize {
+    self.bytes.len()
   }
 }
 

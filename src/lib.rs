@@ -1,5 +1,6 @@
 pub use bit_reader::BitReader;
-pub use chunk_metadata::{ChunkMetadata, CompressedChunk, DecompressedChunk};
+pub use bit_writer::BitWriter;
+pub use chunk_metadata::{ChunkMetadata, DecompressedChunk};
 pub use compressor::{Compressor, CompressorConfig};
 pub use constants::MAX_ENTRIES;
 pub use decompressor::{Decompressor, DecompressorConfig};
@@ -33,6 +34,7 @@ mod huffman;
 mod prefix;
 mod utils;
 pub mod bit_reader;
+pub mod bit_writer;
 pub mod compressor;
 pub mod decompressor;
 pub mod errors;
