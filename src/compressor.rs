@@ -12,6 +12,7 @@ use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
 
+const DEFAULT_MAX_DEPTH: u32 = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
 
@@ -80,7 +81,7 @@ pub struct CompressorConfig {
 impl Default for CompressorConfig {
   fn default() -> Self {
     Self {
-      max_depth: 6
+      max_depth: DEFAULT_MAX_DEPTH,
     }
   }
 }

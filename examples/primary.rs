@@ -21,14 +21,6 @@ fn basename_no_ext(path: &Path) -> String {
   }
 }
 
-// fn bits_to_string(bits: &[bool]) -> String {
-//   return bits
-//     .iter()
-//     .map(|b| if *b {"1"} else {"0"})
-//     .collect::<Vec<&str>>()
-//     .join("");
-// }
-
 trait DtypeHandler<T: 'static> where T: NumberLike {
   fn parse_nums(bytes: &[u8]) -> Vec<T>;
 
@@ -41,7 +33,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
   }
 
   fn decompress(bit_reader: &mut BitReader) -> Vec<T> {
-    Decompressor::<T>::new()
+    Decompressor::<T>::default()
       .simple_decompress(bit_reader)
       .expect("could not decompress")
   }

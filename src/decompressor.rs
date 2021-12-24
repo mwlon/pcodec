@@ -142,15 +142,11 @@ impl<T> Debug for ChunkDecompressor<T> where T: NumberLike {
 #[derive(Clone, Debug, Default)]
 pub struct Decompressor<T> where T: NumberLike {
   pub config: DecompressorConfig,
-  maybe_flags: Option<Flags>,
-  phantom: PhantomData<T>,
+  pub maybe_flags: Option<Flags>,
+  pub phantom: PhantomData<T>,
 }
 
 impl<T> Decompressor<T> where T: NumberLike {
-  pub fn new() -> Self {
-    Self::default()
-  }
-
   pub fn from_config(config: DecompressorConfig) -> Self {
     Self {
       config,

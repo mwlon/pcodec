@@ -50,18 +50,16 @@ fn main() {
     my_ints.push(i as i64);
   }
   
-  // compress
-  // max_depth is basically compression level - 6 is generally good.
-  // Max depths between 4 and 8 are reasonable.
-  let max_depth = 6;
-  let compressor = I64Compressor::train(&my_ints, max_depth).expect("failed to train");
-  let bytes = compressor.compress(&my_ints).expect("out of range");
+  // Compression level can optionally be adjusted by the `max_depth`
+  // property within `CompressorConfig`, but here we just use the default (6).
+  let compressor = I64Compressor::default();
+  let bytes: Vec<u8> = compressor.simple_compress(&my_ints).expect("failed to compress");
   println!("compressed down to {} bytes", bytes.len());
   
   // decompress
-  let bit_reader = &mut BitReader::from(bytes);
-  let decompressor = I64Decompressor::from_reader(bit_reader).expect("couldn't read compression scheme");
-  let recovered = decompressor.decompress(bit_reader);
+  let bit_reader = BitReader::from(bytes);
+  let decompressor = I64Decompressor::default();
+  let recovered = decompressor.simple_decompress(&mut bit_reader);
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```
