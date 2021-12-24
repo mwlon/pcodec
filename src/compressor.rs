@@ -3,15 +3,14 @@ use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use crate::{BitWriter, Flags, huffman};
 use crate::bits::*;
+use crate::chunk_metadata::ChunkMetadata;
 use crate::constants::*;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::{huffman, Flags, BitWriter};
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
-use crate::chunk_metadata::ChunkMetadata;
-use std::time::{Duration, Instant};
 
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
@@ -232,7 +231,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
       let mut success = false;
       let num = nums[i];
       for pref in &sorted_prefixes {
-        if !Self::in_prefix(num, &pref) {
+        if !Self::in_prefix(num, pref) {
           continue;
         }
 
@@ -240,13 +239,13 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
 
         match pref.run_len_jumpstart {
           None => {
-            self.compress_num_offset_bits_w_prefix(num, &pref, writer);
+            self.compress_num_offset_bits_w_prefix(num, pref, writer);
             i += 1;
           }
           Some(jumpstart) => {
             let mut reps = 1;
             for other_num in nums.iter().skip(i + 1) {
-              if Self::in_prefix(*other_num, &pref) {
+              if Self::in_prefix(*other_num, pref) {
                 reps += 1;
               } else {
                 break;
@@ -258,7 +257,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
             writer.write_varint(reps - 1, jumpstart);
 
             for x in nums.iter().skip(i).take(reps) {
-              self.compress_num_offset_bits_w_prefix(*x, &pref, writer);
+              self.compress_num_offset_bits_w_prefix(*x, pref, writer);
             }
             i += reps;
           }
@@ -280,7 +279,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
 
   fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
     writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
-    let pre_header_idx = writer.len();
+    let pre_header_idx = writer.size();
     let mut metadata = ChunkMetadata {
       n: nums.len(),
       // temporarily write compressed body size as 0; we'll fix this after
@@ -290,10 +289,10 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
     };
     metadata.write_to(writer);
 
-    let post_header_idx = writer.len();
+    let post_header_idx = writer.size();
     self.compress_nums(nums, writer)?;
 
-    metadata.compressed_body_size = writer.len() - post_header_idx;
+    metadata.compressed_body_size = writer.size() - post_header_idx;
     metadata.update_write_compressed_body_size(writer, pre_header_idx);
     Ok(metadata)
   }
@@ -344,7 +343,7 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
       self.config.clone(),
       self.flags.clone(),
     )?;
-    chunk_compressor.compress_chunk(&nums, writer)
+    chunk_compressor.compress_chunk(nums, writer)
   }
 
   pub fn footer(&self, writer: &mut BitWriter) -> QCompressResult<()> {

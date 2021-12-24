@@ -3,7 +3,7 @@
 // New flags may be added in over time in a backward-compatible way.
 
 use crate::{BitReader, BitWriter};
-use crate::errors::{QCompressResult, QCompressError};
+use crate::errors::{QCompressError, QCompressResult};
 
 #[derive(Clone, Debug, Default)]
 pub struct Flags {}

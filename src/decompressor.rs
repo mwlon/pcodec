@@ -3,8 +3,8 @@ use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::bit_reader::BitReader;
 use crate::{bits, Flags};
+use crate::bit_reader::BitReader;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk};
 use crate::constants::*;
 use crate::errors::{QCompressError, QCompressResult};
@@ -270,7 +270,7 @@ impl<T> Decompressor<T> where T: NumberLike {
         }
       };
     }
-    Ok(res.unwrap_or(vec![]))
+    Ok(res.unwrap_or_default())
   }
 }
 

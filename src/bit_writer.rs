@@ -1,6 +1,6 @@
-use crate::errors::{QCompressResult, QCompressError};
-use crate::types::UnsignedLike;
 use crate::bits::LEFT_MASKS;
+use crate::errors::{QCompressError, QCompressResult};
+use crate::types::UnsignedLike;
 
 #[derive(Clone)]
 pub struct BitWriter {
@@ -19,7 +19,7 @@ impl Default for BitWriter {
 
 impl BitWriter {
   pub fn write_aligned_byte(&mut self, byte: u8) -> QCompressResult<()> {
-    self.write_aligned_bytes(&vec![byte])
+    self.write_aligned_bytes(&[byte])
   }
 
   pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> QCompressResult<()> {
@@ -37,7 +37,7 @@ impl BitWriter {
     } else {
       for byte in bytes {
         *self.bytes.last_mut().unwrap() |= byte >> self.j;
-        self.bytes.push(byte << 8 - self.j);
+        self.bytes.push(byte << (8 - self.j));
       }
     }
   }
@@ -139,7 +139,7 @@ impl BitWriter {
     self.bytes
   }
 
-  pub fn len(&self) -> usize {
+  pub fn size(&self) -> usize {
     self.bytes.len()
   }
 }

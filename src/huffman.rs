@@ -103,8 +103,8 @@ pub fn make_huffman_code<T: NumberLike>(prefix_sequence: &mut [PrefixIntermediat
 
 #[cfg(test)]
 mod tests {
-  use crate::prefix::PrefixIntermediate;
   use crate::huffman::make_huffman_code;
+  use crate::prefix::PrefixIntermediate;
 
   #[test]
   fn test_make_huffman_code_single() {

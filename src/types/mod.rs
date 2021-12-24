@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Greater, Less};
 use std::fmt::{Debug, Display};
-use std::ops::{BitOrAssign, BitAnd, Sub, Shl, Add, Shr};
+use std::ops::{Add, BitAnd, BitOrAssign, Shl, Shr, Sub};
 
 pub mod boolean;
 pub mod float32;

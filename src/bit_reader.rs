@@ -6,7 +6,6 @@ use crate::bits::{LEFT_MASKS, RIGHT_MASKS};
 use crate::errors::{QCompressError, QCompressResult};
 use crate::types::UnsignedLike;
 
-
 #[derive(Clone)]
 pub struct BitReader {
   bytes: Vec<u8>,
@@ -165,7 +164,7 @@ impl BitReader {
     (self.i, self.j)
   }
 
-  pub fn len(&self) -> usize {
+  pub fn size(&self) -> usize {
     self.bytes.len()
   }
 }

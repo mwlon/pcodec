@@ -1,9 +1,9 @@
-use crate::types::NumberLike;
-use crate::prefix::Prefix;
-use crate::constants::*;
-use crate::bits::bits_to_bytes;
 use crate::{BitReader, BitWriter};
+use crate::bits::bits_to_bytes;
+use crate::constants::*;
 use crate::errors::QCompressResult;
+use crate::prefix::Prefix;
+use crate::types::NumberLike;
 
 #[derive(Clone, Debug)]
 pub struct ChunkMetadata<T> where T: NumberLike {
