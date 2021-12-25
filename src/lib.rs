@@ -152,7 +152,7 @@ mod tests {
     compressor.footer(&mut writer).unwrap();
     let bytes = writer.pop();
 
-    let mut decompressor = I64Decompressor::default();
+    let decompressor = I64Decompressor::default();
     let res = decompressor.simple_decompress(bytes).unwrap();
     assert_eq!(
       res,
@@ -165,7 +165,7 @@ mod tests {
       CompressorConfig { max_depth, ..Default::default()},
     );
     let compressed = compressor.simple_compress(&vals).expect("compression error");
-    let mut decompressor = Decompressor::<T>::default();
+    let decompressor = Decompressor::<T>::default();
     let decompressed = decompressor.simple_decompress(compressed)
       .expect("decompression error");
     // We can't do assert_eq on the whole vector because even bitwise identical

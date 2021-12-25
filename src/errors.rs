@@ -16,7 +16,6 @@ pub enum QCompressError where {
   MaxEntriesError { n: usize },
   MisalignedError,
   OutOfRangeError { num_string: String },
-  UninitializedError,
 }
 
 impl Display for QCompressError {
@@ -78,10 +77,6 @@ impl Display for QCompressError {
         "number {} was not found in any range",
         num_string,
       ),
-      QCompressError::UninitializedError => write!(
-        f,
-        "decompressor has not yet read the file header and does not know what flags to use",
-      )
     }
   }
 }

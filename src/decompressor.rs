@@ -142,7 +142,6 @@ impl<T> Debug for ChunkDecompressor<T> where T: NumberLike {
 #[derive(Clone, Debug, Default)]
 pub struct Decompressor<T> where T: NumberLike {
   pub config: DecompressorConfig,
-  pub maybe_flags: Option<Flags>,
   pub phantom: PhantomData<T>,
 }
 
@@ -154,13 +153,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
-  fn apply_flags(&mut self, reader: &mut BitReader) -> QCompressResult<Flags> {
-    let flags = Flags::parse_from(reader)?;
-    self.maybe_flags = Some(flags.clone());
-    Ok(flags)
-  }
-
-  pub fn apply_header(&mut self, reader: &mut BitReader) -> QCompressResult<Flags> {
+  pub fn header(&self, reader: &mut BitReader) -> QCompressResult<Flags> {
     let bytes = reader.read_bytes(MAGIC_HEADER.len())?;
     if bytes != MAGIC_HEADER {
       return Err(QCompressError::MagicHeaderError {
@@ -176,7 +169,7 @@ impl<T> Decompressor<T> where T: NumberLike {
       });
     }
 
-    self.apply_flags(reader)
+    Flags::parse_from(reader)
   }
 
   pub fn chunk_metadata(&self, reader: &mut BitReader) -> QCompressResult<Option<ChunkMetadata<T>>> {
@@ -220,26 +213,28 @@ impl<T> Decompressor<T> where T: NumberLike {
     &self,
     reader: &mut BitReader,
     metadata: ChunkMetadata<T>,
+    flags: &Flags,
   ) -> QCompressResult<Vec<T>> {
-    if let Some(flags) = self.maybe_flags.clone() {
-      let chunk_decompressor = ChunkDecompressor::new(
-        metadata,
-        self.config.clone(),
-        flags,
-      )?;
-      chunk_decompressor.decompress_chunk(reader)
-    } else {
-      Err(QCompressError::UninitializedError)
-    }
+    let chunk_decompressor = ChunkDecompressor::new(
+      metadata,
+      self.config.clone(),
+      flags.clone(),
+    )?;
+    chunk_decompressor.decompress_chunk(reader)
   }
 
-  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Option<DecompressedChunk<T>>> {
+  pub fn decompress_chunk(
+    &self,
+    reader: &mut BitReader,
+    flags: &Flags,
+  ) -> QCompressResult<Option<DecompressedChunk<T>>> {
     let maybe_metadata = self.chunk_metadata(reader)?;
     match maybe_metadata {
       Some(metadata) => {
         let nums = self.decompress_chunk_body(
           reader,
           metadata.clone(),
+          flags,
         )?;
         Ok(Some(DecompressedChunk {
           metadata,
@@ -250,13 +245,13 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
-  pub fn simple_decompress(&mut self, bytes: Vec<u8>) -> QCompressResult<Vec<T>> {
+  pub fn simple_decompress(&self, bytes: Vec<u8>) -> QCompressResult<Vec<T>> {
     // cloning/extending by a single chunk's numbers can slow down by 2%
     // so we just take ownership of the first chunk's numbers instead
     let mut reader = BitReader::from(bytes);
     let mut res: Option<Vec<T>> = None;
-    self.apply_header(&mut reader)?;
-    while let Some(chunk) = self.decompress_chunk(&mut reader)? {
+    let flags = self.header(&mut reader)?;
+    while let Some(chunk) = self.decompress_chunk(&mut reader, &flags)? {
       res = match res {
         Some(mut existing) => {
           existing.extend(chunk.nums);
