@@ -13,6 +13,13 @@ repository = "https://github.com/mwlon/quantile-compression"
 
 [dependencies]
 
+[dev-dependencies]
+rand = "0.8.4"
+
 [[example]]
 name="primary"
 path="examples/primary.rs"
+
+[[example]]
+name="fast_seeking"
+path="examples/fast_seeking.rs"

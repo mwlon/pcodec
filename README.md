@@ -40,7 +40,8 @@ space probes
 ## Usage
 
 See the following basic usage.
-To run something right away, see [the example](./examples/README.md).
+To run something right away, see
+[the primary example](./examples/primary.md).
 
 ```rust
 use q_compress::{BitReader, I64Compressor, I64Decompressor};
@@ -143,3 +144,6 @@ Using the compressed body size, it is easy to seek through the whole file
 and collect a list of all the chunk metadatas.
 One can aggregate them to obtain the total count of numbers in the whole file
 and even an approximate histogram.
+This is typically about 100x faster than decompressing all the numbers.
+
+See the [fast seeking example](examples/fast_seeking.rs).

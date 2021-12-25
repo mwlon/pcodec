@@ -160,6 +160,11 @@ impl BitReader {
     self.j = 8;
   }
 
+  pub fn seek_bytes(&mut self, n_bytes: usize) {
+    self.j = 8;
+    self.i += n_bytes;
+  }
+
   pub fn inds(&self) -> (usize, usize) {
     (self.i, self.j)
   }

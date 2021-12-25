@@ -172,7 +172,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     Flags::parse_from(reader)
   }
 
-  pub fn chunk_metadata(&self, reader: &mut BitReader) -> QCompressResult<Option<ChunkMetadata<T>>> {
+  pub fn chunk_metadata(&self, reader: &mut BitReader, _flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
     let magic_byte = reader.read_bytes(1)?[0];
     if magic_byte == MAGIC_TERMINATION_BYTE {
       return Ok(None);
@@ -228,7 +228,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     reader: &mut BitReader,
     flags: &Flags,
   ) -> QCompressResult<Option<DecompressedChunk<T>>> {
-    let maybe_metadata = self.chunk_metadata(reader)?;
+    let maybe_metadata = self.chunk_metadata(reader, flags)?;
     match maybe_metadata {
       Some(metadata) => {
         let nums = self.decompress_chunk_body(
