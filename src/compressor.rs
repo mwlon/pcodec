@@ -313,10 +313,6 @@ pub struct Compressor<T> where T: NumberLike {
 }
 
 impl<T> Compressor<T> where T: NumberLike + 'static {
-  pub fn new() -> Self {
-    Self::default()
-  }
-
   pub fn from_config(config: CompressorConfig) -> Self {
     Self {
       config,

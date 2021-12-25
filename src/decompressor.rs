@@ -250,12 +250,13 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
-  pub fn simple_decompress(&mut self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+  pub fn simple_decompress(&mut self, bytes: Vec<u8>) -> QCompressResult<Vec<T>> {
     // cloning/extending by a single chunk's numbers can slow down by 2%
     // so we just take ownership of the first chunk's numbers instead
+    let mut reader = BitReader::from(bytes);
     let mut res: Option<Vec<T>> = None;
-    self.apply_header(reader)?;
-    while let Some(chunk) = self.decompress_chunk(reader)? {
+    self.apply_header(&mut reader)?;
+    while let Some(chunk) = self.decompress_chunk(&mut reader)? {
       res = match res {
         Some(mut existing) => {
           existing.extend(chunk.nums);

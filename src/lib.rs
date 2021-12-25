@@ -41,7 +41,7 @@ pub mod types;
 
 #[cfg(test)]
 mod tests {
-  use crate::{BitReader, Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNs};
+  use crate::{Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNs, I64Compressor, BitWriter, I64Decompressor};
   use crate::types::NumberLike;
 
   #[test]
@@ -142,14 +142,31 @@ mod tests {
     );
   }
 
+  #[test]
+  fn test_multi_chunk() {
+    let compressor = I64Compressor::default();
+    let mut writer = BitWriter::default();
+    compressor.header(&mut writer).unwrap();
+    compressor.compress_chunk(&[1, 2, 3], &mut writer).unwrap();
+    compressor.compress_chunk(&[11, 12, 13], &mut writer).unwrap();
+    compressor.footer(&mut writer).unwrap();
+    let bytes = writer.pop();
+
+    let mut decompressor = I64Decompressor::default();
+    let res = decompressor.simple_decompress(bytes).unwrap();
+    assert_eq!(
+      res,
+      vec![1, 2, 3, 11, 12, 13],
+    );
+  }
+
   fn assert_recovers<T: NumberLike>(vals: Vec<T>, max_depth: u32) {
     let compressor = Compressor::<T>::from_config(
       CompressorConfig { max_depth, ..Default::default()},
     );
     let compressed = compressor.simple_compress(&vals).expect("compression error");
-    let mut bit_reader = BitReader::from(compressed);
     let mut decompressor = Decompressor::<T>::default();
-    let decompressed = decompressor.simple_decompress(&mut bit_reader)
+    let decompressed = decompressor.simple_decompress(compressed)
       .expect("decompression error");
     // We can't do assert_eq on the whole vector because even bitwise identical
     // floats sometimes aren't equal by ==.

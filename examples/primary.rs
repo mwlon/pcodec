@@ -1,6 +1,4 @@
-use q_compress::{BitReader, CompressorConfig};
-use q_compress::compressor::Compressor;
-use q_compress::decompressor::Decompressor;
+use q_compress::{Compressor, Decompressor, CompressorConfig};
 use q_compress::types::NumberLike;
 use std::convert::TryInto;
 use std::env;
@@ -32,9 +30,9 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
       .expect("could not compress")
   }
 
-  fn decompress(bit_reader: &mut BitReader) -> Vec<T> {
+  fn decompress(bytes: Vec<u8>) -> Vec<T> {
     Decompressor::<T>::default()
-      .simple_decompress(bit_reader)
+      .simple_decompress(bytes)
       .expect("could not decompress")
   }
 
@@ -57,9 +55,8 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
 
     // decompress
     let bytes = fs::read(output_path).expect("couldn't read");
-    let mut bit_reader = BitReader::from(bytes);
     let decompress_start = SystemTime::now();
-    let rec_nums = Self::decompress(&mut bit_reader);
+    let rec_nums = Self::decompress(bytes);
     println!("{} nums: {} {}", rec_nums.len(), rec_nums.first().unwrap(), rec_nums.last().unwrap());
     let decompress_end = SystemTime::now();
     let dt = decompress_end.duration_since(decompress_start).expect("can't take dt");

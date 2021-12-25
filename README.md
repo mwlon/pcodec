@@ -30,10 +30,7 @@ As of version `0.4.0`, the file format and API are stable.
 `q_compress` is:
 * lossless
 * order-preserving and bit-preserving (including `NaN` floats)
-* moderately fast
-
-For compression and decompression speed benchmarks,
-see [benchmarks.md](./benchmarks.md).
+* moderately fast (see [benchmarks.md](./benchmarks.md)).
 
 Use cases include:
 * compression for columnar data
@@ -62,9 +59,8 @@ fn main() {
   println!("compressed down to {} bytes", bytes.len());
   
   // decompress
-  let bit_reader = BitReader::from(bytes);
   let decompressor = I64Decompressor::default();
-  let recovered = decompressor.simple_decompress(&mut bit_reader);
+  let recovered = decompressor.simple_decompress(bytes);
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```
