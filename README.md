@@ -127,9 +127,23 @@ At the end of the file is a termination byte.
 
 ## Advanced
 
+### Other Data Types
+
 Small data types can be efficiently compressed by casting to larger data types;
 e.g. `u16` to `u32`.
 When necessary, you can implement your own data type via
  `q_compress::types::NumberLike` and (if the existing unsigned implementations
 are insufficient)
 `q_compress::types::UnsignedLike`.
+
+### Seeking and Quantile Statistics
+
+Recall that each chunk has a metadata section containing
+* the total count of numbers in the chunk,
+* the ranges for the chunk and count of numbers in each range,
+* and the size in bytes of the compressed body.
+
+Using the compressed body size, it is easy to seek through the whole file
+and collect a list of all the chunk metadatas.
+One can aggregate them to obtain the total count of numbers in the whole file
+and even an approximate histogram.
