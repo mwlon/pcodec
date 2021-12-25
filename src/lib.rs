@@ -2,7 +2,6 @@ pub use bit_reader::BitReader;
 pub use bit_writer::BitWriter;
 pub use chunk_metadata::{ChunkMetadata, DecompressedChunk};
 pub use compressor::{Compressor, CompressorConfig};
-pub use constants::MAX_ENTRIES;
 pub use decompressor::{Decompressor, DecompressorConfig};
 pub use flags::Flags;
 pub use types::boolean::BoolCompressor;

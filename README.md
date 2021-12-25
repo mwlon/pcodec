@@ -1,3 +1,8 @@
+[![Crates.io][crates-badge]][crates-url]
+
+[crates-badge]: https://img.shields.io/crates/v/q-compress.svg
+[crates-url]: https://crates.io/crates/q-compress
+
 # Quantile Compression
 
 <div style="text-align:center">
@@ -9,31 +14,31 @@
 <img src="./res/bar_sparse.svg" width="45%">
 </div>
 
-This rust library compresses and decompresses sequences of
+Quantile Compression compresses and decompresses sequences of
 numerical data very well.
 It currently supports the following data types:
 `i32`, `i64`, `u32`, `u64`, `f32`, `f64`, `q_compress::TimestampNs`, `q_compress::TimestampMicros`.
-Smaller data types like `i16` can be efficiently compressed by casting
-to `i32`.
 
 For natural data, it typically shrinks data to 10-40% smaller than what
 `gzip -9` produces, compresses much faster, and decompresses equally
 quickly.
 
-The intended use case for this algorithm is compressing columnar
-data, especially for use by Spark and other execution engines.
+As of version `0.4.0`, the file format and API are stable.
 
-This IS:
+## Use Cases
+
+`q_compress` is:
 * lossless
 * order-preserving and bit-preserving (including `NaN` floats)
 * moderately fast
 
-This is NOT:
-* optimal for sorted data or time series without first taking differences
-* competing for record-breaking decompression speed
-
 For compression and decompression speed benchmarks,
 see [benchmarks.md](./benchmarks.md).
+
+Use cases include:
+* compression for columnar data
+* low-bandwidth communication, like transmiting batches of sensor data from
+space probes
 
 ## Usage
 
@@ -119,3 +124,12 @@ Then an offset (for each repetition if necessary) follows,
 specifying the exact value within the range.
 
 At the end of the file is a termination byte.
+
+## Advanced
+
+Small data types can be efficiently compressed by casting to larger data types;
+e.g. `u16` to `u32`.
+When necessary, you can implement your own data type via
+ `q_compress::types::NumberLike` and (if the existing unsigned implementations
+are insufficient)
+`q_compress::types::UnsignedLike`.
