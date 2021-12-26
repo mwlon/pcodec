@@ -23,7 +23,7 @@ For natural data, it typically shrinks data to 10-40% smaller than what
 `gzip -9` produces, compresses much faster, and decompresses equally
 quickly.
 
-As of version `0.4.0`, the file format and API are stable.
+As of version `0.4.0`, the file format is stable.
 
 ## Use Cases
 
