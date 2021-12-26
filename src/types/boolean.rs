@@ -38,5 +38,5 @@ impl NumberLike for bool {
   }
 }
 
-pub type BoolCompressor = Compressor<u8>;
-pub type BoolDecompressor = Decompressor<u8>;
+pub type BoolCompressor = Compressor<bool>;
+pub type BoolDecompressor = Decompressor<bool>;
