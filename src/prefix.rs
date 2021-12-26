@@ -8,7 +8,7 @@ use crate::types::{NumberLike, UnsignedLike};
 pub struct PrefixDecompressionInfo<T> where T: UnsignedLike {
   pub lower_unsigned: T,
   pub range: T,
-  pub k: u32,
+  pub k: usize,
   pub run_len_jumpstart: Option<usize>,
 }
 
@@ -35,32 +35,36 @@ impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: Numbe
 
 #[derive(Clone, Debug)]
 pub struct Prefix<T> where T: NumberLike {
+  pub count: usize,
   pub val: Vec<bool>,
   pub lower: T,
   pub upper: T,
   pub lower_unsigned: T::Unsigned,
-  pub k: u32,
+  pub k: usize,
   pub only_k_bits_lower: T::Unsigned,
   pub only_k_bits_upper: T::Unsigned,
   pub run_len_jumpstart: Option<usize>,
 }
 
-// In Prefix and PrefixIntermediate, lower and upper are always inclusive.
-// This allows handling extremal values.
-impl<T> Prefix<T> where T: NumberLike {
-  pub fn from_intermediate_and_diff(intermediate: &PrefixIntermediate<T>,) -> Prefix<T> {
+impl<T: NumberLike> From<PrefixIntermediate<T>> for Prefix<T> {
+  fn from(intermediate: PrefixIntermediate<T>) -> Self {
     Self::new(
+      intermediate.count,
       intermediate.val.clone(),
       intermediate.lower,
       intermediate.upper,
       intermediate.run_len_jumpstart,
     )
   }
+}
 
-  pub fn new(val: Vec<bool>, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> Prefix<T> {
+// In Prefix and PrefixIntermediate, lower and upper are always inclusive.
+// This allows handling extremal values.
+impl<T> Prefix<T> where T: NumberLike {
+  pub fn new(count: usize, val: Vec<bool>, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> Prefix<T> {
     let lower_unsigned = lower.to_unsigned();
     let diff = upper.to_unsigned() - lower_unsigned;
-    let k = (diff.to_f64() + 1.0).log2().floor() as u32;
+    let k = (diff.to_f64() + 1.0).log2().floor() as usize;
     let only_k_bits_upper = if k == T::Unsigned::BITS {
       T::Unsigned::MAX
     } else {
@@ -69,6 +73,7 @@ impl<T> Prefix<T> where T: NumberLike {
     let only_k_bits_lower = diff - only_k_bits_upper;
 
     Prefix {
+      count,
       val,
       lower,
       upper,
@@ -99,18 +104,20 @@ impl<T> Display for Prefix<T> where T: NumberLike {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PrefixIntermediate<T> {
-  pub weight: u64,
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrefixIntermediate<T: NumberLike> {
+  pub count: usize, // the actual number of training entries belonging to this prefix
+  pub weight: u64, // how to weight this prefix during huffman coding
   pub lower: T,
   pub upper: T,
   pub val: Vec<bool>,
   pub run_len_jumpstart: Option<usize>,
 }
 
-impl<T> PrefixIntermediate<T> {
-  pub fn new(weight: u64, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> PrefixIntermediate<T> {
+impl<T: NumberLike> PrefixIntermediate<T> {
+  pub fn new(count: usize, weight: u64, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> PrefixIntermediate<T> {
     PrefixIntermediate {
+      count,
       weight,
       lower,
       upper,

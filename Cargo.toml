@@ -1,6 +1,6 @@
 [package]
 name = "q_compress"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
@@ -13,6 +13,13 @@ repository = "https://github.com/mwlon/quantile-compression"
 
 [dependencies]
 
+[dev-dependencies]
+rand = "0.8.4"
+
 [[example]]
 name="primary"
 path="examples/primary.rs"
+
+[[example]]
+name="fast_seeking"
+path="examples/fast_seeking.rs"

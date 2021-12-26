@@ -1,3 +1,8 @@
+[![Crates.io][crates-badge]][crates-url]
+
+[crates-badge]: https://img.shields.io/crates/v/q-compress.svg
+[crates-url]: https://crates.io/crates/q-compress
+
 # Quantile Compression
 
 <div style="text-align:center">
@@ -9,39 +14,37 @@
 <img src="./res/bar_sparse.svg" width="45%">
 </div>
 
-This rust library compresses and decompresses sequences of
+Quantile Compression compresses and decompresses sequences of
 numerical data very well.
 It currently supports the following data types:
 `i32`, `i64`, `u32`, `u64`, `f32`, `f64`, `q_compress::TimestampNs`, `q_compress::TimestampMicros`.
-Smaller data types like `i16` can be efficiently compressed by casting
-to `i32`.
 
 For natural data, it typically shrinks data to 10-40% smaller than what
 `gzip -9` produces, compresses much faster, and decompresses equally
 quickly.
 
-The intended use case for this algorithm is compressing columnar
-data, especially for use by Spark and other execution engines.
+As of version `0.4.0`, the file format is stable.
 
-This IS:
+## Use Cases
+
+`q_compress` is:
 * lossless
 * order-preserving and bit-preserving (including `NaN` floats)
-* moderately fast
+* moderately fast (see [benchmarks.md](./benchmarks.md)).
 
-This is NOT:
-* optimal for sorted data or time series without first taking differences
-* competing for record-breaking decompression speed
-
-For compression and decompression speed benchmarks,
-see [benchmarks.md](./benchmarks.md).
+Use cases include:
+* compression for columnar data
+* low-bandwidth communication, like transmiting batches of sensor data from
+space probes
 
 ## Usage
 
 See the following basic usage.
-To run something right away, see [the example](./examples/README.md).
+To run something right away, see
+[the primary example](./examples/primary.md).
 
 ```rust
-use q_compress:{BitReader, I64Compressor, I64Decompressor};
+use q_compress::{BitReader, I64Compressor, I64Decompressor};
 
 fn main() {
   // your data
@@ -50,18 +53,15 @@ fn main() {
     my_ints.push(i as i64);
   }
   
-  // compress
-  // max_depth is basically compression level - 6 is generally good.
-  // Max depths between 4 and 8 are reasonable.
-  let max_depth = 6;
-  let compressor = I64Compressor::train(&my_ints, max_depth).expect("failed to train");
-  let bytes = compressor.compress(&my_ints).expect("out of range");
+  // Compression level can optionally be adjusted by the `max_depth`
+  // property within `CompressorConfig`, but here we just use the default (6).
+  let compressor = I64Compressor::default();
+  let bytes: Vec<u8> = compressor.simple_compress(&my_ints).expect("failed to compress");
   println!("compressed down to {} bytes", bytes.len());
   
   // decompress
-  let bit_reader = &mut BitReader::from(bytes);
-  let decompressor = I64Decompressor::from_reader(bit_reader).expect("couldn't read compression scheme");
-  let recovered = decompressor.decompress(bit_reader);
+  let decompressor = I64Decompressor::default();
+  let recovered = decompressor.simple_decompress(bytes);
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```
@@ -93,25 +93,57 @@ the approximated distribution `Q` to the true distribution `P`.
 
 <img src="./res/file_format.svg">
 
-Quantile-compressed files consist of a lightweight header (usually <1KB)
-and then very many short number blocks, each of which usually
-encodes a single number.
+Quantile-compressed files consist of a lightweight header (usually <1KB),
+then chunks containing metadata and numerical data, finished by a magic
+termination byte.
 
 The header is expected to start with a magic sequence of 4 bytes for "qco!"
 in ascii.
 The next byte encodes the data type (e.g. `i64`).
-The next few bytes encode the count of numbers in the file,
-and then the count of ranges (or prefixes) used to compress.
-It then contains metadata for each range: lower and upper bound,
-the length of its prefix in bits, the prefix.
-The next bit for each range encodes whether it uses repetitions, which are only
-used for the most common range in a sparse distribution.
-If so, the file then encodes a "jumpstart", which is used in number
-blocks to describe how many repetitions of the range to use.
+Then flags are encoded, which might affect the rest of the encoding.
 
-Each number block has just 2 or 3 parts. First comes the prefix, which indicates a range
-to use.
-If that range uses repetitions, a varint for the exact number of repetitions
+Each chunk begins with a magic "chunk" byte.
+Then the metadata section follows, containing the number of numbers,
+the byte size of the compressed body to follow, and ranges (or prefixes)
+used to compress.
+Each range has a count of numbers in the range, a lower and upper bound,
+a sequence of bits (the prefix), and optionally a "jumpstart" which is used in
+number blocks to describe how many repetitions of the range to use.
+Using the compressed body size metadata and magic chunk/termination bytes
+enables fast seeking through the whole file.
+
+Each chunk body consists of many small number blocks, each of which encodes a
+single number.
+Each number block begins with a prefix for the range the number is in.
+If that range uses repeetitions, a varint for the exact number of repetitions
 follows, leveraging the jumpstart from earlier.
 Then an offset (for each repetition if necessary) follows,
 specifying the exact value within the range.
+
+At the end of the file is a termination byte.
+
+## Advanced
+
+### Other Data Types
+
+Small data types can be efficiently compressed by casting to larger data types;
+e.g. `u16` to `u32`.
+When necessary, you can implement your own data type via
+ `q_compress::types::NumberLike` and (if the existing unsigned implementations
+are insufficient)
+`q_compress::types::UnsignedLike`.
+
+### Seeking and Quantile Statistics
+
+Recall that each chunk has a metadata section containing
+* the total count of numbers in the chunk,
+* the ranges for the chunk and count of numbers in each range,
+* and the size in bytes of the compressed body.
+
+Using the compressed body size, it is easy to seek through the whole file
+and collect a list of all the chunk metadatas.
+One can aggregate them to obtain the total count of numbers in the whole file
+and even an approximate histogram.
+This is typically about 100x faster than decompressing all the numbers.
+
+See the [fast seeking example](examples/fast_seeking.rs).

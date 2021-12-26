@@ -1,6 +1,4 @@
-use q_compress::BitReader;
-use q_compress::compressor::Compressor;
-use q_compress::decompressor::Decompressor;
+use q_compress::{Compressor, Decompressor, CompressorConfig};
 use q_compress::types::NumberLike;
 use std::convert::TryInto;
 use std::env;
@@ -21,21 +19,21 @@ fn basename_no_ext(path: &Path) -> String {
   }
 }
 
-fn bits_to_string(bits: &[bool]) -> String {
-  return bits
-    .iter()
-    .map(|b| if *b {"1"} else {"0"})
-    .collect::<Vec<&str>>()
-    .join("");
-}
-
 trait DtypeHandler<T: 'static> where T: NumberLike {
   fn parse_nums(bytes: &[u8]) -> Vec<T>;
-  fn train_compressor(nums: Vec<T>, max_depth: u32) -> Compressor<T> {
-    Compressor::<T>::train(nums, max_depth).expect("could not train")
+
+  fn compress(nums: Vec<T>, max_depth: u32) -> Vec<u8> {
+    Compressor::<T>::from_config(CompressorConfig {
+      max_depth,
+      ..Default::default()
+    }).simple_compress(&nums)
+      .expect("could not compress")
   }
-  fn decompressor_from_reader(bit_reader: &mut BitReader) -> Decompressor<T> {
-    Decompressor::<T>::from_reader(bit_reader).expect("invalid header")
+
+  fn decompress(bytes: Vec<u8>) -> Vec<T> {
+    Decompressor::<T>::default()
+      .simple_decompress(bytes)
+      .expect("could not decompress")
   }
 
   fn handle(path: &Path, max_depth: u32, output_dir: &str) {
@@ -43,20 +41,13 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     let bytes = fs::read(path).expect("could not read");
     let nums = Self::parse_nums(&bytes);
     let compress_start = SystemTime::now();
-    let compressor = Self::train_compressor(nums.clone(), max_depth);
-    println!(
-      "compressor in {:?}:\n{:?}",
-      SystemTime::now().duration_since(compress_start),
-      compressor
-    );
-    let fname = basename_no_ext(&path);
-
-    let output_path = format!("{}/{}.qco", &output_dir, fname);
-    let compressed = compressor.compress(&nums).expect("could not compress");
+    let compressed = Self::compress(nums.clone(), max_depth);
     let compress_end = SystemTime::now();
     let dt = compress_end.duration_since(compress_start).expect("can't take dt");
     println!("COMPRESSED TO {} BYTES IN {:?}", compressed.len(), dt);
 
+    let fname = basename_no_ext(&path);
+    let output_path = format!("{}/{}.qco", &output_dir, fname);
     fs::write(
       &output_path,
       compressed,
@@ -64,16 +55,8 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
 
     // decompress
     let bytes = fs::read(output_path).expect("couldn't read");
-    let mut bit_reader = BitReader::from(bytes);
-    let bit_reader_ptr = &mut bit_reader;
     let decompress_start = SystemTime::now();
-    let decompressor = Self::decompressor_from_reader(bit_reader_ptr);
-    println!(
-      "decompressor in {:?}:\n{:?}",
-      SystemTime::now().duration_since(decompress_start),
-      decompressor
-    );
-    let rec_nums = decompressor.decompress(bit_reader_ptr);
+    let rec_nums = Self::decompress(bytes);
     println!("{} nums: {} {}", rec_nums.len(), rec_nums.first().unwrap(), rec_nums.last().unwrap());
     let decompress_end = SystemTime::now();
     let dt = decompress_end.duration_since(decompress_start).expect("can't take dt");
@@ -83,10 +66,9 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     for i in 0..rec_nums.len() {
       if !rec_nums[i].num_eq(&nums[i]) {
         println!(
-          "{} num {} -> {} -> {}",
+          "{} num {} -> {}",
           i,
           nums[i],
-          bits_to_string(&compressor.compress_nums_as_bits(&[nums[i]]).expect("could not compress")),
           rec_nums[i]
         );
         panic!("Failed to recover nums by compressing and decompressing!");

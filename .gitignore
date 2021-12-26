@@ -2,7 +2,6 @@
 examples/target
 examples/data
 examples/venv
-*.svg
 .idea
 *.iml
 temp

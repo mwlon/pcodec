@@ -1,6 +1,9 @@
 pub use bit_reader::BitReader;
-pub use compressor::Compressor;
-pub use decompressor::Decompressor;
+pub use bit_writer::BitWriter;
+pub use chunk_metadata::{ChunkMetadata, DecompressedChunk};
+pub use compressor::{Compressor, CompressorConfig};
+pub use decompressor::{Decompressor, DecompressorConfig};
+pub use flags::Flags;
 pub use types::boolean::BoolCompressor;
 pub use types::boolean::BoolDecompressor;
 pub use types::float32::F32Compressor;
@@ -11,25 +14,26 @@ pub use types::signed32::I32Compressor;
 pub use types::signed32::I32Decompressor;
 pub use types::signed64::I64Compressor;
 pub use types::signed64::I64Decompressor;
-pub use types::timestamps::TimestampNs;
-pub use types::timestamps::TimestampNsCompressor;
-pub use types::timestamps::TimestampNsDecompressor;
 pub use types::timestamps::TimestampMicros;
 pub use types::timestamps::TimestampMicrosCompressor;
 pub use types::timestamps::TimestampMicrosDecompressor;
+pub use types::timestamps::TimestampNs;
+pub use types::timestamps::TimestampNsCompressor;
+pub use types::timestamps::TimestampNsDecompressor;
 pub use types::unsigned32::U32Compressor;
 pub use types::unsigned32::U32Decompressor;
 pub use types::unsigned64::U64Compressor;
 pub use types::unsigned64::U64Decompressor;
 
-pub use constants::MAX_ENTRIES;
-
 mod bits;
+mod chunk_metadata;
 mod constants;
+mod flags;
 mod huffman;
 mod prefix;
 mod utils;
 pub mod bit_reader;
+pub mod bit_writer;
 pub mod compressor;
 pub mod decompressor;
 pub mod errors;
@@ -37,8 +41,8 @@ pub mod types;
 
 #[cfg(test)]
 mod tests {
+  use crate::{Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNs, I64Compressor, BitWriter, I64Decompressor};
   use crate::types::NumberLike;
-  use crate::{Compressor, BitReader, Decompressor, TimestampNs, TimestampMicros};
 
   #[test]
   fn test_edge_cases() {
@@ -138,16 +142,34 @@ mod tests {
     );
   }
 
+  #[test]
+  fn test_multi_chunk() {
+    let compressor = I64Compressor::default();
+    let mut writer = BitWriter::default();
+    compressor.header(&mut writer).unwrap();
+    compressor.compress_chunk(&[1, 2, 3], &mut writer).unwrap();
+    compressor.compress_chunk(&[11, 12, 13], &mut writer).unwrap();
+    compressor.footer(&mut writer).unwrap();
+    let bytes = writer.pop();
+
+    let decompressor = I64Decompressor::default();
+    let res = decompressor.simple_decompress(bytes).unwrap();
+    assert_eq!(
+      res,
+      vec![1, 2, 3, 11, 12, 13],
+    );
+  }
+
   fn assert_recovers<T: NumberLike>(vals: Vec<T>, max_depth: u32) {
-    let compressor = Compressor::train(vals.clone(), max_depth)
-      .expect("training error");
-    let compressed = compressor.compress(&vals)
-      .expect("compression error");
-    let mut bit_reader = BitReader::from(compressed);
-    let decompressor = Decompressor::<T>::from_reader(&mut bit_reader)
-      .expect("header error");
-    let decompressed = decompressor.decompress(&mut bit_reader);
-    // can't do assert_eq on the whole vector because floating points don't compare exactly
+    let compressor = Compressor::<T>::from_config(
+      CompressorConfig { max_depth, ..Default::default()},
+    );
+    let compressed = compressor.simple_compress(&vals).expect("compression error");
+    let decompressor = Decompressor::<T>::default();
+    let decompressed = decompressor.simple_decompress(compressed)
+      .expect("decompression error");
+    // We can't do assert_eq on the whole vector because even bitwise identical
+    // floats sometimes aren't equal by ==.
     assert_eq!(decompressed.len(), vals.len());
     for i in 0..decompressed.len() {
       assert!(decompressed[i].num_eq(&vals[i]));

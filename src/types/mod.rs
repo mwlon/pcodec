@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Greater, Less};
 use std::fmt::{Debug, Display};
-use std::ops::{BitOrAssign, BitAnd, Sub, Shl, Add};
+use std::ops::{Add, BitAnd, BitOrAssign, Shl, Shr, Sub};
 
 pub mod boolean;
 pub mod float32;
@@ -12,13 +12,17 @@ pub mod timestamps;
 pub mod unsigned32;
 pub mod unsigned64;
 
-pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign + Copy + Debug + Default + Display + PartialOrd + Shl<u32, Output=Self> + Shl<usize, Output=Self> + Sub<Output=Self> + From<u8> {
+pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
+Copy + Debug + Default + Display + From<u8> + PartialOrd +
+Shl<u32, Output=Self> + Shl<usize, Output=Self> + Shr<usize, Output=Self> +
+Sub<Output=Self> {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
-  const BITS: u32;
+  const BITS: usize;
 
   fn to_f64(self) -> f64;
+  fn last_u8(self) -> u8;
 }
 
 macro_rules! impl_unsigned {
@@ -27,10 +31,14 @@ macro_rules! impl_unsigned {
       const ZERO: Self = 0;
       const ONE: Self = 1;
       const MAX: Self = Self::MAX;
-      const BITS: u32 = Self::BITS;
+      const BITS: usize = Self::BITS as usize;
 
       fn to_f64(self) -> f64 {
         self as f64
+      }
+
+      fn last_u8(self) -> u8 {
+        (self & 0xff) as u8
       }
     }
   }

@@ -9,5 +9,5 @@ pub fn display_prefixes<T: NumberLike>(prefixes: &[Prefix<T>], f: &mut fmt::Form
     .map(|p| p.to_string())
     .collect::<Vec<String>>()
     .join("\n");
-  write!(f, "{}", s)
+  write!(f, "({} prefixes)\n{}", prefixes.len(), s)
 }

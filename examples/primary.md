@@ -1,7 +1,7 @@
 # Quantile Compression Example
 
-This example generates a wide variety of common integer distributions
-with the `i64` and `f64` data types,
+The `primary` example generates a wide variety of common distributions
+with the `i64`, `f64`, and `bool` data types,
 compresses them, decompresses them, and makes sure
 all the data came back bitwise identical.
 We also compare vs

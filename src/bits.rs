@@ -10,28 +10,29 @@ const BIT_MASKS: [u8; 8] = [
   0x02,
   0x01,
 ];
+pub const LEFT_MASKS: [u8; 8] = [
+  0xff,
+  0x7f,
+  0x3f,
+  0x1f,
+  0x0f,
+  0x07,
+  0x03,
+  0x01,
+];
+pub const RIGHT_MASKS: [u8; 8] = [
+  0x00,
+  0x80,
+  0xc0,
+  0xe0,
+  0xf0,
+  0xf8,
+  0xfc,
+  0xfe,
+];
 
 pub fn bit_from_byte(byte: u8, j: usize) -> bool {
   (byte & BIT_MASKS[j]) > 0
-}
-
-pub fn byte_to_bits(byte: u8) -> [bool; 8] {
-  let mut res: [bool; 8];
-  unsafe {
-    res = std::mem::MaybeUninit::uninit().assume_init();
-  }
-  for (j, entry) in res.iter_mut().enumerate() {
-    *entry = bit_from_byte(byte, j)
-  }
-  res
-}
-
-pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
-  let mut res = Vec::with_capacity(8 * bytes.len());
-  for b in &bytes {
-    res.extend(&byte_to_bits(*b));
-  }
-  res
 }
 
 pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
@@ -66,37 +67,6 @@ pub fn bits_to_usize_truncated(bits: &[bool], max_depth: u32) -> usize {
     }
   }
   res
-}
-
-pub fn usize_to_varint_bits(mut x: usize, jumpstart: usize) -> Vec<bool> {
-  let mut res = Vec::with_capacity(jumpstart + 5);
-  res.extend(usize_to_bits(x, jumpstart as u32));
-  x >>= jumpstart;
-  while x > 0 {
-    res.push(true);
-    res.push(x & 1 > 0);
-    x >>= 1;
-  }
-  res.push(false);
-  res
-}
-
-pub fn usize_to_bits(x: usize, n_bits: u32) -> Vec<bool> {
-  diff_to_bits(x as u64, n_bits)
-}
-
-pub fn diff_to_bits<Diff: UnsignedLike>(x: Diff, n_bits: u32) -> Vec<bool> {
-  let mut res = Vec::with_capacity(n_bits as usize);
-  extend_with_diff_bits(x, n_bits, &mut res);
-  res
-}
-
-pub fn extend_with_diff_bits<Diff: UnsignedLike>(x: Diff, n_bits: u32, v: &mut Vec<bool>) {
-  // the least significant bits, but still in bigendian order
-  for i in 1..n_bits + 1 {
-    let shift = n_bits - i;
-    v.push(x & (Diff::ONE << shift) > Diff::ZERO);
-  }
 }
 
 pub fn bits_to_string(bits: &[bool]) -> String {
@@ -147,18 +117,6 @@ mod tests {
   }
 
   #[test]
-  fn test_diff_to_bits() {
-    assert_eq!(diff_to_bits(7_u64, 0), vec![]);
-    assert_eq!(diff_to_bits(7_u64, 4), vec![false, true, true, true]);
-    assert_eq!(diff_to_bits(7_u32, 4), vec![false, true, true, true]);
-  }
-
-  #[test]
-  fn test_usize_to_bits() {
-    assert_eq!(usize_to_bits(7, 5), vec![false, false, true, true, true]);
-  }
-
-  #[test]
   fn test_bits_to_usize_truncated() {
     assert_eq!(bits_to_usize_truncated(&[], 0), 0);
     assert_eq!(bits_to_usize_truncated(&[true], 4), 8);
@@ -175,10 +133,6 @@ mod tests {
       byte_28,
       vec![28]
     );
-    assert_eq!(
-      bytes_to_bits(byte_28),
-      bits_28
-    );
 
     let bits_28_128 = vec![false, false, false, true, true, true, false, false, true];
     let byte_28_128 = bits_to_bytes(bits_28_128.clone());
@@ -186,9 +140,5 @@ mod tests {
       byte_28_128,
       vec![28, 128]
     );
-    assert_eq!(
-      bytes_to_bits(byte_28_128)[0..9],
-      bits_28_128[..],
-    )
   }
 }
