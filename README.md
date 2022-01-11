@@ -44,7 +44,7 @@ To run something right away, see
 [the primary example](./examples/primary.md).
 
 ```rust
-use q_compress::{BitReader, I64Compressor, I64Decompressor};
+use q_compress::{I64Compressor, I64Decompressor};
 
 fn main() {
   // your data
@@ -52,16 +52,16 @@ fn main() {
   for i in 0..100000 {
     my_ints.push(i as i64);
   }
-  
+ 
   // Compression level can optionally be adjusted by the `max_depth`
   // property within `CompressorConfig`, but here we just use the default (6).
   let compressor = I64Compressor::default();
   let bytes: Vec<u8> = compressor.simple_compress(&my_ints).expect("failed to compress");
   println!("compressed down to {} bytes", bytes.len());
-  
+ 
   // decompress
   let decompressor = I64Decompressor::default();
-  let recovered = decompressor.simple_decompress(bytes);
+  let recovered = decompressor.simple_decompress(bytes).expect("failed to decompress");
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```
