@@ -16,22 +16,22 @@ pub struct QCompressError {
 }
 
 impl QCompressError {
-  pub fn new(kind: ErrorKind, message: impl AsRef<str>) -> Self {
+  pub fn new<S: AsRef<str>>(kind: ErrorKind, message: S) -> Self {
     QCompressError {
       kind,
       message: message.as_ref().to_string(),
     }
   }
 
-  pub fn compatibility(message: impl AsRef<str>) -> Self {
+  pub fn compatibility<S: AsRef<str>>(message: S) -> Self {
     Self::new(ErrorKind::Compatibility, message)
   }
 
-  pub fn corruption(message: impl AsRef<str>) -> Self {
+  pub fn corruption<S: AsRef<str>>(message: S) -> Self {
     Self::new(ErrorKind::Corruption, message)
   }
 
-  pub fn invalid_argument(message: impl AsRef<str>) -> Self {
+  pub fn invalid_argument<S: AsRef<str>>(message: S) -> Self {
     Self::new(ErrorKind::InvalidArgument, message)
   }
 }

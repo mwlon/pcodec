@@ -118,16 +118,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     }
   }
 
-  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
-    let start_byte_idx = reader.aligned_byte_ind()?;
-    let remaining_bytes = reader.size() - start_byte_idx;
-    if remaining_bytes < self.compressed_body_size {
-      return Err(QCompressError::invalid_argument(format!(
-        "bit reader has only {} bytes remaining but compressed body size is {}",
-        remaining_bytes,
-        self.compressed_body_size,
-      )))
-    }
+  fn decompress_chunk_nums(&self, reader: &mut BitReader) -> Vec<T> {
     let n = self.n;
     let mut res = Vec::with_capacity(n);
     let mut i = 0;
@@ -158,6 +149,21 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
       }
       i += reps;
     }
+    res
+  }
+
+  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+    let start_byte_idx = reader.aligned_byte_ind()?;
+    let remaining_bytes = reader.size() - start_byte_idx;
+    if remaining_bytes < self.compressed_body_size {
+      return Err(QCompressError::invalid_argument(format!(
+        "bit reader has only {} bytes remaining but compressed body size is {}",
+        remaining_bytes,
+        self.compressed_body_size,
+      )))
+    }
+
+    let res = self.decompress_chunk_nums(reader);
 
     reader.drain_byte();
     let end_byte_idx = reader.aligned_byte_ind()?;

@@ -1,11 +1,12 @@
-use q_compress::{Compressor, Decompressor, CompressorConfig};
-use q_compress::types::NumberLike;
 use std::convert::TryInto;
 use std::env;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::Instant;
+
+use q_compress::{Compressor, CompressorConfig, Decompressor};
+use q_compress::types::NumberLike;
 
 fn basename_no_ext(path: &Path) -> String {
   let basename = path
@@ -40,27 +41,21 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     // compress
     let bytes = fs::read(path).expect("could not read");
     let nums = Self::parse_nums(&bytes);
-    let compress_start = SystemTime::now();
+    let compress_start = Instant::now();
     let compressed = Self::compress(nums.clone(), max_depth);
-    let compress_end = SystemTime::now();
-    let dt = compress_end.duration_since(compress_start).expect("can't take dt");
-    println!("COMPRESSED TO {} BYTES IN {:?}", compressed.len(), dt);
+    println!("COMPRESSED TO {} BYTES IN {:?}", compressed.len(), Instant::now() - compress_start);
 
     let fname = basename_no_ext(&path);
     let output_path = format!("{}/{}.qco", &output_dir, fname);
     fs::write(
       &output_path,
-      compressed,
+      &compressed,
     ).expect("couldn't write");
 
     // decompress
-    let bytes = fs::read(output_path).expect("couldn't read");
-    let decompress_start = SystemTime::now();
-    let rec_nums = Self::decompress(bytes);
-    println!("{} nums: {} {}", rec_nums.len(), rec_nums.first().unwrap(), rec_nums.last().unwrap());
-    let decompress_end = SystemTime::now();
-    let dt = decompress_end.duration_since(decompress_start).expect("can't take dt");
-    println!("DECOMPRESSED IN {:?}", dt);
+    let decompress_start = Instant::now();
+    let rec_nums = Self::decompress(compressed);
+    println!("DECOMPRESSED IN {:?}", Instant::now() - decompress_start);
 
     // make sure everything came back correct
     for i in 0..rec_nums.len() {
