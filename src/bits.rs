@@ -55,7 +55,7 @@ pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
 }
 
 pub fn bits_to_usize_truncated(bits: &[bool], max_depth: u32) -> usize {
-  if max_depth < 1 {
+  if max_depth == 0 {
     return 0;
   }
 
@@ -70,7 +70,7 @@ pub fn bits_to_usize_truncated(bits: &[bool], max_depth: u32) -> usize {
 }
 
 pub fn usize_truncated_to_bits(x: usize, max_depth: u32) -> Vec<bool> {
-  if max_depth < 1 {
+  if max_depth == 0 {
     return Vec::new();
   }
 

@@ -11,9 +11,11 @@ pub struct Flags {}
 impl Flags {
   pub fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
     // When we actually have flags, we'll do something more interesting.
-    let byte = reader.read_bytes(1)?[0];
+    let byte = reader.read_aligned_bytes(1)?[0];
     if byte != 0 {
-      return Err(QCompressError::CompatibilityError);
+      return Err(QCompressError::compatibility(
+        "cannot parse flags; likely written by older version of q_compress"
+      ));
     }
 
     Ok(Self {})

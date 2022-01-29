@@ -27,7 +27,11 @@ impl BitWriter {
       self.bytes.extend(bytes);
       Ok(())
     } else {
-      Err(QCompressError::MisalignedError)
+      Err(QCompressError::invalid_argument(format!(
+        "cannot write aligned bytes to unaligned bit reader at byte {} bit {}",
+        self.bytes.len(),
+        self.j,
+      )))
     }
   }
 
