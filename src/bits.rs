@@ -69,6 +69,18 @@ pub fn bits_to_usize_truncated(bits: &[bool], max_depth: u32) -> usize {
   res
 }
 
+pub fn usize_truncated_to_bits(x: usize, max_depth: u32) -> Vec<bool> {
+  if max_depth < 1 {
+    return Vec::new();
+  }
+
+  let mut res = Vec::with_capacity(max_depth as usize);
+  for i in 0..max_depth {
+    res.push((x >> (max_depth - i - 1)) & 1 > 0);
+  }
+  res
+}
+
 pub fn bits_to_string(bits: &[bool]) -> String {
   return bits
     .iter()
