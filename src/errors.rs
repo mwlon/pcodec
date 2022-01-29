@@ -3,12 +3,14 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 use crate::constants::*;
+use crate::bits;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QCompressError where {
   CompatibilityError,
   CompressedBodySize { expected: usize, actual: usize },
   HeaderDtypeError { header_byte: u8, decompressor_byte: u8 },
+  HuffmanTreeError { bits: Vec<bool>, issue: &'static str },
   InvalidTimestampError { parts: i128, parts_per_sec: u32 },
   MagicChunkByteError { byte: u8 },
   MagicHeaderError { header: Vec<u8> },
@@ -36,6 +38,12 @@ impl Display for QCompressError {
         "header byte {} did not match expected decompressor data type byte {}",
         header_byte,
         decompressor_byte,
+      ),
+      QCompressError::HuffmanTreeError {bits, issue} => write!(
+        f,
+        "corrupt chunk metadata; prefix {} is {}",
+        bits::bits_to_string(bits),
+        issue,
       ),
       QCompressError::InvalidTimestampError { parts, parts_per_sec } => write!(
         f,

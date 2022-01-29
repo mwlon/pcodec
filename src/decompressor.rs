@@ -15,6 +15,32 @@ use crate::utils;
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
 
+fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>], max_depth: u32) -> QCompressResult<()> {
+  if prefixes.is_empty() {
+    return Ok(());
+  }
+
+  let max_n_leafs = 1_usize << max_depth;
+  let mut is_specifieds = vec![false; max_n_leafs];
+  for p in prefixes {
+    let base_idx = bits::bits_to_usize_truncated(&p.val, max_depth);
+    let n_leafs = 1_usize << (max_depth - p.val.len() as u32);
+    for is_specified in is_specifieds.iter_mut().skip(base_idx).take(n_leafs) {
+      if *is_specified {
+        return Err(QCompressError::HuffmanTreeError {bits: p.val.clone(), issue: "duplicated"});
+      }
+      *is_specified = true;
+    }
+  }
+  for (idx, is_specified) in is_specifieds.iter().enumerate() {
+    if !is_specified {
+      let bits = bits::usize_truncated_to_bits(idx, max_depth);
+      return Err(QCompressError::HuffmanTreeError {bits, issue: "missing"});
+    }
+  }
+  Ok(())
+}
+
 #[derive(Clone)]
 struct ChunkDecompressor<T> where T: NumberLike {
   prefixes: Vec<Prefix<T>>,
@@ -38,12 +64,12 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
       ..
     } = metadata;
 
-    // TODO validate prefixes exactly produce a binary tree
-
     let mut max_depth = 0;
     for p in &prefixes {
       max_depth = max(max_depth, p.val.len() as u32);
     }
+    validate_prefix_tree(&prefixes, max_depth)?;
+
     let n_pref = 1_usize << max_depth;
     let mut prefix_map = Vec::with_capacity(n_pref);
     let mut prefix_len_map = Vec::with_capacity(n_pref);
@@ -82,7 +108,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
           return self.prefix_map[prefix_idx];
         }
       }
-      panic!("prefixes are corrupt");
+      unreachable!("prefixes are corrupt yet not caught before decoding numbers");
     }
   }
 
@@ -263,6 +289,46 @@ impl<T> Decompressor<T> where T: NumberLike {
       };
     }
     Ok(res.unwrap_or_default())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::{Decompressor, BitReader, Flags, ChunkMetadata};
+  use crate::prefix::Prefix;
+  use crate::errors::QCompressError;
+
+  #[test]
+  fn test_corrupt_prefixes_error_not_panic() {
+    let decompressor = Decompressor::<i64>::default();
+    let bytes = vec![1, 2, 3, 4, 5, 6]; // not important for test
+
+    let metadata_missing_prefix = ChunkMetadata::<i64> {
+      n: 2,
+      compressed_body_size: 1,
+      prefixes: vec![
+        Prefix::new(1, vec![false], 100, 100, None),
+        Prefix::new(1, vec![true, false], 200, 200, None),
+      ]
+    };
+    let metadata_duplicating_prefix = ChunkMetadata::<i64> {
+      n: 2,
+      compressed_body_size: 1,
+      prefixes: vec![
+        Prefix::new(1, vec![false], 100, 100, None),
+        Prefix::new(1, vec![false], 200, 200, None),
+        Prefix::new(1, vec![true], 300, 300, None),
+      ]
+    };
+
+    for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
+      let result = decompressor.decompress_chunk_body(
+        &mut BitReader::from(bytes.clone()),
+        bad_metadata,
+        &Flags::default(),
+      );
+      assert!(matches!(result, Err(QCompressError::HuffmanTreeError {bits: _b, issue: _i})));
+    }
   }
 }
 
