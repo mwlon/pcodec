@@ -8,16 +8,22 @@ use crate::bit_reader::BitReader;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk};
 use crate::constants::*;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::prefix::{Prefix, PrefixDecompressionInfo};
+use crate::huffman_decoding::HuffmanTable;
+use crate::prefix::Prefix;
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
 
-fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>], max_depth: u32) -> QCompressResult<()> {
+fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResult<()> {
   if prefixes.is_empty() {
     return Ok(());
+  }
+
+  let mut max_depth = 0;
+  for p in prefixes {
+    max_depth = max(max_depth, p.val.len() as u32);
   }
 
   let max_n_leafs = 1_usize << max_depth;
@@ -49,12 +55,9 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>], max_depth: u32) -
 
 #[derive(Clone)]
 struct ChunkDecompressor<T> where T: NumberLike {
+  huffman_table: HuffmanTable<T::Unsigned>,
   prefixes: Vec<Prefix<T>>,
-  prefix_map: Vec<PrefixDecompressionInfo<T::Unsigned>>,
-  prefix_len_map: Vec<u32>,
-  max_depth: u32,
   n: usize,
-  is_single_prefix: bool,
   compressed_body_size: usize,
 }
 
@@ -70,52 +73,14 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
       ..
     } = metadata;
 
-    let mut max_depth = 0;
-    for p in &prefixes {
-      max_depth = max(max_depth, p.val.len() as u32);
-    }
-    validate_prefix_tree(&prefixes, max_depth)?;
+    validate_prefix_tree(&prefixes)?;
 
-    let n_pref = 1_usize << max_depth;
-    let mut prefix_map = Vec::with_capacity(n_pref);
-    let mut prefix_len_map = Vec::with_capacity(n_pref);
-    for _ in 0..n_pref {
-      prefix_map.push(PrefixDecompressionInfo::new());
-      prefix_len_map.push(u32::MAX);
-    }
-    for p in &prefixes {
-      let i = bits::bits_to_usize_truncated(&p.val, max_depth);
-      prefix_map[i] = p.into();
-      prefix_len_map[i] = p.val.len() as u32;
-    }
-
-    let is_single_prefix = prefixes.len() == 1;
     Ok(ChunkDecompressor {
+      huffman_table: HuffmanTable::from(prefixes.clone()),
       prefixes,
-      prefix_map,
-      prefix_len_map,
-      max_depth,
       n,
-      is_single_prefix,
       compressed_body_size: metadata.compressed_body_size,
     })
-  }
-
-  fn next_prefix(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<T::Unsigned> {
-    if self.is_single_prefix {
-      self.prefix_map[0]
-    } else {
-      let mut prefix_idx = 0;
-      for prefix_len in 1..self.max_depth + 1 {
-        if reader.read_one() {
-          prefix_idx |= 1 << (self.max_depth - prefix_len);
-        }
-        if self.prefix_len_map[prefix_idx] == prefix_len {
-          return self.prefix_map[prefix_idx];
-        }
-      }
-      unreachable!("prefixes are corrupt yet not caught before decoding numbers");
-    }
   }
 
   // After much debugging a performance degradation from error handling changes,
@@ -129,7 +94,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     let mut res = Vec::with_capacity(n);
     let mut i = 0;
     while i < n {
-      let p = self.next_prefix(reader);
+      let p = self.huffman_table.search_with_reader(reader);
 
       let reps = match p.run_len_jumpstart {
         None => {
@@ -247,32 +212,10 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
 
     // otherwise there is indeed another chunk
-    let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
-    let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
-    let n_pref = reader.read_usize(MAX_MAX_DEPTH as usize);
-    let mut prefixes = Vec::with_capacity(n_pref);
-    for _ in 0..n_pref {
-      let count = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
-      let lower_bits = reader.read(T::PHYSICAL_BITS);
-      let lower = T::from_bytes(bits::bits_to_bytes(lower_bits));
-      let upper_bits = reader.read(T::PHYSICAL_BITS);
-      let upper = T::from_bytes(bits::bits_to_bytes(upper_bits));
-      let code_len = reader.read_usize(BITS_TO_ENCODE_PREFIX_LEN as usize);
-      let val = reader.read(code_len);
-      let jumpstart = if reader.read_one() {
-        Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART as usize))
-      } else {
-        None
-      };
-      prefixes.push(Prefix::new(count, val, lower, upper, jumpstart));
-    }
+    let metadata = ChunkMetadata::parse_from(reader);
     reader.drain_byte();
 
-    Ok(Some(ChunkMetadata {
-      n,
-      compressed_body_size,
-      prefixes,
-    }))
+    Ok(Some(metadata))
   }
 
   pub fn decompress_chunk_body(
@@ -334,9 +277,9 @@ impl<T> Decompressor<T> where T: NumberLike {
 
 #[cfg(test)]
 mod tests {
-  use crate::{Decompressor, BitReader, Flags, ChunkMetadata};
-  use crate::prefix::Prefix;
+  use crate::{BitReader, ChunkMetadata, Decompressor, Flags};
   use crate::errors::ErrorKind;
+  use crate::prefix::Prefix;
 
   #[test]
   fn test_corrupt_prefixes_error_not_panic() {

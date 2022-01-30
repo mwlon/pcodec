@@ -3,6 +3,7 @@ use std::fmt;
 
 use crate::bits;
 use crate::bits::{LEFT_MASKS, RIGHT_MASKS};
+use crate::constants::PREFIX_TABLE_SIZE_LOG;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::types::UnsignedLike;
 
@@ -87,6 +88,30 @@ impl BitReader {
     res
   }
 
+  // returns (bits read, idx)
+  pub fn read_prefix_table_idx(&mut self) -> (usize, usize) {
+    let n_plus_j = PREFIX_TABLE_SIZE_LOG + self.j;
+    if n_plus_j <= 8 {
+      let shift = 8 - n_plus_j;
+      let res = (self.bytes[self.i] & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift;
+      self.j = n_plus_j;
+      (PREFIX_TABLE_SIZE_LOG, res as usize)
+    } else {
+      let remaining = n_plus_j - 8;
+      let mut res = ((self.bytes[self.i] & LEFT_MASKS[self.j]) as usize) << remaining;
+      self.i += 1;
+      if self.i < self.bytes.len() {
+        let shift = 8 - remaining;
+        res |= ((self.bytes[self.i] & RIGHT_MASKS[remaining]) >> shift) as usize;
+        self.j = remaining;
+        (PREFIX_TABLE_SIZE_LOG, res)
+      } else {
+        self.j = 0;
+        (PREFIX_TABLE_SIZE_LOG - remaining, res)
+      }
+    }
+  }
+
   pub fn read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> Diff {
     if n == 0 {
       return Diff::ZERO;
@@ -95,7 +120,7 @@ impl BitReader {
     self.refresh_if_needed();
 
     let n_plus_j = n + self.j;
-    if n_plus_j < 8 {
+    if n_plus_j <= 8 {
       // it's all in the current byte
       let shift = 8 - n_plus_j;
       let res = Diff::from((self.bytes[self.i] & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift);
@@ -161,12 +186,23 @@ impl BitReader {
   // Used to skip to the next metadata or body section of the file, since they
   // always start byte-aligned.
   pub fn drain_byte(&mut self) {
-    self.j = 8;
+    if self.j > 0 {
+      self.j = 8;
+    }
   }
 
   pub fn seek_bytes(&mut self, n_bytes: usize) {
     self.j = 8;
     self.i += n_bytes;
+  }
+
+  pub fn rewind(&mut self, n: usize) {
+    if n > self.j {
+      self.i -= 1 + (n - self.j - 1).div_euclid(8);
+      self.j = 7 - (n - self.j - 1).rem_euclid(8);
+    } else {
+      self.j -= n;
+    }
   }
 
   pub fn inds(&self) -> (usize, usize) {
@@ -226,5 +262,25 @@ mod tests {
     );
     //leaves 1 bit left over
     Ok(())
+  }
+
+  #[test]
+  fn test_rewind() {
+    let mut reader = BitReader {
+      bytes: vec![], // irrelevant
+      i: 5,
+      j: 3,
+    };
+
+    reader.rewind(2);
+    assert_eq!(reader.inds(), (5, 1));
+    reader.rewind(2);
+    assert_eq!(reader.inds(), (4, 7));
+    reader.rewind(7);
+    assert_eq!(reader.inds(), (4, 0));
+    reader.rewind(8);
+    assert_eq!(reader.inds(), (3, 0));
+    reader.rewind(17);
+    assert_eq!(reader.inds(), (0, 7));
   }
 }

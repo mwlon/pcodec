@@ -1,7 +1,6 @@
 use crate::{BitReader, BitWriter};
 use crate::bits::bits_to_bytes;
 use crate::constants::*;
-use crate::errors::QCompressResult;
 use crate::prefix::Prefix;
 use crate::types::NumberLike;
 
@@ -13,7 +12,7 @@ pub struct ChunkMetadata<T> where T: NumberLike {
 }
 
 impl<T> ChunkMetadata<T> where T: NumberLike {
-  pub fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
+  pub fn parse_from(reader: &mut BitReader) -> Self {
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
     let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
     let n_pref = reader.read_usize(MAX_MAX_DEPTH as usize);
@@ -34,11 +33,11 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       prefixes.push(Prefix::new(count, val, lower, upper, jumpstart));
     }
 
-    Ok(Self {
+    Self {
       n,
       compressed_body_size,
       prefixes,
-    })
+    }
   }
 
   pub fn write_to(&self, writer: &mut BitWriter) {

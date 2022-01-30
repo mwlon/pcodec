@@ -4,18 +4,23 @@ use std::fmt;
 use crate::bits;
 use crate::types::{NumberLike, UnsignedLike};
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct PrefixDecompressionInfo<T> where T: UnsignedLike {
-  pub lower_unsigned: T,
-  pub range: T,
+#[derive(Clone, Copy, Debug)]
+pub struct PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
+  pub lower_unsigned: Diff,
+  pub range: Diff,
   pub k: usize,
+  pub depth: usize,
   pub run_len_jumpstart: Option<usize>,
 }
 
-impl<T> PrefixDecompressionInfo<T> where T: UnsignedLike {
-  pub fn new() -> Self {
+impl<Diff> Default for PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
+  fn default() -> Self {
     PrefixDecompressionInfo {
-      ..Default::default()
+      lower_unsigned: Diff::ZERO,
+      range: Diff::MAX,
+      k: Diff::BITS,
+      depth: 0,
+      run_len_jumpstart: None,
     }
   }
 }
@@ -29,6 +34,7 @@ impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: Numbe
       range: upper_unsigned - lower_unsigned,
       k: p.k,
       run_len_jumpstart: p.run_len_jumpstart,
+      depth: p.val.len(),
     }
   }
 }
