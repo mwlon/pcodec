@@ -3,9 +3,9 @@ use std::fmt;
 
 use crate::bits;
 use crate::bits::{LEFT_MASKS, RIGHT_MASKS};
+use crate::constants::PREFIX_TABLE_SIZE_LOG;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::types::UnsignedLike;
-use crate::constants::PREFIX_TABLE_SIZE_LOG;
 
 #[derive(Clone)]
 pub struct BitReader {

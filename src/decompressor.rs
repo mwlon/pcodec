@@ -8,10 +8,10 @@ use crate::bit_reader::BitReader;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk};
 use crate::constants::*;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::huffman_decoding::HuffmanTable;
 use crate::prefix::{Prefix, PrefixDecompressionInfo};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
-use crate::huffman_decoding::HuffmanTable;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
@@ -303,9 +303,9 @@ impl<T> Decompressor<T> where T: NumberLike {
 
 #[cfg(test)]
 mod tests {
-  use crate::{Decompressor, BitReader, Flags, ChunkMetadata};
-  use crate::prefix::Prefix;
+  use crate::{BitReader, ChunkMetadata, Decompressor, Flags};
   use crate::errors::ErrorKind;
+  use crate::prefix::Prefix;
 
   #[test]
   fn test_corrupt_prefixes_error_not_panic() {

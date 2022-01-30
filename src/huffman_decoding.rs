@@ -1,18 +1,19 @@
-use crate::BitReader;
-use crate::constants::{PREFIX_TABLE_SIZE, PREFIX_TABLE_SIZE_LOG};
-use crate::prefix::{PrefixDecompressionInfo, Prefix};
-use crate::types::{NumberLike, UnsignedLike};
 use std::mem;
 use std::mem::MaybeUninit;
 
+use crate::BitReader;
+use crate::constants::{PREFIX_TABLE_SIZE, PREFIX_TABLE_SIZE_LOG};
+use crate::prefix::{Prefix, PrefixDecompressionInfo};
+use crate::types::{NumberLike, UnsignedLike};
+
 #[derive(Clone, Debug)]
-pub enum HuffmanTable<U: UnsignedLike> {
-  Leaf(PrefixDecompressionInfo<U>),
-  NonLeaf([Box<HuffmanTable<U>>; PREFIX_TABLE_SIZE]),
+pub enum HuffmanTable<Diff: UnsignedLike> {
+  Leaf(PrefixDecompressionInfo<Diff>),
+  NonLeaf([Box<HuffmanTable<Diff>>; PREFIX_TABLE_SIZE]),
 }
 
-impl<U: UnsignedLike> HuffmanTable<U> {
-  pub fn search_with_reader(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<U> {
+impl<Diff: UnsignedLike> HuffmanTable<Diff> {
+  pub fn search_with_reader(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<Diff> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
@@ -33,7 +34,11 @@ impl<U: UnsignedLike> HuffmanTable<U> {
 
 impl<T: NumberLike> From<Vec<Prefix<T>>> for HuffmanTable<T::Unsigned> {
   fn from(prefixes: Vec<Prefix<T>>) -> Self {
-    build_from_prefixes_recursive(prefixes, 0)
+    if prefixes.is_empty() {
+      HuffmanTable::Leaf(PrefixDecompressionInfo::default())
+    } else {
+      build_from_prefixes_recursive(prefixes, 0)
+    }
   }
 }
 
@@ -47,16 +52,16 @@ where T: NumberLike {
     let mut data: [MaybeUninit<Box<HuffmanTable<T::Unsigned>>>; PREFIX_TABLE_SIZE] = unsafe {
       MaybeUninit::uninit().assume_init()
     };
-    for idx in 0..PREFIX_TABLE_SIZE {
+    for (idx, uninit_box) in data.iter_mut().enumerate() {
       let mut sub_bits = Vec::new();
       for depth_incr in 0..PREFIX_TABLE_SIZE_LOG {
         sub_bits.push((idx >> (PREFIX_TABLE_SIZE_LOG - 1 - depth_incr)) & 1 > 0);
       }
       let possible_prefixes = prefixes.iter()
         .filter(|&p| {
-          for depth_incr in 0..PREFIX_TABLE_SIZE_LOG {
+          for (depth_incr, bit) in sub_bits.iter().enumerate() {
             let total_depth = depth + depth_incr;
-            if p.val.len() > total_depth && p.val[total_depth] != sub_bits[depth_incr] {
+            if p.val.len() > total_depth && p.val[total_depth] != *bit {
               return false;
             }
           }
@@ -68,7 +73,7 @@ where T: NumberLike {
         possible_prefixes,
         depth + PREFIX_TABLE_SIZE_LOG,
       );
-      data[idx].write(Box::new(child));
+      uninit_box.write(Box::new(child));
     }
     let children = unsafe {
       mem::transmute::<_, [Box<HuffmanTable<T::Unsigned>>; PREFIX_TABLE_SIZE]>(data)
