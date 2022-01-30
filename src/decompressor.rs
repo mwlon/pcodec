@@ -11,7 +11,6 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::{Prefix, PrefixDecompressionInfo};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
-use std::time::Instant;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
@@ -123,6 +122,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
   // it turned out this function's logic ran slower when any heap allocations
   // were done in the same scope. I don't understand why, but telling it not
   // to inline fixed the performance issue.
+  // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
   #[inline(never)]
   fn decompress_chunk_nums(&self, reader: &mut BitReader) -> Vec<T> {
     let n = self.n;
