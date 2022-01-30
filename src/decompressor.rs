@@ -9,7 +9,7 @@ use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk};
 use crate::constants::*;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
-use crate::prefix::{Prefix, PrefixDecompressionInfo};
+use crate::prefix::Prefix;
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
 
@@ -83,10 +83,6 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     })
   }
 
-  fn next_prefix(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<T::Unsigned> {
-    self.huffman_table.search_with_reader(reader)
-  }
-
   // After much debugging a performance degradation from error handling changes,
   // it turned out this function's logic ran slower when any heap allocations
   // were done in the same scope. I don't understand why, but telling it not
@@ -98,7 +94,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     let mut res = Vec::with_capacity(n);
     let mut i = 0;
     while i < n {
-      let p = self.next_prefix(reader);
+      let p = self.huffman_table.search_with_reader(reader);
 
       let reps = match p.run_len_jumpstart {
         None => {
@@ -216,32 +212,10 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
 
     // otherwise there is indeed another chunk
-    let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
-    let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
-    let n_pref = reader.read_usize(MAX_MAX_DEPTH as usize);
-    let mut prefixes = Vec::with_capacity(n_pref);
-    for _ in 0..n_pref {
-      let count = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
-      let lower_bits = reader.read(T::PHYSICAL_BITS);
-      let lower = T::from_bytes(bits::bits_to_bytes(lower_bits));
-      let upper_bits = reader.read(T::PHYSICAL_BITS);
-      let upper = T::from_bytes(bits::bits_to_bytes(upper_bits));
-      let code_len = reader.read_usize(BITS_TO_ENCODE_PREFIX_LEN as usize);
-      let val = reader.read(code_len);
-      let jumpstart = if reader.read_one() {
-        Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART as usize))
-      } else {
-        None
-      };
-      prefixes.push(Prefix::new(count, val, lower, upper, jumpstart));
-    }
+    let metadata = ChunkMetadata::parse_from(reader);
     reader.drain_byte();
 
-    Ok(Some(ChunkMetadata {
-      n,
-      compressed_body_size,
-      prefixes,
-    }))
+    Ok(Some(metadata))
   }
 
   pub fn decompress_chunk_body(
