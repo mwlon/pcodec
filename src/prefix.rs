@@ -9,15 +9,8 @@ pub struct PrefixDecompressionInfo<T> where T: UnsignedLike {
   pub lower_unsigned: T,
   pub range: T,
   pub k: usize,
+  pub depth: usize,
   pub run_len_jumpstart: Option<usize>,
-}
-
-impl<T> PrefixDecompressionInfo<T> where T: UnsignedLike {
-  pub fn new() -> Self {
-    PrefixDecompressionInfo {
-      ..Default::default()
-    }
-  }
 }
 
 impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: NumberLike {
@@ -29,6 +22,7 @@ impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: Numbe
       range: upper_unsigned - lower_unsigned,
       k: p.k,
       run_len_jumpstart: p.run_len_jumpstart,
+      depth: p.val.len(),
     }
   }
 }

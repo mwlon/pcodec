@@ -10,7 +10,7 @@ const BIT_MASKS: [u8; 8] = [
   0x02,
   0x01,
 ];
-pub const LEFT_MASKS: [u8; 8] = [
+pub const LEFT_MASKS: [u8; 9] = [
   0xff,
   0x7f,
   0x3f,
@@ -19,8 +19,9 @@ pub const LEFT_MASKS: [u8; 8] = [
   0x07,
   0x03,
   0x01,
+  0x00,
 ];
-pub const RIGHT_MASKS: [u8; 8] = [
+pub const RIGHT_MASKS: [u8; 9] = [
   0x00,
   0x80,
   0xc0,
@@ -29,6 +30,7 @@ pub const RIGHT_MASKS: [u8; 8] = [
   0xf8,
   0xfc,
   0xfe,
+  0xff,
 ];
 
 pub fn bit_from_byte(byte: u8, j: usize) -> bool {

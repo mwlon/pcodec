@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{BitWriter, Flags, huffman};
+use crate::{BitWriter, Flags, huffman_encoding};
 use crate::bits::*;
 use crate::chunk_metadata::ChunkMetadata;
 use crate::constants::*;
@@ -176,7 +176,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
       }
     }
 
-    huffman::make_huffman_code(&mut prefix_sequence);
+    huffman_encoding::make_huffman_code(&mut prefix_sequence);
 
     let mut prefixes = Vec::new();
     for p in prefix_sequence {
