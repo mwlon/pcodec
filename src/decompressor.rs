@@ -11,6 +11,7 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::{Prefix, PrefixDecompressionInfo};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
@@ -118,6 +119,11 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     }
   }
 
+  // After much debugging a performance degradation from error handling changes,
+  // it turned out this function's logic ran slower when any heap allocations
+  // were done in the same scope. I don't understand why, but telling it not
+  // to inline fixed the performance issue.
+  #[inline(never)]
   fn decompress_chunk_nums(&self, reader: &mut BitReader) -> Vec<T> {
     let n = self.n;
     let mut res = Vec::with_capacity(n);
@@ -152,17 +158,24 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     res
   }
 
-  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+  fn validate_sufficient_data(&self, reader: &BitReader) -> QCompressResult<()> {
     let start_byte_idx = reader.aligned_byte_ind()?;
     let remaining_bytes = reader.size() - start_byte_idx;
     if remaining_bytes < self.compressed_body_size {
-      return Err(QCompressError::invalid_argument(format!(
+      Err(QCompressError::invalid_argument(format!(
         "bit reader has only {} bytes remaining but compressed body size is {}",
         remaining_bytes,
         self.compressed_body_size,
       )))
+    } else {
+      Ok(())
     }
+  }
 
+  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+    self.validate_sufficient_data(reader)?;
+
+    let start_byte_idx = reader.aligned_byte_ind()?;
     let res = self.decompress_chunk_nums(reader);
 
     reader.drain_byte();
