@@ -95,7 +95,11 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
   pub fn train(nums: Vec<T>, config: CompressorConfig, _flags: Flags) -> QCompressResult<Self> {
     let max_depth = config.max_depth;
     if max_depth > MAX_MAX_DEPTH {
-      return Err(QCompressError::MaxDepthError { max_depth });
+      return Err(QCompressError::invalid_argument(format!(
+        "max_depth max not exceed {} (was {})",
+        MAX_MAX_DEPTH,
+        max_depth,
+      )));
     }
     let n = nums.len();
     if n == 0 {
@@ -104,7 +108,11 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
       });
     }
     if n as u64 > MAX_ENTRIES {
-      return Err(QCompressError::MaxEntriesError { n: nums.len() });
+      return Err(QCompressError::invalid_argument(format!(
+        "count may not exceed {} per chunk (was {})",
+        MAX_ENTRIES,
+        n,
+      )));
     }
 
     let mut sorted = nums;
@@ -269,9 +277,10 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
       }
 
       if !success {
-        return Err(QCompressError::OutOfRangeError {
-          num_string: nums[i].to_string()
-        });
+        return Err(QCompressError::invalid_argument(format!(
+          "chunk compressor's ranges were not trained to include number {}",
+          nums[i],
+        )));
       }
     }
     writer.finish_byte();

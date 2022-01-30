@@ -53,7 +53,7 @@ impl BitReader {
     }
   }
 
-  pub fn read_bytes(&mut self, n: usize) -> QCompressResult<&[u8]> {
+  pub fn read_aligned_bytes(&mut self, n: usize) -> QCompressResult<&[u8]> {
     self.refresh_if_needed();
 
     if self.j == 0 {
@@ -62,7 +62,11 @@ impl BitReader {
       self.j = 8;
       Ok(res)
     } else {
-      Err(QCompressError::MisalignedError {})
+      Err(QCompressError::invalid_argument(format!(
+        "cannot read aligned bytes on misaligned bit reader at byte {} bit {}",
+        self.i,
+        self.j,
+      )))
     }
   }
 
@@ -144,13 +148,13 @@ impl BitReader {
     res
   }
 
-  pub fn drain_bytes(&mut self) -> QCompressResult<&[u8]> {
+  pub fn drain_bytes(&mut self) -> &[u8] {
     if self.j != 0 {
       self.i += 1;
       self.j = 0;
     }
     let n = self.bytes.len() - self.i;
-    self.read_bytes(n)
+    self.read_aligned_bytes(n).unwrap() // this cannot fail because we just did byte alignment
   }
 
   // Seek to the end of the byte.
@@ -169,6 +173,20 @@ impl BitReader {
     (self.i, self.j)
   }
 
+  pub fn aligned_byte_ind(&self) -> QCompressResult<usize> {
+    if self.j == 0 {
+      Ok(self.i)
+    } else if self.j == 8 {
+      Ok(self.i + 1)
+    } else {
+      Err(QCompressError::invalid_argument(format!(
+        "cannot get aligned byte index on misaligned bit reader at byte {} bit {}",
+        self.i,
+        self.j,
+      )))
+    }
+  }
+
   pub fn size(&self) -> usize {
     self.bytes.len()
   }
@@ -185,7 +203,7 @@ mod tests {
     let bytes = vec![0x9a, 0x6b, 0x2d];
     let mut bit_reader = BitReader::from(bytes);
     assert_eq!(
-      bit_reader.read_bytes(1)?,
+      bit_reader.read_aligned_bytes(1)?,
       vec![0x9a],
     );
     assert!(!bit_reader.read_one());

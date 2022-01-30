@@ -27,15 +27,21 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>], max_depth: u32) -
     let n_leafs = 1_usize << (max_depth - p.val.len() as u32);
     for is_specified in is_specifieds.iter_mut().skip(base_idx).take(n_leafs) {
       if *is_specified {
-        return Err(QCompressError::HuffmanTreeError {bits: p.val.clone(), issue: "duplicated"});
+        return Err(QCompressError::corruption(format!(
+          "multiple prefixes for {} found in chunk metadata",
+          bits::bits_to_string(&p.val),
+        )));
       }
       *is_specified = true;
     }
   }
   for (idx, is_specified) in is_specifieds.iter().enumerate() {
     if !is_specified {
-      let bits = bits::usize_truncated_to_bits(idx, max_depth);
-      return Err(QCompressError::HuffmanTreeError {bits, issue: "missing"});
+      let val = bits::usize_truncated_to_bits(idx, max_depth);
+      return Err(QCompressError::corruption(format!(
+        "no prefixes for {} found in chunk metadata",
+        bits::bits_to_string(&val),
+      )));
     }
   }
   Ok(())
@@ -112,8 +118,13 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     }
   }
 
-  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
-    let (start_byte_idx, _) = reader.inds();
+  // After much debugging a performance degradation from error handling changes,
+  // it turned out this function's logic ran slower when any heap allocations
+  // were done in the same scope. I don't understand why, but telling it not
+  // to inline fixed the performance issue.
+  // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
+  #[inline(never)]
+  fn decompress_chunk_nums(&self, reader: &mut BitReader) -> Vec<T> {
     let n = self.n;
     let mut res = Vec::with_capacity(n);
     let mut i = 0;
@@ -144,17 +155,40 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
       }
       i += reps;
     }
+    res
+  }
 
-    let (end_byte_idx, _) = reader.inds();
-    let real_compressed_body_size = end_byte_idx - start_byte_idx;
-    if self.compressed_body_size != real_compressed_body_size {
-      return Err(QCompressError::CompressedBodySize {
-        expected: self.compressed_body_size,
-        actual: real_compressed_body_size,
-      });
+  fn validate_sufficient_data(&self, reader: &BitReader) -> QCompressResult<()> {
+    let start_byte_idx = reader.aligned_byte_ind()?;
+    let remaining_bytes = reader.size() - start_byte_idx;
+    if remaining_bytes < self.compressed_body_size {
+      Err(QCompressError::invalid_argument(format!(
+        "bit reader has only {} bytes remaining but compressed body size is {}",
+        remaining_bytes,
+        self.compressed_body_size,
+      )))
+    } else {
+      Ok(())
     }
+  }
+
+  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+    self.validate_sufficient_data(reader)?;
+
+    let start_byte_idx = reader.aligned_byte_ind()?;
+    let res = self.decompress_chunk_nums(reader);
 
     reader.drain_byte();
+    let end_byte_idx = reader.aligned_byte_ind()?;
+    let real_compressed_body_size = end_byte_idx - start_byte_idx;
+    if self.compressed_body_size != real_compressed_body_size {
+      return Err(QCompressError::corruption(format!(
+        "expected the compressed body to contain {} bytes but it contained {}",
+        self.compressed_body_size,
+        real_compressed_body_size,
+      )));
+    }
+
     Ok(res)
   }
 }
@@ -180,30 +214,36 @@ impl<T> Decompressor<T> where T: NumberLike {
   }
 
   pub fn header(&self, reader: &mut BitReader) -> QCompressResult<Flags> {
-    let bytes = reader.read_bytes(MAGIC_HEADER.len())?;
+    let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
     if bytes != MAGIC_HEADER {
-      return Err(QCompressError::MagicHeaderError {
-        header: bytes.to_vec()
-      });
+      return Err(QCompressError::corruption(format!(
+        "magic header does not match {:?}; instead found {:?}",
+        MAGIC_HEADER,
+        bytes,
+      )));
     }
-    let bytes = reader.read_bytes(1)?;
+    let bytes = reader.read_aligned_bytes(1)?;
     let byte = bytes[0];
     if byte != T::HEADER_BYTE {
-      return Err(QCompressError::HeaderDtypeError {
-        header_byte: byte,
-        decompressor_byte: T::HEADER_BYTE,
-      });
+      return Err(QCompressError::corruption(format!(
+        "data type byte does not match {:?}; instead found {:?}",
+        T::HEADER_BYTE,
+        byte,
+      )));
     }
 
     Flags::parse_from(reader)
   }
 
   pub fn chunk_metadata(&self, reader: &mut BitReader, _flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
-    let magic_byte = reader.read_bytes(1)?[0];
+    let magic_byte = reader.read_aligned_bytes(1)?[0];
     if magic_byte == MAGIC_TERMINATION_BYTE {
       return Ok(None);
     } else if magic_byte != MAGIC_CHUNK_BYTE {
-      return Err(QCompressError::MagicChunkByteError { byte: magic_byte });
+      return Err(QCompressError::corruption(format!(
+        "invalid magic chunk byte: {}",
+        magic_byte
+      )));
     }
 
     // otherwise there is indeed another chunk
@@ -296,7 +336,7 @@ impl<T> Decompressor<T> where T: NumberLike {
 mod tests {
   use crate::{Decompressor, BitReader, Flags, ChunkMetadata};
   use crate::prefix::Prefix;
-  use crate::errors::QCompressError;
+  use crate::errors::ErrorKind;
 
   #[test]
   fn test_corrupt_prefixes_error_not_panic() {
@@ -327,7 +367,7 @@ mod tests {
         bad_metadata,
         &Flags::default(),
       );
-      assert!(matches!(result, Err(QCompressError::HuffmanTreeError {bits: _b, issue: _i})));
+      assert!(matches!(result.unwrap_err().kind, ErrorKind::Corruption));
     }
   }
 }
