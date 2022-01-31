@@ -112,10 +112,15 @@ fn push_pref<T: NumberLike>(
 #[derive(Clone, Default)]
 struct TrainedChunkCompressor<T> where T: NumberLike {
   prefixes: Vec<Prefix<T>>,
+  flags: Flags,
 }
 
 impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
-  pub fn train(nums: Vec<T>, internal_config: InternalCompressorConfig, _flags: Flags) -> QCompressResult<Self> {
+  pub fn train(
+    nums: Vec<T>,
+    internal_config: InternalCompressorConfig,
+    flags: Flags,
+  ) -> QCompressResult<Self> {
     let comp_level = internal_config.compression_level;
     if comp_level > MAX_COMPRESSION_LEVEL {
       return Err(QCompressError::invalid_argument(format!(
@@ -176,7 +181,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
         let pref0 = &prefix_sequence[i];
         let pref1 = &prefix_sequence[i + 1];
 
-        let improvement = Self::combine_improvement(pref0, pref1, n);
+        let improvement = Self::combine_improvement(pref0, pref1, n, &flags);
         if improvement > best_improvement {
           can_improve = true;
           best_i = i as i32;
@@ -208,11 +213,17 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
 
     let res = TrainedChunkCompressor::<T> {
       prefixes,
+      flags,
     };
     Ok(res)
   }
 
-  fn combine_improvement(p0: &PrefixIntermediate<T>, p1: &PrefixIntermediate<T>, n: usize) -> f64 {
+  fn combine_improvement(
+    p0: &PrefixIntermediate<T>,
+    p1: &PrefixIntermediate<T>,
+    n: usize,
+    flags: &Flags,
+  ) -> f64 {
     if p0.run_len_jumpstart.is_some() || p1.run_len_jumpstart.is_some() {
       // can never combine prefixes that encode run length
       return f64::MIN;
@@ -225,7 +236,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
     let p1_d_cost = depth_bits(p1.weight, n);
     let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
     let meta_cost = 10.0 +
-      BITS_TO_ENCODE_N_ENTRIES as f64 +
+      flags.bits_to_encode_prefix_len() as f64 +
       2.0 * T::PHYSICAL_BITS as f64;
 
     let separate_cost = 2.0 * meta_cost +
@@ -310,7 +321,11 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
     Ok(())
   }
 
-  fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
+  fn compress_chunk(
+    &self,
+    nums: &[T],
+    writer: &mut BitWriter,
+  ) -> QCompressResult<ChunkMetadata<T>> {
     writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
     let pre_header_idx = writer.size();
     let mut metadata = ChunkMetadata {
@@ -320,7 +335,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
       compressed_body_size: 0,
       prefixes: self.prefixes.clone()
     };
-    metadata.write_to(writer);
+    metadata.write_to(writer, &self.flags);
 
     let post_header_idx = writer.size();
     self.compress_nums(nums, writer)?;

@@ -17,12 +17,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
     let n_pref = reader.read_usize(MAX_COMPRESSION_LEVEL as usize);
     let mut prefixes = Vec::with_capacity(n_pref);
-    let bits_to_encode_prefix_len = if flags.use_5_bit_prefix_len {
-      5
-    } else {
-      // the legacy case
-      4
-    };
+    let bits_to_encode_prefix_len = flags.bits_to_encode_prefix_len();
     for _ in 0..n_pref {
       let count = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
       let lower_bits = reader.read(T::PHYSICAL_BITS);
@@ -46,15 +41,16 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     }
   }
 
-  pub fn write_to(&self, writer: &mut BitWriter) {
-    writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
-    writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
-    writer.write_usize(self.prefixes.len(), MAX_COMPRESSION_LEVEL);
+  pub fn write_to(&self, writer: &mut BitWriter, flags: &Flags) {
+    writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES as usize);
+    writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
+    writer.write_usize(self.prefixes.len(), MAX_COMPRESSION_LEVEL as usize);
+    let bits_to_encode_prefix_len = flags.bits_to_encode_prefix_len();
     for pref in &self.prefixes {
-      writer.write_usize(pref.count, BITS_TO_ENCODE_N_ENTRIES);
+      writer.write_usize(pref.count, BITS_TO_ENCODE_N_ENTRIES as usize);
       writer.write_bytes(&T::bytes_from(pref.lower));
       writer.write_bytes(&T::bytes_from(pref.upper));
-      writer.write_usize(pref.val.len(), BITS_TO_ENCODE_PREFIX_LEN);
+      writer.write_usize(pref.val.len(), bits_to_encode_prefix_len);
       writer.write_bits(&pref.val);
       match pref.run_len_jumpstart {
         None => {
@@ -62,7 +58,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
         },
         Some(jumpstart) => {
           writer.write_one(true);
-          writer.write_usize(jumpstart, BITS_TO_ENCODE_JUMPSTART);
+          writer.write_usize(jumpstart, BITS_TO_ENCODE_JUMPSTART as usize);
         },
       }
     }

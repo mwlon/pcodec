@@ -5,7 +5,6 @@ pub const MAGIC_TERMINATION_BYTE: u8 = 46; // .
 pub const MAX_ENTRIES: u64 = (1_u64 << 24) - 1;
 pub const BITS_TO_ENCODE_N_ENTRIES: u32 = 24;
 pub const MAX_COMPRESSION_LEVEL: u32 = 12;
-pub const BITS_TO_ENCODE_PREFIX_LEN: u32 = 5; // was 4 in v0.4
 pub const MAX_JUMPSTART: usize = 31;
 pub const BITS_TO_ENCODE_JUMPSTART: u32 = 5;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: u32 = 32;
@@ -25,11 +24,6 @@ mod tests {
   #[test]
   fn test_bits_to_encode_n_entries() {
     assert_can_encode(BITS_TO_ENCODE_N_ENTRIES, MAX_ENTRIES);
-  }
-
-  #[test]
-  fn test_bits_to_encode_prefix_len() {
-    assert_can_encode(BITS_TO_ENCODE_PREFIX_LEN, MAX_COMPRESSION_LEVEL as u64);
   }
 
   #[test]

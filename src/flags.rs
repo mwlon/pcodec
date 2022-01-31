@@ -39,6 +39,14 @@ impl Flags {
     writer.finish_byte();
     Ok(())
   }
+
+  pub fn bits_to_encode_prefix_len(&self) -> usize {
+    if self.use_5_bit_prefix_len {
+      5
+    } else {
+      4
+    }
+  }
 }
 
 impl From<&CompressorConfig> for Flags {
