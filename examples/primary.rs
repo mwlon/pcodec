@@ -23,9 +23,9 @@ fn basename_no_ext(path: &Path) -> String {
 trait DtypeHandler<T: 'static> where T: NumberLike {
   fn parse_nums(bytes: &[u8]) -> Vec<T>;
 
-  fn compress(nums: Vec<T>, max_depth: u32) -> Vec<u8> {
+  fn compress(nums: Vec<T>, compression_level: u32) -> Vec<u8> {
     Compressor::<T>::from_config(CompressorConfig {
-      max_depth,
+      compression_level,
       ..Default::default()
     }).simple_compress(&nums)
       .expect("could not compress")
@@ -37,12 +37,12 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
       .expect("could not decompress")
   }
 
-  fn handle(path: &Path, max_depth: u32, output_dir: &str) {
+  fn handle(path: &Path, compression_level: u32, output_dir: &str) {
     // compress
     let bytes = fs::read(path).expect("could not read");
     let nums = Self::parse_nums(&bytes);
     let compress_start = Instant::now();
-    let compressed = Self::compress(nums.clone(), max_depth);
+    let compressed = Self::compress(nums.clone(), compression_level);
     println!("COMPRESSED TO {} BYTES IN {:?}", compressed.len(), Instant::now() - compress_start);
 
     let fname = basename_no_ext(&path);
@@ -108,8 +108,8 @@ impl DtypeHandler<bool> for BoolHandler {
 
 fn main() {
   let args: Vec<String> = env::args().collect();
-  let max_depth: u32 = if args.len() >= 2 {
-    args[1].parse().expect("invalid max depth")
+  let compression_level: u32 = if args.len() >= 2 {
+    args[1].parse().expect("invalid compression level")
   } else {
     6
   };
@@ -120,7 +120,7 @@ fn main() {
   };
 
   let files = fs::read_dir("examples/data/binary").expect("couldn't read");
-  let output_dir = format!("examples/data/q_compressed_{}", max_depth);
+  let output_dir = format!("examples/data/q_compressed_{}", compression_level);
   match fs::create_dir(&output_dir) {
     Ok(()) => (),
     Err(e) => match e.kind() {
@@ -139,11 +139,11 @@ fn main() {
 
     println!("\nfile: {}", path.display());
     if path_str.contains("i64") {
-      I64Handler::handle(&path, max_depth, &output_dir);
+      I64Handler::handle(&path, compression_level, &output_dir);
     } else if path_str.contains("f64") {
-      F64Handler::handle(&path, max_depth, &output_dir);
+      F64Handler::handle(&path, compression_level, &output_dir);
     } else if path_str.contains("bool8") {
-      BoolHandler::handle(&path, max_depth, &output_dir);
+      BoolHandler::handle(&path, compression_level, &output_dir);
     } else {
       panic!("Could not determine dtype for file {}!", path_str);
     };

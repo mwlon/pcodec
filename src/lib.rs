@@ -161,9 +161,9 @@ mod tests {
     );
   }
 
-  fn assert_recovers<T: NumberLike>(vals: Vec<T>, max_depth: u32) {
+  fn assert_recovers<T: NumberLike>(vals: Vec<T>, compression_level: u32) {
     let compressor = Compressor::<T>::from_config(
-      CompressorConfig { max_depth, ..Default::default()},
+      CompressorConfig { compression_level, ..Default::default()},
     );
     let compressed = compressor.simple_compress(&vals).expect("compression error");
     let decompressor = Decompressor::<T>::default();

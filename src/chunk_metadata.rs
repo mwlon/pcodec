@@ -1,4 +1,4 @@
-use crate::{BitReader, BitWriter};
+use crate::{BitReader, BitWriter, Flags};
 use crate::bits::bits_to_bytes;
 use crate::constants::*;
 use crate::prefix::Prefix;
@@ -12,18 +12,24 @@ pub struct ChunkMetadata<T> where T: NumberLike {
 }
 
 impl<T> ChunkMetadata<T> where T: NumberLike {
-  pub fn parse_from(reader: &mut BitReader) -> Self {
+  pub fn parse_from(reader: &mut BitReader, flags: &Flags) -> Self {
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
     let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
-    let n_pref = reader.read_usize(MAX_MAX_DEPTH as usize);
+    let n_pref = reader.read_usize(MAX_COMPRESSION_LEVEL as usize);
     let mut prefixes = Vec::with_capacity(n_pref);
+    let bits_to_encode_prefix_len = if flags.use_5_bit_prefix_len {
+      5
+    } else {
+      // the legacy case
+      4
+    };
     for _ in 0..n_pref {
       let count = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
       let lower_bits = reader.read(T::PHYSICAL_BITS);
       let lower = T::from_bytes(bits_to_bytes(lower_bits));
       let upper_bits = reader.read(T::PHYSICAL_BITS);
       let upper = T::from_bytes(bits_to_bytes(upper_bits));
-      let code_len = reader.read_usize(BITS_TO_ENCODE_PREFIX_LEN as usize);
+      let code_len = reader.read_usize(bits_to_encode_prefix_len);
       let val = reader.read(code_len);
       let jumpstart = if reader.read_one() {
         Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART as usize))
@@ -43,7 +49,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
   pub fn write_to(&self, writer: &mut BitWriter) {
     writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
     writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
-    writer.write_usize(self.prefixes.len(), MAX_MAX_DEPTH);
+    writer.write_usize(self.prefixes.len(), MAX_COMPRESSION_LEVEL);
     for pref in &self.prefixes {
       writer.write_usize(pref.count, BITS_TO_ENCODE_N_ENTRIES);
       writer.write_bytes(&T::bytes_from(pref.lower));

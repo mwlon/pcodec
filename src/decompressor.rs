@@ -166,8 +166,8 @@ impl<T> Debug for ChunkDecompressor<T> where T: NumberLike {
 
 #[derive(Clone, Debug, Default)]
 pub struct Decompressor<T> where T: NumberLike {
-  pub config: DecompressorConfig,
-  pub phantom: PhantomData<T>,
+  config: DecompressorConfig,
+  phantom: PhantomData<T>,
 }
 
 impl<T> Decompressor<T> where T: NumberLike {
@@ -200,7 +200,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     Flags::parse_from(reader)
   }
 
-  pub fn chunk_metadata(&self, reader: &mut BitReader, _flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
+  pub fn chunk_metadata(&self, reader: &mut BitReader, flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
     let magic_byte = reader.read_aligned_bytes(1)?[0];
     if magic_byte == MAGIC_TERMINATION_BYTE {
       return Ok(None);
@@ -212,7 +212,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
 
     // otherwise there is indeed another chunk
-    let metadata = ChunkMetadata::parse_from(reader);
+    let metadata = ChunkMetadata::parse_from(reader, flags);
     reader.drain_byte();
 
     Ok(Some(metadata))
