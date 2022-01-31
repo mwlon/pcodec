@@ -69,8 +69,8 @@ impl BitWriter {
     }
   }
 
-  pub fn write_usize(&mut self, x: usize, n: u32) {
-    self.write_diff(x as u64, n as usize);
+  pub fn write_usize(&mut self, x: usize, n: usize) {
+    self.write_diff(x as u64, n);
   }
 
   pub fn write_diff<Diff: UnsignedLike>(&mut self, x: Diff, n: usize) {
@@ -106,7 +106,7 @@ impl BitWriter {
   }
 
   pub fn write_varint(&mut self, mut x: usize, jumpstart: usize) {
-    self.write_usize(x, jumpstart as u32);
+    self.write_usize(x, jumpstart);
     x >>= jumpstart;
     while x > 0 {
       self.write_one(true);

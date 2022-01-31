@@ -12,13 +12,49 @@ use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{NumberLike, UnsignedLike};
 use crate::utils;
 
-const DEFAULT_MAX_DEPTH: u32 = 6;
+const DEFAULT_COMPRESSION_LEVEL: u32 = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
 
 struct JumpstartConfiguration {
   weight: u64,
   jumpstart: usize,
+}
+
+// everything the user might want to specify about how to compress
+#[derive(Clone, Debug)]
+pub struct CompressorConfig {
+  pub compression_level: u32,
+}
+
+impl Default for CompressorConfig {
+  fn default() -> Self {
+    Self {
+      compression_level: DEFAULT_COMPRESSION_LEVEL,
+    }
+  }
+}
+
+// InternalCompressorConfig captures all settings that don't belong in flags
+// i.e. these don't get written to the resulting bytes and aren't needed for
+// decoding
+#[derive(Clone, Debug)]
+struct InternalCompressorConfig {
+  pub compression_level: u32,
+}
+
+impl From<&CompressorConfig> for InternalCompressorConfig {
+  fn from(config: &CompressorConfig) -> Self {
+    InternalCompressorConfig {
+      compression_level: config.compression_level,
+    }
+  }
+}
+
+impl Default for InternalCompressorConfig {
+  fn default() -> Self {
+    Self::from(&CompressorConfig::default())
+  }
 }
 
 fn choose_run_len_jumpstart(
@@ -73,32 +109,24 @@ fn push_pref<T: NumberLike>(
   *prefix_idx = new_prefix_idx;
 }
 
-#[derive(Clone, Debug)]
-pub struct CompressorConfig {
-  pub max_depth: u32,
-}
-
-impl Default for CompressorConfig {
-  fn default() -> Self {
-    Self {
-      max_depth: DEFAULT_MAX_DEPTH,
-    }
-  }
-}
-
 #[derive(Clone, Default)]
 struct TrainedChunkCompressor<T> where T: NumberLike {
   prefixes: Vec<Prefix<T>>,
+  flags: Flags,
 }
 
 impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
-  pub fn train(nums: Vec<T>, config: CompressorConfig, _flags: Flags) -> QCompressResult<Self> {
-    let max_depth = config.max_depth;
-    if max_depth > MAX_MAX_DEPTH {
+  pub fn train(
+    nums: Vec<T>,
+    internal_config: InternalCompressorConfig,
+    flags: Flags,
+  ) -> QCompressResult<Self> {
+    let comp_level = internal_config.compression_level;
+    if comp_level > MAX_COMPRESSION_LEVEL {
       return Err(QCompressError::invalid_argument(format!(
-        "max_depth max not exceed {} (was {})",
-        MAX_MAX_DEPTH,
-        max_depth,
+        "compresion level may not exceed {} (was {})",
+        MAX_COMPRESSION_LEVEL,
+        comp_level,
       )));
     }
     let n = nums.len();
@@ -117,8 +145,8 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
 
     let mut sorted = nums;
     sorted.sort_unstable_by(|a, b| a.num_cmp(b));
-    let safe_max_depth = min(max_depth, (n as f64).log2() as u32);
-    let n_prefix = 1_usize << safe_max_depth;
+    let safe_comp_level = min(comp_level, (n as f64).log2() as u32);
+    let n_prefix = 1_usize << safe_comp_level;
     let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
     let seq_ptr = &mut prefix_sequence;
 
@@ -153,7 +181,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
         let pref0 = &prefix_sequence[i];
         let pref1 = &prefix_sequence[i + 1];
 
-        let improvement = Self::combine_improvement(pref0, pref1, n);
+        let improvement = Self::combine_improvement(pref0, pref1, n, &flags);
         if improvement > best_improvement {
           can_improve = true;
           best_i = i as i32;
@@ -185,11 +213,17 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
 
     let res = TrainedChunkCompressor::<T> {
       prefixes,
+      flags,
     };
     Ok(res)
   }
 
-  fn combine_improvement(p0: &PrefixIntermediate<T>, p1: &PrefixIntermediate<T>, n: usize) -> f64 {
+  fn combine_improvement(
+    p0: &PrefixIntermediate<T>,
+    p1: &PrefixIntermediate<T>,
+    n: usize,
+    flags: &Flags,
+  ) -> f64 {
     if p0.run_len_jumpstart.is_some() || p1.run_len_jumpstart.is_some() {
       // can never combine prefixes that encode run length
       return f64::MIN;
@@ -202,7 +236,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
     let p1_d_cost = depth_bits(p1.weight, n);
     let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
     let meta_cost = 10.0 +
-      BITS_TO_ENCODE_N_ENTRIES as f64 +
+      flags.bits_to_encode_prefix_len() as f64 +
       2.0 * T::PHYSICAL_BITS as f64;
 
     let separate_cost = 2.0 * meta_cost +
@@ -287,7 +321,11 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
     Ok(())
   }
 
-  fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
+  fn compress_chunk(
+    &self,
+    nums: &[T],
+    writer: &mut BitWriter,
+  ) -> QCompressResult<ChunkMetadata<T>> {
     writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
     let pre_header_idx = writer.size();
     let mut metadata = ChunkMetadata {
@@ -297,7 +335,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
       compressed_body_size: 0,
       prefixes: self.prefixes.clone()
     };
-    metadata.write_to(writer);
+    metadata.write_to(writer, &self.flags);
 
     let post_header_idx = writer.size();
     self.compress_nums(nums, writer)?;
@@ -316,25 +354,22 @@ impl<T> Debug for TrainedChunkCompressor<T> where T: NumberLike {
 
 #[derive(Clone, Debug, Default)]
 pub struct Compressor<T> where T: NumberLike {
-  pub config: CompressorConfig,
-  pub flags: Flags,
-  pub phantom: PhantomData<T>,
+  internal_config: InternalCompressorConfig,
+  flags: Flags,
+  phantom: PhantomData<T>,
 }
 
 impl<T> Compressor<T> where T: NumberLike + 'static {
   pub fn from_config(config: CompressorConfig) -> Self {
     Self {
-      config,
+      internal_config: InternalCompressorConfig::from(&config),
+      flags: Flags::from(&config),
       ..Default::default()
     }
   }
 
-  pub fn from_config_and_flags(config: CompressorConfig, flags: Flags) -> Self {
-    Self {
-      config,
-      flags,
-      ..Default::default()
-    }
+  pub fn flags(&self) -> &Flags {
+    &self.flags
   }
 
   pub fn header(&self, writer: &mut BitWriter) -> QCompressResult<()> {
@@ -346,7 +381,7 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
   pub fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
     let chunk_compressor = TrainedChunkCompressor::train(
       nums.to_vec(),
-      self.config.clone(),
+      self.internal_config.clone(),
       self.flags.clone(),
     )?;
     chunk_compressor.compress_chunk(nums, writer)

@@ -2,26 +2,57 @@
 // of the .qco file.
 // New flags may be added in over time in a backward-compatible way.
 
-use crate::{BitReader, BitWriter};
+use crate::{BitReader, BitWriter, CompressorConfig};
 use crate::errors::{QCompressError, QCompressResult};
 
-#[derive(Clone, Debug, Default)]
-pub struct Flags {}
+#[derive(Clone, Debug)]
+pub struct Flags {
+  pub use_5_bit_prefix_len: bool,
+}
+
+impl Default for Flags {
+  fn default() -> Self {
+    Flags {
+      use_5_bit_prefix_len: true,
+    }
+  }
+}
 
 impl Flags {
   pub fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    // When we actually have flags, we'll do something more interesting.
-    let byte = reader.read_aligned_bytes(1)?[0];
-    if byte != 0 {
-      return Err(QCompressError::compatibility(
-        "cannot parse flags; likely written by older version of q_compress"
-      ));
+    let use_5_bit_prefix_len = reader.read_one();
+    for _ in 1..8 {
+      if reader.read_one() {
+        return Err(QCompressError::compatibility(
+          "cannot parse flags; likely written by newer version of q_compress"
+        ));
+      }
     }
 
-    Ok(Self {})
+    Ok(Self {
+      use_5_bit_prefix_len,
+    })
   }
 
   pub fn write(&self, writer: &mut BitWriter) -> QCompressResult<()> {
-    writer.write_aligned_byte(0)
+    writer.write_one(self.use_5_bit_prefix_len);
+    writer.finish_byte();
+    Ok(())
+  }
+
+  pub fn bits_to_encode_prefix_len(&self) -> usize {
+    if self.use_5_bit_prefix_len {
+      5
+    } else {
+      4
+    }
+  }
+}
+
+impl From<&CompressorConfig> for Flags {
+  fn from(_: &CompressorConfig) -> Self {
+    // eventually we'll probably have some parts of compressor config
+    // that end up in flags
+    Flags::default()
   }
 }

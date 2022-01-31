@@ -53,8 +53,9 @@ fn main() {
     my_ints.push(i as i64);
   }
  
-  // Compression level can optionally be adjusted by the `max_depth`
+  // Compression level can optionally be adjusted by the `compression_level`
   // property within `CompressorConfig`, but here we just use the default (6).
+  // Valid levels range from 0 to 12.
   let compressor = I64Compressor::default();
   let bytes: Vec<u8> = compressor.simple_compress(&my_ints).expect("failed to compress");
   println!("compressed down to {} bytes", bytes.len());
@@ -81,7 +82,7 @@ entropy.
 Ideally it encodes a number `k` in `b` bits
 if `2^-b ~= P(k)`.
 We can plot `Q(k) = 2^-b` to see how close quantile compression gets to the
-ideal in this example with `max_depth=3`:
+ideal in this example with `compression_level=3`:
 
 <img src="./res/distribution_approximation.svg">
 
