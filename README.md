@@ -123,6 +123,10 @@ specifying the exact value within the range.
 
 At the end of the file is a termination byte.
 
+## Library Changelog
+
+See [changelog.md](./changelog.md)
+
 ## Advanced
 
 ### Other Data Types
