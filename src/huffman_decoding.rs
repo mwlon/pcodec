@@ -9,7 +9,7 @@ use crate::types::{NumberLike, UnsignedLike};
 #[derive(Clone, Debug)]
 pub enum HuffmanTable<Diff: UnsignedLike> {
   Leaf(PrefixDecompressionInfo<Diff>),
-  NonLeaf([Box<HuffmanTable<Diff>>; PREFIX_TABLE_SIZE]),
+  NonLeaf(Box<[HuffmanTable<Diff>; PREFIX_TABLE_SIZE]>),
 }
 
 impl<Diff: UnsignedLike> HuffmanTable<Diff> {
@@ -49,7 +49,7 @@ where T: NumberLike {
     let prefix = &prefixes[0];
     HuffmanTable::Leaf(PrefixDecompressionInfo::from(prefix))
   } else {
-    let mut data: [MaybeUninit<Box<HuffmanTable<T::Unsigned>>>; PREFIX_TABLE_SIZE] = unsafe {
+    let mut data: [MaybeUninit<HuffmanTable<T::Unsigned>>; PREFIX_TABLE_SIZE] = unsafe {
       MaybeUninit::uninit().assume_init()
     };
     for (idx, uninit_box) in data.iter_mut().enumerate() {
@@ -73,11 +73,11 @@ where T: NumberLike {
         possible_prefixes,
         depth + PREFIX_TABLE_SIZE_LOG,
       );
-      uninit_box.write(Box::new(child));
+      uninit_box.write(child);
     }
     let children = unsafe {
-      mem::transmute::<_, [Box<HuffmanTable<T::Unsigned>>; PREFIX_TABLE_SIZE]>(data)
+      mem::transmute_copy::<_, [HuffmanTable<T::Unsigned>; PREFIX_TABLE_SIZE]>(&data)
     };
-    HuffmanTable::NonLeaf(children)
+    HuffmanTable::NonLeaf(Box::new(children))
   }
 }
