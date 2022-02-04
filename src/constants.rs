@@ -2,6 +2,8 @@ pub const MAGIC_HEADER: [u8; 4] = [113, 99, 111, 33]; // ascii for qco!
 pub const MAGIC_CHUNK_BYTE: u8 = 44; // ,
 pub const MAGIC_TERMINATION_BYTE: u8 = 46; // .
 
+pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
+pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: u32 = 3;
 pub const MAX_ENTRIES: u64 = (1_u64 << 24) - 1;
 pub const BITS_TO_ENCODE_N_ENTRIES: u32 = 24;
 pub const MAX_COMPRESSION_LEVEL: u32 = 12;
@@ -19,6 +21,11 @@ mod tests {
   fn assert_can_encode(n_bits: u32, max_number: u64) {
     let min_required_bits = ((max_number + 1) as f64).log2().ceil() as u32;
     assert!(n_bits >= min_required_bits)
+  }
+
+  #[test]
+  fn test_bits_to_encode_delta_encoding_order() {
+    assert_can_encode(BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER as u64);
   }
 
   #[test]

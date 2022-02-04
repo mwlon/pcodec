@@ -23,11 +23,9 @@ fn basename_no_ext(path: &Path) -> String {
 trait DtypeHandler<T: 'static> where T: NumberLike {
   fn parse_nums(bytes: &[u8]) -> Vec<T>;
 
-  fn compress(nums: Vec<T>, compression_level: u32) -> Vec<u8> {
-    Compressor::<T>::from_config(CompressorConfig {
-      compression_level,
-      ..Default::default()
-    }).simple_compress(&nums)
+  fn compress(nums: Vec<T>, config: CompressorConfig) -> Vec<u8> {
+    Compressor::<T>::from_config(config)
+      .simple_compress(&nums)
       .expect("could not compress")
   }
 
@@ -37,16 +35,24 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
       .expect("could not decompress")
   }
 
-  fn handle(path: &Path, compression_level: u32, output_dir: &str) {
+  fn handle(
+    path: &Path,
+    output_dir: &str,
+    config: CompressorConfig,
+  ) {
     // compress
     let bytes = fs::read(path).expect("could not read");
     let nums = Self::parse_nums(&bytes);
+    let mut fname = basename_no_ext(&path);
+    if config.delta_encoding_order > 0 {
+      fname.push_str(&format!("_del={}", config.delta_encoding_order));
+    }
+    let output_path = format!("{}/{}.qco", &output_dir, fname);
+
     let compress_start = Instant::now();
-    let compressed = Self::compress(nums.clone(), compression_level);
+    let compressed = Self::compress(nums.clone(), config);
     println!("COMPRESSED TO {} BYTES IN {:?}", compressed.len(), Instant::now() - compress_start);
 
-    let fname = basename_no_ext(&path);
-    let output_path = format!("{}/{}.qco", &output_dir, fname);
     fs::write(
       &output_path,
       &compressed,
@@ -58,6 +64,10 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     println!("DECOMPRESSED IN {:?}", Instant::now() - decompress_start);
 
     // make sure everything came back correct
+    if rec_nums.len() != nums.len() {
+      println!("original len: {} recovered len: {}", nums.len(), rec_nums.len());
+      panic!("got back the wrong number of numbers!");
+    }
     for i in 0..rec_nums.len() {
       if !rec_nums[i].num_eq(&nums[i]) {
         println!(
@@ -66,7 +76,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
           nums[i],
           rec_nums[i]
         );
-        panic!("Failed to recover nums by compressing and decompressing!");
+        panic!("failed to recover nums by compressing and decompressing!");
       }
     }
   }
@@ -106,6 +116,29 @@ impl DtypeHandler<bool> for BoolHandler {
   }
 }
 
+fn get_configs(path_str: &str, compression_level: u32) -> Vec<CompressorConfig> {
+  let mut res = vec![
+    CompressorConfig {
+      compression_level,
+      ..Default::default()
+    }
+  ];
+  if path_str.contains("slow_cosine") {
+    for delta_encoding_order in [1, 2, 7] {
+      res.push(CompressorConfig {
+        compression_level,
+        delta_encoding_order,
+      });
+    }
+  } else if path_str.contains("extremes") || path_str.contains("bool") || path_str.contains("edge") {
+    res.push(CompressorConfig {
+      compression_level,
+      delta_encoding_order: 1,
+    });
+  }
+  res
+}
+
 fn main() {
   let args: Vec<String> = env::args().collect();
   let compression_level: u32 = if args.len() >= 2 {
@@ -137,15 +170,17 @@ fn main() {
       continue;
     }
 
-    println!("\nfile: {}", path.display());
-    if path_str.contains("i64") {
-      I64Handler::handle(&path, compression_level, &output_dir);
-    } else if path_str.contains("f64") {
-      F64Handler::handle(&path, compression_level, &output_dir);
-    } else if path_str.contains("bool8") {
-      BoolHandler::handle(&path, compression_level, &output_dir);
-    } else {
-      panic!("Could not determine dtype for file {}!", path_str);
-    };
+    for config in get_configs(path_str, compression_level) {
+      println!("\nfile: {} config: {:?}", path.display(), config);
+      if path_str.contains("i64") {
+        I64Handler::handle(&path, &output_dir, config);
+      } else if path_str.contains("f64") {
+        F64Handler::handle(&path, &output_dir, config);
+      } else if path_str.contains("bool8") {
+        BoolHandler::handle(&path, &output_dir, config);
+      } else {
+        panic!("Could not determine dtype for file {}!", path_str);
+      };
+    }
   }
 }

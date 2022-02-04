@@ -93,6 +93,10 @@ write_i64(dollars, 'dollars')
 write_i64(cents, 'cents')
 write_i64(total_cents, 'total_cents')
 
+slow_cosine = 100000 * np.cos(np.arange(n) * 2 * np.pi / (10 ** 4))
+write_i64(slow_cosine, 'slow_cosine')
+write_f64(slow_cosine, 'slow_cosine')
+
 write_f64(np.random.normal(size=n), 'normal_at_0')
 write_f64(np.random.normal(loc=1000.0, size=n), 'normal_at_1000')
 

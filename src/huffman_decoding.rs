@@ -32,19 +32,16 @@ impl<Diff: UnsignedLike> HuffmanTable<Diff> {
   }
 }
 
-impl<T: NumberLike> From<Vec<Prefix<T>>> for HuffmanTable<T::Unsigned> {
-  fn from(prefixes: Vec<Prefix<T>>) -> Self {
-    if prefixes.is_empty() {
-      HuffmanTable::Leaf(PrefixDecompressionInfo::default())
-    } else {
-      build_from_prefixes_recursive(prefixes, 0)
-    }
+impl<T: NumberLike> From<&Vec<Prefix<T>>> for HuffmanTable<T::Unsigned> {
+  fn from(prefixes: &Vec<Prefix<T>>) -> Self {
+    build_from_prefixes_recursive(prefixes, 0)
   }
 }
 
-fn build_from_prefixes_recursive<T>(prefixes: Vec<Prefix<T>>, depth: usize) -> HuffmanTable<T::Unsigned>
+fn build_from_prefixes_recursive<T>(prefixes: &[Prefix<T>], depth: usize) -> HuffmanTable<T::Unsigned>
 where T: NumberLike {
-  // there is an unreachable case we can ignore where prefixes.is_empty()
+  // we don't have to worry about prefixes.is_empty() because we only call this
+  // function after verifying there is at least 1 prefix
   if prefixes.len() == 1 {
     let prefix = &prefixes[0];
     HuffmanTable::Leaf(PrefixDecompressionInfo::from(prefix))
@@ -70,7 +67,7 @@ where T: NumberLike {
         .cloned()
         .collect::<Vec<Prefix<T>>>();
       let child = build_from_prefixes_recursive(
-        possible_prefixes,
+        &possible_prefixes,
         depth + PREFIX_TABLE_SIZE_LOG,
       );
       uninit_box.write(child);
