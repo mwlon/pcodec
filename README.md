@@ -18,7 +18,7 @@ Quantile Compression compresses and decompresses sequences of
 numerical data very well.
 It currently supports the following data types:
 `i8`, `i32`, `i64`, `i128`, `u32`, `u64`, `f32`, `f64`,
-`q_compress::TimestampNs`, `q_compress::TimestampMicros`.
+`q_compress::TimestampNanos`, `q_compress::TimestampMicros`.
 
 For natural data, it typically shrinks data to 10-40% smaller than what
 `gzip -9` produces, compresses much faster, and decompresses equally

@@ -5,7 +5,7 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::time::Instant;
 
-use q_compress::{Compressor, CompressorConfig, Decompressor};
+use q_compress::{Compressor, CompressorConfig, Decompressor, TimestampMicros};
 use q_compress::types::NumberLike;
 
 fn basename_no_ext(path: &Path) -> String {
@@ -82,7 +82,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
   }
 }
 
-struct I64Handler {}
+struct I64Handler;
 
 impl DtypeHandler<i64> for I64Handler {
   fn parse_nums(bytes: &[u8]) -> Vec<i64> {
@@ -94,7 +94,7 @@ impl DtypeHandler<i64> for I64Handler {
   }
 }
 
-struct F64Handler {}
+struct F64Handler;
 
 impl DtypeHandler<f64> for F64Handler {
   fn parse_nums(bytes: &[u8]) -> Vec<f64> {
@@ -105,13 +105,28 @@ impl DtypeHandler<f64> for F64Handler {
   }
 }
 
-struct BoolHandler {}
+struct BoolHandler;
 
 impl DtypeHandler<bool> for BoolHandler {
   fn parse_nums(bytes: &[u8]) -> Vec<bool> {
     bytes
       .chunks(1)
       .map(|chunk| u8::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")) != 0)
+      .collect()
+  }
+}
+
+struct TimestampMicrosHandler;
+
+impl DtypeHandler<TimestampMicros> for TimestampMicrosHandler {
+  fn parse_nums(bytes: &[u8]) -> Vec<TimestampMicros> {
+    bytes
+      .chunks(8)
+      // apparently numpy writes in le order
+      .map(|chunk| {
+        let int = i64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file"));
+        TimestampMicros::new(int as i128).expect("timestamp creation")
+      })
       .collect()
   }
 }
@@ -130,11 +145,15 @@ fn get_configs(path_str: &str, compression_level: u32) -> Vec<CompressorConfig> 
         delta_encoding_order,
       });
     }
-  } else if path_str.contains("extremes") || path_str.contains("bool") || path_str.contains("edge") {
-    res.push(CompressorConfig {
-      compression_level,
-      delta_encoding_order: 1,
-    });
+  }
+  for substr in ["extremes", "bool", "edge", "near_linear"] {
+    if path_str.contains(substr) {
+      res.push(CompressorConfig {
+        compression_level,
+        delta_encoding_order: 1,
+      });
+      break;
+    }
   }
   res
 }
@@ -178,6 +197,8 @@ fn main() {
         F64Handler::handle(&path, &output_dir, config);
       } else if path_str.contains("bool8") {
         BoolHandler::handle(&path, &output_dir, config);
+      } else if path_str.contains("micros") {
+        TimestampMicrosHandler::handle(&path, &output_dir, config);
       } else {
         panic!("Could not determine dtype for file {}!", path_str);
       };

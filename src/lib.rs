@@ -12,7 +12,7 @@ pub use types::signeds::{I32Compressor, I32Decompressor};
 pub use types::signeds::{I64Compressor, I64Decompressor};
 pub use types::signeds::{I128Compressor, I128Decompressor};
 pub use types::timestamps::{TimestampMicros, TimestampMicrosCompressor, TimestampMicrosDecompressor};
-pub use types::timestamps::{TimestampNs, TimestampNsCompressor, TimestampNsDecompressor};
+pub use types::timestamps::{TimestampNanos, TimestampNanosCompressor, TimestampNanosDecompressor};
 pub use types::unsigneds::{U32Compressor, U32Decompressor};
 pub use types::unsigneds::{U64Compressor, U64Decompressor};
 
@@ -33,7 +33,7 @@ pub mod types;
 
 #[cfg(test)]
 mod tests {
-  use crate::{Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNs, I64Compressor, BitWriter, I64Decompressor};
+  use crate::{Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNanos, I64Compressor, BitWriter, I64Decompressor};
   use crate::types::NumberLike;
 
   #[test]
@@ -110,11 +110,11 @@ mod tests {
   fn test_timestamp_ns_codec() {
     assert_recovers(
       vec![
-        TimestampNs::from_secs_and_nanos(i64::MIN, 0),
-        TimestampNs::from_secs_and_nanos(i64::MAX, 999_999_999),
-        TimestampNs::from_secs_and_nanos(i64::MIN, 999_999_999),
-        TimestampNs::from_secs_and_nanos(0, 123_456_789),
-        TimestampNs::from_secs_and_nanos(-1, 123_456_789),
+        TimestampNanos::from_secs_and_nanos(i64::MIN, 0),
+        TimestampNanos::from_secs_and_nanos(i64::MAX, 999_999_999),
+        TimestampNanos::from_secs_and_nanos(i64::MIN, 999_999_999),
+        TimestampNanos::from_secs_and_nanos(0, 123_456_789),
+        TimestampNanos::from_secs_and_nanos(-1, 123_456_789),
       ],
       1
     );

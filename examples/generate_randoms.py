@@ -4,6 +4,7 @@
 import numpy as np
 import pyarrow as pa
 from pyarrow import parquet as pq
+from datetime import datetime
 import os
 
 n = 10 ** 6
@@ -63,6 +64,23 @@ write_i64(np.random.normal(scale=1000000.0, size=n), 'normal1M')
 write_i64(np.random.geometric(p=0.5, size=n), 'geo2')
 write_i64(np.random.geometric(p=0.000001, size=n), 'geo1M')
 
+def write_timestamp_micros(arr, name):
+  if arr.dtype != np.int64:
+    floored = np.floor(arr).astype(np.int64)
+  else:
+    floored = arr
+  ts = [datetime.utcfromtimestamp(x / 10 ** 6) for x in floored]
+  strs = [x.strftime('%Y-%m-%dT%H:%M:%S:%fZ') for x in ts]
+  joined = '\n'.join(strs)
+  with open(f'data/txt/micros_{name}.txt', 'w') as f:
+    f.write(joined)
+  with open(f'data/binary/micros_{name}.bin', 'wb') as f:
+    f.write(floored.tobytes())
+  table = pa.Table.from_pydict({'nums': ts})
+  pq.write_table(table, f'data/parquet/micros_{name}.parquet', compression='NONE')
+  pq.write_table(table, f'data/snappy_parquet/micros_{name}.snappy.parquet', compression='snappy')
+
+
 def fixed_median_lomax(a, median):
   unscaled_median = 2 ** (1 / a) - 1
   return np.random.pareto(a=a, size=n) / unscaled_median * median
@@ -110,3 +128,8 @@ edge_case_floats[p < 0.1] = np.NINF
 write_f64(edge_case_floats, 'edge_cases')
 
 write_bool8(np.random.randint(2, size=n), 'random')
+
+# timestamps increasing 1s at a time on average from 2022-01-01T00:00:00 with
+# 1s random jitter
+timestamps = 10**6 * (1640995200 + np.arange(n) + np.random.normal(size=n))
+write_timestamp_micros(timestamps, 'near_linear')

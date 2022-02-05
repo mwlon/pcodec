@@ -13,7 +13,7 @@ const BILLION_U32: u32 = 1_000_000_000;
 // an instant - does not store time zone
 // always relative to Unix Epoch
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub struct TimestampNs(i128);
+pub struct TimestampNanos(i128);
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct TimestampMicros(i128);
@@ -62,19 +62,17 @@ macro_rules! impl_timestamp {
 
     impl From<SystemTime> for $t {
       fn from(system_time: SystemTime) -> Self {
-        let (seconds, subsec_nanos) = if system_time.lt(&UNIX_EPOCH) {
-          let dur = UNIX_EPOCH.duration_since(system_time)
-            .expect("time difference error (pre-epoch)");
-          (dur.as_secs() as i64, dur.subsec_nanos())
-        } else {
-          let dur = system_time.duration_since(UNIX_EPOCH)
-            .expect("time difference error");
-          let complement_nanos = dur.subsec_nanos();
-          let ceil_secs = -(dur.as_secs() as i64);
-          if complement_nanos == 0 {
-            (ceil_secs, 0)
-          } else {
-            (ceil_secs - 1, BILLION_U32 - complement_nanos)
+        let (seconds, subsec_nanos) = match UNIX_EPOCH.duration_since(system_time) {
+          Ok(dur) => (dur.as_secs() as i64, dur.subsec_nanos()),
+          Err(e) => {
+            let dur = e.duration();
+            let complement_nanos = dur.subsec_nanos();
+            let ceil_secs = -(dur.as_secs() as i64);
+            if complement_nanos == 0 {
+              (ceil_secs, 0)
+            } else {
+              (ceil_secs - 1, BILLION_U32 - complement_nanos)
+            }
           }
         };
 
@@ -152,10 +150,10 @@ macro_rules! impl_timestamp {
   }
 }
 
-impl_timestamp!(TimestampNs, 1_000_000_000_u32, 8);
+impl_timestamp!(TimestampNanos, 1_000_000_000_u32, 8);
 impl_timestamp!(TimestampMicros, 1_000_000_u32, 9);
 
-pub type TimestampNsCompressor = Compressor<TimestampNs>;
-pub type TimestampNsDecompressor = Decompressor<TimestampNs>;
+pub type TimestampNanosCompressor = Compressor<TimestampNanos>;
+pub type TimestampNanosDecompressor = Decompressor<TimestampNanos>;
 pub type TimestampMicrosCompressor = Compressor<TimestampMicros>;
 pub type TimestampMicrosDecompressor = Decompressor<TimestampMicros>;
