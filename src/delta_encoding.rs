@@ -39,13 +39,17 @@ impl<T: NumberLike> DeltaMoments<T> {
   }
 }
 
-fn first_order_deltas<T: NumberLike<Signed=T> + SignedLike>(nums: &[T]) -> Vec<T> {
-  let new_n = nums.len() - 1;
-  let mut res = Vec::with_capacity(new_n);
-  for i in 0..new_n {
-    res.push(nums[i + 1].wrapping_sub(nums[i]))
+fn first_order_deltas_in_place<T: NumberLike<Signed=T> + SignedLike>(nums: &mut Vec<T>) {
+  if nums.is_empty() {
+    return;
   }
-  res
+
+  for i in 0..nums.len() - 1 {
+    nums[i] = nums[i + 1].wrapping_sub(nums[i]);
+  }
+  unsafe {
+    nums.set_len(nums.len() - 1);
+  }
 }
 
 // only valid for order >= 1
@@ -53,17 +57,18 @@ pub fn nth_order_deltas<T: NumberLike>(
   nums: &[T],
   order: usize,
 ) -> Vec<T::Signed> {
-  let signeds = nums
+  let mut res = nums
     .iter()
     .map(|x| x.to_signed())
     .collect::<Vec<_>>();
-  let mut res = first_order_deltas(&signeds);
-  for _ in 0..order - 1 {
-    res = first_order_deltas(&res);
+  for _ in 0..order {
+    first_order_deltas_in_place(&mut res);
   }
   res
 }
 
+// this could probably be made faster by instead doing a single pass with
+// a short vector of moments
 fn nth_order_moments<T: NumberLike>(
   nums: &[T],
   order: usize,
@@ -84,23 +89,8 @@ fn nth_order_moments<T: NumberLike>(
       res.push(T::Signed::ZERO);
     } else {
       res.push(deltas[0]);
-      deltas = first_order_deltas(&deltas);
+      first_order_deltas_in_place(&mut deltas);
     }
-  }
-  res
-}
-
-fn apply_first_order_deltas<T: NumberLike + SignedLike>(
-  moment: T,
-  deltas: &[T],
-  n: usize,
-) -> Vec<T> {
-  let mut res = Vec::with_capacity(n);
-  let mut elem = moment;
-  res.push(moment);
-  for &delta in deltas {
-    elem = elem.wrapping_add(delta);
-    res.push(elem);
   }
   res
 }
@@ -110,15 +100,22 @@ pub fn reconstruct_nums<T: NumberLike>(
   deltas: &[T::Signed],
   n: usize,
 ) -> Vec<T> {
+  let mut moments = delta_moments.moments.clone();
+  let mut res = Vec::with_capacity(n);
   let order = delta_moments.order();
-  let mut signeds = deltas.to_vec();
-  for i in 0..order {
-    let idx = order - i - 1;
-    let moment = delta_moments.moments[idx];
-    signeds = apply_first_order_deltas(moment, &signeds, n - idx);
+  let safe_n = n.max(order) - order;
+  for &delta in deltas {
+    res.push(T::from_signed(moments[0]));
+    for o in 0..order - 1 {
+      moments[o] = moments[o].wrapping_add(moments[o + 1]);
+    }
+    moments[order - 1] = moments[order - 1].wrapping_add(delta);
   }
-
-  signeds.iter()
-    .map(|&s| T::from_signed(s))
-    .collect()
+  for i in safe_n..n {
+    res.push(T::from_signed(moments[0]));
+    for o in 0..n - i - 1 {
+      moments[o] = moments[o].wrapping_add(moments[o + 1]);
+    }
+  }
+  res
 }

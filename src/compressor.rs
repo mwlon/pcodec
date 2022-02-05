@@ -117,6 +117,10 @@ fn train_prefixes<T: NumberLike>(
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
 ) -> QCompressResult<Vec<Prefix<T>>> {
+  if nums.is_empty() {
+    return Ok(Vec::new());
+  }
+
   let comp_level = internal_config.compression_level;
   if comp_level > MAX_COMPRESSION_LEVEL {
     return Err(QCompressError::invalid_argument(format!(
@@ -172,7 +176,7 @@ fn train_prefixes<T: NumberLike>(
       let pref0 = &prefix_sequence[i];
       let pref1 = &prefix_sequence[i + 1];
 
-      let improvement = combine_improvement(pref0, pref1, n, &flags);
+      let improvement = combine_improvement(pref0, pref1, n, flags);
       if improvement > best_improvement {
         can_improve = true;
         best_i = i as i32;
@@ -347,32 +351,6 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     self.flags.write(writer)
   }
 
-  fn train_chunk_metadata(&self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
-    let order = self.flags.delta_encoding_order;
-    let prefix_info = if order == 0 {
-      let prefixes = train_prefixes(nums.to_vec(), &self.internal_config, &self.flags)?;
-      PrefixInfo::Simple {
-        prefixes,
-      }
-    } else {
-      let delta_moments = DeltaMoments::from(nums, order);
-      let deltas = delta_encoding::nth_order_deltas(nums, order);
-      let prefixes = train_prefixes(deltas, &self.internal_config, &self.flags)?;
-      PrefixInfo::Delta {
-        delta_moments,
-        prefixes,
-      }
-    };
-
-    Ok(ChunkMetadata {
-      n: nums.len(),
-      // temporarily write compressed body size as 0; we'll fix this after
-      // actually writing the compressed body and figuring out how big it is
-      compressed_body_size: 0,
-      prefix_info,
-    })
-  }
-
   pub fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
     if nums.is_empty() {
       return Err(QCompressError::invalid_argument(
@@ -382,22 +360,48 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
 
     writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
 
+    let n = nums.len();
     let pre_header_idx = writer.size();
-    let mut metadata = self.train_chunk_metadata(nums)?;
-    metadata.write_to(writer, &self.flags);
-    let post_header_idx = writer.size();
 
-    match &metadata.prefix_info {
-      PrefixInfo::Simple { prefixes } => {
-        let chunk_compressor = TrainedChunkCompressor { prefixes: prefixes.clone() };
-        chunk_compressor.compress_nums(nums, writer)?;
-      },
-      PrefixInfo::Delta { prefixes, delta_moments: _ } => {
-        let chunk_compressor = TrainedChunkCompressor { prefixes: prefixes.clone() };
-        let deltas = delta_encoding::nth_order_deltas(nums, self.flags.delta_encoding_order);
-        chunk_compressor.compress_nums(&deltas, writer)?;
-      }
-    }
+    let order = self.flags.delta_encoding_order;
+    let (mut metadata, post_header_idx) = if order == 0 {
+      let prefixes = train_prefixes(nums.to_vec(), &self.internal_config, &self.flags)?;
+      let prefix_info = PrefixInfo::Simple {
+        prefixes: prefixes.clone(),
+      };
+      let metadata = ChunkMetadata {
+        n,
+        compressed_body_size: 0,
+        prefix_info,
+      };
+      metadata.write_to(writer, &self.flags);
+      let post_header_idx = writer.size();
+      let chunk_compressor = TrainedChunkCompressor { prefixes };
+      chunk_compressor.compress_nums(nums, writer)?;
+      (metadata, post_header_idx)
+    } else {
+      let delta_moments = DeltaMoments::from(nums, order);
+      let deltas = delta_encoding::nth_order_deltas(nums, order);
+      let prefixes = train_prefixes(
+        deltas.clone(),
+        &self.internal_config,
+        &self.flags,
+      )?;
+      let prefix_info = PrefixInfo::Delta {
+        delta_moments,
+        prefixes: prefixes.clone(),
+      };
+      let metadata = ChunkMetadata {
+        n,
+        compressed_body_size: 0,
+        prefix_info
+      };
+      metadata.write_to(writer, &self.flags);
+      let post_header_idx = writer.size();
+      let chunk_compressor = TrainedChunkCompressor { prefixes };
+      chunk_compressor.compress_nums(&deltas, writer)?;
+      (metadata, post_header_idx)
+    };
     metadata.compressed_body_size = writer.size() - post_header_idx;
     metadata.update_write_compressed_body_size(writer, pre_header_idx);
     Ok(metadata)

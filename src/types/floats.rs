@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
-use std::mem;
 
 use crate::compressor::Compressor;
 use crate::decompressor::Decompressor;
@@ -21,15 +20,11 @@ macro_rules! impl_float_number {
 
       // miraculously, this should preserve ordering
       fn to_signed(self) -> Self::Signed {
-        unsafe {
-          mem::transmute::<Self, Self::Signed>(self)
-        }
+        self.to_bits() as Self::Signed
       }
 
       fn from_signed(signed: Self::Signed) -> Self {
-        unsafe {
-          mem::transmute::<Self::Signed, Self>(signed)
-        }
+        Self::from_bits(signed as Self::Unsigned)
       }
 
       fn to_unsigned(self) -> Self::Unsigned {

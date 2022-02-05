@@ -13,6 +13,18 @@ pub struct PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
   pub run_len_jumpstart: Option<usize>,
 }
 
+impl<Diff: UnsignedLike> Default for PrefixDecompressionInfo<Diff> {
+  fn default() -> Self {
+    PrefixDecompressionInfo {
+      lower_unsigned: Diff::ZERO,
+      range: Diff::MAX,
+      k: Diff::BITS,
+      depth: 0,
+      run_len_jumpstart: None,
+    }
+  }
+}
+
 impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: NumberLike {
   fn from(p: &Prefix<T>) -> Self {
     let lower_unsigned = p.lower.to_unsigned();

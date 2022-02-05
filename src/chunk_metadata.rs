@@ -68,13 +68,13 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
     let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
     let prefix_info = if flags.delta_encoding_order == 0 {
-      let prefixes = parse_prefixes::<T>(reader, &flags);
+      let prefixes = parse_prefixes::<T>(reader, flags);
       PrefixInfo::Simple {
         prefixes,
       }
     } else {
       let delta_moments = DeltaMoments::<T>::parse_from(reader, flags.delta_encoding_order);
-      let prefixes = parse_prefixes::<T::Signed>(reader, &flags);
+      let prefixes = parse_prefixes::<T::Signed>(reader, flags);
       PrefixInfo::Delta {
         prefixes,
         delta_moments,

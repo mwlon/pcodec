@@ -12,6 +12,12 @@ pub enum HuffmanTable<Diff: UnsignedLike> {
   NonLeaf(Box<[HuffmanTable<Diff>; PREFIX_TABLE_SIZE]>),
 }
 
+impl<Diff: UnsignedLike> Default for HuffmanTable<Diff> {
+  fn default() -> Self {
+    HuffmanTable::Leaf(PrefixDecompressionInfo::default())
+  }
+}
+
 impl<Diff: UnsignedLike> HuffmanTable<Diff> {
   pub fn search_with_reader(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<Diff> {
     let mut node = self;
@@ -34,14 +40,16 @@ impl<Diff: UnsignedLike> HuffmanTable<Diff> {
 
 impl<T: NumberLike> From<&Vec<Prefix<T>>> for HuffmanTable<T::Unsigned> {
   fn from(prefixes: &Vec<Prefix<T>>) -> Self {
-    build_from_prefixes_recursive(prefixes, 0)
+    if prefixes.is_empty() {
+      HuffmanTable::default()
+    } else {
+      build_from_prefixes_recursive(prefixes, 0)
+    }
   }
 }
 
 fn build_from_prefixes_recursive<T>(prefixes: &[Prefix<T>], depth: usize) -> HuffmanTable<T::Unsigned>
 where T: NumberLike {
-  // we don't have to worry about prefixes.is_empty() because we only call this
-  // function after verifying there is at least 1 prefix
   if prefixes.len() == 1 {
     let prefix = &prefixes[0];
     HuffmanTable::Leaf(PrefixDecompressionInfo::from(prefix))

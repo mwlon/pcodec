@@ -12,15 +12,14 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
 use crate::prefix::Prefix;
 use crate::types::{NumberLike, UnsignedLike};
+use std::time::Instant;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
 
 fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResult<()> {
   if prefixes.is_empty() {
-    return Err(QCompressError::corruption(
-      "chunk contains no prefixes"
-    ));
+    return Ok(());
   }
 
   let mut max_depth = 0;
@@ -135,7 +134,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     }
   }
 
-  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+  pub fn decompress_chunk_body(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
     self.validate_sufficient_data(reader)?;
 
     let start_byte_idx = reader.aligned_byte_ind()?;
@@ -235,14 +234,10 @@ impl<T> Decompressor<T> where T: NumberLike {
           self.config.clone(),
           flags.clone(),
         )?;
-        chunk_decompressor.decompress_chunk(reader)
+        chunk_decompressor.decompress_chunk_body(reader)
       },
       PrefixInfo::Delta { delta_moments, prefixes } => {
-        let n_deltas = if metadata.n < delta_moments.order() {
-          0
-        } else {
-          metadata.n - delta_moments.order()
-        };
+        let n_deltas = metadata.n.max(delta_moments.order()) - delta_moments.order();
         let chunk_decompressor = ChunkDecompressor::new(
           n_deltas,
           metadata.compressed_body_size,
@@ -250,8 +245,11 @@ impl<T> Decompressor<T> where T: NumberLike {
           self.config.clone(),
           flags.clone(),
         )?;
-        let deltas = chunk_decompressor.decompress_chunk(reader)?;
-        Ok(delta_encoding::reconstruct_nums(delta_moments, &deltas, metadata.n))
+        let deltas = chunk_decompressor.decompress_chunk_body(reader)?;
+        let t = Instant::now();
+        let res = delta_encoding::reconstruct_nums(delta_moments, &deltas, metadata.n);
+        println!("reconstructed in {:?}", Instant::now() - t);
+        Ok(res)
       }
     }
   }
