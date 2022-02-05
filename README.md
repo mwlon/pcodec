@@ -17,7 +17,8 @@
 Quantile Compression compresses and decompresses sequences of
 numerical data very well.
 It currently supports the following data types:
-`i32`, `i64`, `u32`, `u64`, `f32`, `f64`, `q_compress::TimestampNs`, `q_compress::TimestampMicros`.
+`i8`, `i32`, `i64`, `i128`, `u32`, `u64`, `f32`, `f64`,
+`q_compress::TimestampNs`, `q_compress::TimestampMicros`.
 
 For natural data, it typically shrinks data to 10-40% smaller than what
 `gzip -9` produces, compresses much faster, and decompresses equally
@@ -31,10 +32,12 @@ As of version `0.4.0`, the file format is stable.
 * lossless
 * order-preserving and bit-preserving (including `NaN` floats)
 * moderately fast (see [benchmarks.md](./benchmarks.md)).
+* effective on data with correlation between consecutive elements via
+configuring `delta_encoding_order`
 
 Use cases include:
 * compression for columnar data
-* low-bandwidth communication, like transmiting batches of sensor data from
+* low-bandwidth communication, like transmitting batches of sensor data from
 space probes
 
 ## Usage
@@ -53,9 +56,10 @@ fn main() {
     my_ints.push(i as i64);
   }
  
-  // Compression level can optionally be adjusted by the `compression_level`
-  // property within `CompressorConfig`, but here we just use the default (6).
-  // Valid levels range from 0 to 12.
+  // Here we just use the default configuration, but `CompressorConfig` contains
+  // the following options:
+  //   `compression_level` 0 to 12, default 6
+  //   `delta_encoding_order` 0 to 7, default 0
   let compressor = I64Compressor::default();
   let bytes: Vec<u8> = compressor.simple_compress(&my_ints).expect("failed to compress");
   println!("compressed down to {} bytes", bytes.len());
@@ -102,11 +106,14 @@ The header is expected to start with a magic sequence of 4 bytes for "qco!"
 in ascii.
 The next byte encodes the data type (e.g. `i64`).
 Then flags are encoded, which might affect the rest of the encoding.
+For instance, if delta encoding of order > 0 is on, then that many delta
+moments will be encoded in each of the following chunk metadata sections.
 
 Each chunk begins with a magic "chunk" byte.
 Then the metadata section follows, containing the number of numbers,
 the byte size of the compressed body to follow, and ranges (or prefixes)
 used to compress.
+There must be at least one number in each chunk.
 Each range has a count of numbers in the range, a lower and upper bound,
 a sequence of bits (the prefix), and optionally a "jumpstart" which is used in
 number blocks to describe how many repetitions of the range to use.

@@ -11,7 +11,16 @@ impl NumberLike for bool {
   // because that's how rust represents them too
   const PHYSICAL_BITS: usize = 8;
 
+  type Signed = i8;
   type Unsigned = u8;
+
+  fn to_signed(self) -> i8 {
+    self as i8
+  }
+
+  fn from_signed(signed: i8) -> bool {
+    signed > 0
+  }
 
   fn to_unsigned(self) -> u8 {
     self as u8
@@ -29,8 +38,8 @@ impl NumberLike for bool {
     self.cmp(other)
   }
 
-  fn bytes_from(value: bool) -> Vec<u8> {
-    (value as u8).to_be_bytes().to_vec()
+  fn to_bytes(self) -> Vec<u8> {
+    vec![self as u8]
   }
 
   fn from_bytes(bytes: Vec<u8>) -> bool {

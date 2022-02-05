@@ -185,10 +185,15 @@ impl BitReader {
   // Seek to the end of the byte.
   // Used to skip to the next metadata or body section of the file, since they
   // always start byte-aligned.
-  pub fn drain_byte(&mut self) {
+  pub fn drain_empty_byte<F>(&mut self, f: F) -> QCompressResult<()>
+  where F: FnOnce() -> QCompressError {
     if self.j > 0 {
+      if self.bytes[self.i] & LEFT_MASKS[self.j] > 0 {
+        return Err(f());
+      }
       self.j = 8;
     }
+    Ok(())
   }
 
   pub fn seek_bytes(&mut self, n_bytes: usize) {

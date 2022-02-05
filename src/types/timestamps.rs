@@ -114,6 +114,7 @@ macro_rules! impl_timestamp {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = 96;
 
+      type Signed = i128;
       type Unsigned = u128;
 
       fn to_unsigned(self) -> u128 {
@@ -124,6 +125,14 @@ macro_rules! impl_timestamp {
         Self(i128::MIN.wrapping_add(off as i128))
       }
 
+      fn to_signed(self) -> i128 {
+        self.0
+      }
+
+      fn from_signed(signed: i128) -> Self {
+        Self(signed)
+      }
+
       fn num_eq(&self, other: &Self) -> bool {
         self.0.eq(&other.0)
       }
@@ -132,8 +141,8 @@ macro_rules! impl_timestamp {
         self.0.cmp(&other.0)
       }
 
-      fn bytes_from(value: Self) -> Vec<u8> {
-        ((value.0 - Self::MIN) as u128).to_be_bytes()[4..].to_vec()
+      fn to_bytes(self) -> Vec<u8> {
+        ((self.0 - Self::MIN) as u128).to_be_bytes()[4..].to_vec()
       }
 
       fn from_bytes(bytes: Vec<u8>) -> Self {

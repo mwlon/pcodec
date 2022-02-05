@@ -13,7 +13,7 @@ pub struct PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
   pub run_len_jumpstart: Option<usize>,
 }
 
-impl<Diff> Default for PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
+impl<Diff: UnsignedLike> Default for PrefixDecompressionInfo<Diff> {
   fn default() -> Self {
     PrefixDecompressionInfo {
       lower_unsigned: Diff::ZERO,
@@ -131,4 +131,13 @@ impl<T: NumberLike> PrefixIntermediate<T> {
       run_len_jumpstart,
     }
   }
+}
+
+pub fn display_prefixes<T: NumberLike>(prefixes: &[Prefix<T>], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+  let s = prefixes
+    .iter()
+    .map(|p| p.to_string())
+    .collect::<Vec<String>>()
+    .join("\n");
+  write!(f, "({} prefixes)\n{}", prefixes.len(), s)
 }

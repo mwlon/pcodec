@@ -3,14 +3,15 @@ use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{BitWriter, Flags, huffman_encoding};
+use crate::{BitWriter, Flags, huffman_encoding, prefix};
 use crate::bits::*;
-use crate::chunk_metadata::ChunkMetadata;
+use crate::chunk_metadata::{ChunkMetadata, PrefixInfo};
 use crate::constants::*;
+use crate::delta_encoding;
+use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{NumberLike, UnsignedLike};
-use crate::utils;
 
 const DEFAULT_COMPRESSION_LEVEL: u32 = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
@@ -25,12 +26,14 @@ struct JumpstartConfiguration {
 #[derive(Clone, Debug)]
 pub struct CompressorConfig {
   pub compression_level: u32,
+  pub delta_encoding_order: usize,
 }
 
 impl Default for CompressorConfig {
   fn default() -> Self {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
+      delta_encoding_order: 0,
     }
   }
 }
@@ -109,145 +112,139 @@ fn push_pref<T: NumberLike>(
   *prefix_idx = new_prefix_idx;
 }
 
+fn train_prefixes<T: NumberLike>(
+  nums: Vec<T>,
+  internal_config: &InternalCompressorConfig,
+  flags: &Flags,
+) -> QCompressResult<Vec<Prefix<T>>> {
+  if nums.is_empty() {
+    return Ok(Vec::new());
+  }
+
+  let comp_level = internal_config.compression_level;
+  if comp_level > MAX_COMPRESSION_LEVEL {
+    return Err(QCompressError::invalid_argument(format!(
+      "compresion level may not exceed {} (was {})",
+      MAX_COMPRESSION_LEVEL,
+      comp_level,
+    )));
+  }
+  let n = nums.len();
+  if n as u64 > MAX_ENTRIES {
+    return Err(QCompressError::invalid_argument(format!(
+      "count may not exceed {} per chunk (was {})",
+      MAX_ENTRIES,
+      n,
+    )));
+  }
+
+  let mut sorted = nums;
+  sorted.sort_unstable_by(|a, b| a.num_cmp(b));
+  let safe_comp_level = min(comp_level, (n as f64).log2() as u32);
+  let n_prefix = 1_usize << safe_comp_level;
+  let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
+  let seq_ptr = &mut prefix_sequence;
+
+  let mut prefix_idx = 0_usize;
+  let prefix_idx_ptr = &mut prefix_idx;
+
+  let mut i = 0;
+  let mut backup_j = 0_usize;
+  for j in 0..n {
+    let target_j = ((*prefix_idx_ptr + 1) * n) / n_prefix;
+    if j > 0 && sorted[j].num_eq(&sorted[j - 1]) {
+      if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
+        push_pref(seq_ptr, prefix_idx_ptr, i, backup_j, n_prefix, n, &sorted);
+        i = backup_j;
+      }
+    } else {
+      backup_j = j;
+      if j >= target_j {
+        push_pref(seq_ptr, prefix_idx_ptr, i, j, n_prefix, n, &sorted);
+        i = j;
+      }
+    }
+  }
+  push_pref(seq_ptr, prefix_idx_ptr, i, n, n_prefix, n, &sorted);
+
+  let mut can_improve = true;
+  while can_improve {
+    can_improve = false;
+    let mut best_i = -1_i32;
+    let mut best_improvement = 0.0;
+    for i in 0..(prefix_sequence.len() - 1) {
+      let pref0 = &prefix_sequence[i];
+      let pref1 = &prefix_sequence[i + 1];
+
+      let improvement = combine_improvement(pref0, pref1, n, flags);
+      if improvement > best_improvement {
+        can_improve = true;
+        best_i = i as i32;
+        best_improvement = improvement;
+      }
+    }
+
+    if can_improve {
+      let pref0 = &prefix_sequence[best_i as usize];
+      let pref1 = &prefix_sequence[best_i as usize + 1];
+      prefix_sequence[best_i as usize] = PrefixIntermediate::new(
+        pref0.count + pref1.count,
+        pref0.weight + pref1.weight,
+        pref0.lower,
+        pref1.upper,
+        None,
+      );
+      //not the most efficient but whatever
+      prefix_sequence.remove(best_i as usize + 1);
+    }
+  }
+
+  huffman_encoding::make_huffman_code(&mut prefix_sequence);
+
+  let mut prefixes = Vec::new();
+  for p in prefix_sequence {
+    prefixes.push(Prefix::from(p));
+  }
+  Ok(prefixes)
+}
+
+fn combine_improvement<T: NumberLike>(
+  p0: &PrefixIntermediate<T>,
+  p1: &PrefixIntermediate<T>,
+  n: usize,
+  flags: &Flags,
+) -> f64 {
+  if p0.run_len_jumpstart.is_some() || p1.run_len_jumpstart.is_some() {
+    // can never combine prefixes that encode run length
+    return f64::MIN;
+  }
+
+  let p0_r_cost = avg_base2_bits(p0.upper.to_unsigned() - p0.lower.to_unsigned());
+  let p1_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p1.lower.to_unsigned());
+  let combined_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p0.lower.to_unsigned());
+  let p0_d_cost = depth_bits(p0.weight, n);
+  let p1_d_cost = depth_bits(p1.weight, n);
+  let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
+  let meta_cost = 10.0 +
+    flags.bits_to_encode_prefix_len() as f64 +
+    2.0 * T::PHYSICAL_BITS as f64;
+
+  let separate_cost = 2.0 * meta_cost +
+    (p0_r_cost + p0_d_cost) * p0.weight as f64+
+    (p1_r_cost + p1_d_cost) * p1.weight as f64;
+  let combined_cost = meta_cost +
+    (combined_r_cost + combined_d_cost) * (p0.weight + p1.weight) as f64;
+
+  separate_cost - combined_cost
+}
+
+
 #[derive(Clone, Default)]
 struct TrainedChunkCompressor<T> where T: NumberLike {
-  prefixes: Vec<Prefix<T>>,
-  flags: Flags,
+  pub prefixes: Vec<Prefix<T>>,
 }
 
 impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
-  pub fn train(
-    nums: Vec<T>,
-    internal_config: InternalCompressorConfig,
-    flags: Flags,
-  ) -> QCompressResult<Self> {
-    let comp_level = internal_config.compression_level;
-    if comp_level > MAX_COMPRESSION_LEVEL {
-      return Err(QCompressError::invalid_argument(format!(
-        "compresion level may not exceed {} (was {})",
-        MAX_COMPRESSION_LEVEL,
-        comp_level,
-      )));
-    }
-    let n = nums.len();
-    if n == 0 {
-      return Ok(TrainedChunkCompressor::<T> {
-        ..Default::default()
-      });
-    }
-    if n as u64 > MAX_ENTRIES {
-      return Err(QCompressError::invalid_argument(format!(
-        "count may not exceed {} per chunk (was {})",
-        MAX_ENTRIES,
-        n,
-      )));
-    }
-
-    let mut sorted = nums;
-    sorted.sort_unstable_by(|a, b| a.num_cmp(b));
-    let safe_comp_level = min(comp_level, (n as f64).log2() as u32);
-    let n_prefix = 1_usize << safe_comp_level;
-    let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
-    let seq_ptr = &mut prefix_sequence;
-
-    let mut prefix_idx = 0_usize;
-    let prefix_idx_ptr = &mut prefix_idx;
-
-    let mut i = 0;
-    let mut backup_j = 0_usize;
-    for j in 0..n {
-      let target_j = ((*prefix_idx_ptr + 1) * n) / n_prefix;
-      if j > 0 && sorted[j].num_eq(&sorted[j - 1]) {
-        if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-          push_pref(seq_ptr, prefix_idx_ptr, i, backup_j, n_prefix, n, &sorted);
-          i = backup_j;
-        }
-      } else {
-        backup_j = j;
-        if j >= target_j {
-          push_pref(seq_ptr, prefix_idx_ptr, i, j, n_prefix, n, &sorted);
-          i = j;
-        }
-      }
-    }
-    push_pref(seq_ptr, prefix_idx_ptr, i, n, n_prefix, n, &sorted);
-
-    let mut can_improve = true;
-    while can_improve {
-      can_improve = false;
-      let mut best_i = -1_i32;
-      let mut best_improvement = 0.0;
-      for i in 0..(prefix_sequence.len() - 1) {
-        let pref0 = &prefix_sequence[i];
-        let pref1 = &prefix_sequence[i + 1];
-
-        let improvement = Self::combine_improvement(pref0, pref1, n, &flags);
-        if improvement > best_improvement {
-          can_improve = true;
-          best_i = i as i32;
-          best_improvement = improvement;
-        }
-      }
-
-      if can_improve {
-        let pref0 = &prefix_sequence[best_i as usize];
-        let pref1 = &prefix_sequence[best_i as usize + 1];
-        prefix_sequence[best_i as usize] = PrefixIntermediate::new(
-          pref0.count + pref1.count,
-          pref0.weight + pref1.weight,
-          pref0.lower,
-          pref1.upper,
-          None,
-        );
-        //not the most efficient but whatever
-        prefix_sequence.remove(best_i as usize + 1);
-      }
-    }
-
-    huffman_encoding::make_huffman_code(&mut prefix_sequence);
-
-    let mut prefixes = Vec::new();
-    for p in prefix_sequence {
-      prefixes.push(Prefix::from(p));
-    }
-
-    let res = TrainedChunkCompressor::<T> {
-      prefixes,
-      flags,
-    };
-    Ok(res)
-  }
-
-  fn combine_improvement(
-    p0: &PrefixIntermediate<T>,
-    p1: &PrefixIntermediate<T>,
-    n: usize,
-    flags: &Flags,
-  ) -> f64 {
-    if p0.run_len_jumpstart.is_some() || p1.run_len_jumpstart.is_some() {
-      // can never combine prefixes that encode run length
-      return f64::MIN;
-    }
-
-    let p0_r_cost = avg_base2_bits(p0.upper.to_unsigned() - p0.lower.to_unsigned());
-    let p1_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p1.lower.to_unsigned());
-    let combined_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p0.lower.to_unsigned());
-    let p0_d_cost = depth_bits(p0.weight, n);
-    let p1_d_cost = depth_bits(p1.weight, n);
-    let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
-    let meta_cost = 10.0 +
-      flags.bits_to_encode_prefix_len() as f64 +
-      2.0 * T::PHYSICAL_BITS as f64;
-
-    let separate_cost = 2.0 * meta_cost +
-      (p0_r_cost + p0_d_cost) * p0.weight as f64+
-      (p1_r_cost + p1_d_cost) * p1.weight as f64;
-    let combined_cost = meta_cost +
-      (combined_r_cost + combined_d_cost) * (p0.weight + p1.weight) as f64;
-
-    separate_cost - combined_cost
-  }
-
   fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, writer: &mut BitWriter) {
     let off = num.to_unsigned() - pref.lower_unsigned;
     writer.write_diff(off, pref.k);
@@ -320,35 +317,11 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
     writer.finish_byte();
     Ok(())
   }
-
-  fn compress_chunk(
-    &self,
-    nums: &[T],
-    writer: &mut BitWriter,
-  ) -> QCompressResult<ChunkMetadata<T>> {
-    writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
-    let pre_header_idx = writer.size();
-    let mut metadata = ChunkMetadata {
-      n: nums.len(),
-      // temporarily write compressed body size as 0; we'll fix this after
-      // actually writing the compressed body and figuring out how big it is
-      compressed_body_size: 0,
-      prefixes: self.prefixes.clone()
-    };
-    metadata.write_to(writer, &self.flags);
-
-    let post_header_idx = writer.size();
-    self.compress_nums(nums, writer)?;
-
-    metadata.compressed_body_size = writer.size() - post_header_idx;
-    metadata.update_write_compressed_body_size(writer, pre_header_idx);
-    Ok(metadata)
-  }
 }
 
 impl<T> Debug for TrainedChunkCompressor<T> where T: NumberLike {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    utils::display_prefixes(&self.prefixes, f)
+    prefix::display_prefixes(&self.prefixes, f)
   }
 }
 
@@ -379,12 +352,59 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
   }
 
   pub fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
-    let chunk_compressor = TrainedChunkCompressor::train(
-      nums.to_vec(),
-      self.internal_config.clone(),
-      self.flags.clone(),
-    )?;
-    chunk_compressor.compress_chunk(nums, writer)
+    if nums.is_empty() {
+      return Err(QCompressError::invalid_argument(
+        "cannot compress empty chunk"
+      ));
+    }
+
+    writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
+
+    let n = nums.len();
+    let pre_header_idx = writer.size();
+
+    let order = self.flags.delta_encoding_order;
+    let (mut metadata, post_header_idx) = if order == 0 {
+      let prefixes = train_prefixes(nums.to_vec(), &self.internal_config, &self.flags)?;
+      let prefix_info = PrefixInfo::Simple {
+        prefixes: prefixes.clone(),
+      };
+      let metadata = ChunkMetadata {
+        n,
+        compressed_body_size: 0,
+        prefix_info,
+      };
+      metadata.write_to(writer, &self.flags);
+      let post_header_idx = writer.size();
+      let chunk_compressor = TrainedChunkCompressor { prefixes };
+      chunk_compressor.compress_nums(nums, writer)?;
+      (metadata, post_header_idx)
+    } else {
+      let delta_moments = DeltaMoments::from(nums, order);
+      let deltas = delta_encoding::nth_order_deltas(nums, order);
+      let prefixes = train_prefixes(
+        deltas.clone(),
+        &self.internal_config,
+        &self.flags,
+      )?;
+      let prefix_info = PrefixInfo::Delta {
+        delta_moments,
+        prefixes: prefixes.clone(),
+      };
+      let metadata = ChunkMetadata {
+        n,
+        compressed_body_size: 0,
+        prefix_info
+      };
+      metadata.write_to(writer, &self.flags);
+      let post_header_idx = writer.size();
+      let chunk_compressor = TrainedChunkCompressor { prefixes };
+      chunk_compressor.compress_nums(&deltas, writer)?;
+      (metadata, post_header_idx)
+    };
+    metadata.compressed_body_size = writer.size() - post_header_idx;
+    metadata.update_write_compressed_body_size(writer, pre_header_idx);
+    Ok(metadata)
   }
 
   pub fn footer(&self, writer: &mut BitWriter) -> QCompressResult<()> {
@@ -394,7 +414,9 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
   pub fn simple_compress(&self, nums: &[T]) -> QCompressResult<Vec<u8>> {
     let mut writer = BitWriter::default();
     self.header(&mut writer)?;
-    self.compress_chunk(nums, &mut writer)?;
+    if !nums.is_empty() {
+      self.compress_chunk(nums, &mut writer)?;
+    }
     self.footer(&mut writer)?;
     Ok(writer.pop())
   }

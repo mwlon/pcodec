@@ -4,35 +4,26 @@ pub use chunk_metadata::{ChunkMetadata, DecompressedChunk};
 pub use compressor::{Compressor, CompressorConfig};
 pub use decompressor::{Decompressor, DecompressorConfig};
 pub use flags::Flags;
-pub use types::boolean::BoolCompressor;
-pub use types::boolean::BoolDecompressor;
-pub use types::float32::F32Compressor;
-pub use types::float32::F32Decompressor;
-pub use types::float64::F64Compressor;
-pub use types::float64::F64Decompressor;
-pub use types::signed32::I32Compressor;
-pub use types::signed32::I32Decompressor;
-pub use types::signed64::I64Compressor;
-pub use types::signed64::I64Decompressor;
-pub use types::timestamps::TimestampMicros;
-pub use types::timestamps::TimestampMicrosCompressor;
-pub use types::timestamps::TimestampMicrosDecompressor;
-pub use types::timestamps::TimestampNs;
-pub use types::timestamps::TimestampNsCompressor;
-pub use types::timestamps::TimestampNsDecompressor;
-pub use types::unsigned32::U32Compressor;
-pub use types::unsigned32::U32Decompressor;
-pub use types::unsigned64::U64Compressor;
-pub use types::unsigned64::U64Decompressor;
+pub use types::boolean::{BoolCompressor, BoolDecompressor};
+pub use types::floats::{F32Compressor, F32Decompressor};
+pub use types::floats::{F64Compressor, F64Decompressor};
+pub use types::signeds::{I8Compressor, I8Decompressor};
+pub use types::signeds::{I32Compressor, I32Decompressor};
+pub use types::signeds::{I64Compressor, I64Decompressor};
+pub use types::signeds::{I128Compressor, I128Decompressor};
+pub use types::timestamps::{TimestampMicros, TimestampMicrosCompressor, TimestampMicrosDecompressor};
+pub use types::timestamps::{TimestampNs, TimestampNsCompressor, TimestampNsDecompressor};
+pub use types::unsigneds::{U32Compressor, U32Decompressor};
+pub use types::unsigneds::{U64Compressor, U64Decompressor};
 
 mod bits;
 mod chunk_metadata;
 mod constants;
+mod delta_encoding;
 mod flags;
 mod huffman_decoding;
 mod huffman_encoding;
 mod prefix;
-mod utils;
 pub mod bit_reader;
 pub mod bit_writer;
 pub mod compressor;
@@ -162,18 +153,20 @@ mod tests {
   }
 
   fn assert_recovers<T: NumberLike>(vals: Vec<T>, compression_level: u32) {
-    let compressor = Compressor::<T>::from_config(
-      CompressorConfig { compression_level, ..Default::default()},
-    );
-    let compressed = compressor.simple_compress(&vals).expect("compression error");
-    let decompressor = Decompressor::<T>::default();
-    let decompressed = decompressor.simple_decompress(compressed)
-      .expect("decompression error");
-    // We can't do assert_eq on the whole vector because even bitwise identical
-    // floats sometimes aren't equal by ==.
-    assert_eq!(decompressed.len(), vals.len());
-    for i in 0..decompressed.len() {
-      assert!(decompressed[i].num_eq(&vals[i]));
+    for delta_encoding_order in [0, 1, 7] {
+      let compressor = Compressor::<T>::from_config(
+        CompressorConfig { compression_level, delta_encoding_order },
+      );
+      let compressed = compressor.simple_compress(&vals).expect("compression error");
+      let decompressor = Decompressor::<T>::default();
+      let decompressed = decompressor.simple_decompress(compressed)
+        .expect("decompression error");
+      // We can't do assert_eq on the whole vector because even bitwise identical
+      // floats sometimes aren't equal by ==.
+      assert_eq!(decompressed.len(), vals.len(), "on delta encoding order {}", delta_encoding_order);
+      for i in 0..decompressed.len() {
+        assert!(decompressed[i].num_eq(&vals[i]), "on delta encoding order {}", delta_encoding_order);
+      }
     }
   }
 }

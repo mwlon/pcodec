@@ -9,7 +9,13 @@ use crate::types::{NumberLike, UnsignedLike};
 #[derive(Clone, Debug)]
 pub enum HuffmanTable<Diff: UnsignedLike> {
   Leaf(PrefixDecompressionInfo<Diff>),
-  NonLeaf([Box<HuffmanTable<Diff>>; PREFIX_TABLE_SIZE]),
+  NonLeaf(Box<[HuffmanTable<Diff>; PREFIX_TABLE_SIZE]>),
+}
+
+impl<Diff: UnsignedLike> Default for HuffmanTable<Diff> {
+  fn default() -> Self {
+    HuffmanTable::Leaf(PrefixDecompressionInfo::default())
+  }
 }
 
 impl<Diff: UnsignedLike> HuffmanTable<Diff> {
@@ -32,24 +38,23 @@ impl<Diff: UnsignedLike> HuffmanTable<Diff> {
   }
 }
 
-impl<T: NumberLike> From<Vec<Prefix<T>>> for HuffmanTable<T::Unsigned> {
-  fn from(prefixes: Vec<Prefix<T>>) -> Self {
+impl<T: NumberLike> From<&Vec<Prefix<T>>> for HuffmanTable<T::Unsigned> {
+  fn from(prefixes: &Vec<Prefix<T>>) -> Self {
     if prefixes.is_empty() {
-      HuffmanTable::Leaf(PrefixDecompressionInfo::default())
+      HuffmanTable::default()
     } else {
       build_from_prefixes_recursive(prefixes, 0)
     }
   }
 }
 
-fn build_from_prefixes_recursive<T>(prefixes: Vec<Prefix<T>>, depth: usize) -> HuffmanTable<T::Unsigned>
+fn build_from_prefixes_recursive<T>(prefixes: &[Prefix<T>], depth: usize) -> HuffmanTable<T::Unsigned>
 where T: NumberLike {
-  // there is an unreachable case we can ignore where prefixes.is_empty()
   if prefixes.len() == 1 {
     let prefix = &prefixes[0];
     HuffmanTable::Leaf(PrefixDecompressionInfo::from(prefix))
   } else {
-    let mut data: [MaybeUninit<Box<HuffmanTable<T::Unsigned>>>; PREFIX_TABLE_SIZE] = unsafe {
+    let mut data: [MaybeUninit<HuffmanTable<T::Unsigned>>; PREFIX_TABLE_SIZE] = unsafe {
       MaybeUninit::uninit().assume_init()
     };
     for (idx, uninit_box) in data.iter_mut().enumerate() {
@@ -70,14 +75,14 @@ where T: NumberLike {
         .cloned()
         .collect::<Vec<Prefix<T>>>();
       let child = build_from_prefixes_recursive(
-        possible_prefixes,
+        &possible_prefixes,
         depth + PREFIX_TABLE_SIZE_LOG,
       );
-      uninit_box.write(Box::new(child));
+      uninit_box.write(child);
     }
     let children = unsafe {
-      mem::transmute::<_, [Box<HuffmanTable<T::Unsigned>>; PREFIX_TABLE_SIZE]>(data)
+      mem::transmute_copy::<_, [HuffmanTable<T::Unsigned>; PREFIX_TABLE_SIZE]>(&data)
     };
-    HuffmanTable::NonLeaf(children)
+    HuffmanTable::NonLeaf(Box::new(children))
   }
 }

@@ -3,15 +3,15 @@ use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{bits, Flags};
+use crate::{bits, Flags, prefix};
 use crate::bit_reader::BitReader;
-use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk};
+use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixInfo};
 use crate::constants::*;
+use crate::delta_encoding;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
 use crate::prefix::Prefix;
 use crate::types::{NumberLike, UnsignedLike};
-use crate::utils;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
@@ -63,23 +63,19 @@ struct ChunkDecompressor<T> where T: NumberLike {
 
 impl<T> ChunkDecompressor<T> where T: NumberLike {
   pub fn new(
-    metadata: ChunkMetadata<T>,
+    n: usize,
+    compressed_body_size: usize,
+    prefixes: Vec<Prefix<T>>,
     _config: DecompressorConfig,
     _flags: Flags,
   ) -> QCompressResult<Self> {
-    let ChunkMetadata {
-      n,
-      prefixes,
-      ..
-    } = metadata;
-
     validate_prefix_tree(&prefixes)?;
 
     Ok(ChunkDecompressor {
-      huffman_table: HuffmanTable::from(prefixes.clone()),
+      huffman_table: HuffmanTable::from(&prefixes),
       prefixes,
       n,
-      compressed_body_size: metadata.compressed_body_size,
+      compressed_body_size,
     })
   }
 
@@ -137,13 +133,15 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     }
   }
 
-  pub fn decompress_chunk(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+  pub fn decompress_chunk_body(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
     self.validate_sufficient_data(reader)?;
 
     let start_byte_idx = reader.aligned_byte_ind()?;
     let res = self.decompress_chunk_nums(reader);
 
-    reader.drain_byte();
+    reader.drain_empty_byte(|| QCompressError::corruption(
+      "nonzero bits in end of final byte of chunk numbers"
+    ))?;
     let end_byte_idx = reader.aligned_byte_ind()?;
     let real_compressed_body_size = end_byte_idx - start_byte_idx;
     if self.compressed_body_size != real_compressed_body_size {
@@ -160,7 +158,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
 
 impl<T> Debug for ChunkDecompressor<T> where T: NumberLike {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    utils::display_prefixes(&self.prefixes, f)
+    prefix::display_prefixes(&self.prefixes, f)
   }
 }
 
@@ -213,7 +211,9 @@ impl<T> Decompressor<T> where T: NumberLike {
 
     // otherwise there is indeed another chunk
     let metadata = ChunkMetadata::parse_from(reader, flags);
-    reader.drain_byte();
+    reader.drain_empty_byte(|| QCompressError::corruption(
+      "nonzero bits in end of final byte of chunk metadata"
+    ))?;
 
     Ok(Some(metadata))
   }
@@ -224,12 +224,31 @@ impl<T> Decompressor<T> where T: NumberLike {
     metadata: ChunkMetadata<T>,
     flags: &Flags,
   ) -> QCompressResult<Vec<T>> {
-    let chunk_decompressor = ChunkDecompressor::new(
-      metadata,
-      self.config.clone(),
-      flags.clone(),
-    )?;
-    chunk_decompressor.decompress_chunk(reader)
+    match &metadata.prefix_info {
+      PrefixInfo::Simple { prefixes } => {
+        let chunk_decompressor = ChunkDecompressor::new(
+          metadata.n,
+          metadata.compressed_body_size,
+          prefixes.clone(),
+          self.config.clone(),
+          flags.clone(),
+        )?;
+        chunk_decompressor.decompress_chunk_body(reader)
+      },
+      PrefixInfo::Delta { delta_moments, prefixes } => {
+        let n_deltas = metadata.n.max(delta_moments.order()) - delta_moments.order();
+        let chunk_decompressor = ChunkDecompressor::new(
+          n_deltas,
+          metadata.compressed_body_size,
+          prefixes.clone(),
+          self.config.clone(),
+          flags.clone(),
+        )?;
+        let deltas = chunk_decompressor.decompress_chunk_body(reader)?;
+        let res = delta_encoding::reconstruct_nums(delta_moments, &deltas, metadata.n);
+        Ok(res)
+      }
+    }
   }
 
   pub fn decompress_chunk(
@@ -280,6 +299,7 @@ mod tests {
   use crate::{BitReader, ChunkMetadata, Decompressor, Flags};
   use crate::errors::ErrorKind;
   use crate::prefix::Prefix;
+  use crate::chunk_metadata::PrefixInfo;
 
   #[test]
   fn test_corrupt_prefixes_error_not_panic() {
@@ -289,19 +309,19 @@ mod tests {
     let metadata_missing_prefix = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
-      prefixes: vec![
+      prefix_info: PrefixInfo::Simple { prefixes: vec![
         Prefix::new(1, vec![false], 100, 100, None),
         Prefix::new(1, vec![true, false], 200, 200, None),
-      ]
+      ]},
     };
     let metadata_duplicating_prefix = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
-      prefixes: vec![
+      prefix_info: PrefixInfo::Simple { prefixes: vec![
         Prefix::new(1, vec![false], 100, 100, None),
         Prefix::new(1, vec![false], 200, 200, None),
         Prefix::new(1, vec![true], 300, 300, None),
-      ]
+      ]}
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {

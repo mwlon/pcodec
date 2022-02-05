@@ -3,14 +3,42 @@ use std::cmp::Ordering::{Greater, Less};
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOrAssign, Shl, Shr, Sub};
 
+use crate::{BitReader, BitWriter};
+use crate::bits;
+
 pub mod boolean;
-pub mod float32;
-pub mod float64;
-pub mod signed32;
-pub mod signed64;
+pub mod floats;
+pub mod signeds;
 pub mod timestamps;
-pub mod unsigned32;
-pub mod unsigned64;
+pub mod unsigneds;
+
+pub trait SignedLike {
+  const ZERO: Self;
+
+  fn wrapping_add(self, other: Self) -> Self;
+  fn wrapping_sub(self, other: Self) -> Self;
+}
+
+macro_rules! impl_signed {
+  ($t: ty) => {
+    impl SignedLike for $t {
+      const ZERO: Self = 0;
+
+      fn wrapping_add(self, other: Self) -> Self {
+        self.wrapping_add(other)
+      }
+
+      fn wrapping_sub(self, other: Self) -> Self {
+        self.wrapping_sub(other)
+      }
+    }
+  }
+}
+
+impl_signed!(i8);
+impl_signed!(i32);
+impl_signed!(i64);
+impl_signed!(i128);
 
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
 Copy + Debug + Default + Display + From<u8> + PartialOrd +
@@ -26,7 +54,7 @@ Sub<Output=Self> {
 }
 
 macro_rules! impl_unsigned {
-  ($t:ty) => {
+  ($t: ty) => {
     impl UnsignedLike for $t {
       const ZERO: Self = 0;
       const ONE: Self = 1;
@@ -54,6 +82,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   const PHYSICAL_BITS: usize;
 
   type Unsigned: UnsignedLike;
+  type Signed: SignedLike + NumberLike<Signed=Self::Signed, Unsigned=Self::Unsigned>;
 
   fn num_eq(&self, other: &Self) -> bool;
 
@@ -63,9 +92,22 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
 
   fn from_unsigned(off: Self::Unsigned) -> Self;
 
-  fn bytes_from(num: Self) -> Vec<u8>;
+  fn to_signed(self) -> Self::Signed;
+
+  fn from_signed(signed: Self::Signed) -> Self;
+
+  fn to_bytes(self) -> Vec<u8>;
 
   fn from_bytes(bytes: Vec<u8>) -> Self;
+
+  fn read_from(reader: &mut BitReader) -> Self {
+    let bools = reader.read(Self::PHYSICAL_BITS);
+    Self::from_bytes(bits::bits_to_bytes(bools))
+  }
+
+  fn write_to(self, writer: &mut BitWriter) {
+    writer.write_bytes(&self.to_bytes());
+  }
 
   fn le(&self, other: &Self) -> bool {
     !matches!(self.num_cmp(other), Greater)
