@@ -12,7 +12,6 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
 use crate::prefix::Prefix;
 use crate::types::{NumberLike, UnsignedLike};
-use std::time::Instant;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
@@ -246,9 +245,7 @@ impl<T> Decompressor<T> where T: NumberLike {
           flags.clone(),
         )?;
         let deltas = chunk_decompressor.decompress_chunk_body(reader)?;
-        let t = Instant::now();
         let res = delta_encoding::reconstruct_nums(delta_moments, &deltas, metadata.n);
-        println!("reconstructed in {:?}", Instant::now() - t);
         Ok(res)
       }
     }
