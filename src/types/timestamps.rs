@@ -119,7 +119,7 @@ macro_rules! impl_timestamp {
       }
 
       fn from_signed(signed: i128) -> Self {
-        Self(signed)
+        Self::new(signed).expect("corrupt signed value for timestamp")
       }
 
       fn num_eq(&self, other: &Self) -> bool {
