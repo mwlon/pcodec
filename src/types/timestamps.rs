@@ -51,13 +51,6 @@ macro_rules! impl_timestamp {
       pub fn to_total_parts(self) -> i128 {
         self.0
       }
-
-      pub fn from_bytes_safe(bytes: &[u8]) -> QCompressResult<$t> {
-        let mut full_bytes = vec![0; 4];
-        full_bytes.extend(bytes);
-        let parts = (u128::from_be_bytes(full_bytes.try_into().unwrap()) as i128) + Self::MIN;
-        Self::new(parts)
-      }
     }
 
     impl From<SystemTime> for $t {
@@ -143,8 +136,11 @@ macro_rules! impl_timestamp {
         ((self.0 - Self::MIN) as u128).to_be_bytes()[4..].to_vec()
       }
 
-      fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self::from_bytes_safe(&bytes).expect("corrupt timestamp bytes")
+      fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self> {
+        let mut full_bytes = vec![0; 4];
+        full_bytes.extend(bytes);
+        let parts = (u128::from_be_bytes(full_bytes.try_into().unwrap()) as i128) + Self::MIN;
+        Self::new(parts)
       }
     }
   }

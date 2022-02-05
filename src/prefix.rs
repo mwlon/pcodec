@@ -3,6 +3,9 @@ use std::fmt;
 
 use crate::bits;
 use crate::types::{NumberLike, UnsignedLike};
+use std::cmp::Ordering;
+use crate::errors::{QCompressResult, QCompressError};
+use std::convert::TryFrom;
 
 #[derive(Clone, Copy, Debug)]
 pub struct PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
@@ -52,8 +55,10 @@ pub struct Prefix<T> where T: NumberLike {
   pub run_len_jumpstart: Option<usize>,
 }
 
-impl<T: NumberLike> From<PrefixIntermediate<T>> for Prefix<T> {
-  fn from(intermediate: PrefixIntermediate<T>) -> Self {
+impl<T: NumberLike> TryFrom<PrefixIntermediate<T>> for Prefix<T> {
+  type Error = QCompressError;
+
+  fn try_from(intermediate: PrefixIntermediate<T>) -> QCompressResult<Self> {
     Self::new(
       intermediate.count,
       intermediate.val.clone(),
@@ -67,7 +72,21 @@ impl<T: NumberLike> From<PrefixIntermediate<T>> for Prefix<T> {
 // In Prefix and PrefixIntermediate, lower and upper are always inclusive.
 // This allows handling extremal values.
 impl<T> Prefix<T> where T: NumberLike {
-  pub fn new(count: usize, val: Vec<bool>, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> Prefix<T> {
+  pub fn new(
+    count: usize,
+    val: Vec<bool>,
+    lower: T,
+    upper: T,
+    run_len_jumpstart: Option<usize>,
+  ) -> QCompressResult<Prefix<T>> {
+    if matches!(lower.num_cmp(&upper), Ordering::Greater) {
+      return Err(QCompressError::corruption(format!(
+        "prefix lower bound {} may not be greater than upper bound {}",
+        lower,
+        upper,
+      )));
+    }
+
     let lower_unsigned = lower.to_unsigned();
     let diff = upper.to_unsigned() - lower_unsigned;
     let k = (diff.to_f64() + 1.0).log2().floor() as usize;
@@ -78,7 +97,7 @@ impl<T> Prefix<T> where T: NumberLike {
     };
     let only_k_bits_lower = diff - only_k_bits_upper;
 
-    Prefix {
+    Ok(Prefix {
       count,
       val,
       lower,
@@ -88,7 +107,7 @@ impl<T> Prefix<T> where T: NumberLike {
       only_k_bits_lower,
       only_k_bits_upper,
       run_len_jumpstart,
-    }
+    })
   }
 }
 

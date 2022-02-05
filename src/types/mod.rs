@@ -5,6 +5,7 @@ use std::ops::{Add, BitAnd, BitOrAssign, Shl, Shr, Sub};
 
 use crate::{BitReader, BitWriter};
 use crate::bits;
+use crate::errors::QCompressResult;
 
 pub mod boolean;
 pub mod floats;
@@ -98,9 +99,9 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
 
   fn to_bytes(self) -> Vec<u8>;
 
-  fn from_bytes(bytes: Vec<u8>) -> Self;
+  fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self>;
 
-  fn read_from(reader: &mut BitReader) -> Self {
+  fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
     let bools = reader.read(Self::PHYSICAL_BITS);
     Self::from_bytes(bits::bits_to_bytes(bools))
   }

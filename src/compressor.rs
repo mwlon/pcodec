@@ -1,4 +1,5 @@
 use std::cmp::{max, min};
+use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -203,7 +204,7 @@ fn train_prefixes<T: NumberLike>(
 
   let mut prefixes = Vec::new();
   for p in prefix_sequence {
-    prefixes.push(Prefix::from(p));
+    prefixes.push(Prefix::try_from(p)?);
   }
   Ok(prefixes)
 }

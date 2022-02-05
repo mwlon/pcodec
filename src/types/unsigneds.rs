@@ -4,6 +4,7 @@ use std::convert::TryInto;
 use crate::types::NumberLike;
 use crate::compressor::Compressor;
 use crate::decompressor::Decompressor;
+use crate::errors::QCompressResult;
 
 macro_rules! impl_unsigned_number {
   ($t: ty, $signed: ty, $header_byte: expr) => {
@@ -42,8 +43,8 @@ macro_rules! impl_unsigned_number {
         self.to_be_bytes().to_vec()
       }
 
-      fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self::from_be_bytes(bytes.try_into().unwrap())
+      fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self> {
+        Ok(Self::from_be_bytes(bytes.try_into().unwrap()))
       }
     }
   }

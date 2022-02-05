@@ -210,7 +210,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
 
     // otherwise there is indeed another chunk
-    let metadata = ChunkMetadata::parse_from(reader, flags);
+    let metadata = ChunkMetadata::parse_from(reader, flags)?;
     reader.drain_empty_byte(|| QCompressError::corruption(
       "nonzero bits in end of final byte of chunk metadata"
     ))?;
@@ -297,12 +297,12 @@ impl<T> Decompressor<T> where T: NumberLike {
 #[cfg(test)]
 mod tests {
   use crate::{BitReader, ChunkMetadata, Decompressor, Flags};
-  use crate::errors::ErrorKind;
+  use crate::errors::{ErrorKind, QCompressResult};
   use crate::prefix::Prefix;
   use crate::chunk_metadata::PrefixInfo;
 
   #[test]
-  fn test_corrupt_prefixes_error_not_panic() {
+  fn test_corrupt_prefixes_error_not_panic() -> QCompressResult<()> {
     let decompressor = Decompressor::<i64>::default();
     let bytes = vec![1, 2, 3, 4, 5, 6]; // not important for test
 
@@ -310,17 +310,17 @@ mod tests {
       n: 2,
       compressed_body_size: 1,
       prefix_info: PrefixInfo::Simple { prefixes: vec![
-        Prefix::new(1, vec![false], 100, 100, None),
-        Prefix::new(1, vec![true, false], 200, 200, None),
+        Prefix::new(1, vec![false], 100, 100, None)?,
+        Prefix::new(1, vec![true, false], 200, 200, None)?,
       ]},
     };
     let metadata_duplicating_prefix = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
       prefix_info: PrefixInfo::Simple { prefixes: vec![
-        Prefix::new(1, vec![false], 100, 100, None),
-        Prefix::new(1, vec![false], 200, 200, None),
-        Prefix::new(1, vec![true], 300, 300, None),
+        Prefix::new(1, vec![false], 100, 100, None)?,
+        Prefix::new(1, vec![false], 200, 200, None)?,
+        Prefix::new(1, vec![true], 300, 300, None)?,
       ]}
     };
 
@@ -332,6 +332,8 @@ mod tests {
       );
       assert!(matches!(result.unwrap_err().kind, ErrorKind::Corruption));
     }
+
+    Ok(())
   }
 }
 
