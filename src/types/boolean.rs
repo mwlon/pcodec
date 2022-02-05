@@ -1,8 +1,6 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::compressor::Compressor;
-use crate::decompressor::Decompressor;
 use crate::types::NumberLike;
 use crate::errors::QCompressResult;
 
@@ -47,6 +45,3 @@ impl NumberLike for bool {
     Ok(u8::from_be_bytes(bytes.try_into().unwrap()) != 0)
   }
 }
-
-pub type BoolCompressor = Compressor<bool>;
-pub type BoolDecompressor = Decompressor<bool>;

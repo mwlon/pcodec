@@ -1,8 +1,6 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::compressor::Compressor;
-use crate::decompressor::Decompressor;
 use crate::types::NumberLike;
 use crate::errors::QCompressResult;
 
@@ -54,12 +52,3 @@ impl_signed_number!(i8, u8, 10);
 impl_signed_number!(i32, u32, 3);
 impl_signed_number!(i64, u64, 1);
 impl_signed_number!(i128, u128, 11);
-
-pub type I8Compressor = Compressor<i8>;
-pub type I8Decompressor = Decompressor<i8>;
-pub type I32Compressor = Compressor<i32>;
-pub type I32Decompressor = Decompressor<i32>;
-pub type I64Compressor = Compressor<i64>;
-pub type I64Decompressor = Decompressor<i64>;
-pub type I128Compressor = Compressor<i128>;
-pub type I128Decompressor = Decompressor<i128>;

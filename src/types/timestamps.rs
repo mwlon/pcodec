@@ -3,8 +3,6 @@ use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::compressor::Compressor;
-use crate::decompressor::Decompressor;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::types::NumberLike;
 
@@ -148,8 +146,3 @@ macro_rules! impl_timestamp {
 
 impl_timestamp!(TimestampNanos, 1_000_000_000_u32, 8);
 impl_timestamp!(TimestampMicros, 1_000_000_u32, 9);
-
-pub type TimestampNanosCompressor = Compressor<TimestampNanos>;
-pub type TimestampNanosDecompressor = Decompressor<TimestampNanos>;
-pub type TimestampMicrosCompressor = Compressor<TimestampMicros>;
-pub type TimestampMicrosDecompressor = Decompressor<TimestampMicros>;

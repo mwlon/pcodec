@@ -2,8 +2,6 @@ use std::cmp::Ordering;
 use std::convert::TryInto;
 
 use crate::types::NumberLike;
-use crate::compressor::Compressor;
-use crate::decompressor::Decompressor;
 use crate::errors::QCompressResult;
 
 macro_rules! impl_unsigned_number {
@@ -52,9 +50,3 @@ macro_rules! impl_unsigned_number {
 
 impl_unsigned_number!(u32, i32, 4);
 impl_unsigned_number!(u64, i64, 2);
-
-pub type U32Compressor = Compressor<u32>;
-pub type U32Decompressor = Decompressor<u32>;
-
-pub type U64Compressor = Compressor<u64>;
-pub type U64Decompressor = Decompressor<u64>;

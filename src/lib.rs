@@ -4,17 +4,7 @@ pub use chunk_metadata::{ChunkMetadata, DecompressedChunk};
 pub use compressor::{Compressor, CompressorConfig};
 pub use decompressor::{Decompressor, DecompressorConfig};
 pub use flags::Flags;
-pub use types::boolean::{BoolCompressor, BoolDecompressor};
-pub use types::floats::{F32Compressor, F32Decompressor};
-pub use types::floats::{F64Compressor, F64Decompressor};
-pub use types::signeds::{I8Compressor, I8Decompressor};
-pub use types::signeds::{I32Compressor, I32Decompressor};
-pub use types::signeds::{I64Compressor, I64Decompressor};
-pub use types::signeds::{I128Compressor, I128Decompressor};
-pub use types::timestamps::{TimestampMicros, TimestampMicrosCompressor, TimestampMicrosDecompressor};
-pub use types::timestamps::{TimestampNanos, TimestampNanosCompressor, TimestampNanosDecompressor};
-pub use types::unsigneds::{U32Compressor, U32Decompressor};
-pub use types::unsigneds::{U64Compressor, U64Decompressor};
+pub use types::timestamps::{TimestampMicros, TimestampNanos};
 
 mod bits;
 mod chunk_metadata;
@@ -33,7 +23,7 @@ pub mod types;
 
 #[cfg(test)]
 mod tests {
-  use crate::{Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNanos, I64Compressor, BitWriter, I64Decompressor};
+  use crate::{Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNanos, BitWriter};
   use crate::types::NumberLike;
 
   #[test]
@@ -136,7 +126,7 @@ mod tests {
 
   #[test]
   fn test_multi_chunk() {
-    let compressor = I64Compressor::default();
+    let compressor = Compressor::<i64>::default();
     let mut writer = BitWriter::default();
     compressor.header(&mut writer).unwrap();
     compressor.compress_chunk(&[1, 2, 3], &mut writer).unwrap();
@@ -144,7 +134,7 @@ mod tests {
     compressor.footer(&mut writer).unwrap();
     let bytes = writer.pop();
 
-    let decompressor = I64Decompressor::default();
+    let decompressor = Decompressor::<i64>::default();
     let res = decompressor.simple_decompress(bytes).unwrap();
     assert_eq!(
       res,
