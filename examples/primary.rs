@@ -131,7 +131,7 @@ impl DtypeHandler<TimestampMicros> for TimestampMicrosHandler {
   }
 }
 
-fn get_configs(path_str: &str, compression_level: u32) -> Vec<CompressorConfig> {
+fn get_configs(path_str: &str, compression_level: usize) -> Vec<CompressorConfig> {
   let mut res = vec![
     CompressorConfig {
       compression_level,
@@ -160,7 +160,7 @@ fn get_configs(path_str: &str, compression_level: u32) -> Vec<CompressorConfig> 
 
 fn main() {
   let args: Vec<String> = env::args().collect();
-  let compression_level: u32 = if args.len() >= 2 {
+  let compression_level: usize = if args.len() >= 2 {
     args[1].parse().expect("invalid compression level")
   } else {
     6

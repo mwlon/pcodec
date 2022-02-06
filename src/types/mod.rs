@@ -43,8 +43,7 @@ impl_signed!(i128);
 
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
 Copy + Debug + Default + Display + From<u8> + PartialOrd +
-Shl<u32, Output=Self> + Shl<usize, Output=Self> + Shr<usize, Output=Self> +
-Sub<Output=Self> {
+Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;

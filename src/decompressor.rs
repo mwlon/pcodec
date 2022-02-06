@@ -23,14 +23,14 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
 
   let mut max_depth = 0;
   for p in prefixes {
-    max_depth = max(max_depth, p.val.len() as u32);
+    max_depth = max(max_depth, p.val.len());
   }
 
   let max_n_leafs = 1_usize << max_depth;
   let mut is_specifieds = vec![false; max_n_leafs];
   for p in prefixes {
     let base_idx = bits::bits_to_usize_truncated(&p.val, max_depth);
-    let n_leafs = 1_usize << (max_depth - p.val.len() as u32);
+    let n_leafs = 1_usize << (max_depth - p.val.len());
     for is_specified in is_specifieds.iter_mut().skip(base_idx).take(n_leafs) {
       if *is_specified {
         return Err(QCompressError::corruption(format!(
@@ -79,6 +79,37 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     })
   }
 
+  // returns the number of numbers in the number block (usually 1)
+  fn unchecked_decompress_num_block(
+    &self,
+    i: usize,
+    reader: &mut BitReader,
+    res: &mut Vec<T>,
+  ) -> usize {
+    let p = self.huffman_table.unchecked_search_with_reader(reader);
+
+    let reps = match p.run_len_jumpstart {
+      None => 1,
+      // we stored the number of occurrences minus 1
+      // because we knew it's at least 1
+      Some(jumpstart) => min(reader.unchecked_read_varint(jumpstart) + 1, self.n - i),
+    };
+
+    for _ in 0..reps {
+      let mut offset = reader.unchecked_read_diff(p.k as usize);
+      if p.k < T::Unsigned::BITS {
+        let most_significant = T::Unsigned::ONE << p.k;
+        if p.range - offset >= most_significant && reader.unchecked_read_one() {
+          offset |= most_significant;
+        }
+      }
+      let num = T::from_unsigned(p.lower_unsigned + offset);
+      res.push(num);
+    }
+
+    reps
+  }
+
   // After much debugging a performance degradation from error handling changes,
   // it turned out this function's logic ran slower when any heap allocations
   // were done in the same scope. I don't understand why, but telling it not
@@ -86,35 +117,10 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
   // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
   #[inline(never)]
   fn decompress_chunk_nums(&self, reader: &mut BitReader) -> Vec<T> {
-    let n = self.n;
-    let mut res = Vec::with_capacity(n);
+    let mut res = Vec::with_capacity(self.n);
     let mut i = 0;
-    while i < n {
-      let p = self.huffman_table.search_with_reader(reader);
-
-      let reps = match p.run_len_jumpstart {
-        None => {
-          1
-        },
-        Some(jumpstart) => {
-          // we stored the number of occurrences minus 1
-          // because we knew it's at least 1
-          min(reader.unchecked_read_varint(jumpstart) + 1, n - i)
-        },
-      };
-
-      for _ in 0..reps {
-        let mut offset = reader.unchecked_read_diff(p.k as usize);
-        if p.k < T::Unsigned::BITS {
-          let most_significant = T::Unsigned::ONE << p.k;
-          if p.range - offset >= most_significant && reader.unchecked_read_one() {
-            offset |= most_significant;
-          }
-        }
-        let num = T::from_unsigned(p.lower_unsigned + offset);
-        res.push(num);
-      }
-      i += reps;
+    while i < self.n {
+      i += self.unchecked_decompress_num_block(i, reader, &mut res);
     }
     res
   }
@@ -134,6 +140,8 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
   }
 
   pub fn decompress_chunk_body(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
+    // This checks that we have enough data, assuming the file is not corrupt.
+    // We still need to be careful in `decompress_chunk_nums`.
     self.validate_sufficient_data(reader)?;
 
     let start_byte_idx = reader.aligned_byte_ind()?;

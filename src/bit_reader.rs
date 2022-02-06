@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::bits;
 use crate::bits::{LEFT_MASKS, RIGHT_MASKS};
-use crate::constants::PREFIX_TABLE_SIZE_LOG;
+use crate::constants::{PREFIX_TABLE_SIZE_LOG, BITS_TO_ENCODE_N_ENTRIES};
 use crate::errors::{QCompressError, QCompressResult};
 use crate::types::UnsignedLike;
 
@@ -110,25 +110,48 @@ impl BitReader {
   }
 
   // returns (bits read, idx)
-  pub fn unchecked_read_prefix_table_idx(&mut self) -> (usize, usize) {
+  pub fn unchecked_read_prefix_table_idx(&mut self) -> usize {
+    self.refresh_if_needed();
+
     let n_plus_j = PREFIX_TABLE_SIZE_LOG + self.j;
     if n_plus_j <= 8 {
       let shift = 8 - n_plus_j;
       let res = (self.unchecked_byte() & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift;
       self.j = n_plus_j;
-      (PREFIX_TABLE_SIZE_LOG, res as usize)
+      res as usize
     } else {
       let remaining = n_plus_j - 8;
       let mut res = ((self.unchecked_byte() & LEFT_MASKS[self.j]) as usize) << remaining;
+      self.i += 1;
+      let shift = 8 - remaining;
+      res |= ((self.unchecked_byte() & RIGHT_MASKS[remaining]) >> shift) as usize;
+      self.j = remaining;
+      res
+    }
+  }
+
+  // returns (bits read, idx)
+  pub fn read_prefix_table_idx(&mut self) -> QCompressResult<(usize, usize)> {
+    self.refresh_if_needed();
+
+    let n_plus_j = PREFIX_TABLE_SIZE_LOG + self.j;
+    if n_plus_j <= 8 {
+      let shift = 8 - n_plus_j;
+      let res = (self.byte()? & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift;
+      self.j = n_plus_j;
+      Ok((PREFIX_TABLE_SIZE_LOG, res as usize))
+    } else {
+      let remaining = n_plus_j - 8;
+      let mut res = ((self.byte()? & LEFT_MASKS[self.j]) as usize) << remaining;
       self.i += 1;
       if self.i < self.bytes.len() {
         let shift = 8 - remaining;
         res |= ((self.unchecked_byte() & RIGHT_MASKS[remaining]) >> shift) as usize;
         self.j = remaining;
-        (PREFIX_TABLE_SIZE_LOG, res)
+        Ok((PREFIX_TABLE_SIZE_LOG, res))
       } else {
         self.j = 0;
-        (PREFIX_TABLE_SIZE_LOG - remaining, res)
+        Ok((PREFIX_TABLE_SIZE_LOG - remaining, res))
       }
     }
   }
@@ -186,24 +209,28 @@ impl BitReader {
 
   pub fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
     let mut res = self.unchecked_read_diff::<u64>(jumpstart) as usize;
-    let mut mask = 1 << jumpstart;
-    while self.unchecked_read_one() {
+    for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
       if self.unchecked_read_one() {
-        res |= mask;
+        if self.unchecked_read_one() {
+          res |= 1 << i
+        }
+      } else {
+        break;
       }
-      mask <<= 1;
     }
     res
   }
 
   pub fn read_varint(&mut self, jumpstart: usize) -> QCompressResult<usize> {
     let mut res = self.read_usize(jumpstart)?;
-    let mut mask = 1 << jumpstart;
-    while self.read_one()? {
+    for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
       if self.read_one()? {
-        res |= mask;
+        if self.read_one()? {
+          res |= 1 << i
+        }
+      } else {
+        break;
       }
-      mask <<= 1;
     }
     Ok(res)
   }

@@ -14,7 +14,7 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{NumberLike, UnsignedLike};
 
-const DEFAULT_COMPRESSION_LEVEL: u32 = 6;
+const DEFAULT_COMPRESSION_LEVEL: usize = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
 
@@ -26,7 +26,7 @@ struct JumpstartConfiguration {
 // everything the user might want to specify about how to compress
 #[derive(Clone, Debug)]
 pub struct CompressorConfig {
-  pub compression_level: u32,
+  pub compression_level: usize,
   pub delta_encoding_order: usize,
 }
 
@@ -44,7 +44,7 @@ impl Default for CompressorConfig {
 // decoding
 #[derive(Clone, Debug)]
 struct InternalCompressorConfig {
-  pub compression_level: u32,
+  pub compression_level: usize,
 }
 
 impl From<&CompressorConfig> for InternalCompressorConfig {
@@ -131,7 +131,7 @@ fn train_prefixes<T: NumberLike>(
     )));
   }
   let n = nums.len();
-  if n as u64 > MAX_ENTRIES {
+  if n > MAX_ENTRIES {
     return Err(QCompressError::invalid_argument(format!(
       "count may not exceed {} per chunk (was {})",
       MAX_ENTRIES,
@@ -141,7 +141,7 @@ fn train_prefixes<T: NumberLike>(
 
   let mut sorted = nums;
   sorted.sort_unstable_by(|a, b| a.num_cmp(b));
-  let safe_comp_level = min(comp_level, (n as f64).log2() as u32);
+  let safe_comp_level = min(comp_level, (n as f64).log2() as usize);
   let n_prefix = 1_usize << safe_comp_level;
   let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
   let seq_ptr = &mut prefix_sequence;

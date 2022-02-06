@@ -142,7 +142,7 @@ mod tests {
     );
   }
 
-  fn assert_recovers<T: NumberLike>(vals: Vec<T>, compression_level: u32) {
+  fn assert_recovers<T: NumberLike>(vals: Vec<T>, compression_level: usize) {
     for delta_encoding_order in [0, 1, 7] {
       let compressor = Compressor::<T>::from_config(
         CompressorConfig { compression_level, delta_encoding_order },

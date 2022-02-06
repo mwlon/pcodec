@@ -120,7 +120,7 @@ impl BitWriter {
     self.j = 8;
   }
 
-  pub fn assign_usize(&mut self, mut i: usize, mut j: usize, x: usize, n: u32) {
+  pub fn assign_usize(&mut self, mut i: usize, mut j: usize, x: usize, n: usize) {
     // not the most efficient implementation but it's ok because we
     // only rarely use this now
     for k in 0..n {
