@@ -102,7 +102,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self>;
 
   fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    let bools = reader.read(Self::PHYSICAL_BITS);
+    let bools = reader.read(Self::PHYSICAL_BITS)?;
     Self::from_bytes(bits::bits_to_bytes(bools))
   }
 

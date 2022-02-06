@@ -29,7 +29,7 @@ impl<Diff: UnsignedLike> HuffmanTable<Diff> {
           return *decompression_info;
         },
         HuffmanTable::NonLeaf(children) => {
-          let (bits_read, idx) = reader.read_prefix_table_idx();
+          let (bits_read, idx) = reader.unchecked_read_prefix_table_idx();
           read_depth += bits_read;
           node = &children[idx];
         },

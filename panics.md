@@ -6,6 +6,6 @@ performance degradation, so it is up to the user to ensure you have provided
 enough data.
 * Decompressing delta-encoded timestamps that return out of bounds causes a
 panic.
-Attempting to use results instead of panics in this code path caused ~5%
-performance degradations for decompressing delta-encoded data for any data
+Attempting to use results instead of panics in this code path caused a ~5%
+decompression performance degradation for delta-encoded data for any data
 type.

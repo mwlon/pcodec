@@ -27,17 +27,17 @@ fn parse_prefixes<T: NumberLike>(
   reader: &mut BitReader,
   flags: &Flags,
 ) -> QCompressResult<Vec<Prefix<T>>> {
-  let n_pref = reader.read_usize(MAX_COMPRESSION_LEVEL as usize);
+  let n_pref = reader.read_usize(MAX_COMPRESSION_LEVEL as usize)?;
   let mut prefixes = Vec::with_capacity(n_pref);
   let bits_to_encode_prefix_len = flags.bits_to_encode_prefix_len();
   for _ in 0..n_pref {
-    let count = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
+    let count = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize)?;
     let lower = T::read_from(reader)?;
     let upper = T::read_from(reader)?;
-    let code_len = reader.read_usize(bits_to_encode_prefix_len);
-    let val = reader.read(code_len);
-    let jumpstart = if reader.read_one() {
-      Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART as usize))
+    let code_len = reader.read_usize(bits_to_encode_prefix_len)?;
+    let val = reader.read(code_len)?;
+    let jumpstart = if reader.read_one()? {
+      Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART as usize)?)
     } else {
       None
     };
@@ -69,8 +69,8 @@ fn write_prefixes<T: NumberLike>(prefixes: &[Prefix<T>], writer: &mut BitWriter,
 
 impl<T> ChunkMetadata<T> where T: NumberLike {
   pub fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
-    let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize);
-    let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
+    let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES as usize)?;
+    let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize)?;
     let prefix_info = if flags.delta_encoding_order == 0 {
       let prefixes = parse_prefixes::<T>(reader, flags)?;
       PrefixInfo::Simple {

@@ -99,15 +99,15 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
         Some(jumpstart) => {
           // we stored the number of occurrences minus 1
           // because we knew it's at least 1
-          min(reader.read_varint(jumpstart) + 1, n - i)
+          min(reader.unchecked_read_varint(jumpstart) + 1, n - i)
         },
       };
 
       for _ in 0..reps {
-        let mut offset = reader.read_diff(p.k as usize);
+        let mut offset = reader.unchecked_read_diff(p.k as usize);
         if p.k < T::Unsigned::BITS {
           let most_significant = T::Unsigned::ONE << p.k;
-          if p.range - offset >= most_significant && reader.read_one() {
+          if p.range - offset >= most_significant && reader.unchecked_read_one() {
             offset |= most_significant;
           }
         }
