@@ -53,7 +53,7 @@ macro_rules! impl_timestamp {
 
     impl From<SystemTime> for $t {
       fn from(system_time: SystemTime) -> Self {
-        let (seconds, subsec_nanos) = match UNIX_EPOCH.duration_since(system_time) {
+        let (seconds, subsec_nanos) = match system_time.duration_since(UNIX_EPOCH) {
           Ok(dur) => (dur.as_secs() as i64, dur.subsec_nanos()),
           Err(e) => {
             let dur = e.duration();
@@ -119,7 +119,9 @@ macro_rules! impl_timestamp {
       }
 
       fn from_signed(signed: i128) -> Self {
-        Self::new(signed).expect("corrupt signed value for timestamp")
+        // TODO configure some check at the end of decompression to make sure
+        // all timestamps are within bounds
+        Self(signed)
       }
 
       fn num_eq(&self, other: &Self) -> bool {
@@ -146,3 +148,24 @@ macro_rules! impl_timestamp {
 
 impl_timestamp!(TimestampNanos, 1_000_000_000_u32, 8);
 impl_timestamp!(TimestampMicros, 1_000_000_u32, 9);
+
+#[cfg(test)]
+mod tests {
+  use std::time::SystemTime;
+  use crate::{TimestampMicros, TimestampNanos};
+
+  #[test]
+  fn test_system_time_conversion() {
+    let t = SystemTime::now();
+    let micro_t = TimestampMicros::from(t);
+    let nano_t = TimestampNanos::from(t);
+    let (micro_t_s, micro_t_ns) = micro_t.to_secs_and_nanos();
+    let (nano_t_s, nano_t_ns) = nano_t.to_secs_and_nanos();
+    assert!(micro_t_s > 1500000000); // would be better if we mocked time
+    assert_eq!(micro_t_s, nano_t_s);
+    assert!(micro_t_ns <= nano_t_ns);
+    assert!(micro_t_ns + 1000 > nano_t_ns);
+    assert_eq!(SystemTime::from(micro_t), t);
+    assert_eq!(SystemTime::from(nano_t), t);
+  }
+}
