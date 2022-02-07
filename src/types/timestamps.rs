@@ -21,7 +21,7 @@ macro_rules! impl_timestamp {
     impl $t {
       const MAX: i128 = $parts_per_sec as i128 * (i64::MAX as i128 + 1) - 1;
       const MIN: i128 = $parts_per_sec as i128 * (i64::MIN as i128);
-      const NS_PER_PART: u32 = 1_000_000_000 / $parts_per_sec;
+      const NS_PER_PART: u32 = BILLION_U32 / $parts_per_sec;
 
       pub fn new(parts: i128) -> QCompressResult<Self> {
         if parts > Self::MAX || parts < Self::MIN {
@@ -146,7 +146,7 @@ macro_rules! impl_timestamp {
   }
 }
 
-impl_timestamp!(TimestampNanos, 1_000_000_000_u32, 8);
+impl_timestamp!(TimestampNanos, BILLION_U32, 8);
 impl_timestamp!(TimestampMicros, 1_000_000_u32, 9);
 
 #[cfg(test)]
