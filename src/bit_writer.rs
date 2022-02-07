@@ -1,6 +1,7 @@
 use crate::bits::LEFT_MASKS;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::types::UnsignedLike;
+use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_ENTRIES};
 
 #[derive(Clone)]
 pub struct BitWriter {
@@ -106,12 +107,20 @@ impl BitWriter {
   }
 
   pub fn write_varint(&mut self, mut x: usize, jumpstart: usize) {
+    if x > MAX_ENTRIES {
+      panic!("unable to encode varint greater than max number of entries");
+    }
+
     self.write_usize(x, jumpstart);
     x >>= jumpstart;
-    while x > 0 {
-      self.write_one(true);
-      self.write_one(x & 1 > 0);
-      x >>= 1;
+    for _ in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
+      if x > 0 {
+        self.write_one(true);
+        self.write_one(x & 1 > 0);
+        x >>= 1;
+      } else {
+        break;
+      }
     }
     self.write_one(false);
   }

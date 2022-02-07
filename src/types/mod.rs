@@ -20,27 +20,6 @@ pub trait SignedLike {
   fn wrapping_sub(self, other: Self) -> Self;
 }
 
-macro_rules! impl_signed {
-  ($t: ty) => {
-    impl SignedLike for $t {
-      const ZERO: Self = 0;
-
-      fn wrapping_add(self, other: Self) -> Self {
-        self.wrapping_add(other)
-      }
-
-      fn wrapping_sub(self, other: Self) -> Self {
-        self.wrapping_sub(other)
-      }
-    }
-  }
-}
-
-impl_signed!(i8);
-impl_signed!(i32);
-impl_signed!(i64);
-impl_signed!(i128);
-
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
 Copy + Debug + Default + Display + From<u8> + PartialOrd +
 Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
@@ -52,30 +31,6 @@ Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
   fn to_f64(self) -> f64;
   fn last_u8(self) -> u8;
 }
-
-macro_rules! impl_unsigned {
-  ($t: ty) => {
-    impl UnsignedLike for $t {
-      const ZERO: Self = 0;
-      const ONE: Self = 1;
-      const MAX: Self = Self::MAX;
-      const BITS: usize = Self::BITS as usize;
-
-      fn to_f64(self) -> f64 {
-        self as f64
-      }
-
-      fn last_u8(self) -> u8 {
-        (self & 0xff) as u8
-      }
-    }
-  }
-}
-
-impl_unsigned!(u8);
-impl_unsigned!(u32);
-impl_unsigned!(u64);
-impl_unsigned!(u128);
 
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   const HEADER_BYTE: u8;

@@ -352,7 +352,7 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     self.flags.write(writer)
   }
 
-  pub fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
+  pub fn chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
     if nums.is_empty() {
       return Err(QCompressError::invalid_argument(
         "cannot compress empty chunk"
@@ -416,7 +416,7 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     let mut writer = BitWriter::default();
     self.header(&mut writer)?;
     if !nums.is_empty() {
-      self.compress_chunk(nums, &mut writer)?;
+      self.chunk(nums, &mut writer)?;
     }
     self.footer(&mut writer)?;
     Ok(writer.pop())

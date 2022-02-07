@@ -129,8 +129,8 @@ mod tests {
     let compressor = Compressor::<i64>::default();
     let mut writer = BitWriter::default();
     compressor.header(&mut writer).unwrap();
-    compressor.compress_chunk(&[1, 2, 3], &mut writer).unwrap();
-    compressor.compress_chunk(&[11, 12, 13], &mut writer).unwrap();
+    compressor.chunk(&[1, 2, 3], &mut writer).unwrap();
+    compressor.chunk(&[11, 12, 13], &mut writer).unwrap();
     compressor.footer(&mut writer).unwrap();
     let bytes = writer.pop();
 

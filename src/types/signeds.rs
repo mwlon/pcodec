@@ -1,11 +1,23 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::types::NumberLike;
+use crate::types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 
-macro_rules! impl_signed_number {
+macro_rules! impl_signed {
   ($t: ty, $unsigned: ty, $header_byte: expr) => {
+    impl SignedLike for $t {
+      const ZERO: Self = 0;
+
+      fn wrapping_add(self, other: Self) -> Self {
+        self.wrapping_add(other)
+      }
+
+      fn wrapping_sub(self, other: Self) -> Self {
+        self.wrapping_sub(other)
+      }
+    }
+
     impl NumberLike for $t {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = Self::BITS as usize;
@@ -48,7 +60,6 @@ macro_rules! impl_signed_number {
   }
 }
 
-impl_signed_number!(i8, u8, 10);
-impl_signed_number!(i32, u32, 3);
-impl_signed_number!(i64, u64, 1);
-impl_signed_number!(i128, u128, 11);
+impl_signed!(i32, u32, 3);
+impl_signed!(i64, u64, 1);
+impl_signed!(i128, u128, 10);

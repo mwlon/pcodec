@@ -13,6 +13,8 @@ use crate::huffman_decoding::HuffmanTable;
 use crate::prefix::Prefix;
 use crate::types::{NumberLike, UnsignedLike};
 
+const UNCHECKED_NUM_THRESHOLD: usize = 1000;
+
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
 
@@ -59,6 +61,7 @@ struct ChunkDecompressor<T> where T: NumberLike {
   prefixes: Vec<Prefix<T>>,
   n: usize,
   compressed_body_size: usize,
+  max_bits_per_num_block: usize,
 }
 
 impl<T> ChunkDecompressor<T> where T: NumberLike {
@@ -69,30 +72,52 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     _config: DecompressorConfig,
     _flags: Flags,
   ) -> QCompressResult<Self> {
+    if prefixes.is_empty() && n > 0 {
+      return Err(QCompressError::corruption(format!(
+        "unable to decompress chunk with no prefixes and {} numbers",
+        n,
+      )));
+    }
     validate_prefix_tree(&prefixes)?;
+
+    let max_bits_per_num_block = prefixes.iter()
+      .map(|p| {
+        let prefix_bits = p.val.len();
+        let (max_reps, max_jumpstart_bits) = match p.run_len_jumpstart {
+          None => (1, 0),
+          Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
+        };
+        let max_bits_per_offset = if p.only_k_bits_lower == T::Unsigned::ZERO {
+          p.k
+        } else {
+          p.k + 1
+        };
+        (prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset)
+          .max(prefix_bits + PREFIX_TABLE_SIZE_LOG - prefix_bits.rem_euclid(PREFIX_TABLE_SIZE_LOG))
+      })
+      .max()
+      .unwrap_or(usize::MAX);
 
     Ok(ChunkDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
       prefixes,
       n,
       compressed_body_size,
+      max_bits_per_num_block,
     })
   }
 
-  // returns the number of numbers in the number block (usually 1)
   fn unchecked_decompress_num_block(
     &self,
-    i: usize,
     reader: &mut BitReader,
     res: &mut Vec<T>,
-  ) -> usize {
+  ) {
     let p = self.huffman_table.unchecked_search_with_reader(reader);
 
     let reps = match p.run_len_jumpstart {
       None => 1,
-      // we stored the number of occurrences minus 1
-      // because we knew it's at least 1
-      Some(jumpstart) => min(reader.unchecked_read_varint(jumpstart) + 1, self.n - i),
+      // we stored the number of occurrences minus 1 because we knew it's at least 1
+      Some(jumpstart) => min(reader.unchecked_read_varint(jumpstart) + 1, self.n - res.len()),
     };
 
     for _ in 0..reps {
@@ -106,23 +131,68 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
       let num = T::from_unsigned(p.lower_unsigned + offset);
       res.push(num);
     }
+  }
 
-    reps
+  fn decompress_num_block(
+    &self,
+    reader: &mut BitReader,
+    res: &mut Vec<T>,
+  ) -> QCompressResult<()> {
+    let p = self.huffman_table.search_with_reader(reader)?;
+
+    let reps = match p.run_len_jumpstart {
+      None => 1,
+      // we stored the number of occurrences minus 1 because we knew it's at least 1
+      Some(jumpstart) => min(reader.read_varint(jumpstart)? + 1, self.n - res.len()),
+    };
+
+    for _ in 0..reps {
+      let mut offset = reader.read_diff(p.k as usize)?;
+      if p.k < T::Unsigned::BITS {
+        let most_significant = T::Unsigned::ONE << p.k;
+        if p.range - offset >= most_significant && reader.read_one()? {
+          offset |= most_significant;
+        }
+      }
+      let num = T::from_unsigned(p.lower_unsigned + offset);
+      res.push(num);
+    }
+    Ok(())
   }
 
   // After much debugging a performance degradation from error handling changes,
-  // it turned out this function's logic ran slower when any heap allocations
-  // were done in the same scope. I don't understand why, but telling it not
+  // it turned out this function's logic ran slower when inlining.
+  // I don't understand why, but telling it not
   // to inline fixed the performance issue.
   // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
   #[inline(never)]
-  fn decompress_chunk_nums(&self, reader: &mut BitReader) -> Vec<T> {
+  fn decompress_chunk_nums(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
     let mut res = Vec::with_capacity(self.n);
-    let mut i = 0;
-    while i < self.n {
-      i += self.unchecked_decompress_num_block(i, reader, &mut res);
+    loop {
+      let remaining_nums = self.n - res.len();
+      let guaranteed_safe_num_blocks = if self.max_bits_per_num_block == 0 {
+        remaining_nums
+      } else {
+        remaining_nums.min(
+          reader.bits_remaining() / self.max_bits_per_num_block
+        )
+      };
+
+      if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
+        let mut block_idx = 0;
+        while block_idx < guaranteed_safe_num_blocks && res.len() < self.n {
+          self.unchecked_decompress_num_block(reader, &mut res);
+          block_idx += 1;
+        }
+      } else {
+        break;
+      }
     }
-    res
+
+    while res.len() < self.n {
+      self.decompress_num_block(reader, &mut res)?;
+    }
+    Ok(res)
   }
 
   fn validate_sufficient_data(&self, reader: &BitReader) -> QCompressResult<()> {
@@ -145,7 +215,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     self.validate_sufficient_data(reader)?;
 
     let start_byte_idx = reader.aligned_byte_ind()?;
-    let res = self.decompress_chunk_nums(reader);
+    let res = self.decompress_chunk_nums(reader)?;
 
     reader.drain_empty_byte(|| QCompressError::corruption(
       "nonzero bits in end of final byte of chunk numbers"
@@ -226,7 +296,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     Ok(Some(metadata))
   }
 
-  pub fn decompress_chunk_body(
+  pub fn chunk_body(
     &self,
     reader: &mut BitReader,
     metadata: ChunkMetadata<T>,
@@ -259,7 +329,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
-  pub fn decompress_chunk(
+  pub fn chunk(
     &self,
     reader: &mut BitReader,
     flags: &Flags,
@@ -267,7 +337,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     let maybe_metadata = self.chunk_metadata(reader, flags)?;
     match maybe_metadata {
       Some(metadata) => {
-        let nums = self.decompress_chunk_body(
+        let nums = self.chunk_body(
           reader,
           metadata.clone(),
           flags,
@@ -287,7 +357,7 @@ impl<T> Decompressor<T> where T: NumberLike {
     let mut reader = BitReader::from(bytes);
     let mut res: Option<Vec<T>> = None;
     let flags = self.header(&mut reader)?;
-    while let Some(chunk) = self.decompress_chunk(&mut reader, &flags)? {
+    while let Some(chunk) = self.chunk(&mut reader, &flags)? {
       res = match res {
         Some(mut existing) => {
           existing.extend(chunk.nums);
@@ -333,7 +403,7 @@ mod tests {
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
-      let result = decompressor.decompress_chunk_body(
+      let result = decompressor.chunk_body(
         &mut BitReader::from(bytes.clone()),
         bad_metadata,
         &Flags::default(),

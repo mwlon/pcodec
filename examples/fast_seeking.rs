@@ -15,7 +15,7 @@ fn main() {
     for _ in 0..100000 {
       nums.push(rng.gen::<f64>());
     }
-    compressor.compress_chunk(&nums, &mut writer).expect("write chunk");
+    compressor.chunk(&nums, &mut writer).expect("write chunk");
   }
   compressor.footer(&mut writer).expect("footer");
 

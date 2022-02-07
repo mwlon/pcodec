@@ -323,6 +323,10 @@ impl BitReader {
   pub fn size(&self) -> usize {
     self.bytes.len()
   }
+
+  pub fn bits_remaining(&self) -> usize {
+    8 * self.bytes.len() - 8 * self.i - self.j
+  }
 }
 
 #[cfg(test)]
