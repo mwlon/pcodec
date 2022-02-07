@@ -1,9 +1,8 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::compressor::Compressor;
-use crate::decompressor::Decompressor;
 use crate::types::NumberLike;
+use crate::errors::QCompressResult;
 
 // Note that in all conversions between float and unsigned int, we are using
 // the unsigned int to indicate an offset.
@@ -60,8 +59,8 @@ macro_rules! impl_float_number {
         self.to_be_bytes().to_vec()
       }
 
-      fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self::from_be_bytes(bytes.try_into().unwrap())
+      fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self> {
+        Ok(Self::from_be_bytes(bytes.try_into().unwrap()))
       }
     }
   }
@@ -69,8 +68,3 @@ macro_rules! impl_float_number {
 
 impl_float_number!(f32, i32, u32, 32, 1_u32 << 31, 6);
 impl_float_number!(f64, i64, u64, 64, 1_u64 << 63, 5);
-
-pub type F32Compressor = Compressor<f32>;
-pub type F32Decompressor = Decompressor<f32>;
-pub type F64Compressor = Compressor<f64>;
-pub type F64Decompressor = Decompressor<f64>;

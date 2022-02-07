@@ -1,9 +1,32 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::types::NumberLike;
-use crate::compressor::Compressor;
-use crate::decompressor::Decompressor;
+use crate::types::{NumberLike, UnsignedLike};
+use crate::errors::QCompressResult;
+
+macro_rules! impl_unsigned {
+  ($t: ty) => {
+    impl UnsignedLike for $t {
+      const ZERO: Self = 0;
+      const ONE: Self = 1;
+      const MAX: Self = Self::MAX;
+      const BITS: usize = Self::BITS as usize;
+
+      fn to_f64(self) -> f64 {
+        self as f64
+      }
+
+      fn last_u8(self) -> u8 {
+        (self & 0xff) as u8
+      }
+    }
+  }
+}
+
+impl_unsigned!(u8);
+impl_unsigned!(u32);
+impl_unsigned!(u64);
+impl_unsigned!(u128);
 
 macro_rules! impl_unsigned_number {
   ($t: ty, $signed: ty, $header_byte: expr) => {
@@ -42,8 +65,8 @@ macro_rules! impl_unsigned_number {
         self.to_be_bytes().to_vec()
       }
 
-      fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self::from_be_bytes(bytes.try_into().unwrap())
+      fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self> {
+        Ok(Self::from_be_bytes(bytes.try_into().unwrap()))
       }
     }
   }
@@ -51,9 +74,3 @@ macro_rules! impl_unsigned_number {
 
 impl_unsigned_number!(u32, i32, 4);
 impl_unsigned_number!(u64, i64, 2);
-
-pub type U32Compressor = Compressor<u32>;
-pub type U32Decompressor = Decompressor<u32>;
-
-pub type U64Compressor = Compressor<u64>;
-pub type U64Decompressor = Decompressor<u64>;

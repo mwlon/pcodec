@@ -6,6 +6,7 @@ use std::fmt;
 pub enum ErrorKind {
   Compatibility,
   Corruption,
+  InsufficientData,
   InvalidArgument,
 }
 
@@ -29,6 +30,10 @@ impl QCompressError {
 
   pub fn corruption<S: AsRef<str>>(message: S) -> Self {
     Self::new(ErrorKind::Corruption, message)
+  }
+
+  pub fn insufficient_data<S: AsRef<str>>(message: S) -> Self {
+    Self::new(ErrorKind::InsufficientData, message)
   }
 
   pub fn invalid_argument<S: AsRef<str>>(message: S) -> Self {

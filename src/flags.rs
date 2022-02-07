@@ -62,8 +62,8 @@ impl Flags {
     reader.aligned_byte_ind()?; // assert it's byte-aligned
     let mut bools = Vec::new();
     loop {
-      bools.extend(reader.read(7));
-      if !reader.read_one() {
+      bools.extend(reader.read(7)?);
+      if !reader.read_one()? {
         break;
       }
     }

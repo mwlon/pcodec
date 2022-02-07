@@ -5,6 +5,7 @@ use crate::BitReader;
 use crate::constants::{PREFIX_TABLE_SIZE, PREFIX_TABLE_SIZE_LOG};
 use crate::prefix::{Prefix, PrefixDecompressionInfo};
 use crate::types::{NumberLike, UnsignedLike};
+use crate::errors::{QCompressResult, QCompressError};
 
 #[derive(Clone, Debug)]
 pub enum HuffmanTable<Diff: UnsignedLike> {
@@ -19,7 +20,37 @@ impl<Diff: UnsignedLike> Default for HuffmanTable<Diff> {
 }
 
 impl<Diff: UnsignedLike> HuffmanTable<Diff> {
-  pub fn search_with_reader(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<Diff> {
+  pub fn search_with_reader(&self, reader: &mut BitReader) -> QCompressResult<PrefixDecompressionInfo<Diff>> {
+    let mut node = self;
+    let mut read_depth = 0;
+    loop {
+      match node {
+        HuffmanTable::Leaf(decompression_info) => {
+          reader.rewind(read_depth - decompression_info.depth);
+          return Ok(*decompression_info);
+        },
+        HuffmanTable::NonLeaf(children) => {
+          let (bits_read, idx) = reader.read_prefix_table_idx()?;
+          read_depth += bits_read;
+          node = &children[idx];
+          if bits_read != PREFIX_TABLE_SIZE_LOG {
+            return match node {
+              HuffmanTable::Leaf(decompression_info)
+              if decompression_info.depth == read_depth => Ok(*decompression_info),
+              HuffmanTable::Leaf(_) => Err(QCompressError::insufficient_data(
+                "search_with_reader(): ran out of data parsing Huffman prefix (reached leaf)"
+              )),
+              HuffmanTable::NonLeaf(_) => Err(QCompressError::insufficient_data(
+                "search_with_reader(): ran out of data parsing Huffman prefix (reached parent)"
+              )),
+            }
+          }
+        },
+      }
+    }
+  }
+
+  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<Diff> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
@@ -29,9 +60,8 @@ impl<Diff: UnsignedLike> HuffmanTable<Diff> {
           return *decompression_info;
         },
         HuffmanTable::NonLeaf(children) => {
-          let (bits_read, idx) = reader.read_prefix_table_idx();
-          read_depth += bits_read;
-          node = &children[idx];
+          node = &children[reader.unchecked_read_prefix_table_idx()];
+          read_depth += PREFIX_TABLE_SIZE_LOG;
         },
       }
     }

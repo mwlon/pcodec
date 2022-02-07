@@ -1,12 +1,23 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::compressor::Compressor;
-use crate::decompressor::Decompressor;
-use crate::types::NumberLike;
+use crate::types::{NumberLike, SignedLike};
+use crate::errors::QCompressResult;
 
-macro_rules! impl_signed_number {
+macro_rules! impl_signed {
   ($t: ty, $unsigned: ty, $header_byte: expr) => {
+    impl SignedLike for $t {
+      const ZERO: Self = 0;
+
+      fn wrapping_add(self, other: Self) -> Self {
+        self.wrapping_add(other)
+      }
+
+      fn wrapping_sub(self, other: Self) -> Self {
+        self.wrapping_sub(other)
+      }
+    }
+
     impl NumberLike for $t {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = Self::BITS as usize;
@@ -42,23 +53,13 @@ macro_rules! impl_signed_number {
         self.to_be_bytes().to_vec()
       }
 
-      fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self::from_be_bytes(bytes.try_into().unwrap())
+      fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self> {
+        Ok(Self::from_be_bytes(bytes.try_into().unwrap()))
       }
     }
   }
 }
 
-impl_signed_number!(i8, u8, 10);
-impl_signed_number!(i32, u32, 3);
-impl_signed_number!(i64, u64, 1);
-impl_signed_number!(i128, u128, 11);
-
-pub type I8Compressor = Compressor<i8>;
-pub type I8Decompressor = Decompressor<i8>;
-pub type I32Compressor = Compressor<i32>;
-pub type I32Decompressor = Decompressor<i32>;
-pub type I64Compressor = Compressor<i64>;
-pub type I64Decompressor = Decompressor<i64>;
-pub type I128Compressor = Compressor<i128>;
-pub type I128Decompressor = Decompressor<i128>;
+impl_signed!(i32, u32, 3);
+impl_signed!(i64, u64, 1);
+impl_signed!(i128, u128, 10);

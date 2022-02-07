@@ -1,6 +1,7 @@
 use crate::{BitReader, BitWriter};
 use crate::types::{NumberLike, SignedLike};
 use std::marker::PhantomData;
+use crate::errors::QCompressResult;
 
 #[derive(Clone, Debug)]
 pub struct DeltaMoments<T: NumberLike> {
@@ -17,15 +18,15 @@ impl<T: NumberLike> DeltaMoments<T> {
     }
   }
 
-  pub fn parse_from(reader: &mut BitReader, order: usize) -> Self {
+  pub fn parse_from(reader: &mut BitReader, order: usize) -> QCompressResult<Self> {
     let mut moments = Vec::new();
     for _ in 0..order {
-      moments.push(T::Signed::read_from(reader));
+      moments.push(T::Signed::read_from(reader)?);
     }
-    DeltaMoments {
+    Ok(DeltaMoments {
       moments,
       phantom: PhantomData,
-    }
+    })
   }
 
   pub fn write_to(&self, writer: &mut BitWriter) {

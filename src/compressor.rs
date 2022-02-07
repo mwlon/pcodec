@@ -1,4 +1,5 @@
 use std::cmp::{max, min};
+use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -13,7 +14,7 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::{Prefix, PrefixIntermediate};
 use crate::types::{NumberLike, UnsignedLike};
 
-const DEFAULT_COMPRESSION_LEVEL: u32 = 6;
+const DEFAULT_COMPRESSION_LEVEL: usize = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
 
@@ -25,7 +26,7 @@ struct JumpstartConfiguration {
 // everything the user might want to specify about how to compress
 #[derive(Clone, Debug)]
 pub struct CompressorConfig {
-  pub compression_level: u32,
+  pub compression_level: usize,
   pub delta_encoding_order: usize,
 }
 
@@ -43,7 +44,7 @@ impl Default for CompressorConfig {
 // decoding
 #[derive(Clone, Debug)]
 struct InternalCompressorConfig {
-  pub compression_level: u32,
+  pub compression_level: usize,
 }
 
 impl From<&CompressorConfig> for InternalCompressorConfig {
@@ -130,7 +131,7 @@ fn train_prefixes<T: NumberLike>(
     )));
   }
   let n = nums.len();
-  if n as u64 > MAX_ENTRIES {
+  if n > MAX_ENTRIES {
     return Err(QCompressError::invalid_argument(format!(
       "count may not exceed {} per chunk (was {})",
       MAX_ENTRIES,
@@ -140,7 +141,7 @@ fn train_prefixes<T: NumberLike>(
 
   let mut sorted = nums;
   sorted.sort_unstable_by(|a, b| a.num_cmp(b));
-  let safe_comp_level = min(comp_level, (n as f64).log2() as u32);
+  let safe_comp_level = min(comp_level, (n as f64).log2() as usize);
   let n_prefix = 1_usize << safe_comp_level;
   let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
   let seq_ptr = &mut prefix_sequence;
@@ -203,7 +204,7 @@ fn train_prefixes<T: NumberLike>(
 
   let mut prefixes = Vec::new();
   for p in prefix_sequence {
-    prefixes.push(Prefix::from(p));
+    prefixes.push(Prefix::try_from(p)?);
   }
   Ok(prefixes)
 }
@@ -351,7 +352,7 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     self.flags.write(writer)
   }
 
-  pub fn compress_chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
+  pub fn chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
     if nums.is_empty() {
       return Err(QCompressError::invalid_argument(
         "cannot compress empty chunk"
@@ -415,7 +416,7 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     let mut writer = BitWriter::default();
     self.header(&mut writer)?;
     if !nums.is_empty() {
-      self.compress_chunk(nums, &mut writer)?;
+      self.chunk(nums, &mut writer)?;
     }
     self.footer(&mut writer)?;
     Ok(writer.pop())
