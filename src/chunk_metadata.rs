@@ -27,7 +27,7 @@ fn parse_prefixes<T: NumberLike>(
   reader: &mut BitReader,
   flags: &Flags,
 ) -> QCompressResult<Vec<Prefix<T>>> {
-  let n_pref = reader.read_usize(MAX_COMPRESSION_LEVEL)?;
+  let n_pref = reader.read_usize(BITS_TO_ENCODE_N_PREFIXES)?;
   let mut prefixes = Vec::with_capacity(n_pref);
   let bits_to_encode_prefix_len = flags.bits_to_encode_prefix_len();
   for _ in 0..n_pref {
@@ -47,7 +47,7 @@ fn parse_prefixes<T: NumberLike>(
 }
 
 fn write_prefixes<T: NumberLike>(prefixes: &[Prefix<T>], writer: &mut BitWriter, flags: &Flags) {
-  writer.write_usize(prefixes.len(), MAX_COMPRESSION_LEVEL);
+  writer.write_usize(prefixes.len(), BITS_TO_ENCODE_N_PREFIXES);
   let bits_to_encode_prefix_len = flags.bits_to_encode_prefix_len();
   for pref in prefixes {
     writer.write_usize(pref.count, BITS_TO_ENCODE_N_ENTRIES);

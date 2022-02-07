@@ -1,11 +1,11 @@
 [package]
 name = "q_compress"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding"]
-description = "Good data compression for numerical sequences"
+description = "Good data compression columnar numerical data and time series"
 include = ["src/**/*.rs", "Cargo.toml"]
 keywords = ["compression", "numerical", "quantile"]
 license = "Apache-2.0"
@@ -23,3 +23,7 @@ path="examples/primary.rs"
 [[example]]
 name="fast_seeking"
 path="examples/fast_seeking.rs"
+
+[[example]]
+name="compatibility_test_case_generator"
+path="examples/compatibility_test_case_generator.rs"

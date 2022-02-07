@@ -6,6 +6,7 @@ pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
 pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: usize = 3;
 pub const MAX_ENTRIES: usize = (1 << 24) - 1;
 pub const BITS_TO_ENCODE_N_ENTRIES: usize = 24;
+pub const BITS_TO_ENCODE_N_PREFIXES: usize = 15;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
 pub const MAX_JUMPSTART: usize = BITS_TO_ENCODE_N_ENTRIES;
 pub const BITS_TO_ENCODE_JUMPSTART: usize = 5;
