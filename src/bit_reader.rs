@@ -12,6 +12,7 @@ pub struct BitReader {
   bytes: Vec<u8>,
   i: usize,
   j: usize,
+  total_bits: usize,
 }
 
 impl Debug for BitReader {
@@ -38,10 +39,12 @@ impl Debug for BitReader {
 
 impl From<Vec<u8>> for BitReader {
   fn from(bytes: Vec<u8>) -> BitReader {
+    let total_bits = 8 * bytes.len();
     BitReader {
       bytes,
       i: 0,
       j: 0,
+      total_bits,
     }
   }
 }
@@ -194,7 +197,7 @@ impl BitReader {
   }
 
   pub fn read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> QCompressResult<Diff> {
-    if self.i * 8 + self.j + n > self.bytes.len() * 8 {
+    if self.i * 8 + self.j + n > self.total_bits {
       return Err(QCompressError::insufficient_data(
         "read_diff(): reached end of data available to BitReader"
       ))
@@ -325,7 +328,7 @@ impl BitReader {
   }
 
   pub fn bits_remaining(&self) -> usize {
-    8 * self.bytes.len() - 8 * self.i - self.j
+    self.total_bits - 8 * self.i - self.j
   }
 }
 
@@ -367,11 +370,8 @@ mod tests {
 
   #[test]
   fn test_rewind() {
-    let mut reader = BitReader {
-      bytes: vec![], // irrelevant
-      i: 5,
-      j: 3,
-    };
+    let mut reader = BitReader::from(vec![0; 6]);
+    reader.read(43); // so we start at (5, 3)
 
     reader.rewind(2);
     assert_eq!(reader.inds(), (5, 1));

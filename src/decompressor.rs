@@ -13,7 +13,7 @@ use crate::huffman_decoding::HuffmanTable;
 use crate::prefix::Prefix;
 use crate::types::{NumberLike, UnsignedLike};
 
-const UNCHECKED_NUM_THRESHOLD: usize = 1000;
+const UNCHECKED_NUM_THRESHOLD: usize = 1;
 
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
@@ -199,7 +199,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     let start_byte_idx = reader.aligned_byte_ind()?;
     let remaining_bytes = reader.size() - start_byte_idx;
     if remaining_bytes < self.compressed_body_size {
-      Err(QCompressError::invalid_argument(format!(
+      Err(QCompressError::insufficient_data(format!(
         "bit reader has only {} bytes remaining but compressed body size is {}",
         remaining_bytes,
         self.compressed_body_size,
