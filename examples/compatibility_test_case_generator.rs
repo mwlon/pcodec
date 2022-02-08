@@ -1,4 +1,4 @@
-use q_compress::types::NumberLike;
+use q_compress::data_types::NumberLike;
 use q_compress::{Compressor, CompressorConfig, TimestampMicros};
 use rand::Rng;
 use std::time::{SystemTime, Duration};

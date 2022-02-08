@@ -6,7 +6,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use q_compress::{Compressor, CompressorConfig, Decompressor, TimestampMicros};
-use q_compress::types::NumberLike;
+use q_compress::data_types::NumberLike;
 
 fn basename_no_ext(path: &Path) -> String {
   let basename = path

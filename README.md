@@ -37,6 +37,7 @@ configuring `delta_encoding_order`
 
 Use cases include:
 * compression for columnar data
+* compression for time series data with delta encoding
 * low-bandwidth communication, like transmitting batches of sensor data from
 space probes
 
@@ -141,8 +142,9 @@ See [changelog.md](./changelog.md)
 Small data types can be efficiently compressed by casting to larger data types;
 e.g. `u16` to `u32`.
 When necessary, you can implement your own data type via
- `q_compress::types::NumberLike` and (if the existing unsigned implementations
-are insufficient)
+ `q_compress::types::NumberLike` and (if the existing signed/unsigned
+implementations are insufficient)
+`q_compress::types::SignedLike` and
 `q_compress::types::UnsignedLike`.
 
 ### Seeking and Quantile Statistics

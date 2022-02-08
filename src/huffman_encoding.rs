@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::prefix::PrefixIntermediate;
-use crate::types::NumberLike;
+use crate::prefix::WeightedPrefix;
+use crate::data_types::NumberLike;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
@@ -40,7 +40,7 @@ impl HuffmanItem {
   pub fn create_bits<T: NumberLike>(
     &self,
     item_index: &mut Vec<HuffmanItem>,
-    leaf_index: &mut [PrefixIntermediate<T>],
+    leaf_index: &mut [WeightedPrefix<T>],
   ) {
     self.create_bits_from(Vec::new(), item_index, leaf_index);
   }
@@ -49,11 +49,11 @@ impl HuffmanItem {
     &self,
     bits: Vec<bool>,
     item_index: &mut [HuffmanItem],
-    leaf_index: &mut [PrefixIntermediate<T>],
+    leaf_index: &mut [WeightedPrefix<T>],
   ) {
     item_index[self.id].bits = bits.clone();
     if self.leaf_id.is_some() {
-      leaf_index[self.leaf_id.unwrap()].val = bits;
+      leaf_index[self.leaf_id.unwrap()].prefix.code = bits;
     } else {
       let mut left_bits = bits.clone();
       left_bits.push(false);
@@ -77,7 +77,7 @@ impl PartialOrd for HuffmanItem {
   }
 }
 
-pub fn make_huffman_code<T: NumberLike>(prefix_sequence: &mut [PrefixIntermediate<T>]) {
+pub fn make_huffman_code<T: NumberLike>(prefix_sequence: &mut [WeightedPrefix<T>]) {
   let n = prefix_sequence.len();
   let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
   let mut items = Vec::with_capacity(n); // for modifying item codes
@@ -104,22 +104,35 @@ pub fn make_huffman_code<T: NumberLike>(prefix_sequence: &mut [PrefixIntermediat
 #[cfg(test)]
 mod tests {
   use crate::huffman_encoding::make_huffman_code;
-  use crate::prefix::PrefixIntermediate;
+  use crate::prefix::{WeightedPrefix, Prefix};
+
+  fn coded_prefix(weight: u64, code: Vec<bool>) -> WeightedPrefix<i32> {
+    WeightedPrefix {
+      weight,
+      prefix: Prefix {
+        count: 0,
+        code,
+        lower: 0,
+        upper: 0,
+        run_len_jumpstart: None,
+      }
+    }
+  }
+
+  fn uncoded_prefix(weight: u64) -> WeightedPrefix<i32> {
+    coded_prefix(weight, Vec::new())
+  }
 
   #[test]
   fn test_make_huffman_code_single() {
     let mut prefix_seq = vec![
-      PrefixIntermediate::<i32> { weight: 100, ..Default::default() },
+      uncoded_prefix(100),
     ];
     make_huffman_code(&mut prefix_seq);
     assert_eq!(
       prefix_seq,
       vec![
-        PrefixIntermediate::<i32> {
-          weight: 100,
-          val: vec![],
-          ..Default::default()
-        },
+        coded_prefix(100, vec![]),
       ]
     );
   }
@@ -127,41 +140,21 @@ mod tests {
   #[test]
   fn test_make_huffman_code() {
     let mut prefix_seq = vec![
-      PrefixIntermediate::<i32> { weight: 1, ..Default::default() },
-      PrefixIntermediate::<i32> { weight: 6, ..Default::default() },
-      PrefixIntermediate::<i32> { weight: 2, ..Default::default() },
-      PrefixIntermediate::<i32> { weight: 4, ..Default::default() },
-      PrefixIntermediate::<i32> { weight: 5, ..Default::default() },
+      uncoded_prefix(1),
+      uncoded_prefix(6),
+      uncoded_prefix(2),
+      uncoded_prefix(4),
+      uncoded_prefix(5),
     ];
     make_huffman_code(&mut prefix_seq);
     assert_eq!(
       prefix_seq,
       vec![
-        PrefixIntermediate::<i32> {
-          weight: 1,
-          val: vec![false, false, false],
-          ..Default::default()
-        },
-        PrefixIntermediate::<i32> {
-          weight: 6,
-          val: vec![true, true],
-          ..Default::default()
-        },
-        PrefixIntermediate::<i32> {
-          weight: 2,
-          val: vec![false, false, true],
-          ..Default::default()
-        },
-        PrefixIntermediate::<i32> {
-          weight: 4,
-          val: vec![false, true],
-          ..Default::default()
-        },
-        PrefixIntermediate::<i32> {
-          weight: 5,
-          val: vec![true, false],
-          ..Default::default()
-        },
+        coded_prefix(1, vec![false, false, false]),
+        coded_prefix(6, vec![true, true]),
+        coded_prefix(2, vec![false, false, true]),
+        coded_prefix(4, vec![false, true]),
+        coded_prefix(5, vec![true, false]),
       ]
     );
   }

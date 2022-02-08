@@ -4,6 +4,9 @@
 
 * Added support for delta encoding, which can compress correlated data
   to a small fraction of the size in cases with correlated data.
+* Eliminated all known panic cases.
+Notably, an error is now returned on decompressing to the end of a `BitReader`,
+instead of a panic.
 
 ## 0.5.0
 

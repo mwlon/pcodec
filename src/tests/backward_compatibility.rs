@@ -1,7 +1,7 @@
 use std::fs;
 
 use crate::{Decompressor, TimestampMicros};
-use crate::types::NumberLike;
+use crate::data_types::NumberLike;
 
 fn assert_compatible<T: NumberLike>(
   filename: &str,

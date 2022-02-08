@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::types::{NumberLike, UnsignedLike};
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
 
 macro_rules! impl_unsigned {

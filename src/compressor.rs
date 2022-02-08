@@ -1,18 +1,16 @@
 use std::cmp::{max, min};
-use std::convert::TryFrom;
-use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{BitWriter, Flags, huffman_encoding, prefix};
+use crate::{BitWriter, Flags, huffman_encoding};
 use crate::bits::*;
-use crate::chunk_metadata::{ChunkMetadata, PrefixInfo};
+use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
 use crate::constants::*;
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::prefix::{Prefix, PrefixIntermediate};
-use crate::types::{NumberLike, UnsignedLike};
+use crate::prefix::{PrefixCompressionInfo, WeightedPrefix, Prefix};
+use crate::data_types::{NumberLike, UnsignedLike};
 
 const DEFAULT_COMPRESSION_LEVEL: usize = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
@@ -23,10 +21,41 @@ struct JumpstartConfiguration {
   jumpstart: usize,
 }
 
-// everything the user might want to specify about how to compress
+/// All the settings you can specify about compression.
+///
+/// Some, like `delta_encoding_order`, are explicitly stored as `Flags` in the
+/// compressed bytes.
+/// Others, like `compression_level`, affect compression but are not explicitly
+/// stored in the output.
 #[derive(Clone, Debug)]
 pub struct CompressorConfig {
+  /// `compression_level` ranges from 0 to 12 inclusive, defaulting to 6.
+  ///
+  /// The compressor uses up to 2^`compression_level` prefixes.
+  ///
+  /// For example,
+  /// * Level 0 achieves a modest amount of compression with 1 prefix and can
+  /// be twice as fast as level 6.
+  /// * Level 6 achieves nearly the best compression with 64 prefixes and still
+  /// runs in reasonable time. In some cases, its compression ratio is 3-4x as
+  /// high as level level 0's.
+  /// * Level 12 can achieve a few % better compression than 6 with 4096
+  /// prefixes but runs ~10x slower in many cases.
   pub compression_level: usize,
+  /// `delta_encoding_order` ranges from 0 to 7 inclusive, defaulting to 0.
+  ///
+  /// It is the number of times to apply delta encoding
+  /// before compressing. For instance, say we have the numbers
+  /// `[0, 2, 2, 4, 4, 6, 6]` and consider different delta encoding orders.
+  /// * 0 indicates no delta encoding, so the numbers would be compressed
+  /// as-is. This is perfect for columnar data were the order is essentially
+  /// random.
+  /// * 1st order delta encoding would take consecutive differences, leaving
+  /// `[0, 2, 0, 2, 0, 2, 0]`. This is perfect for time series data like stock
+  /// prices that are continuous but not smooth.
+  /// * 2nd order delta encoding would take consecutive differences again,
+  /// leaving `[2, -2, 2, -2, 2, -2]`. Higher-order delta encoding is good
+  /// for time series like sensor readings that are very smooth.
   pub delta_encoding_order: usize,
 }
 
@@ -76,7 +105,7 @@ fn choose_run_len_jumpstart(
 }
 
 fn push_pref<T: NumberLike>(
-  seq: &mut Vec<PrefixIntermediate<T>>,
+  seq: &mut Vec<WeightedPrefix<T>>,
   prefix_idx: &mut usize,
   i: usize,
   j: usize,
@@ -91,7 +120,7 @@ fn push_pref<T: NumberLike>(
   if n < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n || prefix_idx_incr == 1 {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
-    seq.push(PrefixIntermediate::new(
+    seq.push(WeightedPrefix::new(
       count,
       count as u64,
       sorted[i],
@@ -102,7 +131,7 @@ fn push_pref<T: NumberLike>(
     // The weird case - a range that represents almost all (but not all) the data.
     // We create extra prefixes that can describe `reps` copies of the range at once.
     let config = choose_run_len_jumpstart(count as u64, n as u64);
-    seq.push(PrefixIntermediate::new(
+    seq.push(WeightedPrefix::new(
       count,
       config.weight,
       sorted[i],
@@ -143,7 +172,7 @@ fn train_prefixes<T: NumberLike>(
   sorted.sort_unstable_by(|a, b| a.num_cmp(b));
   let safe_comp_level = min(comp_level, (n as f64).log2() as usize);
   let n_prefix = 1_usize << safe_comp_level;
-  let mut prefix_sequence: Vec<PrefixIntermediate<T>> = Vec::new();
+  let mut prefix_sequence: Vec<WeightedPrefix<T>> = Vec::new();
   let seq_ptr = &mut prefix_sequence;
 
   let mut prefix_idx = 0_usize;
@@ -188,11 +217,11 @@ fn train_prefixes<T: NumberLike>(
     if can_improve {
       let pref0 = &prefix_sequence[best_i as usize];
       let pref1 = &prefix_sequence[best_i as usize + 1];
-      prefix_sequence[best_i as usize] = PrefixIntermediate::new(
-        pref0.count + pref1.count,
+      prefix_sequence[best_i as usize] = WeightedPrefix::new(
+        pref0.prefix.count + pref1.prefix.count,
         pref0.weight + pref1.weight,
-        pref0.lower,
-        pref1.upper,
+        pref0.prefix.lower,
+        pref1.prefix.upper,
         None,
       );
       //not the most efficient but whatever
@@ -202,19 +231,20 @@ fn train_prefixes<T: NumberLike>(
 
   huffman_encoding::make_huffman_code(&mut prefix_sequence);
 
-  let mut prefixes = Vec::new();
-  for p in prefix_sequence {
-    prefixes.push(Prefix::try_from(p)?);
-  }
+  let prefixes = prefix_sequence.iter()
+    .map(|wp| wp.prefix.clone())
+    .collect();
   Ok(prefixes)
 }
 
 fn combine_improvement<T: NumberLike>(
-  p0: &PrefixIntermediate<T>,
-  p1: &PrefixIntermediate<T>,
+  wp0: &WeightedPrefix<T>,
+  wp1: &WeightedPrefix<T>,
   n: usize,
   flags: &Flags,
 ) -> f64 {
+  let p0 = &wp0.prefix;
+  let p1 = &wp1.prefix;
   if p0.run_len_jumpstart.is_some() || p1.run_len_jumpstart.is_some() {
     // can never combine prefixes that encode run length
     return f64::MIN;
@@ -223,18 +253,18 @@ fn combine_improvement<T: NumberLike>(
   let p0_r_cost = avg_base2_bits(p0.upper.to_unsigned() - p0.lower.to_unsigned());
   let p1_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p1.lower.to_unsigned());
   let combined_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p0.lower.to_unsigned());
-  let p0_d_cost = depth_bits(p0.weight, n);
-  let p1_d_cost = depth_bits(p1.weight, n);
-  let combined_d_cost = depth_bits(p0.weight + p1.weight, n);
+  let p0_d_cost = depth_bits(wp0.weight, n);
+  let p1_d_cost = depth_bits(wp1.weight, n);
+  let combined_d_cost = depth_bits(wp0.weight + wp1.weight, n);
   let meta_cost = 10.0 +
     flags.bits_to_encode_prefix_len() as f64 +
     2.0 * T::PHYSICAL_BITS as f64;
 
   let separate_cost = 2.0 * meta_cost +
-    (p0_r_cost + p0_d_cost) * p0.weight as f64+
-    (p1_r_cost + p1_d_cost) * p1.weight as f64;
+    (p0_r_cost + p0_d_cost) * wp0.weight as f64+
+    (p1_r_cost + p1_d_cost) * wp1.weight as f64;
   let combined_cost = meta_cost +
-    (combined_r_cost + combined_d_cost) * (p0.weight + p1.weight) as f64;
+    (combined_r_cost + combined_d_cost) * (wp0.weight + wp1.weight) as f64;
 
   separate_cost - combined_cost
 }
@@ -242,11 +272,19 @@ fn combine_improvement<T: NumberLike>(
 
 #[derive(Clone, Default)]
 struct TrainedChunkCompressor<T> where T: NumberLike {
-  pub prefixes: Vec<Prefix<T>>,
+  pub prefix_infos: Vec<PrefixCompressionInfo<T>>,
 }
 
 impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
-  fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &Prefix<T>, writer: &mut BitWriter) {
+  pub fn new(prefixes: &[Prefix<T>]) -> QCompressResult<Self> {
+    let mut prefix_infos = Vec::new();
+    for p in prefixes {
+      prefix_infos.push(PrefixCompressionInfo::from(p));
+    }
+    Ok(Self { prefix_infos })
+  }
+
+  fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &PrefixCompressionInfo<T>, writer: &mut BitWriter) {
     let off = num.to_unsigned() - pref.lower_unsigned;
     writer.write_diff(off, pref.k);
     if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
@@ -255,12 +293,12 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
     }
   }
 
-  fn in_prefix(num: T, prefix: &Prefix<T>) -> bool {
+  fn in_prefix(num: T, prefix: &PrefixCompressionInfo<T>) -> bool {
     num.ge(&prefix.lower) && num.le(&prefix.upper)
   }
 
   fn compress_nums(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<()> {
-    let mut sorted_prefixes = self.prefixes.clone();
+    let mut sorted_prefixes = self.prefix_infos.clone();
     // most common prefixes come first
     sorted_prefixes.sort_by(
       |p0, p1|
@@ -276,7 +314,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
           continue;
         }
 
-        writer.write_bits(&pref.val);
+        writer.write(&pref.code);
 
         match pref.run_len_jumpstart {
           None => {
@@ -320,17 +358,23 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
   }
 }
 
-impl<T> Debug for TrainedChunkCompressor<T> where T: NumberLike {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    prefix::display_prefixes(&self.prefixes, f)
-  }
-}
+// impl<T> Debug for TrainedChunkCompressor<T> where T: NumberLike {
+//   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//     prefix::display_prefixes(&self.prefix_infos, f)
+//   }
+// }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Compressor<T> where T: NumberLike {
   internal_config: InternalCompressorConfig,
   flags: Flags,
   phantom: PhantomData<T>,
+}
+
+impl<T: NumberLike> Default for Compressor<T> {
+  fn default() -> Self {
+    Self::from_config(CompressorConfig::default())
+  }
 }
 
 impl<T> Compressor<T> where T: NumberLike + 'static {
@@ -338,7 +382,7 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     Self {
       internal_config: InternalCompressorConfig::from(&config),
       flags: Flags::from(&config),
-      ..Default::default()
+      phantom: PhantomData,
     }
   }
 
@@ -362,22 +406,22 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
 
     let n = nums.len();
-    let pre_header_idx = writer.size();
+    let pre_header_idx = writer.byte_size();
 
     let order = self.flags.delta_encoding_order;
     let (mut metadata, post_header_idx) = if order == 0 {
       let prefixes = train_prefixes(nums.to_vec(), &self.internal_config, &self.flags)?;
-      let prefix_info = PrefixInfo::Simple {
+      let prefix_metadata = PrefixMetadata::Simple {
         prefixes: prefixes.clone(),
       };
       let metadata = ChunkMetadata {
         n,
         compressed_body_size: 0,
-        prefix_info,
+        prefix_metadata,
       };
       metadata.write_to(writer, &self.flags);
-      let post_header_idx = writer.size();
-      let chunk_compressor = TrainedChunkCompressor { prefixes };
+      let post_header_idx = writer.byte_size();
+      let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
       chunk_compressor.compress_nums(nums, writer)?;
       (metadata, post_header_idx)
     } else {
@@ -388,22 +432,22 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
         &self.internal_config,
         &self.flags,
       )?;
-      let prefix_info = PrefixInfo::Delta {
+      let prefix_metadata = PrefixMetadata::Delta {
         delta_moments,
         prefixes: prefixes.clone(),
       };
       let metadata = ChunkMetadata {
         n,
         compressed_body_size: 0,
-        prefix_info
+        prefix_metadata
       };
       metadata.write_to(writer, &self.flags);
-      let post_header_idx = writer.size();
-      let chunk_compressor = TrainedChunkCompressor { prefixes };
+      let post_header_idx = writer.byte_size();
+      let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
       chunk_compressor.compress_nums(&deltas, writer)?;
       (metadata, post_header_idx)
     };
-    metadata.compressed_body_size = writer.size() - post_header_idx;
+    metadata.compressed_body_size = writer.byte_size() - post_header_idx;
     metadata.update_write_compressed_body_size(writer, pre_header_idx);
     Ok(metadata)
   }

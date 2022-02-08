@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::types::{NumberLike, SignedLike};
+use crate::data_types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 
 impl SignedLike for bool {

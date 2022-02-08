@@ -3,8 +3,8 @@ use std::mem::MaybeUninit;
 
 use crate::BitReader;
 use crate::constants::{PREFIX_TABLE_SIZE, PREFIX_TABLE_SIZE_LOG};
-use crate::prefix::{Prefix, PrefixDecompressionInfo};
-use crate::types::{NumberLike, UnsignedLike};
+use crate::prefix::{PrefixDecompressionInfo, Prefix};
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressResult, QCompressError};
 
 #[derive(Clone, Debug)]
@@ -96,7 +96,7 @@ where T: NumberLike {
         .filter(|&p| {
           for (depth_incr, bit) in sub_bits.iter().enumerate() {
             let total_depth = depth + depth_incr;
-            if p.val.len() > total_depth && p.val[total_depth] != *bit {
+            if p.code.len() > total_depth && p.code[total_depth] != *bit {
               return false;
             }
           }

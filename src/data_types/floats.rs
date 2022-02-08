@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::convert::TryInto;
 
-use crate::types::NumberLike;
+use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 
 // Note that in all conversions between float and unsigned int, we are using

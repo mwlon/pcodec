@@ -1,5 +1,5 @@
 use crate::{BitReader, BitWriter};
-use crate::types::{NumberLike, SignedLike};
+use crate::data_types::{NumberLike, SignedLike};
 use std::marker::PhantomData;
 use crate::errors::QCompressResult;
 

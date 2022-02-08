@@ -1,8 +1,7 @@
-use crate::types::NumberLike;
-use crate::prefix::Prefix;
-use crate::{ChunkMetadata, Compressor, BitWriter, Decompressor};
+use crate::data_types::NumberLike;
+use crate::{Compressor, BitWriter, Decompressor};
 use crate::errors::ErrorKind;
-use crate::chunk_metadata::PrefixInfo;
+use crate::chunk_metadata::{PrefixMetadata, ChunkMetadata};
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
   let compressor = Compressor::default();
@@ -35,11 +34,11 @@ fn test_insufficient_data_short_prefixes() {
   }
 
   let metadata = assert_panic_safe(nums);
-  match metadata.prefix_info {
-    PrefixInfo::Simple { prefixes } => {
+  match metadata.prefix_metadata {
+    PrefixMetadata::Simple { prefixes } => {
       assert_eq!(prefixes.len(), 2);
       for p in &prefixes {
-        assert_eq!(p.val.len(), 1);
+        assert_eq!(p.code.len(), 1);
       }
     },
     _ => panic!("expected simple prefix info"),
@@ -54,8 +53,8 @@ fn test_insufficient_data_many_reps() {
   }
 
   let metadata = assert_panic_safe(nums);
-  match metadata.prefix_info {
-    PrefixInfo::Simple { prefixes } => {
+  match metadata.prefix_metadata {
+    PrefixMetadata::Simple { prefixes } => {
       assert_eq!(prefixes.len(), 2);
       let has_reps = prefixes.iter()
         .any(|p| p.run_len_jumpstart.is_some());
@@ -77,10 +76,10 @@ fn test_insufficient_data_long_offsets() {
 
 
   let metadata = assert_panic_safe(nums);
-  match metadata.prefix_info {
-    PrefixInfo::Simple { prefixes } => {
+  match metadata.prefix_metadata {
+    PrefixMetadata::Simple { prefixes } => {
       assert_eq!(prefixes.len(), 1);
-      assert_eq!(prefixes[0].k, 63);
+      assert_eq!(prefixes[0].k_info().k, 63);
     },
     _ => panic!("expected simple prefix info"),
   }
