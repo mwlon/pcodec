@@ -18,6 +18,7 @@ mod bit_writer;
 mod bits;
 mod chunk_metadata;
 mod constants;
+mod compression_table;
 mod compressor;
 mod decompressor;
 mod delta_encoding;

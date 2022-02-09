@@ -114,32 +114,51 @@ impl<T: NumberLike> WeightedPrefix<T> {
 }
 
 #[derive(Clone, Debug)]
-pub struct PrefixCompressionInfo<T> where T: NumberLike {
+pub struct PrefixCompressionInfo<Diff> where Diff: UnsignedLike {
   pub count: usize,
   pub code: Vec<bool>,
-  pub lower: T,
-  pub upper: T,
-  pub lower_unsigned: T::Unsigned,
+  pub lower: Diff,
+  pub upper: Diff,
   pub k: usize,
-  pub only_k_bits_lower: T::Unsigned,
-  pub only_k_bits_upper: T::Unsigned,
+  pub only_k_bits_lower: Diff,
+  pub only_k_bits_upper: Diff,
   pub run_len_jumpstart: Option<usize>,
 }
 
-impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T> {
+impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
   fn from(prefix: &Prefix<T>) -> Self {
     let KInfo { k, only_k_bits_upper, only_k_bits_lower } = prefix.k_info();
 
     PrefixCompressionInfo {
       count: prefix.count,
       code: prefix.code.clone(),
-      lower: prefix.lower,
-      upper: prefix.upper,
-      lower_unsigned: prefix.lower.to_unsigned(),
+      lower: prefix.lower.to_unsigned(),
+      upper: prefix.upper.to_unsigned(),
       k,
       only_k_bits_lower,
       only_k_bits_upper,
       run_len_jumpstart: prefix.run_len_jumpstart,
+    }
+  }
+}
+
+impl<Diff: UnsignedLike> PrefixCompressionInfo<Diff> {
+  pub fn contains(&self, unsigned: Diff) -> bool {
+    self.lower <= unsigned && self.upper >= unsigned
+  }
+}
+
+impl<Diff: UnsignedLike> Default for PrefixCompressionInfo<Diff> {
+  fn default() -> Self {
+    PrefixCompressionInfo {
+      count: 0,
+      code: Vec::new(),
+      lower: Diff::ZERO,
+      upper: Diff::MAX,
+      k: Diff::BITS,
+      only_k_bits_lower: Diff::ZERO,
+      only_k_bits_upper: Diff::MAX,
+      run_len_jumpstart: None,
     }
   }
 }

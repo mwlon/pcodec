@@ -11,6 +11,8 @@ use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::{PrefixCompressionInfo, WeightedPrefix, Prefix};
 use crate::data_types::{NumberLike, UnsignedLike};
+use crate::compression_table::CompressionTable;
+use std::time::Instant;
 
 const DEFAULT_COMPRESSION_LEVEL: usize = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
@@ -270,88 +272,65 @@ fn combine_improvement<T: NumberLike>(
   separate_cost - combined_cost
 }
 
+fn compress_offset_bits_w_prefix<Diff: UnsignedLike>(
+  unsigned: Diff,
+  p: &PrefixCompressionInfo<Diff>,
+  writer: &mut BitWriter,
+) {
+  let off = unsigned - p.lower;
+  writer.write_diff(off, p.k);
+  if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
+    // most significant bit, if necessary, comes last
+    writer.write_one((off & (Diff::ONE << p.k)) > Diff::ZERO);
+  }
+}
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct TrainedChunkCompressor<T> where T: NumberLike {
-  pub prefix_infos: Vec<PrefixCompressionInfo<T>>,
+  pub table: CompressionTable<T::Unsigned>,
+  // pub prefix_infos: Vec<PrefixCompressionInfo<T>>,
 }
 
 impl<T> TrainedChunkCompressor<T> where T: NumberLike {
   pub fn new(prefixes: &[Prefix<T>]) -> QCompressResult<Self> {
-    let mut prefix_infos = Vec::new();
-    for p in prefixes {
-      prefix_infos.push(PrefixCompressionInfo::from(p));
-    }
-    Ok(Self { prefix_infos })
-  }
-
-  fn compress_num_offset_bits_w_prefix(&self, num: T, pref: &PrefixCompressionInfo<T>, writer: &mut BitWriter) {
-    let off = num.to_unsigned() - pref.lower_unsigned;
-    writer.write_diff(off, pref.k);
-    if off < pref.only_k_bits_lower || off > pref.only_k_bits_upper {
-      // most significant bit, if necessary, comes last
-      writer.write_one((off & (T::Unsigned::ONE << pref.k)) > T::Unsigned::ZERO);
-    }
-  }
-
-  fn in_prefix(num: T, prefix: &PrefixCompressionInfo<T>) -> bool {
-    num.ge(&prefix.lower) && num.le(&prefix.upper)
+    let table = CompressionTable::from(prefixes);
+    Ok(Self { table })
   }
 
   fn compress_nums(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<()> {
-    let mut sorted_prefixes = self.prefix_infos.clone();
-    // most common prefixes come first
-    sorted_prefixes.sort_by(
-      |p0, p1|
-        p0.count.cmp(&p1.count)
-    );
+    let unsigneds = nums.iter()
+      .map(|&n| n.to_unsigned())
+      .collect::<Vec<_>>();
 
     let mut i = 0;
-    while i < nums.len() {
-      let mut success = false;
-      let num = nums[i];
-      for pref in &sorted_prefixes {
-        if !Self::in_prefix(num, pref) {
-          continue;
+    while i < unsigneds.len() {
+      let unsigned = unsigneds[i];
+      let p = self.table.search(unsigned)?;
+      writer.write(&p.code);
+      match p.run_len_jumpstart {
+        None => {
+          compress_offset_bits_w_prefix(unsigned, p, writer);
+          i += 1;
         }
-
-        writer.write(&pref.code);
-
-        match pref.run_len_jumpstart {
-          None => {
-            self.compress_num_offset_bits_w_prefix(num, pref, writer);
-            i += 1;
-          }
-          Some(jumpstart) => {
-            let mut reps = 1;
-            for other_num in nums.iter().skip(i + 1) {
-              if Self::in_prefix(*other_num, pref) {
-                reps += 1;
-              } else {
-                break;
-              }
+        Some(jumpstart) => {
+          let mut reps = 1;
+          for &other in unsigneds.iter().skip(i + 1) {
+            if p.contains(other) {
+              reps += 1;
+            } else {
+              break;
             }
-
-            // we store 1 less than the number of occurrences
-            // because the prefix already implies there is at least 1 occurrence
-            writer.write_varint(reps - 1, jumpstart);
-
-            for x in nums.iter().skip(i).take(reps) {
-              self.compress_num_offset_bits_w_prefix(*x, pref, writer);
-            }
-            i += reps;
           }
+
+          // we store 1 less than the number of occurrences
+          // because the prefix already implies there is at least 1 occurrence
+          writer.write_varint(reps - 1, jumpstart);
+
+          for &unsigned in unsigneds.iter().skip(i).take(reps) {
+            compress_offset_bits_w_prefix(unsigned, p, writer);
+          }
+          i += reps;
         }
-
-        success = true;
-        break;
-      }
-
-      if !success {
-        return Err(QCompressError::invalid_argument(format!(
-          "chunk compressor's ranges were not trained to include number {}",
-          nums[i],
-        )));
       }
     }
     writer.finish_byte();
@@ -455,7 +434,10 @@ impl<T> Compressor<T> where T: NumberLike {
 
     let order = self.flags.delta_encoding_order;
     let (mut metadata, post_header_idx) = if order == 0 {
+      let t0 = Instant::now();
       let prefixes = train_prefixes(nums.to_vec(), &self.internal_config, &self.flags)?;
+      let t1 = Instant::now();
+      println!("trained {} prefixes in {:?}", prefixes.len(), t1 - t0);
       let prefix_metadata = PrefixMetadata::Simple {
         prefixes: prefixes.clone(),
       };
@@ -467,7 +449,11 @@ impl<T> Compressor<T> where T: NumberLike {
       metadata.write_to(writer, &self.flags);
       let post_header_idx = writer.byte_size();
       let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
+      let t2 = Instant::now();
+      println!("simple stuff in {:?}", t2 - t1);
       chunk_compressor.compress_nums(nums, writer)?;
+      let t3 = Instant::now();
+      println!("final body compress in {:?}", t3 - t2);
       (metadata, post_header_idx)
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
