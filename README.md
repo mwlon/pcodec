@@ -57,10 +57,9 @@ fn main() {
     my_ints.push(i as i64);
   }
  
-  // Here we just use the default configuration, but `CompressorConfig` contains
-  // the following options:
-  //   `compression_level` 0 to 12, default 6
-  //   `delta_encoding_order` 0 to 7, default 0
+  // Here we just use the default configuration, but we can also use
+  // `::from_compressor_config()` to set configurations like
+  // `compression_level` and `delta_encoding_order`.
   let compressor = I64Compressor::default();
   let bytes: Vec<u8> = compressor.simple_compress(&my_ints);
   println!("compressed down to {} bytes", bytes.len());
@@ -124,7 +123,7 @@ enables fast seeking through the whole file.
 Each chunk body consists of many small number blocks, each of which encodes a
 single number.
 Each number block begins with a prefix for the range the number is in.
-If that range uses repeetitions, a varint for the exact number of repetitions
+If that range uses repetitions, a varint for the exact number of repetitions
 follows, leveraging the jumpstart from earlier.
 Then an offset (for each repetition if necessary) follows,
 specifying the exact value within the range.
