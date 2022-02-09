@@ -5,8 +5,8 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::time::Instant;
 
-use q_compress::{Compressor, CompressorConfig, Decompressor, TimestampMicros};
-use q_compress::data_types::NumberLike;
+use q_compress::{Compressor, CompressorConfig, Decompressor};
+use q_compress::data_types::{NumberLike, TimestampMicros};
 
 fn basename_no_ext(path: &Path) -> String {
   let basename = path

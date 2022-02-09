@@ -1,5 +1,5 @@
-use q_compress::data_types::NumberLike;
-use q_compress::{Compressor, CompressorConfig, TimestampMicros};
+use q_compress::data_types::{NumberLike, TimestampMicros};
+use q_compress::{Compressor, CompressorConfig};
 use rand::Rng;
 use std::time::{SystemTime, Duration};
 use std::ops::AddAssign;

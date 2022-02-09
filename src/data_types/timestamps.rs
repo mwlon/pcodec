@@ -183,7 +183,7 @@ impl_timestamp!(TimestampMicros, 1_000_000_u32, 9);
 #[cfg(test)]
 mod tests {
   use std::time::SystemTime;
-  use crate::{TimestampMicros, TimestampNanos};
+  use crate::data_types::{TimestampMicros, TimestampNanos};
 
   #[test]
   fn test_system_time_conversion() {

@@ -1,5 +1,5 @@
-use crate::{Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNanos, BitWriter};
-use crate::data_types::NumberLike;
+use crate::{Compressor, CompressorConfig, Decompressor, BitWriter};
+use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 
 #[test]
 fn test_edge_cases() {

@@ -6,7 +6,6 @@ pub use bit_reader::BitReader;
 pub use bit_writer::BitWriter;
 pub use chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
 pub use compressor::{Compressor, CompressorConfig};
-pub use data_types::{TimestampMicros, TimestampNanos};
 pub use decompressor::{Decompressor, DecompressorConfig};
 pub use flags::Flags;
 pub use prefix::Prefix;
