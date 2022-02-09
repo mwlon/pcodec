@@ -199,6 +199,11 @@ fn train_prefixes<T: NumberLike>(
   }
   push_pref(seq_ptr, prefix_idx_ptr, i, n, n_prefix, n, &sorted);
 
+  // prefix optimization loop
+  // This isn't a performance issue for compression level up to 8,
+  // but it's currently O(unoptimized_prefixes ^ 2).
+  // We could amend this code to make it much faster for compression levels
+  // 9 - 12.
   let mut can_improve = true;
   while can_improve {
     can_improve = false;
