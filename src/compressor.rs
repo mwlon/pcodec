@@ -15,6 +15,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 const DEFAULT_COMPRESSION_LEVEL: usize = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
+const DEFAULT_CHUNK_SIZE: usize = 1000000;
 
 struct JumpstartConfiguration {
   weight: u64,
@@ -275,7 +276,7 @@ struct TrainedChunkCompressor<T> where T: NumberLike {
   pub prefix_infos: Vec<PrefixCompressionInfo<T>>,
 }
 
-impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
+impl<T> TrainedChunkCompressor<T> where T: NumberLike {
   pub fn new(prefixes: &[Prefix<T>]) -> QCompressResult<Self> {
     let mut prefix_infos = Vec::new();
     for p in prefixes {
@@ -358,12 +359,37 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike + 'static {
   }
 }
 
-// impl<T> Debug for TrainedChunkCompressor<T> where T: NumberLike {
-//   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//     prefix::display_prefixes(&self.prefix_infos, f)
-//   }
-// }
-
+/// Converts vectors of numbers into compressed bytes.
+///
+/// You can use the compressor very easily:
+/// ```
+/// use q_compress::Compressor;
+///
+/// let my_nums = vec![1, 2, 3];
+/// let compressor = Compressor::<i32>::default();
+/// let bytes = compressor.simple_compress(&my_nums);
+/// ```
+/// You can also get full control over the compression process:
+/// ```
+/// use q_compress::{BitWriter, Compressor, CompressorConfig};
+///
+/// let compressor = Compressor::<i32>::from_config(CompressorConfig {
+///   compression_level: 5,
+///   ..Default::default()
+/// });
+/// let mut writer = BitWriter::default();
+///
+/// compressor.header(&mut writer).expect("header failure");
+/// let chunk_0 = vec![1, 2, 3];
+/// compressor.chunk(&chunk_0, &mut writer).expect("chunk failure");
+/// let chunk_1 = vec![4, 5];
+/// compressor.chunk(&chunk_1, &mut writer).expect("chunk failure");
+/// compressor.footer(&mut writer).expect("footer failure");
+///
+/// let bytes = writer.pop();
+/// ```
+/// Note that in practice we would need larger chunks than this to
+/// achieve good compression, preferably containing 10k-10M numbers.
 #[derive(Clone, Debug)]
 pub struct Compressor<T> where T: NumberLike {
   internal_config: InternalCompressorConfig,
@@ -377,7 +403,11 @@ impl<T: NumberLike> Default for Compressor<T> {
   }
 }
 
-impl<T> Compressor<T> where T: NumberLike + 'static {
+impl<T> Compressor<T> where T: NumberLike {
+  /// Creates a new compressor, given a [`CompressorConfig`].
+  /// Internally, the compressor builds [`Flags`] as well as an internal
+  /// configuration that doesn't show up in the output file.
+  /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
   pub fn from_config(config: CompressorConfig) -> Self {
     Self {
       internal_config: InternalCompressorConfig::from(&config),
@@ -386,16 +416,31 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     }
   }
 
+  /// Returns a reference to the compressor's flags.
   pub fn flags(&self) -> &Flags {
     &self.flags
   }
 
+  /// Writes out a header using the compressor's data type and flags.
+  /// Will return an error if the writer is not at a byte-aligned position.
+  ///
+  /// Each .qco file must start with such a header, which contains:
+  /// * a 4-byte magic header for "qco!" in ascii,
+  /// * a byte for the data type (e.g. `i64` has byte 1 and `f64` has byte
+  /// 5), and
+  /// * bytes for the flags used to compress.
   pub fn header(&self, writer: &mut BitWriter) -> QCompressResult<()> {
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
     writer.write_aligned_byte(T::HEADER_BYTE)?;
     self.flags.write(writer)
   }
 
+  /// Writes out a chunk of data representing the provided numbers.
+  /// Will return an error if the writer is not at a byte-aligned position or
+  /// the slice of numbers is empty.
+  ///
+  /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
+  /// The chunk body encodes the numbers passed in here.
   pub fn chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
     if nums.is_empty() {
       return Err(QCompressError::invalid_argument(
@@ -452,17 +497,24 @@ impl<T> Compressor<T> where T: NumberLike + 'static {
     Ok(metadata)
   }
 
+  /// Writes out a single footer byte indicating that the .qco file has ended.
+  /// Will return an error if the writer is not byte-aligned.
   pub fn footer(&self, writer: &mut BitWriter) -> QCompressResult<()> {
     writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)
   }
 
-  pub fn simple_compress(&self, nums: &[T]) -> QCompressResult<Vec<u8>> {
+  /// Takes in a slice of numbers and returns compressed bytes.
+  pub fn simple_compress(&self, nums: &[T]) -> Vec<u8> {
     let mut writer = BitWriter::default();
-    self.header(&mut writer)?;
-    if !nums.is_empty() {
-      self.chunk(nums, &mut writer)?;
-    }
-    self.footer(&mut writer)?;
-    Ok(writer.pop())
+    // The following unwraps are safe because the writer will be byte-aligned
+    // after each step and ensure each chunk has appropriate size.
+    self.header(&mut writer).unwrap();
+    nums.chunks(DEFAULT_CHUNK_SIZE)
+      .for_each(|chunk| {
+        self.chunk(chunk, &mut writer).unwrap();
+      });
+
+    self.footer(&mut writer).unwrap();
+    writer.pop()
   }
 }

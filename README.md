@@ -62,7 +62,7 @@ fn main() {
   //   `compression_level` 0 to 12, default 6
   //   `delta_encoding_order` 0 to 7, default 0
   let compressor = I64Compressor::default();
-  let bytes: Vec<u8> = compressor.simple_compress(&my_ints).expect("failed to compress");
+  let bytes: Vec<u8> = compressor.simple_compress(&my_ints);
   println!("compressed down to {} bytes", bytes.len());
  
   // decompress

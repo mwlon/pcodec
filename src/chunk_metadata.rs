@@ -5,9 +5,10 @@ use crate::prefix::Prefix;
 use crate::data_types::NumberLike;
 use crate::errors::{QCompressResult, QCompressError};
 
-/// An wrapper for prefixes in the two cases cases: delta encoded or not.
+/// A wrapper for prefixes in the two cases cases: delta encoded or not.
 /// 
-/// This is a part of chunk metadata.
+/// This is the part of chunk metadata that describes *how* the data was
+/// compressed - the Huffman codes used and what ranges they specify.
 #[derive(Clone, Debug)]
 pub enum PrefixMetadata<T: NumberLike> {
   /// `Simple` prefix metadata corresponds to the case when delta encoding is
@@ -34,10 +35,21 @@ pub enum PrefixMetadata<T: NumberLike> {
   }
 }
 
+/// The metadata of a .qco file chunk.
+///
+/// Each file may contain multiple metadata sections, so to count the
+/// entries, one must sum the count `n` for each chunk metadata. This can
+/// be done easily - see the fast_seeking.rs example.
+/// One can also create a rough histogram (or a histogram of deltas, if
+/// delta encoding was used) by aggregating chunk metadata.
 #[derive(Clone, Debug)]
 pub struct ChunkMetadata<T> where T: NumberLike {
+  /// The count of numbers in the chunk.
   pub n: usize,
+  /// The compressed byte length of the compressed numbers that immediately
+  /// follow this chunk metadata section.
   pub compressed_body_size: usize,
+  /// *How* the chunk body was compressed.
   pub prefix_metadata: PrefixMetadata<T>,
 }
 
@@ -140,7 +152,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     writer.finish_byte();
   }
 
-  pub fn update_write_compressed_body_size(&self, writer: &mut BitWriter, initial_idx: usize) {
+  pub(crate) fn update_write_compressed_body_size(&self, writer: &mut BitWriter, initial_idx: usize) {
     writer.assign_usize(
       initial_idx + BITS_TO_ENCODE_N_ENTRIES as usize / 8,
       BITS_TO_ENCODE_N_ENTRIES as usize % 8,
@@ -150,6 +162,8 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
   }
 }
 
+/// A whole chunk of decompressed data - both the metadata
+/// and the numbers it contained.
 #[derive(Clone)]
 pub struct DecompressedChunk<T> where T: NumberLike {
   pub metadata: ChunkMetadata<T>,

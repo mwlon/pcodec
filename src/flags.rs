@@ -9,7 +9,7 @@ use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
 
-/// The configuration stored in a `.qco` file's header.
+/// The configuration stored in a .qco file's header.
 ///
 /// During compression, flags are determined based on your `CompressorConfig`
 /// and the `q_compress` version.

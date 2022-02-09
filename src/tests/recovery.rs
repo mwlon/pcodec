@@ -122,7 +122,7 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize) {
     let compressor = Compressor::<T>::from_config(
       CompressorConfig { compression_level, delta_encoding_order },
     );
-    let compressed = compressor.simple_compress(&nums).expect("compression error");
+    let compressed = compressor.simple_compress(&nums);
     let decompressor = Decompressor::<T>::default();
     let decompressed = decompressor.simple_decompress(compressed)
       .expect("decompression error");

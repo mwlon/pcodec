@@ -4,12 +4,35 @@ use std::fmt;
 use crate::bits;
 use crate::data_types::{NumberLike, UnsignedLike};
 
+/// A pairing of a Huffman code with a numerical range.
+///
+/// Quantile Compression works by splitting the distribution of numbers
+/// into ranges and associating a Huffman code (a short sequence of bits)
+/// with each range.
+/// The combination of these pieces of information, plus a couple others,
+/// is called a `Prefix`.
+/// When compressing a number, the compressor finds the prefix containing
+/// it, then writes out its Huffman code, optionally the number of
+/// consecutive repetitions of that number if `run_length_jumpstart` is
+/// available, and then the exact offset within the range for the number.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prefix<T> where T: NumberLike {
+  /// The count of numbers in the chunk that fall into this Prefix's range.
   pub count: usize,
+  /// The Huffman code for this prefix. Collectively, all the prefixes for a
+  /// chunk form a binary search tree (BST) over these Huffman codes.
+  /// The BST over Huffman codes is different from the BST over numerical
+  /// ranges.
   pub code: Vec<bool>,
+  /// The lower bound for this prefix's numerical range.
   pub lower: T,
+  /// The upper bound (inclusive) for this prefix's numerical range.
   pub upper: T,
+  /// A parameter used for the most common prefix in a sparse distribution.
+  /// For instance, if 90% of a chunk's numbers are exactly 77, then the
+  /// prefix for the range `[0, 0]` will have a `run_len_jumpstart`.
+  /// The jumpstart value tunes the varint encoding of the number of
+  /// consecutive repetitions of the prefix.
   pub run_len_jumpstart: Option<usize>,
 }
 

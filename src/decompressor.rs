@@ -242,6 +242,32 @@ impl<T> Debug for ChunkDecompressor<T> where T: NumberLike {
   }
 }
 
+/// Converts compressed bytes into [`Flags`], [`ChunkMetadata`],
+/// and vectors of numbers.
+///
+/// You can use the decompressor very easily:
+/// ```
+/// use q_compress::Decompressor;
+///
+/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
+/// let decompressor = Decompressor::<i32>::default();
+/// let nums = decompressor.simple_decompress(my_bytes).expect("decompression"); // returns Vec<i32>
+/// ```
+/// You can also get full control over the decompression process:
+/// ```
+/// use q_compress::{BitReader, Decompressor};
+///
+/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
+/// let mut reader = BitReader::from(my_bytes);
+/// let decompressor = Decompressor::<i32>::default();
+///
+/// let flags = decompressor.header(&mut reader).expect("header failure");
+/// while let Some(chunk_meta) = decompressor.chunk_metadata(&mut reader, &flags).expect("chunk meta failure") {
+///   let nums = decompressor.chunk_body(&mut reader, &flags, &chunk_meta).expect("chunk body failure");
+/// }
+/// // We don't need to explicitly read the footer because `.chunk_metadata()`
+/// // returns `None` when it reaches the footer byte.
+/// ```
 #[derive(Clone, Debug, Default)]
 pub struct Decompressor<T> where T: NumberLike {
   config: DecompressorConfig,
@@ -249,6 +275,9 @@ pub struct Decompressor<T> where T: NumberLike {
 }
 
 impl<T> Decompressor<T> where T: NumberLike {
+  /// Creates a new decompressor, given a [`DecompressorConfig`].
+  /// This config has nothing to do with [`Flags`], which will be parsed out
+  /// of a .qco file's header.
   pub fn from_config(config: DecompressorConfig) -> Self {
     Self {
       config,
@@ -256,6 +285,11 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
+  /// Reads the header, returning its [`Flags`].
+  /// Will return an error if the reader is not byte-aligned,
+  /// if the reader runs out of data, if the data type byte does not agree,
+  /// if the flags are from a newer, incompatible version of q_compress,
+  /// or if any corruptions are found.
   pub fn header(&self, reader: &mut BitReader) -> QCompressResult<Flags> {
     let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
     if bytes != MAGIC_HEADER {
@@ -278,6 +312,14 @@ impl<T> Decompressor<T> where T: NumberLike {
     Flags::parse_from(reader)
   }
 
+  /// Reads a [`ChunkMetadata`], returning it.
+  /// Will return `None` if it instead finds a termination footer
+  /// (indicating end of the .qco file).
+  /// Will return an error if the reader is not byte-aligned,
+  /// the reader runs out of data, or any corruptions are found.
+  ///
+  /// Typically one would pass in the [`Flags`] obtained from an earlier
+  /// [`.header()`][Self::header] call.
   pub fn chunk_metadata(&self, reader: &mut BitReader, flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
     let magic_byte = reader.read_aligned_bytes(1)?[0];
     if magic_byte == MAGIC_TERMINATION_BYTE {
@@ -298,11 +340,18 @@ impl<T> Decompressor<T> where T: NumberLike {
     Ok(Some(metadata))
   }
 
+  /// Reads a chunk body, returning it as a vector of numbers.
+  /// Will return an error if the reader is not byte-aligned,
+  /// the reader runs out of data, or any corruptions are found.
+  ///
+  /// Typically one would pass in the [`Flags`] obtained from an earlier
+  /// [`.header()`][Self::header] call and the [`ChunkMetadata`] obtained
+  /// from an earlier [`.chunk_metadata()`][Self::chunk_metadata] call.
   pub fn chunk_body(
     &self,
     reader: &mut BitReader,
-    metadata: ChunkMetadata<T>,
     flags: &Flags,
+    metadata: &ChunkMetadata<T>,
   ) -> QCompressResult<Vec<T>> {
     match &metadata.prefix_metadata {
       PrefixMetadata::Simple { prefixes } => {
@@ -331,6 +380,16 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
+  /// Reads a [`ChunkMetadata`] and the chunk body into a vector of numbers,
+  /// returning both.
+  /// Will return `None` if it instead finds a termination footer
+  /// (indicating end of the .qco file).
+  /// Will return an error if the reader is not byte-aligned,
+  /// the reader runs out of data, or any corruptions are found.
+  ///
+  /// The same effect can be achieved via
+  /// [`.chunk_metadata()`][Self::chunk_metadata] and
+  /// [`.chunk_body()`][Self::chunk_body].
   pub fn chunk(
     &self,
     reader: &mut BitReader,
@@ -341,8 +400,8 @@ impl<T> Decompressor<T> where T: NumberLike {
       Some(metadata) => {
         let nums = self.chunk_body(
           reader,
-          metadata.clone(),
           flags,
+          &metadata,
         )?;
         Ok(Some(DecompressedChunk {
           metadata,
@@ -353,6 +412,9 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
+  /// Takes in compressed bytes and returns a vector of numbers.
+  /// Will return an error if there are any compatibility, corruption,
+  /// or insufficient data issues.
   pub fn simple_decompress(&self, bytes: Vec<u8>) -> QCompressResult<Vec<T>> {
     // cloning/extending by a single chunk's numbers can slow down by 2%
     // so we just take ownership of the first chunk's numbers instead
@@ -422,8 +484,8 @@ mod tests {
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
       let result = decompressor.chunk_body(
         &mut BitReader::from(bytes.clone()),
-        bad_metadata,
         &flags,
+        &bad_metadata,
       );
       assert!(matches!(result.unwrap_err().kind, ErrorKind::Corruption));
     }

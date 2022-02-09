@@ -26,7 +26,6 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
   fn compress(nums: Vec<T>, config: CompressorConfig) -> Vec<u8> {
     Compressor::<T>::from_config(config)
       .simple_compress(&nums)
-      .expect("could not compress")
   }
 
   fn decompress(bytes: Vec<u8>) -> Vec<T> {
