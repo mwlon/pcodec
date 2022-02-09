@@ -1,6 +1,6 @@
 # `q_compress` Changelog
 
-## 0.6.0 (not yet released)
+## 0.6.0
 
 * Added support for delta encoding, which can compress correlated data
 to a small fraction of the size in cases with correlated data.
@@ -13,7 +13,7 @@ because all error cases are unreachable.
 * Renamed `types` module to `data_types` and made public exports for timestamp
 types go through it.
 
-## 0.5.0
+## 0.5.0 (yanked)
 
 * Simplified error handling to 3 error kinds: invalid argument, corruption,
 and version incompatibility.
@@ -22,6 +22,10 @@ and version incompatibility.
 * Changed naming of `CompressorConfig`'s `max_depth` to `compression_level`
 * Fixed bug where in certain cases with high compression level and spiky
 distributions, compressed metadata would be wrong.
+* Yanked from crates.io because it introduced a backward incompatibility in
+chunk metadata.
+Version 0.6 added backward compatibility tests that will prevent this in
+the future.
 
 ## 0.4.1
 
