@@ -3,17 +3,25 @@
 ## 0.6.0 (not yet released)
 
 * Added support for delta encoding, which can compress correlated data
-  to a small fraction of the size in cases with correlated data.
+to a small fraction of the size in cases with correlated data.
+* Eliminated all known panic cases.
+Notably, an error is now returned on decompressing to the end of a `BitReader`,
+instead of a panic.
+* Changed `.simple_compress` to return `Vec<T>` instead of `Result<Vec<T>>`
+because all error cases are unreachable.
+* Trimmed unnecessary functionality from the public API.
+* Renamed `types` module to `data_types` and made public exports for timestamp
+types go through it.
 
 ## 0.5.0
 
 * Simplified error handling to 3 error kinds: invalid argument, corruption,
-  and version incompatibility.
+and version incompatibility.
 * Changed Huffman decoding approach for a decompression speed improvement of
-  50% in most cases.
+50% in most cases.
 * Changed naming of `CompressorConfig`'s `max_depth` to `compression_level`
 * Fixed bug where in certain cases with high compression level and spiky
-  distributions, compressed metadata would be wrong.
+distributions, compressed metadata would be wrong.
 
 ## 0.4.1
 

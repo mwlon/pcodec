@@ -5,8 +5,8 @@ use std::io::ErrorKind;
 use std::path::Path;
 use std::time::Instant;
 
-use q_compress::{Compressor, CompressorConfig, Decompressor, TimestampMicros};
-use q_compress::types::NumberLike;
+use q_compress::{Compressor, CompressorConfig, Decompressor};
+use q_compress::data_types::{NumberLike, TimestampMicros};
 
 fn basename_no_ext(path: &Path) -> String {
   let basename = path
@@ -26,7 +26,6 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
   fn compress(nums: Vec<T>, config: CompressorConfig) -> Vec<u8> {
     Compressor::<T>::from_config(config)
       .simple_compress(&nums)
-      .expect("could not compress")
   }
 
   fn decompress(bytes: Vec<u8>) -> Vec<T> {

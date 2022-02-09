@@ -9,9 +9,30 @@ use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
 
-#[derive(Clone, Debug, Default)]
+/// The configuration stored in a .qco file's header.
+///
+/// During compression, flags are determined based on your `CompressorConfig`
+/// and the `q_compress` version.
+/// Flags affect the encoding of the rest of the file, so decompressing with
+/// the wrong flags will likely cause a corruption error.
+///
+/// Most users will not need to manually instantiate flags; that should be done
+/// internally by `Compressor::from_config`.
+/// However, in some circumstances you may want to inspect flags during
+/// decompression.
+#[derive(Clone, Debug)]
 pub struct Flags {
+  /// Whether to use 5 bits to encode the length of a prefix,
+  /// as opposed to 4.
+  /// Earlier versions of `q_compress` used 4, which was insufficient for
+  /// Huffman prefixes that could reach up to 23 in length
+  /// (23 >= 16 = 2^4)
+  /// in spiky distributions with high compression level.
+  /// In later versions, this flag is always true.
   pub use_5_bit_prefix_len: bool,
+  /// How many times delta encoding was applied during compression.
+  /// This is stored as 3 bits to express 0-7
+  /// See `CompressorConfig` for more details.
   pub delta_encoding_order: usize,
 }
 
@@ -78,7 +99,7 @@ impl Flags {
     for i in 0_usize..(bools.len() / 7) + 1 {
       let start = i * 7;
       let end = (start + 7).min(bools.len());
-      writer.write_bits(&bools[start..end]);
+      writer.write(&bools[start..end]);
       if end < bools.len() {
         writer.write_one(true);
       }

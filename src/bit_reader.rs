@@ -5,8 +5,17 @@ use crate::bits;
 use crate::bits::{LEFT_MASKS, RIGHT_MASKS};
 use crate::constants::{PREFIX_TABLE_SIZE_LOG, BITS_TO_ENCODE_N_ENTRIES};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::types::UnsignedLike;
+use crate::data_types::UnsignedLike;
 
+/// `BitReader` wraps bytes during decompression, enabling a decompressor
+/// to read bit-level information and maintain its position in the bytes.
+///
+/// It does this by maintaining
+/// * a byte index and
+/// * a bit index from 0-8 within that byte.
+///
+/// The reader is consider is considered "aligned" if the current bit index
+/// is 0 or 8 (i.e. at the start or end of the current byte).
 #[derive(Clone)]
 pub struct BitReader {
   bytes: Vec<u8>,
@@ -50,6 +59,39 @@ impl From<Vec<u8>> for BitReader {
 }
 
 impl BitReader {
+  /// Returns the reader's current byte index. Will return an error if the
+  /// reader is at
+  /// a misaligned position.
+  pub fn aligned_byte_ind(&self) -> QCompressResult<usize> {
+    if self.j == 0 {
+      Ok(self.i)
+    } else if self.j == 8 {
+      Ok(self.i + 1)
+    } else {
+      Err(QCompressError::invalid_argument(format!(
+        "cannot get aligned byte index on misaligned bit reader at byte {} bit {}",
+        self.i,
+        self.j,
+      )))
+    }
+  }
+
+  /// Returns the number of bits between the reader's current position and
+  /// the end.
+  pub fn bits_remaining(&self) -> usize {
+    self.total_bits - 8 * self.i - self.j
+  }
+
+  /// Returns the number of bytes in the reader.
+  pub fn byte_size(&self) -> usize {
+    self.bytes.len()
+  }
+
+  /// Returns the reader's current (byte_idx, bit_idx) tuple.
+  pub fn inds(&self) -> (usize, usize) {
+    (self.i, self.j)
+  }
+
   fn refresh_if_needed(&mut self) {
     if self.j == 8 {
       self.i += 1;
@@ -67,10 +109,9 @@ impl BitReader {
     }
   }
 
-  fn unchecked_byte(&self) -> u8 {
-    self.bytes[self.i]
-  }
-
+  /// Returns a slice into the next `n` bytes. Will return an error if
+  /// there are not enough bytes remaining in the reader or the reader is
+  /// misaligned.
   pub fn read_aligned_bytes(&mut self, n: usize) -> QCompressResult<&[u8]> {
     self.refresh_if_needed();
 
@@ -80,12 +121,12 @@ impl BitReader {
         self.i,
         self.j,
       )))
-    } else if self.i + n > self.size() {
+    } else if self.i + n > self.bytes.len() {
       Err(QCompressError::insufficient_data(format!(
         "cannot read {} aligned bytes at byte {} out of {}",
         n,
         self.i,
-        self.size(),
+        self.bytes.len(),
       )))
     } else {
       let res = &self.bytes[self.i..self.i + n];
@@ -95,6 +136,18 @@ impl BitReader {
     }
   }
 
+  /// Returns the next bit. Will return an error if we have reached the end
+  /// of the reader.
+  pub fn read_one(&mut self) -> QCompressResult<bool> {
+    self.refresh_if_needed();
+
+    let res = bits::bit_from_byte(self.byte()?, self.j);
+    self.j += 1;
+    Ok(res)
+  }
+
+  /// Returns the next `n` bits. Will return an error if there are not
+  /// enough bits remaining.
   pub fn read(&mut self, n: usize) -> QCompressResult<Vec<bool>> {
     let mut res = Vec::with_capacity(n);
 
@@ -112,29 +165,22 @@ impl BitReader {
     Ok(res)
   }
 
-  // returns (bits read, idx)
-  pub fn unchecked_read_prefix_table_idx(&mut self) -> usize {
-    self.refresh_if_needed();
-
-    let n_plus_j = PREFIX_TABLE_SIZE_LOG + self.j;
-    if n_plus_j <= 8 {
-      let shift = 8 - n_plus_j;
-      let res = (self.unchecked_byte() & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift;
-      self.j = n_plus_j;
-      res as usize
-    } else {
-      let remaining = n_plus_j - 8;
-      let mut res = ((self.unchecked_byte() & LEFT_MASKS[self.j]) as usize) << remaining;
-      self.i += 1;
-      let shift = 8 - remaining;
-      res |= ((self.unchecked_byte() & RIGHT_MASKS[remaining]) >> shift) as usize;
-      self.j = remaining;
-      res
+  pub(crate) fn read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> QCompressResult<Diff> {
+    if self.i * 8 + self.j + n > self.total_bits {
+      return Err(QCompressError::insufficient_data(
+        "read_diff(): reached end of data available to BitReader"
+      ))
     }
+
+    Ok(self.unchecked_read_diff::<Diff>(n))
+  }
+
+  pub(crate) fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
+    Ok(self.read_diff::<u64>(n)? as usize)
   }
 
   // returns (bits read, idx)
-  pub fn read_prefix_table_idx(&mut self) -> QCompressResult<(usize, usize)> {
+  pub(crate) fn read_prefix_table_idx(&mut self) -> QCompressResult<(usize, usize)> {
     self.refresh_if_needed();
 
     let n_plus_j = PREFIX_TABLE_SIZE_LOG + self.j;
@@ -159,7 +205,35 @@ impl BitReader {
     }
   }
 
-  pub fn unchecked_read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> Diff {
+  pub(crate) fn read_varint(&mut self, jumpstart: usize) -> QCompressResult<usize> {
+    let mut res = self.read_usize(jumpstart)?;
+    for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
+      if self.read_one()? {
+        if self.read_one()? {
+          res |= 1 << i
+        }
+      } else {
+        break;
+      }
+    }
+    Ok(res)
+  }
+
+  fn unchecked_byte(&self) -> u8 {
+    self.bytes[self.i]
+  }
+
+  /// Returns the next bit. Will panic if we have reached the end of the
+  /// reader. This tends to be much faster than `read_one()`.
+  pub fn unchecked_read_one(&mut self) -> bool {
+    self.refresh_if_needed();
+
+    let res = bits::bit_from_byte(self.unchecked_byte(), self.j);
+    self.j += 1;
+    res
+  }
+
+  pub(crate) fn unchecked_read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> Diff {
     if n == 0 {
       return Diff::ZERO;
     }
@@ -196,21 +270,27 @@ impl BitReader {
     }
   }
 
-  pub fn read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> QCompressResult<Diff> {
-    if self.i * 8 + self.j + n > self.total_bits {
-      return Err(QCompressError::insufficient_data(
-        "read_diff(): reached end of data available to BitReader"
-      ))
+  pub(crate) fn unchecked_read_prefix_table_idx(&mut self) -> usize {
+    self.refresh_if_needed();
+
+    let n_plus_j = PREFIX_TABLE_SIZE_LOG + self.j;
+    if n_plus_j <= 8 {
+      let shift = 8 - n_plus_j;
+      let res = (self.unchecked_byte() & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift;
+      self.j = n_plus_j;
+      res as usize
+    } else {
+      let remaining = n_plus_j - 8;
+      let mut res = ((self.unchecked_byte() & LEFT_MASKS[self.j]) as usize) << remaining;
+      self.i += 1;
+      let shift = 8 - remaining;
+      res |= ((self.unchecked_byte() & RIGHT_MASKS[remaining]) >> shift) as usize;
+      self.j = remaining;
+      res
     }
-
-    Ok(self.unchecked_read_diff::<Diff>(n))
   }
 
-  pub fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
-    Ok(self.read_diff::<u64>(n)? as usize)
-  }
-
-  pub fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
+  pub(crate) fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
     let mut res = self.unchecked_read_diff::<u64>(jumpstart) as usize;
     for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
       if self.unchecked_read_one() {
@@ -224,49 +304,10 @@ impl BitReader {
     res
   }
 
-  pub fn read_varint(&mut self, jumpstart: usize) -> QCompressResult<usize> {
-    let mut res = self.read_usize(jumpstart)?;
-    for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
-      if self.read_one()? {
-        if self.read_one()? {
-          res |= 1 << i
-        }
-      } else {
-        break;
-      }
-    }
-    Ok(res)
-  }
-
-  pub fn unchecked_read_one(&mut self) -> bool {
-    self.refresh_if_needed();
-
-    let res = bits::bit_from_byte(self.unchecked_byte(), self.j);
-    self.j += 1;
-    res
-  }
-
-  pub fn read_one(&mut self) -> QCompressResult<bool> {
-    self.refresh_if_needed();
-
-    let res = bits::bit_from_byte(self.byte()?, self.j);
-    self.j += 1;
-    Ok(res)
-  }
-
-  pub fn drain_bytes(&mut self) -> &[u8] {
-    if self.j != 0 {
-      self.i += 1;
-      self.j = 0;
-    }
-    let n = self.bytes.len() - self.i;
-    self.read_aligned_bytes(n).unwrap() // this cannot fail because we just did byte alignment
-  }
-
   // Seek to the end of the byte.
   // Used to skip to the next metadata or body section of the file, since they
   // always start byte-aligned.
-  pub fn drain_empty_byte<F>(&mut self, f: F) -> QCompressResult<()>
+  pub(crate) fn drain_empty_byte<F>(&mut self, f: F) -> QCompressResult<()>
   where F: FnOnce() -> QCompressError {
     if self.j > 0 {
       if self.byte()? & LEFT_MASKS[self.j] > 0 {
@@ -277,58 +318,24 @@ impl BitReader {
     Ok(())
   }
 
-  pub fn seek_aligned_bytes(&mut self, n_bytes: usize) -> QCompressResult<()> {
-    self.refresh_if_needed();
-
-    if self.j != 0 {
-      Err(QCompressError::invalid_argument(format!(
-        "cannot seek aligned bytes on misaligned bit reader at byte {} bit {}",
-        self.i,
-        self.j,
-      )))
-    } else if self.i + n_bytes >= self.bytes.len() {
-      Err(QCompressError::insufficient_data(
-        "seek_aligned_bytes(): reached end of data available to BitReader"
-      ))
-    } else {
-      self.i += n_bytes;
-      Ok(())
-    }
+  /// Skips forward `n` bits. Will NOT check whether
+  /// the resulting position is in bounds or not.
+  pub fn seek(&mut self, n: usize) {
+    let forward_bit_idx = self.j + n;
+    self.i += forward_bit_idx.div_euclid(8);
+    self.j = forward_bit_idx.rem_euclid(8);
   }
 
+  /// Skips backward `n` bits. Will panic if the resulting position is less
+  /// than 0.
   pub fn rewind(&mut self, n: usize) {
-    if n > self.j {
-      self.i -= 1 + (n - self.j - 1).div_euclid(8);
-      self.j = 7 - (n - self.j - 1).rem_euclid(8);
-    } else {
+    if n <= self.j {
       self.j -= n;
-    }
-  }
-
-  pub fn inds(&self) -> (usize, usize) {
-    (self.i, self.j)
-  }
-
-  pub fn aligned_byte_ind(&self) -> QCompressResult<usize> {
-    if self.j == 0 {
-      Ok(self.i)
-    } else if self.j == 8 {
-      Ok(self.i + 1)
     } else {
-      Err(QCompressError::invalid_argument(format!(
-        "cannot get aligned byte index on misaligned bit reader at byte {} bit {}",
-        self.i,
-        self.j,
-      )))
+      let backward_bit_idx = (n + 7) - self.j;
+      self.i -= backward_bit_idx.div_euclid(8);
+      self.j = 7 - backward_bit_idx.rem_euclid(8);
     }
-  }
-
-  pub fn size(&self) -> usize {
-    self.bytes.len()
-  }
-
-  pub fn bits_remaining(&self) -> usize {
-    self.total_bits - 8 * self.i - self.j
   }
 }
 
@@ -369,9 +376,9 @@ mod tests {
   }
 
   #[test]
-  fn test_rewind() {
+  fn test_seek_rewind() {
     let mut reader = BitReader::from(vec![0; 6]);
-    reader.read(43); // so we start at (5, 3)
+    reader.seek(43);
 
     reader.rewind(2);
     assert_eq!(reader.inds(), (5, 1));

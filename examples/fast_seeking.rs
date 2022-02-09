@@ -26,7 +26,7 @@ fn main() {
   let flags = decompressor.header(&mut reader).expect("flags");
   let mut metadatas = Vec::new();
   while let Some(meta) = decompressor.chunk_metadata(&mut reader, &flags).expect("read chunk") {
-    reader.seek_aligned_bytes(meta.compressed_body_size).expect("misaligned");
+    reader.seek(meta.compressed_body_size * 8);
     metadatas.push(meta);
   }
 

@@ -1,4 +1,4 @@
-use crate::types::UnsignedLike;
+use crate::data_types::UnsignedLike;
 
 const BIT_MASKS: [u8; 8] = [
   0x80,
@@ -52,6 +52,16 @@ pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
       }
     }
     res.push(byte);
+  }
+  res
+}
+
+pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
+  let mut res = Vec::with_capacity(bytes.len() * 8);
+  for b in bytes {
+    for &mask in &BIT_MASKS {
+      res.push(b & mask > 0);
+    }
   }
   res
 }

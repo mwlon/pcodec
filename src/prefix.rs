@@ -2,10 +2,147 @@ use std::fmt::{Display, Formatter};
 use std::fmt;
 
 use crate::bits;
-use crate::types::{NumberLike, UnsignedLike};
-use std::cmp::Ordering;
-use crate::errors::{QCompressResult, QCompressError};
-use std::convert::TryFrom;
+use crate::data_types::{NumberLike, UnsignedLike};
+
+/// A pairing of a Huffman code with a numerical range.
+///
+/// Quantile Compression works by splitting the distribution of numbers
+/// into ranges and associating a Huffman code (a short sequence of bits)
+/// with each range.
+/// The combination of these pieces of information, plus a couple others,
+/// is called a `Prefix`.
+/// When compressing a number, the compressor finds the prefix containing
+/// it, then writes out its Huffman code, optionally the number of
+/// consecutive repetitions of that number if `run_length_jumpstart` is
+/// available, and then the exact offset within the range for the number.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Prefix<T> where T: NumberLike {
+  /// The count of numbers in the chunk that fall into this Prefix's range.
+  pub count: usize,
+  /// The Huffman code for this prefix. Collectively, all the prefixes for a
+  /// chunk form a binary search tree (BST) over these Huffman codes.
+  /// The BST over Huffman codes is different from the BST over numerical
+  /// ranges.
+  pub code: Vec<bool>,
+  /// The lower bound for this prefix's numerical range.
+  pub lower: T,
+  /// The upper bound (inclusive) for this prefix's numerical range.
+  pub upper: T,
+  /// A parameter used for the most common prefix in a sparse distribution.
+  /// For instance, if 90% of a chunk's numbers are exactly 77, then the
+  /// prefix for the range `[0, 0]` will have a `run_len_jumpstart`.
+  /// The jumpstart value tunes the varint encoding of the number of
+  /// consecutive repetitions of the prefix.
+  pub run_len_jumpstart: Option<usize>,
+}
+
+// k is used internally to describe the minimum number of bits
+// required to describe an offset; k = floor(log_2(upper - lower)).
+// Each offset is encoded as k bit if it is between
+// only_k_bits_lower and only_k_bits_upper, or
+// or k + 1 bits otherwise.
+pub(crate) struct KInfo<T: NumberLike> {
+  pub k: usize,
+  pub only_k_bits_lower: T::Unsigned,
+  pub only_k_bits_upper: T::Unsigned,
+}
+
+impl<T: NumberLike> Prefix<T> {
+  pub(crate) fn k_info(&self) -> KInfo<T> {
+    let lower_unsigned = self.lower.to_unsigned();
+    let diff = self.upper.to_unsigned() - lower_unsigned;
+    let k = (diff.to_f64() + 1.0).log2().floor() as usize;
+    let only_k_bits_upper = if k == T::Unsigned::BITS {
+      T::Unsigned::MAX
+    } else {
+      (T::Unsigned::ONE << k) - T::Unsigned::ONE
+    };
+    let only_k_bits_lower = diff - only_k_bits_upper;
+
+    KInfo {
+      k,
+      only_k_bits_lower,
+      only_k_bits_upper,
+    }
+  }
+}
+
+impl<T> Display for Prefix<T> where T: NumberLike {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    let reps_info = match self.run_len_jumpstart {
+      None => "".to_string(),
+      Some(jumpstart) => format!(" (>={} run length bits)", jumpstart)
+    };
+
+    write!(
+      f,
+      "{}: {} to {}{}",
+      bits::bits_to_string(&self.code),
+      self.lower,
+      self.upper,
+      reps_info,
+    )
+  }
+}
+
+// used during compression to determine Huffman codes
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WeightedPrefix<T: NumberLike> {
+  pub prefix: Prefix<T>,
+  // How to weight this prefix during huffman coding,
+  // in contrast to prefix.count, which is the actual number of training
+  // entries belonging to it.
+  // Usually these are the same, but a prefix with repetitions will have lower
+  // weight than count.
+  pub weight: u64,
+}
+
+impl<T: NumberLike> WeightedPrefix<T> {
+  pub fn new(count: usize, weight: u64, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> WeightedPrefix<T> {
+    let prefix = Prefix {
+      count,
+      lower,
+      upper,
+      code: Vec::new(),
+      run_len_jumpstart
+    };
+    WeightedPrefix {
+      prefix,
+      weight,
+    }
+  }
+}
+
+#[derive(Clone, Debug)]
+pub struct PrefixCompressionInfo<T> where T: NumberLike {
+  pub count: usize,
+  pub code: Vec<bool>,
+  pub lower: T,
+  pub upper: T,
+  pub lower_unsigned: T::Unsigned,
+  pub k: usize,
+  pub only_k_bits_lower: T::Unsigned,
+  pub only_k_bits_upper: T::Unsigned,
+  pub run_len_jumpstart: Option<usize>,
+}
+
+impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T> {
+  fn from(prefix: &Prefix<T>) -> Self {
+    let KInfo { k, only_k_bits_upper, only_k_bits_lower } = prefix.k_info();
+
+    PrefixCompressionInfo {
+      count: prefix.count,
+      code: prefix.code.clone(),
+      lower: prefix.lower,
+      upper: prefix.upper,
+      lower_unsigned: prefix.lower.to_unsigned(),
+      k,
+      only_k_bits_lower,
+      only_k_bits_upper,
+      run_len_jumpstart: prefix.run_len_jumpstart,
+    }
+  }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
@@ -32,122 +169,13 @@ impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: Numbe
   fn from(p: &Prefix<T>) -> Self {
     let lower_unsigned = p.lower.to_unsigned();
     let upper_unsigned = p.upper.to_unsigned();
+    let KInfo { k, only_k_bits_lower: _, only_k_bits_upper: _ } = p.k_info();
     PrefixDecompressionInfo {
       lower_unsigned,
       range: upper_unsigned - lower_unsigned,
-      k: p.k,
-      run_len_jumpstart: p.run_len_jumpstart,
-      depth: p.val.len(),
-    }
-  }
-}
-
-#[derive(Clone, Debug)]
-pub struct Prefix<T> where T: NumberLike {
-  pub count: usize,
-  pub val: Vec<bool>,
-  pub lower: T,
-  pub upper: T,
-  pub lower_unsigned: T::Unsigned,
-  pub k: usize,
-  pub only_k_bits_lower: T::Unsigned,
-  pub only_k_bits_upper: T::Unsigned,
-  pub run_len_jumpstart: Option<usize>,
-}
-
-impl<T: NumberLike> TryFrom<PrefixIntermediate<T>> for Prefix<T> {
-  type Error = QCompressError;
-
-  fn try_from(intermediate: PrefixIntermediate<T>) -> QCompressResult<Self> {
-    Self::new(
-      intermediate.count,
-      intermediate.val.clone(),
-      intermediate.lower,
-      intermediate.upper,
-      intermediate.run_len_jumpstart,
-    )
-  }
-}
-
-// In Prefix and PrefixIntermediate, lower and upper are always inclusive.
-// This allows handling extremal values.
-impl<T> Prefix<T> where T: NumberLike {
-  pub fn new(
-    count: usize,
-    val: Vec<bool>,
-    lower: T,
-    upper: T,
-    run_len_jumpstart: Option<usize>,
-  ) -> QCompressResult<Prefix<T>> {
-    if matches!(lower.num_cmp(&upper), Ordering::Greater) {
-      return Err(QCompressError::corruption(format!(
-        "prefix lower bound {} may not be greater than upper bound {}",
-        lower,
-        upper,
-      )));
-    }
-
-    let lower_unsigned = lower.to_unsigned();
-    let diff = upper.to_unsigned() - lower_unsigned;
-    let k = (diff.to_f64() + 1.0).log2().floor() as usize;
-    let only_k_bits_upper = if k == T::Unsigned::BITS {
-      T::Unsigned::MAX
-    } else {
-      (T::Unsigned::ONE << k) - T::Unsigned::ONE
-    };
-    let only_k_bits_lower = diff - only_k_bits_upper;
-
-    Ok(Prefix {
-      count,
-      val,
-      lower,
-      upper,
-      lower_unsigned,
       k,
-      only_k_bits_lower,
-      only_k_bits_upper,
-      run_len_jumpstart,
-    })
-  }
-}
-
-impl<T> Display for Prefix<T> where T: NumberLike {
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    let reps_info = match self.run_len_jumpstart {
-      None => "".to_string(),
-      Some(jumpstart) => format!(" (>={} run length bits)", jumpstart)
-    };
-
-    write!(
-      f,
-      "{}: {} to {}{}",
-      bits::bits_to_string(&self.val),
-      self.lower,
-      self.upper,
-      reps_info,
-    )
-  }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct PrefixIntermediate<T: NumberLike> {
-  pub count: usize, // the actual number of training entries belonging to this prefix
-  pub weight: u64, // how to weight this prefix during huffman coding
-  pub lower: T,
-  pub upper: T,
-  pub val: Vec<bool>,
-  pub run_len_jumpstart: Option<usize>,
-}
-
-impl<T: NumberLike> PrefixIntermediate<T> {
-  pub fn new(count: usize, weight: u64, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> PrefixIntermediate<T> {
-    PrefixIntermediate {
-      count,
-      weight,
-      lower,
-      upper,
-      val: Vec::new(),
-      run_len_jumpstart,
+      run_len_jumpstart: p.run_len_jumpstart,
+      depth: p.code.len(),
     }
   }
 }

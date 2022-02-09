@@ -1,5 +1,5 @@
-use crate::{Compressor, CompressorConfig, Decompressor, TimestampMicros, TimestampNanos, BitWriter};
-use crate::types::NumberLike;
+use crate::{Compressor, CompressorConfig, Decompressor, BitWriter};
+use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 
 #[test]
 fn test_edge_cases() {
@@ -117,20 +117,20 @@ fn test_multi_chunk() {
   );
 }
 
-fn assert_recovers<T: NumberLike>(vals: Vec<T>, compression_level: usize) {
+fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize) {
   for delta_encoding_order in [0, 1, 7] {
     let compressor = Compressor::<T>::from_config(
       CompressorConfig { compression_level, delta_encoding_order },
     );
-    let compressed = compressor.simple_compress(&vals).expect("compression error");
+    let compressed = compressor.simple_compress(&nums);
     let decompressor = Decompressor::<T>::default();
     let decompressed = decompressor.simple_decompress(compressed)
       .expect("decompression error");
     // We can't do assert_eq on the whole vector because even bitwise identical
     // floats sometimes aren't equal by ==.
-    assert_eq!(decompressed.len(), vals.len(), "on delta encoding order {}", delta_encoding_order);
+    assert_eq!(decompressed.len(), nums.len(), "on delta encoding order {}", delta_encoding_order);
     for i in 0..decompressed.len() {
-      assert!(decompressed[i].num_eq(&vals[i]), "on delta encoding order {}", delta_encoding_order);
+      assert!(decompressed[i].num_eq(&nums[i]), "on delta encoding order {}", delta_encoding_order);
     }
   }
 }

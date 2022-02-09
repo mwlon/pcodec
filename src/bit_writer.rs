@@ -1,8 +1,17 @@
 use crate::bits::LEFT_MASKS;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::types::UnsignedLike;
+use crate::data_types::UnsignedLike;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_ENTRIES};
 
+/// `BitWriter` builds a `Vec<u8>`, enabling a compressor to write bit-level
+/// information and maintain its position in the bytes.
+///
+/// It does this by maintaining
+/// * a byte index and
+/// * a bit index from 0-8 within that byte.
+///
+/// The reader is consider is considered "aligned" if the current bit index
+/// is 0 or 8 (i.e. at the start or end of the current byte).
 #[derive(Clone)]
 pub struct BitWriter {
   bytes: Vec<u8>,
@@ -19,10 +28,17 @@ impl Default for BitWriter {
 }
 
 impl BitWriter {
-  pub fn write_aligned_byte(&mut self, byte: u8) -> QCompressResult<()> {
+  /// Returns the number of bytes so far produced by the writer.
+  pub fn byte_size(&self) -> usize {
+    self.bytes.len()
+  }
+
+  pub(crate) fn write_aligned_byte(&mut self, byte: u8) -> QCompressResult<()> {
     self.write_aligned_bytes(&[byte])
   }
 
+  /// Appends the bits to the writer. Will return an error if the writer is
+  /// misaligned.
   pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> QCompressResult<()> {
     if self.j == 8 {
       self.bytes.extend(bytes);
@@ -36,24 +52,14 @@ impl BitWriter {
     }
   }
 
-  pub fn write_bytes(&mut self, bytes: &[u8]) {
-    if self.j == 8 {
-      self.bytes.extend(bytes);
-    } else {
-      for byte in bytes {
-        *self.bytes.last_mut().unwrap() |= byte >> self.j;
-        self.bytes.push(byte << (8 - self.j));
-      }
-    }
-  }
-
-  pub fn refresh_if_needed(&mut self) {
+  fn refresh_if_needed(&mut self) {
     if self.j == 8 {
       self.bytes.push(0);
       self.j = 0;
     }
   }
 
+  /// Appends the bit to the writer.
   pub fn write_one(&mut self, b: bool) {
     self.refresh_if_needed();
 
@@ -64,17 +70,18 @@ impl BitWriter {
     self.j += 1;
   }
 
-  pub fn write_bits(&mut self, bs: &[bool]) {
+  /// Appends the bits to the writer.
+  pub fn write(&mut self, bs: &[bool]) {
     for &b in bs {
       self.write_one(b);
     }
   }
 
-  pub fn write_usize(&mut self, x: usize, n: usize) {
+  pub(crate) fn write_usize(&mut self, x: usize, n: usize) {
     self.write_diff(x as u64, n);
   }
 
-  pub fn write_diff<Diff: UnsignedLike>(&mut self, x: Diff, n: usize) {
+  pub(crate) fn write_diff<Diff: UnsignedLike>(&mut self, x: Diff, n: usize) {
     if n == 0 {
       return;
     }
@@ -106,7 +113,7 @@ impl BitWriter {
     self.j = remaining;
   }
 
-  pub fn write_varint(&mut self, mut x: usize, jumpstart: usize) {
+  pub(crate) fn write_varint(&mut self, mut x: usize, jumpstart: usize) {
     if x > MAX_ENTRIES {
       panic!("unable to encode varint greater than max number of entries");
     }
@@ -125,11 +132,11 @@ impl BitWriter {
     self.write_one(false);
   }
 
-  pub fn finish_byte(&mut self) {
+  pub(crate) fn finish_byte(&mut self) {
     self.j = 8;
   }
 
-  pub fn assign_usize(&mut self, mut i: usize, mut j: usize, x: usize, n: usize) {
+  pub(crate) fn assign_usize(&mut self, mut i: usize, mut j: usize, x: usize, n: usize) {
     // not the most efficient implementation but it's ok because we
     // only rarely use this now
     for k in 0..n {
@@ -148,12 +155,10 @@ impl BitWriter {
     }
   }
 
+  /// Returns the bytes produced by the writer, taking ownership and ending
+  /// the writer's lifetime.
   pub fn pop(self) -> Vec<u8> {
     self.bytes
-  }
-
-  pub fn size(&self) -> usize {
-    self.bytes.len()
   }
 }
 
@@ -164,7 +169,7 @@ mod tests {
   #[test]
   fn test_write_bigger_num() {
     let mut writer = BitWriter::default();
-    writer.write_bits(&vec![true, true, true, true]);
+    writer.write(&vec![true, true, true, true]);
     writer.write_usize(187, 4);
     let bytes = writer.pop();
     assert_eq!(

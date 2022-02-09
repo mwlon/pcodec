@@ -4,15 +4,37 @@ use std::fmt::{Display, Formatter};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::errors::{QCompressError, QCompressResult};
-use crate::types::NumberLike;
+use crate::data_types::NumberLike;
 
 const BILLION_U32: u32 = 1_000_000_000;
 
-// an instant - does not store time zone
-// always relative to Unix Epoch
+/// A nanosecond-precise, timezone-naive timestamp.
+///
+/// All `q_compress` timestamps use a signed 64 bit integer for the number of
+/// seconds since the Unix Epoch, which is a range of about +/- 500 million
+/// years.
+/// This is (generally) the most generous timestamp range standard used by
+/// other major tools today.
+///
+/// `TimestampNanos` in particular have fine enough granularity to losslessly
+/// convert timestamps for any operating system or (generally) major tool.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct TimestampNanos(i128);
 
+/// A microsecond-precise, timezone-naive timestamp.
+///
+/// All `q_compress` timestamps use a signed 64 bit integer for the number of
+/// seconds since the Unix Epoch, which is a range of about +/- 500 million
+/// years.
+/// This is (generally) the most generous timestamp range standard used by
+/// other major tools today.
+///
+/// `TimestampMicros` has fine enough granularity to losslessly convert
+/// timestamps for many (but not all) operating systems and major tools.
+/// For most practical purposes, resolution finer than microsecond is not
+/// helpful.
+///
+/// Supports `SystemTime::from()` and vice versa.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct TimestampMicros(i128);
 
@@ -23,6 +45,10 @@ macro_rules! impl_timestamp {
       const MIN: i128 = $parts_per_sec as i128 * (i64::MIN as i128);
       const NS_PER_PART: u32 = BILLION_U32 / $parts_per_sec;
 
+      /// Returns a timestamp with the corresponding `parts` since the Unix
+      /// Epoch. Will return an error if outside the bounds of a 64-bit signed
+      /// integer for seconds and 32-bit unsigned integer for
+      /// fractional parts.
       pub fn new(parts: i128) -> QCompressResult<Self> {
         if parts > Self::MAX || parts < Self::MIN {
           Err(QCompressError::invalid_argument(format!(
@@ -35,10 +61,13 @@ macro_rules! impl_timestamp {
         }
       }
 
+      /// Returns a timestamp with the corresponding seconds and fractional
+      /// nanoseconds since the Unix Epoch.
       pub fn from_secs_and_nanos(seconds: i64, subsec_nanos: u32) -> Self {
         Self(seconds as i128 * $parts_per_sec as i128 + (subsec_nanos / Self::NS_PER_PART) as i128)
       }
 
+      /// Returns the `(seconds, subsec_nanos)` since the Unix Epoch.
       pub fn to_secs_and_nanos(self) -> (i64, u32) {
         let parts = self.0;
         let seconds = parts.div_euclid($parts_per_sec as i128) as i64;
@@ -46,6 +75,8 @@ macro_rules! impl_timestamp {
         (seconds, subsec_nanos)
       }
 
+      /// Returns the total number of `parts` (e.g. microseconds or
+      /// nanoseconds) since the Unix Epoch.
       pub fn to_total_parts(self) -> i128 {
         self.0
       }
@@ -152,7 +183,7 @@ impl_timestamp!(TimestampMicros, 1_000_000_u32, 9);
 #[cfg(test)]
 mod tests {
   use std::time::SystemTime;
-  use crate::{TimestampMicros, TimestampNanos};
+  use crate::data_types::{TimestampMicros, TimestampNanos};
 
   #[test]
   fn test_system_time_conversion() {
