@@ -12,7 +12,6 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::{PrefixCompressionInfo, WeightedPrefix, Prefix};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::compression_table::CompressionTable;
-use std::time::Instant;
 
 const DEFAULT_COMPRESSION_LEVEL: usize = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
@@ -434,10 +433,7 @@ impl<T> Compressor<T> where T: NumberLike {
 
     let order = self.flags.delta_encoding_order;
     let (mut metadata, post_header_idx) = if order == 0 {
-      let t0 = Instant::now();
       let prefixes = train_prefixes(nums.to_vec(), &self.internal_config, &self.flags)?;
-      let t1 = Instant::now();
-      println!("trained {} prefixes in {:?}", prefixes.len(), t1 - t0);
       let prefix_metadata = PrefixMetadata::Simple {
         prefixes: prefixes.clone(),
       };
@@ -449,11 +445,7 @@ impl<T> Compressor<T> where T: NumberLike {
       metadata.write_to(writer, &self.flags);
       let post_header_idx = writer.byte_size();
       let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
-      let t2 = Instant::now();
-      println!("simple stuff in {:?}", t2 - t1);
       chunk_compressor.compress_nums(nums, writer)?;
-      let t3 = Instant::now();
-      println!("final body compress in {:?}", t3 - t2);
       (metadata, post_header_idx)
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
