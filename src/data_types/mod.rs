@@ -44,7 +44,7 @@ pub trait SignedLike {
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
-Copy + Debug + Display + From<u8> + PartialOrd +
+Copy + Debug + Display + From<u8> + Ord + PartialOrd +
 Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
   const ZERO: Self;
   const ONE: Self;
