@@ -50,9 +50,8 @@ macro_rules! impl_timestamp {
       /// integer for seconds and 32-bit unsigned integer for
       /// fractional parts.
       pub fn new(parts: i128) -> QCompressResult<Self> {
-        let res = Self(parts);
-        if res.is_valid() {
-          Ok(res)
+        if Self::is_valid(parts) {
+          Ok(Self(parts))
         } else {
           Err(QCompressError::invalid_argument(format!(
             "invalid timestamp with {}/{} seconds",
@@ -95,7 +94,7 @@ macro_rules! impl_timestamp {
       /// timestamp. Otherwise, it is possible that a panic occurs when you try
       /// to use the corrupt timestamps.
       pub fn validate(&self) -> QCompressResult<()> {
-        if self.is_valid() {
+        if Self::is_valid(self.0) {
           Ok(())
         } else {
           Err(QCompressError::corruption(format!(
@@ -106,8 +105,8 @@ macro_rules! impl_timestamp {
         }
       }
 
-      pub(crate) fn is_valid(&self) -> bool {
-        self.parts <= Self::MAX && self.parts >= Self::MIN
+      pub(crate) fn is_valid(parts: i128) -> bool {
+        parts <= Self::MAX && parts >= Self::MIN
       }
     }
 
