@@ -99,7 +99,7 @@ macro_rules! impl_timestamp {
           Ok(())
         } else {
           Err(QCompressError::corruption(format!(
-            "corrupt timestamp with has {}/{} seconds",
+            "corrupt timestamp with {}/{} seconds",
             self.0,
             $parts_per_sec,
           )))
