@@ -1,5 +1,11 @@
 # `q_compress` Changelog
 
+## 0.6.1
+
+* Made compression 50%-300% faster for interesting distributions
+and nontrivial compression levels.
+* Added timestamp validation functionality.
+
 ## 0.6.0
 
 * Added support for delta encoding, which can compress correlated data

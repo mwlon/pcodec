@@ -33,7 +33,7 @@ checksum = "ed0cfbc8191465bed66e1718596ee0b0b35d5ee1f41c5df2189d0fe8bde535ba"
 
 [[package]]
 name = "q_compress"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "rand",
 ]
