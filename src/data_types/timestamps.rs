@@ -84,12 +84,14 @@ macro_rules! impl_timestamp {
 
       /// Return an error if the timestamp is out of range.
       ///
-      /// Timestamps are expected to fit into a 64-bit signed integer
+      /// Valid timestamps fit into a 64-bit signed integer
       /// for seconds and 32-bit unsigned integer for the fractional part
-      /// of the second. However, a decompressor using delta decoding does
-      /// not check that the resulting timestamps are valid. If you are
-      /// concerned about a data corruption affecting such a case without
-      /// being noticed, you may want to `.validate()` every returned
+      /// of the second. However, the in-memory representation uses a 128-bit
+      /// signed integer for the total number of fractional parts.
+      /// It is theoretically possible for a corrupt delta-encoded file to
+      /// cause a decompressor to return invalid timestamps.
+      /// If you are concerned about a data corruption affecting such a case
+      /// without being noticed, you may want to `.validate()` every returned
       /// timestamp. Otherwise, it is possible that a panic occurs when you try
       /// to use the corrupt timestamps.
       pub fn validate(&self) -> QCompressResult<()> {
