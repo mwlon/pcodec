@@ -105,7 +105,7 @@ macro_rules! impl_timestamp {
         }
       }
 
-      pub(crate) fn is_valid(parts: i128) -> bool {
+      fn is_valid(parts: i128) -> bool {
         parts <= Self::MAX && parts >= Self::MIN
       }
     }
