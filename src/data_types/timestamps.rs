@@ -50,14 +50,15 @@ macro_rules! impl_timestamp {
       /// integer for seconds and 32-bit unsigned integer for
       /// fractional parts.
       pub fn new(parts: i128) -> QCompressResult<Self> {
-        if parts > Self::MAX || parts < Self::MIN {
+        let res = Self(parts);
+        if res.is_valid() {
+          Ok(res)
+        } else {
           Err(QCompressError::invalid_argument(format!(
-            "invalid timestamp with {}/{} of a second",
+            "invalid timestamp with {}/{} seconds",
             parts,
             $parts_per_sec,
           )))
-        } else {
-          Ok(Self(parts))
         }
       }
 
@@ -79,6 +80,32 @@ macro_rules! impl_timestamp {
       /// nanoseconds) since the Unix Epoch.
       pub fn to_total_parts(self) -> i128 {
         self.0
+      }
+
+      /// Return an error if the timestamp is out of range.
+      ///
+      /// Timestamps are expected to fit into a 64-bit signed integer
+      /// for seconds and 32-bit unsigned integer for the fractional part
+      /// of the second. However, a decompressor using delta decoding does
+      /// not check that the resulting timestamps are valid. If you are
+      /// concerned about a data corruption affecting such a case without
+      /// being noticed, you may want to `.validate()` every returned
+      /// timestamp. Otherwise, it is possible that a panic occurs when you try
+      /// to use the corrupt timestamps.
+      pub fn validate(&self) -> QCompressResult<()> {
+        if self.is_valid() {
+          Ok(())
+        } else {
+          Err(QCompressError::corruption(format!(
+            "corrupt timestamp with has {}/{} seconds",
+            self.0,
+            $parts_per_sec,
+          )))
+        }
+      }
+
+      pub(crate) fn is_valid(&self) -> bool {
+        self.parts <= Self::MAX && self.parts >= Self::MIN
       }
     }
 
