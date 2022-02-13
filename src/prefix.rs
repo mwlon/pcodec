@@ -1,6 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::fmt;
-
 use crate::bits;
 use crate::data_types::{NumberLike, UnsignedLike};
 
@@ -36,6 +34,25 @@ pub struct Prefix<T> where T: NumberLike {
   pub run_len_jumpstart: Option<usize>,
 }
 
+impl<T: NumberLike> Display for Prefix<T> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    let jumpstart_str = if let Some(jumpstart) = self.run_len_jumpstart {
+      format!("(jumpstart: {})", jumpstart)
+    } else {
+      "".to_string()
+    };
+    write!(
+      f,
+      "count: {} code: {} lower: {} upper: {} {}",
+      self.count,
+      bits::bits_to_string(&self.code),
+      self.lower,
+      self.upper,
+      jumpstart_str,
+    )
+  }
+}
+
 // k is used internally to describe the minimum number of bits
 // required to describe an offset; k = floor(log_2(upper - lower)).
 // Each offset is encoded as k bit if it is between
@@ -67,24 +84,6 @@ impl<T: NumberLike> Prefix<T> {
   }
 }
 
-impl<T> Display for Prefix<T> where T: NumberLike {
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    let reps_info = match self.run_len_jumpstart {
-      None => "".to_string(),
-      Some(jumpstart) => format!(" (>={} run length bits)", jumpstart)
-    };
-
-    write!(
-      f,
-      "{}: {} to {}{}",
-      bits::bits_to_string(&self.code),
-      self.lower,
-      self.upper,
-      reps_info,
-    )
-  }
-}
-
 // used during compression to determine Huffman codes
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WeightedPrefix<T: NumberLike> {
@@ -94,11 +93,11 @@ pub struct WeightedPrefix<T: NumberLike> {
   // entries belonging to it.
   // Usually these are the same, but a prefix with repetitions will have lower
   // weight than count.
-  pub weight: u64,
+  pub weight: usize,
 }
 
 impl<T: NumberLike> WeightedPrefix<T> {
-  pub fn new(count: usize, weight: u64, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> WeightedPrefix<T> {
+  pub fn new(count: usize, weight: usize, lower: T, upper: T, run_len_jumpstart: Option<usize>) -> WeightedPrefix<T> {
     let prefix = Prefix {
       count,
       lower,
@@ -197,13 +196,4 @@ impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: Numbe
       depth: p.code.len(),
     }
   }
-}
-
-pub fn display_prefixes<T: NumberLike>(prefixes: &[Prefix<T>], f: &mut fmt::Formatter<'_>) -> fmt::Result {
-  let s = prefixes
-    .iter()
-    .map(|p| p.to_string())
-    .collect::<Vec<String>>()
-    .join("\n");
-  write!(f, "({} prefixes)\n{}", prefixes.len(), s)
 }

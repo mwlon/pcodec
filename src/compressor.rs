@@ -3,15 +3,15 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use crate::{BitWriter, Flags, huffman_encoding};
-use crate::bits::*;
 use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
+use crate::compression_table::CompressionTable;
 use crate::constants::*;
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::prefix::{PrefixCompressionInfo, WeightedPrefix, Prefix};
-use crate::data_types::{NumberLike, UnsignedLike};
-use crate::compression_table::CompressionTable;
+use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
+use crate::prefix_optimization;
 
 const DEFAULT_COMPRESSION_LEVEL: usize = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
@@ -19,7 +19,7 @@ const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
 const DEFAULT_CHUNK_SIZE: usize = 1000000;
 
 struct JumpstartConfiguration {
-  weight: u64,
+  weight: usize,
   jumpstart: usize,
 }
 
@@ -49,15 +49,17 @@ pub struct CompressorConfig {
   /// It is the number of times to apply delta encoding
   /// before compressing. For instance, say we have the numbers
   /// `[0, 2, 2, 4, 4, 6, 6]` and consider different delta encoding orders.
-  /// * 0 indicates no delta encoding, so the numbers would be compressed
+  /// * 0 indicates no delta encoding, it compresses numbers
   /// as-is. This is perfect for columnar data were the order is essentially
   /// random.
-  /// * 1st order delta encoding would take consecutive differences, leaving
-  /// `[0, 2, 0, 2, 0, 2, 0]`. This is perfect for time series data like stock
-  /// prices that are continuous but not smooth.
-  /// * 2nd order delta encoding would take consecutive differences again,
-  /// leaving `[2, -2, 2, -2, 2, -2]`. Higher-order delta encoding is good
-  /// for time series like sensor readings that are very smooth.
+  /// * 1st order delta encoding takes consecutive differences, leaving
+  /// `[0, 2, 0, 2, 0, 2, 0]`. This is perfect for continuous but noisy time
+  /// series data, like stock prices.
+  /// * 2nd order delta encoding takes consecutive differences again,
+  /// leaving `[2, -2, 2, -2, 2, -2]`. This is perfect for locally linear data,
+  /// like a sequence of timestamps sampled approximately periodically.
+  /// * Higher-order delta encoding is good for time series that are very
+  /// smooth, like temperature or light sensor readings.
   pub delta_encoding_order: usize,
 }
 
@@ -93,13 +95,13 @@ impl Default for InternalCompressorConfig {
 }
 
 fn choose_run_len_jumpstart(
-  count: u64,
-  n: u64,
+  count: usize,
+  n: usize,
 ) -> JumpstartConfiguration {
   let freq = (count as f64) / (n as f64);
   let non_freq = 1.0 - freq;
   let jumpstart = min((-non_freq.log2()).ceil() as usize, MAX_JUMPSTART);
-  let expected_n_runs = (freq * non_freq * n as f64).ceil() as u64;
+  let expected_n_runs = (freq * non_freq * n as f64).ceil() as usize;
   JumpstartConfiguration {
     weight: expected_n_runs,
     jumpstart,
@@ -124,7 +126,7 @@ fn push_pref<T: NumberLike>(
     // <=80% of the data.
     seq.push(WeightedPrefix::new(
       count,
-      count as u64,
+      count,
       sorted[i],
       sorted[j - 1],
       None
@@ -132,7 +134,7 @@ fn push_pref<T: NumberLike>(
   } else {
     // The weird case - a range that represents almost all (but not all) the data.
     // We create extra prefixes that can describe `reps` copies of the range at once.
-    let config = choose_run_len_jumpstart(count as u64, n as u64);
+    let config = choose_run_len_jumpstart(count, n);
     seq.push(WeightedPrefix::new(
       count,
       config.weight,
@@ -173,107 +175,48 @@ fn train_prefixes<T: NumberLike>(
   let mut sorted = nums;
   sorted.sort_unstable_by(|a, b| a.num_cmp(b));
   let safe_comp_level = min(comp_level, (n as f64).log2() as usize);
-  let n_prefix = 1_usize << safe_comp_level;
-  let mut prefix_sequence: Vec<WeightedPrefix<T>> = Vec::new();
-  let seq_ptr = &mut prefix_sequence;
+  let n_pref = 1_usize << safe_comp_level;
+  let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
+  let pref_ptr = &mut raw_prefs;
 
-  let mut prefix_idx = 0_usize;
-  let prefix_idx_ptr = &mut prefix_idx;
+  let mut pref_idx = 0_usize;
+  let pref_idx_ptr = &mut pref_idx;
 
   let mut i = 0;
   let mut backup_j = 0_usize;
   for j in 0..n {
-    let target_j = ((*prefix_idx_ptr + 1) * n) / n_prefix;
+    let target_j = ((*pref_idx_ptr + 1) * n) / n_pref;
     if j > 0 && sorted[j].num_eq(&sorted[j - 1]) {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        push_pref(seq_ptr, prefix_idx_ptr, i, backup_j, n_prefix, n, &sorted);
+        push_pref(pref_ptr, pref_idx_ptr, i, backup_j, n_pref, n, &sorted);
         i = backup_j;
       }
     } else {
       backup_j = j;
       if j >= target_j {
-        push_pref(seq_ptr, prefix_idx_ptr, i, j, n_prefix, n, &sorted);
+        push_pref(pref_ptr, pref_idx_ptr, i, j, n_pref, n, &sorted);
         i = j;
       }
     }
   }
-  push_pref(seq_ptr, prefix_idx_ptr, i, n, n_prefix, n, &sorted);
+  push_pref(pref_ptr, pref_idx_ptr, i, n, n_pref, n, &sorted);
 
-  // prefix optimization loop
-  // This isn't a performance issue for compression level up to 8,
-  // but it's currently O(unoptimized_prefixes ^ 2).
-  // We could amend this code to make it much faster for compression levels
-  // 9 - 12.
-  let mut can_improve = true;
-  while can_improve {
-    can_improve = false;
-    let mut best_i = -1_i32;
-    let mut best_improvement = 0.0;
-    for i in 0..(prefix_sequence.len() - 1) {
-      let pref0 = &prefix_sequence[i];
-      let pref1 = &prefix_sequence[i + 1];
+  let mut optimized_prefs = prefix_optimization::optimize_prefixes(
+    raw_prefs,
+    flags,
+  );
 
-      let improvement = combine_improvement(pref0, pref1, n, flags);
-      if improvement > best_improvement {
-        can_improve = true;
-        best_i = i as i32;
-        best_improvement = improvement;
-      }
-    }
-
-    if can_improve {
-      let pref0 = &prefix_sequence[best_i as usize];
-      let pref1 = &prefix_sequence[best_i as usize + 1];
-      prefix_sequence[best_i as usize] = WeightedPrefix::new(
-        pref0.prefix.count + pref1.prefix.count,
-        pref0.weight + pref1.weight,
-        pref0.prefix.lower,
-        pref1.prefix.upper,
-        None,
-      );
-      //not the most efficient but whatever
-      prefix_sequence.remove(best_i as usize + 1);
-    }
+  huffman_encoding::make_huffman_code(&mut optimized_prefs);
+  println!("optimized to {} prefixes", optimized_prefs.len());
+  for p in &optimized_prefs {
+    println!("\t{}", p.prefix);
   }
 
-  huffman_encoding::make_huffman_code(&mut prefix_sequence);
 
-  let prefixes = prefix_sequence.iter()
+  let prefixes = optimized_prefs.iter()
     .map(|wp| wp.prefix.clone())
     .collect();
   Ok(prefixes)
-}
-
-fn combine_improvement<T: NumberLike>(
-  wp0: &WeightedPrefix<T>,
-  wp1: &WeightedPrefix<T>,
-  n: usize,
-  flags: &Flags,
-) -> f64 {
-  let p0 = &wp0.prefix;
-  let p1 = &wp1.prefix;
-  if p0.run_len_jumpstart.is_some() || p1.run_len_jumpstart.is_some() {
-    // can never combine prefixes that encode run length
-    return f64::MIN;
-  }
-
-  let p0_r_cost = avg_base2_bits(p0.upper.to_unsigned() - p0.lower.to_unsigned());
-  let p1_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p1.lower.to_unsigned());
-  let combined_r_cost = avg_base2_bits(p1.upper.to_unsigned() - p0.lower.to_unsigned());
-  let p0_d_cost = depth_bits(wp0.weight, n);
-  let p1_d_cost = depth_bits(wp1.weight, n);
-  let combined_d_cost = depth_bits(wp0.weight + wp1.weight, n);
-  let meta_cost = 10.0 +
-    flags.bits_to_encode_prefix_len() as f64 +
-    2.0 * T::PHYSICAL_BITS as f64;
-
-  let separate_cost = 2.0 * meta_cost +
-    (p0_r_cost + p0_d_cost) * wp0.weight as f64+
-    (p1_r_cost + p1_d_cost) * wp1.weight as f64;
-  let combined_cost = meta_cost +
-    (combined_r_cost + combined_d_cost) * (wp0.weight + wp1.weight) as f64;
-
-  separate_cost - combined_cost
 }
 
 fn compress_offset_bits_w_prefix<Diff: UnsignedLike>(

@@ -105,16 +105,19 @@ pub fn bits_to_string(bits: &[bool]) -> String {
     .join("");
 }
 
-pub fn avg_base2_bits<Diff: UnsignedLike>(upper_lower_diff: Diff) -> f64 {
-  let n = upper_lower_diff.to_f64() + 1.0;
-  let k = n.log2().floor();
+fn bumpy_log(x: f64) -> f64 {
+  let k = x.log2().floor();
   let two_to_k = (2.0_f64).powf(k);
-  let overshoot = n - two_to_k;
-  k + (2.0 * overshoot) / n
+  let overshoot = x - two_to_k;
+  k + (2.0 * overshoot) / x
 }
 
-pub fn depth_bits(weight: u64, total_weight: usize) -> f64 {
-  -(weight as f64 / total_weight as f64).log2()
+pub fn avg_offset_bits<Diff: UnsignedLike>(lower: Diff, upper: Diff) -> f64 {
+  bumpy_log((upper - lower).to_f64() + 1.0)
+}
+
+pub fn avg_depth_bits(weight: usize, total_weight: usize) -> f64 {
+  bumpy_log(total_weight as f64 / weight as f64)
 }
 
 #[cfg(test)]
@@ -129,19 +132,19 @@ mod tests {
 
   #[test]
   fn test_depth_bits() {
-    assert_eq!(depth_bits(2, 2), 0.0);
-    assert_eq!(depth_bits(2, 4), 1.0);
-    assert_eq!(depth_bits(2, 8), 2.0);
-    assert_eq!(depth_bits(4, 8), 1.0);
+    assert_eq!(avg_depth_bits(2, 2), 0.0);
+    assert_eq!(avg_depth_bits(2, 4), 1.0);
+    assert_eq!(avg_depth_bits(2, 8), 2.0);
+    assert_eq!(avg_depth_bits(4, 8), 1.0);
   }
 
   #[test]
   fn test_avg_base2_bits() {
-    assert_eq!(avg_base2_bits(0_u32), 0.0);
-    assert_eq!(avg_base2_bits(1_u32), 1.0);
-    assert!((avg_base2_bits(2_u32) - 5.0 / 3.0).abs() < 1E-8);
-    assert_eq!(avg_base2_bits(3_u32), 2.0);
-    assert!((avg_base2_bits(4_u64) - 12.0 / 5.0).abs() < 1E-8);
+    assert_eq!(avg_offset_bits(0_u32, 0_u32), 0.0);
+    assert_eq!(avg_offset_bits(4_u32, 5_u32), 1.0);
+    assert!((avg_offset_bits(2_u32, 4_u32) - 5.0 / 3.0).abs() < 1E-8);
+    assert_eq!(avg_offset_bits(10_u32, 13_u32), 2.0);
+    assert!((avg_offset_bits(0_u64, 4_u64) - 12.0 / 5.0).abs() < 1E-8);
   }
 
   #[test]

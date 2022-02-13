@@ -1,9 +1,8 @@
 use std::cmp::{max, min};
-use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{bits, Flags, prefix};
+use crate::{bits, Flags};
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
 use crate::constants::*;
@@ -56,10 +55,9 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
   Ok(())
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct ChunkDecompressor<T> where T: NumberLike {
   huffman_table: HuffmanTable<T::Unsigned>,
-  prefixes: Vec<Prefix<T>>,
   n: usize,
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
@@ -102,7 +100,6 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
 
     Ok(ChunkDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
-      prefixes,
       n,
       compressed_body_size,
       max_bits_per_num_block,
@@ -233,12 +230,6 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     }
 
     Ok(res)
-  }
-}
-
-impl<T> Debug for ChunkDecompressor<T> where T: NumberLike {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    prefix::display_prefixes(&self.prefixes, f)
   }
 }
 

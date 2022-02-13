@@ -7,7 +7,7 @@ use crate::data_types::NumberLike;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
   id: usize,
-  weight: u64,
+  weight: usize,
   left_id: Option<usize>,
   right_id: Option<usize>,
   leaf_id: Option<usize>,
@@ -15,7 +15,7 @@ pub struct HuffmanItem {
 }
 
 impl HuffmanItem {
-  pub fn new(weight: u64, id: usize) -> HuffmanItem {
+  pub fn new(weight: usize, id: usize) -> HuffmanItem {
     HuffmanItem {
       id,
       weight,
@@ -106,7 +106,7 @@ mod tests {
   use crate::huffman_encoding::make_huffman_code;
   use crate::prefix::{WeightedPrefix, Prefix};
 
-  fn coded_prefix(weight: u64, code: Vec<bool>) -> WeightedPrefix<i32> {
+  fn coded_prefix(weight: usize, code: Vec<bool>) -> WeightedPrefix<i32> {
     WeightedPrefix {
       weight,
       prefix: Prefix {
@@ -119,7 +119,7 @@ mod tests {
     }
   }
 
-  fn uncoded_prefix(weight: u64) -> WeightedPrefix<i32> {
+  fn uncoded_prefix(weight: usize) -> WeightedPrefix<i32> {
     coded_prefix(weight, Vec::new())
   }
 

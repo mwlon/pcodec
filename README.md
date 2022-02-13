@@ -14,38 +14,31 @@
 <img src="./res/bar_sparse.svg" width="45%">
 </div>
 
-Quantile Compression compresses and decompresses sequences of
-numerical data very well.
-It currently supports the following data types:
-`i32`, `i64`, `i128`, `u32`, `u64`, `f32`, `f64`,
-`q_compress::TimestampNanos`, `q_compress::TimestampMicros`.
+Quantile Compression losslessly compresses and decompresses numerical sequences
+with high compression ratio and moderately fast speed.
 
-For natural data, it typically shrinks data to 10-40% smaller than what
-`gzip -9` produces, compresses much faster, and decompresses equally
-quickly.
-
-As of version `0.4.0`, the file format is stable.
-
-## Use Cases
-
-`q_compress` is:
-* lossless
-* order-preserving and bit-preserving (including `NaN` floats)
-* moderately fast (see [benchmarks.md](./benchmarks.md)).
-* effective on data with correlation between consecutive elements via
-configuring `delta_encoding_order`
-
-Use cases include:
+**Use cases:**
 * compression for columnar data
-* compression for time series data with delta encoding
+* compression for time series data
 * low-bandwidth communication, like transmitting batches of sensor data from
-space probes
+  space probes
+
+**Data types:**
+`i32`, `i64`, `i128`, `u32`, `u64`, `f32`, `f64`,
+`q_compress::TimestampMicros`,
+`q_compress::TimestampNanos`
+
+**Features:**
+* stable file format (`.qco`)
+* preserves ordering and exact bit representation (including `NaN` floats)
+* supports nth-order delta encoding up to order 7 (e.g. 2nd order is delta-of-deltas)
+* compresses faster or slower depending on compression level from 0 to 12
+
+## Performance Benchmarks
+
+(see [benchmarks.md](./benchmarks.md)).
 
 ## Usage
-
-See the following basic usage.
-To run something right away, see
-[the primary example](./examples/primary.md).
 
 ```rust
 use q_compress::{I64Compressor, I64Decompressor};
@@ -71,14 +64,22 @@ fn main() {
 }
 ```
 
+To run something right away, see
+[the primary example](./examples/primary.md).
+
+For a lower-level API that allows writing/reading one chunk at a time and
+extracting all metadata, see the docs.rs documentation.
+
 ## Method
 
 This works by describing each number with a _range_ and an _offset_.
 The range specifies an inclusive range `[lower, upper]` that the
-number might be in, and the offset specifies the exact position within that
+number is in, and the offset specifies the exact position within that
 range.
 The compressor chooses a _prefix_ for each range via Huffman
 codes.
+
+When delta encoding of some order is turned on, 
 
 For data sampled from a random distribution, this compression algorithm can
 reduce byte size to near the theoretical limit of the distribution's Shannon
@@ -111,11 +112,11 @@ moments will be encoded in each of the following chunk metadata sections.
 
 Each chunk begins with a magic "chunk" byte.
 Then the metadata section follows, containing the number of numbers,
-the byte size of the compressed body to follow, and ranges (or prefixes)
+the byte size of the compressed body to follow, and prefixes
 used to compress.
 There must be at least one number in each chunk.
-Each range has a count of numbers in the range, a lower and upper bound,
-a sequence of bits (the prefix), and optionally a "jumpstart" which is used in
+Each prefix has a count of numbers in the range, a lower and upper bound,
+a Huffman code, and optionally a "jumpstart" which is used in
 number blocks to describe how many repetitions of the range to use.
 Using the compressed body size metadata and magic chunk/termination bytes
 enables fast seeking through the whole file.
@@ -136,10 +137,13 @@ See [changelog.md](./changelog.md)
 
 ## Advanced
 
-### Other Data Types
+### Custom Data Types
 
-Small data types can be efficiently compressed by casting to larger data types;
+Small data types can be efficiently compressed by upcasting to the next
+supported data type;
 e.g. `u16` to `u32`.
+In fact, the only cost to upcasting is a small increase in chunk metadata size.
+
 When necessary, you can implement your own data type via
  `q_compress::types::NumberLike` and (if the existing signed/unsigned
 implementations are insufficient)

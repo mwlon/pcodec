@@ -26,6 +26,7 @@ mod flags;
 mod huffman_decoding;
 mod huffman_encoding;
 mod prefix;
+mod prefix_optimization;
 
 #[cfg(test)]
 mod tests;
