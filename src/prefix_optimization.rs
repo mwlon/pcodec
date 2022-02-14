@@ -4,7 +4,7 @@ use crate::{Flags, Prefix};
 use crate::bits::{avg_offset_bits, avg_depth_bits};
 use crate::constants::BITS_TO_ENCODE_N_ENTRIES;
 
-fn bit_cost<T: NumberLike>(
+fn prefix_bit_cost<T: NumberLike>(
   base_meta_cost: f64,
   lower: T::Unsigned,
   upper: T::Unsigned,
@@ -13,7 +13,9 @@ fn bit_cost<T: NumberLike>(
 ) -> f64 {
   let offset_cost = avg_offset_bits(lower, upper);
   let huffman_cost = avg_depth_bits(weight, total_weight);
-  base_meta_cost + huffman_cost + (offset_cost + huffman_cost) * weight as f64
+  base_meta_cost +
+    huffman_cost + // extra meta cost depending on length of huffman code
+    (offset_cost + huffman_cost) * weight as f64 // body cost
 }
 
 // this is an exact optimal strategy
@@ -56,7 +58,7 @@ pub fn optimize_prefixes<T: NumberLike>(
       _ => 0,
     };
     for j in start_j..i + 1 {
-      let cost = best_costs[j] + bit_cost::<T>(
+      let cost = best_costs[j] + prefix_bit_cost::<T>(
         base_meta_cost,
         lower_unsigneds[j],
         upper,
@@ -76,7 +78,6 @@ pub fn optimize_prefixes<T: NumberLike>(
     best_paths.push(best_path);
   }
 
-  println!("ESTIMATED TO BE {} BYTES", *best_costs.last().unwrap() as f64 / 8.0);
   let path = best_paths.last().unwrap();
   let mut res = Vec::with_capacity(path.len());
   for &(j, i) in path {

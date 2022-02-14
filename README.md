@@ -34,9 +34,23 @@ with high compression ratio and moderately fast speed.
 * supports nth-order delta encoding up to order 7 (e.g. 2nd order is delta-of-deltas)
 * compresses faster or slower depending on compression level from 0 to 12
 
-## Performance Benchmarks
+## Performance
 
-(see [benchmarks.md](./benchmarks.md)).
+See [benchmarks.md](./benchmarks.md).
+
+Here are two examples of the compressed file size vs compression time tradeoff
+as compression level increases for a given dataset.
+Each point is annotated with the compression level used:
+
+<div style="text-align:center">
+<img src="./res/levels_dollars_cents.svg" width="45%">
+<img src="./res/levels_lomax05.svg" width="45%">
+</div>
+
+The dollars and cents is very intricate and sees some improvement for
+high compression levels.
+But most data, like the heavy-tail integers dataset, is already well-compressed
+by level 6 or so.
 
 ## Usage
 

@@ -113,15 +113,14 @@ fn push_pref<T: NumberLike>(
   prefix_idx: &mut usize,
   i: usize,
   j: usize,
-  max_n_prefix: usize,
+  max_n_pref: usize,
   n: usize,
   sorted: &[T],
 ) {
   let count = j - i;
   let frequency = count as f64 / n as f64;
-  let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_prefix) / n);
-  let prefix_idx_incr = new_prefix_idx - *prefix_idx;
-  if n < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n || prefix_idx_incr == 1 {
+  let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_pref) / n);
+  if n < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
     seq.push(WeightedPrefix::new(
@@ -175,7 +174,7 @@ fn train_prefixes<T: NumberLike>(
   let mut sorted = nums;
   sorted.sort_unstable_by(|a, b| a.num_cmp(b));
   let safe_comp_level = min(comp_level, (n as f64).log2() as usize);
-  let n_pref = 1_usize << safe_comp_level;
+  let max_n_pref = 1_usize << safe_comp_level;
   let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
   let pref_ptr = &mut raw_prefs;
 
@@ -185,21 +184,21 @@ fn train_prefixes<T: NumberLike>(
   let mut i = 0;
   let mut backup_j = 0_usize;
   for j in 0..n {
-    let target_j = ((*pref_idx_ptr + 1) * n) / n_pref;
+    let target_j = ((*pref_idx_ptr + 1) * n) / max_n_pref;
     if j > 0 && sorted[j].num_eq(&sorted[j - 1]) {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        push_pref(pref_ptr, pref_idx_ptr, i, backup_j, n_pref, n, &sorted);
+        push_pref(pref_ptr, pref_idx_ptr, i, backup_j, max_n_pref, n, &sorted);
         i = backup_j;
       }
     } else {
       backup_j = j;
       if j >= target_j {
-        push_pref(pref_ptr, pref_idx_ptr, i, j, n_pref, n, &sorted);
+        push_pref(pref_ptr, pref_idx_ptr, i, j, max_n_pref, n, &sorted);
         i = j;
       }
     }
   }
-  push_pref(pref_ptr, pref_idx_ptr, i, n, n_pref, n, &sorted);
+  push_pref(pref_ptr, pref_idx_ptr, i, n, max_n_pref, n, &sorted);
 
   let mut optimized_prefs = prefix_optimization::optimize_prefixes(
     raw_prefs,
@@ -207,11 +206,10 @@ fn train_prefixes<T: NumberLike>(
   );
 
   huffman_encoding::make_huffman_code(&mut optimized_prefs);
-  println!("optimized to {} prefixes", optimized_prefs.len());
+  println!("{} prefixes:", optimized_prefs.len());
   for p in &optimized_prefs {
     println!("\t{}", p.prefix);
   }
-
 
   let prefixes = optimized_prefs.iter()
     .map(|wp| wp.prefix.clone())

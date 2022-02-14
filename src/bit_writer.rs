@@ -6,9 +6,8 @@ use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_ENTRIES};
 /// `BitWriter` builds a `Vec<u8>`, enabling a compressor to write bit-level
 /// information and maintain its position in the bytes.
 ///
-/// It does this by maintaining
-/// * a byte index and
-/// * a bit index from 0-8 within that byte.
+/// It does this by maintaining a bit index from 0-8 within its most recent
+/// byte.
 ///
 /// The reader is consider is considered "aligned" if the current bit index
 /// is 0 or 8 (i.e. at the start or end of the current byte).
@@ -59,12 +58,16 @@ impl BitWriter {
     }
   }
 
+  fn last_mut(&mut self) -> &mut u8 {
+    self.bytes.last_mut().unwrap()
+  }
+
   /// Appends the bit to the writer.
   pub fn write_one(&mut self, b: bool) {
     self.refresh_if_needed();
 
     if b {
-      *self.bytes.last_mut().unwrap() |= 1_u8 << (7 - self.j);
+      *self.last_mut() |= 1_u8 << (7 - self.j);
     }
 
     self.j += 1;
@@ -88,18 +91,17 @@ impl BitWriter {
 
     self.refresh_if_needed();
 
-    let mut remaining = n;
     let n_plus_j = n + self.j;
     if n_plus_j <= 8 {
-      let lshift = 8 - n_plus_j;
-      *self.bytes.last_mut().unwrap() |= (x << lshift).last_u8() & LEFT_MASKS[self.j];
+      let shifted = (x << (8 - n_plus_j)).last_u8();
+      *self.last_mut() |= shifted & LEFT_MASKS[self.j];
       self.j = n_plus_j;
       return;
-    } else {
-      let rshift = n_plus_j - 8;
-      *self.bytes.last_mut().unwrap() |= (x >> rshift).last_u8() & LEFT_MASKS[self.j];
-      remaining -= 8 - self.j;
     }
+
+    let rshift = n_plus_j - 8;
+    *self.last_mut() |= (x >> rshift).last_u8() & LEFT_MASKS[self.j];
+    let mut remaining = n + self.j - 8;
 
     while remaining > 8 {
       let rshift = remaining - 8;
@@ -169,7 +171,7 @@ mod tests {
   #[test]
   fn test_write_bigger_num() {
     let mut writer = BitWriter::default();
-    writer.write(&vec![true, true, true, true]);
+    writer.write(&[true, true, true, true]);
     writer.write_usize(187, 4);
     let bytes = writer.pop();
     assert_eq!(
@@ -179,16 +181,21 @@ mod tests {
   }
 
   #[test]
-  fn test_long_write() {
+  fn test_long_diff_writes() {
     let mut writer = BitWriter::default();
-    // 10100000 00001000 00000010 00000001 1
-    writer.write_one(true);
-    writer.write_usize((1 << 30) + (1 << 20) + (1 << 10) + 3, 32);
+    // 10000000 11000000 00001000 01000000 00000000 01000000 00000010
+    // 10000000 10000000 00000000
+    writer.write_usize((1 << 9) + (1 << 8) + 1, 9);
+    writer.write_usize((1 << 16) + (1 << 5) + 1, 17);
+    writer.write_usize(1 << 1, 17);
+    writer.write_usize(1 << 1, 13);
+    writer.write_usize((1 << 23) + (1 << 15), 24);
+
     let bytes = writer.pop();
     assert_eq!(
       bytes,
-      vec![160, 8, 2, 1, 128]
-    );
+      vec![128, 192, 8, 64, 0, 64, 2, 128, 128, 0],
+    )
   }
 
   #[test]
