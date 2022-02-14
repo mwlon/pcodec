@@ -38,7 +38,7 @@ with high compression ratio and moderately fast speed.
 
 See [benchmarks.md](./benchmarks.md).
 
-Here are two examples of the compressed file size vs compression time tradeoff
+Here are two examples of the compressed file size vs. compression time tradeoff
 as compression level increases for a given dataset.
 Each point is annotated with the compression level used:
 
@@ -47,10 +47,11 @@ Each point is annotated with the compression level used:
 <img src="./res/levels_lomax05.svg" width="45%">
 </div>
 
-The dollars and cents is very intricate and sees some improvement for
+The Dollars and Cents dataset is very intricate and still sees improvement for
 high compression levels.
 But most data, like the heavy-tail integers dataset, is already well-compressed
 by level 6 or so.
+Each of these datasets is 8MB uncompressed.
 
 ## Usage
 
@@ -93,7 +94,11 @@ range.
 The compressor chooses a _prefix_ for each range via Huffman
 codes.
 
-When delta encoding of some order is turned on, 
+When delta encoding of some order is turned on, compression happens in these
+stages:
+1. Compute deltas.
+2. Determine prefixes based on distribution of deltas.
+3. Encode deltas using prefixes.
 
 For data sampled from a random distribution, this compression algorithm can
 reduce byte size to near the theoretical limit of the distribution's Shannon
@@ -113,12 +118,12 @@ the approximated distribution `Q` to the true distribution `P`.
 
 <img src="./res/file_format.svg">
 
-Quantile-compressed files consist of a lightweight header (usually <1KB),
+Quantile-compressed files consist of a lightweight header (usually <1kB),
 then chunks containing metadata and numerical data, finished by a magic
 termination byte.
 
 The header is expected to start with a magic sequence of 4 bytes for "qco!"
-in ascii.
+in ASCII.
 The next byte encodes the data type (e.g. `i64`).
 Then flags are encoded, which might affect the rest of the encoding.
 For instance, if delta encoding of order > 0 is on, then that many delta
@@ -129,7 +134,7 @@ Then the metadata section follows, containing the number of numbers,
 the byte size of the compressed body to follow, and prefixes
 used to compress.
 There must be at least one number in each chunk.
-Each prefix has a count of numbers in the range, a lower and upper bound,
+Each prefix has a count of numbers in its range, a lower and upper bound,
 a Huffman code, and optionally a "jumpstart" which is used in
 number blocks to describe how many repetitions of the range to use.
 Using the compressed body size metadata and magic chunk/termination bytes
