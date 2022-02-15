@@ -17,14 +17,14 @@ use crate::data_types::UnsignedLike;
 /// The reader is consider is considered "aligned" if the current bit index
 /// is 0 or 8 (i.e. at the start or end of the current byte).
 #[derive(Clone)]
-pub struct BitReader {
-  bytes: Vec<u8>,
+pub struct BitReader<'a> {
+  bytes: &'a [u8],
   i: usize,
   j: usize,
   total_bits: usize,
 }
 
-impl Debug for BitReader {
+impl<'a> Debug for BitReader<'a> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     let current_info = if self.i < self.bytes.len() {
       format!(
@@ -46,8 +46,8 @@ impl Debug for BitReader {
   }
 }
 
-impl From<Vec<u8>> for BitReader {
-  fn from(bytes: Vec<u8>) -> BitReader {
+impl<'a> From<&'a [u8]> for BitReader<'a> {
+  fn from(bytes: &'a [u8]) -> BitReader<'a> {
     let total_bits = 8 * bytes.len();
     BitReader {
       bytes,
@@ -58,7 +58,13 @@ impl From<Vec<u8>> for BitReader {
   }
 }
 
-impl BitReader {
+impl<'a, B: AsRef<[u8]>> From<&'a B> for BitReader<'a> {
+  fn from(bytes: &'a B) -> BitReader<'a> {
+    bytes.as_ref().into()
+  }
+}
+
+impl<'a> BitReader<'a> {
   /// Returns the reader's current byte index. Will return an error if the
   /// reader is at
   /// a misaligned position.
@@ -348,7 +354,7 @@ mod tests {
   fn test_bit_reader() -> QCompressResult<()>{
     // bits: 1001 1010  0110 1011  0010 1101
     let bytes = vec![0x9a, 0x6b, 0x2d];
-    let mut bit_reader = BitReader::from(bytes);
+    let mut bit_reader = BitReader::from(&bytes);
     assert_eq!(
       bit_reader.read_aligned_bytes(1)?,
       vec![0x9a],
@@ -377,7 +383,8 @@ mod tests {
 
   #[test]
   fn test_seek_rewind() {
-    let mut reader = BitReader::from(vec![0; 6]);
+    let bytes = vec![0; 6];
+    let mut reader = BitReader::from(&bytes);
     reader.seek(43);
 
     reader.rewind(2);

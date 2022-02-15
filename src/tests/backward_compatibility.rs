@@ -14,7 +14,7 @@ fn assert_compatible<T: NumberLike>(
 
   let compressed = fs::read(format!("assets/{}.qco", filename)).expect("read qco");
   let decompressor = Decompressor::<T>::default();
-  let decompressed = decompressor.simple_decompress(compressed).expect("decompress");
+  let decompressed = decompressor.simple_decompress(&compressed).expect("decompress");
 
   assert_eq!(decompressed, expected)
 }

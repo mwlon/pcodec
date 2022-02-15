@@ -21,7 +21,8 @@ fn main() {
 
   // now read back only the metadata
   let start_t = Instant::now();
-  let mut reader = BitReader::from(writer.pop());
+  let bytes = writer.pop();
+  let mut reader = BitReader::from(&bytes);
   let decompressor = Decompressor::<f64>::default();
   let flags = decompressor.header(&mut reader).expect("flags");
   let mut metadatas = Vec::new();

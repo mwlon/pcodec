@@ -28,7 +28,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
       .simple_compress(&nums)
   }
 
-  fn decompress(bytes: Vec<u8>) -> Vec<T> {
+  fn decompress(bytes: &[u8]) -> Vec<T> {
     Decompressor::<T>::default()
       .simple_decompress(bytes)
       .expect("could not decompress")
@@ -59,7 +59,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
 
     // decompress
     let decompress_start = Instant::now();
-    let rec_nums = Self::decompress(compressed);
+    let rec_nums = Self::decompress(&compressed);
     println!("DECOMPRESSED IN {:?}", Instant::now() - decompress_start);
 
     // make sure everything came back correct

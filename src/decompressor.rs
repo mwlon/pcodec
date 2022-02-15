@@ -256,14 +256,14 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
 ///
 /// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
 /// let decompressor = Decompressor::<i32>::default();
-/// let nums = decompressor.simple_decompress(my_bytes).expect("decompression"); // returns Vec<i32>
+/// let nums = decompressor.simple_decompress(&my_bytes).expect("decompression"); // returns Vec<i32>
 /// ```
 /// You can also get full control over the decompression process:
 /// ```
 /// use q_compress::{BitReader, Decompressor};
 ///
 /// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
-/// let mut reader = BitReader::from(my_bytes);
+/// let mut reader = BitReader::from(&my_bytes);
 /// let decompressor = Decompressor::<i32>::default();
 ///
 /// let flags = decompressor.header(&mut reader).expect("header failure");
@@ -420,7 +420,7 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// Takes in compressed bytes and returns a vector of numbers.
   /// Will return an error if there are any compatibility, corruption,
   /// or insufficient data issues.
-  pub fn simple_decompress(&self, bytes: Vec<u8>) -> QCompressResult<Vec<T>> {
+  pub fn simple_decompress(&self, bytes: &[u8]) -> QCompressResult<Vec<T>> {
     // cloning/extending by a single chunk's numbers can slow down by 2%
     // so we just take ownership of the first chunk's numbers instead
     let mut reader = BitReader::from(bytes);
@@ -488,7 +488,7 @@ mod tests {
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
       let result = decompressor.chunk_body(
-        &mut BitReader::from(bytes.clone()),
+        &mut BitReader::from(&bytes),
         &flags,
         &bad_metadata,
       );
