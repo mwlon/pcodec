@@ -56,7 +56,7 @@ Each of these datasets is 8MB uncompressed.
 ## Usage
 
 ```rust
-use q_compress::{I64Compressor, I64Decompressor};
+use q_compress::{Compressor, Decompressor};
 
 fn main() {
   // your data
@@ -68,12 +68,12 @@ fn main() {
   // Here we just use the default configuration, but we can also use
   // `::from_compressor_config()` to set configurations like
   // `compression_level` and `delta_encoding_order`.
-  let compressor = I64Compressor::default();
+  let compressor = Compressor::<i64>::default();
   let bytes: Vec<u8> = compressor.simple_compress(&my_ints);
   println!("compressed down to {} bytes", bytes.len());
  
   // decompress
-  let decompressor = I64Decompressor::default();
+  let decompressor = Decompressor::<i64>::default();
   let recovered = decompressor.simple_decompress(bytes).expect("failed to decompress");
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
