@@ -2,8 +2,13 @@
 
 ## 0.6.1
 
-* Made compression 50%-300% faster for interesting distributions
-and nontrivial compression levels.
+* Made compression of interesting distributions 50%-300% faster by improving
+prefix search algorithm.
+* Made compression of constant data several times faster.
+* Overwrite prefix optimization algorithm with a provably optimal one,
+reducing most file sizes ~0.05% and making compression of high compression
+levels ~100% faster. Inadvertently improved decompression speed of certain
+distributions by ~10% via better choice of prefixes.
 * Added timestamp validation functionality.
 
 ## 0.6.0
