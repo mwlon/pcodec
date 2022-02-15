@@ -93,8 +93,8 @@ impl BitWriter {
 
     let n_plus_j = n + self.j;
     if n_plus_j <= 8 {
-      let shifted = (x << (8 - n_plus_j)).last_u8();
-      *self.last_mut() |= shifted & LEFT_MASKS[self.j];
+      let lshift = 8 - n_plus_j;
+      *self.last_mut() |= (x << lshift).last_u8() & LEFT_MASKS[self.j];
       self.j = n_plus_j;
       return;
     }

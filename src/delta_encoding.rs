@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::marker::PhantomData;
 
 use crate::{BitReader, BitWriter};
@@ -106,7 +105,7 @@ pub fn reconstruct_nums<T: NumberLike>(
   let mut moments = delta_moments.moments.clone();
   let mut res = Vec::with_capacity(n);
   let order = delta_moments.order();
-  let safe_n = max(n, order) - order;
+  let safe_n = n.saturating_sub(order);
   for &delta in deltas {
     res.push(T::from_signed(moments[0]));
     for o in 0..order - 1 {

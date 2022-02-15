@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::cmp::Ordering::{Greater, Less};
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOrAssign, Shl, Shr, ShrAssign, Sub};
+use std::ops::{Add, BitAnd, BitOrAssign, Shl, Shr, Sub};
 
 use crate::{BitReader, BitWriter};
 use crate::bits;
@@ -45,12 +45,11 @@ pub trait SignedLike {
 /// corresponding `UnsignedLike` representation.
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
 Copy + Debug + Display + From<u8> + Ord + PartialOrd +
-Shl<usize, Output=Self> + Shr<usize, Output=Self> + ShrAssign<usize> + Sub<Output=Self> {
+Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
   const BITS: usize;
-  const BYTES: usize = Self::BITS / 8;
 
   fn to_f64(self) -> f64;
   /// Returns the last byte in the unsigned integer's bigendian representation.

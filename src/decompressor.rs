@@ -370,10 +370,7 @@ impl<T> Decompressor<T> where T: NumberLike {
         chunk_decompressor.decompress_chunk_body(reader)
       },
       PrefixMetadata::Delta { delta_moments, prefixes } => {
-        let n_deltas = max(
-          metadata.n,
-          delta_moments.order(),
-        ) - delta_moments.order();
+        let n_deltas = metadata.n.saturating_sub(delta_moments.order());
         let chunk_decompressor = ChunkDecompressor::new(
           n_deltas,
           metadata.compressed_body_size,

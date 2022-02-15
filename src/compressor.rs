@@ -206,10 +206,6 @@ fn train_prefixes<T: NumberLike>(
   );
 
   huffman_encoding::make_huffman_code(&mut optimized_prefs);
-  println!("{} prefixes:", optimized_prefs.len());
-  for p in &optimized_prefs {
-    println!("\t{}", p.prefix);
-  }
 
   let prefixes = optimized_prefs.iter()
     .map(|wp| wp.prefix.clone())
