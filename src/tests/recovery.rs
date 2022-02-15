@@ -110,7 +110,7 @@ fn test_multi_chunk() {
   let bytes = writer.pop();
 
   let decompressor = Decompressor::<i64>::default();
-  let res = decompressor.simple_decompress(bytes).unwrap();
+  let res = decompressor.simple_decompress(&bytes).unwrap();
   assert_eq!(
     res,
     vec![1, 2, 3, 11, 12, 13],
@@ -124,7 +124,7 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize) {
     );
     let compressed = compressor.simple_compress(&nums);
     let decompressor = Decompressor::<T>::default();
-    let decompressed = decompressor.simple_decompress(compressed)
+    let decompressed = decompressor.simple_decompress(&compressed)
       .expect("decompression error");
     // We can't do assert_eq on the whole vector because even bitwise identical
     // floats sometimes aren't equal by ==.

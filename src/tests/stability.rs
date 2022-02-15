@@ -13,7 +13,7 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
 
   let decompressor = Decompressor::<T>::default();
   for i in 0..compressed.len() - 1 {
-    match decompressor.simple_decompress((&compressed[0..i]).to_vec()) {
+    match decompressor.simple_decompress(&compressed[0..i]) {
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (), // good
       Ok(_) => panic!("expected decompressor to notice insufficient data (got Ok)"),
       Err(e) => panic!("expected decompressor to notice insufficient data (got {})", e),
