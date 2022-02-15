@@ -138,8 +138,8 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
   }
 
   pub fn write_to(&self, writer: &mut BitWriter, flags: &Flags) {
-    writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES as usize);
-    writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE as usize);
+    writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
+    writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
     match &self.prefix_metadata {
       PrefixMetadata::Simple { prefixes} => {
         write_prefixes(prefixes, writer, flags);
@@ -154,8 +154,8 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
 
   pub(crate) fn update_write_compressed_body_size(&self, writer: &mut BitWriter, initial_idx: usize) {
     writer.assign_usize(
-      initial_idx + BITS_TO_ENCODE_N_ENTRIES as usize / 8,
-      BITS_TO_ENCODE_N_ENTRIES as usize % 8,
+      initial_idx + BITS_TO_ENCODE_N_ENTRIES / 8,
+      BITS_TO_ENCODE_N_ENTRIES % 8,
       self.compressed_body_size,
       BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
     );

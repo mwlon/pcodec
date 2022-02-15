@@ -2,6 +2,7 @@
 // of the .qco file.
 // New flags may be added in over time in a backward-compatible way.
 
+use std::cmp::min;
 use std::convert::{TryFrom, TryInto};
 
 use crate::{BitReader, BitWriter, CompressorConfig};
@@ -42,7 +43,7 @@ impl TryFrom<Vec<bool>> for Flags {
   fn try_from(bools: Vec<bool>) -> QCompressResult<Self> {
     // would be nice to make a bit reader to do this instead of keeping track of index manually
     let use_5_bit_prefix_len = bools[0];
-    let delta_end_idx = 1 + BITS_TO_ENCODE_DELTA_ENCODING_ORDER as usize;
+    let delta_end_idx = 1 + BITS_TO_ENCODE_DELTA_ENCODING_ORDER;
     let delta_encoding_bits = &bools[1..delta_end_idx];
     let delta_encoding_order = bits::bits_to_usize(delta_encoding_bits);
     for &bit in bools.iter().skip(delta_end_idx) {
@@ -98,7 +99,7 @@ impl Flags {
     // byte
     for i in 0_usize..(bools.len() / 7) + 1 {
       let start = i * 7;
-      let end = (start + 7).min(bools.len());
+      let end = min(start + 7, bools.len());
       writer.write(&bools[start..end]);
       if end < bools.len() {
         writer.write_one(true);

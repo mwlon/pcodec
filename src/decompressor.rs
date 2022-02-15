@@ -1,9 +1,8 @@
 use std::cmp::{max, min};
-use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{bits, Flags, prefix};
+use crate::{bits, Flags};
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
 use crate::constants::*;
@@ -56,10 +55,9 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
   Ok(())
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct ChunkDecompressor<T> where T: NumberLike {
   huffman_table: HuffmanTable<T::Unsigned>,
-  prefixes: Vec<Prefix<T>>,
   n: usize,
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
@@ -94,15 +92,19 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
         } else {
           k_info.k + 1
         };
-        (prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset)
-          .max(prefix_bits + PREFIX_TABLE_SIZE_LOG - prefix_bits.rem_euclid(PREFIX_TABLE_SIZE_LOG))
+        let overshoot_prefix_bits = ((prefix_bits + PREFIX_TABLE_SIZE_LOG - 1)
+          / PREFIX_TABLE_SIZE_LOG) * PREFIX_TABLE_SIZE_LOG;
+
+        max(
+          prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset,
+          overshoot_prefix_bits,
+        )
       })
       .max()
       .unwrap_or(usize::MAX);
 
     Ok(ChunkDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
-      prefixes,
       n,
       compressed_body_size,
       max_bits_per_num_block,
@@ -123,7 +125,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     };
 
     for _ in 0..reps {
-      let mut offset = reader.unchecked_read_diff(p.k as usize);
+      let mut offset = reader.unchecked_read_diff(p.k);
       if p.k < T::Unsigned::BITS {
         let most_significant = T::Unsigned::ONE << p.k;
         if p.range - offset >= most_significant && reader.unchecked_read_one() {
@@ -149,7 +151,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     };
 
     for _ in 0..reps {
-      let mut offset = reader.read_diff(p.k as usize)?;
+      let mut offset = reader.read_diff(p.k)?;
       if p.k < T::Unsigned::BITS {
         let most_significant = T::Unsigned::ONE << p.k;
         if p.range - offset >= most_significant && reader.read_one()? {
@@ -159,6 +161,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
       let num = T::from_unsigned(p.lower_unsigned + offset);
       res.push(num);
     }
+
     Ok(())
   }
 
@@ -170,15 +173,23 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
   #[inline(never)]
   fn decompress_chunk_nums(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
     let mut res = Vec::with_capacity(self.n);
+
+    if self.max_bits_per_num_block == 0 {
+      let mut temp = Vec::with_capacity(1);
+      self.unchecked_decompress_num_block(reader, &mut temp);
+      let constant_num = temp[0];
+      for _ in 0..self.n {
+        res.push(constant_num);
+      }
+      return Ok(res);
+    }
+
     loop {
       let remaining_nums = self.n - res.len();
-      let guaranteed_safe_num_blocks = if self.max_bits_per_num_block == 0 {
-        remaining_nums
-      } else {
-        remaining_nums.min(
-          reader.bits_remaining() / self.max_bits_per_num_block
-        )
-      };
+      let guaranteed_safe_num_blocks = min(
+        remaining_nums,
+        reader.bits_remaining() / self.max_bits_per_num_block,
+      );
 
       if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
         let mut block_idx = 0;
@@ -233,12 +244,6 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     }
 
     Ok(res)
-  }
-}
-
-impl<T> Debug for ChunkDecompressor<T> where T: NumberLike {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    prefix::display_prefixes(&self.prefixes, f)
   }
 }
 
@@ -365,7 +370,7 @@ impl<T> Decompressor<T> where T: NumberLike {
         chunk_decompressor.decompress_chunk_body(reader)
       },
       PrefixMetadata::Delta { delta_moments, prefixes } => {
-        let n_deltas = metadata.n.max(delta_moments.order()) - delta_moments.order();
+        let n_deltas = metadata.n.saturating_sub(delta_moments.order());
         let chunk_decompressor = ChunkDecompressor::new(
           n_deltas,
           metadata.compressed_body_size,

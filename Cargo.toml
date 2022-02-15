@@ -7,7 +7,7 @@ authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding"]
 description = "Good data compression columnar numerical data and time series"
 include = ["src/**/*.rs", "Cargo.toml"]
-keywords = ["compression", "numerical", "quantile"]
+keywords = ["compression", "numerical", "quantile", "delta"]
 license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
 
