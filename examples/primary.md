@@ -142,9 +142,15 @@ Some observations one can draw, comparing `.qco` to `.zstd.parquet`:
   The cents are commonly 99, 98, 0, etc.
   Quantile compression smooths over high-frequency information like this
   when just given total cents (100 + dollars + cents), and only compresses
-  down to 1.3MB.
+  down to 1.29MB.
   But given the two columns separately, it compresses down to
-  619K + 440K = 1.06MB.
+  619K + 440K = 1.04MB.
+* However, if you run at the max `q_compress` level of 12
+  (`cargo run --release --example primary 12`),
+  total cents drops to about 1.05MB, whereas dollars and cents separately
+  stay roughly the same.
+  So some suboptimal choices of data model can be compensated for via
+  increased compression level.
 * Floating point distributions can't be compressed as much as integers.
   That's because between any power of 2, 64 bit floats use 52 bits of
   information, which is already most of their 64 bits.
