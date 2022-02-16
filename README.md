@@ -74,7 +74,7 @@ fn main() {
  
   // decompress
   let decompressor = Decompressor::<i64>::default();
-  let recovered = decompressor.simple_decompress(bytes).expect("failed to decompress");
+  let recovered = decompressor.simple_decompress(&bytes).expect("failed to decompress");
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```
