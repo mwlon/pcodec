@@ -4,7 +4,7 @@ use crate::{BitReader, BitWriter};
 use crate::data_types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeltaMoments<T: NumberLike> {
   pub moments: Vec<T::Signed>,
   pub phantom: PhantomData<T>,
@@ -98,25 +98,20 @@ fn nth_order_moments<T: NumberLike>(
 }
 
 pub fn reconstruct_nums<T: NumberLike>(
-  delta_moments: &DeltaMoments<T>,
+  delta_moments: &mut DeltaMoments<T>,
   deltas: &[T::Signed],
   n: usize,
 ) -> Vec<T> {
-  let mut moments = delta_moments.moments.clone();
   let mut res = Vec::with_capacity(n);
   let order = delta_moments.order();
-  let safe_n = n.saturating_sub(order);
-  for &delta in deltas {
+  let moments = &mut delta_moments.moments;
+  for i in 0..n {
     res.push(T::from_signed(moments[0]));
     for o in 0..order - 1 {
       moments[o] = moments[o].wrapping_add(moments[o + 1]);
     }
-    moments[order - 1] = moments[order - 1].wrapping_add(delta);
-  }
-  for i in safe_n..n {
-    res.push(T::from_signed(moments[0]));
-    for o in 0..n - i - 1 {
-      moments[o] = moments[o].wrapping_add(moments[o + 1]);
+    if i < deltas.len() {
+      moments[order - 1] = moments[order - 1].wrapping_add(deltas[i]);
     }
   }
   res
