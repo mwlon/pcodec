@@ -63,7 +63,6 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
           &mut reader,
           1,
         ).unwrap();
-        println!("i {} j {} order {}", i, j, delta_encoding_order);
         assert_eq!(
           batch.len(),
           if j < nums.len() { 1 } else { 0 },
