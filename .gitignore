@@ -6,3 +6,4 @@ examples/venv
 *.iml
 temp
 **/.DS_Store
+*.swp
