@@ -68,7 +68,7 @@ impl TryInto<Vec<bool>> for &Flags {
     let mut res = vec![self.use_5_bit_prefix_len];
     if self.delta_encoding_order > MAX_DELTA_ENCODING_ORDER {
       return Err(QCompressError::invalid_argument(format!(
-        "delta encoding level may not exceed {} (was {})",
+        "delta encoding order may not exceed {} (was {})",
         MAX_DELTA_ENCODING_ORDER,
         self.delta_encoding_order,
       )));

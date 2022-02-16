@@ -43,15 +43,15 @@ as compression level increases for a given dataset.
 Each point is annotated with the compression level used:
 
 <div style="text-align:center">
-<img src="./res/levels_dollars_cents.svg" width="45%">
+<img src="./res/levels_total_cents.svg" width="45%">
 <img src="./res/levels_lomax05.svg" width="45%">
 </div>
 
-The Dollars and Cents dataset is very intricate and still sees improvement for
+The Total Cents dataset is very intricate and still sees improvement for
 high compression levels.
 But most data, like the heavy-tail integers dataset, is already well-compressed
 by level 6 or so.
-Each of these datasets is 8MB uncompressed.
+Each of these datasets is 7.6MB uncompressed.
 
 ## Usage
 
@@ -74,7 +74,7 @@ fn main() {
  
   // decompress
   let decompressor = Decompressor::<i64>::default();
-  let recovered = decompressor.simple_decompress(bytes).expect("failed to decompress");
+  let recovered = decompressor.simple_decompress(&bytes).expect("failed to decompress");
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```
