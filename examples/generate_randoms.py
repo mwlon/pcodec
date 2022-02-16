@@ -13,7 +13,15 @@ os.makedirs('data/txt', exist_ok=True)
 os.makedirs('data/parquet', exist_ok=True)
 os.makedirs('data/snappy_parquet', exist_ok=True)
 os.makedirs('data/gzip_parquet', exist_ok=True)
+os.makedirs('data/zstd_parquet', exist_ok=True)
 os.makedirs('data/binary', exist_ok=True)
+
+def write_parquet_tables(nums, full_name):
+  table = pa.Table.from_pydict({'nums': nums})
+  pq.write_table(table, f'data/parquet/{full_name}.parquet', compression='NONE')
+  pq.write_table(table, f'data/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
+  pq.write_table(table, f'data/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=9)
+  pq.write_table(table, f'data/zstd_parquet/{full_name}.zstd.parquet', compression='zstd', compression_level=22)
 
 def write_i64(arr, name):
   if arr.dtype != np.int64:
@@ -22,13 +30,12 @@ def write_i64(arr, name):
     floored = arr
   ints = [str(x) for x in floored]
   joined = '\n'.join(ints)
-  with open(f'data/txt/i64_{name}.txt', 'w') as f:
+  full_name = f'i64_{name}'
+  with open(f'data/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'data/binary/i64_{name}.bin', 'wb') as f:
+  with open(f'data/binary/{full_name}.bin', 'wb') as f:
     f.write(floored.tobytes())
-  table = pa.Table.from_pydict({'nums': floored})
-  pq.write_table(table, f'data/parquet/i64_{name}.parquet', compression='NONE')
-  pq.write_table(table, f'data/snappy_parquet/i64_{name}.snappy.parquet', compression='snappy')
+  write_parquet_tables(floored, full_name)
 
 def write_bool8(arr, name):
   if arr.dtype != np.int8:
@@ -37,32 +44,23 @@ def write_bool8(arr, name):
     floored = arr
   ints = [str(x) for x in floored]
   joined = '\n'.join(ints)
-  with open(f'data/txt/bool8_{name}.txt', 'w') as f:
+  full_name = f'bool8_{name}'
+  with open(f'data/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'data/binary/bool8_{name}.bin', 'wb') as f:
+  with open(f'data/binary/{full_name}.bin', 'wb') as f:
     f.write(floored.tobytes())
-  table = pa.Table.from_pydict({'nums': floored})
-  pq.write_table(table, f'data/parquet/bool8_{name}.parquet', compression='NONE')
-  pq.write_table(table, f'data/snappy_parquet/bool8_{name}.snappy.parquet', compression='snappy')
+  write_parquet_tables(floored, full_name)
 
 def write_f64(arr, name):
   arr = arr.astype(np.float64)
   floats = [str(x) for x in arr]
   joined = '\n'.join(floats)
-  with open(f'data/txt/f64_{name}.txt', 'w') as f:
+  full_name = f'f64_{name}'
+  with open(f'data/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'data/binary/f64_{name}.bin', 'wb') as f:
+  with open(f'data/binary/{full_name}.bin', 'wb') as f:
     f.write(arr.tobytes())
-  table = pa.Table.from_pydict({'nums': arr})
-  pq.write_table(table, f'data/parquet/f64_{name}.parquet', compression='NONE')
-  pq.write_table(table, f'data/snappy_parquet/f64_{name}.snappy.parquet', compression='snappy')
-
-write_i64(np.random.normal(scale=1.0, size=n), 'normal1')
-write_i64(np.random.normal(scale=10.0, size=n), 'normal10')
-write_i64(np.random.normal(scale=1000000.0, size=n), 'normal1M')
-
-write_i64(np.random.geometric(p=0.5, size=n), 'geo2')
-write_i64(np.random.geometric(p=0.000001, size=n), 'geo1M')
+  write_parquet_tables(arr, full_name)
 
 def write_timestamp_micros(arr, name):
   if arr.dtype != np.int64:
@@ -72,14 +70,19 @@ def write_timestamp_micros(arr, name):
   ts = [datetime.utcfromtimestamp(x / 10 ** 6) for x in floored]
   strs = [x.strftime('%Y-%m-%dT%H:%M:%S:%fZ') for x in ts]
   joined = '\n'.join(strs)
-  with open(f'data/txt/micros_{name}.txt', 'w') as f:
+  full_name = f'micros_{name}'
+  with open(f'data/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'data/binary/micros_{name}.bin', 'wb') as f:
+  with open(f'data/binary/{full_name}.bin', 'wb') as f:
     f.write(floored.tobytes())
-  table = pa.Table.from_pydict({'nums': ts})
-  pq.write_table(table, f'data/parquet/micros_{name}.parquet', compression='NONE')
-  pq.write_table(table, f'data/snappy_parquet/micros_{name}.snappy.parquet', compression='snappy')
+  write_parquet_tables(ts, full_name)
 
+write_i64(np.random.normal(scale=1.0, size=n), 'normal1')
+write_i64(np.random.normal(scale=10.0, size=n), 'normal10')
+write_i64(np.random.normal(scale=1000000.0, size=n), 'normal1M')
+
+write_i64(np.random.geometric(p=0.5, size=n), 'geo2')
+write_i64(np.random.geometric(p=0.000001, size=n), 'geo1M')
 
 def fixed_median_lomax(a, median):
   unscaled_median = 2 ** (1 / a) - 1

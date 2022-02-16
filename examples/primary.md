@@ -1,12 +1,14 @@
 # Quantile Compression Example
 
 The `primary` example generates a wide variety of common distributions
-with the `i64`, `f64`, and `bool` data types,
+with the `bool`, `f64`, `i64`, and `TimestampMicros` data types,
 compresses them, decompresses them, and makes sure
 all the data came back bitwise identical.
 We also compare vs
-gzip, Snappy, and their combinations with Parquet
+gzip, Snappy, ZStandard, and their combinations with Parquet
 on the binary data of these numbers.
+On all parquet files, we use the max compression level available for the
+codec (9 for gzip, 22 for zstd).
 
 ## Running
 
@@ -16,7 +18,7 @@ TL;DR:
 
 The script to generate the data uses python, so set up a python3
 environment with `numpy` and `pyarrow` installed.
-In that environment, `cd`'d into the `example/` directory, run
+In that environment, `cd`'d into the `examples/` directory, run
 `python generate_randoms.py`.
 This will populate some human-readable data in `data/txt/` and
 the exact same numerical data as bytes in `data/binary`.
@@ -51,63 +53,87 @@ levels 1 and 9.
 To try pure Snappy,
 you can install the `szip` and `xargs` commands and run `sh run_snappy.sh`.
 
-
-
 ## Comparing vs other algorithms
 
 You can compare file sizes with `ls`:
 ```
-% ls -lh data/q_compressed_6 
-... 4.3M ... f64_edge_cases.qco
-... 6.6M ... f64_normal_at_0.qco
-... 5.4M ... f64_normal_at_1000.qco
-... 440K ... i64_cents.qco
-...  28B ... i64_constant.qco
-... 622K ... i64_dollars.qco
-... 122K ... i64_extremes.qco
-... 2.6M ... i64_geo1M.qco
-... 248K ... i64_geo2.qco
-... 1.7M ... i64_lomax05.qco
-... 1.5M ... i64_lomax15.qco
-... 1.5M ... i64_lomax25.qco
-... 280K ... i64_normal1.qco
-... 665K ... i64_normal10.qco
-... 2.6M ... i64_normal1M.qco
-...  13K ... i64_sparse.qco
-... 1.3M ... i64_total_cents.qco
-... 7.6M ... i64_uniform.qco
+% ls -lh data/q_compressed_6 | awk '{print $5 "\t" $9}'
+122K	bool8_random.qco
+122K	bool8_random_del=1.qco
+4.2M	f64_edge_cases.qco
+6.1M	f64_edge_cases_del=1.qco
+6.6M	f64_normal_at_0.qco
+5.4M	f64_normal_at_1000.qco
+6.5M	f64_slow_cosine.qco
+5.4M	f64_slow_cosine_del=1.qco
+3.8M	f64_slow_cosine_del=2.qco
+2.1M	f64_slow_cosine_del=7.qco
+440K	i64_cents.qco
+37B     i64_constant.qco
+619K	i64_dollars.qco
+122K	i64_extremes.qco
+183K	i64_extremes_del=1.qco
+2.6M	i64_geo1M.qco
+248K	i64_geo2.qco
+1.7M	i64_lomax05.qco
+1.5M	i64_lomax15.qco
+1.5M	i64_lomax25.qco
+280K	i64_normal1.qco
+666K	i64_normal10.qco
+2.6M	i64_normal1M.qco
+2.1M	i64_slow_cosine.qco
+837K	i64_slow_cosine_del=1.qco
+216K	i64_slow_cosine_del=2.qco
+624K	i64_slow_cosine_del=7.qco
+13K     i64_sparse.qco
+1.3M	i64_total_cents.qco
+7.6M	i64_uniform.qco
+4.8M	micros_near_linear.qco
+2.7M	micros_near_linear_del=1.qco
 
-% ls -lh data/gzip_parquet  
-... 5.2M ... f64_edge_cases.gzip.parquet
-... 7.6M ... f64_normal_at_0.gzip.parquet
-... 6.7M ... f64_normal_at_1000.gzip.parquet
-... 603K ... i64_cents.gzip.parquet
-... 632B ... i64_constant.gzip.parquet
-... 895K ... i64_dollars.gzip.parquet
-... 126K ... i64_extremes.gzip.parquet
-... 3.8M ... i64_geo1M.gzip.parquet
-... 348K ... i64_geo2.gzip.parquet
-... 2.3M ... i64_lomax05.gzip.parquet
-... 1.8M ... i64_lomax15.gzip.parquet
-... 1.8M ... i64_lomax25.gzip.parquet
-... 296K ... i64_normal1.gzip.parquet
-... 796K ... i64_normal10.gzip.parquet
-... 3.8M ... i64_normal1M.gzip.parquet
-...  17K ... i64_sparse.gzip.parquet
-... 1.4M ... i64_total_cents.gzip.parquet
-... 7.9M ... i64_uniform.gzip.parquet
+% ls -lh data/zstd_parquet | awk '{print $5 "\t" $9}' 
+126K	bool8_random.zstd.parquet
+5.1M	f64_edge_cases.zstd.parquet
+7.6M	f64_normal_at_0.zstd.parquet
+6.8M	f64_normal_at_1000.zstd.parquet
+7.2M	f64_slow_cosine.zstd.parquet
+578K	i64_cents.zstd.parquet
+615B	i64_constant.zstd.parquet
+834K	i64_dollars.zstd.parquet
+126K	i64_extremes.zstd.parquet
+3.5M	i64_geo1M.zstd.parquet
+326K	i64_geo2.zstd.parquet
+2.3M	i64_lomax05.zstd.parquet
+1.8M	i64_lomax15.zstd.parquet
+1.8M	i64_lomax25.zstd.parquet
+264K	i64_normal1.zstd.parquet
+796K	i64_normal10.zstd.parquet
+3.6M	i64_normal1M.zstd.parquet
+1.8M	i64_slow_cosine.zstd.parquet
+16K     i64_sparse.zstd.parquet
+1.3M	i64_total_cents.zstd.parquet
+7.9M	i64_uniform.zstd.parquet
+3.3M	micros_near_linear.zstd.parquet
 ```
 
 Note that the uncompressed, binary file size for each of these datasets
 is 7.6MB (1M numbers * 8 bytes / number).
 
-Here you can see that data is typically a good deal smaller
-as `.qco` than `.gz`, even though we're comparing a fast
-`.qco` compression level with the very highest
-`.gz` compresison level.
-Some observations:
+For some distributions, we demonstrate different delta encoding orders
+in the `.qco` files by indicating `del=x`.
+The best delta encoding order can usually be known ahead of time, so use the
+best compressed file for comparison purposes.
+
+In the above `ls` commands,
+you can see that `.qco` files are typically a good deal smaller
+than their corresponding `.zstd.parquet` files,
+even though we're comparing a fast `q_compress` compression level with the
+very highest zstd compresison level.
+
+Other than `.qco`, the best performing alternative was `.zstd.parquet`.
+Some observations one can draw, comparing `.qco` to `.zstd.parquet`:
 * In all cases `.qco` files are smaller.
-  On average about 25% smaller.
+  On average about 26% smaller.
 * With uniformly random data, there's not really any information to compress,
   so both algorithms use close to the original file size of 7.6MB.
 * Particularly interesting are the `cents`, `dollars`, and `total_cents`
@@ -118,7 +144,7 @@ Some observations:
   when just given total cents (100 + dollars + cents), and only compresses
   down to 1.3MB.
   But given the two columns separately, it compresses down to
-  622K + 440K = 1.06MB.
+  619K + 440K = 1.06MB.
 * Floating point distributions can't be compressed as much as integers.
   That's because between any power of 2, 64 bit floats use 52 bits of
   information, which is already most of their 64 bits.
