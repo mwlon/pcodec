@@ -8,9 +8,10 @@ use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
+use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
-use crate::prefix::Prefix;
+use crate::prefix::{Prefix, PrefixDecompressionInfo};
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
@@ -55,21 +56,54 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
   Ok(())
 }
 
+// For the prefix, the maximum number of bits we might need to read.
+// Helps decide whether to do checked or unchecked reads.
+fn max_bits_read<T: NumberLike>(p: &Prefix<T>) -> usize {
+  let prefix_bits = p.code.len();
+  let (max_reps, max_jumpstart_bits) = match p.run_len_jumpstart {
+    None => (1, 0),
+    Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
+  };
+  let k_info = p.k_info();
+  let max_bits_per_offset = if k_info.only_k_bits_lower == T::Unsigned::ZERO {
+    k_info.k
+  } else {
+    k_info.k + 1
+  };
+  let overshoot_prefix_bits = ((prefix_bits + PREFIX_TABLE_SIZE_LOG - 1)
+    / PREFIX_TABLE_SIZE_LOG) * PREFIX_TABLE_SIZE_LOG;
+
+  max(
+    prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset,
+    overshoot_prefix_bits,
+  )
+}
+
+#[derive(Clone, Copy, Debug)]
+struct IncompletePrefix<Diff: UnsignedLike> {
+  prefix: PrefixDecompressionInfo<Diff>,
+  remaining_reps: usize,
+}
+
 #[derive(Clone, Debug)]
-struct ChunkDecompressor<T> where T: NumberLike {
+pub struct NumDecompressor<T> where T: NumberLike {
+  // known information about the chunk
   huffman_table: HuffmanTable<T::Unsigned>,
   n: usize,
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
+
+  // mutable state
+  nums_processed: usize,
+  bits_processed: usize,
+  incomplete_prefix: Option<IncompletePrefix<T::Unsigned>>,
 }
 
-impl<T> ChunkDecompressor<T> where T: NumberLike {
-  pub fn new(
+impl<T> NumDecompressor<T> where T: NumberLike {
+  pub(crate) fn new(
     n: usize,
     compressed_body_size: usize,
     prefixes: Vec<Prefix<T>>,
-    _config: DecompressorConfig,
-    _flags: Flags,
   ) -> QCompressResult<Self> {
     if prefixes.is_empty() && n > 0 {
       return Err(QCompressError::corruption(format!(
@@ -80,50 +114,64 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
     validate_prefix_tree(&prefixes)?;
 
     let max_bits_per_num_block = prefixes.iter()
-      .map(|p| {
-        let prefix_bits = p.code.len();
-        let (max_reps, max_jumpstart_bits) = match p.run_len_jumpstart {
-          None => (1, 0),
-          Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
-        };
-        let k_info = p.k_info();
-        let max_bits_per_offset = if k_info.only_k_bits_lower == T::Unsigned::ZERO {
-          k_info.k
-        } else {
-          k_info.k + 1
-        };
-        let overshoot_prefix_bits = ((prefix_bits + PREFIX_TABLE_SIZE_LOG - 1)
-          / PREFIX_TABLE_SIZE_LOG) * PREFIX_TABLE_SIZE_LOG;
-
-        max(
-          prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset,
-          overshoot_prefix_bits,
-        )
-      })
+      .map(max_bits_read)
       .max()
       .unwrap_or(usize::MAX);
 
-    Ok(ChunkDecompressor {
+    Ok(NumDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
       n,
       compressed_body_size,
       max_bits_per_num_block,
+      nums_processed: 0,
+      bits_processed: 0,
+      incomplete_prefix: None,
     })
   }
 
+  fn limit_reps(
+    &mut self,
+    prefix: PrefixDecompressionInfo<T::Unsigned>,
+    full_reps: usize,
+    limit: usize,
+  ) -> usize {
+    if full_reps > limit {
+      self.incomplete_prefix = Some(IncompletePrefix {
+        prefix,
+        remaining_reps: full_reps - limit,
+      });
+      limit
+    } else {
+      full_reps
+    }
+  }
+
   fn unchecked_decompress_num_block(
-    &self,
+    &mut self,
     reader: &mut BitReader,
     res: &mut Vec<T>,
+    batch_size: usize,
   ) {
     let p = self.huffman_table.unchecked_search_with_reader(reader);
 
     let reps = match p.run_len_jumpstart {
       None => 1,
       // we stored the number of occurrences minus 1 because we knew it's at least 1
-      Some(jumpstart) => min(reader.unchecked_read_varint(jumpstart) + 1, self.n - res.len()),
+      Some(jumpstart) => {
+        let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
+        self.limit_reps(p, full_reps, batch_size - res.len())
+      },
     };
+    self.unchecked_decompress_offsets(reader, res, p, reps);
+  }
 
+  fn unchecked_decompress_offsets(
+    &self,
+    reader: &mut BitReader,
+    res: &mut Vec<T>,
+    p: PrefixDecompressionInfo<T::Unsigned>,
+    reps: usize,
+  ) {
     for _ in 0..reps {
       let mut offset = reader.unchecked_read_diff(p.k);
       if p.k < T::Unsigned::BITS {
@@ -138,18 +186,31 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
   }
 
   fn decompress_num_block(
-    &self,
+    &mut self,
     reader: &mut BitReader,
     res: &mut Vec<T>,
+    batch_size: usize,
   ) -> QCompressResult<()> {
     let p = self.huffman_table.search_with_reader(reader)?;
 
     let reps = match p.run_len_jumpstart {
       None => 1,
       // we stored the number of occurrences minus 1 because we knew it's at least 1
-      Some(jumpstart) => min(reader.read_varint(jumpstart)? + 1, self.n - res.len()),
+      Some(jumpstart) => {
+        let full_reps = reader.read_varint(jumpstart)? + 1;
+        self.limit_reps(p, full_reps, batch_size - res.len())
+      },
     };
+    self.decompress_offsets(reader, res, p, reps)
+  }
 
+  fn decompress_offsets(
+    &self,
+    reader: &mut BitReader,
+    res: &mut Vec<T>,
+    p: PrefixDecompressionInfo<T::Unsigned>,
+    reps: usize,
+  ) -> QCompressResult<()> {
     for _ in 0..reps {
       let mut offset = reader.read_diff(p.k)?;
       if p.k < T::Unsigned::BITS {
@@ -171,79 +232,182 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
   // to inline fixed the performance issue.
   // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
   #[inline(never)]
-  fn decompress_chunk_nums(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
-    let mut res = Vec::with_capacity(self.n);
+  pub fn decompress_nums_limited(
+    &mut self,
+    reader: &mut BitReader,
+    limit: usize,
+  ) -> QCompressResult<Vec<T>> {
+    let batch_size = min(
+      self.n - self.nums_processed,
+      limit,
+    );
+    let mut res = Vec::with_capacity(batch_size);
 
-    if self.max_bits_per_num_block == 0 {
-      let mut temp = Vec::with_capacity(1);
-      self.unchecked_decompress_num_block(reader, &mut temp);
-      let constant_num = temp[0];
-      for _ in 0..self.n {
-        res.push(constant_num);
-      }
+    if batch_size == 0 {
       return Ok(res);
     }
 
-    loop {
-      let remaining_nums = self.n - res.len();
-      let guaranteed_safe_num_blocks = min(
-        remaining_nums,
-        reader.bits_remaining() / self.max_bits_per_num_block,
-      );
+    let start_bit_ind = reader.bit_ind();
 
-      if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
-        let mut block_idx = 0;
-        while block_idx < guaranteed_safe_num_blocks && res.len() < self.n {
-          self.unchecked_decompress_num_block(reader, &mut res);
-          block_idx += 1;
-        }
+    if let Some(IncompletePrefix { prefix, remaining_reps }) = self.incomplete_prefix {
+      let reps = if remaining_reps <= batch_size {
+        self.incomplete_prefix = None;
+        remaining_reps
       } else {
-        break;
+        self.incomplete_prefix = Some(IncompletePrefix {
+          prefix,
+          remaining_reps: remaining_reps - batch_size,
+        });
+        batch_size
+      };
+      self.decompress_offsets(
+        reader,
+        &mut res,
+        prefix,
+        reps,
+      )?;
+    }
+
+    if self.max_bits_per_num_block == 0 {
+      let mut temp = Vec::with_capacity(1);
+      self.unchecked_decompress_num_block(reader, &mut temp, 1);
+      let constant_num = temp[0];
+      for _ in 0..batch_size {
+        res.push(constant_num);
+      }
+    } else {
+      loop {
+        let remaining_nums = batch_size - res.len();
+        let guaranteed_safe_num_blocks = min(
+          remaining_nums,
+          reader.bits_remaining() / self.max_bits_per_num_block,
+        );
+
+        if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
+          let mut block_idx = 0;
+          while block_idx < guaranteed_safe_num_blocks && res.len() < self.n {
+            self.unchecked_decompress_num_block(reader, &mut res, batch_size);
+            block_idx += 1;
+          }
+        } else {
+          break;
+        }
+      }
+
+      while res.len() < batch_size {
+        self.decompress_num_block(reader, &mut res, batch_size)?;
       }
     }
 
-    while res.len() < self.n {
-      self.decompress_num_block(reader, &mut res)?;
+    self.nums_processed += batch_size;
+    if self.nums_processed == self.n {
+      reader.drain_empty_byte(|| QCompressError::corruption(
+        "nonzero bits in end of final byte of chunk numbers"
+      ))?;
     }
-    Ok(res)
-  }
+    let end_bit_ind = reader.bit_ind();
+    self.bits_processed += end_bit_ind - start_bit_ind;
 
-  fn validate_sufficient_data(&self, reader: &BitReader) -> QCompressResult<()> {
-    let start_byte_idx = reader.aligned_byte_ind()?;
-    let remaining_bytes = reader.byte_size() - start_byte_idx;
-    if remaining_bytes < self.compressed_body_size {
-      Err(QCompressError::insufficient_data(format!(
-        "bit reader has only {} bytes remaining but compressed body size is {}",
-        remaining_bytes,
-        self.compressed_body_size,
-      )))
-    } else {
-      Ok(())
-    }
-  }
-
-  pub fn decompress_chunk_body(&self, reader: &mut BitReader) -> QCompressResult<Vec<T>> {
-    // This checks that we have enough data, assuming the file is not corrupt.
-    // We still need to be careful in `decompress_chunk_nums`.
-    self.validate_sufficient_data(reader)?;
-
-    let start_byte_idx = reader.aligned_byte_ind()?;
-    let res = self.decompress_chunk_nums(reader)?;
-
-    reader.drain_empty_byte(|| QCompressError::corruption(
-      "nonzero bits in end of final byte of chunk numbers"
-    ))?;
-    let end_byte_idx = reader.aligned_byte_ind()?;
-    let real_compressed_body_size = end_byte_idx - start_byte_idx;
-    if self.compressed_body_size != real_compressed_body_size {
-      return Err(QCompressError::corruption(format!(
-        "expected the compressed body to contain {} bytes but it contained {}",
-        self.compressed_body_size,
-        real_compressed_body_size,
-      )));
+    if self.nums_processed == self.n {
+      let compressed_body_bit_size = self.compressed_body_size * 8;
+      if compressed_body_bit_size != self.bits_processed {
+        return Err(QCompressError::corruption(format!(
+          "expected the compressed body to contain {} bits but instead processed {}",
+          compressed_body_bit_size,
+          self.bits_processed,
+        )));
+      }
     }
 
     Ok(res)
+  }
+}
+
+/// A low-level, stateful way to decompress small batches of numbers at a time.
+///
+/// After decompressing metadata with a `Decompressor`, you may call
+/// [`Decompressor::get_chunk_body_decompressor`]
+/// to create an instance of `ChunkBodyDecompressor`.
+pub enum ChunkBodyDecompressor<T: NumberLike> {
+  #[doc(hidden)]
+  Simple {
+    num_decompressor: NumDecompressor<T>,
+  },
+  #[doc(hidden)]
+  Delta {
+    n: usize,
+    num_decompressor: NumDecompressor<T::Signed>,
+    delta_moments: DeltaMoments<T>,
+    nums_processed: usize,
+  },
+}
+
+impl<T: NumberLike> ChunkBodyDecompressor<T> {
+  pub(crate) fn new(metadata: &ChunkMetadata<T>) -> QCompressResult<Self> {
+    Ok(match &metadata.prefix_metadata {
+      PrefixMetadata::Simple { prefixes } => Self::Simple {
+        num_decompressor: NumDecompressor::new(
+          metadata.n,
+          metadata.compressed_body_size,
+          prefixes.clone()
+        )?
+      },
+      PrefixMetadata::Delta { prefixes, delta_moments } => Self::Delta {
+        n: metadata.n,
+        num_decompressor: NumDecompressor::new(
+          metadata.n.saturating_sub(delta_moments.order()),
+          metadata.compressed_body_size,
+          prefixes.clone()
+        )?,
+        delta_moments: delta_moments.clone(),
+        nums_processed: 0,
+      },
+    })
+  }
+
+  /// Returns up to `limit` numbers from the `BitReader`.
+  /// Will return an error if the reader runs out of data.
+  ///
+  /// This maintains an internal state allowing you to pick up where you left
+  /// off. For example, calling on a chunk containing 11 numbers using limit 5
+  /// repeatedly will return
+  /// * the first 5 numbers in the first batch,
+  /// * then the next 5,
+  /// * then the last number,
+  /// * then an empty vector for each following call.
+  pub fn decompress_next_batch(
+    &mut self,
+    reader: &mut BitReader,
+    limit: usize,
+  ) -> QCompressResult<Vec<T>> {
+    match self {
+      Self::Simple { num_decompressor } => num_decompressor.decompress_nums_limited(
+        reader,
+        limit
+      ),
+      Self::Delta {
+        n,
+        num_decompressor,
+        delta_moments,
+        nums_processed,
+      } => {
+        let batch_size = min(
+          *n - *nums_processed,
+          limit,
+        );
+        let deltas = num_decompressor.decompress_nums_limited(
+          reader,
+          limit,
+        )?;
+        let nums = delta_encoding::reconstruct_nums(
+          delta_moments,
+          &deltas,
+          batch_size,
+        );
+        *nums_processed += batch_size;
+        Ok(nums)
+      }
+    }
   }
 }
 
@@ -275,7 +439,7 @@ impl<T> ChunkDecompressor<T> where T: NumberLike {
 /// ```
 #[derive(Clone, Debug, Default)]
 pub struct Decompressor<T> where T: NumberLike {
-  config: DecompressorConfig,
+  _config: DecompressorConfig,
   phantom: PhantomData<T>,
 }
 
@@ -285,7 +449,7 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// of a .qco file's header.
   pub fn from_config(config: DecompressorConfig) -> Self {
     Self {
-      config,
+      _config: config,
       ..Default::default()
     }
   }
@@ -345,9 +509,41 @@ impl<T> Decompressor<T> where T: NumberLike {
     Ok(Some(metadata))
   }
 
+  /// The lowest-level way to decompress numbers from a chunk.
+  ///
+  /// Returns a stateful `ChunkBodyDecompressor` that supports decompressing
+  /// one batch of numbers at a time, rather than all numbers at once.
+  /// Will return an error if the metadata is corrupt.
+  /// This can be useful if you only need the first few numbers or you are
+  /// working in memory-constrained conditions and cannot decompress a whole
+  /// chunk at a time.
+  ///
+  /// ```
+  /// use q_compress::{BitReader, Decompressor};
+  ///
+  /// // .qco bytes for the boolean `true` repeated 2^24 - 1 times.
+  /// // We'll read just the first 3.
+  /// let my_bytes = vec![113, 99, 111, 33, 7, 0, 44, 255, 255, 255, 0, 0, 0, 0, 0, 3, 255, 255, 254, 2, 2, 0, 46];
+  /// let mut reader = BitReader::from(&my_bytes);
+  /// let decompressor = Decompressor::<bool>::default();
+  ///
+  /// let flags = decompressor.header(&mut reader).unwrap();
+  /// let metadata = decompressor.chunk_metadata(&mut reader, &flags).unwrap().unwrap();
+  /// let mut chunk_body_decompressor = decompressor.get_chunk_body_decompressor(&flags, &metadata).unwrap();
+  /// let head = chunk_body_decompressor.decompress_next_batch(&mut reader, 3).unwrap();
+  /// assert_eq!(head, vec![true, true, true]);
+  /// ```
+  pub fn get_chunk_body_decompressor(
+    &self,
+    _flags: &Flags,
+    metadata: &ChunkMetadata<T>,
+  ) -> QCompressResult<ChunkBodyDecompressor<T>> {
+    ChunkBodyDecompressor::new(metadata)
+  }
+
   /// Reads a chunk body, returning it as a vector of numbers.
-  /// Will return an error if the reader is not byte-aligned,
-  /// the reader runs out of data, or any corruptions are found.
+  /// Will return an error if the reader runs out of data
+  /// or any corruptions are found.
   ///
   /// Typically one would pass in the [`Flags`] obtained from an earlier
   /// [`.header()`][Self::header] call and the [`ChunkMetadata`] obtained
@@ -358,31 +554,14 @@ impl<T> Decompressor<T> where T: NumberLike {
     flags: &Flags,
     metadata: &ChunkMetadata<T>,
   ) -> QCompressResult<Vec<T>> {
-    match &metadata.prefix_metadata {
-      PrefixMetadata::Simple { prefixes } => {
-        let chunk_decompressor = ChunkDecompressor::new(
-          metadata.n,
-          metadata.compressed_body_size,
-          prefixes.clone(),
-          self.config.clone(),
-          flags.clone(),
-        )?;
-        chunk_decompressor.decompress_chunk_body(reader)
-      },
-      PrefixMetadata::Delta { delta_moments, prefixes } => {
-        let n_deltas = metadata.n.saturating_sub(delta_moments.order());
-        let chunk_decompressor = ChunkDecompressor::new(
-          n_deltas,
-          metadata.compressed_body_size,
-          prefixes.clone(),
-          self.config.clone(),
-          flags.clone(),
-        )?;
-        let deltas = chunk_decompressor.decompress_chunk_body(reader)?;
-        let res = delta_encoding::reconstruct_nums(delta_moments, &deltas, metadata.n);
-        Ok(res)
-      }
-    }
+    let mut chunk_body_decompressor = self.get_chunk_body_decompressor(
+      flags,
+      metadata,
+    )?;
+    chunk_body_decompressor.decompress_next_batch(
+      reader,
+      metadata.n,
+    )
   }
 
   /// Reads a [`ChunkMetadata`] and the chunk body into a vector of numbers,

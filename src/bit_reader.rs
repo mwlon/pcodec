@@ -81,11 +81,15 @@ impl<'a> BitReader<'a> {
       )))
     }
   }
+  
+  pub(crate) fn bit_ind(&self) -> usize {
+    8 * self.i + self.j
+  }
 
   /// Returns the number of bits between the reader's current position and
   /// the end.
   pub fn bits_remaining(&self) -> usize {
-    self.total_bits - 8 * self.i - self.j
+    self.total_bits - self.bit_ind()
   }
 
   /// Returns the number of bytes in the reader.
@@ -172,7 +176,7 @@ impl<'a> BitReader<'a> {
   }
 
   pub(crate) fn read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> QCompressResult<Diff> {
-    if self.i * 8 + self.j + n > self.total_bits {
+    if self.bit_ind() + n > self.total_bits {
       return Err(QCompressError::insufficient_data(
         "read_diff(): reached end of data available to BitReader"
       ))

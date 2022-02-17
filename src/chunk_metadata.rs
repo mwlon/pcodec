@@ -9,7 +9,7 @@ use crate::errors::{QCompressResult, QCompressError};
 /// 
 /// This is the part of chunk metadata that describes *how* the data was
 /// compressed - the Huffman codes used and what ranges they specify.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PrefixMetadata<T: NumberLike> {
   /// `Simple` prefix metadata corresponds to the case when delta encoding is
   /// off (`delta_encoding_order` of 0).
@@ -42,7 +42,7 @@ pub enum PrefixMetadata<T: NumberLike> {
 /// be done easily - see the fast_seeking.rs example.
 /// One can also create a rough histogram (or a histogram of deltas, if
 /// delta encoding was used) by aggregating chunk metadata.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ChunkMetadata<T> where T: NumberLike {
   /// The count of numbers in the chunk.
   pub n: usize,

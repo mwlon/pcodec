@@ -87,23 +87,25 @@ extracting all metadata, see the docs.rs documentation.
 
 ## Method
 
-This works by describing each number with a _range_ and an _offset_.
-The range specifies an inclusive range `[lower, upper]` that the
+This works by describing each number with a Huffman code and an _offset_.
+The Huffman code corresponds to a range `[lower, upper]` that the
 number is in, and the offset specifies the exact position within that
 range.
-The compressor chooses a _prefix_ for each range via Huffman
-codes.
 
-When delta encoding of some order is turned on, compression happens in these
-stages:
-1. Compute deltas.
-2. Determine prefixes based on distribution of deltas.
-3. Encode deltas using prefixes.
+Compression happens in this order for each chunk:
+1. If delta encoding is on, compute deltas and use those as your values
+   instead.
+2. Determine unoptimized _prefixes_ by taking `2^compression_level` roughly evenly-spaced
+   quantiles of the distribution.
+   Each prefix is simply a range and associated metadata.
+3. Optimize prefixes, combining adjacent ones if advantageous.
+4. Determine Huffman codes for each prefix based on its weight in the data.
+5. Encode deltas using prefixes.
 
 For data sampled from a random distribution, this compression algorithm can
 reduce byte size to near the theoretical limit of the distribution's Shannon
 entropy.
-Ideally it encodes a number `k` in `b` bits
+Ideally it encodes a number `k` with probability `P(k)` in `b` bits
 if `2^-b ~= P(k)`.
 We can plot `Q(k) = 2^-b` to see how close quantile compression gets to the
 ideal in this example with `compression_level=3`:
@@ -130,15 +132,13 @@ For instance, if delta encoding of order > 0 is on, then that many delta
 moments will be encoded in each of the following chunk metadata sections.
 
 Each chunk begins with a magic "chunk" byte.
-Then the metadata section follows, containing the number of numbers,
+Then the metadata section follows, containing the count of numbers,
 the byte size of the compressed body to follow, and prefixes
 used to compress.
-There must be at least one number in each chunk.
 Each prefix has a count of numbers in its range, a lower and upper bound,
 a Huffman code, and optionally a "jumpstart" which is used in
 number blocks to describe how many repetitions of the range to use.
-Using the compressed body size metadata and magic chunk/termination bytes
-enables fast seeking through the whole file.
+There must be at least one number in each chunk.
 
 Each chunk body consists of many small number blocks, each of which encodes a
 single number.
