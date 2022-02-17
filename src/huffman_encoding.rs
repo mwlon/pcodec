@@ -39,28 +39,28 @@ impl HuffmanItem {
 
   pub fn create_bits<T: NumberLike>(
     &self,
-    item_index: &mut Vec<HuffmanItem>,
-    leaf_index: &mut [WeightedPrefix<T>],
+    item_idx: &mut Vec<HuffmanItem>,
+    leaf_idx: &mut [WeightedPrefix<T>],
   ) {
-    self.create_bits_from(Vec::new(), item_index, leaf_index);
+    self.create_bits_from(Vec::new(), item_idx, leaf_idx);
   }
 
   fn create_bits_from<T: NumberLike>(
     &self,
     bits: Vec<bool>,
-    item_index: &mut [HuffmanItem],
-    leaf_index: &mut [WeightedPrefix<T>],
+    item_idx: &mut [HuffmanItem],
+    leaf_idx: &mut [WeightedPrefix<T>],
   ) {
-    item_index[self.id].bits = bits.clone();
+    item_idx[self.id].bits = bits.clone();
     if self.leaf_id.is_some() {
-      leaf_index[self.leaf_id.unwrap()].prefix.code = bits;
+      leaf_idx[self.leaf_id.unwrap()].prefix.code = bits;
     } else {
       let mut left_bits = bits.clone();
       left_bits.push(false);
       let mut right_bits = bits;
       right_bits.push(true);
-      item_index[self.left_id.unwrap()].clone().create_bits_from(left_bits, item_index, leaf_index);
-      item_index[self.right_id.unwrap()].clone().create_bits_from(right_bits, item_index, leaf_index);
+      item_idx[self.left_id.unwrap()].clone().create_bits_from(left_bits, item_idx, leaf_idx);
+      item_idx[self.right_id.unwrap()].clone().create_bits_from(right_bits, item_idx, leaf_idx);
     }
   }
 }

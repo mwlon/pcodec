@@ -35,7 +35,7 @@ pub fn optimize_prefixes<T: NumberLike>(
     .map(|wp| wp.prefix.lower.to_unsigned())
     .collect::<Vec<_>>();
 
-  let maybe_rep_ind = wprefixes.iter()
+  let maybe_rep_idx = wprefixes.iter()
     .position(|wp| wp.prefix.run_len_jumpstart.is_some());
 
   let mut best_costs = Vec::with_capacity(wprefixes.len() + 1);
@@ -52,7 +52,7 @@ pub fn optimize_prefixes<T: NumberLike>(
     let mut best_j = usize::MAX;
     let upper = wprefixes[i].prefix.upper.to_unsigned();
     let cum_weight_i = cum_weight[i + 1];
-    let start_j = match maybe_rep_ind {
+    let start_j = match maybe_rep_idx {
       Some(ind) if ind < i => ind + 1,
       Some(ind) if ind == i => ind,
       _ => 0,

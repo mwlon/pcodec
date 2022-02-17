@@ -146,9 +146,9 @@ impl BitWriter {
     self.j = ((self.j + 7) / 8) * 8;
   }
 
-  pub(crate) fn overwrite_usize(&mut self, bit_ind: usize, x: usize, n: usize) {
-    let mut i = bit_ind / WORD_SIZE;
-    let mut j = bit_ind % WORD_SIZE;
+  pub(crate) fn overwrite_usize(&mut self, bit_idx: usize, x: usize, n: usize) {
+    let mut i = bit_idx / WORD_SIZE;
+    let mut j = bit_idx % WORD_SIZE;
     // not the most efficient implementation but it's ok because we
     // only rarely use this now
     for k in 0..n {

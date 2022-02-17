@@ -68,7 +68,7 @@ impl<'a> BitReader<'a> {
   /// Returns the reader's current byte index. Will return an error if the
   /// reader is at
   /// a misaligned position.
-  pub fn aligned_byte_ind(&self) -> QCompressResult<usize> {
+  pub fn aligned_byte_idx(&self) -> QCompressResult<usize> {
     if self.j == 0 {
       Ok(self.i)
     } else if self.j == 8 {
@@ -82,14 +82,14 @@ impl<'a> BitReader<'a> {
     }
   }
   
-  pub(crate) fn bit_ind(&self) -> usize {
+  pub(crate) fn bit_idx(&self) -> usize {
     8 * self.i + self.j
   }
 
   /// Returns the number of bits between the reader's current position and
   /// the end.
   pub fn bits_remaining(&self) -> usize {
-    self.total_bits - self.bit_ind()
+    self.total_bits - self.bit_idx()
   }
 
   /// Returns the number of bytes in the reader.
@@ -98,7 +98,7 @@ impl<'a> BitReader<'a> {
   }
 
   /// Returns the reader's current (byte_idx, bit_idx) tuple.
-  pub fn inds(&self) -> (usize, usize) {
+  pub fn idxs(&self) -> (usize, usize) {
     (self.i, self.j)
   }
 
@@ -176,7 +176,7 @@ impl<'a> BitReader<'a> {
   }
 
   pub(crate) fn read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> QCompressResult<Diff> {
-    if self.bit_ind() + n > self.total_bits {
+    if self.bit_idx() + n > self.total_bits {
       return Err(QCompressError::insufficient_data(
         "read_diff(): reached end of data available to BitReader"
       ))
@@ -392,14 +392,14 @@ mod tests {
     reader.seek(43);
 
     reader.rewind(2);
-    assert_eq!(reader.inds(), (5, 1));
+    assert_eq!(reader.idxs(), (5, 1));
     reader.rewind(2);
-    assert_eq!(reader.inds(), (4, 7));
+    assert_eq!(reader.idxs(), (4, 7));
     reader.rewind(7);
-    assert_eq!(reader.inds(), (4, 0));
+    assert_eq!(reader.idxs(), (4, 0));
     reader.rewind(8);
-    assert_eq!(reader.inds(), (3, 0));
+    assert_eq!(reader.idxs(), (3, 0));
     reader.rewind(17);
-    assert_eq!(reader.inds(), (0, 7));
+    assert_eq!(reader.idxs(), (0, 7));
   }
 }
