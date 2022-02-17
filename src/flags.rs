@@ -81,7 +81,7 @@ impl TryInto<Vec<bool>> for &Flags {
 
 impl Flags {
   pub fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    reader.aligned_byte_ind()?; // assert it's byte-aligned
+    reader.aligned_byte_idx()?; // assert it's byte-aligned
     let mut bools = Vec::new();
     loop {
       bools.extend(reader.read(7)?);

@@ -15,6 +15,9 @@ pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: usize = 32;
 pub const PREFIX_TABLE_SIZE_LOG: usize = 4; // tuned to maximize performance on intel i5
 pub const PREFIX_TABLE_SIZE: usize = 1_usize << PREFIX_TABLE_SIZE_LOG;
 
+pub const WORD_SIZE: usize = usize::BITS as usize;
+pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
+
 #[cfg(test)]
 mod tests {
   use crate::constants::*;

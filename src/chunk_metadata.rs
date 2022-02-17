@@ -152,10 +152,13 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     writer.finish_byte();
   }
 
-  pub(crate) fn update_write_compressed_body_size(&self, writer: &mut BitWriter, initial_idx: usize) {
-    writer.assign_usize(
-      initial_idx + BITS_TO_ENCODE_N_ENTRIES / 8,
-      BITS_TO_ENCODE_N_ENTRIES % 8,
+  pub(crate) fn update_write_compressed_body_size(
+    &self,
+    writer: &mut BitWriter,
+    bit_idx: usize,
+  ) {
+    writer.overwrite_usize(
+      bit_idx + BITS_TO_ENCODE_N_ENTRIES,
       self.compressed_body_size,
       BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
     );

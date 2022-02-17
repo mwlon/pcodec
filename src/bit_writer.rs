@@ -1,27 +1,26 @@
-use crate::bits::LEFT_MASKS;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::data_types::UnsignedLike;
-use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_ENTRIES};
+use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WORD_SIZE};
 
-/// `BitWriter` builds a `Vec<u8>`, enabling a compressor to write bit-level
-/// information and maintain its position in the bytes.
+/// `BitWriter` builds a `Vec<usize>`, enabling a compressor to write bit-level
+/// information and ultimately output a `Vec<u8>`.
 ///
-/// It does this by maintaining a bit index from 0-8 within its most recent
-/// byte.
+/// It does this by maintaining a bit index from 0-usize::BITS within its most
+/// recent byte.
 ///
 /// The reader is consider is considered "aligned" if the current bit index
-/// is 0 or 8 (i.e. at the start or end of the current byte).
+/// is 0 or usize::BITS (i.e. at the start or end of the current byte).
 #[derive(Clone)]
 pub struct BitWriter {
-  bytes: Vec<u8>,
+  words: Vec<usize>,
   j: usize,
 }
 
 impl Default for BitWriter {
   fn default() -> Self {
     BitWriter {
-      bytes: Vec::new(),
-      j: 8,
+      words: Vec::new(),
+      j: WORD_SIZE,
     }
   }
 }
@@ -29,7 +28,12 @@ impl Default for BitWriter {
 impl BitWriter {
   /// Returns the number of bytes so far produced by the writer.
   pub fn byte_size(&self) -> usize {
-    self.bytes.len()
+    self.words.len() * BYTES_PER_WORD - (WORD_SIZE - self.j) / 8
+  }
+
+  /// Returns the number of bits so far produced by the writer.
+  pub fn bit_size(&self) -> usize {
+    self.words.len() * WORD_SIZE - (WORD_SIZE - self.j)
   }
 
   pub(crate) fn write_aligned_byte(&mut self, byte: u8) -> QCompressResult<()> {
@@ -39,27 +43,31 @@ impl BitWriter {
   /// Appends the bits to the writer. Will return an error if the writer is
   /// misaligned.
   pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> QCompressResult<()> {
-    if self.j == 8 {
-      self.bytes.extend(bytes);
+    if self.j % 8 == 0 {
+      for &byte in bytes {
+        self.refresh_if_needed();
+        *self.last_mut() |= (byte as usize) << (WORD_SIZE - 8 - self.j);
+        self.j += 8;
+      }
       Ok(())
     } else {
       Err(QCompressError::invalid_argument(format!(
-        "cannot write aligned bytes to unaligned bit reader at byte {} bit {}",
-        self.bytes.len(),
+        "cannot write aligned bytes to unaligned bit reader at word {} bit {}",
+        self.words.len(),
         self.j,
       )))
     }
   }
 
   fn refresh_if_needed(&mut self) {
-    if self.j == 8 {
-      self.bytes.push(0);
+    if self.j == WORD_SIZE {
+      self.words.push(0);
       self.j = 0;
     }
   }
 
-  fn last_mut(&mut self) -> &mut u8 {
-    self.bytes.last_mut().unwrap()
+  fn last_mut(&mut self) -> &mut usize {
+    self.words.last_mut().unwrap()
   }
 
   /// Appends the bit to the writer.
@@ -67,7 +75,7 @@ impl BitWriter {
     self.refresh_if_needed();
 
     if b {
-      *self.last_mut() |= 1_u8 << (7 - self.j);
+      *self.last_mut() |= 1_usize << (WORD_SIZE - 1 - self.j);
     }
 
     self.j += 1;
@@ -92,26 +100,26 @@ impl BitWriter {
     self.refresh_if_needed();
 
     let n_plus_j = n + self.j;
-    if n_plus_j <= 8 {
-      let lshift = 8 - n_plus_j;
-      *self.last_mut() |= (x << lshift).last_u8() & LEFT_MASKS[self.j];
+    if n_plus_j <= WORD_SIZE {
+      let lshift = WORD_SIZE - n_plus_j;
+      *self.last_mut() |= x.lshift_word(lshift) & (usize::MAX >> self.j);
       self.j = n_plus_j;
       return;
     }
 
-    let rshift = n_plus_j - 8;
-    *self.last_mut() |= (x >> rshift).last_u8() & LEFT_MASKS[self.j];
-    let mut remaining = n + self.j - 8;
+    let rshift = n_plus_j - WORD_SIZE;
+    *self.last_mut() |= x.rshift_word(rshift) & (usize::MAX >> self.j);
+    let mut remaining = n + self.j - WORD_SIZE;
 
-    while remaining > 8 {
-      let rshift = remaining - 8;
-      self.bytes.push((x >> rshift).last_u8());
-      remaining -= 8;
+    while remaining > WORD_SIZE {
+      let rshift = remaining - WORD_SIZE;
+      self.words.push(x.rshift_word(rshift));
+      remaining -= WORD_SIZE;
     }
 
-    // now remaining bits <= 8
-    let lshift = 8 - remaining;
-    self.bytes.push((x << lshift).last_u8());
+    // now remaining bits <= WORD_SIZE
+    let lshift = WORD_SIZE - remaining;
+    self.words.push(x.lshift_word(lshift));
     self.j = remaining;
   }
 
@@ -135,23 +143,25 @@ impl BitWriter {
   }
 
   pub(crate) fn finish_byte(&mut self) {
-    self.j = 8;
+    self.j = ((self.j + 7) / 8) * 8;
   }
 
-  pub(crate) fn assign_usize(&mut self, mut i: usize, mut j: usize, x: usize, n: usize) {
+  pub(crate) fn overwrite_usize(&mut self, bit_idx: usize, x: usize, n: usize) {
+    let mut i = bit_idx / WORD_SIZE;
+    let mut j = bit_idx % WORD_SIZE;
     // not the most efficient implementation but it's ok because we
     // only rarely use this now
     for k in 0..n {
       let b = (x >> (n - k - 1)) & 1 > 0;
-      if j == 8 {
+      if j == WORD_SIZE {
         i += 1;
         j = 0;
       }
-      let shift = 7 - j;
-      let mask = 1_u8 << shift;
-      let shifted_bit = (b as u8) << shift;
-      if self.bytes[i] & mask != shifted_bit {
-        self.bytes[i] ^= shifted_bit;
+      let shift = WORD_SIZE - 1 - j;
+      let mask = 1_usize << shift;
+      let shifted_bit = (b as usize) << shift;
+      if self.words[i] & mask != shifted_bit {
+        self.words[i] ^= shifted_bit;
       }
       j += 1;
     }
@@ -160,7 +170,16 @@ impl BitWriter {
   /// Returns the bytes produced by the writer, taking ownership and ending
   /// the writer's lifetime.
   pub fn pop(self) -> Vec<u8> {
-    self.bytes
+    let byte_size = self.byte_size();
+    // We can't just transmute because many machines are little-endian.
+    let mut res = self.words.iter()
+      .map(|w| w.to_be_bytes())
+      .flatten()
+      .collect::<Vec<_>>();
+    unsafe {
+      res.set_len(byte_size);
+    }
+    res
   }
 }
 
@@ -222,7 +241,7 @@ mod tests {
   fn test_assign_usize() {
     let mut writer = BitWriter::default();
     writer.write_usize(0, 24);
-    writer.assign_usize(1, 1, 129, 9);
+    writer.overwrite_usize(9, 129, 9);
     let bytes = writer.pop();
     assert_eq!(
       bytes,

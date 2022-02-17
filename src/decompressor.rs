@@ -247,7 +247,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       return Ok(res);
     }
 
-    let start_bit_ind = reader.bit_ind();
+    let start_bit_idx = reader.bit_idx();
 
     if let Some(IncompletePrefix { prefix, remaining_reps }) = self.incomplete_prefix {
       let reps = if remaining_reps <= batch_size {
@@ -305,8 +305,8 @@ impl<T> NumDecompressor<T> where T: NumberLike {
         "nonzero bits in end of final byte of chunk numbers"
       ))?;
     }
-    let end_bit_ind = reader.bit_ind();
-    self.bits_processed += end_bit_ind - start_bit_ind;
+    let end_bit_idx = reader.bit_idx();
+    self.bits_processed += end_bit_idx - start_bit_idx;
 
     if self.nums_processed == self.n {
       let compressed_body_bit_size = self.compressed_body_size * 8;

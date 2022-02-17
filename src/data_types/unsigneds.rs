@@ -16,8 +16,22 @@ macro_rules! impl_unsigned {
         self as f64
       }
 
-      fn last_u8(self) -> u8 {
-        (self & 0xff) as u8
+      // These lshift an rshift implementations look slow, but all the
+      // conditionals and masks are zero-costed away by the compiler.
+      fn rshift_word(self, shift: usize) -> usize {
+        if Self::BITS <= usize::BITS {
+          (self as usize) >> shift
+        } else {
+          ((self >> shift) & (usize::MAX as Self)) as usize
+        }
+      }
+
+      fn lshift_word(self, shift: usize) -> usize {
+        if Self::BITS <= usize::BITS {
+          (self as usize) << shift
+        } else {
+          ((self << shift) & (usize::MAX as Self)) as usize
+        }
       }
     }
   }

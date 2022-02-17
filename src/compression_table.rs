@@ -32,7 +32,7 @@ impl<Diff: UnsignedLike> CompressionTable<Diff> {
     if prefixes.is_empty() {
       return CompressionTable::Leaf(PrefixCompressionInfo::default());
     } else if prefixes.len() == 1 {
-      return CompressionTable::Leaf(prefixes[0].clone());
+      return CompressionTable::Leaf(prefixes[0]);
     }
 
     let total_count: usize = prefixes.iter()
