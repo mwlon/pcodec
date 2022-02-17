@@ -368,7 +368,7 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
   /// Returns up to `limit` numbers from the `BitReader`.
   /// Will return an error if the reader runs out of data.
   ///
-  /// This maintains an internal state allowing one to pick up where you left
+  /// This maintains an internal state allowing you to pick up where you left
   /// off. For example, calling on a chunk containing 11 numbers using limit 5
   /// repeatedly will return
   /// * the first 5 numbers in the first batch,
