@@ -247,7 +247,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
     while i < unsigneds.len() {
       let unsigned = unsigneds[i];
       let p = self.table.search(unsigned)?;
-      writer.write(&p.code);
+      writer.write_usize(p.code, p.code_len);
       match p.run_len_jumpstart {
         None => {
           compress_offset_bits_w_prefix(unsigned, p, writer);
@@ -371,10 +371,10 @@ impl<T> Compressor<T> where T: NumberLike {
     writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
 
     let n = nums.len();
-    let pre_header_idx = writer.byte_size();
+    let pre_meta_bit_ind = writer.bit_size();
 
     let order = self.flags.delta_encoding_order;
-    let (mut metadata, post_header_idx) = if order == 0 {
+    let (mut metadata, post_meta_byte_ind) = if order == 0 {
       let prefixes = train_prefixes(nums.to_vec(), &self.internal_config, &self.flags)?;
       let prefix_metadata = PrefixMetadata::Simple {
         prefixes: prefixes.clone(),
@@ -385,10 +385,10 @@ impl<T> Compressor<T> where T: NumberLike {
         prefix_metadata,
       };
       metadata.write_to(writer, &self.flags);
-      let post_header_idx = writer.byte_size();
+      let post_header_ind = writer.byte_size();
       let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
       chunk_compressor.compress_nums(nums, writer)?;
-      (metadata, post_header_idx)
+      (metadata, post_header_ind)
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
       let deltas = delta_encoding::nth_order_deltas(nums, order);
@@ -407,13 +407,13 @@ impl<T> Compressor<T> where T: NumberLike {
         prefix_metadata
       };
       metadata.write_to(writer, &self.flags);
-      let post_header_idx = writer.byte_size();
+      let post_header_ind = writer.byte_size();
       let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
       chunk_compressor.compress_nums(&deltas, writer)?;
-      (metadata, post_header_idx)
+      (metadata, post_header_ind)
     };
-    metadata.compressed_body_size = writer.byte_size() - post_header_idx;
-    metadata.update_write_compressed_body_size(writer, pre_header_idx);
+    metadata.compressed_body_size = writer.byte_size() - post_meta_byte_ind;
+    metadata.update_write_compressed_body_size(writer, pre_meta_bit_ind);
     Ok(metadata)
   }
 

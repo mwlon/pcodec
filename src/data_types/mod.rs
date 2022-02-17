@@ -52,9 +52,28 @@ Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
   const BITS: usize;
 
   fn to_f64(self) -> f64;
-  /// Returns the last byte in the unsigned integer's bigendian representation.
-  /// Used for some bit arithmetic masking operations.
-  fn last_u8(self) -> u8;
+
+  /// Shifts the unsigned integer right and returns its lowest bits as a usize.
+  /// For example,
+  /// ```
+  /// use q_compress::data_types::UnsignedLike;
+  /// assert_eq!(6_u8.rshift_word(1), 3_usize);
+  /// assert_eq!(((1_u128 << 100) + (1_u128 << 4)).rshift_word(1), 8_usize);
+  /// ```
+  ///
+  /// Used for some bit arithmetic operations during compression.
+  fn rshift_word(self, shift: usize) -> usize;
+
+  /// Shifts the unsigned integer left and returns its lowest bits as a usize.
+  /// For example,
+  /// ```
+  /// use q_compress::data_types::UnsignedLike;
+  /// assert_eq!(6_u8.lshift_word(1), 12_usize);
+  /// assert_eq!(((1_u128 << 100) + (1_u128 << 4)).lshift_word(1), 32_usize);
+  /// ```
+  ///
+  /// Used for some bit arithmetic operations during compression.
+  fn lshift_word(self, shift: usize) -> usize;
 }
 
 /// Trait for data types supported for compression/decompression.

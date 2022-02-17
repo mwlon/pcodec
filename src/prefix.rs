@@ -112,10 +112,11 @@ impl<T: NumberLike> WeightedPrefix<T> {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct PrefixCompressionInfo<Diff> where Diff: UnsignedLike {
   pub count: usize,
-  pub code: Vec<bool>,
+  pub code: usize,
+  pub code_len: usize,
   pub lower: Diff,
   pub upper: Diff,
   pub k: usize,
@@ -127,10 +128,12 @@ pub struct PrefixCompressionInfo<Diff> where Diff: UnsignedLike {
 impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
   fn from(prefix: &Prefix<T>) -> Self {
     let KInfo { k, only_k_bits_upper, only_k_bits_lower } = prefix.k_info();
+    let code = bits::bits_to_usize(&prefix.code);
 
     PrefixCompressionInfo {
       count: prefix.count,
-      code: prefix.code.clone(),
+      code,
+      code_len: prefix.code.len(),
       lower: prefix.lower.to_unsigned(),
       upper: prefix.upper.to_unsigned(),
       k,
@@ -151,7 +154,8 @@ impl<Diff: UnsignedLike> Default for PrefixCompressionInfo<Diff> {
   fn default() -> Self {
     PrefixCompressionInfo {
       count: 0,
-      code: Vec::new(),
+      code: 0,
+      code_len: 0,
       lower: Diff::ZERO,
       upper: Diff::MAX,
       k: Diff::BITS,
