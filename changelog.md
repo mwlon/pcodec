@@ -1,5 +1,18 @@
 # `q_compress` Changelog
 
+## 0.7.0
+
+* Changed `BitReader` and `Decompressor::simple_decompress` to accept `&[u8]`
+instead of `Vec<u8>`.
+* Added stateful `ChunkBodyDecompressor` to enable decompressing a specific
+batch size of numbers at a time, giving more fine-grained control for
+constrained-memory use cases and taking just the first few numbers.
+* Improved compression speed 10% by making `BitWriter` maintain a `Vec<usize>`
+instead of `Vec<u8>` and making the compressor write Huffman codes more
+efficiently. In doing so, changed the `UnsignedLike` trait to require
+`lshift_word` and `rshift_word` implementations instead of `last_u8`.
+* Standardized naming to use `_idx` instead of `_ind`.
+
 ## 0.6.1
 
 * Made compression of interesting distributions 50%-300% faster by improving
