@@ -49,9 +49,8 @@ Each point is annotated with the compression level used:
 
 The Total Cents dataset is very intricate and still sees improvement for
 high compression levels.
-But most data, like the heavy-tail integers dataset, is already well-compressed
+But most data, like the Heavy-tail Integers dataset, is already well-compressed
 by level 6 or so.
-Each of these datasets is 7.6MB uncompressed.
 
 ## Usage
 
@@ -120,7 +119,7 @@ the approximated distribution `Q` to the true distribution `P`.
 
 <img src="./res/file_format.svg">
 
-Quantile-compressed files consist of a lightweight header (usually <1kB),
+Quantile-compressed files consist of a lightweight header,
 then chunks containing metadata and numerical data, finished by a magic
 termination byte.
 

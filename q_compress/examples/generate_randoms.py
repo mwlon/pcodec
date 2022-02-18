@@ -7,7 +7,7 @@ from pyarrow import parquet as pq
 from datetime import datetime
 import os
 
-n = 10 ** 6
+n = 1000000
 
 os.makedirs('data/txt', exist_ok=True)
 os.makedirs('data/parquet', exist_ok=True)
