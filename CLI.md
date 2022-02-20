@@ -15,10 +15,11 @@ You can always get help, e.g. `cargo run --release`, `cargo run compress --help`
 
 ### Compress
 
-This command compresses a single column of a .csv or .parquet file into a .qco file.
-
-Remember to set `--delta-order` if your data has a sequential relationship/is a
-time series!
+This command compresses a single column of a .csv or .parquet file into a .qco
+file.
+If delta encoding order (`--delta-order`) is not specified, the default
+behavior is to use the first numbers and make an educated guess for the best
+delta encoding order.
 
 ```shell
 cargo run --release compress --csv my.csv --col-name my_column out.qco
@@ -36,15 +37,15 @@ cargo run --release compress \
 cargo run --release compress \
   --csv time_series.csv \
   --csv-timestamp-format "%Y-%m-%d %H:%M:%s%.f%z" \
-  --col-idx 0 \
+  --col-name time \
   --dtype TimestampMicros \
   --delta-order 1 \
   out.qco
 cargo run --release compress \
   --csv time_series.csv \
-  --col-idx 1 \
+  --col-name temperature \
   --dtype f32 \
-  --delta-order 1 \
+  --delta-order 3 \
   out.qco
 ```
 
