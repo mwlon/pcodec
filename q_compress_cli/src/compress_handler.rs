@@ -1,21 +1,27 @@
+use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use arrow::csv::Reader as CsvReader;
 use arrow::datatypes::{Schema, SchemaRef};
+use arrow::record_batch::RecordBatch;
 use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::file::reader::SerializedFileReader;
 
 use q_compress::{BitWriter, Compressor, CompressorConfig};
 use q_compress::data_types::NumberLike;
-use crate::handlers::HandlerImpl;
 
-use crate::opt::CompressOpt;
 use crate::arrow_number_like::ArrowNumberLike;
+use crate::handlers::HandlerImpl;
+use crate::opt::CompressOpt;
 use crate::utils;
+
+const AUTO_DELTA_LIMIT: usize = 1000;
 
 pub trait CompressHandler {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()>;
@@ -30,12 +36,6 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
       ));
     }
 
-    let config = CompressorConfig {
-      compression_level: opt.level,
-      delta_encoding_order: opt.delta_encoding_order,
-    };
-    let compressor = Compressor::<T>::from_config(config);
-
     let mut open_options = OpenOptions::new();
     open_options.write(true);
     if opt.overwrite {
@@ -46,108 +46,140 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
     }
     let mut file = open_options.open(&opt.qco_path)?;
     let mut writer = BitWriter::default();
+
+    let delta_encoding_order = if let Some(order) = opt.delta_encoding_order {
+      order
+    } else {
+      auto_delta_encoding_order::<T>(schema, opt)?
+    };
+
+    let config = CompressorConfig {
+      compression_level: opt.level,
+      delta_encoding_order,
+    };
+    let compressor = Compressor::<T>::from_config(config);
+
     compressor.header(&mut writer)?;
 
-    match (&opt.csv_path, &opt.parquet_path) {
-      (Some(csv_path), None) => compress_csv_chunks(
-        &compressor,
-        schema,
-        csv_path,
-        opt,
-        &mut file,
-        &mut writer,
-      )?,
-      (None, Some(parquet_path)) => compress_parquet_chunks(
-        &compressor,
-        schema,
-        parquet_path,
-        opt,
-        &mut file,
-        &mut writer,
-      )?,
-      _ => unreachable!("should have already checked that file is uniquely specified")
+    let mut reader = new_column_reader(schema, opt)?;
+    let mut num_buffer = Vec::new();
+    while let Some(batch_result) = reader.next_batch() {
+      let batch = batch_result?;
+      num_buffer.extend(&batch);
+      if num_buffer.len() >= opt.chunk_size {
+        write_chunk(&compressor, &num_buffer[..opt.chunk_size], &mut file, &mut writer)?;
+        num_buffer = num_buffer[opt.chunk_size..].to_vec();
+      }
     }
+    if !num_buffer.is_empty() {
+      write_chunk(&compressor, &num_buffer, &mut file, &mut writer)?;
+    }
+
     compressor.footer(&mut writer)?;
     file.write_all(&writer.pop())?;
     Ok(())
   }
 }
 
-fn compress_parquet_chunks<T: ArrowNumberLike>(
-  compressor: &Compressor<T>,
+fn new_column_reader<T: ArrowNumberLike>(
   schema: &Schema,
-  parquet_path: &Path,
   opt: &CompressOpt,
-  file: &mut File,
-  writer: &mut BitWriter,
-) -> Result<()> {
-  let reader = SerializedFileReader::new(File::open(parquet_path)?)?;
-  let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(reader));
-  let col_idx = utils::find_col_idx(schema, opt);
-  let batch_reader = arrow_reader.get_record_reader_by_columns(
-    vec![col_idx],
-    opt.chunk_size,
-  )?;
-  let mut nums_buffer = Vec::new();
-  for batch_result in batch_reader {
-    let batch = batch_result?;
-    let arrow_array = batch.column(col_idx);
-    nums_buffer.extend(&utils::arrow_to_vec::<T>(arrow_array));
-    if nums_buffer.len() >= opt.chunk_size {
-      write_chunk(
-        compressor,
-        &nums_buffer[0..opt.chunk_size],
-        file,
-        writer,
-      )?;
-      nums_buffer = nums_buffer[opt.chunk_size..].to_vec()
-    }
-  }
-  if !nums_buffer.is_empty() {
-    write_chunk(
-      compressor,
-      &nums_buffer,
-      file,
-      writer,
-    )?;
-  }
-
-  Ok(())
+) -> Result<Box<dyn ColumnReader<T>>> {
+  let res: Box<dyn ColumnReader<T>> = match (&opt.csv_path, &opt.parquet_path) {
+    (Some(csv_path), None) => Box::new(CsvColumnReader::new(
+      schema,
+      csv_path,
+      opt,
+    )?),
+    (None, Some(parquet_path)) => Box::new(ParquetColumnReader::new(
+      schema,
+      parquet_path,
+      opt,
+    )?),
+    _ => unreachable!("should have already checked that file is uniquely specified")
+  };
+  Ok(res)
 }
 
-fn compress_csv_chunks<T: ArrowNumberLike>(
-  compressor: &Compressor<T>,
-  schema: &Schema,
-  csv_path: &Path,
-  opt: &CompressOpt,
-  file: &mut File,
-  writer: &mut BitWriter,
-) -> Result<()> {
-  let reader = CsvReader::from_reader(
-    File::open(csv_path)?,
-    SchemaRef::new(schema.clone()),
-    opt.csv_has_header()?,
-    Some(opt.delimiter as u8),
-    opt.chunk_size,
-    None,
-    None,
-    Some(opt.timestamp_format.clone()),
-  );
-  let col_idx = utils::find_col_idx(schema, opt);
+trait ColumnReader<T: ArrowNumberLike> {
+  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self> where Self: Sized;
+  fn next_arrow_batch(&mut self) -> Option<arrow::error::Result<RecordBatch>>;
+  fn col_idx(&self) -> usize;
 
-  for batch_result in reader {
-    let batch = batch_result?;
-    let arrow_array = batch.column(col_idx);
-    let nums = utils::arrow_to_vec::<T>(arrow_array);
-    write_chunk(
-      compressor,
-      &nums,
-      file,
-      writer,
+  fn next_batch(&mut self) -> Option<Result<Vec<T>>> {
+    self.next_arrow_batch().map(|batch_result| {
+      let batch = batch_result?;
+      let arrow_array = batch.column(self.col_idx());
+      Ok(utils::arrow_to_vec::<T>(arrow_array))
+    })
+  }
+}
+
+struct ParquetColumnReader<T> {
+  batch_reader: ParquetRecordBatchReader,
+  col_idx: usize,
+  phantom: PhantomData<T>,
+}
+
+impl<T: ArrowNumberLike> ColumnReader<T> for ParquetColumnReader<T> {
+  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self> {
+    let reader = SerializedFileReader::new(File::open(path)?)?;
+    let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(reader));
+    let col_idx = utils::find_col_idx(schema, opt);
+    let batch_reader = arrow_reader.get_record_reader_by_columns(
+      vec![col_idx],
+      opt.chunk_size,
     )?;
+    Ok(Self {
+      batch_reader,
+      col_idx,
+      phantom: PhantomData,
+    })
   }
 
-  Ok(())
+  fn next_arrow_batch(&mut self) -> Option<arrow::error::Result<RecordBatch>> {
+    self.batch_reader.next()
+  }
+
+  fn col_idx(&self) -> usize {
+    self.col_idx
+  }
+}
+
+struct CsvColumnReader<T: ArrowNumberLike> {
+  csv_reader: CsvReader<File>,
+  col_idx: usize,
+  phantom: PhantomData<T>,
+}
+
+impl<T: ArrowNumberLike> ColumnReader<T> for CsvColumnReader<T> {
+  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self> where Self: Sized {
+    let csv_reader = CsvReader::from_reader(
+      File::open(path)?,
+      SchemaRef::new(schema.clone()),
+      opt.csv_has_header()?,
+      Some(opt.delimiter as u8),
+      opt.chunk_size,
+      None,
+      None,
+      Some(opt.timestamp_format.clone()),
+    );
+    let col_idx = utils::find_col_idx(schema, opt);
+
+    Ok(Self {
+      csv_reader,
+      col_idx,
+      phantom: PhantomData,
+    })
+  }
+
+  fn next_arrow_batch(&mut self) -> Option<arrow::error::Result<RecordBatch>> {
+    self.csv_reader.next()
+  }
+
+  fn col_idx(&self) -> usize {
+    self.col_idx
+  }
 }
 
 fn write_chunk<T: NumberLike>(
@@ -160,4 +192,46 @@ fn write_chunk<T: NumberLike>(
   file.write_all(&writer.pop())?;
   *writer = BitWriter::default();
   Ok(())
+}
+
+fn auto_delta_encoding_order<T: ArrowNumberLike>(
+  schema: &Schema,
+  opt: &CompressOpt,
+) -> Result<usize> {
+  let mut reader = new_column_reader::<T>(schema, opt)?;
+  let mut head_nums = Vec::with_capacity(AUTO_DELTA_LIMIT);
+  while let Some(batch_result) = reader.next_batch() {
+    head_nums.extend(batch_result?);
+    if head_nums.len() >= AUTO_DELTA_LIMIT {
+      break;
+    }
+  }
+  if head_nums.len() > AUTO_DELTA_LIMIT {
+    head_nums = head_nums[0..AUTO_DELTA_LIMIT].to_vec();
+  }
+  println!(
+    "automatically choosing delta encoding order based on first {} nums (specify --delta-order to skip)",
+    head_nums.len(),
+  );
+  let mut best_order = usize::MAX;
+  let mut best_size = usize::MAX;
+  for delta_encoding_order in 0..8 {
+    let config = CompressorConfig {
+      delta_encoding_order,
+      compression_level: min(opt.level, 6),
+    };
+    let compressor = Compressor::<T>::from_config(config);
+    let mut writer = BitWriter::default();
+    compressor.chunk(&head_nums, &mut writer)?;
+    let size = writer.byte_size();
+    if size < best_size {
+      best_order = delta_encoding_order;
+      best_size = size;
+    } else {
+      // it's almost always monotonic
+      break;
+    }
+  }
+  println!("determined best delta encoding order: {}", best_order);
+  Ok(best_order)
 }

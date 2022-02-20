@@ -9,8 +9,6 @@ use q_compress::data_types::NumberLike;
 use crate::opt::CompressOpt;
 use crate::arrow_number_like::ArrowNumberLike;
 
-// const AUTO_DELTA_LIMIT: usize = 1000;
-
 pub fn get_header_byte(bytes: &[u8]) -> Result<u8> {
   if bytes.len() >= 5 {
     Ok(bytes[4])
@@ -39,32 +37,3 @@ pub fn find_col_idx(schema: &Schema, opt: &CompressOpt) -> usize {
 pub fn dtype_name<T: NumberLike>() -> String {
   any::type_name::<T>().split(':').last().unwrap().to_string()
 }
-
-// TODO add this in
-// pub fn choose_delta_encoding_order<T: NumberLike>(nums: &[T]) -> Result<usize> {
-//   let head_nums = &nums[0..min(nums.len(), AUTO_DELTA_LIMIT)];
-//   println!(
-//     "automatically choosing delta encoding order based on first {} nums (specify --delta-order to skip)",
-//     head_nums.len(),
-//   );
-//   let mut best_order = usize::MAX;
-//   let mut best_size = usize::MAX;
-//   for delta_encoding_order in 0..8 {
-//     let config = CompressorConfig {
-//       delta_encoding_order,
-//       ..Default::default()
-//     };
-//     let compressor = Compressor::<T>::from_config(config);
-//     let mut writer = BitWriter::default();
-//     compressor.chunk(&head_nums, &mut writer)?;
-//     let size = writer.byte_size();
-//     if size < best_size {
-//       best_order = delta_encoding_order;
-//       best_size = size;
-//     } else {
-//       // it's almost always monotonic
-//       break;
-//     }
-//   }
-//   Ok(best_order)
-// }

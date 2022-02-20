@@ -6,8 +6,6 @@ use crate::opt::Opt;
 mod compress;
 mod inspect;
 mod opt;
-// mod unknown_compressor;
-// mod unknown_inspector;
 mod utils;
 mod dtype;
 mod arrow_number_like;

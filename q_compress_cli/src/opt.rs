@@ -27,8 +27,8 @@ pub struct CompressOpt {
 
   #[structopt(short="l", long="level", default_value="6")]
   pub level: usize,
-  #[structopt(long="delta-order", default_value="0")]
-  pub delta_encoding_order: usize,
+  #[structopt(long="delta-order")]
+  pub delta_encoding_order: Option<usize>,
   #[structopt(long="dtype")]
   pub dtype: Option<DType>,
   #[structopt(long="col-name")]
