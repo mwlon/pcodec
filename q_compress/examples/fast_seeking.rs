@@ -20,9 +20,9 @@ fn main() {
   compressor.footer(&mut writer).expect("footer");
 
   // now read back only the metadata
-  let start_t = Instant::now();
   let bytes = writer.pop();
   let mut reader = BitReader::from(&bytes);
+  let start_t = Instant::now();
   let decompressor = Decompressor::<f64>::default();
   let flags = decompressor.header(&mut reader).expect("flags");
   let mut metadatas = Vec::new();

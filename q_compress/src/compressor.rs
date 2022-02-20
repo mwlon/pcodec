@@ -385,10 +385,10 @@ impl<T> Compressor<T> where T: NumberLike {
         prefix_metadata,
       };
       metadata.write_to(writer, &self.flags);
-      let post_header_idx = writer.byte_size();
+      let post_meta_idx = writer.byte_size();
       let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
       chunk_compressor.compress_nums(nums, writer)?;
-      (metadata, post_header_idx)
+      (metadata, post_meta_idx)
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
       let deltas = delta_encoding::nth_order_deltas(nums, order);
@@ -407,10 +407,10 @@ impl<T> Compressor<T> where T: NumberLike {
         prefix_metadata
       };
       metadata.write_to(writer, &self.flags);
-      let post_header_idx = writer.byte_size();
+      let post_meta_idx = writer.byte_size();
       let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
       chunk_compressor.compress_nums(&deltas, writer)?;
-      (metadata, post_header_idx)
+      (metadata, post_meta_idx)
     };
     metadata.compressed_body_size = writer.byte_size() - post_meta_byte_idx;
     metadata.update_write_compressed_body_size(writer, pre_meta_bit_idx);

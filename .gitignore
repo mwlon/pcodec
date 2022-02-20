@@ -1,7 +1,6 @@
 /target
-examples/target
-examples/data
-examples/venv
+q_compress/examples/data/**
+q_compress/examples/venv/**
 .idea
 *.iml
 temp

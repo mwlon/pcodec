@@ -1,5 +1,9 @@
 # `q_compress` Changelog
 
+## 0.7.1 (not yet released)
+
+* `BitWriter.pop` is no longer destructive.
+
 ## 0.7.0
 
 * Changed `BitReader` and `Decompressor::simple_decompress` to accept `&[u8]`

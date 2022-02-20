@@ -49,9 +49,8 @@ Each point is annotated with the compression level used:
 
 The Total Cents dataset is very intricate and still sees improvement for
 high compression levels.
-But most data, like the heavy-tail integers dataset, is already well-compressed
+But most data, like the Heavy-tail Integers dataset, is already well-compressed
 by level 6 or so.
-Each of these datasets is 7.6MB uncompressed.
 
 ## Usage
 
@@ -83,7 +82,7 @@ To run something right away, see
 [the primary example](./examples/primary.md).
 
 For a lower-level API that allows writing/reading one chunk at a time and
-extracting all metadata, see the docs.rs documentation.
+extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compress/latest/q_compress/).
 
 ## Method
 
@@ -120,7 +119,7 @@ the approximated distribution `Q` to the true distribution `P`.
 
 <img src="./res/file_format.svg">
 
-Quantile-compressed files consist of a lightweight header (usually <1kB),
+Quantile-compressed files consist of a lightweight header,
 then chunks containing metadata and numerical data, finished by a magic
 termination byte.
 
@@ -153,6 +152,11 @@ At the end of the file is a termination byte.
 ## Library Changelog
 
 See [changelog.md](./changelog.md)
+
+## CLI
+
+This is a partially-complete CLI.
+See [CLI.md](./CLI.md).
 
 ## Advanced
 
