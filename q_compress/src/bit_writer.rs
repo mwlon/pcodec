@@ -167,9 +167,8 @@ impl BitWriter {
     }
   }
 
-  /// Returns the bytes produced by the writer, taking ownership and ending
-  /// the writer's lifetime.
-  pub fn pop(self) -> Vec<u8> {
+  /// Returns the bytes produced by the writer.
+  pub fn pop(&self) -> Vec<u8> {
     let byte_size = self.byte_size();
     // We can't just transmute because many machines are little-endian.
     let mut res = self.words.iter()

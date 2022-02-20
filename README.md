@@ -82,7 +82,7 @@ To run something right away, see
 [the primary example](./examples/primary.md).
 
 For a lower-level API that allows writing/reading one chunk at a time and
-extracting all metadata, see the docs.rs documentation.
+extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compress/latest/q_compress/).
 
 ## Method
 

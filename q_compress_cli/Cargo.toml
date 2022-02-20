@@ -13,5 +13,8 @@ repository = "https://github.com/mwlon/quantile-compression"
 
 [dependencies]
 anyhow = "1.0.53"
+arrow = "9.0.2"
+chrono = "0.4.19"
+parquet = "9.0.2"
 structopt = "0.3.26"
 q_compress = {path="../q_compress"}
