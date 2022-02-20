@@ -83,17 +83,3 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
     Ok(())
   }
 }
-
-#[cfg(test)]
-mod tests {
-  use crate::unknown_inspector::new;
-
-  #[test]
-  fn test_dtype_bytes_agree() {
-    for header_byte in 0..255 {
-      if let Ok(decompressor) = new(header_byte) {
-        assert_eq!(decompressor.header_byte(), header_byte);
-      }
-    }
-  }
-}

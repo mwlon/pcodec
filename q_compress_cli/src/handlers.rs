@@ -41,3 +41,17 @@ pub struct HandlerImpl<T> {
 }
 
 impl<T: ArrowNumberLike> Handler for HandlerImpl<T> {}
+
+#[cfg(test)]
+mod tests {
+  use crate::handlers;
+
+  #[test]
+  fn test_dtype_bytes_agree() {
+    for header_byte in 0..255 {
+      if let Ok(decompressor) = handlers::from_header_byte(header_byte) {
+        assert_eq!(decompressor.header_byte(), header_byte);
+      }
+    }
+  }
+}
