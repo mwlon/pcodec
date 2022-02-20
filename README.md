@@ -24,7 +24,10 @@ with high compression ratio and moderately fast speed.
   space probes
 
 **Data types:**
-`i32`, `i64`, `i128`, `u32`, `u64`, `f32`, `f64`,
+`bool`,
+`i8`, `i16`, `i32`, `i64`, `i128`,
+`u8`, `u16`, `u32`, `u64`, `u128`,
+`f32`, `f64`,
 `q_compress::TimestampMicros`,
 `q_compress::TimestampNanos`
 
@@ -162,13 +165,13 @@ See [CLI.md](./CLI.md).
 
 ### Custom Data Types
 
-Small data types can be efficiently compressed by upcasting to the next
-supported data type;
-e.g. `u16` to `u32`.
-In fact, the only cost to upcasting is a small increase in chunk metadata size.
+Small data types can be efficiently compressed in expansion:
+for example, compressing 24-bit data as a sequence of `u32`
+values.  The only cost to using a larger datatype is a small
+increase in chunk metadata size.
 
 When necessary, you can implement your own data type via
- `q_compress::types::NumberLike` and (if the existing signed/unsigned
+`q_compress::types::NumberLike` and (if the existing signed/unsigned
 implementations are insufficient)
 `q_compress::types::SignedLike` and
 `q_compress::types::UnsignedLike`.
