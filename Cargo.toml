@@ -1,7 +1,4 @@
-[package]
-name = "q_compress"
-version = "0.7.1"
-edition = "2018"
+[workspace]
 
 members = [
   "q_compress",

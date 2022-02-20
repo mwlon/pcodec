@@ -25,8 +25,8 @@ with high compression ratio and moderately fast speed.
 
 **Data types:**
 `bool`,
-`i8`, `i16`, `i32`, `i64`, `i128`,
-`u8`, `u16`, `u32`, `u64`, `u128`,
+`i16`, `i32`, `i64`, `i128`,
+`u16`, `u32`, `u64`, `u128`,
 `f32`, `f64`,
 `q_compress::TimestampMicros`,
 `q_compress::TimestampNanos`
@@ -166,7 +166,7 @@ See [CLI.md](./CLI.md).
 ### Custom Data Types
 
 Small data types can be efficiently compressed in expansion:
-for example, compressing 24-bit data as a sequence of `u32`
+for example, compressing `u8` data as a sequence of `u16`
 values.  The only cost to using a larger datatype is a small
 increase in chunk metadata size.
 
