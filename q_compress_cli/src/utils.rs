@@ -7,7 +7,7 @@ use arrow::datatypes::Schema;
 use q_compress::data_types::NumberLike;
 
 use crate::opt::CompressOpt;
-use crate::universal_number_like::ArrowLike;
+use crate::arrow_number_like::ArrowNumberLike;
 
 // const AUTO_DELTA_LIMIT: usize = 1000;
 
@@ -19,7 +19,7 @@ pub fn get_header_byte(bytes: &[u8]) -> Result<u8> {
   }
 }
 
-pub fn arrow_to_vec<T: ArrowLike>(arr: &ArrayRef) -> Vec<T> {
+pub fn arrow_to_vec<T: ArrowNumberLike>(arr: &ArrayRef) -> Vec<T> {
   let primitive = arrow::array::as_primitive_array::<T::ArrowPrimitive>(arr);
   primitive.values().iter()
     .map(|x| T::from_arrow(*x))

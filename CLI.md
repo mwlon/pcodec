@@ -7,7 +7,7 @@ Until we publish to package managers, follow this setup:
 
 1. Install Rust: https://www.rust-lang.org/tools/install
 2. `git clone https://github.com/mwlon/quantile-compression.git`
-3. `cd quantile-compression/q_compress_cli`
+3. `cd quantile-compression`
 
 ## Example Commands
 
@@ -22,7 +22,17 @@ time series!
 
 ```shell
 cargo run --release compress --csv my.csv --col-name my_column out.qco
-cargo run --release compress --csv my.csv --col-idx 0 --csv-has-header --dtype u32 --level 7 out.qco
+cargo run --release compress --parquet my.snappy.parquet --col-name my_column out.qco
+
+cargo run --release compress \
+  --csv my.csv \
+  --col-idx 0 \
+  --csv-has-header \
+  --dtype u32 \
+  --level 7 \
+  --overwrite \
+  out.qco
+
 cargo run --release compress \
   --csv time_series.csv \
   --csv-timestamp-format "%Y-%m-%d %H:%M:%s%.f%z" \
@@ -36,7 +46,6 @@ cargo run --release compress \
   --dtype f32 \
   --delta-order 1 \
   out.qco
-cargo run --release compress --parquet my.snappy.parquet --col-name my_column out.qco
 ```
 
 ### Inspect

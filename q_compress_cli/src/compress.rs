@@ -1,15 +1,16 @@
-use anyhow::Result;
-use std::fs::{File};
-use std::path::{Path};
-use q_compress::CompressorConfig;
+use std::fs::File;
+use std::path::Path;
 
-use crate::opt::CompressOpt;
-use crate::{unknown_compressor, utils};
 use anyhow::anyhow;
+use anyhow::Result;
 use arrow::csv;
 use arrow::datatypes::{Field, Schema};
 use parquet::file::reader::{FileReader, SerializedFileReader};
+
+use crate::utils;
 use crate::dtype::DType;
+use crate::handlers;
+use crate::opt::CompressOpt;
 
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 
@@ -86,13 +87,6 @@ pub fn compress(opt: CompressOpt) -> Result<()> {
     _ => Err(anyhow!("incomplete or incompatible col name and col idx")),
   }?;
   let dtype = DType::from_arrow(arrow_dtype)?;
-  let config = CompressorConfig {
-    compression_level: opt.level,
-    delta_encoding_order: opt.delta_encoding_order,
-  };
-  let compressor = unknown_compressor::new(
-    dtype,
-    config,
-  )?;
-  compressor.compress(&opt, &schema)
+  let handler = handlers::from_dtype(dtype)?;
+  handler.compress(&opt, &schema)
 }

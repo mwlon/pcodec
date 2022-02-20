@@ -153,6 +153,11 @@ At the end of the file is a termination byte.
 
 See [changelog.md](./changelog.md)
 
+## CLI
+
+This is a partially-complete CLI.
+See [CLI.md](./CLI.md).
+
 ## Advanced
 
 ### Custom Data Types

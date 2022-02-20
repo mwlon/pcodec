@@ -6,11 +6,14 @@ use crate::opt::Opt;
 mod compress;
 mod inspect;
 mod opt;
-mod unknown_compressor;
-mod unknown_inspector;
+// mod unknown_compressor;
+// mod unknown_inspector;
 mod utils;
 mod dtype;
-mod universal_number_like;
+mod arrow_number_like;
+mod handlers;
+mod inspect_handler;
+mod compress_handler;
 
 fn main() -> Result<()> {
   let opt = Opt::from_args();

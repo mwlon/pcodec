@@ -1,51 +1,28 @@
-use std::convert::TryFrom;
-
 use anyhow::Result;
 
 use q_compress::{BitReader, Decompressor, PrefixMetadata};
-use q_compress::data_types::{NumberLike, TimestampMicros, TimestampNanos};
+use q_compress::data_types::NumberLike;
 
-use crate::dtype::DType;
+use crate::handlers::HandlerImpl;
 use crate::opt::InspectOpt;
 use crate::utils;
 
-fn new_boxed_inspector<T: NumberLike>() -> Box<dyn UnknownInspector> {
-  Box::new(Decompressor::<T>::default())
+pub trait InspectHandler {
+  fn header_byte(&self) -> u8; // only used for testing now
+  fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()>;
 }
 
-pub fn new(header_byte: u8) -> Result<Box<dyn UnknownInspector>> {
-  let dtype = DType::try_from(header_byte)?;
-  Ok(match dtype {
-    DType::Bool => new_boxed_inspector::<bool>(),
-    DType::F32 => new_boxed_inspector::<f32>(),
-    DType::F64 => new_boxed_inspector::<f64>(),
-    DType::I32 => new_boxed_inspector::<i32>(),
-    DType::I64 => new_boxed_inspector::<i64>(),
-    DType::I128 => new_boxed_inspector::<i128>(),
-    DType::Micros => new_boxed_inspector::<TimestampMicros>(),
-    DType::Nanos => new_boxed_inspector::<TimestampNanos>(),
-    DType::U32 => new_boxed_inspector::<u32>(),
-    DType::U64 => new_boxed_inspector::<u64>(),
-  })
-}
-
-pub trait UnknownInspector {
-  fn header_byte(&self) -> u8;
-  fn inspect(&self, bytes: &[u8], opt: InspectOpt) -> Result<()>;
-}
-
-// we can't combine this with UnknownDecompressor because they have different
-// bounds on `T`
-impl<T: NumberLike> UnknownInspector for Decompressor<T> {
+impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
   fn header_byte(&self) -> u8 {
     T::HEADER_BYTE
   }
 
-  fn inspect(&self, bytes: &[u8], opt: InspectOpt) -> Result<()> {
+  fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()> {
+    let decompressor = Decompressor::<T>::default();
     println!("inspecting {:?}", opt.path);
 
     let mut reader = BitReader::from(bytes);
-    let flags = self.header(&mut reader)?;
+    let flags = decompressor.header(&mut reader)?;
     println!("=================\n");
     println!("data type: {}", utils::dtype_name::<T>());
     println!("flags: {:?}", flags);
@@ -54,7 +31,7 @@ impl<T: NumberLike> UnknownInspector for Decompressor<T> {
 
     let mut metadatas = Vec::new();
     let mut start_byte_idx = reader.aligned_byte_idx()?;
-    while let Some(meta) = self.chunk_metadata(&mut reader, &flags)? {
+    while let Some(meta) = decompressor.chunk_metadata(&mut reader, &flags)? {
       let byte_idx = reader.aligned_byte_idx()?;
       metadata_size += byte_idx - start_byte_idx;
 

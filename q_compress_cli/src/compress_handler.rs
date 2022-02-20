@@ -10,44 +10,32 @@ use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::file::reader::SerializedFileReader;
 
 use q_compress::{BitWriter, Compressor, CompressorConfig};
-use q_compress::data_types::{NumberLike, TimestampMicros, TimestampNanos};
-use crate::dtype::DType;
+use q_compress::data_types::NumberLike;
+use crate::handlers::HandlerImpl;
 
 use crate::opt::CompressOpt;
-use crate::universal_number_like::{ArrowLike, UniversalNumberLike};
+use crate::arrow_number_like::ArrowNumberLike;
 use crate::utils;
 
-fn new_boxed_compressor<T: UniversalNumberLike>(config: CompressorConfig) -> Box<dyn UnknownCompressor> {
-  Box::new(Compressor::<T>::from_config(config))
-}
-
-pub fn new(dtype: DType, config: CompressorConfig) -> Result<Box<dyn UnknownCompressor>> {
-  Ok(match dtype {
-    DType::Bool => new_boxed_compressor::<bool>(config),
-    DType::F32 => new_boxed_compressor::<f32>(config),
-    DType::F64 => new_boxed_compressor::<f64>(config),
-    DType::I32 => new_boxed_compressor::<i32>(config),
-    DType::I64 => new_boxed_compressor::<i64>(config),
-    DType::I128 => new_boxed_compressor::<i128>(config),
-    DType::Micros => new_boxed_compressor::<TimestampMicros>(config),
-    DType::Nanos => new_boxed_compressor::<TimestampNanos>(config),
-    DType::U32 => new_boxed_compressor::<u32>(config),
-    DType::U64 => new_boxed_compressor::<u64>(config),
-  })
-}
-
-pub trait UnknownCompressor {
-  fn header_byte(&self) -> u8;
-
+pub trait CompressHandler {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()>;
 }
 
-impl<T: UniversalNumberLike> UnknownCompressor for Compressor<T> {
-  fn header_byte(&self) -> u8 {
-    T::HEADER_BYTE
-  }
-
+impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()> {
+    if !T::IS_ARROW {
+      return Err(anyhow!(
+        "data type {} not supported by arrow converters",
+        utils::dtype_name::<T>()
+      ));
+    }
+
+    let config = CompressorConfig {
+      compression_level: opt.level,
+      delta_encoding_order: opt.delta_encoding_order,
+    };
+    let compressor = Compressor::<T>::from_config(config);
+
     let mut open_options = OpenOptions::new();
     open_options.write(true);
     if opt.overwrite {
@@ -58,11 +46,11 @@ impl<T: UniversalNumberLike> UnknownCompressor for Compressor<T> {
     }
     let mut file = open_options.open(&opt.qco_path)?;
     let mut writer = BitWriter::default();
-    self.header(&mut writer)?;
+    compressor.header(&mut writer)?;
 
     match (&opt.csv_path, &opt.parquet_path) {
       (Some(csv_path), None) => compress_csv_chunks(
-        self,
+        &compressor,
         schema,
         csv_path,
         opt,
@@ -70,7 +58,7 @@ impl<T: UniversalNumberLike> UnknownCompressor for Compressor<T> {
         &mut writer,
       )?,
       (None, Some(parquet_path)) => compress_parquet_chunks(
-        self,
+        &compressor,
         schema,
         parquet_path,
         opt,
@@ -79,13 +67,13 @@ impl<T: UniversalNumberLike> UnknownCompressor for Compressor<T> {
       )?,
       _ => unreachable!("should have already checked that file is uniquely specified")
     }
-    self.footer(&mut writer)?;
+    compressor.footer(&mut writer)?;
     file.write_all(&writer.pop())?;
     Ok(())
   }
 }
 
-fn compress_parquet_chunks<T: UniversalNumberLike>(
+fn compress_parquet_chunks<T: ArrowNumberLike>(
   compressor: &Compressor<T>,
   schema: &Schema,
   parquet_path: &Path,
@@ -93,13 +81,6 @@ fn compress_parquet_chunks<T: UniversalNumberLike>(
   file: &mut File,
   writer: &mut BitWriter,
 ) -> Result<()> {
-  if !<T as ArrowLike>::SUPPORTED {
-    return Err(anyhow!(
-      "data type {} not supported by parquet converters",
-      utils::dtype_name::<T>()
-    ));
-  }
-
   let reader = SerializedFileReader::new(File::open(parquet_path)?)?;
   let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(reader));
   let col_idx = utils::find_col_idx(schema, opt);
@@ -134,7 +115,7 @@ fn compress_parquet_chunks<T: UniversalNumberLike>(
   Ok(())
 }
 
-fn compress_csv_chunks<T: UniversalNumberLike>(
+fn compress_csv_chunks<T: ArrowNumberLike>(
   compressor: &Compressor<T>,
   schema: &Schema,
   csv_path: &Path,
@@ -142,13 +123,6 @@ fn compress_csv_chunks<T: UniversalNumberLike>(
   file: &mut File,
   writer: &mut BitWriter,
 ) -> Result<()> {
-  if !<T as ArrowLike>::SUPPORTED {
-    return Err(anyhow!(
-      "data type {} not supported by arrow converters",
-      utils::dtype_name::<T>()
-    ));
-  }
-
   let reader = CsvReader::from_reader(
     File::open(csv_path)?,
     SchemaRef::new(schema.clone()),
