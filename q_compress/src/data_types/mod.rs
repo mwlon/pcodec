@@ -102,7 +102,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   ///
   /// To choose a header byte for a new data type, review all header bytes in
   /// the library and pick an unused one. For instance, as of writing, bytes
-  /// 1 through 10 are used, so 11 would be a good choice for another
+  /// 1 through 13 are used, so 14 would be a good choice for another
   /// `q_compress`-supported data type, and 255 would be a good choice for a
   /// custom data type.
   const HEADER_BYTE: u8;
