@@ -3,6 +3,7 @@
 ## 0.7.1 (not yet released)
 
 * `BitWriter.pop` is no longer destructive.
+* Added new `NumberLike` implementations: `i16`, `u16`, `u128`
 
 ## 0.7.0
 
