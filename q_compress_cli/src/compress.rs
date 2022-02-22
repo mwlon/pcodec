@@ -87,6 +87,6 @@ pub fn compress(opt: CompressOpt) -> Result<()> {
     _ => Err(anyhow!("incomplete or incompatible col name and col idx")),
   }?;
   let dtype = DType::from_arrow(arrow_dtype)?;
-  let handler = handlers::from_dtype(dtype)?;
+  let handler = handlers::from_dtype(dtype);
   handler.compress(&opt, &schema)
 }
