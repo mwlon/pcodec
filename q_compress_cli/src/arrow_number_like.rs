@@ -37,10 +37,13 @@ macro_rules! no_arrow {
 
 no_arrow!(bool);
 no_arrow!(i128);
+no_arrow!(u128);
 trivial_arrow!(f32, arrow_dtypes::Float32Type);
 trivial_arrow!(f64, arrow_dtypes::Float64Type);
+trivial_arrow!(i16, arrow_dtypes::Int16Type);
 trivial_arrow!(i32, arrow_dtypes::Int32Type);
 trivial_arrow!(i64, arrow_dtypes::Int64Type);
+trivial_arrow!(u16, arrow_dtypes::UInt16Type);
 trivial_arrow!(u32, arrow_dtypes::UInt32Type);
 trivial_arrow!(u64, arrow_dtypes::UInt64Type);
 

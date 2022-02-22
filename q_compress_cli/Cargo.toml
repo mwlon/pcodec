@@ -18,3 +18,6 @@ chrono = "0.4.19"
 parquet = "9.0.2"
 structopt = "0.3.26"
 q_compress = {path="../q_compress"}
+
+[dev-dependencies]
+enum-iterator = "0.7.0"
