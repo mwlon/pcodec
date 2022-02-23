@@ -82,7 +82,7 @@ fn main() {
 ```
 
 To run something right away, see
-[the primary example](./examples/primary.md).
+[the primary example](./q_compress/examples/primary.md).
 
 For a lower-level API that allows writing/reading one chunk at a time and
 extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compress/latest/q_compress/).
@@ -189,4 +189,4 @@ One can aggregate them to obtain the total count of numbers in the whole file
 and even an approximate histogram.
 This is typically about 100x faster than decompressing all the numbers.
 
-See the [fast seeking example](examples/fast_seeking.rs).
+See the [fast seeking example](./q_compress/examples/fast_seeking.rs).
