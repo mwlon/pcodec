@@ -17,12 +17,12 @@ pub enum DType {
   I32,
   I64,
   I128,
+  TimestampMicros,
+  TimestampNanos,
   U16,
   U32,
   U64,
   U128,
-  Micros,
-  Nanos,
 }
 
 impl FromStr for DType {
@@ -41,8 +41,8 @@ impl FromStr for DType {
       "u32" => DType::U32,
       "u64" => DType::U64,
       "u128" => DType::U128,
-      "micros" | "timestampmicros" => DType::Micros,
-      "nanos" | "timestampnanos" => DType::Nanos,
+      "micros" | "timestampmicros" => DType::TimestampMicros,
+      "nanos" | "timestampnanos" => DType::TimestampNanos,
       _ => {
         return Err(anyhow!("unknown dtype {}", s));
       }
@@ -62,8 +62,8 @@ impl TryFrom<u8> for DType {
       i32::HEADER_BYTE => DType::I32,
       i64::HEADER_BYTE => DType::I64,
       i128::HEADER_BYTE => DType::I128,
-      TimestampMicros::HEADER_BYTE => DType::Micros,
-      TimestampNanos::HEADER_BYTE => DType::Nanos,
+      TimestampMicros::HEADER_BYTE => DType::TimestampMicros,
+      TimestampNanos::HEADER_BYTE => DType::TimestampNanos,
       u16::HEADER_BYTE => DType::U16,
       u32::HEADER_BYTE => DType::U32,
       u64::HEADER_BYTE => DType::U64,
@@ -88,8 +88,8 @@ impl DType {
       DType::U16 => ArrowDataType::UInt16,
       DType::U32 => ArrowDataType::UInt32,
       DType::U64 => ArrowDataType::UInt64,
-      DType::Micros => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
-      DType::Nanos => ArrowDataType::Timestamp(TimeUnit::Nanosecond, None),
+      DType::TimestampMicros => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+      DType::TimestampNanos => ArrowDataType::Timestamp(TimeUnit::Nanosecond, None),
       _ => {
         return Err(anyhow!("unable to convert q_compress dtype {:?} to arrow", self));
       }
@@ -108,8 +108,8 @@ impl DType {
       ArrowDataType::UInt16 => DType::U16,
       ArrowDataType::UInt32 => DType::U32,
       ArrowDataType::UInt64 => DType::U64,
-      ArrowDataType::Timestamp(TimeUnit::Microsecond, _) => DType::Micros,
-      ArrowDataType::Timestamp(TimeUnit::Nanosecond, _) => DType::Nanos,
+      ArrowDataType::Timestamp(TimeUnit::Microsecond, _) => DType::TimestampMicros,
+      ArrowDataType::Timestamp(TimeUnit::Nanosecond, _) => DType::TimestampNanos,
       _ => {
         return Err(anyhow!("unable to convert arrow dtype {:?} to q_compress", arrow_dtype))
       }

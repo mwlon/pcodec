@@ -42,6 +42,13 @@ fn infer_csv_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
     }
     Ok(Schema::new(fields))
   } else {
+    let col_idx = utils::find_col_idx(&inferred_schema, opt);
+    let arrow_dtype = inferred_schema.fields()[col_idx].data_type();
+    let dtype = DType::from_arrow(arrow_dtype)?;
+    println!(
+      "using inferred CSV column data type: {:?}",
+      dtype,
+    );
     Ok(inferred_schema)
   }
 }

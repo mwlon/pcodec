@@ -37,7 +37,7 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
 
       reader.seek(meta.compressed_body_size * 8);
       metadatas.push(meta);
-      start_byte_idx = byte_idx;
+      start_byte_idx = reader.aligned_byte_idx()?;
     }
     let compressed_size = reader.aligned_byte_idx()?;
 
