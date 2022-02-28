@@ -12,47 +12,48 @@ codec (9 for gzip, 22 for zstd).
 
 ## Running
 
-TL;DR:
-* `cd q_compress`
-* `python generate_randoms.py`
+TL;DR (`cd`'d into `quantile-compression/`):
+* `python q_compress/examples/generate_randoms.py`
 * `cargo run --release --example primary`
 
 The script to generate the data uses python, so set up a python3
 environment with `numpy` and `pyarrow` installed.
-In that environment, `cd`'d into the `examples/` directory, run
-`python generate_randoms.py`.
-This will populate some human-readable data in `data/txt/` and
-the exact same numerical data as bytes in `data/binary`.
+In that environment, run
+`python q_compress/examples/generate_randoms.py`.
+This will populate some human-readable data in `q_compress/examples/data/txt/` and
+the exact same numerical data as bytes in `q_compress/examples/data/binary`.
 For instance,
 ```
-% head -5 data/txt/normal10.txt
--4
-10
-6
--11
-4
+% head -5 q_compress/examples/data/txt/f64_normal_at_0.txt
+-1.3077788857647787
+1.0762085641687826
+-1.7763511291198668
+0.26791893481533213
+0.39219157633731955
 ```
 shows integers sampled from a floored normal distribution with standard
 deviation of 10.
 
 Then to run quantile compression and decompression on each dataset, run
 `cargo run --release --example primary`.
-This will show the quantile parameters chosen for each dataset and how long
-it took to compress and decompress.
-You can see the compressed files in `data/q_compressed_$DEPTH`, where `DEPTH=6`
+This will show the compressed size and how long
+it took to compress and decompress each dataset.
+You can see the compressed files in
+`q_compress/examples/data/q_compressed_$LEVEL`, where `LEVEL=6`
 by default.
 
 When generating randoms, some comparison file formats were already generated,
-like `.gzip.parquet` in `data/gzip_parquet/`.
+like `.zstd.parquet` in `q_compress/examples/data/zstd_parquet/`.
 
 To try pure gzip on the same data,
 make sure you have `gzip` and `xargs` installed,
-then simply run `sh run_gzip.sh`.
+then simply run `sh q_compress/examples/run_gzip.sh`.
 This will use gzip to compress the binary version of the data at compression
 levels 1 and 9.
 
 To try pure Snappy,
-you can install the `szip` and `xargs` commands and run `sh run_snappy.sh`.
+you can install the `szip` and `xargs` commands and run
+`sh q_compress/examples/run_snappy.sh`.
 
 To try pure ZStandard, run the `compare_zstd` example:
 `cargo run --release --example compare_zstd [compression-level]`
@@ -61,9 +62,9 @@ To try pure ZStandard, run the `compare_zstd` example:
 
 You can compare file sizes with `ls`:
 ```
-% ls -lh data/q_compressed_6 | awk '{print $5 "\t" $9}'
-122K	bool8_random.qco
-122K	bool8_random_del=1.qco
+% ls -lh q_compress/examples/data/q_compressed_6 | awk '{print $5 "\t" $9}'
+122K	bool_random.qco
+122K	bool_random_del=1.qco
 4.2M	f64_edge_cases.qco
 6.1M	f64_edge_cases_del=1.qco
 6.6M	f64_normal_at_0.qco
@@ -95,8 +96,8 @@ You can compare file sizes with `ls`:
 4.8M	micros_near_linear.qco
 2.7M	micros_near_linear_del=1.qco
 
-% ls -lh data/zstd_parquet | awk '{print $5 "\t" $9}' 
-126K	bool8_random.zstd.parquet
+% ls -lh q_compress/examples/data/zstd_parquet | awk '{print $5 "\t" $9}' 
+126K	bool_random.zstd.parquet
 5.1M	f64_edge_cases.zstd.parquet
 7.6M	f64_normal_at_0.zstd.parquet
 6.8M	f64_normal_at_1000.zstd.parquet
@@ -121,7 +122,7 @@ You can compare file sizes with `ls`:
 ```
 
 Note that the uncompressed, binary file size for each of these datasets
-is 7.6MB (1M numbers * 8 bytes / number).
+is 7.6MB (1M numbers * 8B / number).
 
 For some distributions, we demonstrate different delta encoding orders
 in the `.qco` files by indicating `del=x`.

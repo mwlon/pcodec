@@ -1,7 +1,7 @@
 //! For crate-level documentation, see either
 //! <https://crates.io/crates/q_compress> or
-//! <https://github.com/mwlon/quantile-compression>.
-#[doc = include_str!("../../README.md")]
+//! <https://github.com/mwlon/quantile-compression/tree/main/q_compress>.
+#[doc = include_str!("../README.md")]
 
 pub use bit_reader::BitReader;
 pub use bit_writer::BitWriter;

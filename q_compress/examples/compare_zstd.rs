@@ -1,8 +1,12 @@
-use std::fs;
+// We could probably combine this, run_snappy.sh, and run_gzip.sh into the
+// primary example and make it print out a table of results.
+
 use std::env;
+use std::fs;
 use std::io::ErrorKind;
 use std::time::Instant;
-use zstd;
+
+const BASE_DIR: &str = "q_compress/examples/data";
 
 fn main() {
   let args: Vec<String> = env::args().collect();
@@ -17,7 +21,8 @@ fn main() {
     "".to_string()
   };
 
-  let output_dir = format!("examples/data/zstd_{}", compression_level);
+  let subfolder = format!("zstd_{}", compression_level);
+  let output_dir = format!("{}/{}", BASE_DIR, &subfolder);
   match fs::create_dir(&output_dir) {
     Ok(()) => (),
     Err(e) => match e.kind() {
@@ -25,7 +30,8 @@ fn main() {
       _ => panic!("{}", e)
     }
   }
-  let files = fs::read_dir("examples/data/binary").expect("couldn't read");
+  let files = fs::read_dir(format!("{}/binary", BASE_DIR))
+    .expect("couldn't read");
 
   for file in files {
     let path = file.unwrap().path();
@@ -34,9 +40,9 @@ fn main() {
       continue;
     }
 
-    println!("\nRUNNING ON {}", path_str);
+    println!("\nRUNNING ON {:?}", path.file_name().unwrap());
     let out_path_str = path_str
-      .replace("examples/data/binary", &output_dir)
+      .replace("binary", &subfolder)
       .replace(".bin", ".zstd");
     let binary = fs::read(path_str).unwrap();
 

@@ -1,4 +1,4 @@
-# q_compress CLI
+# `q_compress` CLI
 
 ## Setup
 
@@ -71,4 +71,5 @@ compressed byte size: 6967210 (ratio: 1.1482358074465964)
 	footer size: 1
 	unknown trailing bytes: 0
 [min, max] numbers: [-4.628380674508539, 4.919770799153994]
+...
 ```

@@ -1,3 +1,4 @@
+cd q_compress/examples
 for level in 1 9; do
   echo compressing for level $level
   mkdir -p data/gzip_$level
