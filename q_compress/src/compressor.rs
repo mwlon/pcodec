@@ -115,19 +115,21 @@ fn push_pref<T: NumberLike>(
   j: usize,
   max_n_pref: usize,
   n: usize,
-  sorted: &[T],
+  sorted: &[T::Unsigned],
 ) {
   let count = j - i;
   let frequency = count as f64 / n as f64;
   let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_pref) / n);
+  let lower = T::from_unsigned(sorted[i]);
+  let upper = T::from_unsigned(sorted[j - 1]);
   if n < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
     seq.push(WeightedPrefix::new(
       count,
       count,
-      sorted[i],
-      sorted[j - 1],
+      lower,
+      upper,
       None
     ));
   } else {
@@ -137,8 +139,8 @@ fn push_pref<T: NumberLike>(
     seq.push(WeightedPrefix::new(
       count,
       config.weight,
-      sorted[i],
-      sorted[j - 1],
+      lower,
+      upper,
       Some(config.jumpstart)
     ));
   }
@@ -146,11 +148,11 @@ fn push_pref<T: NumberLike>(
 }
 
 fn train_prefixes<T: NumberLike>(
-  nums: Vec<T>,
+  unsigneds: Vec<T::Unsigned>,
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
 ) -> QCompressResult<Vec<Prefix<T>>> {
-  if nums.is_empty() {
+  if unsigneds.is_empty() {
     return Ok(Vec::new());
   }
 
@@ -162,7 +164,7 @@ fn train_prefixes<T: NumberLike>(
       comp_level,
     )));
   }
-  let n = nums.len();
+  let n = unsigneds.len();
   if n > MAX_ENTRIES {
     return Err(QCompressError::invalid_argument(format!(
       "count may not exceed {} per chunk (was {})",
@@ -171,8 +173,8 @@ fn train_prefixes<T: NumberLike>(
     )));
   }
 
-  let mut sorted = nums;
-  sorted.sort_unstable_by(|a, b| a.num_cmp(b));
+  let mut sorted = unsigneds;
+  sorted.sort_unstable();
   let safe_comp_level = min(comp_level, (n as f64).log2() as usize);
   let max_n_pref = 1_usize << safe_comp_level;
   let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
@@ -185,7 +187,7 @@ fn train_prefixes<T: NumberLike>(
   let mut backup_j = 0_usize;
   for j in 0..n {
     let target_j = ((*pref_idx_ptr + 1) * n) / max_n_pref;
-    if j > 0 && sorted[j].num_eq(&sorted[j - 1]) {
+    if j > 0 && sorted[j] == sorted[j - 1] {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
         push_pref(pref_ptr, pref_idx_ptr, i, backup_j, max_n_pref, n, &sorted);
         i = backup_j;
@@ -238,11 +240,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
     Ok(Self { table })
   }
 
-  fn compress_nums(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<()> {
-    let unsigneds = nums.iter()
-      .map(|&n| n.to_unsigned())
-      .collect::<Vec<_>>();
-
+  fn compress_nums(&self, unsigneds: &[T::Unsigned], writer: &mut BitWriter) -> QCompressResult<()> {
     let mut i = 0;
     while i < unsigneds.len() {
       let unsigned = unsigneds[i];
@@ -375,7 +373,14 @@ impl<T> Compressor<T> where T: NumberLike {
 
     let order = self.flags.delta_encoding_order;
     let (mut metadata, post_meta_byte_idx) = if order == 0 {
-      let prefixes = train_prefixes(nums.to_vec(), &self.internal_config, &self.flags)?;
+      let unsigneds = nums.iter()
+        .map(|x| x.to_unsigned())
+        .collect::<Vec<_>>();
+      let prefixes = train_prefixes(
+        unsigneds.clone(),
+        &self.internal_config,
+        &self.flags,
+      )?;
       let prefix_metadata = PrefixMetadata::Simple {
         prefixes: prefixes.clone(),
       };
@@ -387,13 +392,16 @@ impl<T> Compressor<T> where T: NumberLike {
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();
       let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
-      chunk_compressor.compress_nums(nums, writer)?;
+      chunk_compressor.compress_nums(&unsigneds, writer)?;
       (metadata, post_meta_idx)
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
       let deltas = delta_encoding::nth_order_deltas(nums, order);
+      let unsigneds = deltas.iter()
+        .map(|x| x.to_unsigned())
+        .collect::<Vec<_>>();
       let prefixes = train_prefixes(
-        deltas.clone(),
+        unsigneds.clone(),
         &self.internal_config,
         &self.flags,
       )?;
@@ -409,7 +417,7 @@ impl<T> Compressor<T> where T: NumberLike {
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();
       let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
-      chunk_compressor.compress_nums(&deltas, writer)?;
+      chunk_compressor.compress_nums(&unsigneds, writer)?;
       (metadata, post_meta_idx)
     };
     metadata.compressed_body_size = writer.byte_size() - post_meta_byte_idx;

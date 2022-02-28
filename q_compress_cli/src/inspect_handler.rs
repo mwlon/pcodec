@@ -1,15 +1,24 @@
 use anyhow::Result;
 
-use q_compress::{BitReader, Decompressor, PrefixMetadata};
+use q_compress::{BitReader, Decompressor, Prefix, PrefixMetadata};
 use q_compress::data_types::NumberLike;
 
 use crate::handlers::HandlerImpl;
 use crate::opt::InspectOpt;
 use crate::utils;
 
+const INDENT: &str = "  ";
+
 pub trait InspectHandler {
   fn header_byte(&self) -> u8; // only used for testing now
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()>;
+}
+
+fn print_prefixes<T: NumberLike>(prefixes: &[Prefix<T>]) {
+  println!("{}{} prefixes:", INDENT, prefixes.len());
+  for p in prefixes {
+    println!("{}{}{}", INDENT, INDENT, p);
+  }
 }
 
 impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
@@ -53,14 +62,15 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
       compressed_size,
       uncompressed_size as f64 / compressed_size as f64,
     );
-    println!("\theader size: {}", header_size);
-    println!("\tchunk metadata size: {}", metadata_size);
+    println!("{}header size: {}", INDENT, header_size);
+    println!("{}chunk metadata size: {}", INDENT, metadata_size);
     println!(
-      "\tchunk body size: {}",
+      "{}chunk body size: {}",
+      INDENT,
       metadatas.iter().map(|m| m.compressed_body_size).sum::<usize>()
     );
-    println!("\tfooter size: 1");
-    println!("\tunknown trailing bytes: {}", bytes.len() - compressed_size);
+    println!("{}footer size: 1", INDENT);
+    println!("{}unknown trailing bytes: {}", INDENT, bytes.len() - compressed_size);
 
     if total_n > 0 && flags.delta_encoding_order == 0 {
       let mut bounds = Vec::new();
@@ -78,6 +88,15 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
       let min_num = bounds.iter().min_by_key(|&&x| x.to_unsigned()).cloned().unwrap();
       let max_num = bounds.iter().max_by_key(|&&x| x.to_unsigned()).cloned().unwrap();
       println!("[min, max] numbers: [{}, {}]", min_num, max_num);
+    }
+
+    for (i, m) in metadatas.iter().enumerate() {
+      println!("\nchunk {}", i);
+      println!("{}n: {}", INDENT, m.n);
+      match &m.prefix_metadata {
+        PrefixMetadata::Simple { prefixes } => print_prefixes(prefixes),
+        PrefixMetadata::Delta {delta_moments: _, prefixes} => print_prefixes(prefixes),
+      }
     }
 
     Ok(())

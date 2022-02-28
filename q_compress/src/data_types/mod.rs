@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-use std::cmp::Ordering::{Greater, Less};
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOrAssign, Shl, Shr, Sub};
 
@@ -113,27 +111,22 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// and timestamps have 96 (not 128).
   const PHYSICAL_BITS: usize;
 
-  /// The unsigned integer this type can convert between to do
-  /// bitwise logic and such.
-  type Unsigned: UnsignedLike;
   /// The signed integer this type can convert between to do wrapped
   /// subtraction and addition for delta encoding/decoding.
   /// Must be another `NumberLike` with the same `Signed` and `Unsigned` as
   /// this type; in this way, if we take 7th order deltas, they are ensured to
   /// have the same type as 1st order deltas.
   type Signed: SignedLike + NumberLike<Signed=Self::Signed, Unsigned=Self::Unsigned>;
+  /// The unsigned integer this type can convert between to do
+  /// bitwise logic and such.
+  type Unsigned: UnsignedLike;
 
   /// Lossless check for bit-exact equality. This is important because not all data types
   /// support full ordering:
   /// <https://stackoverflow.com/questions/26489701/why-does-rust-not-implement-total-ordering-via-the-ord-trait-for-f64-and-f32>.
-  fn num_eq(&self, other: &Self) -> bool;
-
-  /// Lossless numerical comparison. This is important for the same reason as
-  /// `num_eq`.
-  /// We use it to sort numbers and calculate quantiles.
-  /// For example, this function can order the many `f32` and `f64` NaN
-  /// representations.
-  fn num_cmp(&self, other: &Self) -> Ordering;
+  fn num_eq(&self, other: &Self) -> bool {
+    self.to_unsigned() == other.to_unsigned()
+  }
 
   /// Used during compression to convert to an unsigned integer.
   fn to_unsigned(self) -> Self::Unsigned;
@@ -164,21 +157,5 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// `BitWriter`.
   fn write_to(self, writer: &mut BitWriter) {
     writer.write(&bits::bytes_to_bits(self.to_bytes()));
-  }
-
-  fn le(&self, other: &Self) -> bool {
-    !matches!(self.num_cmp(other), Greater)
-  }
-
-  fn lt(&self, other: &Self) -> bool {
-    matches!(self.num_cmp(other), Less)
-  }
-
-  fn ge(&self, other: &Self) -> bool {
-    !matches!(self.num_cmp(other), Less)
-  }
-
-  fn gt(&self, other: &Self) -> bool {
-    matches!(self.num_cmp(other), Greater)
   }
 }

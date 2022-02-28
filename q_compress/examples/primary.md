@@ -12,7 +12,7 @@ codec (9 for gzip, 22 for zstd).
 
 ## Running
 
-TL;DR:
+TL;DR from `/q_compress`:
 * `python generate_randoms.py`
 * `cargo run --release --example primary`
 

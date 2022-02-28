@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -181,14 +180,6 @@ macro_rules! impl_timestamp {
         // TODO configure some check at the end of decompression to make sure
         // all timestamps are within bounds
         Self(signed)
-      }
-
-      fn num_eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
-      }
-
-      fn num_cmp(&self, other: &Self) -> Ordering {
-        self.0.cmp(&other.0)
       }
 
       fn to_bytes(self) -> Vec<u8> {
