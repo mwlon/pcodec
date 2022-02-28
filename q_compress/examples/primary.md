@@ -12,7 +12,8 @@ codec (9 for gzip, 22 for zstd).
 
 ## Running
 
-TL;DR from `/q_compress`:
+TL;DR:
+* `cd q_compress`
 * `python generate_randoms.py`
 * `cargo run --release --example primary`
 
@@ -44,7 +45,7 @@ by default.
 When generating randoms, some comparison file formats were already generated,
 like `.gzip.parquet` in `data/gzip_parquet/`.
 
-If you want to try out pure gzip on the same data,
+To try pure gzip on the same data,
 make sure you have `gzip` and `xargs` installed,
 then simply run `sh run_gzip.sh`.
 This will use gzip to compress the binary version of the data at compression
@@ -52,6 +53,9 @@ levels 1 and 9.
 
 To try pure Snappy,
 you can install the `szip` and `xargs` commands and run `sh run_snappy.sh`.
+
+To try pure ZStandard, run the `compare_zstd` example:
+`cargo run --release --example compare_zstd [compression-level]`
 
 ## Comparing vs other algorithms
 
