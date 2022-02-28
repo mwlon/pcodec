@@ -76,7 +76,7 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
     }
 
     compressor.footer(&mut writer)?;
-    file.write_all(&writer.pop())?;
+    file.write_all(&writer.bytes())?;
     Ok(())
   }
 }
@@ -189,7 +189,7 @@ fn write_chunk<T: NumberLike>(
   writer: &mut BitWriter,
 ) -> Result<()> {
   compressor.chunk(nums, writer)?;
-  file.write_all(&writer.pop())?;
+  file.write_all(&writer.bytes())?;
   *writer = BitWriter::default();
   Ok(())
 }

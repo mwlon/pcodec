@@ -9,7 +9,7 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
   compressor.header(&mut writer).expect("header");
   let metadata = compressor.chunk(&nums, &mut writer).expect("chunk");
   compressor.footer(&mut writer).expect("footer");
-  let compressed = writer.pop();
+  let compressed = writer.bytes();
 
   let decompressor = Decompressor::<T>::default();
   for i in 0..compressed.len() - 1 {

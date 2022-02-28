@@ -304,7 +304,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
 /// compressor.chunk(&chunk_1, &mut writer).expect("chunk failure");
 /// compressor.footer(&mut writer).expect("footer failure");
 ///
-/// let bytes = writer.pop();
+/// let bytes = writer.bytes();
 /// ```
 /// Note that in practice we would need larger chunks than this to
 /// achieve good compression, preferably containing 10k-10M numbers.
@@ -443,6 +443,6 @@ impl<T> Compressor<T> where T: NumberLike {
       });
 
     self.footer(&mut writer).unwrap();
-    writer.pop()
+    writer.bytes()
   }
 }

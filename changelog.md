@@ -4,6 +4,7 @@
 
 * Improved compression speed in most cases (up to 40%)
 * Removed need to implement `num_cmp` and `num_eq` for `NumberLike`
+* Renamed `BitWriter.pop()` to `.bytes()`
 
 ## 0.7.1
 

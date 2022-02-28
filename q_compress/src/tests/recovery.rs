@@ -107,7 +107,7 @@ fn test_multi_chunk() {
   compressor.chunk(&[1, 2, 3], &mut writer).unwrap();
   compressor.chunk(&[11, 12, 13], &mut writer).unwrap();
   compressor.footer(&mut writer).unwrap();
-  let bytes = writer.pop();
+  let bytes = writer.bytes();
 
   let decompressor = Decompressor::<i64>::default();
   let res = decompressor.simple_decompress(&bytes).unwrap();
