@@ -180,8 +180,8 @@ fn main() {
     }
   }
 
-  for f in files {
-    let path = f.unwrap().path();
+  for file in files {
+    let path = file.unwrap().path();
     let path_str = path.to_str().unwrap();
     if !path_str.contains(&substring_filter) {
       println!("skipping file that doesn't match substring: {}", path.display());

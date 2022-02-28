@@ -1,9 +1,11 @@
 # `q_compress` Changelog
 
-## 0.7.1 (not yet released)
+## 0.8.0 (not yet released)
 
-* `BitWriter.pop` is no longer destructive.
-* Added new `NumberLike` implementations: `i16`, `u16`, `u128`
+* Improved compression speed in most cases (up to 40%).
+* Removed need to implement `num_cmp` and `num_eq` for `NumberLike`.
+* Renamed `BitWriter.pop()` to `.bytes()` and made it no longer destructive.
+* Added new `NumberLike` implementations: `i16`, `u16`, `u128`.
 
 ## 0.7.0
 

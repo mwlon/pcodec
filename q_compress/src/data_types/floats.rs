@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::convert::TryInto;
 
 use crate::data_types::NumberLike;
@@ -45,14 +44,6 @@ macro_rules! impl_float_number {
           // negative float
           Self::from_bits(!off)
         }
-      }
-
-      fn num_eq(&self, other: &Self) -> bool {
-        self.to_bits() == other.to_bits()
-      }
-
-      fn num_cmp(&self, other: &Self) -> Ordering {
-        self.to_unsigned().cmp(&other.to_unsigned())
       }
 
       fn to_bytes(self) -> Vec<u8> {

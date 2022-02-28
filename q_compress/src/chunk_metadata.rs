@@ -65,7 +65,7 @@ fn parse_prefixes<T: NumberLike>(
     let lower = T::read_from(reader)?;
     let upper = T::read_from(reader)?;
 
-    if lower.gt(&upper) {
+    if lower.to_unsigned() > upper.to_unsigned() {
       return Err(QCompressError::corruption(format!(
         "prefix lower bound {} may not be greater than upper bound {}",
         lower,

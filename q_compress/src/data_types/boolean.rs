@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::convert::TryInto;
 
 use crate::data_types::{NumberLike, SignedLike};
@@ -25,14 +24,6 @@ impl NumberLike for bool {
   type Signed = bool;
   type Unsigned = u8;
 
-  fn to_signed(self) -> bool {
-    self
-  }
-
-  fn from_signed(signed: bool) -> bool {
-    signed
-  }
-
   fn to_unsigned(self) -> u8 {
     self as u8
   }
@@ -41,12 +32,12 @@ impl NumberLike for bool {
     off > 0
   }
 
-  fn num_eq(&self, other: &Self) -> bool {
-    self.eq(other)
+  fn to_signed(self) -> bool {
+    self
   }
 
-  fn num_cmp(&self, other: &Self) -> Ordering {
-    self.cmp(other)
+  fn from_signed(signed: bool) -> bool {
+    signed
   }
 
   fn to_bytes(self) -> Vec<u8> {

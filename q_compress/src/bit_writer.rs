@@ -168,7 +168,7 @@ impl BitWriter {
   }
 
   /// Returns the bytes produced by the writer.
-  pub fn pop(&self) -> Vec<u8> {
+  pub fn bytes(&self) -> Vec<u8> {
     let byte_size = self.byte_size();
     // We can't just transmute because many machines are little-endian.
     let mut res = self.words.iter()
@@ -191,7 +191,7 @@ mod tests {
     let mut writer = BitWriter::default();
     writer.write(&[true, true, true, true]);
     writer.write_usize(187, 4);
-    let bytes = writer.pop();
+    let bytes = writer.bytes();
     assert_eq!(
       bytes,
       vec![251],
@@ -209,7 +209,7 @@ mod tests {
     writer.write_usize(1 << 1, 13);
     writer.write_usize((1 << 23) + (1 << 15), 24);
 
-    let bytes = writer.pop();
+    let bytes = writer.bytes();
     assert_eq!(
       bytes,
       vec![128, 192, 8, 64, 0, 64, 2, 128, 128, 0],
@@ -229,7 +229,7 @@ mod tests {
     writer.write_usize(5, 4);
     writer.write_usize(5, 4);
 
-    let bytes = writer.pop();
+    let bytes = writer.bytes();
     assert_eq!(
       bytes,
       vec![136, 64, 123, 149, 229, 80],
@@ -241,7 +241,7 @@ mod tests {
     let mut writer = BitWriter::default();
     writer.write_usize(0, 24);
     writer.overwrite_usize(9, 129, 9);
-    let bytes = writer.pop();
+    let bytes = writer.bytes();
     assert_eq!(
       bytes,
       vec![0, 32, 64],

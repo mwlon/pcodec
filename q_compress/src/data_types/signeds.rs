@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::convert::TryInto;
 
 use crate::data_types::{NumberLike, SignedLike};
@@ -39,14 +38,6 @@ macro_rules! impl_signed {
 
       fn from_unsigned(off: Self::Unsigned) -> Self {
         Self::MIN.wrapping_add(off as $t)
-      }
-
-      fn num_eq(&self, other: &Self) -> bool {
-        self.eq(other)
-      }
-
-      fn num_cmp(&self, other: &Self) -> Ordering {
-        self.cmp(other)
       }
 
       fn to_bytes(self) -> Vec<u8> {

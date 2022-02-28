@@ -39,7 +39,7 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
     }
     compressor.footer(&mut writer).unwrap();
 
-    let bytes = writer.pop();
+    let bytes = writer.bytes();
     let mut reader = BitReader::from(&bytes);
 
     let decompressor = Decompressor::<T>::default();
