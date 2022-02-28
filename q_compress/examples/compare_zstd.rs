@@ -1,3 +1,6 @@
+// We could probably combine this, run_snappy.sh, and run_gzip.sh into the
+// primary example and make it print out a table of results.
+
 use std::env;
 use std::fs;
 use std::io::ErrorKind;

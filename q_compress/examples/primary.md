@@ -63,8 +63,8 @@ To try pure ZStandard, run the `compare_zstd` example:
 You can compare file sizes with `ls`:
 ```
 % ls -lh q_compress/examples/data/q_compressed_6 | awk '{print $5 "\t" $9}'
-122K	bool8_random.qco
-122K	bool8_random_del=1.qco
+122K	bool_random.qco
+122K	bool_random_del=1.qco
 4.2M	f64_edge_cases.qco
 6.1M	f64_edge_cases_del=1.qco
 6.6M	f64_normal_at_0.qco
@@ -97,7 +97,7 @@ You can compare file sizes with `ls`:
 2.7M	micros_near_linear_del=1.qco
 
 % ls -lh q_compress/examples/data/zstd_parquet | awk '{print $5 "\t" $9}' 
-126K	bool8_random.zstd.parquet
+126K	bool_random.zstd.parquet
 5.1M	f64_edge_cases.zstd.parquet
 7.6M	f64_normal_at_0.zstd.parquet
 6.8M	f64_normal_at_1000.zstd.parquet
