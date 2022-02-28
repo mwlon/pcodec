@@ -23,8 +23,7 @@ with high compression ratio and moderately fast speed.
 `i16`, `i32`, `i64`, `i128`,
 `u16`, `u32`, `u64`, `u128`,
 `f32`, `f64`,
-`q_compress::TimestampMicros`,
-`q_compress::TimestampNanos`
+`TimestampMicros`, `TimestampNanos`
 
 **Features:**
 * stable file format (`.qco`)
@@ -118,7 +117,7 @@ At the end of the file is a termination byte.
 
 ## Documentation
 
-[q_compress library documentation](https://github.com/mwlon/quantile-compression/tree/main/q_compress)
+[q_compress library documentation](./q_compress/README.md)
 
-[CLI documentation](https://github.com/mwlon/quantile-compression/tree/main/q_compress_cli)
+[CLI documentation](./q_compress_cli/README.md)
 
