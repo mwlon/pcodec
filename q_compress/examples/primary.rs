@@ -8,6 +8,8 @@ use std::time::Instant;
 use q_compress::{Compressor, CompressorConfig, Decompressor};
 use q_compress::data_types::{NumberLike, TimestampMicros};
 
+const BASE_DIR: &str = "q_compress/examples/data";
+
 fn basename_no_ext(path: &Path) -> String {
   let basename = path
     .file_name()
@@ -170,8 +172,8 @@ fn main() {
     "".to_string()
   };
 
-  let files = fs::read_dir("examples/data/binary").expect("couldn't read");
-  let output_dir = format!("examples/data/q_compressed_{}", compression_level);
+  let files = fs::read_dir(format!("{}/binary", BASE_DIR)).expect("couldn't read");
+  let output_dir = format!("{}/q_compressed_{}", BASE_DIR, compression_level);
   match fs::create_dir(&output_dir) {
     Ok(()) => (),
     Err(e) => match e.kind() {
@@ -194,7 +196,7 @@ fn main() {
         I64Handler::handle(&path, &output_dir, config);
       } else if path_str.contains("f64") {
         F64Handler::handle(&path, &output_dir, config);
-      } else if path_str.contains("bool8") {
+      } else if path_str.contains("bool") {
         BoolHandler::handle(&path, &output_dir, config);
       } else if path_str.contains("micros") {
         TimestampMicrosHandler::handle(&path, &output_dir, config);

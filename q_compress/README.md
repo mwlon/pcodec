@@ -3,7 +3,7 @@
 [crates-badge]: https://img.shields.io/crates/v/q-compress.svg
 [crates-url]: https://crates.io/crates/q-compress
 
-# Quantile Compression
+# `q_compress`
 
 ## Usage
 

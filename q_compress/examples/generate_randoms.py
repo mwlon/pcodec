@@ -9,19 +9,21 @@ import os
 
 n = 1000000
 
-os.makedirs('data/txt', exist_ok=True)
-os.makedirs('data/parquet', exist_ok=True)
-os.makedirs('data/snappy_parquet', exist_ok=True)
-os.makedirs('data/gzip_parquet', exist_ok=True)
-os.makedirs('data/zstd_parquet', exist_ok=True)
-os.makedirs('data/binary', exist_ok=True)
+base_dir = 'q_compress/examples/data'
+
+os.makedirs(f'{base_dir}/txt', exist_ok=True)
+os.makedirs(f'{base_dir}/parquet', exist_ok=True)
+os.makedirs(f'{base_dir}/snappy_parquet', exist_ok=True)
+os.makedirs(f'{base_dir}/gzip_parquet', exist_ok=True)
+os.makedirs(f'{base_dir}/zstd_parquet', exist_ok=True)
+os.makedirs(f'{base_dir}/binary', exist_ok=True)
 
 def write_parquet_tables(nums, full_name):
   table = pa.Table.from_pydict({'nums': nums})
-  pq.write_table(table, f'data/parquet/{full_name}.parquet', compression='NONE')
-  pq.write_table(table, f'data/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
-  pq.write_table(table, f'data/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=9)
-  pq.write_table(table, f'data/zstd_parquet/{full_name}.zstd.parquet', compression='zstd', compression_level=22)
+  pq.write_table(table, f'{base_dir}/parquet/{full_name}.parquet', compression='NONE')
+  pq.write_table(table, f'{base_dir}/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
+  pq.write_table(table, f'{base_dir}/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=9)
+  pq.write_table(table, f'{base_dir}/zstd_parquet/{full_name}.zstd.parquet', compression='zstd', compression_level=22)
 
 def write_i64(arr, name):
   if arr.dtype != np.int64:
@@ -31,23 +33,23 @@ def write_i64(arr, name):
   ints = [str(x) for x in floored]
   joined = '\n'.join(ints)
   full_name = f'i64_{name}'
-  with open(f'data/txt/{full_name}.txt', 'w') as f:
+  with open(f'{base_dir}/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'data/binary/{full_name}.bin', 'wb') as f:
+  with open(f'{base_dir}/binary/{full_name}.bin', 'wb') as f:
     f.write(floored.tobytes())
   write_parquet_tables(floored, full_name)
 
-def write_bool8(arr, name):
+def write_bool(arr, name):
   if arr.dtype != np.int8:
     floored = np.floor(arr).astype(np.int8)
   else:
     floored = arr
   ints = [str(x) for x in floored]
   joined = '\n'.join(ints)
-  full_name = f'bool8_{name}'
-  with open(f'data/txt/{full_name}.txt', 'w') as f:
+  full_name = f'bool_{name}'
+  with open(f'{base_dir}/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'data/binary/{full_name}.bin', 'wb') as f:
+  with open(f'{base_dir}/binary/{full_name}.bin', 'wb') as f:
     f.write(floored.tobytes())
   write_parquet_tables(floored, full_name)
 
@@ -56,9 +58,9 @@ def write_f64(arr, name):
   floats = [str(x) for x in arr]
   joined = '\n'.join(floats)
   full_name = f'f64_{name}'
-  with open(f'data/txt/{full_name}.txt', 'w') as f:
+  with open(f'{base_dir}/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'data/binary/{full_name}.bin', 'wb') as f:
+  with open(f'{base_dir}/binary/{full_name}.bin', 'wb') as f:
     f.write(arr.tobytes())
   write_parquet_tables(arr, full_name)
 
@@ -71,9 +73,9 @@ def write_timestamp_micros(arr, name):
   strs = [x.strftime('%Y-%m-%dT%H:%M:%S:%fZ') for x in ts]
   joined = '\n'.join(strs)
   full_name = f'micros_{name}'
-  with open(f'data/txt/{full_name}.txt', 'w') as f:
+  with open(f'{base_dir}/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'data/binary/{full_name}.bin', 'wb') as f:
+  with open(f'{base_dir}/binary/{full_name}.bin', 'wb') as f:
     f.write(floored.tobytes())
   write_parquet_tables(ts, full_name)
 
@@ -133,7 +135,7 @@ edge_case_floats[p < 0.2] = -np.nan  # yes, it is different
 edge_case_floats[p < 0.1] = np.NINF
 write_f64(edge_case_floats, 'edge_cases')
 
-write_bool8(np.random.randint(2, size=n), 'random')
+write_bool(np.random.randint(2, size=n), 'random')
 
 # timestamps increasing 1s at a time on average from 2022-01-01T00:00:00 with
 # 1s random jitter

@@ -1,4 +1,4 @@
-# q_compress CLI
+# `q_compress` CLI
 
 ## Setup
 
