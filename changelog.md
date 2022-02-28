@@ -1,6 +1,6 @@
 # `q_compress` Changelog
 
-## 0.8.0 (not yet released)
+## 0.8.0
 
 * Improved compression speed in most cases (up to 40%).
 * Removed need to implement `num_cmp` and `num_eq` for `NumberLike`.
