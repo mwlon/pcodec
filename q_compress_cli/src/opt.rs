@@ -10,40 +10,40 @@ use anyhow::Result;
   about = "A command line tool to compress, decompress, and inspect .qco files",
 }]
 pub enum Opt {
-  #[structopt(name="compress")]
+  #[structopt(name = "compress")]
   Compress(CompressOpt),
-  // #[structopt(name="decompress")]
-  // Decompress(DecompressOpt),
-  #[structopt(name="inspect")]
+  #[structopt(name = "decompress")]
+  Decompress(DecompressOpt),
+  #[structopt(name = "inspect")]
   Inspect(InspectOpt),
 }
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct CompressOpt {
-  #[structopt(long="csv")]
+  #[structopt(long = "csv")]
   pub csv_path: Option<PathBuf>,
-  #[structopt(long="parquet")]
+  #[structopt(long = "parquet")]
   pub parquet_path: Option<PathBuf>,
 
-  #[structopt(short="l", long="level", default_value="6")]
+  #[structopt(short = "l", long = "level", default_value = "6")]
   pub level: usize,
-  #[structopt(long="delta-order")]
+  #[structopt(long = "delta-order")]
   pub delta_encoding_order: Option<usize>,
-  #[structopt(long="dtype")]
+  #[structopt(long = "dtype")]
   pub dtype: Option<DType>,
-  #[structopt(long="col-name")]
+  #[structopt(long = "col-name")]
   pub col_name: Option<String>,
-  #[structopt(long="col-idx")]
+  #[structopt(long = "col-idx")]
   pub col_idx: Option<usize>,
-  #[structopt(long="chunk-size", default_value="1000000")]
+  #[structopt(long = "chunk-size", default_value = "1000000")]
   pub chunk_size: usize,
-  #[structopt(long="overwrite")]
+  #[structopt(long = "overwrite")]
   pub overwrite: bool,
-  #[structopt(long="csv-has-header")]
+  #[structopt(long = "csv-has-header")]
   pub has_csv_header: bool,
-  #[structopt(long="csv-timestamp-format", default_value="%Y-%m-%dT%H:%M:%s%.f%z")]
+  #[structopt(long = "csv-timestamp-format", default_value = "%Y-%m-%dT%H:%M:%s%.f%z")]
   pub timestamp_format: String,
-  #[structopt(long="csv-delimiter", default_value=",")]
+  #[structopt(long = "csv-delimiter", default_value = ",")]
   pub delimiter: char,
 
   pub qco_path: PathBuf,
@@ -59,6 +59,23 @@ impl CompressOpt {
 
     Ok(res)
   }
+}
+
+#[derive(Clone, Debug, StructOpt)]
+pub struct DecompressOpt {
+  #[structopt(long = "stdout")]
+  pub use_stdout: bool,
+  #[structopt(long = "txt")]
+  pub txt_path: Option<PathBuf>,
+
+  #[structopt(long = "limit")]
+  pub limit: Option<usize>,
+  #[structopt(long = "timestamp-format", default_value = "%Y-%m-%dT%H:%M:%s%.f%z")]
+  pub timestamp_format: String,
+  #[structopt(long = "overwrite")]
+  pub overwrite: bool,
+
+  pub qco_path: PathBuf,
 }
 
 #[derive(Clone, Debug, StructOpt)]
