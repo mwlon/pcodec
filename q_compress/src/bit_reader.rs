@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::bits;
 use crate::bits::{LEFT_MASKS, RIGHT_MASKS};
-use crate::constants::{PREFIX_TABLE_SIZE_LOG, BITS_TO_ENCODE_N_ENTRIES};
+use crate::constants::BITS_TO_ENCODE_N_ENTRIES;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::data_types::UnsignedLike;
 
@@ -190,15 +190,18 @@ impl<'a> BitReader<'a> {
   }
 
   // returns (bits read, idx)
-  pub(crate) fn read_prefix_table_idx(&mut self) -> QCompressResult<(usize, usize)> {
+  pub(crate) fn read_prefix_table_idx(
+    &mut self,
+    table_size_log: usize,
+  ) -> QCompressResult<(usize, usize)> {
     self.refresh_if_needed();
 
-    let n_plus_j = PREFIX_TABLE_SIZE_LOG + self.j;
+    let n_plus_j = table_size_log + self.j;
     if n_plus_j <= 8 {
       let shift = 8 - n_plus_j;
       let res = (self.byte()? & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift;
       self.j = n_plus_j;
-      Ok((PREFIX_TABLE_SIZE_LOG, res as usize))
+      Ok((table_size_log, res as usize))
     } else {
       let remaining = n_plus_j - 8;
       let mut res = ((self.byte()? & LEFT_MASKS[self.j]) as usize) << remaining;
@@ -207,10 +210,10 @@ impl<'a> BitReader<'a> {
         let shift = 8 - remaining;
         res |= ((self.unchecked_byte() & RIGHT_MASKS[remaining]) >> shift) as usize;
         self.j = remaining;
-        Ok((PREFIX_TABLE_SIZE_LOG, res))
+        Ok((table_size_log, res))
       } else {
         self.j = 0;
-        Ok((PREFIX_TABLE_SIZE_LOG - remaining, res))
+        Ok((table_size_log - remaining, res))
       }
     }
   }
@@ -280,10 +283,13 @@ impl<'a> BitReader<'a> {
     }
   }
 
-  pub(crate) fn unchecked_read_prefix_table_idx(&mut self) -> usize {
+  pub(crate) fn unchecked_read_prefix_table_idx(
+    &mut self,
+    table_size_log: usize,
+  ) -> usize {
     self.refresh_if_needed();
 
-    let n_plus_j = PREFIX_TABLE_SIZE_LOG + self.j;
+    let n_plus_j = table_size_log + self.j;
     if n_plus_j <= 8 {
       let shift = 8 - n_plus_j;
       let res = (self.unchecked_byte() & LEFT_MASKS[self.j] & RIGHT_MASKS[n_plus_j]) >> shift;
