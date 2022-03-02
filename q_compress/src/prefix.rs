@@ -173,6 +173,7 @@ pub struct PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
   pub k: usize,
   pub depth: usize,
   pub run_len_jumpstart: Option<usize>,
+  pub most_significant: Diff,
 }
 
 impl<Diff: UnsignedLike> Default for PrefixDecompressionInfo<Diff> {
@@ -183,6 +184,7 @@ impl<Diff: UnsignedLike> Default for PrefixDecompressionInfo<Diff> {
       k: Diff::BITS,
       depth: 0,
       run_len_jumpstart: None,
+      most_significant: Diff::ZERO,
     }
   }
 }
@@ -192,12 +194,18 @@ impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: Numbe
     let lower_unsigned = p.lower.to_unsigned();
     let upper_unsigned = p.upper.to_unsigned();
     let KInfo { k, only_k_bits_lower: _, only_k_bits_upper: _ } = p.k_info();
+    let most_significant = if k == T::PHYSICAL_BITS {
+      T::Unsigned::ZERO
+    } else {
+      T::Unsigned::ONE << k
+    };
     PrefixDecompressionInfo {
       lower_unsigned,
       range: upper_unsigned - lower_unsigned,
       k,
       run_len_jumpstart: p.run_len_jumpstart,
       depth: p.code.len(),
+      most_significant,
     }
   }
 }

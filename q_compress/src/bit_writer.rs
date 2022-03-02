@@ -1,3 +1,5 @@
+use crate::bits;
+use crate::bits::BASE_BIT_MASK;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::data_types::UnsignedLike;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WORD_SIZE};
@@ -75,7 +77,7 @@ impl BitWriter {
     self.refresh_if_needed();
 
     if b {
-      *self.last_mut() |= 1_usize << (WORD_SIZE - 1 - self.j);
+      *self.last_mut() |= BASE_BIT_MASK >> self.j;
     }
 
     self.j += 1;
@@ -143,7 +145,7 @@ impl BitWriter {
   }
 
   pub(crate) fn finish_byte(&mut self) {
-    self.j = ((self.j + 7) / 8) * 8;
+    self.j = bits::ceil_div(self.j, 8) * 8;
   }
 
   pub(crate) fn overwrite_usize(&mut self, bit_idx: usize, x: usize, n: usize) {
@@ -170,14 +172,8 @@ impl BitWriter {
   /// Returns the bytes produced by the writer.
   pub fn bytes(&self) -> Vec<u8> {
     let byte_size = self.byte_size();
-    // We can't just transmute because many machines are little-endian.
-    let mut res = self.words.iter()
-      .map(|w| w.to_be_bytes())
-      .flatten()
-      .collect::<Vec<_>>();
-    unsafe {
-      res.set_len(byte_size);
-    }
+    let mut res = bits::words_to_bytes(&self.words);
+    res.truncate(byte_size);
     res
   }
 }
