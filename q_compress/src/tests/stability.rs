@@ -71,7 +71,7 @@ fn test_insufficient_data_long_offsets() {
   let n = 1000;
   let mut nums = Vec::new();
   for i in 0..n {
-    nums.push(0 + (u64::MAX / n) * i);
+    nums.push((u64::MAX / n) * i);
   }
 
 

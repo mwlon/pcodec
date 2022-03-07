@@ -42,12 +42,14 @@ pub trait SignedLike {
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
-Copy + Debug + Display + From<u8> + Ord + PartialOrd +
+Copy + Debug + Display + Ord + PartialOrd +
 Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
   const BITS: usize;
+
+  fn from_word(word: usize) -> Self;
 
   fn to_f64(self) -> f64;
 

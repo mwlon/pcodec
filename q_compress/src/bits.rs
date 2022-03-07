@@ -1,40 +1,10 @@
+use crate::constants::WORD_SIZE;
 use crate::data_types::UnsignedLike;
 
-const BIT_MASKS: [u8; 8] = [
-  0x80,
-  0x40,
-  0x20,
-  0x10,
-  0x08,
-  0x04,
-  0x02,
-  0x01,
-];
-pub const LEFT_MASKS: [u8; 9] = [
-  0xff,
-  0x7f,
-  0x3f,
-  0x1f,
-  0x0f,
-  0x07,
-  0x03,
-  0x01,
-  0x00,
-];
-pub const RIGHT_MASKS: [u8; 9] = [
-  0x00,
-  0x80,
-  0xc0,
-  0xe0,
-  0xf0,
-  0xf8,
-  0xfc,
-  0xfe,
-  0xff,
-];
+pub const BASE_BIT_MASK: usize = 1 << (WORD_SIZE - 1);
 
-pub fn bit_from_byte(byte: u8, j: usize) -> bool {
-  (byte & BIT_MASKS[j]) > 0
+pub fn bit_from_word(word: usize, j: usize) -> bool {
+  (word & (BASE_BIT_MASK >> j)) > 0
 }
 
 pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
@@ -59,8 +29,8 @@ pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
 pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
   let mut res = Vec::with_capacity(bytes.len() * 8);
   for b in bytes {
-    for &mask in &BIT_MASKS {
-      res.push(b & mask > 0);
+    for i in 0_usize..8 {
+      res.push(b & (1 << (7 - i)) > 0);
     }
   }
   res
@@ -120,6 +90,17 @@ pub fn avg_depth_bits(weight: usize, total_weight: usize) -> f64 {
   bumpy_log(total_weight as f64 / weight as f64)
 }
 
+pub fn ceil_div(x: usize, divisor: usize) -> usize {
+  (x + divisor - 1) / divisor
+}
+
+pub fn words_to_bytes(words: &[usize]) -> Vec<u8> {
+  // We can't just transmute because many machines are little-endian.
+  words.iter()
+    .flat_map(|w| w.to_be_bytes())
+    .collect::<Vec<_>>()
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -159,14 +140,14 @@ mod tests {
   #[test]
   fn test_bits_to_bytes_to_bits() {
     let bits_28 = vec![false, false, false, true, true, true, false, false];
-    let byte_28 = bits_to_bytes(bits_28.clone());
+    let byte_28 = bits_to_bytes(bits_28);
     assert_eq!(
       byte_28,
       vec![28]
     );
 
     let bits_28_128 = vec![false, false, false, true, true, true, false, false, true];
-    let byte_28_128 = bits_to_bytes(bits_28_128.clone());
+    let byte_28_128 = bits_to_bytes(bits_28_128);
     assert_eq!(
       byte_28_128,
       vec![28, 128]
