@@ -75,6 +75,19 @@ fn max_bits_read<T: NumberLike>(p: &Prefix<T>) -> usize {
   prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
 }
 
+// For the prefix, the maximum number of bits we might overshoot by during an
+// unchecked read.
+// Helps decide whether to do checked or unchecked reads.
+// We could make a slightly tighter bound with more logic, but I don't think there
+// are any cases where it would help much.
+fn max_bits_overshot<T: NumberLike>(p: &Prefix<T>) -> usize {
+  if p.code.is_empty() {
+    0
+  } else {
+    (MAX_PREFIX_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info().k)
+  }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct IncompletePrefix<Diff: UnsignedLike> {
   prefix: PrefixDecompressionInfo<Diff>,
@@ -88,6 +101,7 @@ pub struct NumDecompressor<T> where T: NumberLike {
   n: usize,
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
+  max_overshoot_per_num_block: usize,
 
   // mutable state
   nums_processed: usize,
@@ -113,12 +127,17 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       .map(max_bits_read)
       .max()
       .unwrap_or(usize::MAX);
+    let max_overshoot_per_num_block = prefixes.iter()
+      .map(max_bits_overshot)
+      .max()
+      .unwrap_or(usize::MAX);
 
     Ok(NumDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
       n,
       compressed_body_size,
       max_bits_per_num_block,
+      max_overshoot_per_num_block,
       nums_processed: 0,
       bits_processed: 0,
       incomplete_prefix: None,
@@ -284,7 +303,8 @@ impl<T> NumDecompressor<T> where T: NumberLike {
         let remaining_nums = batch_size - res.len();
         let guaranteed_safe_num_blocks = min(
           remaining_nums,
-          reader.bits_remaining() / self.max_bits_per_num_block,
+          reader.bits_remaining().saturating_sub(self.max_overshoot_per_num_block) /
+            self.max_bits_per_num_block,
         );
 
         if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {

@@ -6,7 +6,8 @@
 sparse case).
 * `BitReader` changes: now reads from `&[usize]` instead of `&[u8]`,
 necessitating a new wrapper type `BitWords` containing both a `Vec<usize>` and
-information about the total number of bits.
+information about the total number of bits. `.read_aligned_bytes()` now returns
+a `Vec<u8>` instead of a slice.
 * `UnsignedLike` changes: no longer requires `From<u8>`, now requires
 `from_word(word: usize) -> Self` instead.
 

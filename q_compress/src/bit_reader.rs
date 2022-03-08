@@ -64,7 +64,7 @@ impl<'a> BitReader<'a> {
 
   /// Returns the number of bytes in the reader.
   pub fn byte_size(&self) -> usize {
-    self.total_bits / 8
+    bits::ceil_div(self.total_bits, 8)
   }
 
   fn refresh_if_needed(&mut self) {
