@@ -7,6 +7,7 @@ use q_compress::data_types::{TimestampMicros, TimestampNanos};
 
 use crate::arrow_number_like::ArrowNumberLike;
 use crate::compress_handler::CompressHandler;
+use crate::decompress_handler::DecompressHandler;
 use crate::dtype::DType;
 use crate::inspect_handler::InspectHandler;
 
@@ -37,7 +38,7 @@ pub fn from_dtype(dtype: DType) -> Box<dyn Handler> {
   }
 }
 
-pub trait Handler: InspectHandler + CompressHandler {}
+pub trait Handler: CompressHandler + DecompressHandler + InspectHandler {}
 
 #[derive(Clone, Debug, Default)]
 pub struct HandlerImpl<T> {
