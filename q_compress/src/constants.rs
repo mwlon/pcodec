@@ -12,8 +12,10 @@ pub const MAX_JUMPSTART: usize = BITS_TO_ENCODE_N_ENTRIES;
 pub const BITS_TO_ENCODE_JUMPSTART: usize = 5;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: usize = 32;
 
-pub const PREFIX_TABLE_SIZE_LOG: usize = 4; // tuned to maximize performance on intel i5
-pub const PREFIX_TABLE_SIZE: usize = 1_usize << PREFIX_TABLE_SIZE_LOG;
+// MAX_PREFIX_TABLE_SIZE_LOG is a performance tuning parameter
+// Too high, and we use excessive memory and in some cases hurt performance.
+// Too low, and performance drops.
+pub const MAX_PREFIX_TABLE_SIZE_LOG: usize = 6;
 
 pub const WORD_SIZE: usize = usize::BITS as usize;
 pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
@@ -48,8 +50,8 @@ mod tests {
   }
 
   #[test]
-  fn test_prefix_table_size_fits_in_byte() {
-    assert!(PREFIX_TABLE_SIZE_LOG > 0);
-    assert!(PREFIX_TABLE_SIZE_LOG <= 8);
+  fn test_prefix_table_size_fits_in_word() {
+    assert!(MAX_PREFIX_TABLE_SIZE_LOG > 0);
+    assert!(MAX_PREFIX_TABLE_SIZE_LOG <= WORD_SIZE);
   }
 }

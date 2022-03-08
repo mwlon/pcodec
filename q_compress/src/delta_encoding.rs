@@ -49,9 +49,7 @@ fn first_order_deltas_in_place<T: NumberLike<Signed=T> + SignedLike>(nums: &mut 
   for i in 0..nums.len() - 1 {
     nums[i] = nums[i + 1].wrapping_sub(nums[i]);
   }
-  unsafe {
-    nums.set_len(nums.len() - 1);
-  }
+  nums.truncate(nums.len() - 1);
 }
 
 // only valid for order >= 1
