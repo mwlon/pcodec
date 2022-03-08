@@ -1,12 +1,15 @@
 use arrow::datatypes as arrow_dtypes;
+use arrow::datatypes::ArrowPrimitiveType;
 
 use q_compress::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 
 pub trait ArrowNumberLike: NumberLike {
   const IS_ARROW: bool;
-  type ArrowPrimitive: arrow_dtypes::ArrowPrimitiveType;
+  type ArrowPrimitive: ArrowPrimitiveType;
 
-  fn from_arrow(native: <Self::ArrowPrimitive as arrow_dtypes::ArrowPrimitiveType>::Native) -> Self;
+  fn from_arrow(native: <Self::ArrowPrimitive as ArrowPrimitiveType>::Native) -> Self;
+  
+  fn to_arrow(self) -> <Self::ArrowPrimitive as ArrowPrimitiveType>::Native;
 }
 
 macro_rules! trivial_arrow {
@@ -17,6 +20,10 @@ macro_rules! trivial_arrow {
 
       fn from_arrow(native: Self) -> Self {
         native
+      }
+      
+      fn to_arrow(self) -> Self {
+        self
       }
     }
   }
@@ -29,6 +36,10 @@ macro_rules! no_arrow {
       type ArrowPrimitive = arrow_dtypes::Float32Type; // fake
 
       fn from_arrow(_: f32) -> Self {
+        unreachable!()
+      }
+      
+      fn to_arrow(self) -> f32 {
         unreachable!()
       }
     }
@@ -54,6 +65,10 @@ impl ArrowNumberLike for TimestampMicros {
   fn from_arrow(native: i64) -> Self {
     TimestampMicros::new(native as i128).unwrap()
   }
+
+  fn to_arrow(self) -> i64 {
+    self.to_total_parts() as i64
+  }
 }
 
 impl ArrowNumberLike for TimestampNanos {
@@ -62,5 +77,9 @@ impl ArrowNumberLike for TimestampNanos {
 
   fn from_arrow(native: i64) -> Self {
     TimestampNanos::new(native as i128).unwrap()
+  }
+
+  fn to_arrow(self) -> <Self::ArrowPrimitive as ArrowPrimitiveType>::Native {
+    self.to_total_parts() as i64
   }
 }

@@ -25,19 +25,19 @@ pub struct CompressOpt {
   #[structopt(long = "parquet")]
   pub parquet_path: Option<PathBuf>,
 
-  #[structopt(short = "l", long = "level", default_value = "6")]
+  #[structopt(long, default_value = "6")]
   pub level: usize,
   #[structopt(long = "delta-order")]
   pub delta_encoding_order: Option<usize>,
-  #[structopt(long = "dtype")]
+  #[structopt(long)]
   pub dtype: Option<DType>,
-  #[structopt(long = "col-name")]
+  #[structopt(long)]
   pub col_name: Option<String>,
-  #[structopt(long = "col-idx")]
+  #[structopt(long)]
   pub col_idx: Option<usize>,
-  #[structopt(long = "chunk-size", default_value = "1000000")]
+  #[structopt(long, default_value = "1000000")]
   pub chunk_size: usize,
-  #[structopt(long = "overwrite")]
+  #[structopt(long)]
   pub overwrite: bool,
   #[structopt(long = "csv-has-header")]
   pub has_csv_header: bool,
@@ -63,17 +63,10 @@ impl CompressOpt {
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct DecompressOpt {
-  #[structopt(long = "stdout")]
-  pub use_stdout: bool,
-  #[structopt(long = "txt")]
-  pub txt_path: Option<PathBuf>,
-
   #[structopt(long = "limit")]
   pub limit: Option<usize>,
-  #[structopt(long = "timestamp-format", default_value = "%Y-%m-%dT%H:%M:%s%.f%z")]
+  #[structopt(long = "timestamp-format", default_value = "%Y-%m-%dT%H:%M:%s%.f")]
   pub timestamp_format: String,
-  #[structopt(long = "overwrite")]
-  pub overwrite: bool,
 
   pub qco_path: PathBuf,
 }

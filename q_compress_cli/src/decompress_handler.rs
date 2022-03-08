@@ -1,9 +1,14 @@
 use std::marker::PhantomData;
-use std::path::Path;
+use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use arrow::array::PrimitiveArray;
+use arrow::datatypes::{Field, Schema};
+use arrow::datatypes::ArrowPrimitiveType;
+use arrow::record_batch::RecordBatch;
+use arrow::csv::WriterBuilder as CsvWriterBuilder;
 
-use q_compress::{BitReader, Decompressor};
+use q_compress::{BitReader, BitWords, Decompressor};
 
 use crate::arrow_number_like::ArrowNumberLike;
 use crate::handlers::HandlerImpl;
@@ -16,29 +21,26 @@ pub trait DecompressHandler {
 impl<T: ArrowNumberLike> DecompressHandler for HandlerImpl<T> {
   fn decompress(&self, opt: &DecompressOpt, bytes: &[u8]) -> Result<()> {
     let decompressor = Decompressor::<T>::default();
-    let mut reader = BitReader::from(bytes);
+    let words = BitWords::from(bytes);
+    let mut reader = BitReader::from(&words);
     let flags = decompressor.header(&mut reader)?;
-    let mut remaining = if let Some(limit) = opt.limit {
-      limit
-    } else {
-      usize::MAX
-    };
 
     let mut writer = new_column_writer(opt)?;
+    let mut remaining_limit = opt.limit.unwrap_or(usize::MAX);
 
     loop {
-      if remaining == 0 {
+      if remaining_limit == 0 {
         break;
       }
 
       if let Some(chunk) = decompressor.chunk(&mut reader, &flags)? {
         let nums = chunk.nums;
-        let num_slice = if nums.len() <= remaining {
-          remaining -= nums.len();
+        let num_slice = if nums.len() <= remaining_limit {
+          remaining_limit -= nums.len();
           nums.as_slice()
         } else {
-          let res = &nums[0..remaining];
-          remaining = 0;
+          let res = &nums[0..remaining_limit];
+          remaining_limit = 0;
           res
         };
         writer.write(num_slice)?;
@@ -52,52 +54,59 @@ impl<T: ArrowNumberLike> DecompressHandler for HandlerImpl<T> {
   }
 }
 
-fn new_column_writer<T: ArrowNumberLike>(opt: &DecompressOpt) -> Result<Box<dyn ColumnWriter<T>>>{
-  match (&opt.use_stdout, &opt.txt_path) {
-    (true, None) => Ok(Box::new(StdoutWriter::default())),
-    (false, Some(txt_path)) => Ok(Box::new(TxtWriter::new(opt, txt_path)?)),
-    _ => Err(anyhow!("missing or incomplete input options")),
-  }
+fn new_column_writer<T: ArrowNumberLike>(opt: &DecompressOpt) -> Result<Box<dyn ColumnWriter<T>>> {
+  // eventually we'll likely have a txt writer and a parquet writer, etc.
+  Ok(Box::new(StdoutWriter::from_opt(opt)))
 }
 
 trait ColumnWriter<T: ArrowNumberLike> {
+  fn from_opt(opt: &DecompressOpt) -> Self where Self: Sized;
   fn write(&mut self, nums: &[T]) -> Result<()>;
   fn close(&mut self) -> Result<()>;
 }
 
 #[derive(Default)]
 struct StdoutWriter<T: ArrowNumberLike> {
+  timestamp_format: String,
   phantom: PhantomData<T>,
 }
 
 impl<T: ArrowNumberLike> ColumnWriter<T> for StdoutWriter<T> {
-  fn write(&mut self, nums: &[T]) -> Result<()> {
-    for num in nums {
-      println!("{}", num);
+  fn from_opt(opt: &DecompressOpt) -> Self {
+    Self {
+      timestamp_format: opt.timestamp_format.clone(),
+      ..Default::default()
     }
-    Ok(())
   }
 
-  fn close(&mut self) -> Result<()> {
-    Ok(())
-  }
-}
-
-#[derive(Default)]
-struct TxtWriter<T: ArrowNumberLike> {
-  phantom: PhantomData<T>,
-}
-
-impl<T: ArrowNumberLike> TxtWriter<T> {
-  fn new(opt: &DecompressOpt, path: &Path) -> Result<Self> {
-    Ok(Self::default())
-  }
-}
-
-impl<T: ArrowNumberLike> ColumnWriter<T> for TxtWriter<T> {
   fn write(&mut self, nums: &[T]) -> Result<()> {
-    for num in nums {
-      println!("{}", num);
+    if T::IS_ARROW {
+      let schema = Schema::new(vec![
+        Field::new("c0", T::ArrowPrimitive::DATA_TYPE, false)
+      ]);
+      let arrow_natives = nums.iter()
+        .map(|x| x.to_arrow());
+      let c0 = PrimitiveArray::<T::ArrowPrimitive>::from_iter_values(
+        arrow_natives
+      );
+      let batch = RecordBatch::try_new(
+        Arc::new(schema),
+        vec![Arc::new(c0)],
+      )?;
+      let mut stdout_bytes = Vec::<u8>::new();
+      {
+        let mut writer = CsvWriterBuilder::new()
+          .has_headers(false)
+          .with_timestamp_format(self.timestamp_format.clone())
+          .build(&mut stdout_bytes);
+          // &mut stdout_bytes);
+        writer.write(&batch)?;
+      }
+      print!("{}", String::from_utf8(stdout_bytes)?);
+    } else {
+      for num in nums {
+        println!("{}", num);
+      }
     }
     Ok(())
   }
