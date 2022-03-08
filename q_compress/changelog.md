@@ -4,7 +4,11 @@
 
 * Improved decompression speed (20-25% in interesting cases, up to 50% in
 sparse case).
-* `BitReader` API changes: no more lifetime parameter and now 
+* `BitReader` changes: now reads from `&[usize]` instead of `&[u8]`,
+necessitating a new wrapper type `BitWords` containing both a `Vec<usize>` and
+information about the total number of bits.
+* `UnsignedLike` changes: no longer requires `From<u8>`, now requires
+`from_word(word: usize) -> Self` instead.
 
 ## 0.8.0
 
