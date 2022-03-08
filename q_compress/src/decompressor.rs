@@ -70,13 +70,8 @@ fn max_bits_read<T: NumberLike>(p: &Prefix<T>) -> usize {
   } else {
     k_info.k + 1
   };
-  let overshoot_prefix_bits = ((prefix_bits + MAX_PREFIX_TABLE_SIZE_LOG - 1)
-    / MAX_PREFIX_TABLE_SIZE_LOG) * MAX_PREFIX_TABLE_SIZE_LOG;
 
-  max(
-    prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset,
-    overshoot_prefix_bits,
-  )
+  prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -270,7 +265,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       let mut temp = Vec::with_capacity(1);
       self.unchecked_decompress_num_block(reader, &mut temp, 1);
       let constant_num = temp[0];
-      for _ in 0..batch_size {
+      while res.len() < batch_size {
         res.push(constant_num);
       }
     } else {
