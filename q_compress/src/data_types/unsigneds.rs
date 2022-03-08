@@ -11,6 +11,10 @@ macro_rules! impl_unsigned {
       const MAX: Self = Self::MAX;
       const BITS: usize = Self::BITS as usize;
 
+      fn from_word(word: usize) -> Self {
+        word as Self
+      }
+
       fn to_f64(self) -> f64 {
         self as f64
       }

@@ -1,4 +1,5 @@
 use crate::{BitReader, BitWriter, Compressor, CompressorConfig, Decompressor};
+use crate::bit_words::BitWords;
 use crate::data_types::NumberLike;
 
 #[test]
@@ -40,7 +41,8 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
     compressor.footer(&mut writer).unwrap();
 
     let bytes = writer.bytes();
-    let mut reader = BitReader::from(&bytes);
+    let words = BitWords::from(&bytes);
+    let mut reader = BitReader::from(&words);
 
     let decompressor = Decompressor::<T>::default();
     let flags = decompressor.header(&mut reader).unwrap();

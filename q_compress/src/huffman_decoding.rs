@@ -1,8 +1,7 @@
-use std::mem;
-use std::mem::MaybeUninit;
+use std::cmp::min;
 
 use crate::BitReader;
-use crate::constants::{PREFIX_TABLE_SIZE, PREFIX_TABLE_SIZE_LOG};
+use crate::constants::MAX_PREFIX_TABLE_SIZE_LOG;
 use crate::prefix::{PrefixDecompressionInfo, Prefix};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressResult, QCompressError};
@@ -10,7 +9,10 @@ use crate::errors::{QCompressResult, QCompressError};
 #[derive(Clone, Debug)]
 pub enum HuffmanTable<Diff: UnsignedLike> {
   Leaf(PrefixDecompressionInfo<Diff>),
-  NonLeaf(Box<[HuffmanTable<Diff>; PREFIX_TABLE_SIZE]>),
+  NonLeaf {
+    table_size_log: usize,
+    children: Vec<HuffmanTable<Diff>>,
+  },
 }
 
 impl<Diff: UnsignedLike> Default for HuffmanTable<Diff> {
@@ -29,18 +31,18 @@ impl<Diff: UnsignedLike> HuffmanTable<Diff> {
           reader.rewind(read_depth - decompression_info.depth);
           return Ok(*decompression_info);
         },
-        HuffmanTable::NonLeaf(children) => {
-          let (bits_read, idx) = reader.read_prefix_table_idx()?;
+        HuffmanTable::NonLeaf { table_size_log, children} => {
+          let (bits_read, idx) = reader.read_prefix_table_idx(*table_size_log)?;
           read_depth += bits_read;
           node = &children[idx];
-          if bits_read != PREFIX_TABLE_SIZE_LOG {
+          if bits_read != *table_size_log {
             return match node {
               HuffmanTable::Leaf(decompression_info)
               if decompression_info.depth == read_depth => Ok(*decompression_info),
               HuffmanTable::Leaf(_) => Err(QCompressError::insufficient_data(
                 "search_with_reader(): ran out of data parsing Huffman prefix (reached leaf)"
               )),
-              HuffmanTable::NonLeaf(_) => Err(QCompressError::insufficient_data(
+              HuffmanTable::NonLeaf {table_size_log: _, children: _} => Err(QCompressError::insufficient_data(
                 "search_with_reader(): ran out of data parsing Huffman prefix (reached parent)"
               )),
             }
@@ -59,9 +61,9 @@ impl<Diff: UnsignedLike> HuffmanTable<Diff> {
           reader.rewind(read_depth - decompression_info.depth);
           return *decompression_info;
         },
-        HuffmanTable::NonLeaf(children) => {
-          node = &children[reader.unchecked_read_prefix_table_idx()];
-          read_depth += PREFIX_TABLE_SIZE_LOG;
+        HuffmanTable::NonLeaf { table_size_log, children } => {
+          node = &children[reader.unchecked_read_prefix_table_idx(*table_size_log)];
+          read_depth += table_size_log;
         },
       }
     }
@@ -84,13 +86,21 @@ where T: NumberLike {
     let prefix = &prefixes[0];
     HuffmanTable::Leaf(PrefixDecompressionInfo::from(prefix))
   } else {
-    let mut data: [MaybeUninit<HuffmanTable<T::Unsigned>>; PREFIX_TABLE_SIZE] = unsafe {
-      MaybeUninit::uninit().assume_init()
-    };
-    for (idx, uninit_box) in data.iter_mut().enumerate() {
+    let max_depth = prefixes.iter()
+      .map(|p| p.code.len())
+      .max()
+      .unwrap();
+    let table_size_log: usize = min(
+      MAX_PREFIX_TABLE_SIZE_LOG,
+      max_depth - depth,
+    );
+    let table_size = 1 << table_size_log;
+
+    let mut children = Vec::new();
+    for idx in 0..table_size {
       let mut sub_bits = Vec::new();
-      for depth_incr in 0..PREFIX_TABLE_SIZE_LOG {
-        sub_bits.push((idx >> (PREFIX_TABLE_SIZE_LOG - 1 - depth_incr)) & 1 > 0);
+      for depth_incr in 0..table_size_log {
+        sub_bits.push((idx >> (table_size_log - 1 - depth_incr)) & 1 > 0);
       }
       let possible_prefixes = prefixes.iter()
         .filter(|&p| {
@@ -106,13 +116,13 @@ where T: NumberLike {
         .collect::<Vec<Prefix<T>>>();
       let child = build_from_prefixes_recursive(
         &possible_prefixes,
-        depth + PREFIX_TABLE_SIZE_LOG,
+        depth + table_size_log,
       );
-      uninit_box.write(child);
+      children.push(child);
     }
-    let children = unsafe {
-      mem::transmute_copy::<_, [HuffmanTable<T::Unsigned>; PREFIX_TABLE_SIZE]>(&data)
-    };
-    HuffmanTable::NonLeaf(Box::new(children))
+    HuffmanTable::NonLeaf {
+      table_size_log,
+      children,
+    }
   }
 }

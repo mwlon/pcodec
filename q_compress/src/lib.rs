@@ -4,6 +4,7 @@
 #[doc = include_str!("../README.md")]
 
 pub use bit_reader::BitReader;
+pub use bit_words::BitWords;
 pub use bit_writer::BitWriter;
 pub use chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
 pub use compressor::{Compressor, CompressorConfig};
@@ -15,6 +16,7 @@ pub mod data_types;
 pub mod errors;
 
 mod bit_reader;
+mod bit_words;
 mod bit_writer;
 mod bits;
 mod chunk_metadata;

@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use crate::{bits, Flags};
 use crate::bit_reader::BitReader;
+use crate::bit_words::BitWords;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -70,13 +71,21 @@ fn max_bits_read<T: NumberLike>(p: &Prefix<T>) -> usize {
   } else {
     k_info.k + 1
   };
-  let overshoot_prefix_bits = ((prefix_bits + PREFIX_TABLE_SIZE_LOG - 1)
-    / PREFIX_TABLE_SIZE_LOG) * PREFIX_TABLE_SIZE_LOG;
 
-  max(
-    prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset,
-    overshoot_prefix_bits,
-  )
+  prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
+}
+
+// For the prefix, the maximum number of bits we might overshoot by during an
+// unchecked read.
+// Helps decide whether to do checked or unchecked reads.
+// We could make a slightly tighter bound with more logic, but I don't think there
+// are any cases where it would help much.
+fn max_bits_overshot<T: NumberLike>(p: &Prefix<T>) -> usize {
+  if p.code.is_empty() {
+    0
+  } else {
+    (MAX_PREFIX_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info().k)
+  }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -92,6 +101,7 @@ pub struct NumDecompressor<T> where T: NumberLike {
   n: usize,
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
+  max_overshoot_per_num_block: usize,
 
   // mutable state
   nums_processed: usize,
@@ -117,12 +127,17 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       .map(max_bits_read)
       .max()
       .unwrap_or(usize::MAX);
+    let max_overshoot_per_num_block = prefixes.iter()
+      .map(max_bits_overshot)
+      .max()
+      .unwrap_or(usize::MAX);
 
     Ok(NumDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
       n,
       compressed_body_size,
       max_bits_per_num_block,
+      max_overshoot_per_num_block,
       nums_processed: 0,
       bits_processed: 0,
       incomplete_prefix: None,
@@ -154,15 +169,15 @@ impl<T> NumDecompressor<T> where T: NumberLike {
   ) {
     let p = self.huffman_table.unchecked_search_with_reader(reader);
 
-    let reps = match p.run_len_jumpstart {
-      None => 1,
+    match p.run_len_jumpstart {
+      None => self.unchecked_decompress_offsets(reader, res, p, 1),
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        self.limit_reps(p, full_reps, batch_size - res.len())
+        let reps = self.limit_reps(p, full_reps, batch_size - res.len());
+        self.unchecked_decompress_offsets(reader, res, p, reps);
       },
     };
-    self.unchecked_decompress_offsets(reader, res, p, reps);
   }
 
   fn unchecked_decompress_offsets(
@@ -172,16 +187,24 @@ impl<T> NumDecompressor<T> where T: NumberLike {
     p: PrefixDecompressionInfo<T::Unsigned>,
     reps: usize,
   ) {
-    for _ in 0..reps {
-      let mut offset = reader.unchecked_read_diff(p.k);
-      if p.k < T::Unsigned::BITS {
-        let most_significant = T::Unsigned::ONE << p.k;
-        if p.range - offset >= most_significant && reader.unchecked_read_one() {
-          offset |= most_significant;
-        }
+    if reps > 1 && p.k == 0 {
+      // this branch is purely for performance reasons
+      // the reps > 1 check also improves performance
+      let num = T::from_unsigned(p.lower_unsigned);
+      for _ in 0..reps {
+        res.push(num);
       }
-      let num = T::from_unsigned(p.lower_unsigned + offset);
-      res.push(num);
+    } else {
+      for _ in 0..reps {
+        let mut offset = reader.unchecked_read_diff(p.k);
+        if p.k < T::Unsigned::BITS &&
+          p.range - offset >= p.most_significant &&
+          reader.unchecked_read_one() {
+          offset |= p.most_significant;
+        }
+        let num = T::from_unsigned(p.lower_unsigned + offset);
+        res.push(num);
+      }
     }
   }
 
@@ -272,7 +295,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       let mut temp = Vec::with_capacity(1);
       self.unchecked_decompress_num_block(reader, &mut temp, 1);
       let constant_num = temp[0];
-      for _ in 0..batch_size {
+      while res.len() < batch_size {
         res.push(constant_num);
       }
     } else {
@@ -280,7 +303,8 @@ impl<T> NumDecompressor<T> where T: NumberLike {
         let remaining_nums = batch_size - res.len();
         let guaranteed_safe_num_blocks = min(
           remaining_nums,
-          reader.bits_remaining() / self.max_bits_per_num_block,
+          reader.bits_remaining().saturating_sub(self.max_overshoot_per_num_block) /
+            self.max_bits_per_num_block,
         );
 
         if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
@@ -424,10 +448,11 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
 /// ```
 /// You can also get full control over the decompression process:
 /// ```
-/// use q_compress::{BitReader, Decompressor};
+/// use q_compress::{BitReader, BitWords, Decompressor};
 ///
 /// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
-/// let mut reader = BitReader::from(&my_bytes);
+/// let my_words = BitWords::from(&my_bytes);
+/// let mut reader = BitReader::from(&my_words);
 /// let decompressor = Decompressor::<i32>::default();
 ///
 /// let flags = decompressor.header(&mut reader).expect("header failure");
@@ -519,12 +544,13 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// chunk at a time.
   ///
   /// ```
-  /// use q_compress::{BitReader, Decompressor};
+  /// use q_compress::{BitReader, BitWords, Decompressor};
   ///
   /// // .qco bytes for the boolean `true` repeated 2^24 - 1 times.
   /// // We'll read just the first 3.
   /// let my_bytes = vec![113, 99, 111, 33, 7, 0, 44, 255, 255, 255, 0, 0, 0, 0, 0, 3, 255, 255, 254, 2, 2, 0, 46];
-  /// let mut reader = BitReader::from(&my_bytes);
+  /// let my_words = BitWords::from(&my_bytes);
+  /// let mut reader = BitReader::from(&my_words);
   /// let decompressor = Decompressor::<bool>::default();
   ///
   /// let flags = decompressor.header(&mut reader).unwrap();
@@ -602,7 +628,8 @@ impl<T> Decompressor<T> where T: NumberLike {
   pub fn simple_decompress(&self, bytes: &[u8]) -> QCompressResult<Vec<T>> {
     // cloning/extending by a single chunk's numbers can slow down by 2%
     // so we just take ownership of the first chunk's numbers instead
-    let mut reader = BitReader::from(bytes);
+    let words = BitWords::from(bytes);
+    let mut reader = BitReader::from(&words);
     let mut res: Option<Vec<T>> = None;
     let flags = self.header(&mut reader)?;
     while let Some(chunk) = self.chunk(&mut reader, &flags)? {
@@ -623,6 +650,7 @@ impl<T> Decompressor<T> where T: NumberLike {
 #[cfg(test)]
 mod tests {
   use crate::{BitReader, Decompressor, Flags};
+  use crate::bit_words::BitWords;
   use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
   use crate::errors::{ErrorKind, QCompressResult};
   use crate::prefix::Prefix;
@@ -666,8 +694,10 @@ mod tests {
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
+      let words = BitWords::from(&bytes);
+      let mut reader = BitReader::from(&words);
       let result = decompressor.chunk_body(
-        &mut BitReader::from(&bytes),
+        &mut reader,
         &flags,
         &bad_metadata,
       );

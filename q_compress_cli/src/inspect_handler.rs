@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use q_compress::{BitReader, Decompressor, Prefix, PrefixMetadata};
+use q_compress::{BitReader, BitWords, Decompressor, Prefix, PrefixMetadata};
 use q_compress::data_types::NumberLike;
 
 use crate::handlers::HandlerImpl;
@@ -30,7 +30,8 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
     let decompressor = Decompressor::<T>::default();
     println!("inspecting {:?}", opt.path);
 
-    let mut reader = BitReader::from(bytes);
+    let words = BitWords::from(bytes);
+    let mut reader = BitReader::from(&words);
     let flags = decompressor.header(&mut reader)?;
     println!("=================\n");
     println!("data type: {}", utils::dtype_name::<T>());

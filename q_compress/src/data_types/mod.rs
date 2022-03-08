@@ -42,16 +42,21 @@ pub trait SignedLike {
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
-Copy + Debug + Display + From<u8> + Ord + PartialOrd +
+Copy + Debug + Display + Ord + PartialOrd +
 Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
   const BITS: usize;
 
+  /// Converts a `usize` into this type. Panics if the conversion is
+  /// impossible.
+  fn from_word(word: usize) -> Self;
+
   fn to_f64(self) -> f64;
 
-  /// Shifts the unsigned integer right and returns its lowest bits as a usize.
+  /// Shifts the unsigned integer right and returns its lowest bits as a
+  /// `usize`.
   /// For example,
   /// ```
   /// use q_compress::data_types::UnsignedLike;
@@ -62,7 +67,8 @@ Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
   /// Used for some bit arithmetic operations during compression.
   fn rshift_word(self, shift: usize) -> usize;
 
-  /// Shifts the unsigned integer left and returns its lowest bits as a usize.
+  /// Shifts the unsigned integer left and returns its lowest bits as a
+  /// `usize`.
   /// For example,
   /// ```
   /// use q_compress::data_types::UnsignedLike;
@@ -93,7 +99,7 @@ Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// A number from 0-255 that corresponds to the number's data type.
   ///
-  /// Each `NumberLike` implementation should have a different `HeaderByte`.
+  /// Each `NumberLike` implementation should have a different `HEADER_BYTE`.
   /// This byte gets written into the file's header during compression, and
   /// if the wrong header byte shows up during decompression, the decompressor
   /// will return an error.
