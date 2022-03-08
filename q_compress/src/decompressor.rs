@@ -150,32 +150,42 @@ impl<T> NumDecompressor<T> where T: NumberLike {
     let p = self.huffman_table.unchecked_search_with_reader(reader);
 
     match p.run_len_jumpstart {
-      None => self.unchecked_decompress_offset(reader, res, p),
+      None => self.unchecked_decompress_offsets(reader, res, p, 1),
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
         let reps = self.limit_reps(p, full_reps, batch_size - res.len());
-        for _ in 0..reps {
-          self.unchecked_decompress_offset(reader, res, p);
-        }
+        self.unchecked_decompress_offsets(reader, res, p, reps);
       },
     };
   }
 
-  fn unchecked_decompress_offset(
+  fn unchecked_decompress_offsets(
     &self,
     reader: &mut BitReader,
     res: &mut Vec<T>,
     p: PrefixDecompressionInfo<T::Unsigned>,
+    reps: usize,
   ) {
-    let mut offset = reader.unchecked_read_diff(p.k);
-    if p.k < T::Unsigned::BITS &&
-      p.range - offset >= p.most_significant &&
-      reader.unchecked_read_one() {
-      offset |= p.most_significant;
+    if reps > 1 && p.k == 0 {
+      // this branch is purely for performance reasons
+      // the reps > 1 check also improves performance
+      let num = T::from_unsigned(p.lower_unsigned);
+      for _ in 0..reps {
+        res.push(num);
+      }
+    } else {
+      for _ in 0..reps {
+        let mut offset = reader.unchecked_read_diff(p.k);
+        if p.k < T::Unsigned::BITS &&
+          p.range - offset >= p.most_significant &&
+          reader.unchecked_read_one() {
+          offset |= p.most_significant;
+        }
+        let num = T::from_unsigned(p.lower_unsigned + offset);
+        res.push(num);
+      }
     }
-    let num = T::from_unsigned(p.lower_unsigned + offset);
-    res.push(num);
   }
 
   fn decompress_num_block(
