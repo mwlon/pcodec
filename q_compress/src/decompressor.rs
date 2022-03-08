@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use crate::{bits, Flags};
 use crate::bit_reader::BitReader;
+use crate::bit_words::BitWords;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -427,10 +428,11 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
 /// ```
 /// You can also get full control over the decompression process:
 /// ```
-/// use q_compress::{BitReader, Decompressor};
+/// use q_compress::{BitReader, BitWords, Decompressor};
 ///
 /// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
-/// let mut reader = BitReader::from(&my_bytes);
+/// let my_words = BitWords::from(&my_bytes);
+/// let mut reader = BitReader::from(&my_words);
 /// let decompressor = Decompressor::<i32>::default();
 ///
 /// let flags = decompressor.header(&mut reader).expect("header failure");
@@ -522,12 +524,13 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// chunk at a time.
   ///
   /// ```
-  /// use q_compress::{BitReader, Decompressor};
+  /// use q_compress::{BitReader, BitWords, Decompressor};
   ///
   /// // .qco bytes for the boolean `true` repeated 2^24 - 1 times.
   /// // We'll read just the first 3.
   /// let my_bytes = vec![113, 99, 111, 33, 7, 0, 44, 255, 255, 255, 0, 0, 0, 0, 0, 3, 255, 255, 254, 2, 2, 0, 46];
-  /// let mut reader = BitReader::from(&my_bytes);
+  /// let my_words = BitWords::from(&my_bytes);
+  /// let mut reader = BitReader::from(&my_words);
   /// let decompressor = Decompressor::<bool>::default();
   ///
   /// let flags = decompressor.header(&mut reader).unwrap();
@@ -605,7 +608,8 @@ impl<T> Decompressor<T> where T: NumberLike {
   pub fn simple_decompress(&self, bytes: &[u8]) -> QCompressResult<Vec<T>> {
     // cloning/extending by a single chunk's numbers can slow down by 2%
     // so we just take ownership of the first chunk's numbers instead
-    let mut reader = BitReader::from(bytes);
+    let words = BitWords::from(bytes);
+    let mut reader = BitReader::from(&words);
     let mut res: Option<Vec<T>> = None;
     let flags = self.header(&mut reader)?;
     while let Some(chunk) = self.chunk(&mut reader, &flags)? {
@@ -626,6 +630,7 @@ impl<T> Decompressor<T> where T: NumberLike {
 #[cfg(test)]
 mod tests {
   use crate::{BitReader, Decompressor, Flags};
+  use crate::bit_words::BitWords;
   use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
   use crate::errors::{ErrorKind, QCompressResult};
   use crate::prefix::Prefix;
@@ -669,8 +674,10 @@ mod tests {
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
+      let words = BitWords::from(&bytes);
+      let mut reader = BitReader::from(&words);
       let result = decompressor.chunk_body(
-        &mut BitReader::from(&bytes),
+        &mut reader,
         &flags,
         &bad_metadata,
       );

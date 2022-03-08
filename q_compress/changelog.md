@@ -1,5 +1,11 @@
 # `q_compress` Changelog
 
+## 0.9.0 (not yet released)
+
+* Improved decompression speed (20-25% in interesting cases, up to 50% in
+sparse case).
+* `BitReader` API changes: no more lifetime parameter and now 
+
 ## 0.8.0
 
 * Improved compression speed in most cases (up to 40%).

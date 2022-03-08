@@ -1,4 +1,4 @@
-use q_compress::{BitWriter, BitReader, Compressor, Decompressor};
+use q_compress::{BitWriter, BitReader, Compressor, Decompressor, BitWords};
 use rand::Rng;
 use std::time::Instant;
 
@@ -21,7 +21,8 @@ fn main() {
 
   // now read back only the metadata
   let bytes = writer.bytes();
-  let mut reader = BitReader::from(&bytes);
+  let words = BitWords::from(&bytes);
+  let mut reader = BitReader::from(&words);
   let start_t = Instant::now();
   let decompressor = Decompressor::<f64>::default();
   let flags = decompressor.header(&mut reader).expect("flags");

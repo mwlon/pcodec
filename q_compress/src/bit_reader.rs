@@ -1,63 +1,42 @@
 use std::cmp::min;
-use std::convert::TryInto;
+use crate::bit_words::BitWords;
 
 use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 
-// TODO fix docstrings
-/// `BitReader` wraps bytes during decompression, enabling a decompressor
-/// to read bit-level information and maintain its position in the bytes.
+/// `BitReader` wraps compressed data during decompression, enabling a
+/// decompressor to read bit-level information and maintain its position in the
+/// data.
 ///
-/// It does this by maintaining
-/// * a byte index and
-/// * a bit index from 0-8 within that byte.
+/// It does this with a slice of `usize`s representing the data and
+/// maintaining
+/// * an index into the slice and
+/// * a bit index from 0 to `usize::BITS` within that `usize`.
 ///
 /// The reader is consider is considered "aligned" if the current bit index
-/// is 0 or 8 (i.e. at the start or end of the current byte).
+/// is byte-aligned; e.g. `bit_idx % 8 == 0`.
 #[derive(Clone)]
-pub struct BitReader {
-  words: Vec<usize>,
+pub struct BitReader<'a> {
+  words: &'a [usize],
   i: usize,
   j: usize,
   total_bits: usize,
 }
 
-impl From<&[u8]> for BitReader {
-  fn from(bytes: &[u8]) -> BitReader {
-    let total_bits = 8 * bytes.len();
-    let n_words = bits::ceil_div(total_bits, WORD_SIZE);
-    let mut words = Vec::with_capacity(n_words);
-    words.extend(
-      bytes
-        .chunks_exact(BYTES_PER_WORD)
-        .map(|word_bytes| usize::from_be_bytes(word_bytes.try_into().unwrap()))
-    );
-    if words.len() < n_words {
-      let mut last_bytes = bytes[words.len() * BYTES_PER_WORD..].to_vec();
-      while last_bytes.len() < BYTES_PER_WORD {
-        last_bytes.push(0);
-      }
-      words.push(usize::from_be_bytes(last_bytes.try_into().unwrap()));
-    }
-
+impl<'a> From<&'a BitWords> for BitReader<'a> {
+  fn from(bit_words: &'a BitWords) -> Self {
     BitReader {
-      words,
+      words: &bit_words.words,
       i: 0,
       j: 0,
-      total_bits,
+      total_bits: bit_words.total_bits,
     }
   }
 }
 
-impl<B: AsRef<[u8]>> From<&B> for BitReader {
-  fn from(bytes: &B) -> BitReader {
-    bytes.as_ref().into()
-  }
-}
-
-impl BitReader {
+impl<'a> BitReader<'a> {
   /// Returns the reader's current byte index. Will return an error if the
   /// reader is at
   /// a misaligned position.
@@ -109,7 +88,7 @@ impl BitReader {
     }
   }
 
-  /// Returns a slice into the next `n` bytes. Will return an error if
+  /// Returns the next `n` bytes. Will return an error if
   /// there are not enough bytes remaining in the reader or the reader is
   /// misaligned.
   pub fn read_aligned_bytes(&mut self, n: usize) -> QCompressResult<Vec<u8>> {
@@ -340,8 +319,8 @@ impl BitReader {
     self.j = forward_bit_idx.rem_euclid(WORD_SIZE);
   }
 
-  /// Skips backward `n` bits. Will panic if the resulting position is less
-  /// than 0.
+  /// Skips backward `n` bits. Will panic if the resulting position is out of
+  /// bounds.
   pub fn rewind(&mut self, n: usize) {
     if n <= self.j {
       self.j -= n;
@@ -355,6 +334,7 @@ impl BitReader {
 
 #[cfg(test)]
 mod tests {
+  use crate::bit_words::BitWords;
   use crate::BitReader;
   use crate::errors::QCompressResult;
 
@@ -362,7 +342,8 @@ mod tests {
   fn test_bit_reader() -> QCompressResult<()>{
     // bits: 1001 1010  0110 1011  0010 1101
     let bytes = vec![0x9a, 0x6b, 0x2d];
-    let mut bit_reader = BitReader::from(&bytes);
+    let words = BitWords::from(&bytes);
+    let mut bit_reader = BitReader::from(&words);
     assert_eq!(
       bit_reader.read_aligned_bytes(1)?,
       vec![0x9a],
@@ -392,7 +373,8 @@ mod tests {
   #[test]
   fn test_seek_rewind() {
     let bytes = vec![0; 6];
-    let mut reader = BitReader::from(&bytes);
+    let words = BitWords::from(&bytes);
+    let mut reader = BitReader::from(&words);
     reader.seek(43);
 
     reader.rewind(2);
