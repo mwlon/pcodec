@@ -6,14 +6,14 @@ use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 
-/// `BitReader` wraps compressed data during decompression, enabling a
-/// decompressor to read bit-level information and maintain its position in the
-/// data.
+/// Wrapper around compressed data, enabling a
+/// [`Decompressor`][crate::Decompressor] to read
+/// bit-level information and maintain its position in the data.
 ///
 /// It does this with a slice of `usize`s representing the data and
 /// maintaining
 /// * an index into the slice and
-/// * a bit index from 0 to `usize::BITS` within that `usize`.
+/// * a bit index from 0 to `usize::BITS` within the current `usize`.
 ///
 /// The reader is consider is considered "aligned" if the current bit index
 /// is byte-aligned; e.g. `bit_idx % 8 == 0`.

@@ -2,7 +2,7 @@ use crate::bits;
 use std::convert::TryInto;
 use crate::constants::{BYTES_PER_WORD, WORD_SIZE};
 
-/// A wrapper around a Vec<usize> with a specific number of bits.
+/// Wrapper around a `Vec<usize>` with a specific number of bits.
 ///
 /// This is used during decompression because doing bit-level operations on a
 /// `Vec<usize>` is faster than on a `Vec<u8>`; `usize` represents the

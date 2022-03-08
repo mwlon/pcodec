@@ -4,8 +4,8 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::data_types::UnsignedLike;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WORD_SIZE};
 
-/// `BitWriter` builds a `Vec<usize>`, enabling a compressor to write bit-level
-/// information and ultimately output a `Vec<u8>`.
+/// Builds compressed data, enabling a [`Compressor`][crate::Compressor] to
+/// write bit-level information and ultimately output a `Vec<u8>`.
 ///
 /// It does this by maintaining a bit index from 0 to `usize::BITS` within its
 /// most recent `usize`.
