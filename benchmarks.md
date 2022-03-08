@@ -18,7 +18,7 @@ For the `i64` heavy-tail integers, a lomax distribution with alpha parameter 0.5
 
 `i64` and `f64` are each 8 bytes, so for the more interesting distributions
 (e.g. heavy-tail integers and standard normal),
-this is a decompression speed of 200-300MB/s.
+this is a decompression speed of 250-350MB/s.
 
 For reference, on the same hardware and heavy-tail integers dataset, ZStandard
 `0.10.0+zstd.1.5.2` gets:
