@@ -63,9 +63,9 @@ impl CompressOpt {
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct DecompressOpt {
-  #[structopt(long = "limit")]
+  #[structopt(long)]
   pub limit: Option<usize>,
-  #[structopt(long = "timestamp-format", default_value = "%Y-%m-%dT%H:%M:%s%.f")]
+  #[structopt(long, default_value = "%Y-%m-%dT%H:%M:%s%.f")]
   pub timestamp_format: String,
 
   pub qco_path: PathBuf,
