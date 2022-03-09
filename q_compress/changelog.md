@@ -1,6 +1,6 @@
 # `q_compress` Changelog
 
-## 0.9.0 (not yet released)
+## 0.9.0
 
 * Improved decompression speed (20-25% in interesting cases, up to 50% in
 sparse case).
