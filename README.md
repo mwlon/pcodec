@@ -1,3 +1,10 @@
+[![Crates.io][crates-badge]][crates-url]
+
+[crates-badge]: https://img.shields.io/crates/v/q-compress.svg
+[crates-url]: https://crates.io/crates/q-compress
+
+
+
 # Quantile Compression
 
 <div style="text-align:center">
@@ -30,6 +37,12 @@ with high compression ratio and moderately fast speed.
 * preserves ordering and exact bit representation (including `NaN` floats)
 * supports nth-order delta encoding up to order 7 (e.g. 2nd order is delta-of-deltas)
 * compresses faster or slower depending on compression level from 0 to 12
+
+## Get Started
+
+[Use the CLI](./q_compress_cli/README.md)
+
+[Use the rust API](./q_compress/README.md)
 
 ## Performance
 
@@ -113,11 +126,3 @@ Then an offset (for each repetition if necessary) follows,
 specifying the exact value within the range.
 
 At the end of the file is a termination byte.
-
-
-## Documentation
-
-[q_compress library documentation](./q_compress/README.md)
-
-[CLI documentation](./q_compress_cli/README.md)
-
