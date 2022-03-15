@@ -1,6 +1,6 @@
 # `q_compress` Changelog
 
-## 0.9.1 (not yet released)
+## 0.9.1
 
 * Introduced a new always-on flag that reduces file size by a few % in cases
 of small data by using the minimal number of bits required to encode prefix
