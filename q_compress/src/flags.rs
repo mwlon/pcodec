@@ -7,7 +7,7 @@ use std::convert::{TryFrom, TryInto};
 
 use crate::{BitReader, BitWriter, CompressorConfig};
 use crate::bits;
-use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
+use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
 
 /// The configuration stored in a .qco file's header.
@@ -23,30 +23,50 @@ use crate::errors::{QCompressError, QCompressResult};
 /// decompression.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Flags {
-  /// Whether to use 5 bits to encode the length of a prefix,
+  /// Whether to use 5 bits to encode the length of a prefix Huffman code,
   /// as opposed to 4.
   /// Earlier versions of `q_compress` used 4, which was insufficient for
-  /// Huffman prefixes that could reach up to 23 in length
+  /// Huffman codes that could reach up to 23 in length
   /// (23 >= 16 = 2^4)
   /// in spiky distributions with high compression level.
   /// In later versions, this flag is always true.
-  pub use_5_bit_prefix_len: bool,
+  /// Introduced in 0.5.0.
+  pub use_5_bit_code_len: bool,
   /// How many times delta encoding was applied during compression.
   /// This is stored as 3 bits to express 0-7
   /// See `CompressorConfig` for more details.
+  /// Introduced in 0.6.0.
   pub delta_encoding_order: usize,
+  /// Whether to use the minimum number of bits to encode the count of each
+  /// prefix, rather than using a constant number of bits.
+  /// This can reduce file size slightly for small data.
+  /// In later versions, this flag is always true.
+  /// Introduced in 0.9.1.
+  pub use_min_count_encoding: bool,
 }
 
 impl TryFrom<Vec<bool>> for Flags {
   type Error = QCompressError;
 
   fn try_from(bools: Vec<bool>) -> QCompressResult<Self> {
-    // would be nice to make a bit reader to do this instead of keeping track of index manually
-    let use_5_bit_prefix_len = bools[0];
-    let delta_end_idx = 1 + BITS_TO_ENCODE_DELTA_ENCODING_ORDER;
-    let delta_encoding_bits = &bools[1..delta_end_idx];
-    let delta_encoding_order = bits::bits_to_usize(delta_encoding_bits);
-    for &bit in bools.iter().skip(delta_end_idx) {
+    let mut flags = Flags {
+      use_5_bit_code_len: false,
+      delta_encoding_order: 0,
+      use_min_count_encoding: false,
+    };
+
+    let mut bit_iter = bools.iter();
+    flags.use_5_bit_code_len = bit_iter.next() == Some(&true);
+
+    let mut delta_encoding_bits = Vec::new();
+    while delta_encoding_bits.len() < BITS_TO_ENCODE_DELTA_ENCODING_ORDER {
+      delta_encoding_bits.push(bit_iter.next().cloned().unwrap_or(false));
+    }
+    flags.delta_encoding_order = bits::bits_to_usize(&delta_encoding_bits);
+
+    flags.use_min_count_encoding = bit_iter.next() == Some(&true);
+
+    for &bit in bit_iter {
       if bit {
         return Err(QCompressError::compatibility(
           "cannot parse flags; likely written by newer version of q_compress"
@@ -54,10 +74,7 @@ impl TryFrom<Vec<bool>> for Flags {
       }
     }
 
-    Ok(Self {
-      use_5_bit_prefix_len,
-      delta_encoding_order,
-    })
+    Ok(flags)
   }
 }
 
@@ -65,7 +82,8 @@ impl TryInto<Vec<bool>> for &Flags {
   type Error = QCompressError;
 
   fn try_into(self) -> QCompressResult<Vec<bool>> {
-    let mut res = vec![self.use_5_bit_prefix_len];
+    let mut res = vec![self.use_5_bit_code_len];
+
     if self.delta_encoding_order > MAX_DELTA_ENCODING_ORDER {
       return Err(QCompressError::invalid_argument(format!(
         "delta encoding order may not exceed {} (was {})",
@@ -75,6 +93,15 @@ impl TryInto<Vec<bool>> for &Flags {
     }
     let delta_bits = bits::usize_truncated_to_bits(self.delta_encoding_order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
     res.extend(delta_bits);
+
+    res.push(self.use_min_count_encoding);
+
+    let necessary_len = res.iter()
+      .rposition(|&bit| bit)
+      .map(|idx| idx + 1)
+      .unwrap_or(0);
+    res.truncate(necessary_len);
+
     Ok(res)
   }
 }
@@ -110,11 +137,19 @@ impl Flags {
   }
 
 
-  pub fn bits_to_encode_prefix_len(&self) -> usize {
-    if self.use_5_bit_prefix_len {
+  pub fn bits_to_encode_code_len(&self) -> usize {
+    if self.use_5_bit_code_len {
       5
     } else {
       4
+    }
+  }
+
+  pub fn bits_to_encode_count(&self, n: usize) -> usize {
+    if self.use_min_count_encoding {
+      ((n + 1) as f64).log2().ceil() as usize
+    } else {
+      BITS_TO_ENCODE_N_ENTRIES
     }
   }
 }
@@ -122,8 +157,9 @@ impl Flags {
 impl From<&CompressorConfig> for Flags {
   fn from(config: &CompressorConfig) -> Self {
     Flags {
-      use_5_bit_prefix_len: true,
+      use_5_bit_code_len: true,
       delta_encoding_order: config.delta_encoding_order,
+      use_min_count_encoding: true,
     }
   }
 }

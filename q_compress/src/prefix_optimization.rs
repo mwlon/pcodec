@@ -1,8 +1,7 @@
+use crate::{Flags, Prefix};
+use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::data_types::NumberLike;
 use crate::prefix::WeightedPrefix;
-use crate::{Flags, Prefix};
-use crate::bits::{avg_offset_bits, avg_depth_bits};
-use crate::constants::BITS_TO_ENCODE_N_ENTRIES;
 
 fn prefix_bit_cost<T: NumberLike>(
   base_meta_cost: f64,
@@ -22,6 +21,7 @@ fn prefix_bit_cost<T: NumberLike>(
 pub fn optimize_prefixes<T: NumberLike>(
   wprefixes: Vec<WeightedPrefix<T>>,
   flags: &Flags,
+  n: usize,
 ) -> Vec<WeightedPrefix<T>> {
   let mut c = 0;
   let mut cum_weight = Vec::with_capacity(wprefixes.len() + 1);
@@ -43,9 +43,10 @@ pub fn optimize_prefixes<T: NumberLike>(
   best_costs.push(0.0);
   best_paths.push(Vec::new());
 
-  let base_meta_cost = BITS_TO_ENCODE_N_ENTRIES as f64 +
+  let bits_to_encode_count = flags.bits_to_encode_count(n);
+  let base_meta_cost = bits_to_encode_count as f64 +
     2.0 * T::PHYSICAL_BITS as f64 + // lower and upper bounds
-    flags.bits_to_encode_prefix_len() as f64 +
+    flags.bits_to_encode_code_len() as f64 +
     1.0; // bit to say there is no run len jumpstart
   for i in 0..wprefixes.len() {
     let mut best_cost = f64::MAX;

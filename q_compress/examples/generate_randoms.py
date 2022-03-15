@@ -7,6 +7,7 @@ from pyarrow import parquet as pq
 from datetime import datetime
 import os
 
+np.random.seed(0)
 n = 1000000
 
 base_dir = 'q_compress/examples/data'
