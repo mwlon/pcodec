@@ -4,6 +4,8 @@ use rand::Rng;
 use std::time::{SystemTime, Duration};
 use std::ops::AddAssign;
 
+const BASE_DIR: &str = "q_compress/assets";
+
 fn write_case<T: NumberLike>(version: &str, case_version: &str, name: &str, nums: Vec<T>, config: CompressorConfig) {
   if version != case_version {
     return;
@@ -12,16 +14,15 @@ fn write_case<T: NumberLike>(version: &str, case_version: &str, name: &str, nums
   let compressor = Compressor::<T>::from_config(config);
   let compressed = compressor.simple_compress(&nums);
   let raw = nums.iter()
-    // .map(|&x| T::bytes_from(x)) // for 0.4 to 0.5
-    .map(|&x| x.to_bytes()) // for 0.6+
-    .flatten()
+    // .flat_map(|&x| T::bytes_from(x)) // for 0.4 to 0.5
+    .flat_map(|&x| x.to_bytes()) // for 0.6+
     .collect::<Vec<u8>>();
   std::fs::write(
-    format!("assets/v{}_{}.qco", version, name),
+    format!("{}/v{}_{}.qco", BASE_DIR, version, name),
     compressed,
   ).expect("write qco");
   std::fs::write(
-    format!("assets/v{}_{}.bin", version, name),
+    format!("{}/v{}_{}.bin", BASE_DIR, version, name),
     raw,
   ).expect("write bin");
 }
@@ -97,4 +98,19 @@ fn main() {
       ..Default::default()
     },
   );
+
+  let mut dispersed_shorts = Vec::new();
+  for _ in 0..64 {
+    for i in 0_u16..20 {
+      dispersed_shorts.push(i * 4);
+    }
+  }
+  // really using 0.9.1
+  write_case(
+    &version,
+    "0.9",
+    "dispersed_shorts",
+    dispersed_shorts,
+    CompressorConfig::default(),
+  )
 }

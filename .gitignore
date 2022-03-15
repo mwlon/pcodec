@@ -1,6 +1,7 @@
 /target
 q_compress/examples/data/**
 q_compress/examples/venv/**
+q_compress/Cargo.lock
 .idea
 *.iml
 temp

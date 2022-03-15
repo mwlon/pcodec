@@ -114,15 +114,15 @@ fn push_pref<T: NumberLike>(
   i: usize,
   j: usize,
   max_n_pref: usize,
-  n: usize,
+  n_unsigneds: usize,
   sorted: &[T::Unsigned],
 ) {
   let count = j - i;
-  let frequency = count as f64 / n as f64;
-  let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_pref) / n);
+  let frequency = count as f64 / n_unsigneds as f64;
+  let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_pref) / n_unsigneds);
   let lower = T::from_unsigned(sorted[i]);
   let upper = T::from_unsigned(sorted[j - 1]);
-  if n < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n {
+  if n_unsigneds < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n_unsigneds {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
     seq.push(WeightedPrefix::new(
@@ -135,7 +135,7 @@ fn push_pref<T: NumberLike>(
   } else {
     // The weird case - a range that represents almost all (but not all) the data.
     // We create extra prefixes that can describe `reps` copies of the range at once.
-    let config = choose_run_len_jumpstart(count, n);
+    let config = choose_run_len_jumpstart(count, n_unsigneds);
     seq.push(WeightedPrefix::new(
       count,
       config.weight,
@@ -151,6 +151,7 @@ fn train_prefixes<T: NumberLike>(
   unsigneds: Vec<T::Unsigned>,
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
+  n: usize, // can be greater than unsigneds.len() if delta encoding is on
 ) -> QCompressResult<Vec<Prefix<T>>> {
   if unsigneds.is_empty() {
     return Ok(Vec::new());
@@ -164,7 +165,6 @@ fn train_prefixes<T: NumberLike>(
       comp_level,
     )));
   }
-  let n = unsigneds.len();
   if n > MAX_ENTRIES {
     return Err(QCompressError::invalid_argument(format!(
       "count may not exceed {} per chunk (was {})",
@@ -173,9 +173,10 @@ fn train_prefixes<T: NumberLike>(
     )));
   }
 
+  let n_unsigneds = unsigneds.len();
   let mut sorted = unsigneds;
   sorted.sort_unstable();
-  let safe_comp_level = min(comp_level, (n as f64).log2() as usize);
+  let safe_comp_level = min(comp_level, (n_unsigneds as f64).log2() as usize);
   let max_n_pref = 1_usize << safe_comp_level;
   let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
   let pref_ptr = &mut raw_prefs;
@@ -185,26 +186,27 @@ fn train_prefixes<T: NumberLike>(
 
   let mut i = 0;
   let mut backup_j = 0_usize;
-  for j in 0..n {
-    let target_j = ((*pref_idx_ptr + 1) * n) / max_n_pref;
+  for j in 0..n_unsigneds {
+    let target_j = ((*pref_idx_ptr + 1) * n_unsigneds) / max_n_pref;
     if j > 0 && sorted[j] == sorted[j - 1] {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        push_pref(pref_ptr, pref_idx_ptr, i, backup_j, max_n_pref, n, &sorted);
+        push_pref(pref_ptr, pref_idx_ptr, i, backup_j, max_n_pref, n_unsigneds, &sorted);
         i = backup_j;
       }
     } else {
       backup_j = j;
       if j >= target_j {
-        push_pref(pref_ptr, pref_idx_ptr, i, j, max_n_pref, n, &sorted);
+        push_pref(pref_ptr, pref_idx_ptr, i, j, max_n_pref, n_unsigneds, &sorted);
         i = j;
       }
     }
   }
-  push_pref(pref_ptr, pref_idx_ptr, i, n, max_n_pref, n, &sorted);
+  push_pref(pref_ptr, pref_idx_ptr, i, n_unsigneds, max_n_pref, n_unsigneds, &sorted);
 
   let mut optimized_prefs = prefix_optimization::optimize_prefixes(
     raw_prefs,
     flags,
+    n,
   );
 
   huffman_encoding::make_huffman_code(&mut optimized_prefs);
@@ -380,6 +382,7 @@ impl<T> Compressor<T> where T: NumberLike {
         unsigneds.clone(),
         &self.internal_config,
         &self.flags,
+        n,
       )?;
       let prefix_metadata = PrefixMetadata::Simple {
         prefixes: prefixes.clone(),
@@ -404,6 +407,7 @@ impl<T> Compressor<T> where T: NumberLike {
         unsigneds.clone(),
         &self.internal_config,
         &self.flags,
+        n,
       )?;
       let prefix_metadata = PrefixMetadata::Delta {
         delta_moments,

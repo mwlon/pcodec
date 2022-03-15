@@ -56,12 +56,14 @@ pub struct ChunkMetadata<T> where T: NumberLike {
 fn parse_prefixes<T: NumberLike>(
   reader: &mut BitReader,
   flags: &Flags,
+  n: usize,
 ) -> QCompressResult<Vec<Prefix<T>>> {
   let n_pref = reader.read_usize(BITS_TO_ENCODE_N_PREFIXES)?;
   let mut prefixes = Vec::with_capacity(n_pref);
-  let bits_to_encode_prefix_len = flags.bits_to_encode_prefix_len();
+  let bits_to_encode_code_len = flags.bits_to_encode_code_len();
+  let bits_to_encode_count = flags.bits_to_encode_count(n);
   for _ in 0..n_pref {
-    let count = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)?;
+    let count = reader.read_usize(bits_to_encode_count)?;
     let lower = T::read_from(reader)?;
     let upper = T::read_from(reader)?;
 
@@ -73,7 +75,7 @@ fn parse_prefixes<T: NumberLike>(
       )));
     }
 
-    let code_len = reader.read_usize(bits_to_encode_prefix_len)?;
+    let code_len = reader.read_usize(bits_to_encode_code_len)?;
     let code = reader.read(code_len)?;
     let run_len_jumpstart = if reader.read_one()? {
       Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART)?)
@@ -91,11 +93,17 @@ fn parse_prefixes<T: NumberLike>(
   Ok(prefixes)
 }
 
-fn write_prefixes<T: NumberLike>(prefixes: &[Prefix<T>], writer: &mut BitWriter, flags: &Flags) {
+fn write_prefixes<T: NumberLike>(
+  prefixes: &[Prefix<T>],
+  writer: &mut BitWriter,
+  flags: &Flags,
+  n: usize,
+) {
   writer.write_usize(prefixes.len(), BITS_TO_ENCODE_N_PREFIXES);
-  let bits_to_encode_prefix_len = flags.bits_to_encode_prefix_len();
+  let bits_to_encode_prefix_len = flags.bits_to_encode_code_len();
+  let bits_to_encode_count = flags.bits_to_encode_count(n);
   for pref in prefixes {
-    writer.write_usize(pref.count, BITS_TO_ENCODE_N_ENTRIES);
+    writer.write_usize(pref.count, bits_to_encode_count);
     pref.lower.write_to(writer);
     pref.upper.write_to(writer);
     writer.write_usize(pref.code.len(), bits_to_encode_prefix_len);
@@ -117,13 +125,13 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)?;
     let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?;
     let prefix_metadata = if flags.delta_encoding_order == 0 {
-      let prefixes = parse_prefixes::<T>(reader, flags)?;
+      let prefixes = parse_prefixes::<T>(reader, flags, n)?;
       PrefixMetadata::Simple {
         prefixes,
       }
     } else {
       let delta_moments = DeltaMoments::<T>::parse_from(reader, flags.delta_encoding_order)?;
-      let prefixes = parse_prefixes::<T::Signed>(reader, flags)?;
+      let prefixes = parse_prefixes::<T::Signed>(reader, flags, n)?;
       PrefixMetadata::Delta {
         prefixes,
         delta_moments,
@@ -142,11 +150,11 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
     match &self.prefix_metadata {
       PrefixMetadata::Simple { prefixes} => {
-        write_prefixes(prefixes, writer, flags);
+        write_prefixes(prefixes, writer, flags, self.n);
       },
       PrefixMetadata::Delta { prefixes, delta_moments } => {
         delta_moments.write_to(writer);
-        write_prefixes(prefixes, writer, flags);
+        write_prefixes(prefixes, writer, flags, self.n);
       },
     }
     writer.finish_byte();

@@ -43,3 +43,8 @@ fn test_v04_f32() {
 fn test_v06_timestamp_deltas() {
   assert_compatible::<TimestampMicros>("v0.6_timestamp_deltas_2k");
 }
+
+#[test]
+fn test_v09_dispersed_shorts() {
+  assert_compatible::<u16>("v0.9_dispersed_shorts");
+}

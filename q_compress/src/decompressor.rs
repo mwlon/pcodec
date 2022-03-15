@@ -689,8 +689,9 @@ mod tests {
     };
 
     let flags = Flags {
-      use_5_bit_prefix_len: true,
+      use_5_bit_code_len: true,
       delta_encoding_order: 0,
+      use_min_count_encoding: true,
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
