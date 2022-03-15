@@ -100,12 +100,12 @@ fn main() {
   );
 
   let mut dispersed_shorts = Vec::new();
-  for _ in 0..128 {
-    for i in 0_u16..100 {
+  for _ in 0..64 {
+    for i in 0_u16..20 {
       dispersed_shorts.push(i * 4);
     }
   }
-  // really using 0.9.1+
+  // really using 0.9.1
   write_case(
     &version,
     "0.9",
