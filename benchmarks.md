@@ -1,7 +1,7 @@
 All figured reported here are calculated using a single thread on a
 2.8GHz i5 CPU, operating on in-memory data.
 Benchmarks were done by averaging 5 runs on a dataset of 1M numbers
-with `max_depth` 6.
+with `compression_level` 6.
 
 Speeds are reported in count of numbers compressed or decompressed
 per second with 2 significant figures.

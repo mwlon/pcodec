@@ -21,7 +21,7 @@ environment with `numpy` and `pyarrow` installed.
 In that environment, run
 `python q_compress/examples/generate_randoms.py`.
 This will populate some human-readable data in `q_compress/examples/data/txt/` and
-the exact same numerical data as bytes in `q_compress/examples/data/binary`.
+the exact same numerical data as bytes in `q_compress/examples/data/binary/`.
 For instance,
 ```
 % head -5 q_compress/examples/data/txt/f64_normal_at_0.txt
@@ -31,8 +31,7 @@ For instance,
 0.26791893481533213
 0.39219157633731955
 ```
-shows integers sampled from a floored normal distribution with standard
-deviation of 10.
+shows floats sampled from a standard normal distribution.
 
 Then to run quantile compression and decompression on each dataset, run
 `cargo run --release --example primary`.
