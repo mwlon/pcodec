@@ -311,24 +311,27 @@ impl<'a> BitReader<'a> {
     Ok(())
   }
 
+  /// Sets the bit reader's current position to the specified bit index.
+  /// Will NOT check whether the resulting position is in bounds or not.
+  pub fn seek_to(&mut self, bit_idx: usize) {
+    self.i = bit_idx.div_euclid(WORD_SIZE);
+    self.j = bit_idx.rem_euclid(WORD_SIZE);
+  }
+
   /// Skips forward `n` bits. Will NOT check whether
   /// the resulting position is in bounds or not.
+  ///
+  /// Wraps [`seek_to`][BitReader::seek_to].
   pub fn seek(&mut self, n: usize) {
-    let forward_bit_idx = self.j + n;
-    self.i += forward_bit_idx.div_euclid(WORD_SIZE);
-    self.j = forward_bit_idx.rem_euclid(WORD_SIZE);
+    self.seek_to(self.bit_idx() + n);
   }
 
   /// Skips backward `n` bits. Will panic if the resulting position is out of
   /// bounds.
+  ///
+  /// Wraps [`seek_to`][BitReader::seek_to].
   pub fn rewind(&mut self, n: usize) {
-    if n <= self.j {
-      self.j -= n;
-    } else {
-      let backward_bit_idx = (n + WORD_SIZE - 1) - self.j;
-      self.i -= backward_bit_idx.div_euclid(WORD_SIZE);
-      self.j = WORD_SIZE - 1 - backward_bit_idx.rem_euclid(WORD_SIZE);
-    }
+    self.seek_to(self.bit_idx() - n);
   }
 }
 

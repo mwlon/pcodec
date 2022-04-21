@@ -1,6 +1,6 @@
 [package]
 name = "q_compress"
-version = "0.9.1"
+version = "0.9.2"
 edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
