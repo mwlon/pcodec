@@ -20,6 +20,16 @@ const UNCHECKED_NUM_THRESHOLD: usize = 30;
 #[derive(Clone, Debug, Default)]
 pub struct DecompressorConfig {}
 
+fn atomically<T, F>(reader: &mut BitReader, f: F) -> QCompressResult<T>
+where F: FnOnce(&mut BitReader) -> QCompressResult<T> {
+  let clean_bit_idx = reader.bit_idx();
+  let res = f(reader);
+  if res.is_err() {
+    reader.seek_to(clean_bit_idx);
+  }
+  res
+}
+
 fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResult<()> {
   if prefixes.is_empty() {
     return Ok(());
@@ -227,6 +237,9 @@ impl<T> NumDecompressor<T> where T: NumberLike {
     self.decompress_offsets(reader, res, p, reps)
   }
 
+  // Pushes as many numbers as possible up to `reps` into `res`,
+  // leaving the reader at the end of the last offset block.
+  // If it runs out of data, it additionally returns
   fn decompress_offsets(
     &self,
     reader: &mut BitReader,
@@ -254,8 +267,20 @@ impl<T> NumDecompressor<T> where T: NumberLike {
   // I don't understand why, but telling it not
   // to inline fixed the performance issue.
   // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
-  #[inline(never)]
+  //
+  // If this runs out of data, it returns an error and leaves reader unchanged.
   pub fn decompress_nums_limited(
+    &mut self,
+    reader: &mut BitReader,
+    limit: usize,
+  ) -> QCompressResult<Vec<T>> {
+    atomically(reader, |r| {
+      self.decompress_nums_limited_dirty(r, limit)
+    })
+  }
+
+  #[inline(never)]
+  fn decompress_nums_limited_dirty(
     &mut self,
     reader: &mut BitReader,
     limit: usize,
@@ -399,6 +424,8 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
   /// * then the next 5,
   /// * then the last number,
   /// * then an empty vector for each following call.
+  ///
+  /// If this reaches an error, it leaves `reader` unchanged.
   pub fn decompress_next_batch(
     &mut self,
     reader: &mut BitReader,
@@ -484,26 +511,30 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// if the reader runs out of data, if the data type byte does not agree,
   /// if the flags are from a newer, incompatible version of q_compress,
   /// or if any corruptions are found.
+  ///
+  /// If this reaches an error, it leaves `reader` unchanged.
   pub fn header(&self, reader: &mut BitReader) -> QCompressResult<Flags> {
-    let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
-    if bytes != MAGIC_HEADER {
-      return Err(QCompressError::corruption(format!(
-        "magic header does not match {:?}; instead found {:?}",
-        MAGIC_HEADER,
-        bytes,
-      )));
-    }
-    let bytes = reader.read_aligned_bytes(1)?;
-    let byte = bytes[0];
-    if byte != T::HEADER_BYTE {
-      return Err(QCompressError::corruption(format!(
-        "data type byte does not match {:?}; instead found {:?}",
-        T::HEADER_BYTE,
-        byte,
-      )));
-    }
+    atomically(reader, |reader| {
+      let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
+      if bytes != MAGIC_HEADER {
+        return Err(QCompressError::corruption(format!(
+          "magic header does not match {:?}; instead found {:?}",
+          MAGIC_HEADER,
+          bytes,
+        )));
+      }
+      let bytes = reader.read_aligned_bytes(1)?;
+      let byte = bytes[0];
+      if byte != T::HEADER_BYTE {
+        return Err(QCompressError::corruption(format!(
+          "data type byte does not match {:?}; instead found {:?}",
+          T::HEADER_BYTE,
+          byte,
+        )));
+      }
 
-    Flags::parse_from(reader)
+      Flags::parse_from(reader)
+    })
   }
 
   /// Reads a [`ChunkMetadata`], returning it.
@@ -514,24 +545,28 @@ impl<T> Decompressor<T> where T: NumberLike {
   ///
   /// Typically one would pass in the [`Flags`] obtained from an earlier
   /// [`.header()`][Self::header] call.
+  ///
+  /// If this reaches an error, it leaves `reader` unchanged.
   pub fn chunk_metadata(&self, reader: &mut BitReader, flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
-    let magic_byte = reader.read_aligned_bytes(1)?[0];
-    if magic_byte == MAGIC_TERMINATION_BYTE {
-      return Ok(None);
-    } else if magic_byte != MAGIC_CHUNK_BYTE {
-      return Err(QCompressError::corruption(format!(
-        "invalid magic chunk byte: {}",
-        magic_byte
-      )));
-    }
+    atomically(reader, |reader| {
+      let magic_byte = reader.read_aligned_bytes(1)?[0];
+      if magic_byte == MAGIC_TERMINATION_BYTE {
+        return Ok(None);
+      } else if magic_byte != MAGIC_CHUNK_BYTE {
+        return Err(QCompressError::corruption(format!(
+          "invalid magic chunk byte: {}",
+          magic_byte
+        )));
+      }
 
-    // otherwise there is indeed another chunk
-    let metadata = ChunkMetadata::parse_from(reader, flags)?;
-    reader.drain_empty_byte(|| QCompressError::corruption(
-      "nonzero bits in end of final byte of chunk metadata"
-    ))?;
+      // otherwise there is indeed another chunk
+      let metadata = ChunkMetadata::parse_from(reader, flags)?;
+      reader.drain_empty_byte(|| QCompressError::corruption(
+        "nonzero bits in end of final byte of chunk metadata"
+      ))?;
 
-    Ok(Some(metadata))
+      Ok(Some(metadata))
+    })
   }
 
   /// The lowest-level way to decompress numbers from a chunk.
@@ -600,26 +635,29 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// The same effect can be achieved via
   /// [`.chunk_metadata()`][Self::chunk_metadata] and
   /// [`.chunk_body()`][Self::chunk_body].
+  /// If this reaches an error, it leaves `reader` unchanged.
   pub fn chunk(
     &self,
     reader: &mut BitReader,
     flags: &Flags,
   ) -> QCompressResult<Option<DecompressedChunk<T>>> {
-    let maybe_metadata = self.chunk_metadata(reader, flags)?;
-    match maybe_metadata {
-      Some(metadata) => {
-        let nums = self.chunk_body(
-          reader,
-          flags,
-          &metadata,
-        )?;
-        Ok(Some(DecompressedChunk {
-          metadata,
-          nums,
-        }))
-      },
-      None => Ok(None)
-    }
+    atomically(reader, |reader| {
+      let maybe_metadata = self.chunk_metadata(reader, flags)?;
+      match maybe_metadata {
+        Some(metadata) => {
+          let nums = self.chunk_body(
+            reader,
+            flags,
+            &metadata,
+          )?;
+          Ok(Some(DecompressedChunk {
+            metadata,
+            nums,
+          }))
+        },
+        None => Ok(None)
+      }
+    })
   }
 
   /// Takes in compressed bytes and returns a vector of numbers.

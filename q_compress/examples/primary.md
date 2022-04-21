@@ -25,11 +25,11 @@ the exact same numerical data as bytes in `q_compress/examples/data/binary/`.
 For instance,
 ```
 % head -5 q_compress/examples/data/txt/f64_normal_at_0.txt
--1.3077788857647787
-1.0762085641687826
--1.7763511291198668
-0.26791893481533213
-0.39219157633731955
+1.4159442981360018
+-0.7575599825222276
+0.11351170269868066
+0.6510141768675483
+-0.4418627064838288
 ```
 shows floats sampled from a standard normal distribution.
 
