@@ -1,5 +1,10 @@
 # `q_compress` Changelog
 
+## 0.9.2
+
+* Defined behavior for decompression failures: the bit reader remains
+unmodified.
+
 ## 0.9.1
 
 * Introduced a new always-on flag that reduces file size by a few % in cases
