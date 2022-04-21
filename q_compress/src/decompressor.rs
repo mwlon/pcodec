@@ -237,9 +237,6 @@ impl<T> NumDecompressor<T> where T: NumberLike {
     self.decompress_offsets(reader, res, p, reps)
   }
 
-  // Pushes as many numbers as possible up to `reps` into `res`,
-  // leaving the reader at the end of the last offset block.
-  // If it runs out of data, it additionally returns
   fn decompress_offsets(
     &self,
     reader: &mut BitReader,

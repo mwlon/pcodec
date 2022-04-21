@@ -80,12 +80,3 @@ impl Display for QCompressError {
 impl Error for QCompressError {}
 
 pub type QCompressResult<T> = Result<T, QCompressError>;
-
-// #[derive(Clone, Debug)]
-// pub(crate) struct InternalInsufficientDataError {}
-// 
-// impl Display for InternalInsufficientDataError {
-//   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-//     write!(f, "InsufficientDataError")
-//   }
-// }
