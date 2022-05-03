@@ -2,16 +2,16 @@
 
 ## Setup
 
-You can compress and inspect .qco files using our simple CLI.
-Until we publish to package managers, follow this setup:
+You can compress, decompress, and inspect .qco files using our simple CLI.
+Follow this setup:
 
 1. Install Rust: https://www.rust-lang.org/tools/install
 2. `git clone https://github.com/mwlon/quantile-compression.git`
 3. `cd quantile-compression`
 
-## Example Commands
+## Command Info
 
-You can always get help, e.g. `cargo run --release`, `cargo run compress --help`.
+You can always get help, e.g. `cargo run`, `cargo run compress --help`.
 
 ### Compress
 
@@ -20,6 +20,8 @@ file.
 If delta encoding order (`--delta-order`) is not specified, the default
 behavior is to use the first numbers and make an educated guess for the best
 delta encoding order.
+
+Examples:
 
 ```shell
 cargo run --release compress --csv my.csv --col-name my_column out.qco
@@ -36,7 +38,7 @@ cargo run --release compress \
 
 cargo run --release compress \
   --csv time_series.csv \
-  --csv-timestamp-format "%Y-%m-%d %H:%M:%s%.f%z" \
+  --csv-timestamp-format "%Y-%m-%d %H:%M:%S%.f%z" \
   --col-name time \
   --dtype TimestampMicros \
   --delta-order 1 \
@@ -49,14 +51,27 @@ cargo run --release compress \
   out.qco
 ```
 
+### Decompress
+
+This command prints numbers in a .qco file to stdout.
+
+Examples:
+
+```shell
+cargo run --release decompress --limit 10 in.qco
+cargo run --release decompress --timestamp-format "%Y-%m-%d %H:%M:%S.%f" in.qco > out.txt
+```
+
 ### Inspect
 
 This command prints out information about a .qco file.
 
+Examples:
+
 ```shell
-% cargo run --release inspect out.qco
+% cargo run --release inspect in.qco
 ...
-inspecting "out.qco"
+inspecting "in.qco"
 =================
 
 data type: f64
