@@ -11,13 +11,16 @@ keywords = ["compression", "numerical", "quantile", "delta"]
 license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
 
+[[bin]]
+name = "qcompress"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0.53"
-arrow = "9.0.2"
-chrono = "0.4.19"
-parquet = "9.0.2"
+arrow = {version = "9.0.2", features = ["csv"], default-features=false}
+parquet = {version = "9.0.2", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
 structopt = "0.3.26"
-q_compress = {path="../q_compress"}
+q_compress = {version = "0.9.2", path = "../q_compress"}
 
 [dev-dependencies]
 enum-iterator = "0.7.0"

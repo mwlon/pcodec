@@ -6,12 +6,13 @@ You can compress, decompress, and inspect .qco files using our simple CLI.
 Follow this setup:
 
 1. Install Rust: https://www.rust-lang.org/tools/install
-2. `git clone https://github.com/mwlon/quantile-compression.git`
-3. `cd quantile-compression`
+2. `cargo install q_compress_cli`
+
+This provides you with the `qcompress` command.
 
 ## Command Info
 
-You can always get help, e.g. `cargo run`, `cargo run compress --help`.
+You can always get help, e.g. `qcompress`, `qcompress compress --help`.
 
 ### Compress
 
@@ -24,10 +25,10 @@ delta encoding order.
 Examples:
 
 ```shell
-cargo run --release compress --csv my.csv --col-name my_column out.qco
-cargo run --release compress --parquet my.snappy.parquet --col-name my_column out.qco
+qcompress compress --csv my.csv --col-name my_column out.qco
+qcompress compress --parquet my.snappy.parquet --col-name my_column out.qco
 
-cargo run --release compress \
+qcompress compress \
   --csv my.csv \
   --col-idx 0 \
   --csv-has-header \
@@ -36,14 +37,14 @@ cargo run --release compress \
   --overwrite \
   out.qco
 
-cargo run --release compress \
+qcompress compress \
   --csv time_series.csv \
   --csv-timestamp-format "%Y-%m-%d %H:%M:%S%.f%z" \
   --col-name time \
   --dtype TimestampMicros \
   --delta-order 1 \
   out.qco
-cargo run --release compress \
+qcompress compress \
   --csv time_series.csv \
   --col-name temperature \
   --dtype f32 \
@@ -58,8 +59,8 @@ This command prints numbers in a .qco file to stdout.
 Examples:
 
 ```shell
-cargo run --release decompress --limit 10 in.qco
-cargo run --release decompress --timestamp-format "%Y-%m-%d %H:%M:%S.%f" in.qco > out.txt
+qcompress decompress --limit 10 in.qco
+qcompress decompress --timestamp-format "%Y-%m-%d %H:%M:%S.%f" in.qco > out.txt
 ```
 
 ### Inspect
@@ -69,7 +70,7 @@ This command prints out information about a .qco file.
 Examples:
 
 ```shell
-% cargo run --release inspect in.qco
+% qcompress inspect in.qco
 ...
 inspecting "in.qco"
 =================
