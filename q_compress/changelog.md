@@ -1,5 +1,9 @@
 # `q_compress` Changelog
 
+## 0.9.3
+
+* Added auto compress/decompress functions that can be used as 1-liners.
+
 ## 0.9.2
 
 * Defined behavior for decompression failures: the bit reader remains

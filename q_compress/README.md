@@ -8,8 +8,6 @@
 ## Usage
 
 ```rust
-use q_compress::{Compressor, Decompressor};
-
 fn main() {
   // your data
   let mut my_ints = Vec::new();
@@ -17,16 +15,14 @@ fn main() {
     my_ints.push(i as i64);
   }
  
-  // Here we just use the default configuration, but we can also use
-  // `::from_compressor_config()` to set configurations like
-  // `compression_level` and `delta_encoding_order`.
-  let compressor = Compressor::<i64>::default();
-  let bytes: Vec<u8> = compressor.simple_compress(&my_ints);
+  // Here we let the library choose a configuration with compression level 6.
+  // But if you know a little about the data you're compressing, you can
+  // make your own `CompressorConfig` to save some compute.
+  let bytes: Vec<u8> = q_compress::auto_compress(&my_ints, 6);
   println!("compressed down to {} bytes", bytes.len());
  
   // decompress
-  let decompressor = Decompressor::<i64>::default();
-  let recovered = decompressor.simple_decompress(&bytes).expect("failed to decompress");
+  let recovered = q_compress::auto_decompress::<i64>(&bytes).expect("failed to decompress");
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```

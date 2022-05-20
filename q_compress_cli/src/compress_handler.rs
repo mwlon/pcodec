@@ -1,4 +1,3 @@
-use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::marker::PhantomData;
@@ -50,7 +49,13 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
     let delta_encoding_order = if let Some(order) = opt.delta_encoding_order {
       order
     } else {
-      auto_delta_encoding_order::<T>(schema, opt)?
+      println!(
+        "automatically choosing delta encoding order based on first nums (specify --delta-order to skip)",
+      );
+      let head_nums = head_nums::<T>(schema, opt)?;
+      let best_order = q_compress::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
+      println!("determined best delta encoding order: {}", best_order);
+      best_order
     };
 
     let config = CompressorConfig {
@@ -194,10 +199,10 @@ fn write_chunk<T: NumberLike>(
   Ok(())
 }
 
-fn auto_delta_encoding_order<T: ArrowNumberLike>(
+fn head_nums<T: ArrowNumberLike>(
   schema: &Schema,
   opt: &CompressOpt,
-) -> Result<usize> {
+) -> Result<Vec<T>> {
   let mut reader = new_column_reader::<T>(schema, opt)?;
   let mut head_nums = Vec::with_capacity(AUTO_DELTA_LIMIT);
   while let Some(batch_result) = reader.next_batch() {
@@ -209,29 +214,5 @@ fn auto_delta_encoding_order<T: ArrowNumberLike>(
   if head_nums.len() > AUTO_DELTA_LIMIT {
     head_nums = head_nums[0..AUTO_DELTA_LIMIT].to_vec();
   }
-  println!(
-    "automatically choosing delta encoding order based on first {} nums (specify --delta-order to skip)",
-    head_nums.len(),
-  );
-  let mut best_order = usize::MAX;
-  let mut best_size = usize::MAX;
-  for delta_encoding_order in 0..8 {
-    let config = CompressorConfig {
-      delta_encoding_order,
-      compression_level: min(opt.level, 6),
-    };
-    let compressor = Compressor::<T>::from_config(config);
-    let mut writer = BitWriter::default();
-    compressor.chunk(&head_nums, &mut writer)?;
-    let size = writer.byte_size();
-    if size < best_size {
-      best_order = delta_encoding_order;
-      best_size = size;
-    } else {
-      // it's almost always monotonic
-      break;
-    }
-  }
-  println!("determined best delta encoding order: {}", best_order);
-  Ok(best_order)
+  Ok(head_nums)
 }
