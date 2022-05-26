@@ -44,7 +44,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     // compress
     let bytes = fs::read(path).expect("could not read");
     let nums = Self::parse_nums(&bytes);
-    let mut fname = basename_no_ext(&path);
+    let mut fname = basename_no_ext(path);
     if config.delta_encoding_order > 0 {
       fname.push_str(&format!("_del={}", config.delta_encoding_order));
     }
@@ -133,30 +133,23 @@ impl DtypeHandler<TimestampMicros> for TimestampMicrosHandler {
 }
 
 fn get_configs(path_str: &str, compression_level: usize) -> Vec<CompressorConfig> {
-  let mut res = vec![
-    CompressorConfig {
-      compression_level,
-      ..Default::default()
-    }
-  ];
+  let mut delta_orders = vec![0];
   if path_str.contains("slow_cosine") {
-    for delta_encoding_order in [1, 2, 7] {
-      res.push(CompressorConfig {
-        compression_level,
-        delta_encoding_order,
-      });
-    }
+    delta_orders.extend(&[1, 2, 7]);
   }
   for substr in ["extremes", "bool", "edge", "near_linear"] {
     if path_str.contains(substr) {
-      res.push(CompressorConfig {
-        compression_level,
-        delta_encoding_order: 1,
-      });
+      delta_orders.push(1);
       break;
     }
   }
-  res
+  delta_orders.iter()
+    .map(|&delta_encoding_order| CompressorConfig {
+      compression_level,
+      delta_encoding_order,
+      ..Default::default()
+    })
+    .collect()
 }
 
 fn main() {

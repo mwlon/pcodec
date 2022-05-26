@@ -43,6 +43,14 @@ pub struct Flags {
   /// In later versions, this flag is always true.
   /// Introduced in 0.9.1.
   pub use_min_count_encoding: bool,
+  /// Whether to enable greatest common divisor multipliers for each
+  /// prefix.
+  /// This adds an optional multiplier to each prefix metadata, so that each
+  /// unsigned number is decoded as `x = prefix_lower + offset * multiplier`.
+  /// This can improve compression ratio in some cases, such as when the
+  /// numbers are all integer multiples of 100 or all integer-valued floats.
+  /// Introduced in 0.9.4.
+  pub use_gcds: bool,
 }
 
 impl TryFrom<Vec<bool>> for Flags {
@@ -53,6 +61,7 @@ impl TryFrom<Vec<bool>> for Flags {
       use_5_bit_code_len: false,
       delta_encoding_order: 0,
       use_min_count_encoding: false,
+      use_gcds: false,
     };
 
     let mut bit_iter = bools.iter();
@@ -65,6 +74,8 @@ impl TryFrom<Vec<bool>> for Flags {
     flags.delta_encoding_order = bits::bits_to_usize(&delta_encoding_bits);
 
     flags.use_min_count_encoding = bit_iter.next() == Some(&true);
+
+    flags.use_gcds = bit_iter.next() == Some(&true);
 
     for &bit in bit_iter {
       if bit {
@@ -95,6 +106,8 @@ impl TryInto<Vec<bool>> for &Flags {
     res.extend(delta_bits);
 
     res.push(self.use_min_count_encoding);
+
+    res.push(self.use_gcds);
 
     let necessary_len = res.iter()
       .rposition(|&bit| bit)
@@ -160,6 +173,7 @@ impl From<&CompressorConfig> for Flags {
       use_5_bit_code_len: true,
       delta_encoding_order: config.delta_encoding_order,
       use_min_count_encoding: true,
+      use_gcds: config.infer_gcds,
     }
   }
 }

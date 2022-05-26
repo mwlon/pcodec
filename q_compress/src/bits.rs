@@ -82,8 +82,8 @@ fn bumpy_log(x: f64) -> f64 {
   k + (2.0 * overshoot) / x
 }
 
-pub fn avg_offset_bits<Diff: UnsignedLike>(lower: Diff, upper: Diff) -> f64 {
-  bumpy_log((upper - lower).to_f64() + 1.0)
+pub fn avg_offset_bits<Diff: UnsignedLike>(lower: Diff, upper: Diff, gcd: Diff) -> f64 {
+  bumpy_log(((upper - lower) / gcd).to_f64() + 1.0)
 }
 
 pub fn avg_depth_bits(weight: usize, total_weight: usize) -> f64 {
@@ -121,11 +121,13 @@ mod tests {
 
   #[test]
   fn test_avg_base2_bits() {
-    assert_eq!(avg_offset_bits(0_u32, 0_u32), 0.0);
-    assert_eq!(avg_offset_bits(4_u32, 5_u32), 1.0);
-    assert!((avg_offset_bits(2_u32, 4_u32) - 5.0 / 3.0).abs() < 1E-8);
-    assert_eq!(avg_offset_bits(10_u32, 13_u32), 2.0);
-    assert!((avg_offset_bits(0_u64, 4_u64) - 12.0 / 5.0).abs() < 1E-8);
+    assert_eq!(avg_offset_bits(0_u32, 0_u32, 1), 0.0);
+    assert_eq!(avg_offset_bits(4_u32, 5_u32, 1), 1.0);
+    assert!((avg_offset_bits(2_u32, 4_u32, 1) - 5.0 / 3.0).abs() < 1E-8);
+    assert_eq!(avg_offset_bits(10_u32, 13_u32, 1), 2.0);
+    assert_eq!(avg_offset_bits(10_u32, 13_u32, 3), 1.0);
+    assert_eq!(avg_offset_bits(10_u32, 19_u32, 3), 2.0);
+    assert!((avg_offset_bits(0_u64, 4_u64, 1) - 12.0 / 5.0).abs() < 1E-8);
   }
 
   #[test]

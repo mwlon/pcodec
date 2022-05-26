@@ -1,8 +1,8 @@
-use crate::{BitReader, BitWriter, Flags};
+use crate::{BitReader, BitWriter, Flags, gcd_utils};
 use crate::constants::*;
 use crate::delta_encoding::DeltaMoments;
 use crate::prefix::Prefix;
-use crate::data_types::NumberLike;
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressResult, QCompressError};
 
 /// A wrapper for prefixes in the two cases cases: delta encoded or not.
@@ -62,6 +62,15 @@ fn parse_prefixes<T: NumberLike>(
   let mut prefixes = Vec::with_capacity(n_pref);
   let bits_to_encode_code_len = flags.bits_to_encode_code_len();
   let bits_to_encode_count = flags.bits_to_encode_count(n);
+  let maybe_common_gcd = if flags.use_gcds {
+    if reader.read_one()? {
+      Some(gcd_utils::read_gcd(T::Unsigned::MAX, reader)?)
+    } else {
+      None
+    }
+  } else {
+    Some(T::Unsigned::ONE)
+  };
   for _ in 0..n_pref {
     let count = reader.read_usize(bits_to_encode_count)?;
     let lower = T::read_from(reader)?;
@@ -82,12 +91,18 @@ fn parse_prefixes<T: NumberLike>(
     } else {
       None
     };
+    let gcd = if let Some(common_gcd) = maybe_common_gcd {
+      common_gcd
+    } else {
+      gcd_utils::read_gcd(upper.to_unsigned() - lower.to_unsigned(), reader)?
+    };
     prefixes.push(Prefix {
       count,
       code,
       lower,
       upper,
       run_len_jumpstart,
+      gcd,
     });
   }
   Ok(prefixes)
@@ -102,6 +117,16 @@ fn write_prefixes<T: NumberLike>(
   writer.write_usize(prefixes.len(), BITS_TO_ENCODE_N_PREFIXES);
   let bits_to_encode_prefix_len = flags.bits_to_encode_code_len();
   let bits_to_encode_count = flags.bits_to_encode_count(n);
+  let maybe_commond_gcd = if flags.use_gcds {
+    let maybe_common_gcd = gcd_utils::get_common_gcd(prefixes);
+    writer.write_one(maybe_common_gcd.is_some());
+    if let Some(common_gcd) = maybe_common_gcd {
+      gcd_utils::write_gcd(T::Unsigned::MAX, common_gcd, writer);
+    }
+    maybe_common_gcd
+  } else {
+    Some(T::Unsigned::ONE)
+  };
   for pref in prefixes {
     writer.write_usize(pref.count, bits_to_encode_count);
     pref.lower.write_to(writer);
@@ -116,6 +141,9 @@ fn write_prefixes<T: NumberLike>(
         writer.write_one(true);
         writer.write_usize(jumpstart, BITS_TO_ENCODE_JUMPSTART);
       },
+    }
+    if maybe_commond_gcd.is_none() {
+      gcd_utils::write_gcd(pref.upper.to_unsigned() - pref.lower.to_unsigned(), pref.gcd, writer);
     }
   }
 }

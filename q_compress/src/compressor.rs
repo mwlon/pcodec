@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{BitWriter, Flags, huffman_encoding};
+use crate::{BitWriter, Flags, gcd_utils, huffman_encoding};
 use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -31,7 +31,7 @@ struct JumpstartConfiguration {
 /// stored in the output.
 #[derive(Clone, Debug)]
 pub struct CompressorConfig {
-  /// `compression_level` ranges from 0 to 12 inclusive, defaulting to 6.
+  /// `compression_level` ranges from 0 to 12 inclusive (default 6).
   ///
   /// The compressor uses up to 2^`compression_level` prefixes.
   ///
@@ -44,7 +44,7 @@ pub struct CompressorConfig {
   /// * Level 12 can achieve a few % better compression than 6 with 4096
   /// prefixes but runs ~10x slower in many cases.
   pub compression_level: usize,
-  /// `delta_encoding_order` ranges from 0 to 7 inclusive, defaulting to 0.
+  /// `delta_encoding_order` ranges from 0 to 7 inclusive (default 0).
   ///
   /// It is the number of times to apply delta encoding
   /// before compressing. For instance, say we have the numbers
@@ -61,6 +61,19 @@ pub struct CompressorConfig {
   /// * Higher-order delta encoding is good for time series that are very
   /// smooth, like temperature or light sensor readings.
   pub delta_encoding_order: usize,
+  /// `infer_gcds` can improve compression ratio in cases where all
+  /// numbers in each range share a nontrivial greatest common divisor
+  /// (default true).
+  ///
+  /// Examples where this helps:
+  /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
+  /// * floats `[1.0, 2.0, ... 1000.0]` shuffled
+  /// * nanosecond-precision timestamps that are all whole numbers of
+  /// microseconds
+  ///
+  /// This adds a small amount of extra compute and a very small amount of
+  /// extra data in cases where it is not helpful.
+  pub infer_gcds: bool,
 }
 
 impl Default for CompressorConfig {
@@ -68,6 +81,7 @@ impl Default for CompressorConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
+      infer_gcds: true,
     }
   }
 }
@@ -108,43 +122,58 @@ fn choose_run_len_jumpstart(
   }
 }
 
+struct PrefixBuffer<'a, T: NumberLike> {
+  pub seq: &'a mut Vec<WeightedPrefix<T>>,
+  pub prefix_idx: &'a mut usize,
+  pub max_n_pref: usize,
+  pub n_unsigneds: usize,
+  pub sorted: &'a [T::Unsigned],
+  pub use_gcd: bool,
+}
+
 fn push_pref<T: NumberLike>(
-  seq: &mut Vec<WeightedPrefix<T>>,
-  prefix_idx: &mut usize,
+  buffer: &mut PrefixBuffer<'_, T>,
   i: usize,
   j: usize,
-  max_n_pref: usize,
-  n_unsigneds: usize,
-  sorted: &[T::Unsigned],
 ) {
+  let sorted = buffer.sorted;
+  let n_unsigneds = buffer.n_unsigneds;
+
   let count = j - i;
-  let frequency = count as f64 / n_unsigneds as f64;
-  let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_pref) / n_unsigneds);
+  let frequency = count as f64 / buffer.n_unsigneds as f64;
+  let new_prefix_idx = max(*buffer.prefix_idx + 1, (j * buffer.max_n_pref) / n_unsigneds);
   let lower = T::from_unsigned(sorted[i]);
   let upper = T::from_unsigned(sorted[j - 1]);
+  let gcd = if buffer.use_gcd {
+    gcd_utils::gcd(&sorted[i..j])
+  } else {
+    T::Unsigned::ONE
+  };
   if n_unsigneds < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n_unsigneds {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
-    seq.push(WeightedPrefix::new(
+    buffer.seq.push(WeightedPrefix::new(
       count,
       count,
       lower,
       upper,
-      None
+      None,
+      gcd,
     ));
   } else {
     // The weird case - a range that represents almost all (but not all) the data.
     // We create extra prefixes that can describe `reps` copies of the range at once.
     let config = choose_run_len_jumpstart(count, n_unsigneds);
-    seq.push(WeightedPrefix::new(
+    buffer.seq.push(WeightedPrefix::new(
       count,
       config.weight,
       lower,
       upper,
-      Some(config.jumpstart)
+      Some(config.jumpstart),
+      gcd,
     ));
   }
-  *prefix_idx = new_prefix_idx;
+  *buffer.prefix_idx = new_prefix_idx;
 }
 
 fn train_prefixes<T: NumberLike>(
@@ -179,29 +208,35 @@ fn train_prefixes<T: NumberLike>(
   let safe_comp_level = min(comp_level, (n_unsigneds as f64).log2() as usize);
   let max_n_pref = 1_usize << safe_comp_level;
   let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
-  let pref_ptr = &mut raw_prefs;
-
   let mut pref_idx = 0_usize;
-  let pref_idx_ptr = &mut pref_idx;
 
+  let use_gcd = flags.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
+  let mut prefix_buffer = PrefixBuffer::<T> {
+    seq: &mut raw_prefs,
+    prefix_idx: &mut pref_idx,
+    max_n_pref,
+    n_unsigneds,
+    sorted: &sorted,
+    use_gcd,
+  };
   for j in 0..n_unsigneds {
-    let target_j = ((*pref_idx_ptr + 1) * n_unsigneds) / max_n_pref;
+    let target_j = ((*prefix_buffer.prefix_idx + 1) * n_unsigneds) / max_n_pref;
     if j > 0 && sorted[j] == sorted[j - 1] {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        push_pref(pref_ptr, pref_idx_ptr, i, backup_j, max_n_pref, n_unsigneds, &sorted);
+        push_pref(&mut prefix_buffer, i, backup_j);
         i = backup_j;
       }
     } else {
       backup_j = j;
       if j >= target_j {
-        push_pref(pref_ptr, pref_idx_ptr, i, j, max_n_pref, n_unsigneds, &sorted);
+        push_pref(&mut prefix_buffer, i, j);
         i = j;
       }
     }
   }
-  push_pref(pref_ptr, pref_idx_ptr, i, n_unsigneds, max_n_pref, n_unsigneds, &sorted);
+  push_pref(&mut prefix_buffer, i, n_unsigneds);
 
   let mut optimized_prefs = prefix_optimization::optimize_prefixes(
     raw_prefs,
@@ -222,7 +257,7 @@ fn compress_offset_bits_w_prefix<Diff: UnsignedLike>(
   p: &PrefixCompressionInfo<Diff>,
   writer: &mut BitWriter,
 ) {
-  let off = unsigned - p.lower;
+  let off = (unsigned - p.lower) / p.gcd;
   writer.write_diff(off, p.k);
   if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
     // most significant bit, if necessary, comes last

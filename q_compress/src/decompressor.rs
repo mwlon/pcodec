@@ -208,11 +208,11 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       for _ in 0..reps {
         let mut offset = reader.unchecked_read_diff(p.k);
         if p.k < T::Unsigned::BITS &&
-          p.range - offset >= p.most_significant &&
+          p.k_range - offset >= p.most_significant &&
           reader.unchecked_read_one() {
           offset |= p.most_significant;
         }
-        let num = T::from_unsigned(p.lower_unsigned + offset);
+        let num = T::from_unsigned(p.lower_unsigned + offset * p.gcd);
         res.push(num);
       }
     }
@@ -248,11 +248,11 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       let mut offset = reader.read_diff(p.k)?;
       if p.k < T::Unsigned::BITS {
         let most_significant = T::Unsigned::ONE << p.k;
-        if p.range - offset >= most_significant && reader.read_one()? {
+        if p.k_range - offset >= most_significant && reader.read_one()? {
           offset |= most_significant;
         }
       }
-      let num = T::from_unsigned(p.lower_unsigned + offset);
+      let num = T::from_unsigned(p.lower_unsigned + offset * p.gcd);
       res.push(num);
     }
 
@@ -697,6 +697,7 @@ mod tests {
       lower: 100,
       upper: 200,
       run_len_jumpstart: None,
+      gcd: 1,
     }
   }
 
@@ -727,6 +728,7 @@ mod tests {
       use_5_bit_code_len: true,
       delta_encoding_order: 0,
       use_min_count_encoding: true,
+      use_gcds: false,
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {

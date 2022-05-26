@@ -1,10 +1,13 @@
 use crate::data_types::NumberLike;
-use crate::{Compressor, BitWriter, Decompressor};
+use crate::{Compressor, BitWriter, Decompressor, CompressorConfig};
 use crate::errors::ErrorKind;
 use crate::chunk_metadata::{PrefixMetadata, ChunkMetadata};
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
-  let compressor = Compressor::default();
+  let compressor = Compressor::from_config(CompressorConfig {
+    infer_gcds: false,
+    ..Default::default()
+  });
   let mut writer = BitWriter::default();
   compressor.header(&mut writer).expect("header");
   let metadata = compressor.chunk(&nums, &mut writer).expect("chunk");

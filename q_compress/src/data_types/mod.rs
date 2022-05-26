@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOrAssign, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
 use crate::{BitReader, BitWriter};
 use crate::bits;
@@ -42,8 +42,9 @@ pub trait SignedLike {
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
-Copy + Debug + Display + Ord + PartialOrd +
-Shl<usize, Output=Self> + Shr<usize, Output=Self> + Sub<Output=Self> {
+Copy + Debug + Display + Div<Output=Self> + Mul<Output = Self> + Ord +
+PartialOrd + RemAssign + Shl<usize, Output=Self> + Shr<usize, Output=Self> +
+Sub<Output=Self> {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
