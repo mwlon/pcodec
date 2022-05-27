@@ -14,7 +14,7 @@ fn prefix_bit_cost<Diff: UnsignedLike>(
   let offset_cost = avg_offset_bits(lower, upper, gcd);
   let huffman_cost = avg_depth_bits(weight, total_weight);
   let gcd_cost = if gcd > Diff::ONE {
-    Diff::BITS as f64
+    gcd_utils::gcd_bits_required(upper - lower) as f64
   } else {
     0.0
   };

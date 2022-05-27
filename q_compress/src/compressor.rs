@@ -63,7 +63,7 @@ pub struct CompressorConfig {
   pub delta_encoding_order: usize,
   /// `infer_gcds` can improve compression ratio in cases where all
   /// numbers in each range share a nontrivial greatest common divisor
-  /// (default true).
+  /// (default false).
   ///
   /// Examples where this helps:
   /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
@@ -81,7 +81,7 @@ impl Default for CompressorConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
-      infer_gcds: true,
+      infer_gcds: false,
     }
   }
 }
