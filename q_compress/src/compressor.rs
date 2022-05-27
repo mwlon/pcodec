@@ -252,32 +252,48 @@ fn train_prefixes<T: NumberLike>(
   Ok(prefixes)
 }
 
-fn compress_offset_bits_w_prefix<Diff: UnsignedLike>(
-  unsigned: Diff,
-  p: &PrefixCompressionInfo<Diff>,
-  writer: &mut BitWriter,
-) {
-  let off = (unsigned - p.lower) / p.gcd;
-  writer.write_diff(off, p.k);
-  if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
-    // most significant bit, if necessary, comes last
-    writer.write_one((off & (Diff::ONE << p.k)) > Diff::ZERO);
+trait GcdOperator {
+  fn get_offset<Diff: UnsignedLike>(diff: Diff, gcd: Diff) -> Diff;
+}
+
+struct TrivialGcdOp;
+struct GeneralGcdOp;
+
+impl GcdOperator for TrivialGcdOp {
+  fn get_offset<Diff: UnsignedLike>(diff: Diff, _: Diff) -> Diff {
+    diff
+  }
+}
+
+impl GcdOperator for GeneralGcdOp {
+  fn get_offset<Diff: UnsignedLike>(diff: Diff, gcd: Diff) -> Diff {
+    diff / gcd
   }
 }
 
 #[derive(Clone)]
-struct TrainedChunkCompressor<T> where T: NumberLike {
-  pub table: CompressionTable<T::Unsigned>,
-  // pub prefix_infos: Vec<PrefixCompressionInfo<T>>,
+struct TrainedChunkCompressor<Diff: UnsignedLike, GcdOp: GcdOperator> {
+  pub table: CompressionTable<Diff>,
+  op: PhantomData<GcdOp>,
 }
 
-impl<T> TrainedChunkCompressor<T> where T: NumberLike {
-  pub fn new(prefixes: &[Prefix<T>]) -> QCompressResult<Self> {
-    let table = CompressionTable::from(prefixes);
-    Ok(Self { table })
+fn trained_compress_chunk_nums<T: NumberLike>(
+  prefixes: &[Prefix<T>],
+  unsigneds: &[T::Unsigned],
+  writer: &mut BitWriter,
+) -> QCompressResult<()> {
+  let table = CompressionTable::from(prefixes);
+  if gcd_utils::get_common_gcd(prefixes) == Some(T::Unsigned::ONE) {
+    TrainedChunkCompressor::<T::Unsigned, TrivialGcdOp> { table, op: PhantomData }
+      .compress_nums(unsigneds, writer)
+  } else {
+    TrainedChunkCompressor::<T::Unsigned, GeneralGcdOp> { table, op: PhantomData }
+      .compress_nums(unsigneds, writer)
   }
+}
 
-  fn compress_nums(&self, unsigneds: &[T::Unsigned], writer: &mut BitWriter) -> QCompressResult<()> {
+impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, GcdOp: GcdOperator {
+  fn compress_nums(&self, unsigneds: &[Diff], writer: &mut BitWriter) -> QCompressResult<()> {
     let mut i = 0;
     while i < unsigneds.len() {
       let unsigned = unsigneds[i];
@@ -285,7 +301,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
       writer.write_usize(p.code, p.code_len);
       match p.run_len_jumpstart {
         None => {
-          compress_offset_bits_w_prefix(unsigned, p, writer);
+          Self::compress_offset_bits_w_prefix(unsigned, p, writer);
           i += 1;
         }
         Some(jumpstart) => {
@@ -303,7 +319,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
           writer.write_varint(reps - 1, jumpstart);
 
           for &unsigned in unsigneds.iter().skip(i).take(reps) {
-            compress_offset_bits_w_prefix(unsigned, p, writer);
+            Self::compress_offset_bits_w_prefix(unsigned, p, writer);
           }
           i += reps;
         }
@@ -311,6 +327,19 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
     }
     writer.finish_byte();
     Ok(())
+  }
+
+  fn compress_offset_bits_w_prefix(
+    unsigned: Diff,
+    p: &PrefixCompressionInfo<Diff>,
+    writer: &mut BitWriter,
+  ) {
+    let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
+    writer.write_diff(off, p.k);
+    if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
+      // most significant bit, if necessary, comes last
+      writer.write_one((off & (Diff::ONE << p.k)) > Diff::ZERO);
+    }
   }
 }
 
@@ -429,8 +458,11 @@ impl<T> Compressor<T> where T: NumberLike {
       };
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();
-      let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
-      chunk_compressor.compress_nums(&unsigneds, writer)?;
+      trained_compress_chunk_nums(
+        &prefixes,
+        &unsigneds,
+        writer
+      )?;
       (metadata, post_meta_idx)
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
@@ -455,8 +487,11 @@ impl<T> Compressor<T> where T: NumberLike {
       };
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();
-      let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
-      chunk_compressor.compress_nums(&unsigneds, writer)?;
+      trained_compress_chunk_nums(
+        &prefixes,
+        &unsigneds,
+        writer
+      )?;
       (metadata, post_meta_idx)
     };
     metadata.compressed_body_size = writer.byte_size() - post_meta_byte_idx;
