@@ -40,18 +40,18 @@ pub struct Prefix<T> where T: NumberLike {
 impl<T: NumberLike> Display for Prefix<T> {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     let jumpstart_str = if let Some(jumpstart) = self.run_len_jumpstart {
-      format!("(jumpstart: {})", jumpstart)
+      format!(" (jumpstart: {})", jumpstart)
     } else {
       "".to_string()
     };
     let gcd_str = if self.gcd > T::Unsigned::ONE {
-      format!("(gcd: {})", self.gcd)
+      format!(" (gcd: {})", self.gcd)
     } else {
       "".to_string()
     };
     write!(
       f,
-      "count: {} code: {} lower: {} upper: {} {} {}",
+      "count: {} code: {} lower: {} upper: {}{}{}",
       self.count,
       bits::bits_to_string(&self.code),
       self.lower,
