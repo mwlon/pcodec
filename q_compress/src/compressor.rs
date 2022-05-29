@@ -10,6 +10,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
 use crate::prefix_optimization;
 
@@ -252,27 +253,8 @@ fn train_prefixes<T: NumberLike>(
   Ok(prefixes)
 }
 
-trait GcdOperator {
-  fn get_offset<Diff: UnsignedLike>(diff: Diff, gcd: Diff) -> Diff;
-}
-
-struct TrivialGcdOp;
-struct GeneralGcdOp;
-
-impl GcdOperator for TrivialGcdOp {
-  fn get_offset<Diff: UnsignedLike>(diff: Diff, _: Diff) -> Diff {
-    diff
-  }
-}
-
-impl GcdOperator for GeneralGcdOp {
-  fn get_offset<Diff: UnsignedLike>(diff: Diff, gcd: Diff) -> Diff {
-    diff / gcd
-  }
-}
-
 #[derive(Clone)]
-struct TrainedChunkCompressor<Diff: UnsignedLike, GcdOp: GcdOperator> {
+struct TrainedChunkCompressor<Diff: UnsignedLike, GcdOp: GcdOperator<Diff>> {
   pub table: CompressionTable<Diff>,
   op: PhantomData<GcdOp>,
 }
@@ -283,7 +265,7 @@ fn trained_compress_chunk_nums<T: NumberLike>(
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   let table = CompressionTable::from(prefixes);
-  if gcd_utils::get_common_gcd(prefixes) == Some(T::Unsigned::ONE) {
+  if gcd_utils::common_gcd_for_compress(prefixes) == Some(T::Unsigned::ONE) {
     TrainedChunkCompressor::<T::Unsigned, TrivialGcdOp> { table, op: PhantomData }
       .compress_nums(unsigneds, writer)
   } else {
@@ -292,7 +274,7 @@ fn trained_compress_chunk_nums<T: NumberLike>(
   }
 }
 
-impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, GcdOp: GcdOperator {
+impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, GcdOp: GcdOperator<Diff> {
   fn compress_nums(&self, unsigneds: &[Diff], writer: &mut BitWriter) -> QCompressResult<()> {
     let mut i = 0;
     while i < unsigneds.len() {

@@ -20,6 +20,7 @@ os.makedirs(f'{base_dir}/zstd_parquet', exist_ok=True)
 os.makedirs(f'{base_dir}/binary', exist_ok=True)
 
 def write_parquet_tables(nums, full_name):
+  print(f'writing parquet for {full_name}...')
   table = pa.Table.from_pydict({'nums': nums})
   pq.write_table(table, f'{base_dir}/parquet/{full_name}.parquet', compression='NONE')
   pq.write_table(table, f'{base_dir}/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
@@ -140,5 +141,13 @@ write_bool(np.random.randint(2, size=n), 'random')
 
 # timestamps increasing 1s at a time on average from 2022-01-01T00:00:00 with
 # 1s random jitter
-timestamps = 10**6 * (1640995200 + np.arange(n) + np.random.normal(size=n))
-write_timestamp_micros(timestamps, 'near_linear')
+nl_timestamps = 10**6 * (1640995200 + np.arange(n) + np.random.normal(size=n))
+write_timestamp_micros(nl_timestamps, 'near_linear')
+
+# millisecond timestamps compressed as microseconds
+milli_micro_timestamps = 10 ** 3 * (1640995200000  + np.random.randint(0, 10 ** 9, size=n))
+write_timestamp_micros(milli_micro_timestamps, 'millis')
+
+# integers compressed as floats
+int_floats = np.random.randint(0, 2 ** 30, size=n)
+write_f64(int_floats, 'integers')

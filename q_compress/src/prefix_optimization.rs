@@ -59,6 +59,8 @@ pub fn optimize_prefixes<T: NumberLike>(
     flags.bits_to_encode_code_len() as f64 +
     if flags.use_gcds { 1.0 } else { 0.0 } +
     1.0; // bit to say there is no run len jumpstart
+  // determine whether we can skip GCD folding to improve performance in some cases
+  let fold_gcd = gcd_utils::weighted_prefixes_have_common_gcd(&wprefixes);
   for i in 0..wprefixes.len() {
     let mut best_cost = f64::MAX;
     let mut best_j = usize::MAX;
@@ -69,20 +71,19 @@ pub fn optimize_prefixes<T: NumberLike>(
       Some(ind) if ind == i => ind,
       _ => 0,
     };
-    let mut gcd = gcds[i];
+    let mut gcd_acc = gcds[i];
     for j in (start_j..i + 1).rev() {
       let lower = lower_unsigneds[j];
-      // reducing GCD's involves taking their pairwise GCD, additionally
-      // GCD'd with their modulo offset
-      gcd = gcd_utils::pair_gcd(gcds[j], gcd);
-      gcd = gcd_utils::pair_gcd(upper - lower, gcd);
+      if fold_gcd {
+        gcd_utils::fold_prefix_gcds(lower, upper, gcds[j], &mut gcd_acc);
+      }
       let cost = best_costs[j] + prefix_bit_cost::<T::Unsigned>(
         base_meta_cost,
         lower,
         upper,
         cum_weight_i - cum_weight[j],
         total_weight,
-        gcd,
+        gcd_acc,
       );
       if cost < best_cost {
         best_cost = cost;
@@ -101,12 +102,18 @@ pub fn optimize_prefixes<T: NumberLike>(
   let mut res = Vec::with_capacity(path.len());
   for &(j, i) in path {
     let mut count = 0;
-    let mut gcd = gcds[j];
+    let mut gcd_acc = gcds[j];
     let lower = wprefixes[j].prefix.lower;
     for wp in wprefixes.iter().take(i + 1).skip(j) {
       count += wp.prefix.count;
-      gcd = gcd_utils::pair_gcd(wp.prefix.gcd, gcd);
-      gcd = gcd_utils::pair_gcd(wp.prefix.upper.to_unsigned() - lower.to_unsigned(), gcd);
+      if fold_gcd {
+        gcd_utils::fold_prefix_gcds(
+          wp.prefix.lower.to_unsigned(),
+          wp.prefix.upper.to_unsigned(),
+          wp.prefix.gcd,
+          &mut gcd_acc,
+        );
+      }
     }
     let prefix = Prefix {
       count,
@@ -114,7 +121,7 @@ pub fn optimize_prefixes<T: NumberLike>(
       lower,
       upper: wprefixes[i].prefix.upper,
       run_len_jumpstart: wprefixes[i].prefix.run_len_jumpstart,
-      gcd,
+      gcd: gcd_acc,
     };
     res.push(WeightedPrefix {
       weight: cum_weight[i + 1] - cum_weight[j],

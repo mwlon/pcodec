@@ -1,6 +1,7 @@
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::{BitReader, BitWriter, Prefix};
 use crate::errors::{QCompressError, QCompressResult};
+use crate::prefix::WeightedPrefix;
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<Diff: UnsignedLike>(mut a: Diff, mut b: Diff) -> Diff {
@@ -20,7 +21,7 @@ pub fn gcd<Diff: UnsignedLike>(sorted: &[Diff]) -> Diff {
   let lower = sorted[0];
   let upper = sorted[sorted.len() - 1];
   if lower == upper {
-    return Diff::ONE;
+    return lower;
   }
   let mut res = upper - lower;
   for &x in sorted.iter().skip(1) {
@@ -32,18 +33,39 @@ pub fn gcd<Diff: UnsignedLike>(sorted: &[Diff]) -> Diff {
   res
 }
 
-pub fn get_common_gcd<T: NumberLike>(prefixes: &[Prefix<T>]) -> Option<T::Unsigned> {
-  if prefixes.is_empty() {
-    None
-  } else {
-    let gcd = prefixes[0].gcd;
-    for p in prefixes.iter().skip(1) {
-      if p.gcd != gcd {
-        return None;
+// Returns Some(gcd) if it is more concise to use the same GCD for all prefixes
+// Returns None if it is more concise to describe each prefix's GCD separately
+// 4 cases:
+// * no prefixes: we don't even need to bother writing a common GCD, return None
+// * all prefixes have range 0, i.e. [x, x]: GCD doesn't affect num blocks, return Some(1)
+// * all prefixes with range >0 have same GCD: return Some(that GCD)
+// * two prefixes with range >0 have different GCD: return None
+pub fn common_gcd_for_compress<T: NumberLike>(prefixes: &[Prefix<T>]) -> Option<T::Unsigned> {
+  let mut nontrivial_ranges_share_gcd: bool = true;
+  let mut gcd = None;
+  for p in prefixes {
+    if p.upper != p.lower {
+      if gcd.is_none() {
+        gcd = Some(p.gcd);
+      } else {
+        nontrivial_ranges_share_gcd = false;
       }
     }
-    Some(gcd)
   }
+
+  match (prefixes.len(), nontrivial_ranges_share_gcd, gcd) {
+    (0, _, _) => None,
+    (_, false, _) => None,
+    (_, true, Some(gcd)) => Some(gcd),
+    (_, _, None) => Some(T::Unsigned::ONE),
+  }
+}
+
+pub fn weighted_prefixes_have_common_gcd<T: NumberLike>(wps: &[WeightedPrefix<T>]) -> bool {
+  let prefixes = wps.iter()
+    .map(|wp| wp.prefix.clone())
+    .collect::<Vec<_>>();
+  common_gcd_for_compress(&prefixes).is_some()
 }
 
 pub fn gcd_bits_required<Diff: UnsignedLike>(range: Diff) -> usize {
@@ -75,6 +97,44 @@ pub fn read_gcd<Diff: UnsignedLike>(range: Diff, reader: &mut BitReader) -> QCom
   } else {
     Ok(Diff::ONE)
   }
+}
+
+pub trait GcdOperator<Diff: UnsignedLike> {
+  fn get_offset(diff: Diff, gcd: Diff) -> Diff;
+  fn get_diff(offset: Diff, gcd: Diff) -> Diff;
+}
+
+pub struct TrivialGcdOp;
+
+pub struct GeneralGcdOp;
+
+// When all prefix GCD's are 1
+impl<Diff: UnsignedLike> GcdOperator<Diff> for TrivialGcdOp {
+  fn get_offset(diff: Diff, _: Diff) -> Diff {
+    diff
+  }
+  fn get_diff(offset: Diff, _: Diff) -> Diff {
+    offset
+  }
+}
+
+// General case when GCD might not be 1
+impl<Diff: UnsignedLike> GcdOperator<Diff> for GeneralGcdOp {
+  fn get_offset(diff: Diff, gcd: Diff) -> Diff {
+    diff / gcd
+  }
+  fn get_diff(offset: Diff, gcd: Diff) -> Diff {
+    offset * gcd
+  }
+}
+
+pub fn fold_prefix_gcds<Diff: UnsignedLike>(lower: Diff, upper: Diff, gcd: Diff, acc: &mut Diff) {
+  // reducing GCD's involves taking their pairwise GCD, additionally
+  // GCD'd with their modulo offset
+  *acc = pair_gcd(
+    upper - lower,
+    pair_gcd(gcd, *acc)
+  );
 }
 
 #[cfg(test)]
