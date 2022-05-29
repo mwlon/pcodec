@@ -184,21 +184,18 @@ fn main() {
     }
 
     for config in get_configs(path_str, compression_level) {
-      for _ in 0..10 {
-        let config = config.clone();
-        println!("\nfile: {} config: {:?}", path.display(), config);
-        if path_str.contains("i64") {
-          I64Handler::handle(&path, &output_dir, config);
-        } else if path_str.contains("f64") {
-          F64Handler::handle(&path, &output_dir, config);
-        } else if path_str.contains("bool") {
-          BoolHandler::handle(&path, &output_dir, config);
-        } else if path_str.contains("micros") {
-          TimestampMicrosHandler::handle(&path, &output_dir, config);
-        } else {
-          panic!("Could not determine dtype for file {}!", path_str);
-        };
-      }
+      println!("\nfile: {} config: {:?}", path.display(), config);
+      if path_str.contains("i64") {
+        I64Handler::handle(&path, &output_dir, config);
+      } else if path_str.contains("f64") {
+        F64Handler::handle(&path, &output_dir, config);
+      } else if path_str.contains("bool") {
+        BoolHandler::handle(&path, &output_dir, config);
+      } else if path_str.contains("micros") {
+        TimestampMicrosHandler::handle(&path, &output_dir, config);
+      } else {
+        panic!("Could not determine dtype for file {}!", path_str);
+      };
     }
   }
 }
