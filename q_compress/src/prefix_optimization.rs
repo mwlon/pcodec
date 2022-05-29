@@ -44,6 +44,9 @@ pub fn optimize_prefixes<T: NumberLike>(
   let lower_unsigneds = wprefixes.iter()
     .map(|wp| wp.prefix.lower.to_unsigned())
     .collect::<Vec<_>>();
+  let upper_unsigneds = wprefixes.iter()
+    .map(|wp| wp.prefix.upper.to_unsigned())
+    .collect::<Vec<_>>();
 
   let maybe_rep_idx = wprefixes.iter()
     .position(|wp| wp.prefix.run_len_jumpstart.is_some());
@@ -59,12 +62,18 @@ pub fn optimize_prefixes<T: NumberLike>(
     flags.bits_to_encode_code_len() as f64 +
     if flags.use_gcds { 1.0 } else { 0.0 } +
     1.0; // bit to say there is no run len jumpstart
+
   // determine whether we can skip GCD folding to improve performance in some cases
-  let fold_gcd = gcd_utils::weighted_prefixes_have_common_gcd(&wprefixes);
+  let fold_gcd = {
+    let prefixes = wprefixes.iter()
+      .map(|wp| &wp.prefix);
+    gcd_utils::use_gcd_arithmetic(prefixes)
+  };
+
   for i in 0..wprefixes.len() {
     let mut best_cost = f64::MAX;
     let mut best_j = usize::MAX;
-    let upper = wprefixes[i].prefix.upper.to_unsigned();
+    let upper = upper_unsigneds[i];
     let cum_weight_i = cum_weight[i + 1];
     let start_j = match maybe_rep_idx {
       Some(ind) if ind < i => ind + 1,
@@ -75,7 +84,7 @@ pub fn optimize_prefixes<T: NumberLike>(
     for j in (start_j..i + 1).rev() {
       let lower = lower_unsigneds[j];
       if fold_gcd {
-        gcd_utils::fold_prefix_gcds(lower, upper, gcds[j], &mut gcd_acc);
+        gcd_utils::fold_prefix_gcds(lower_unsigneds[j], upper_unsigneds[i], gcds[j], upper, &mut gcd_acc);
       }
       let cost = best_costs[j] + prefix_bit_cost::<T::Unsigned>(
         base_meta_cost,
@@ -102,15 +111,15 @@ pub fn optimize_prefixes<T: NumberLike>(
   let mut res = Vec::with_capacity(path.len());
   for &(j, i) in path {
     let mut count = 0;
-    let mut gcd_acc = gcds[j];
-    let lower = wprefixes[j].prefix.lower;
-    for wp in wprefixes.iter().take(i + 1).skip(j) {
+    let mut gcd_acc = gcds[i];
+    for (k, wp) in wprefixes.iter().enumerate().take(i + 1).skip(j).rev() {
       count += wp.prefix.count;
       if fold_gcd {
         gcd_utils::fold_prefix_gcds(
-          wp.prefix.lower.to_unsigned(),
-          wp.prefix.upper.to_unsigned(),
+          lower_unsigneds[k],
+          upper_unsigneds[k],
           wp.prefix.gcd,
+          upper_unsigneds[i],
           &mut gcd_acc,
         );
       }
@@ -118,7 +127,7 @@ pub fn optimize_prefixes<T: NumberLike>(
     let prefix = Prefix {
       count,
       code: Vec::new(),
-      lower,
+      lower: wprefixes[j].prefix.lower,
       upper: wprefixes[i].prefix.upper,
       run_len_jumpstart: wprefixes[i].prefix.run_len_jumpstart,
       gcd: gcd_acc,

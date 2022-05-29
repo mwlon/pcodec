@@ -118,7 +118,7 @@ fn write_prefixes<T: NumberLike>(
   let bits_to_encode_prefix_len = flags.bits_to_encode_code_len();
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let maybe_commond_gcd = if flags.use_gcds {
-    let maybe_common_gcd = gcd_utils::common_gcd_for_compress(prefixes);
+    let maybe_common_gcd = gcd_utils::common_gcd_for_chunk_meta(prefixes);
     writer.write_one(maybe_common_gcd.is_some());
     if let Some(common_gcd) = maybe_common_gcd {
       gcd_utils::write_gcd(T::Unsigned::MAX, common_gcd, writer);
