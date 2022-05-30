@@ -52,6 +52,8 @@ pub struct ChunkMetadata<T> where T: NumberLike {
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
   pub prefix_metadata: PrefixMetadata<T>,
+  // Make it API-stable to add more fields in the future
+  pub(crate) phantom: PhantomData<()>,
 }
 
 fn parse_prefixes<T: NumberLike>(
@@ -172,6 +174,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       n,
       compressed_body_size,
       prefix_metadata,
+      phantom: PhantomData,
     })
   }
 

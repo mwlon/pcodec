@@ -460,6 +460,7 @@ impl<T> Compressor<T> where T: NumberLike {
         n,
         compressed_body_size: 0,
         prefix_metadata,
+        phantom: PhantomData,
       };
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();
@@ -488,7 +489,8 @@ impl<T> Compressor<T> where T: NumberLike {
       let metadata = ChunkMetadata {
         n,
         compressed_body_size: 0,
-        prefix_metadata
+        prefix_metadata,
+        phantom: PhantomData,
       };
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();

@@ -19,7 +19,10 @@ const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
 /// All the settings you can specify about decompression.
 #[derive(Clone, Debug, Default)]
-pub struct DecompressorConfig {}
+pub struct DecompressorConfig {
+  // Make it API-stable to add more fields in the future
+  phantom: PhantomData<()>,
+}
 
 fn atomically<T, F>(reader: &mut BitReader, f: F) -> QCompressResult<T>
 where F: FnOnce(&mut BitReader) -> QCompressResult<T> {
@@ -723,6 +726,7 @@ mod tests {
         prefix_w_code(vec![false]),
         prefix_w_code(vec![true, false]),
       ]},
+      phantom: PhantomData,
     };
     let metadata_duplicating_prefix = ChunkMetadata::<i64> {
       n: 2,
@@ -731,7 +735,8 @@ mod tests {
         prefix_w_code(vec![false]),
         prefix_w_code(vec![false]),
         prefix_w_code(vec![true]),
-      ]}
+      ]},
+      phantom: PhantomData,
     };
 
     let flags = Flags {
