@@ -60,9 +60,8 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(prefixes: &[Prefix<T>]) -> Optio
   }
 }
 
-pub fn use_gcd_arithmetic<'a, T: NumberLike, I>(prefixes: I) -> bool
-where I: IntoIterator<Item=&'a Prefix<T>>{
-  prefixes.into_iter()
+pub fn use_gcd_arithmetic<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
+  prefixes.iter()
     .any(|p| p.gcd > T::Unsigned::ONE && p.upper != p.lower)
 }
 
@@ -97,18 +96,24 @@ pub fn read_gcd<Diff: UnsignedLike>(range: Diff, reader: &mut BitReader) -> QCom
   }
 }
 
-pub fn fold_prefix_gcds<Diff: UnsignedLike>(
-  new_lower: Diff,
-  new_upper: Diff,
-  new_gcd: Diff,
-  old_upper: Diff,
+pub fn fold_prefix_gcds_left<Diff: UnsignedLike>(
+  left_lower: Diff,
+  left_upper: Diff,
+  left_gcd: Diff,
+  right_lower: Diff,
+  right_upper: Diff,
   acc: &mut Diff,
 ) {
   // folding GCD's involves GCD'ing with their modulo offset and (if the new
   // range is nontrivial) with the new prefix's GCD
-  *acc = pair_gcd(old_upper - new_upper, *acc);
-  if new_upper != new_lower {
-    *acc = pair_gcd(new_gcd, *acc);
+  if right_lower == right_upper {
+    println!("RL: {} LU: {}", right_lower, left_upper);
+    *acc = right_lower - left_upper;
+  } else {
+    *acc = pair_gcd(right_lower - left_upper, *acc);
+  }
+  if left_upper != left_lower {
+    *acc = pair_gcd(left_gcd, *acc);
   }
 }
 
