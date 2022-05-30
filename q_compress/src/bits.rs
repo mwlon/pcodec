@@ -120,7 +120,7 @@ mod tests {
   }
 
   #[test]
-  fn test_avg_base2_bits() {
+  fn test_avg_offset_bits() {
     assert_eq!(avg_offset_bits(0_u32, 0_u32, 1), 0.0);
     assert_eq!(avg_offset_bits(4_u32, 5_u32, 1), 1.0);
     assert!((avg_offset_bits(2_u32, 4_u32, 1) - 5.0 / 3.0).abs() < 1E-8);

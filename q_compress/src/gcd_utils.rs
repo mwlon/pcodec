@@ -84,7 +84,7 @@ pub fn use_gcd_prefix_optimize<T: NumberLike>(
   false
 }
 
-pub fn use_gcd_num_blocks<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
+pub fn use_gcd_arithmetic<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
   prefixes.iter()
     .any(|p| p.gcd > T::Unsigned::ONE && p.upper != p.lower)
 }

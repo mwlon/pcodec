@@ -61,10 +61,13 @@ pub struct CompressorConfig {
   /// like a sequence of timestamps sampled approximately periodically.
   /// * Higher-order delta encoding is good for time series that are very
   /// smooth, like temperature or light sensor readings.
+  ///
+  /// Setting delta encoding order too high or low will hurt compression ratio.
+  /// If you're unsure, use [`auto_compressor_config()`] to choose it.
   pub delta_encoding_order: usize,
-  /// `infer_gcds` can improve compression ratio in cases where all
-  /// numbers in each range share a nontrivial greatest common divisor
-  /// (default false).
+  /// `infer_gcds` improves compression ratio in cases where all
+  /// numbers in a range share a nontrivial Greatest Common Divisor
+  /// (default true).
   ///
   /// Examples where this helps:
   /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
@@ -72,8 +75,8 @@ pub struct CompressorConfig {
   /// * nanosecond-precision timestamps that are all whole numbers of
   /// microseconds
   ///
-  /// This adds a small amount of extra compute and a very small amount of
-  /// extra data in cases where it is not helpful.
+  /// When this is helpful and in rare cases when it isn't, compression speed
+  /// is slightly reduced.
   pub infer_gcds: bool,
 }
 
@@ -82,7 +85,7 @@ impl Default for CompressorConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
-      infer_gcds: false,
+      infer_gcds: true,
     }
   }
 }
@@ -265,7 +268,7 @@ fn trained_compress_chunk_nums<T: NumberLike>(
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   let table = CompressionTable::from(prefixes);
-  if gcd_utils::use_gcd_num_blocks(prefixes) {
+  if gcd_utils::use_gcd_arithmetic(prefixes) {
     TrainedChunkCompressor::<T::Unsigned, GeneralGcdOp> { table, op: PhantomData }
       .compress_nums(unsigneds, writer)
   } else {

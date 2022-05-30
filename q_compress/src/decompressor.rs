@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{bits, Flags};
+use crate::{bits, Flags, gcd_utils};
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
@@ -171,8 +171,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       .map(max_bits_overshot)
       .max()
       .unwrap_or(usize::MAX);
-    let use_gcd = prefixes.iter()
-      .any(|p| p.gcd > T::Unsigned::ONE && p.upper != p.lower);
+    let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
 
     Ok(NumDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
