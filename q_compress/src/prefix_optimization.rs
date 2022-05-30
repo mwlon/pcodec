@@ -66,7 +66,7 @@ pub fn optimize_prefixes<T: NumberLike>(
     if flags.use_gcds { 1.0 } else { 0.0 } + // bit to say whether there is GCD or not
     1.0; // bit to say there is no run len jumpstart
   // determine whether we can skip GCD folding to improve performance in some cases
-  let fold_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
+  let fold_gcd = gcd_utils::use_gcd_prefix_optimize(&prefixes, flags);
 
   for i in 0..wprefixes.len() {
     let mut best_cost = f64::MAX;
@@ -78,15 +78,14 @@ pub fn optimize_prefixes<T: NumberLike>(
       Some(ind) if ind == i => ind,
       _ => 0,
     };
-    let mut gcd_acc = gcds[i];
+    let mut gcd_acc = None;
     for j in (start_j..i + 1).rev() {
       let lower = lower_unsigneds[j];
       if fold_gcd {
         gcd_utils::fold_prefix_gcds_left(
           lower_unsigneds[j],
-          upper_unsigneds[i],
+          upper_unsigneds[j],
           gcds[j],
-          lower_unsigneds[i],
           upper,
           &mut gcd_acc
         );
@@ -97,7 +96,7 @@ pub fn optimize_prefixes<T: NumberLike>(
         upper,
         cum_weight_i - cum_weight[j],
         total_weight,
-        gcd_acc,
+        gcd_acc.unwrap_or(T::Unsigned::ONE),
       );
       if cost < best_cost {
         best_cost = cost;
@@ -116,7 +115,7 @@ pub fn optimize_prefixes<T: NumberLike>(
   let mut res = Vec::with_capacity(path.len());
   for &(j, i) in path {
     let mut count = 0;
-    let mut gcd_acc = gcds[i];
+    let mut gcd_acc = None;
     for (k, p) in prefixes.iter().enumerate().take(i + 1).skip(j).rev() {
       count += p.count;
       if fold_gcd {
@@ -124,7 +123,6 @@ pub fn optimize_prefixes<T: NumberLike>(
           lower_unsigneds[k],
           upper_unsigneds[k],
           p.gcd,
-          lower_unsigneds[i],
           upper_unsigneds[i],
           &mut gcd_acc,
         );
@@ -136,7 +134,7 @@ pub fn optimize_prefixes<T: NumberLike>(
       lower: prefixes[j].lower,
       upper: prefixes[i].upper,
       run_len_jumpstart: prefixes[i].run_len_jumpstart,
-      gcd: gcd_acc,
+      gcd: gcd_acc.unwrap_or(T::Unsigned::ONE),
     };
     res.push(WeightedPrefix {
       weight: cum_weight[i + 1] - cum_weight[j],
@@ -162,7 +160,7 @@ mod tests {
   }
 
   #[test]
-  fn test_optimize_w_gcds() {
+  fn test_optimize_trivial_ranges_gcd() {
     let wps = vec![
       WeightedPrefix::new(1, 1, 1000_i32, 1000, None, 1_u32),
       WeightedPrefix::new(1, 1, 2000_i32, 2000, None, 1_u32),
@@ -174,6 +172,58 @@ mod tests {
     );
     let expected = vec![
       WeightedPrefix::new(2, 2, 1000_i32, 2000, None, 1000_u32),
+    ];
+    assert_eq!(res, expected);
+  }
+
+  #[test]
+  fn test_optimize_single_nontrivial_range_gcd() {
+    let wps = vec![
+      WeightedPrefix::new(100, 100, 1000_i32, 2000, None, 10_u32),
+      WeightedPrefix::new(1, 1, 2100_i32, 2100, None, 1_u32),
+    ];
+    let res = optimize_prefixes(
+      wps,
+      &basic_flags(),
+      100,
+    );
+    let expected = vec![
+      WeightedPrefix::new(101, 101, 1000_i32, 2100, None, 10_u32),
+    ];
+    assert_eq!(res, expected);
+  }
+
+  #[test]
+  fn test_optimize_nontrivial_ranges_gcd() {
+    let wps = vec![
+      WeightedPrefix::new(5, 5, 1000_i32, 1100, None, 10_u32),
+      WeightedPrefix::new(5, 5, 1105, 1135, None, 15_u32),
+    ];
+    let res = optimize_prefixes(
+      wps,
+      &basic_flags(),
+      100,
+    );
+    let expected = vec![
+      WeightedPrefix::new(10, 10, 1000_i32, 1135, None, 5_u32),
+    ];
+    assert_eq!(res, expected);
+  }
+
+  #[test]
+  fn test_optimize_nontrivial_misaligned_ranges_gcd() {
+    let wps = vec![
+      WeightedPrefix::new(100, 100, 1000_i32, 1100, None, 10_u32),
+      WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
+    ];
+    let res = optimize_prefixes(
+      wps,
+      &basic_flags(),
+      100,
+    );
+    let expected = vec![
+      WeightedPrefix::new(100, 100, 1000_i32, 1100, None, 10_u32),
+      WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
     ];
     assert_eq!(res, expected);
   }

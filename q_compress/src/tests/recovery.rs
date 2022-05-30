@@ -141,12 +141,17 @@ fn test_with_gcds() {
     sparse_with_gcd.push(7);
   }
   assert_recovers(sparse_with_gcd, 4, "sparse with gcd");
-
 }
 
 fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: &str) {
   for delta_encoding_order in [0, 1, 7] {
     for infer_gcds in [false, true] {
+      let debug_info = format!(
+        "name={} delta_encoding_order={}, infer_gcds={}",
+        name,
+        delta_encoding_order,
+        infer_gcds,
+      );
       let compressor = Compressor::<T>::from_config(
         CompressorConfig { compression_level, delta_encoding_order, infer_gcds },
       );
@@ -156,12 +161,6 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         .expect("decompression error");
       // We can't do assert_eq on the whole vector because even bitwise identical
       // floats sometimes aren't equal by ==.
-      let debug_info = format!(
-        "name={} delta_encoding_order={}, infer_gcds={}",
-        name,
-        delta_encoding_order,
-        infer_gcds,
-      );
       assert_eq!(decompressed.len(), nums.len(), "{}", debug_info);
       for i in 0..decompressed.len() {
         assert!(

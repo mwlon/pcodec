@@ -67,6 +67,7 @@ impl<T: NumberLike> Display for Prefix<T> {
 // Each offset is encoded as k bit if it is between
 // only_k_bits_lower and only_k_bits_upper, or
 // or k + 1 bits otherwise.
+#[derive(Debug)]
 pub(crate) struct KInfo<T: NumberLike> {
   pub k: usize,
   pub only_k_bits_lower: T::Unsigned,

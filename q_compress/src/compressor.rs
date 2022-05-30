@@ -265,7 +265,7 @@ fn trained_compress_chunk_nums<T: NumberLike>(
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   let table = CompressionTable::from(prefixes);
-  if gcd_utils::use_gcd_arithmetic(prefixes) {
+  if gcd_utils::use_gcd_num_blocks(prefixes) {
     TrainedChunkCompressor::<T::Unsigned, GeneralGcdOp> { table, op: PhantomData }
       .compress_nums(unsigneds, writer)
   } else {

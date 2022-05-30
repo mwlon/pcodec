@@ -1,5 +1,5 @@
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::{BitReader, BitWriter, Prefix};
+use crate::{BitReader, BitWriter, Flags, Prefix};
 use crate::errors::{QCompressError, QCompressResult};
 
 // fast if b is small, requires b > 0
@@ -60,7 +60,31 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(prefixes: &[Prefix<T>]) -> Optio
   }
 }
 
-pub fn use_gcd_arithmetic<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
+pub fn use_gcd_prefix_optimize<T: NumberLike>(
+  prefixes: &[Prefix<T>],
+  flags: &Flags,
+) -> bool {
+  if !flags.use_gcds {
+    return false;
+  }
+
+  for p in prefixes {
+    if p.gcd > T::Unsigned::ONE {
+      return true;
+    }
+  }
+  for (i, pi) in prefixes.iter().enumerate().skip(1) {
+    let pj = &prefixes[i - 1];
+    if pi.lower == pi.upper &&
+      pj.lower == pj.upper &&
+      pj.upper.to_unsigned() + T::Unsigned::ONE < pi.lower.to_unsigned() {
+      return true;
+    }
+  }
+  false
+}
+
+pub fn use_gcd_num_blocks<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
   prefixes.iter()
     .any(|p| p.gcd > T::Unsigned::ONE && p.upper != p.lower)
 }
@@ -100,20 +124,22 @@ pub fn fold_prefix_gcds_left<Diff: UnsignedLike>(
   left_lower: Diff,
   left_upper: Diff,
   left_gcd: Diff,
-  right_lower: Diff,
   right_upper: Diff,
-  acc: &mut Diff,
+  acc: &mut Option<Diff>,
 ) {
   // folding GCD's involves GCD'ing with their modulo offset and (if the new
   // range is nontrivial) with the new prefix's GCD
-  if right_lower == right_upper {
-    println!("RL: {} LU: {}", right_lower, left_upper);
-    *acc = right_lower - left_upper;
-  } else {
-    *acc = pair_gcd(right_lower - left_upper, *acc);
+  if left_upper != right_upper {
+    *acc = Some(match *acc {
+      Some(gcd) => pair_gcd(right_upper - left_upper, gcd),
+      None => right_upper - left_upper,
+    });
   }
   if left_upper != left_lower {
-    *acc = pair_gcd(left_gcd, *acc);
+    *acc = Some(match *acc {
+      Some(gcd) => pair_gcd(left_gcd, gcd),
+      None => left_gcd,
+    });
   }
 }
 
