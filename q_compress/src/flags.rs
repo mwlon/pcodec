@@ -47,7 +47,7 @@ pub struct Flags {
   /// prefix.
   /// This adds an optional multiplier to each prefix metadata, so that each
   /// unsigned number is decoded as `x = prefix_lower + offset * multiplier`.
-  /// This can improve compression ratio in some cases, such as when the
+  /// This can improve compression ratio in some cases, e.g. when the
   /// numbers are all integer multiples of 100 or all integer-valued floats.
   /// Introduced in 0.10.0.
   pub use_gcds: bool,
