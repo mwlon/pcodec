@@ -61,7 +61,7 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
     let config = CompressorConfig {
       compression_level: opt.level,
       delta_encoding_order,
-      infer_gcds: !opt.disable_gcd_inference,
+      use_gcds: !opt.disable_gcd_inference,
     };
     let compressor = Compressor::<T>::from_config(config);
 

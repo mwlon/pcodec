@@ -1,5 +1,10 @@
 # `q_compress` Changelog
 
+## 0.10.0 (not yet released)
+
+* Added `use_gcds` compressor config and flag to improve compression ratio
+in cases where all numbers in some ranges share a nontrivial common divisor.
+
 ## 0.9.3
 
 * Added auto compress/decompress functions that can be used as 1-liners.
