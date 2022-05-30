@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{BitWriter, Flags, huffman_encoding};
+use crate::{BitWriter, Flags, gcd_utils, huffman_encoding};
 use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -10,6 +10,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
 use crate::prefix_optimization;
 
@@ -31,7 +32,7 @@ struct JumpstartConfiguration {
 /// stored in the output.
 #[derive(Clone, Debug)]
 pub struct CompressorConfig {
-  /// `compression_level` ranges from 0 to 12 inclusive, defaulting to 6.
+  /// `compression_level` ranges from 0 to 12 inclusive (default 6).
   ///
   /// The compressor uses up to 2^`compression_level` prefixes.
   ///
@@ -44,7 +45,7 @@ pub struct CompressorConfig {
   /// * Level 12 can achieve a few % better compression than 6 with 4096
   /// prefixes but runs ~10x slower in many cases.
   pub compression_level: usize,
-  /// `delta_encoding_order` ranges from 0 to 7 inclusive, defaulting to 0.
+  /// `delta_encoding_order` ranges from 0 to 7 inclusive (default 0).
   ///
   /// It is the number of times to apply delta encoding
   /// before compressing. For instance, say we have the numbers
@@ -60,7 +61,24 @@ pub struct CompressorConfig {
   /// like a sequence of timestamps sampled approximately periodically.
   /// * Higher-order delta encoding is good for time series that are very
   /// smooth, like temperature or light sensor readings.
+  ///
+  /// Setting delta encoding order too high or low will hurt compression ratio.
+  /// If you're unsure, use
+  /// [`auto_compressor_config()`][crate::auto_compressor_config] to choose it.
   pub delta_encoding_order: usize,
+  /// `use_gcds` improves compression ratio in cases where all
+  /// numbers in a range share a nontrivial Greatest Common Divisor
+  /// (default true).
+  ///
+  /// Examples where this helps:
+  /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
+  /// * floats `[1.0, 2.0, ... 1000.0]` shuffled
+  /// * nanosecond-precision timestamps that are all whole numbers of
+  /// microseconds
+  ///
+  /// When this is helpful and in rare cases when it isn't, compression speed
+  /// is slightly reduced.
+  pub use_gcds: bool,
 }
 
 impl Default for CompressorConfig {
@@ -68,6 +86,7 @@ impl Default for CompressorConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
+      use_gcds: true,
     }
   }
 }
@@ -108,43 +127,58 @@ fn choose_run_len_jumpstart(
   }
 }
 
+struct PrefixBuffer<'a, T: NumberLike> {
+  pub seq: &'a mut Vec<WeightedPrefix<T>>,
+  pub prefix_idx: &'a mut usize,
+  pub max_n_pref: usize,
+  pub n_unsigneds: usize,
+  pub sorted: &'a [T::Unsigned],
+  pub use_gcd: bool,
+}
+
 fn push_pref<T: NumberLike>(
-  seq: &mut Vec<WeightedPrefix<T>>,
-  prefix_idx: &mut usize,
+  buffer: &mut PrefixBuffer<'_, T>,
   i: usize,
   j: usize,
-  max_n_pref: usize,
-  n_unsigneds: usize,
-  sorted: &[T::Unsigned],
 ) {
+  let sorted = buffer.sorted;
+  let n_unsigneds = buffer.n_unsigneds;
+
   let count = j - i;
-  let frequency = count as f64 / n_unsigneds as f64;
-  let new_prefix_idx = max(*prefix_idx + 1, (j * max_n_pref) / n_unsigneds);
+  let frequency = count as f64 / buffer.n_unsigneds as f64;
+  let new_prefix_idx = max(*buffer.prefix_idx + 1, (j * buffer.max_n_pref) / n_unsigneds);
   let lower = T::from_unsigned(sorted[i]);
   let upper = T::from_unsigned(sorted[j - 1]);
+  let gcd = if buffer.use_gcd {
+    gcd_utils::gcd(&sorted[i..j])
+  } else {
+    T::Unsigned::ONE
+  };
   if n_unsigneds < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n_unsigneds {
     // The usual case - a prefix for a range that represents either 100% or
     // <=80% of the data.
-    seq.push(WeightedPrefix::new(
+    buffer.seq.push(WeightedPrefix::new(
       count,
       count,
       lower,
       upper,
-      None
+      None,
+      gcd,
     ));
   } else {
     // The weird case - a range that represents almost all (but not all) the data.
     // We create extra prefixes that can describe `reps` copies of the range at once.
     let config = choose_run_len_jumpstart(count, n_unsigneds);
-    seq.push(WeightedPrefix::new(
+    buffer.seq.push(WeightedPrefix::new(
       count,
       config.weight,
       lower,
       upper,
-      Some(config.jumpstart)
+      Some(config.jumpstart),
+      gcd,
     ));
   }
-  *prefix_idx = new_prefix_idx;
+  *buffer.prefix_idx = new_prefix_idx;
 }
 
 fn train_prefixes<T: NumberLike>(
@@ -179,29 +213,35 @@ fn train_prefixes<T: NumberLike>(
   let safe_comp_level = min(comp_level, (n_unsigneds as f64).log2() as usize);
   let max_n_pref = 1_usize << safe_comp_level;
   let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
-  let pref_ptr = &mut raw_prefs;
-
   let mut pref_idx = 0_usize;
-  let pref_idx_ptr = &mut pref_idx;
 
+  let use_gcd = flags.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
+  let mut prefix_buffer = PrefixBuffer::<T> {
+    seq: &mut raw_prefs,
+    prefix_idx: &mut pref_idx,
+    max_n_pref,
+    n_unsigneds,
+    sorted: &sorted,
+    use_gcd,
+  };
   for j in 0..n_unsigneds {
-    let target_j = ((*pref_idx_ptr + 1) * n_unsigneds) / max_n_pref;
+    let target_j = ((*prefix_buffer.prefix_idx + 1) * n_unsigneds) / max_n_pref;
     if j > 0 && sorted[j] == sorted[j - 1] {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        push_pref(pref_ptr, pref_idx_ptr, i, backup_j, max_n_pref, n_unsigneds, &sorted);
+        push_pref(&mut prefix_buffer, i, backup_j);
         i = backup_j;
       }
     } else {
       backup_j = j;
       if j >= target_j {
-        push_pref(pref_ptr, pref_idx_ptr, i, j, max_n_pref, n_unsigneds, &sorted);
+        push_pref(&mut prefix_buffer, i, j);
         i = j;
       }
     }
   }
-  push_pref(pref_ptr, pref_idx_ptr, i, n_unsigneds, max_n_pref, n_unsigneds, &sorted);
+  push_pref(&mut prefix_buffer, i, n_unsigneds);
 
   let mut optimized_prefs = prefix_optimization::optimize_prefixes(
     raw_prefs,
@@ -217,32 +257,29 @@ fn train_prefixes<T: NumberLike>(
   Ok(prefixes)
 }
 
-fn compress_offset_bits_w_prefix<Diff: UnsignedLike>(
-  unsigned: Diff,
-  p: &PrefixCompressionInfo<Diff>,
-  writer: &mut BitWriter,
-) {
-  let off = unsigned - p.lower;
-  writer.write_diff(off, p.k);
-  if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
-    // most significant bit, if necessary, comes last
-    writer.write_one((off & (Diff::ONE << p.k)) > Diff::ZERO);
-  }
-}
-
 #[derive(Clone)]
-struct TrainedChunkCompressor<T> where T: NumberLike {
-  pub table: CompressionTable<T::Unsigned>,
-  // pub prefix_infos: Vec<PrefixCompressionInfo<T>>,
+struct TrainedChunkCompressor<Diff: UnsignedLike, GcdOp: GcdOperator<Diff>> {
+  pub table: CompressionTable<Diff>,
+  op: PhantomData<GcdOp>,
 }
 
-impl<T> TrainedChunkCompressor<T> where T: NumberLike {
-  pub fn new(prefixes: &[Prefix<T>]) -> QCompressResult<Self> {
-    let table = CompressionTable::from(prefixes);
-    Ok(Self { table })
+fn trained_compress_chunk_nums<T: NumberLike>(
+  prefixes: &[Prefix<T>],
+  unsigneds: &[T::Unsigned],
+  writer: &mut BitWriter,
+) -> QCompressResult<()> {
+  let table = CompressionTable::from(prefixes);
+  if gcd_utils::use_gcd_arithmetic(prefixes) {
+    TrainedChunkCompressor::<T::Unsigned, GeneralGcdOp> { table, op: PhantomData }
+      .compress_nums(unsigneds, writer)
+  } else {
+    TrainedChunkCompressor::<T::Unsigned, TrivialGcdOp> { table, op: PhantomData }
+      .compress_nums(unsigneds, writer)
   }
+}
 
-  fn compress_nums(&self, unsigneds: &[T::Unsigned], writer: &mut BitWriter) -> QCompressResult<()> {
+impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, GcdOp: GcdOperator<Diff> {
+  fn compress_nums(&self, unsigneds: &[Diff], writer: &mut BitWriter) -> QCompressResult<()> {
     let mut i = 0;
     while i < unsigneds.len() {
       let unsigned = unsigneds[i];
@@ -250,7 +287,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
       writer.write_usize(p.code, p.code_len);
       match p.run_len_jumpstart {
         None => {
-          compress_offset_bits_w_prefix(unsigned, p, writer);
+          Self::compress_offset_bits_w_prefix(unsigned, p, writer);
           i += 1;
         }
         Some(jumpstart) => {
@@ -268,7 +305,7 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
           writer.write_varint(reps - 1, jumpstart);
 
           for &unsigned in unsigneds.iter().skip(i).take(reps) {
-            compress_offset_bits_w_prefix(unsigned, p, writer);
+            Self::compress_offset_bits_w_prefix(unsigned, p, writer);
           }
           i += reps;
         }
@@ -276,6 +313,19 @@ impl<T> TrainedChunkCompressor<T> where T: NumberLike {
     }
     writer.finish_byte();
     Ok(())
+  }
+
+  fn compress_offset_bits_w_prefix(
+    unsigned: Diff,
+    p: &PrefixCompressionInfo<Diff>,
+    writer: &mut BitWriter,
+  ) {
+    let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
+    writer.write_diff(off, p.k);
+    if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
+      // most significant bit, if necessary, comes last
+      writer.write_one((off & (Diff::ONE << p.k)) > Diff::ZERO);
+    }
   }
 }
 
@@ -394,8 +444,11 @@ impl<T> Compressor<T> where T: NumberLike {
       };
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();
-      let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
-      chunk_compressor.compress_nums(&unsigneds, writer)?;
+      trained_compress_chunk_nums(
+        &prefixes,
+        &unsigneds,
+        writer
+      )?;
       (metadata, post_meta_idx)
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
@@ -420,8 +473,11 @@ impl<T> Compressor<T> where T: NumberLike {
       };
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();
-      let chunk_compressor = TrainedChunkCompressor::new(&prefixes)?;
-      chunk_compressor.compress_nums(&unsigneds, writer)?;
+      trained_compress_chunk_nums(
+        &prefixes,
+        &unsigneds,
+        writer
+      )?;
       (metadata, post_meta_idx)
     };
     metadata.compressed_body_size = writer.byte_size() - post_meta_byte_idx;

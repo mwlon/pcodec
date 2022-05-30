@@ -115,6 +115,7 @@ mod tests {
         lower: 0,
         upper: 0,
         run_len_jumpstart: None,
+        gcd: 1,
       }
     }
   }

@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{bits, Flags};
+use crate::{bits, Flags, gcd_utils};
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
@@ -11,6 +11,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::huffman_decoding::HuffmanTable;
 use crate::prefix::{Prefix, PrefixDecompressionInfo};
 
@@ -117,7 +118,36 @@ pub struct NumDecompressor<T> where T: NumberLike {
   nums_processed: usize,
   bits_processed: usize,
   incomplete_prefix: Option<IncompletePrefix<T::Unsigned>>,
+  use_gcd: bool,
 }
+
+fn unchecked_decompress_offsets<T: NumberLike, GcdOp: GcdOperator<T::Unsigned>>(
+  reader: &mut BitReader,
+  res: &mut Vec<T>,
+  p: PrefixDecompressionInfo<T::Unsigned>,
+  reps: usize,
+) {
+  if reps > 1 && p.k == 0 {
+    // this branch is purely for performance reasons
+    // the reps > 1 check also improves performance
+    let num = T::from_unsigned(p.lower_unsigned);
+    for _ in 0..reps {
+      res.push(num);
+    }
+  } else {
+    for _ in 0..reps {
+      let mut offset = reader.unchecked_read_diff(p.k);
+      if p.k < T::Unsigned::BITS &&
+        p.k_range - offset >= p.most_significant &&
+        reader.unchecked_read_one() {
+        offset |= p.most_significant;
+      }
+      let num = T::from_unsigned(p.lower_unsigned + GcdOp::get_diff(offset, p.gcd));
+      res.push(num);
+    }
+  }
+}
+
 
 impl<T> NumDecompressor<T> where T: NumberLike {
   pub(crate) fn new(
@@ -141,6 +171,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       .map(max_bits_overshot)
       .max()
       .unwrap_or(usize::MAX);
+    let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
 
     Ok(NumDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
@@ -151,6 +182,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       nums_processed: 0,
       bits_processed: 0,
       incomplete_prefix: None,
+      use_gcd,
     })
   }
 
@@ -171,7 +203,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
     }
   }
 
-  fn unchecked_decompress_num_block(
+  fn unchecked_decompress_num_block<GcdOp: GcdOperator<T::Unsigned>>(
     &mut self,
     reader: &mut BitReader,
     res: &mut Vec<T>,
@@ -180,42 +212,14 @@ impl<T> NumDecompressor<T> where T: NumberLike {
     let p = self.huffman_table.unchecked_search_with_reader(reader);
 
     match p.run_len_jumpstart {
-      None => self.unchecked_decompress_offsets(reader, res, p, 1),
+      None => unchecked_decompress_offsets::<T, GcdOp>(reader, res, p, 1),
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
         let reps = self.limit_reps(p, full_reps, batch_size - res.len());
-        self.unchecked_decompress_offsets(reader, res, p, reps);
+        unchecked_decompress_offsets::<T, GcdOp>(reader, res, p, reps);
       },
     };
-  }
-
-  fn unchecked_decompress_offsets(
-    &self,
-    reader: &mut BitReader,
-    res: &mut Vec<T>,
-    p: PrefixDecompressionInfo<T::Unsigned>,
-    reps: usize,
-  ) {
-    if reps > 1 && p.k == 0 {
-      // this branch is purely for performance reasons
-      // the reps > 1 check also improves performance
-      let num = T::from_unsigned(p.lower_unsigned);
-      for _ in 0..reps {
-        res.push(num);
-      }
-    } else {
-      for _ in 0..reps {
-        let mut offset = reader.unchecked_read_diff(p.k);
-        if p.k < T::Unsigned::BITS &&
-          p.range - offset >= p.most_significant &&
-          reader.unchecked_read_one() {
-          offset |= p.most_significant;
-        }
-        let num = T::from_unsigned(p.lower_unsigned + offset);
-        res.push(num);
-      }
-    }
   }
 
   fn decompress_num_block(
@@ -248,15 +252,29 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       let mut offset = reader.read_diff(p.k)?;
       if p.k < T::Unsigned::BITS {
         let most_significant = T::Unsigned::ONE << p.k;
-        if p.range - offset >= most_significant && reader.read_one()? {
+        if p.k_range - offset >= most_significant && reader.read_one()? {
           offset |= most_significant;
         }
       }
-      let num = T::from_unsigned(p.lower_unsigned + offset);
+      let num = T::from_unsigned(p.lower_unsigned + offset * p.gcd);
       res.push(num);
     }
 
     Ok(())
+  }
+
+  pub fn decompress_nums_limited(
+    &mut self,
+    reader: &mut BitReader,
+    limit: usize,
+  ) -> QCompressResult<Vec<T>> {
+    atomically(reader, |r| {
+      if self.use_gcd {
+        self.decompress_nums_limited_dirty::<GeneralGcdOp>(r, limit)
+      } else {
+        self.decompress_nums_limited_dirty::<TrivialGcdOp>(r, limit)
+      }
+    })
   }
 
   // After much debugging a performance degradation from error handling changes,
@@ -266,18 +284,8 @@ impl<T> NumDecompressor<T> where T: NumberLike {
   // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
   //
   // If this runs out of data, it returns an error and leaves reader unchanged.
-  pub fn decompress_nums_limited(
-    &mut self,
-    reader: &mut BitReader,
-    limit: usize,
-  ) -> QCompressResult<Vec<T>> {
-    atomically(reader, |r| {
-      self.decompress_nums_limited_dirty(r, limit)
-    })
-  }
-
   #[inline(never)]
-  fn decompress_nums_limited_dirty(
+  fn decompress_nums_limited_dirty<GcdOp: GcdOperator<T::Unsigned>>(
     &mut self,
     reader: &mut BitReader,
     limit: usize,
@@ -315,7 +323,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
 
     if self.max_bits_per_num_block == 0 {
       let mut temp = Vec::with_capacity(1);
-      self.unchecked_decompress_num_block(reader, &mut temp, 1);
+      self.unchecked_decompress_num_block::<GcdOp>(reader, &mut temp, 1);
       let constant_num = temp[0];
       while res.len() < batch_size {
         res.push(constant_num);
@@ -332,7 +340,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
         if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
           let mut block_idx = 0;
           while block_idx < guaranteed_safe_num_blocks && res.len() < self.n {
-            self.unchecked_decompress_num_block(reader, &mut res, batch_size);
+            self.unchecked_decompress_num_block::<GcdOp>(reader, &mut res, batch_size);
             block_idx += 1;
           }
         } else {
@@ -697,6 +705,7 @@ mod tests {
       lower: 100,
       upper: 200,
       run_len_jumpstart: None,
+      gcd: 1,
     }
   }
 
@@ -727,6 +736,7 @@ mod tests {
       use_5_bit_code_len: true,
       delta_encoding_order: 0,
       use_min_count_encoding: true,
+      use_gcds: false,
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {

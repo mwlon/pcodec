@@ -16,10 +16,8 @@ fn test_errors_do_not_mutate_reader() {
     let bit_words = BitWords::from(&compressed[0..i]);
     let mut reader = BitReader::from(&bit_words);
     reader.seek_to(bit_idx);
-    println!("i={}/{}, bit_idx={}", i, compressed.len(), bit_idx);
     match decompressor.header(&mut reader) {
       Ok(x) => {
-        println!("ok");
         maybe_flags = Some(x);
       }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
@@ -36,13 +34,11 @@ fn test_errors_do_not_mutate_reader() {
   let mut maybe_chunk_meta = None;
   let lb = ceil_div(bit_idx, 8);
   for i in lb..compressed.len() + 1 {
-    println!("i={}/{}, bit_idx={}", i, compressed.len(), bit_idx);
     let bit_words = BitWords::from(&compressed[0..i]);
     let mut reader = BitReader::from(&bit_words);
     reader.seek_to(bit_idx);
     match decompressor.chunk_metadata(&mut reader, &flags) {
       Ok(x) => {
-        println!("ok");
         maybe_chunk_meta = x;
       }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
@@ -59,13 +55,11 @@ fn test_errors_do_not_mutate_reader() {
   let mut maybe_nums = None;
   let lb = ceil_div(bit_idx, 8);
   for i in lb..compressed.len() + 1 {
-    println!("i={}/{}, bit_idx={}", i, compressed.len(), bit_idx);
     let bit_words = BitWords::from(&compressed[0..i]);
     let mut reader = BitReader::from(&bit_words);
     reader.seek_to(bit_idx);
     match decompressor.chunk_body(&mut reader, &flags, &chunk_meta) {
       Ok(x) => {
-        println!("ok");
         maybe_nums = Some(x);
       }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),

@@ -112,5 +112,32 @@ fn main() {
     "dispersed_shorts",
     dispersed_shorts,
     CompressorConfig::default(),
-  )
+  );
+
+  let mut varied_gcds = Vec::new();
+  let mut same_gcds = Vec::new();
+  for i in 0..(1 << 11) {
+    varied_gcds.push(i as f32);
+    same_gcds.push(i * 111);
+  }
+  write_case(
+    &version,
+    "0.10",
+    "varied_gcds",
+    varied_gcds,
+    CompressorConfig {
+      use_gcds: true,
+      ..Default::default()
+    },
+  );
+  write_case(
+    &version,
+    "0.10",
+    "same_gcds",
+    same_gcds,
+    CompressorConfig {
+      use_gcds: true,
+      ..Default::default()
+    },
+  );
 }

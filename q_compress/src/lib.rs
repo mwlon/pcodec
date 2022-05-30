@@ -28,6 +28,7 @@ mod compressor;
 mod decompressor;
 mod delta_encoding;
 mod flags;
+mod gcd_utils;
 mod huffman_decoding;
 mod huffman_encoding;
 mod prefix;

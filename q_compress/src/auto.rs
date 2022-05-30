@@ -42,6 +42,7 @@ pub fn auto_compressor_config<T: NumberLike>(nums: &[T], compression_level: usiz
   CompressorConfig {
     compression_level,
     delta_encoding_order,
+    use_gcds: true,
   }
 }
 
@@ -60,6 +61,10 @@ fn auto_delta_encoding_order<T: NumberLike>(
     let config = CompressorConfig {
       delta_encoding_order,
       compression_level: min(compression_level, 6),
+      // Taking deltas of a large dataset won't change the GCD,
+      // so we don't need to waste compute here inferring GCD's just to
+      // determine the best delta order.
+      use_gcds: false,
     };
     let compressor = Compressor::<T>::from_config(config);
     let mut writer = BitWriter::default();
