@@ -692,6 +692,7 @@ impl<T> Decompressor<T> where T: NumberLike {
 
 #[cfg(test)]
 mod tests {
+  use std::marker::PhantomData;
   use crate::{BitReader, Decompressor, Flags};
   use crate::bit_words::BitWords;
   use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
@@ -706,6 +707,7 @@ mod tests {
       upper: 200,
       run_len_jumpstart: None,
       gcd: 1,
+      phantom: PhantomData,
     }
   }
 
@@ -737,6 +739,7 @@ mod tests {
       delta_encoding_order: 0,
       use_min_count_encoding: true,
       use_gcds: false,
+      phantom: PhantomData,
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {

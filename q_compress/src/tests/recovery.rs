@@ -1,4 +1,4 @@
-use crate::{Compressor, CompressorConfig, Decompressor, BitWriter};
+use crate::{BitWriter, Compressor, CompressorConfig, Decompressor};
 use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 
 #[test]
@@ -153,7 +153,10 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         use_gcds,
       );
       let compressor = Compressor::<T>::from_config(
-        CompressorConfig { compression_level, delta_encoding_order, use_gcds },
+        CompressorConfig::default()
+          .with_compression_level(compression_level)
+          .with_delta_encoding_order(delta_encoding_order)
+          .with_use_gcds(use_gcds)
       );
       let compressed = compressor.simple_compress(&nums);
       let decompressor = Decompressor::<T>::default();

@@ -9,8 +9,8 @@ use crate::constants::{BYTES_PER_WORD, WORD_SIZE};
 /// true word size of the processor.
 #[derive(Clone)]
 pub struct BitWords {
-  pub words: Vec<usize>,
-  pub total_bits: usize,
+  pub(crate) words: Vec<usize>,
+  pub(crate) total_bits: usize,
 }
 
 impl<B: AsRef<[u8]>> From<B> for BitWords {

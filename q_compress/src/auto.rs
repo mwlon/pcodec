@@ -39,11 +39,9 @@ pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> QCompressResult<Vec<T>> {
 /// See [`CompressorConfig`] for information about compression levels.
 pub fn auto_compressor_config<T: NumberLike>(nums: &[T], compression_level: usize) -> CompressorConfig {
   let delta_encoding_order = auto_delta_encoding_order(nums, compression_level);
-  CompressorConfig {
-    compression_level,
-    delta_encoding_order,
-    use_gcds: true,
-  }
+  CompressorConfig::default()
+    .with_compression_level(compression_level)
+    .with_delta_encoding_order(delta_encoding_order)
 }
 
 fn auto_delta_encoding_order<T: NumberLike>(
@@ -58,14 +56,13 @@ fn auto_delta_encoding_order<T: NumberLike>(
   let mut best_order = usize::MAX;
   let mut best_size = usize::MAX;
   for delta_encoding_order in 0..8 {
-    let config = CompressorConfig {
-      delta_encoding_order,
-      compression_level: min(compression_level, 6),
-      // Taking deltas of a large dataset won't change the GCD,
-      // so we don't need to waste compute here inferring GCD's just to
-      // determine the best delta order.
-      use_gcds: false,
-    };
+    // Taking deltas of a large dataset won't change the GCD,
+    // so we don't need to waste compute here inferring GCD's just to
+    // determine the best delta order.
+    let config = CompressorConfig::default()
+      .with_delta_encoding_order(delta_encoding_order)
+      .with_compression_level(min(compression_level, 6))
+      .with_use_gcds(false);
     let compressor = Compressor::<T>::from_config(config);
     let mut writer = BitWriter::default();
     compressor.chunk(head_nums, &mut writer).unwrap(); // only unreachable errors

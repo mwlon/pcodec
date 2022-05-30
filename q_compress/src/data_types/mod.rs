@@ -27,6 +27,7 @@ mod unsigneds;
 /// This is important because deltas like +1 and -1 are numerically close to
 /// each other and easily compressible, which would not be the case with
 /// unsigned integers.
+/// Note: API stability of `SignedLike`'s trait requirements is not guaranteed.
 pub trait SignedLike {
   const ZERO: Self;
 
@@ -41,6 +42,8 @@ pub trait SignedLike {
 /// hold.
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
+///
+/// Note: API stability of `UnsignedLike`'s trait requirements is not guaranteed.
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
 Copy + Debug + Display + Div<Output=Self> + Mul<Output = Self> + Ord +
 PartialOrd + RemAssign + Shl<usize, Output=Self> + Shr<usize, Output=Self> +
@@ -97,6 +100,8 @@ Sub<Output=Self> {
 /// * How can I encode and decode this number in an uncompressed way? This
 /// uncompressed representation is used to store metadata in each chunk of the
 /// Quantile Compression format.
+///
+/// Note: API stability of `NumberLike`'s trait requirements is not guaranteed.
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// A number from 0-255 that corresponds to the number's data type.
   ///

@@ -29,10 +29,9 @@ fn test_low_level_sparse() {
 fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
     let mut writer = BitWriter::default();
-    let compressor = Compressor::<T>::from_config(CompressorConfig {
-      delta_encoding_order,
-      ..Default::default()
-    });
+    let compressor = Compressor::<T>::from_config(
+      CompressorConfig::default().with_delta_encoding_order(delta_encoding_order)
+    );
     compressor.header(&mut writer).unwrap();
     let mut metadatas = Vec::new();
     for nums in &numss {

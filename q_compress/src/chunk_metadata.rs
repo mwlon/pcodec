@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use crate::{BitReader, BitWriter, Flags, gcd_utils};
 use crate::constants::*;
 use crate::delta_encoding::DeltaMoments;
@@ -103,6 +104,7 @@ fn parse_prefixes<T: NumberLike>(
       upper,
       run_len_jumpstart,
       gcd,
+      phantom: PhantomData,
     });
   }
   Ok(prefixes)

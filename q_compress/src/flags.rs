@@ -4,6 +4,7 @@
 
 use std::cmp::min;
 use std::convert::{TryFrom, TryInto};
+use std::marker::PhantomData;
 
 use crate::{BitReader, BitWriter, CompressorConfig};
 use crate::bits;
@@ -55,6 +56,8 @@ pub struct Flags {
   ///
   /// Introduced in 0.10.0.
   pub use_gcds: bool,
+  // Make it API-stable to add more fields in the future
+  pub(crate) phantom: PhantomData<()>,
 }
 
 impl TryFrom<Vec<bool>> for Flags {
@@ -66,6 +69,7 @@ impl TryFrom<Vec<bool>> for Flags {
       delta_encoding_order: 0,
       use_min_count_encoding: false,
       use_gcds: false,
+      phantom: PhantomData,
     };
 
     let mut bit_iter = bools.iter();
@@ -178,6 +182,7 @@ impl From<&CompressorConfig> for Flags {
       delta_encoding_order: config.delta_encoding_order,
       use_min_count_encoding: true,
       use_gcds: config.use_gcds,
+      phantom: PhantomData,
     }
   }
 }
