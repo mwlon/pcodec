@@ -144,11 +144,10 @@ fn get_configs(path_str: &str, compression_level: usize) -> Vec<CompressorConfig
     }
   }
   delta_orders.iter()
-    .map(|&delta_encoding_order| CompressorConfig {
-      compression_level,
-      delta_encoding_order,
-      ..Default::default()
-    })
+    .map(|&delta_encoding_order| CompressorConfig::default()
+      .with_compression_level(compression_level)
+      .with_delta_encoding_order(delta_encoding_order)
+    )
     .collect()
 }
 

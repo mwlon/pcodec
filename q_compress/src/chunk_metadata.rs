@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use crate::{BitReader, BitWriter, Flags, gcd_utils};
 use crate::constants::*;
 use crate::delta_encoding::DeltaMoments;
@@ -51,6 +52,8 @@ pub struct ChunkMetadata<T> where T: NumberLike {
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
   pub prefix_metadata: PrefixMetadata<T>,
+  // Make it API-stable to add more fields in the future
+  pub(crate) phantom: PhantomData<()>,
 }
 
 fn parse_prefixes<T: NumberLike>(
@@ -103,6 +106,7 @@ fn parse_prefixes<T: NumberLike>(
       upper,
       run_len_jumpstart,
       gcd,
+      phantom: PhantomData,
     });
   }
   Ok(prefixes)
@@ -170,6 +174,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       n,
       compressed_body_size,
       prefix_metadata,
+      phantom: PhantomData,
     })
   }
 

@@ -4,10 +4,9 @@ use crate::errors::ErrorKind;
 use crate::chunk_metadata::{PrefixMetadata, ChunkMetadata};
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
-  let compressor = Compressor::from_config(CompressorConfig {
-    use_gcds: false,
-    ..Default::default()
-  });
+  let compressor = Compressor::from_config(
+    CompressorConfig::default().with_use_gcds(false)
+  );
   let mut writer = BitWriter::default();
   compressor.header(&mut writer).expect("header");
   let metadata = compressor.chunk(&nums, &mut writer).expect("chunk");

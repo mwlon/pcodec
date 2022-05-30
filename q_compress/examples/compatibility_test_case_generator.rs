@@ -93,10 +93,8 @@ fn main() {
     "0.6",
     "timestamp_deltas_2k",
     timestamp_deltas_2k,
-    CompressorConfig {
-      delta_encoding_order: 1,
-      ..Default::default()
-    },
+    CompressorConfig::default()
+      .with_delta_encoding_order(1)
   );
 
   let mut dispersed_shorts = Vec::new();
@@ -125,19 +123,13 @@ fn main() {
     "0.10",
     "varied_gcds",
     varied_gcds,
-    CompressorConfig {
-      use_gcds: true,
-      ..Default::default()
-    },
+    CompressorConfig::default(),
   );
   write_case(
     &version,
     "0.10",
     "same_gcds",
     same_gcds,
-    CompressorConfig {
-      use_gcds: true,
-      ..Default::default()
-    },
+    CompressorConfig::default(),
   );
 }

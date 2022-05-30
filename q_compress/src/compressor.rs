@@ -79,6 +79,8 @@ pub struct CompressorConfig {
   /// When this is helpful and in rare cases when it isn't, compression speed
   /// is slightly reduced.
   pub use_gcds: bool,
+  // Make it API-stable to add more fields in the future
+  phantom: PhantomData<()>,
 }
 
 impl Default for CompressorConfig {
@@ -87,7 +89,25 @@ impl Default for CompressorConfig {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
       use_gcds: true,
+      phantom: PhantomData,
     }
+  }
+}
+
+impl CompressorConfig {
+  pub fn with_compression_level(mut self, level: usize) -> Self {
+    self.compression_level = level;
+    self
+  }
+
+  pub fn with_delta_encoding_order(mut self, order: usize) -> Self {
+    self.delta_encoding_order = order;
+    self
+  }
+
+  pub fn with_use_gcds(mut self, use_gcds: bool) -> Self {
+    self.use_gcds = use_gcds;
+    self
   }
 }
 
@@ -343,10 +363,9 @@ impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, 
 /// ```
 /// use q_compress::{BitWriter, Compressor, CompressorConfig};
 ///
-/// let compressor = Compressor::<i32>::from_config(CompressorConfig {
-///   compression_level: 5,
-///   ..Default::default()
-/// });
+/// let compressor = Compressor::<i32>::from_config(
+///   CompressorConfig::default().with_compression_level(5)
+/// );
 /// let mut writer = BitWriter::default();
 ///
 /// compressor.header(&mut writer).expect("header failure");
@@ -441,6 +460,7 @@ impl<T> Compressor<T> where T: NumberLike {
         n,
         compressed_body_size: 0,
         prefix_metadata,
+        phantom: PhantomData,
       };
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();
@@ -469,7 +489,8 @@ impl<T> Compressor<T> where T: NumberLike {
       let metadata = ChunkMetadata {
         n,
         compressed_body_size: 0,
-        prefix_metadata
+        prefix_metadata,
+        phantom: PhantomData,
       };
       metadata.write_to(writer, &self.flags);
       let post_meta_idx = writer.byte_size();

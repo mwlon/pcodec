@@ -19,7 +19,10 @@ const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
 /// All the settings you can specify about decompression.
 #[derive(Clone, Debug, Default)]
-pub struct DecompressorConfig {}
+pub struct DecompressorConfig {
+  // Make it API-stable to add more fields in the future
+  phantom: PhantomData<()>,
+}
 
 fn atomically<T, F>(reader: &mut BitReader, f: F) -> QCompressResult<T>
 where F: FnOnce(&mut BitReader) -> QCompressResult<T> {
@@ -692,6 +695,7 @@ impl<T> Decompressor<T> where T: NumberLike {
 
 #[cfg(test)]
 mod tests {
+  use std::marker::PhantomData;
   use crate::{BitReader, Decompressor, Flags};
   use crate::bit_words::BitWords;
   use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
@@ -706,6 +710,7 @@ mod tests {
       upper: 200,
       run_len_jumpstart: None,
       gcd: 1,
+      phantom: PhantomData,
     }
   }
 
@@ -721,6 +726,7 @@ mod tests {
         prefix_w_code(vec![false]),
         prefix_w_code(vec![true, false]),
       ]},
+      phantom: PhantomData,
     };
     let metadata_duplicating_prefix = ChunkMetadata::<i64> {
       n: 2,
@@ -729,7 +735,8 @@ mod tests {
         prefix_w_code(vec![false]),
         prefix_w_code(vec![false]),
         prefix_w_code(vec![true]),
-      ]}
+      ]},
+      phantom: PhantomData,
     };
 
     let flags = Flags {
@@ -737,6 +744,7 @@ mod tests {
       delta_encoding_order: 0,
       use_min_count_encoding: true,
       use_gcds: false,
+      phantom: PhantomData,
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {

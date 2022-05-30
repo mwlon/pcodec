@@ -58,11 +58,10 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
       best_order
     };
 
-    let config = CompressorConfig {
-      compression_level: opt.level,
-      delta_encoding_order,
-      use_gcds: !opt.disable_gcd_inference,
-    };
+    let config = CompressorConfig::default()
+      .with_compression_level(opt.level)
+      .with_delta_encoding_order(delta_encoding_order)
+      .with_use_gcds(!opt.disable_gcds);
     let compressor = Compressor::<T>::from_config(config);
 
     compressor.header(&mut writer)?;

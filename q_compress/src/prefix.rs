@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::marker::PhantomData;
 use crate::bits;
 use crate::data_types::{NumberLike, UnsignedLike};
 
@@ -35,6 +36,8 @@ pub struct Prefix<T> where T: NumberLike {
   /// The greatest common divisor of all numbers belonging to this prefix
   /// (in the data type's corresponding unsigned integer).
   pub gcd: T::Unsigned,
+  // Make it API-stable to add more fields in the future
+  pub(crate) phantom: PhantomData<()>,
 }
 
 impl<T: NumberLike> Display for Prefix<T> {
@@ -121,6 +124,7 @@ impl<T: NumberLike> WeightedPrefix<T> {
       code: Vec::new(),
       run_len_jumpstart,
       gcd,
+      phantom: PhantomData,
     };
     WeightedPrefix {
       prefix,
