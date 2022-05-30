@@ -16,7 +16,8 @@ fn main() {
   }
  
   // Here we let the library choose a configuration with compression level 6.
-  // If you know about the data you're compressing, 
+  // If you know about the data you're compressing, you can compress faster
+  // by creating a `CompressorConfig`.
   let bytes: Vec<u8> = q_compress::auto_compress(&my_ints, 6);
   println!("compressed down to {} bytes", bytes.len());
  

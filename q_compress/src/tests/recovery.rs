@@ -145,15 +145,15 @@ fn test_with_gcds() {
 
 fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: &str) {
   for delta_encoding_order in [0, 1, 7] {
-    for infer_gcds in [false, true] {
+    for use_gcds in [false, true] {
       let debug_info = format!(
-        "name={} delta_encoding_order={}, infer_gcds={}",
+        "name={} delta_encoding_order={}, use_gcds={}",
         name,
         delta_encoding_order,
-        infer_gcds,
+        use_gcds,
       );
       let compressor = Compressor::<T>::from_config(
-        CompressorConfig { compression_level, delta_encoding_order, infer_gcds },
+        CompressorConfig { compression_level, delta_encoding_order, use_gcds },
       );
       let compressed = compressor.simple_compress(&nums);
       let decompressor = Decompressor::<T>::default();

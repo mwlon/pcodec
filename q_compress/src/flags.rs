@@ -30,25 +30,29 @@ pub struct Flags {
   /// (23 >= 16 = 2^4)
   /// in spiky distributions with high compression level.
   /// In later versions, this flag is always true.
+  ///
   /// Introduced in 0.5.0.
   pub use_5_bit_code_len: bool,
   /// How many times delta encoding was applied during compression.
   /// This is stored as 3 bits to express 0-7
   /// See `CompressorConfig` for more details.
+  ///
   /// Introduced in 0.6.0.
   pub delta_encoding_order: usize,
   /// Whether to use the minimum number of bits to encode the count of each
   /// prefix, rather than using a constant number of bits.
   /// This can reduce file size slightly for small data.
   /// In later versions, this flag is always true.
+  ///
   /// Introduced in 0.9.1.
   pub use_min_count_encoding: bool,
   /// Whether to enable greatest common divisor multipliers for each
   /// prefix.
   /// This adds an optional multiplier to each prefix metadata, so that each
-  /// unsigned number is decoded as `x = prefix_lower + offset * multiplier`.
+  /// unsigned number is decoded as `x = prefix_lower + offset * gcd`.
   /// This can improve compression ratio in some cases, e.g. when the
   /// numbers are all integer multiples of 100 or all integer-valued floats.
+  ///
   /// Introduced in 0.10.0.
   pub use_gcds: bool,
 }
@@ -120,7 +124,7 @@ impl TryInto<Vec<bool>> for &Flags {
 }
 
 impl Flags {
-  pub fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
+  pub(crate) fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
     reader.aligned_byte_idx()?; // assert it's byte-aligned
     let mut bools = Vec::new();
     loop {
@@ -132,7 +136,7 @@ impl Flags {
     Self::try_from(bools)
   }
 
-  pub fn write(&self, writer: &mut BitWriter) -> QCompressResult<()> {
+  pub(crate) fn write(&self, writer: &mut BitWriter) -> QCompressResult<()> {
     let bools: Vec<bool> = self.try_into()?;
 
     // reserve 1 bit at the end of every byte for whether there is a following
@@ -150,7 +154,7 @@ impl Flags {
   }
 
 
-  pub fn bits_to_encode_code_len(&self) -> usize {
+  pub(crate) fn bits_to_encode_code_len(&self) -> usize {
     if self.use_5_bit_code_len {
       5
     } else {
@@ -158,7 +162,7 @@ impl Flags {
     }
   }
 
-  pub fn bits_to_encode_count(&self, n: usize) -> usize {
+  pub(crate) fn bits_to_encode_count(&self, n: usize) -> usize {
     if self.use_min_count_encoding {
       ((n + 1) as f64).log2().ceil() as usize
     } else {
@@ -173,7 +177,7 @@ impl From<&CompressorConfig> for Flags {
       use_5_bit_code_len: true,
       delta_encoding_order: config.delta_encoding_order,
       use_min_count_encoding: true,
-      use_gcds: config.infer_gcds,
+      use_gcds: config.use_gcds,
     }
   }
 }

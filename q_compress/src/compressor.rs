@@ -63,9 +63,10 @@ pub struct CompressorConfig {
   /// smooth, like temperature or light sensor readings.
   ///
   /// Setting delta encoding order too high or low will hurt compression ratio.
-  /// If you're unsure, use [`auto_compressor_config()`] to choose it.
+  /// If you're unsure, use
+  /// [`auto_compressor_config()`][crate::auto_compressor_config] to choose it.
   pub delta_encoding_order: usize,
-  /// `infer_gcds` improves compression ratio in cases where all
+  /// `use_gcds` improves compression ratio in cases where all
   /// numbers in a range share a nontrivial Greatest Common Divisor
   /// (default true).
   ///
@@ -77,7 +78,7 @@ pub struct CompressorConfig {
   ///
   /// When this is helpful and in rare cases when it isn't, compression speed
   /// is slightly reduced.
-  pub infer_gcds: bool,
+  pub use_gcds: bool,
 }
 
 impl Default for CompressorConfig {
@@ -85,7 +86,7 @@ impl Default for CompressorConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
-      infer_gcds: true,
+      use_gcds: true,
     }
   }
 }

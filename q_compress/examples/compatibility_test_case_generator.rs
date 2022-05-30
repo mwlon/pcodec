@@ -126,7 +126,7 @@ fn main() {
     "varied_gcds",
     varied_gcds,
     CompressorConfig {
-      infer_gcds: true,
+      use_gcds: true,
       ..Default::default()
     },
   );
@@ -136,7 +136,7 @@ fn main() {
     "same_gcds",
     same_gcds,
     CompressorConfig {
-      infer_gcds: true,
+      use_gcds: true,
       ..Default::default()
     },
   );

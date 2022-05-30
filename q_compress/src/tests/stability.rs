@@ -5,7 +5,7 @@ use crate::chunk_metadata::{PrefixMetadata, ChunkMetadata};
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
   let compressor = Compressor::from_config(CompressorConfig {
-    infer_gcds: false,
+    use_gcds: false,
     ..Default::default()
   });
   let mut writer = BitWriter::default();
