@@ -140,3 +140,35 @@ pub fn optimize_prefixes<T: NumberLike>(
   res
 }
 
+#[cfg(test)]
+mod tests {
+  use crate::Flags;
+  use crate::prefix::WeightedPrefix;
+  use crate::prefix_optimization::optimize_prefixes;
+
+  fn basic_flags() -> Flags {
+    Flags {
+      use_gcds: true,
+      use_min_count_encoding: true,
+      use_5_bit_code_len: true,
+      delta_encoding_order: 0,
+    }
+  }
+
+  #[test]
+  fn test_optimize_w_gcds() {
+    let wps = vec![
+      WeightedPrefix::new(1, 1, 1000_i32, 1000, None, 1_u32),
+      WeightedPrefix::new(1, 1, 2000_i32, 2000, None, 1_u32),
+    ];
+    let res = optimize_prefixes(
+      wps,
+      &basic_flags(),
+      100,
+    );
+    let expected = vec![
+      WeightedPrefix::new(2, 2, 1000_i32, 2000, None, 1000_u32),
+    ];
+    assert_eq!(res, expected);
+  }
+}
