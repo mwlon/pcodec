@@ -29,7 +29,3 @@ path="examples/fast_seeking.rs"
 [[example]]
 name="compatibility_test_case_generator"
 path="examples/compatibility_test_case_generator.rs"
-
-[[example]]
-name="compare_zstd"
-path="examples/compare_zstd.rs"
