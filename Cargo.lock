@@ -552,6 +552,7 @@ name = "q_compress"
 version = "0.10.0"
 dependencies = [
  "rand",
+ "structopt",
  "zstd",
 ]
 

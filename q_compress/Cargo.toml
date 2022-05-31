@@ -15,6 +15,7 @@ repository = "https://github.com/mwlon/quantile-compression"
 
 [dev-dependencies]
 rand = "0.8.4"
+structopt = "0.3.26"
 zstd = "0.10"
 
 [[example]]
