@@ -174,7 +174,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     warmup: bool,
   ) -> BenchStat {
     let dataset = basename_no_ext(path);
-    println!("\ndataset: {} config: {:?}", dataset, config);
+    println!("\ndataset: {} warmup: {} config: {:?}", dataset, warmup, config);
 
     // compress
     let bytes = fs::read(path).expect("could not read");
@@ -217,7 +217,6 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     }
 
     // decompress
-    let decompress_start = Instant::now();
     let decompress_dt = match config {
       MultiCompressorConfig::QCompress(_) => {
         let decompress_start = Instant::now();
@@ -249,7 +248,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
         Instant::now() - decompress_start
       }
     };
-    println!("\tdecompressed in {:?}", Instant::now() - decompress_start);
+    println!("\tdecompressed in {:?}", decompress_dt);
 
     BenchStat {
       dataset,
