@@ -15,6 +15,7 @@ repository = "https://github.com/mwlon/quantile-compression"
 
 [dev-dependencies]
 rand = "0.8.4"
+structopt = "0.3.26"
 zstd = "0.10"
 
 [[example]]
@@ -28,7 +29,3 @@ path="examples/fast_seeking.rs"
 [[example]]
 name="compatibility_test_case_generator"
 path="examples/compatibility_test_case_generator.rs"
-
-[[example]]
-name="compare_zstd"
-path="examples/compare_zstd.rs"
