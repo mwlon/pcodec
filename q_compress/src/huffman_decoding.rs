@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-use crate::BitReader;
+use crate::bit_reader::BitReader;
 use crate::constants::MAX_PREFIX_TABLE_SIZE_LOG;
 use crate::prefix::{PrefixDecompressionInfo, Prefix};
 use crate::data_types::{NumberLike, UnsignedLike};

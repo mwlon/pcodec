@@ -1,15 +1,14 @@
 //! For crate-level documentation, see either
 //! <https://crates.io/crates/q_compress> or
 //! <https://github.com/mwlon/quantile-compression/tree/main/q_compress>.
+#![allow(clippy::needless_range_loop)]
 #[doc = include_str!("../README.md")]
 
 pub use auto::{auto_compress, auto_compressor_config, auto_decompress};
-pub use bit_reader::BitReader;
-pub use bit_words::BitWords;
 pub use bit_writer::BitWriter;
-pub use chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
+pub use chunk_metadata::{ChunkMetadata, PrefixMetadata};
 pub use compressor::{Compressor, CompressorConfig};
-pub use decompressor::{ChunkBodyDecompressor, Decompressor, DecompressorConfig};
+pub use decompressor::{DecompressedItem, Decompressor, DecompressorConfig};
 pub use flags::Flags;
 pub use prefix::Prefix;
 
@@ -21,6 +20,7 @@ mod bit_reader;
 mod bit_words;
 mod bit_writer;
 mod bits;
+mod chunk_body_decompressor;
 mod chunk_metadata;
 mod constants;
 mod compression_table;
@@ -31,6 +31,7 @@ mod flags;
 mod gcd_utils;
 mod huffman_decoding;
 mod huffman_encoding;
+mod num_decompressor;
 mod prefix;
 mod prefix_optimization;
 

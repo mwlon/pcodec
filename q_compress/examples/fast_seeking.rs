@@ -1,4 +1,5 @@
-use q_compress::{BitWriter, BitReader, Compressor, Decompressor, BitWords};
+use std::io::Write;
+use q_compress::{BitWriter, Compressor, Decompressor};
 use rand::Rng;
 use std::time::Instant;
 
@@ -21,15 +22,14 @@ fn main() {
 
   // now read back only the metadata
   let bytes = writer.bytes();
-  let words = BitWords::from(&bytes);
-  let mut reader = BitReader::from(&words);
+  let mut decompressor = Decompressor::<f64>::default();
+  decompressor.write_all(&bytes).unwrap();
   let start_t = Instant::now();
-  let decompressor = Decompressor::<f64>::default();
-  let flags = decompressor.header(&mut reader).expect("flags");
+  decompressor.header().expect("flags");
   let mut metadatas = Vec::new();
-  while let Some(meta) = decompressor.chunk_metadata(&mut reader, &flags).expect("read chunk") {
-    reader.seek(meta.compressed_body_size * 8);
+  while let Some(meta) = decompressor.chunk_metadata().expect("read chunk") {
     metadatas.push(meta);
+    decompressor.skip_chunk_body().expect("skipping");
   }
 
   let n: usize = metadatas.iter()

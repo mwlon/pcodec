@@ -1,6 +1,6 @@
 use std::fs;
 
-use crate::Decompressor;
+use crate::auto_decompress;
 use crate::data_types::{NumberLike, TimestampMicros};
 
 fn assert_compatible<T: NumberLike>(
@@ -13,8 +13,7 @@ fn assert_compatible<T: NumberLike>(
     .collect::<Vec<_>>();
 
   let compressed = fs::read(format!("assets/{}.qco", filename)).expect("read qco");
-  let decompressor = Decompressor::<T>::default();
-  let decompressed = decompressor.simple_decompress(&compressed).expect("decompress");
+  let decompressed = auto_decompress::<T>(&compressed).expect("decompress");
 
   assert_eq!(decompressed, expected)
 }

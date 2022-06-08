@@ -1,5 +1,5 @@
 use crate::data_types::NumberLike;
-use crate::{Compressor, BitWriter, Decompressor, CompressorConfig};
+use crate::{Compressor, BitWriter, CompressorConfig};
 use crate::errors::ErrorKind;
 use crate::chunk_metadata::{PrefixMetadata, ChunkMetadata};
 
@@ -13,9 +13,8 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
   compressor.footer(&mut writer).expect("footer");
   let compressed = writer.bytes();
 
-  let decompressor = Decompressor::<T>::default();
   for i in 0..compressed.len() - 1 {
-    match decompressor.simple_decompress(&compressed[0..i]) {
+    match crate::auto_decompress::<T>(&compressed[0..i]) {
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (), // good
       Ok(_) => panic!("expected decompressor to notice insufficient data (got Ok)"),
       Err(e) => panic!("expected decompressor to notice insufficient data (got {})", e),

@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::io::Write;
 
 use crate::{BitWriter, Compressor, CompressorConfig, Decompressor};
 use crate::data_types::NumberLike;
@@ -27,8 +28,9 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 /// There are currently no fields in the decompression configuration, so there
 /// is no compute downside to using this function.
 pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> QCompressResult<Vec<T>> {
-  let decompressor = Decompressor::<T>::default();
-  decompressor.simple_decompress(bytes)
+  let mut decompressor = Decompressor::<T>::default();
+  decompressor.write_all(bytes).unwrap();
+  decompressor.simple_decompress()
 }
 
 /// Automatically makes an educated guess for the best compression

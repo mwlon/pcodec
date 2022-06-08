@@ -1,0 +1,150 @@
+use std::cmp::min;
+
+use crate::bit_reader::BitReader;
+use crate::{ChunkMetadata, delta_encoding, PrefixMetadata};
+use crate::data_types::NumberLike;
+use crate::delta_encoding::DeltaMoments;
+use crate::errors::QCompressResult;
+use crate::num_decompressor::{Numbers, NumDecompressor};
+
+// ChunkBodyDecompressor wraps NumDecompressor and handles reconstruction from
+// delta encoding.
+#[derive(Clone)]
+pub enum ChunkBodyDecompressor<T: NumberLike> {
+  Simple {
+    num_decompressor: NumDecompressor<T>,
+  },
+  Delta {
+    n: usize,
+    num_decompressor: NumDecompressor<T::Signed>,
+    delta_moments: DeltaMoments<T>,
+    nums_processed: usize,
+  },
+}
+
+impl<T: NumberLike> ChunkBodyDecompressor<T> {
+  pub(crate) fn new(metadata: &ChunkMetadata<T>) -> QCompressResult<Self> {
+    Ok(match &metadata.prefix_metadata {
+      PrefixMetadata::Simple { prefixes } => Self::Simple {
+        num_decompressor: NumDecompressor::new(
+          metadata.n,
+          metadata.compressed_body_size,
+          prefixes.clone()
+        )?
+      },
+      PrefixMetadata::Delta { prefixes, delta_moments } => Self::Delta {
+        n: metadata.n,
+        num_decompressor: NumDecompressor::new(
+          metadata.n.saturating_sub(delta_moments.order()),
+          metadata.compressed_body_size,
+          prefixes.clone()
+        )?,
+        delta_moments: delta_moments.clone(),
+        nums_processed: 0,
+      },
+    })
+  }
+
+  pub fn decompress_next_batch(
+    &mut self,
+    reader: &mut BitReader,
+    limit: usize,
+    error_on_insufficient_data: bool,
+  ) -> QCompressResult<Numbers<T>> {
+    match self {
+      Self::Simple { num_decompressor } => num_decompressor.decompress_nums_limited(
+        reader,
+        limit,
+        error_on_insufficient_data,
+      ),
+      Self::Delta {
+        n,
+        num_decompressor,
+        delta_moments,
+        nums_processed,
+      } => {
+        let deltas = num_decompressor.decompress_nums_limited(
+          reader,
+          limit,
+          error_on_insufficient_data,
+        )?;
+        let batch_size = if deltas.finished_chunk_body {
+          min(limit, *n - *nums_processed)
+        } else {
+          deltas.nums.len()
+        };
+        let nums = delta_encoding::reconstruct_nums(
+          delta_moments,
+          &deltas.nums,
+          batch_size,
+        );
+        *nums_processed += batch_size;
+        Ok(Numbers {
+          nums,
+          finished_chunk_body: nums_processed == n,
+        })
+      }
+    }
+  }
+
+  pub fn bits_remaining(&self) -> usize {
+    match self {
+      Self::Simple { num_decompressor } => num_decompressor.bits_remaining(),
+      Self::Delta { num_decompressor, n: _, delta_moments: _, nums_processed: _ } => num_decompressor.bits_remaining(),
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::marker::PhantomData;
+
+  use super::ChunkBodyDecompressor;
+  use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
+  use crate::errors::ErrorKind;
+  use crate::prefix::Prefix;
+
+  fn prefix_w_code(code: Vec<bool>) -> Prefix<i64> {
+    Prefix {
+      count: 1,
+      code,
+      lower: 100,
+      upper: 200,
+      run_len_jumpstart: None,
+      gcd: 1,
+      phantom: PhantomData,
+    }
+  }
+
+  #[test]
+  fn test_corrupt_prefixes_error_not_panic() {
+    let metadata_missing_prefix = ChunkMetadata::<i64> {
+      n: 2,
+      compressed_body_size: 1,
+      prefix_metadata: PrefixMetadata::Simple { prefixes: vec![
+        prefix_w_code(vec![false]),
+        prefix_w_code(vec![true, false]),
+      ]},
+      phantom: PhantomData,
+    };
+    let metadata_duplicating_prefix = ChunkMetadata::<i64> {
+      n: 2,
+      compressed_body_size: 1,
+      prefix_metadata: PrefixMetadata::Simple { prefixes: vec![
+        prefix_w_code(vec![false]),
+        prefix_w_code(vec![false]),
+        prefix_w_code(vec![true]),
+      ]},
+      phantom: PhantomData,
+    };
+
+    for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
+      let result = ChunkBodyDecompressor::new(&bad_metadata);
+      match result {
+        Ok(_) => panic!("expected an error for bad metadata: {:?}", bad_metadata),
+        Err(e) if matches!(e.kind, ErrorKind::Corruption) => (),
+        Err(e) => panic!("expected a different error than {:?} for bad metadata {:?}", e, bad_metadata),
+      }
+    }
+  }
+}

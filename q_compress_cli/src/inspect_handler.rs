@@ -1,6 +1,7 @@
+use std::io::Write;
 use anyhow::Result;
 
-use q_compress::{BitReader, BitWords, Decompressor, Prefix, PrefixMetadata};
+use q_compress::{Decompressor, Prefix, PrefixMetadata};
 use q_compress::data_types::NumberLike;
 
 use crate::handlers::HandlerImpl;
@@ -27,29 +28,28 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
   }
 
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()> {
-    let decompressor = Decompressor::<T>::default();
     println!("inspecting {:?}", opt.path);
+    let mut decompressor = Decompressor::<T>::default();
+    decompressor.write_all(bytes).unwrap();
 
-    let words = BitWords::from(bytes);
-    let mut reader = BitReader::from(&words);
-    let flags = decompressor.header(&mut reader)?;
+    let flags = decompressor.header()?;
     println!("=================\n");
     println!("data type: {}", utils::dtype_name::<T>());
     println!("flags: {:?}", flags);
-    let header_size = reader.aligned_byte_idx()?;
+    let header_size = decompressor.bit_idx() / 8;
     let mut metadata_size = 0;
 
     let mut metadatas = Vec::new();
-    let mut start_byte_idx = reader.aligned_byte_idx()?;
-    while let Some(meta) = decompressor.chunk_metadata(&mut reader, &flags)? {
-      let byte_idx = reader.aligned_byte_idx()?;
-      metadata_size += byte_idx - start_byte_idx;
+    let mut start_bit_idx = decompressor.bit_idx();
+    while let Some(meta) = decompressor.chunk_metadata()? {
+      let bit_idx = decompressor.bit_idx();
+      metadata_size += (bit_idx - start_bit_idx) / 8;
 
-      reader.seek(meta.compressed_body_size * 8);
+      decompressor.skip_chunk_body()?;
       metadatas.push(meta);
-      start_byte_idx = reader.aligned_byte_idx()?;
+      start_bit_idx = decompressor.bit_idx();
     }
-    let compressed_size = reader.aligned_byte_idx()?;
+    let compressed_size = decompressor.bit_idx() / 8;
 
     println!("number of chunks: {}", metadatas.len());
     let total_n: usize = metadatas.iter()

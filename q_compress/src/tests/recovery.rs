@@ -1,3 +1,4 @@
+use std::io::Write;
 use crate::{BitWriter, Compressor, CompressorConfig, Decompressor};
 use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 
@@ -119,8 +120,9 @@ fn test_multi_chunk() {
   compressor.footer(&mut writer).unwrap();
   let bytes = writer.bytes();
 
-  let decompressor = Decompressor::<i64>::default();
-  let res = decompressor.simple_decompress(&bytes).unwrap();
+  let mut decompressor = Decompressor::<i64>::default();
+  decompressor.write_all(&bytes).unwrap();
+  let res = decompressor.simple_decompress().unwrap();
   assert_eq!(
     res,
     vec![1, 2, 3, 11, 12, 13],
@@ -159,8 +161,9 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
           .with_use_gcds(use_gcds)
       );
       let compressed = compressor.simple_compress(&nums);
-      let decompressor = Decompressor::<T>::default();
-      let decompressed = decompressor.simple_decompress(&compressed)
+      let mut decompressor = Decompressor::<T>::default();
+      decompressor.write_all(&compressed).unwrap();
+      let decompressed = decompressor.simple_decompress()
         .expect("decompression error");
       // We can't do assert_eq on the whole vector because even bitwise identical
       // floats sometimes aren't equal by ==.

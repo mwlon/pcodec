@@ -4,8 +4,9 @@
 
 * Added `use_gcds` compressor config and flag to improve compression ratio
 in cases where all numbers in some ranges share a nontrivial common divisor.
-* Made `CompressorConfig`, `DecompressorConfig`, `Prefix`, `Flags`, and
+* Made `CompressorConfig`, `Prefix`, `Flags`, and
 `ChunkMetadata` more API-stable by adding a phantom private field.
+* Removed `DecompressorConfig` since it's empty.
 
 ## 0.9.3
 
