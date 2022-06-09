@@ -1,5 +1,5 @@
 use std::io::Write;
-use crate::{BitWriter, Compressor, CompressorConfig, DecompressedItem, Decompressor};
+use crate::{Compressor, CompressorConfig, DecompressedItem, Decompressor};
 use crate::data_types::NumberLike;
 use crate::decompressor::DecompressorConfig;
 use crate::errors::ErrorKind;
@@ -31,18 +31,17 @@ fn test_low_level_sparse() {
 fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
     println!("deo={}", delta_encoding_order);
-    let mut writer = BitWriter::default();
-    let compressor = Compressor::<T>::from_config(
+    let mut compressor = Compressor::<T>::from_config(
       CompressorConfig::default().with_delta_encoding_order(delta_encoding_order)
     );
-    compressor.header(&mut writer).unwrap();
+    compressor.header().unwrap();
     let mut metadatas = Vec::new();
     for nums in &numss {
-      metadatas.push(compressor.chunk(nums, &mut writer).unwrap());
+      metadatas.push(compressor.chunk(nums).unwrap());
     }
-    compressor.footer(&mut writer).unwrap();
+    compressor.footer().unwrap();
 
-    let bytes = writer.bytes();
+    let bytes = compressor.drain_bytes();
 
     let mut decompressor = Decompressor::<T>::from_config(
       DecompressorConfig::default().with_numbers_limit_per_item(2)

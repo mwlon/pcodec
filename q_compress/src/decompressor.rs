@@ -11,8 +11,10 @@ use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 
+/// All configurations available for a [`Decompressor`].
 #[derive(Clone, Debug)]
 pub struct DecompressorConfig {
+  ///
   pub numbers_limit_per_item: usize,
   pub mem_cleanup_threshold: usize,
   phantom: PhantomData<()>, // for API stability
@@ -29,11 +31,13 @@ impl Default for DecompressorConfig {
 }
 
 impl DecompressorConfig {
+  /// Sets the `numbers_limit_per_item` property.
   pub fn with_numbers_limit_per_item(mut self, limit: usize) -> Self {
     self.numbers_limit_per_item = limit;
     self
   }
 
+  /// Sets the `mem_cleanup_threshold` property.
   pub fn with_mem_cleanup_threshold(mut self, threshold: usize) -> Self {
     self.mem_cleanup_threshold = threshold;
     self
@@ -103,25 +107,36 @@ pub(crate) fn read_chunk_meta<T: NumberLike>(reader: &mut BitReader, flags: &Fla
 /// All `Decompressor` methods leave its state unchanged if they return an
 /// error.
 ///
-/// You can use the decompressor at a file level:
+/// You can use the decompressor at a file, chunk, or stream level.
 /// ```
 /// use std::io::Write;
-/// use q_compress::Decompressor;
+/// use q_compress::{DecompressedItem, Decompressor, DecompressorConfig};
 ///
-/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
+/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46];
+///
+/// // DECOMPRESS WHOLE FILE
 /// let mut decompressor = Decompressor::<i32>::default();
 /// decompressor.write_all(&my_bytes).unwrap();
 /// let nums: Vec<i32> = decompressor.simple_decompress().expect("decompression");
-/// ```
-/// Or at a chunk level:
-/// ```
-/// // TODO
-/// use std::io::Write;
-/// use q_compress::Decompressor;
 ///
-/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
+/// // DECOMPRESS BY CHUNK
 /// let mut decompressor = Decompressor::<i32>::default();
 /// decompressor.write_all(&my_bytes);
+/// let flags = decompressor.header().expect("header");
+/// let maybe_chunk_0_meta = decompressor.chunk_metadata().expect("chunk meta");
+/// if maybe_chunk_0_meta.is_some() {
+///   let chunk_0_nums = decompressor.chunk_body().expect("chunk body");
+/// }
+///
+/// // DECOMPRESS BY STREAM
+/// let mut decompressor = Decompressor::<i32>::default();
+/// decompressor.write_all(&my_bytes);
+/// for item in &mut decompressor {
+///   match item.expect("stream") {
+///     DecompressedItem::Numbers(nums) => println!("nums: {:?}", nums),
+///     _ => (),
+///   }
+/// }
 /// ```
 #[derive(Clone, Default)]
 pub struct Decompressor<T> where T: NumberLike {
@@ -166,7 +181,7 @@ impl<T> Decompressor<T> where T: NumberLike {
 
   fn check_not_terminated(&self) -> QCompressResult<()> {
     if self.state.terminated {
-      Err(QCompressError::invalid_argument("Decompressor has already been terminated"))
+      Err(QCompressError::invalid_argument("attempted to write to terminated decompressor"))
     } else {
       Ok(())
     }
@@ -357,47 +372,3 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
     }
   }
 }
-
-// #[cfg(test)]
-// mod tests {
-//   use crate::{BitWriter, Compressor};
-//   use crate::decompressor::{DecompressedItem, StreamDecompressor};
-//
-//   #[test]
-//   fn test_stream_decompress() {
-//     let n_compress_chunks = 3;
-//     let n_decompress_chunks = 500;
-//     let mut writer = BitWriter::default();
-//     let compressor = Compressor::<i32>::default();
-//     compressor.header(&mut writer).unwrap();
-//     let mut all_nums = Vec::new();
-//     for i in 0..n_compress_chunks {
-//       let mut nums = Vec::new();
-//       for j in i * 1000..(i + 1) * 1000 {
-//         nums.push(j);
-//       }
-//       compressor.chunk(&nums, &mut writer).unwrap();
-//       all_nums.extend(&nums);
-//     }
-//     compressor.footer(&mut writer).unwrap();
-//     let bytes = writer.bytes(); // about 4500 bytes
-//
-//     let mut stream_decompressor = StreamDecompressor::<i32>::default();
-//     let mut recovered_nums = Vec::<i32>::new();
-//     for i in 0..n_decompress_chunks {
-//       let start = (i * bytes.len()) / n_decompress_chunks;
-//       let end = ((i + 1) * bytes.len()) / n_decompress_chunks;
-//       stream_decompressor.extend(&bytes[start..end]);
-//
-//       for stream_res in &mut stream_decompressor {
-//         let item = stream_res.unwrap();
-//         if let DecompressedItem::Numbers(nums) = item {
-//           recovered_nums.extend(&nums);
-//         }
-//       }
-//       assert!(stream_decompressor.next().is_none());
-//     }
-//     assert_eq!(recovered_nums, all_nums);
-//   }
-// }
-

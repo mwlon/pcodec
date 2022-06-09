@@ -12,7 +12,7 @@ use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::file::reader::SerializedFileReader;
 
-use q_compress::{BitWriter, Compressor, CompressorConfig};
+use q_compress::{Compressor, CompressorConfig};
 use q_compress::data_types::NumberLike;
 
 use crate::arrow_number_like::ArrowNumberLike;
@@ -44,7 +44,6 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
       open_options.create_new(true);
     }
     let mut file = open_options.open(&opt.qco_path)?;
-    let mut writer = BitWriter::default();
 
     let delta_encoding_order = if let Some(order) = opt.delta_encoding_order {
       order
@@ -62,9 +61,9 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
       .with_compression_level(opt.level)
       .with_delta_encoding_order(delta_encoding_order)
       .with_use_gcds(!opt.disable_gcds);
-    let compressor = Compressor::<T>::from_config(config);
+    let mut compressor = Compressor::<T>::from_config(config);
 
-    compressor.header(&mut writer)?;
+    compressor.header()?;
 
     let mut reader = new_column_reader(schema, opt)?;
     let mut num_buffer = Vec::new();
@@ -72,16 +71,16 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
       let batch = batch_result?;
       num_buffer.extend(&batch);
       if num_buffer.len() >= opt.chunk_size {
-        write_chunk(&compressor, &num_buffer[..opt.chunk_size], &mut file, &mut writer)?;
+        write_chunk(&mut compressor, &num_buffer[..opt.chunk_size], &mut file)?;
         num_buffer = num_buffer[opt.chunk_size..].to_vec();
       }
     }
     if !num_buffer.is_empty() {
-      write_chunk(&compressor, &num_buffer, &mut file, &mut writer)?;
+      write_chunk(&mut compressor, &num_buffer, &mut file)?;
     }
 
-    compressor.footer(&mut writer)?;
-    file.write_all(&writer.bytes())?;
+    compressor.footer()?;
+    file.write_all(&compressor.drain_bytes())?;
     Ok(())
   }
 }
@@ -188,14 +187,12 @@ impl<T: ArrowNumberLike> ColumnReader<T> for CsvColumnReader<T> {
 }
 
 fn write_chunk<T: NumberLike>(
-  compressor: &Compressor<T>,
+  compressor: &mut Compressor<T>,
   nums: &[T],
   file: &mut File,
-  writer: &mut BitWriter,
 ) -> Result<()> {
-  compressor.chunk(nums, writer)?;
-  file.write_all(&writer.bytes())?;
-  *writer = BitWriter::default();
+  compressor.chunk(nums)?;
+  file.write_all(&compressor.drain_bytes())?;
   Ok(())
 }
 

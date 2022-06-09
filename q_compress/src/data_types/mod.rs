@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
-use crate::BitWriter;
+use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::errors::QCompressResult;
 

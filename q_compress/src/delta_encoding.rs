@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
-use crate::{BitWriter};
+use crate::bit_writer::BitWriter;
 use crate::data_types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 

@@ -2,7 +2,8 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use crate::{BitWriter, Flags, gcd_utils, huffman_encoding};
+use crate::{Flags, gcd_utils, huffman_encoding};
+use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -349,40 +350,45 @@ impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, 
   }
 }
 
+#[derive(Clone, Default)]
+struct State {
+  has_written_header: bool,
+  has_written_footer: bool,
+}
+
 /// Converts vectors of numbers into compressed bytes.
 ///
-/// You can use the compressor very easily:
+/// All `Compressor` methods leave its state unchanged if they return an error.
+/// You can configure behavior like compression level by instantiating with
+/// [`.from_config()`][Compressor::from_config]
+///
+/// You can use the compressor at a file or chunk level.
 /// ```
 /// use q_compress::Compressor;
 ///
 /// let my_nums = vec![1, 2, 3];
-/// let compressor = Compressor::<i32>::default();
+///
+/// // FILE LEVEL
+/// let mut compressor = Compressor::<i32>::default();
 /// let bytes = compressor.simple_compress(&my_nums);
-/// ```
-/// You can also get full control over the compression process:
-/// ```
-/// use q_compress::{BitWriter, Compressor, CompressorConfig};
 ///
-/// let compressor = Compressor::<i32>::from_config(
-///   CompressorConfig::default().with_compression_level(5)
-/// );
-/// let mut writer = BitWriter::default();
-///
-/// compressor.header(&mut writer).expect("header failure");
-/// let chunk_0 = vec![1, 2, 3];
-/// compressor.chunk(&chunk_0, &mut writer).expect("chunk failure");
-/// let chunk_1 = vec![4, 5];
-/// compressor.chunk(&chunk_1, &mut writer).expect("chunk failure");
-/// compressor.footer(&mut writer).expect("footer failure");
-///
-/// let bytes = writer.bytes();
+/// // CHUNK LEVEL
+/// let mut compressor = Compressor::<i32>::default();
+/// compressor.header().expect("header");
+/// let header_bytes = compressor.drain_bytes();
+/// compressor.chunk(&my_nums).expect("chunk");
+/// let chunk_bytes = compressor.drain_bytes();
+/// compressor.footer().expect("footer");
+/// let footer_bytes = compressor.drain_bytes();
 /// ```
 /// Note that in practice we would need larger chunks than this to
-/// achieve good compression, preferably containing 10k-10M numbers.
-#[derive(Clone, Debug)]
+/// achieve good compression, preferably containing 3k-10M numbers.
+#[derive(Clone)]
 pub struct Compressor<T> where T: NumberLike {
   internal_config: InternalCompressorConfig,
   flags: Flags,
+  writer: BitWriter,
+  state: State,
   phantom: PhantomData<T>,
 }
 
@@ -401,6 +407,8 @@ impl<T> Compressor<T> where T: NumberLike {
     Self {
       internal_config: InternalCompressorConfig::from(&config),
       flags: Flags::from(&config),
+      writer: BitWriter::default(),
+      state: State::default(),
       phantom: PhantomData,
     }
   }
@@ -411,36 +419,59 @@ impl<T> Compressor<T> where T: NumberLike {
   }
 
   /// Writes out a header using the compressor's data type and flags.
-  /// Will return an error if the writer is not at a byte-aligned position.
+  /// Will return an error if the compressor has already written the header or
+  /// footer.
   ///
   /// Each .qco file must start with such a header, which contains:
   /// * a 4-byte magic header for "qco!" in ascii,
   /// * a byte for the data type (e.g. `i64` has byte 1 and `f64` has byte
   /// 5), and
   /// * bytes for the flags used to compress.
-  pub fn header(&self, writer: &mut BitWriter) -> QCompressResult<()> {
-    writer.write_aligned_bytes(&MAGIC_HEADER)?;
-    writer.write_aligned_byte(T::HEADER_BYTE)?;
-    self.flags.write(writer)
+  pub fn header(&mut self) -> QCompressResult<()> {
+    if self.state.has_written_header {
+      return Err(QCompressError::invalid_argument(
+        "attempted to write second header with compressor"
+      ));
+    }
+    if self.state.has_written_footer {
+      return Err(QCompressError::invalid_argument(
+        "attempted to write header after footer"
+      ));
+    }
+    self.writer.write_aligned_bytes(&MAGIC_HEADER)?;
+    self.writer.write_aligned_byte(T::HEADER_BYTE)?;
+    self.flags.write(&mut self.writer)?;
+    self.state.has_written_header = true;
+    Ok(())
   }
 
   /// Writes out a chunk of data representing the provided numbers.
-  /// Will return an error if the writer is not at a byte-aligned position or
-  /// the slice of numbers is empty.
+  /// Will return an error if the compressor has not yet written the header
+  /// or already written the footer.
   ///
   /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
   /// The chunk body encodes the numbers passed in here.
-  pub fn chunk(&self, nums: &[T], writer: &mut BitWriter) -> QCompressResult<ChunkMetadata<T>> {
+  pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
+    if !self.state.has_written_header {
+      return Err(QCompressError::invalid_argument(
+        "attempted to write chunk before header"
+      ));
+    }
+    if self.state.has_written_footer {
+      return Err(QCompressError::invalid_argument(
+        "attempted to write chunk to terminated compressor"
+      ));
+    }
     if nums.is_empty() {
       return Err(QCompressError::invalid_argument(
         "cannot compress empty chunk"
       ));
     }
 
-    writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
+    self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
 
     let n = nums.len();
-    let pre_meta_bit_idx = writer.bit_size();
+    let pre_meta_bit_idx = self.writer.bit_size();
 
     let order = self.flags.delta_encoding_order;
     let (mut metadata, post_meta_byte_idx) = if order == 0 {
@@ -462,12 +493,12 @@ impl<T> Compressor<T> where T: NumberLike {
         prefix_metadata,
         phantom: PhantomData,
       };
-      metadata.write_to(writer, &self.flags);
-      let post_meta_idx = writer.byte_size();
+      metadata.write_to(&mut self.writer, &self.flags);
+      let post_meta_idx = self.writer.byte_size();
       trained_compress_chunk_nums(
         &prefixes,
         &unsigneds,
-        writer
+        &mut self.writer
       )?;
       (metadata, post_meta_idx)
     } else {
@@ -492,38 +523,65 @@ impl<T> Compressor<T> where T: NumberLike {
         prefix_metadata,
         phantom: PhantomData,
       };
-      metadata.write_to(writer, &self.flags);
-      let post_meta_idx = writer.byte_size();
+      metadata.write_to(&mut self.writer, &self.flags);
+      let post_meta_idx = self.writer.byte_size();
       trained_compress_chunk_nums(
         &prefixes,
         &unsigneds,
-        writer
+        &mut self.writer
       )?;
       (metadata, post_meta_idx)
     };
-    metadata.compressed_body_size = writer.byte_size() - post_meta_byte_idx;
-    metadata.update_write_compressed_body_size(writer, pre_meta_bit_idx);
+    metadata.compressed_body_size = self.writer.byte_size() - post_meta_byte_idx;
+    metadata.update_write_compressed_body_size(&mut self.writer, pre_meta_bit_idx);
     Ok(metadata)
   }
 
   /// Writes out a single footer byte indicating that the .qco file has ended.
-  /// Will return an error if the writer is not byte-aligned.
-  pub fn footer(&self, writer: &mut BitWriter) -> QCompressResult<()> {
-    writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)
+  /// Will return an error if the compressor has not yet written the header
+  /// or already written the footer.
+  pub fn footer(&mut self) -> QCompressResult<()> {
+    if !self.state.has_written_header {
+      return Err(QCompressError::invalid_argument(
+        "attempted to write footer before header"
+      ));
+    }
+    if self.state.has_written_footer {
+      return Err(QCompressError::invalid_argument(
+        "attempted to write second footer"
+      ));
+    }
+    self.writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)?;
+    self.state.has_written_footer = true;
+    Ok(())
   }
 
   /// Takes in a slice of numbers and returns compressed bytes.
-  pub fn simple_compress(&self, nums: &[T]) -> Vec<u8> {
-    let mut writer = BitWriter::default();
+  pub fn simple_compress(&mut self, nums: &[T]) -> Vec<u8> {
     // The following unwraps are safe because the writer will be byte-aligned
     // after each step and ensure each chunk has appropriate size.
-    self.header(&mut writer).unwrap();
+    self.header().unwrap();
     nums.chunks(DEFAULT_CHUNK_SIZE)
       .for_each(|chunk| {
-        self.chunk(chunk, &mut writer).unwrap();
+        self.chunk(chunk).unwrap();
       });
 
-    self.footer(&mut writer).unwrap();
-    writer.bytes()
+    self.footer().unwrap();
+    self.drain_bytes()
+  }
+
+  /// Returns all bytes produced by the compressor so far that have not yet
+  /// been read.
+  ///
+  /// In the future we may implement a method to write to a `std::io::Write` or
+  /// implement `Compressor` as `std::io::Read`, TBD.
+  pub fn drain_bytes(&mut self) -> Vec<u8> {
+    self.writer.drain_bytes()
+  }
+
+  /// Returns the size of bytes produced by the compressor so far that have not
+  /// yet been read.
+  pub fn byte_size(&mut self) -> usize {
+    self.writer.byte_size()
   }
 }

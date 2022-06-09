@@ -5,7 +5,6 @@
 #[doc = include_str!("../README.md")]
 
 pub use auto::{auto_compress, auto_compressor_config, auto_decompress};
-pub use bit_writer::BitWriter;
 pub use chunk_metadata::{ChunkMetadata, PrefixMetadata};
 pub use compressor::{Compressor, CompressorConfig};
 pub use decompressor::{DecompressedItem, Decompressor, DecompressorConfig};

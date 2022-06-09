@@ -1,6 +1,7 @@
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::bit_reader::BitReader;
-use crate::{BitWriter, Flags, Prefix};
+use crate::bit_writer::BitWriter;
+use crate::{Flags, Prefix};
 use crate::errors::{QCompressError, QCompressResult};
 
 // fast if b is small, requires b > 0

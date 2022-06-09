@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 use crate::bit_reader::BitReader;
-use crate::{BitWriter, Flags, gcd_utils};
+use crate::{Flags, gcd_utils};
+use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::delta_encoding::DeltaMoments;
 use crate::prefix::Prefix;

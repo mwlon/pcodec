@@ -5,7 +5,7 @@ use crate::errors::ErrorKind;
 #[test]
 fn test_errors_do_not_mutate_decompressor() {
   let nums = vec![1, 2, 3, 4, 5];
-  let compressor = Compressor::default();
+  let mut compressor = Compressor::default();
   let compressed = compressor.simple_compress(&nums);
   let mut decompressor = Decompressor::<i32>::default();
 

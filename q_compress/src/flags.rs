@@ -7,7 +7,8 @@ use std::convert::{TryFrom, TryInto};
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
-use crate::{BitWriter, CompressorConfig};
+use crate::{CompressorConfig};
+use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
