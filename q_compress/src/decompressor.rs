@@ -7,16 +7,16 @@ use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::chunk_body_decompressor::ChunkBodyDecompressor;
 use crate::chunk_metadata::{ChunkMetadata};
-use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
+use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, WORD_SIZE};
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 
 /// All configurations available for a [`Decompressor`].
 #[derive(Clone, Debug)]
 pub struct DecompressorConfig {
-  ///
+  /// The maximum number of numbers to decode at a time when streaming through
+  /// the decompressor as an iterator.
   pub numbers_limit_per_item: usize,
-  pub mem_cleanup_threshold: usize,
   phantom: PhantomData<()>, // for API stability
 }
 
@@ -24,31 +24,27 @@ impl Default for DecompressorConfig {
   fn default() -> Self {
     Self {
       numbers_limit_per_item: 100000,
-      mem_cleanup_threshold: 1 << 20,
       phantom: PhantomData,
     }
   }
 }
 
 impl DecompressorConfig {
-  /// Sets the `numbers_limit_per_item` property.
+  /// Sets [`numbers_limit_per_item`][DecompressorConfig::numbers_limit_per_item].
   pub fn with_numbers_limit_per_item(mut self, limit: usize) -> Self {
     self.numbers_limit_per_item = limit;
     self
   }
-
-  /// Sets the `mem_cleanup_threshold` property.
-  pub fn with_mem_cleanup_threshold(mut self, threshold: usize) -> Self {
-    self.mem_cleanup_threshold = threshold;
-    self
-  }
 }
 
+/// The different types of data encountered when iterating through the
+/// decompressor.
 #[derive(Clone)]
 pub enum DecompressedItem<T: NumberLike> {
   Flags(Flags),
   ChunkMetadata(ChunkMetadata<T>),
   Numbers(Vec<T>),
+  Footer,
 }
 
 #[derive(Clone, Default)]
@@ -157,6 +153,7 @@ impl<T: NumberLike> Write for Decompressor<T> {
 }
 
 impl<T> Decompressor<T> where T: NumberLike {
+  /// Creates a new decompressor, given a [`DecompressorConfig`].
   pub fn from_config(config: DecompressorConfig) -> Self {
     Self {
       config,
@@ -164,6 +161,9 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
+  /// Returns the current bit position into the compressed data the
+  /// decompressor is pointed at.
+  /// Note that when memory is freed, this will decrease.
   pub fn bit_idx(&self) -> usize {
     self.state.bit_idx
   }
@@ -308,6 +308,17 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
     Ok(res.unwrap_or_default())
   }
+
+  /// Frees memory used for storing compressed bytes the decompressor has
+  /// already decoded.
+  /// Note that calling this too frequently can cause performance issues.
+  pub fn free_compressed_memory(&mut self) {
+    let words_to_free = self.state.bit_idx / WORD_SIZE;
+    if words_to_free > 0 {
+      self.words.truncate_left(words_to_free);
+      self.state.bit_idx -= words_to_free * WORD_SIZE;
+    }
+  }
 }
 
 impl<T: NumberLike> Iterator for &mut Decompressor<T> {
@@ -341,7 +352,7 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
           },
           Ok(None) => {
             state.terminated = true;
-            Ok(None)
+            Ok(Some(DecompressedItem::Footer))
           },
           Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
           Err(e) => Err(e),

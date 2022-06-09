@@ -44,7 +44,7 @@ pub struct CompressorConfig {
   /// runs in reasonable time. In some cases, its compression ratio is 3-4x as
   /// high as level level 0's.
   /// * Level 12 can achieve a few % better compression than 6 with 4096
-  /// prefixes but runs ~10x slower in many cases.
+  /// prefixes but runs ~5x slower in many cases.
   pub compression_level: usize,
   /// `delta_encoding_order` ranges from 0 to 7 inclusive (default 0).
   ///
@@ -96,16 +96,19 @@ impl Default for CompressorConfig {
 }
 
 impl CompressorConfig {
+  /// Sets [`compression_level`][CompressorConfig::compression_level].
   pub fn with_compression_level(mut self, level: usize) -> Self {
     self.compression_level = level;
     self
   }
 
+  /// Sets [`delta_encoding_order`][CompressorConfig::delta_encoding_order].
   pub fn with_delta_encoding_order(mut self, order: usize) -> Self {
     self.delta_encoding_order = order;
     self
   }
 
+  /// Sets [`use_gcds`][CompressorConfig::use_gcds].
   pub fn with_use_gcds(mut self, use_gcds: bool) -> Self {
     self.use_gcds = use_gcds;
     self
@@ -375,11 +378,9 @@ struct State {
 /// // CHUNK LEVEL
 /// let mut compressor = Compressor::<i32>::default();
 /// compressor.header().expect("header");
-/// let header_bytes = compressor.drain_bytes();
 /// compressor.chunk(&my_nums).expect("chunk");
-/// let chunk_bytes = compressor.drain_bytes();
 /// compressor.footer().expect("footer");
-/// let footer_bytes = compressor.drain_bytes();
+/// let bytes = compressor.drain_bytes();
 /// ```
 /// Note that in practice we would need larger chunks than this to
 /// achieve good compression, preferably containing 3k-10M numbers.
@@ -579,8 +580,8 @@ impl<T> Compressor<T> where T: NumberLike {
     self.writer.drain_bytes()
   }
 
-  /// Returns the size of bytes produced by the compressor so far that have not
-  /// yet been read.
+  /// Returns the number of bytes produced by the compressor so far that have
+  /// not yet been read.
   pub fn byte_size(&mut self) -> usize {
     self.writer.byte_size()
   }

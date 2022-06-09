@@ -20,15 +20,15 @@ use crate::errors::{QCompressError, QCompressResult};
 /// Flags affect the encoding of the rest of the file, so decompressing with
 /// the wrong flags will likely cause a corruption error.
 ///
-/// Most users will not need to manually instantiate flags; that should be done
+/// You will not need to manually instantiate flags; that should be done
 /// internally by `Compressor::from_config`.
 /// However, in some circumstances you may want to inspect flags during
 /// decompression.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Flags {
   /// Whether to use 5 bits to encode the length of a prefix Huffman code,
   /// as opposed to 4.
-  /// Earlier versions of `q_compress` used 4, which was insufficient for
+  /// The first versions of `q_compress` used 4, which was insufficient for
   /// Huffman codes that could reach up to 23 in length
   /// (23 >= 16 = 2^4)
   /// in spiky distributions with high compression level.
@@ -37,7 +37,7 @@ pub struct Flags {
   /// Introduced in 0.5.0.
   pub use_5_bit_code_len: bool,
   /// How many times delta encoding was applied during compression.
-  /// This is stored as 3 bits to express 0-7
+  /// This is stored as 3 bits to express 0-7.
   /// See `CompressorConfig` for more details.
   ///
   /// Introduced in 0.6.0.

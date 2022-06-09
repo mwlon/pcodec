@@ -61,8 +61,13 @@ impl<B: AsRef<[u8]>> From<B> for BitWords {
 }
 
 impl BitWords {
-  pub(crate) fn extend_bytes<B: AsRef<[u8]>>(&mut self, bytes: B) {
+  pub fn extend_bytes<B: AsRef<[u8]>>(&mut self, bytes: B) {
     self.total_bits = extend(&mut self.words, self.total_bits, bytes);
+  }
+
+  pub fn truncate_left(&mut self, words_to_free: usize) {
+    self.words = self.words[words_to_free..].to_vec();
+    self.total_bits -= words_to_free * WORD_SIZE;
   }
 }
 

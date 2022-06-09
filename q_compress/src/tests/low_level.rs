@@ -51,11 +51,13 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
     assert_eq!(&flags, compressor.flags());
     let mut chunk_idx = 0;
     let mut chunk_nums = Vec::<T>::new();
+    let mut terminated = false;
     for maybe_item in &mut decompressor {
       let item = maybe_item.unwrap();
       match item {
         DecompressedItem::Flags(_) => panic!("already read flags"),
         DecompressedItem::ChunkMetadata(meta) => {
+          assert!(!terminated);
           assert_eq!(&meta, &metadatas[chunk_idx]);
           if chunk_idx > 0 {
             assert_eq!(&chunk_nums, &numss[chunk_idx - 1]);
@@ -64,7 +66,12 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
           chunk_idx += 1;
         },
         DecompressedItem::Numbers(nums) => {
+          assert!(!terminated);
           chunk_nums.extend(&nums);
+        }
+        DecompressedItem::Footer => {
+          assert!(!terminated);
+          terminated = true;
         }
       }
     }
@@ -72,5 +79,6 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
 
     let terminated_err = decompressor.chunk_metadata().unwrap_err();
     assert!(matches!(terminated_err.kind, ErrorKind::InvalidArgument));
+    assert!(terminated);
   }
 }
