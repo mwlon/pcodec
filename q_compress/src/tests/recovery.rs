@@ -1,4 +1,5 @@
-use crate::{BitWriter, Compressor, CompressorConfig, Decompressor};
+use std::io::Write;
+use crate::{Compressor, CompressorConfig, Decompressor};
 use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 
 #[test]
@@ -111,16 +112,16 @@ fn test_timestamp_micros_codec() {
 
 #[test]
 fn test_multi_chunk() {
-  let compressor = Compressor::<i64>::default();
-  let mut writer = BitWriter::default();
-  compressor.header(&mut writer).unwrap();
-  compressor.chunk(&[1, 2, 3], &mut writer).unwrap();
-  compressor.chunk(&[11, 12, 13], &mut writer).unwrap();
-  compressor.footer(&mut writer).unwrap();
-  let bytes = writer.bytes();
+  let mut compressor = Compressor::<i64>::default();
+  compressor.header().unwrap();
+  compressor.chunk(&[1, 2, 3]).unwrap();
+  compressor.chunk(&[11, 12, 13]).unwrap();
+  compressor.footer().unwrap();
+  let bytes = compressor.drain_bytes();
 
-  let decompressor = Decompressor::<i64>::default();
-  let res = decompressor.simple_decompress(&bytes).unwrap();
+  let mut decompressor = Decompressor::<i64>::default();
+  decompressor.write_all(&bytes).unwrap();
+  let res = decompressor.simple_decompress().unwrap();
   assert_eq!(
     res,
     vec![1, 2, 3, 11, 12, 13],
@@ -152,15 +153,16 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         delta_encoding_order,
         use_gcds,
       );
-      let compressor = Compressor::<T>::from_config(
+      let mut compressor = Compressor::<T>::from_config(
         CompressorConfig::default()
           .with_compression_level(compression_level)
           .with_delta_encoding_order(delta_encoding_order)
           .with_use_gcds(use_gcds)
       );
       let compressed = compressor.simple_compress(&nums);
-      let decompressor = Decompressor::<T>::default();
-      let decompressed = decompressor.simple_decompress(&compressed)
+      let mut decompressor = Decompressor::<T>::default();
+      decompressor.write_all(&compressed).unwrap();
+      let decompressed = decompressor.simple_decompress()
         .expect("decompression error");
       // We can't do assert_eq on the whole vector because even bitwise identical
       // floats sometimes aren't equal by ==.

@@ -1,11 +1,12 @@
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
-use crate::{BitReader, BitWriter};
+use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::errors::QCompressResult;
 
 pub use timestamps::{TimestampMicros, TimestampNanos};
+use crate::bit_reader::BitReader;
 
 mod boolean;
 mod floats;

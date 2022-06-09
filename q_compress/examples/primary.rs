@@ -6,7 +6,7 @@ use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use q_compress::{Compressor, CompressorConfig, Decompressor};
+use q_compress::{auto_decompress, Compressor, CompressorConfig};
 use q_compress::data_types::{NumberLike, TimestampMicros};
 use structopt::StructOpt;
 
@@ -163,9 +163,7 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
   }
 
   fn decompress_qco(bytes: &[u8]) -> Vec<T> {
-    Decompressor::<T>::default()
-      .simple_decompress(bytes)
-      .expect("could not decompress")
+    auto_decompress(bytes).expect("could not decompress")
   }
 
   fn handle(

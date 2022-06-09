@@ -1,764 +1,385 @@
-use std::cmp::{max, min};
 use std::fmt::Debug;
+use std::io::Write;
 use std::marker::PhantomData;
 
-use crate::{bits, Flags, gcd_utils};
+use crate::Flags;
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
-use crate::chunk_metadata::{ChunkMetadata, DecompressedChunk, PrefixMetadata};
-use crate::constants::*;
-use crate::data_types::{NumberLike, UnsignedLike};
-use crate::delta_encoding;
-use crate::delta_encoding::DeltaMoments;
-use crate::errors::{QCompressError, QCompressResult};
-use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
-use crate::huffman_decoding::HuffmanTable;
-use crate::prefix::{Prefix, PrefixDecompressionInfo};
+use crate::chunk_body_decompressor::ChunkBodyDecompressor;
+use crate::chunk_metadata::{ChunkMetadata};
+use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, WORD_SIZE};
+use crate::data_types::NumberLike;
+use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 
-const UNCHECKED_NUM_THRESHOLD: usize = 30;
-
-/// All the settings you can specify about decompression.
-#[derive(Clone, Debug, Default)]
-pub struct DecompressorConfig {
-  // Make it API-stable to add more fields in the future
-  phantom: PhantomData<()>,
-}
-
-fn atomically<T, F>(reader: &mut BitReader, f: F) -> QCompressResult<T>
-where F: FnOnce(&mut BitReader) -> QCompressResult<T> {
-  let clean_bit_idx = reader.bit_idx();
-  let res = f(reader);
-  if res.is_err() {
-    reader.seek_to(clean_bit_idx);
-  }
-  res
-}
-
-fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResult<()> {
-  if prefixes.is_empty() {
-    return Ok(());
-  }
-
-  let mut max_depth = 0;
-  for p in prefixes {
-    max_depth = max(max_depth, p.code.len());
-  }
-
-  let max_n_leafs = 1_usize << max_depth;
-  let mut is_specifieds = vec![false; max_n_leafs];
-  for p in prefixes {
-    let base_idx = bits::bits_to_usize_truncated(&p.code, max_depth);
-    let n_leafs = 1_usize << (max_depth - p.code.len());
-    for is_specified in is_specifieds.iter_mut().skip(base_idx).take(n_leafs) {
-      if *is_specified {
-        return Err(QCompressError::corruption(format!(
-          "multiple prefixes for {} found in chunk metadata",
-          bits::bits_to_string(&p.code),
-        )));
-      }
-      *is_specified = true;
-    }
-  }
-  for (idx, is_specified) in is_specifieds.iter().enumerate() {
-    if !is_specified {
-      let code = bits::usize_truncated_to_bits(idx, max_depth);
-      return Err(QCompressError::corruption(format!(
-        "no prefixes for {} found in chunk metadata",
-        bits::bits_to_string(&code),
-      )));
-    }
-  }
-  Ok(())
-}
-
-// For the prefix, the maximum number of bits we might need to read.
-// Helps decide whether to do checked or unchecked reads.
-fn max_bits_read<T: NumberLike>(p: &Prefix<T>) -> usize {
-  let prefix_bits = p.code.len();
-  let (max_reps, max_jumpstart_bits) = match p.run_len_jumpstart {
-    None => (1, 0),
-    Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
-  };
-  let k_info = p.k_info();
-  let max_bits_per_offset = if k_info.only_k_bits_lower == T::Unsigned::ZERO {
-    k_info.k
-  } else {
-    k_info.k + 1
-  };
-
-  prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
-}
-
-// For the prefix, the maximum number of bits we might overshoot by during an
-// unchecked read.
-// Helps decide whether to do checked or unchecked reads.
-// We could make a slightly tighter bound with more logic, but I don't think there
-// are any cases where it would help much.
-fn max_bits_overshot<T: NumberLike>(p: &Prefix<T>) -> usize {
-  if p.code.is_empty() {
-    0
-  } else {
-    (MAX_PREFIX_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info().k)
-  }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct IncompletePrefix<Diff: UnsignedLike> {
-  prefix: PrefixDecompressionInfo<Diff>,
-  remaining_reps: usize,
-}
-
+/// All configurations available for a [`Decompressor`].
 #[derive(Clone, Debug)]
-pub struct NumDecompressor<T> where T: NumberLike {
-  // known information about the chunk
-  huffman_table: HuffmanTable<T::Unsigned>,
-  n: usize,
-  compressed_body_size: usize,
-  max_bits_per_num_block: usize,
-  max_overshoot_per_num_block: usize,
-
-  // mutable state
-  nums_processed: usize,
-  bits_processed: usize,
-  incomplete_prefix: Option<IncompletePrefix<T::Unsigned>>,
-  use_gcd: bool,
+pub struct DecompressorConfig {
+  /// The maximum number of numbers to decode at a time when streaming through
+  /// the decompressor as an iterator.
+  pub numbers_limit_per_item: usize,
+  phantom: PhantomData<()>, // for API stability
 }
 
-fn unchecked_decompress_offsets<T: NumberLike, GcdOp: GcdOperator<T::Unsigned>>(
-  reader: &mut BitReader,
-  res: &mut Vec<T>,
-  p: PrefixDecompressionInfo<T::Unsigned>,
-  reps: usize,
-) {
-  if reps > 1 && p.k == 0 {
-    // this branch is purely for performance reasons
-    // the reps > 1 check also improves performance
-    let num = T::from_unsigned(p.lower_unsigned);
-    for _ in 0..reps {
-      res.push(num);
-    }
-  } else {
-    for _ in 0..reps {
-      let mut offset = reader.unchecked_read_diff(p.k);
-      if p.k < T::Unsigned::BITS &&
-        p.k_range - offset >= p.most_significant &&
-        reader.unchecked_read_one() {
-        offset |= p.most_significant;
-      }
-      let num = T::from_unsigned(p.lower_unsigned + GcdOp::get_diff(offset, p.gcd));
-      res.push(num);
+impl Default for DecompressorConfig {
+  fn default() -> Self {
+    Self {
+      numbers_limit_per_item: 100000,
+      phantom: PhantomData,
     }
   }
 }
 
-
-impl<T> NumDecompressor<T> where T: NumberLike {
-  pub(crate) fn new(
-    n: usize,
-    compressed_body_size: usize,
-    prefixes: Vec<Prefix<T>>,
-  ) -> QCompressResult<Self> {
-    if prefixes.is_empty() && n > 0 {
-      return Err(QCompressError::corruption(format!(
-        "unable to decompress chunk with no prefixes and {} numbers",
-        n,
-      )));
-    }
-    validate_prefix_tree(&prefixes)?;
-
-    let max_bits_per_num_block = prefixes.iter()
-      .map(max_bits_read)
-      .max()
-      .unwrap_or(usize::MAX);
-    let max_overshoot_per_num_block = prefixes.iter()
-      .map(max_bits_overshot)
-      .max()
-      .unwrap_or(usize::MAX);
-    let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
-
-    Ok(NumDecompressor {
-      huffman_table: HuffmanTable::from(&prefixes),
-      n,
-      compressed_body_size,
-      max_bits_per_num_block,
-      max_overshoot_per_num_block,
-      nums_processed: 0,
-      bits_processed: 0,
-      incomplete_prefix: None,
-      use_gcd,
-    })
-  }
-
-  fn limit_reps(
-    &mut self,
-    prefix: PrefixDecompressionInfo<T::Unsigned>,
-    full_reps: usize,
-    limit: usize,
-  ) -> usize {
-    if full_reps > limit {
-      self.incomplete_prefix = Some(IncompletePrefix {
-        prefix,
-        remaining_reps: full_reps - limit,
-      });
-      limit
-    } else {
-      full_reps
-    }
-  }
-
-  fn unchecked_decompress_num_block<GcdOp: GcdOperator<T::Unsigned>>(
-    &mut self,
-    reader: &mut BitReader,
-    res: &mut Vec<T>,
-    batch_size: usize,
-  ) {
-    let p = self.huffman_table.unchecked_search_with_reader(reader);
-
-    match p.run_len_jumpstart {
-      None => unchecked_decompress_offsets::<T, GcdOp>(reader, res, p, 1),
-      // we stored the number of occurrences minus 1 because we knew it's at least 1
-      Some(jumpstart) => {
-        let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = self.limit_reps(p, full_reps, batch_size - res.len());
-        unchecked_decompress_offsets::<T, GcdOp>(reader, res, p, reps);
-      },
-    };
-  }
-
-  fn decompress_num_block(
-    &mut self,
-    reader: &mut BitReader,
-    res: &mut Vec<T>,
-    batch_size: usize,
-  ) -> QCompressResult<()> {
-    let p = self.huffman_table.search_with_reader(reader)?;
-
-    let reps = match p.run_len_jumpstart {
-      None => 1,
-      // we stored the number of occurrences minus 1 because we knew it's at least 1
-      Some(jumpstart) => {
-        let full_reps = reader.read_varint(jumpstart)? + 1;
-        self.limit_reps(p, full_reps, batch_size - res.len())
-      },
-    };
-    self.decompress_offsets(reader, res, p, reps)
-  }
-
-  fn decompress_offsets(
-    &self,
-    reader: &mut BitReader,
-    res: &mut Vec<T>,
-    p: PrefixDecompressionInfo<T::Unsigned>,
-    reps: usize,
-  ) -> QCompressResult<()> {
-    for _ in 0..reps {
-      let mut offset = reader.read_diff(p.k)?;
-      if p.k < T::Unsigned::BITS {
-        let most_significant = T::Unsigned::ONE << p.k;
-        if p.k_range - offset >= most_significant && reader.read_one()? {
-          offset |= most_significant;
-        }
-      }
-      let num = T::from_unsigned(p.lower_unsigned + offset * p.gcd);
-      res.push(num);
-    }
-
-    Ok(())
-  }
-
-  pub fn decompress_nums_limited(
-    &mut self,
-    reader: &mut BitReader,
-    limit: usize,
-  ) -> QCompressResult<Vec<T>> {
-    atomically(reader, |r| {
-      if self.use_gcd {
-        self.decompress_nums_limited_dirty::<GeneralGcdOp>(r, limit)
-      } else {
-        self.decompress_nums_limited_dirty::<TrivialGcdOp>(r, limit)
-      }
-    })
-  }
-
-  // After much debugging a performance degradation from error handling changes,
-  // it turned out this function's logic ran slower when inlining.
-  // I don't understand why, but telling it not
-  // to inline fixed the performance issue.
-  // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
-  //
-  // If this runs out of data, it returns an error and leaves reader unchanged.
-  #[inline(never)]
-  fn decompress_nums_limited_dirty<GcdOp: GcdOperator<T::Unsigned>>(
-    &mut self,
-    reader: &mut BitReader,
-    limit: usize,
-  ) -> QCompressResult<Vec<T>> {
-    let batch_size = min(
-      self.n - self.nums_processed,
-      limit,
-    );
-    let mut res = Vec::with_capacity(batch_size);
-
-    if batch_size == 0 {
-      return Ok(res);
-    }
-
-    let start_bit_idx = reader.bit_idx();
-
-    if let Some(IncompletePrefix { prefix, remaining_reps }) = self.incomplete_prefix {
-      let reps = if remaining_reps <= batch_size {
-        self.incomplete_prefix = None;
-        remaining_reps
-      } else {
-        self.incomplete_prefix = Some(IncompletePrefix {
-          prefix,
-          remaining_reps: remaining_reps - batch_size,
-        });
-        batch_size
-      };
-      self.decompress_offsets(
-        reader,
-        &mut res,
-        prefix,
-        reps,
-      )?;
-    }
-
-    if self.max_bits_per_num_block == 0 {
-      let mut temp = Vec::with_capacity(1);
-      self.unchecked_decompress_num_block::<GcdOp>(reader, &mut temp, 1);
-      let constant_num = temp[0];
-      while res.len() < batch_size {
-        res.push(constant_num);
-      }
-    } else {
-      loop {
-        let remaining_nums = batch_size - res.len();
-        let guaranteed_safe_num_blocks = min(
-          remaining_nums,
-          reader.bits_remaining().saturating_sub(self.max_overshoot_per_num_block) /
-            self.max_bits_per_num_block,
-        );
-
-        if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
-          let mut block_idx = 0;
-          while block_idx < guaranteed_safe_num_blocks && res.len() < self.n {
-            self.unchecked_decompress_num_block::<GcdOp>(reader, &mut res, batch_size);
-            block_idx += 1;
-          }
-        } else {
-          break;
-        }
-      }
-
-      while res.len() < batch_size {
-        self.decompress_num_block(reader, &mut res, batch_size)?;
-      }
-    }
-
-    self.nums_processed += batch_size;
-    if self.nums_processed == self.n {
-      reader.drain_empty_byte(|| QCompressError::corruption(
-        "nonzero bits in end of final byte of chunk numbers"
-      ))?;
-    }
-    let end_bit_idx = reader.bit_idx();
-    self.bits_processed += end_bit_idx - start_bit_idx;
-
-    if self.nums_processed == self.n {
-      let compressed_body_bit_size = self.compressed_body_size * 8;
-      if compressed_body_bit_size != self.bits_processed {
-        return Err(QCompressError::corruption(format!(
-          "expected the compressed body to contain {} bits but instead processed {}",
-          compressed_body_bit_size,
-          self.bits_processed,
-        )));
-      }
-    }
-
-    Ok(res)
+impl DecompressorConfig {
+  /// Sets [`numbers_limit_per_item`][DecompressorConfig::numbers_limit_per_item].
+  pub fn with_numbers_limit_per_item(mut self, limit: usize) -> Self {
+    self.numbers_limit_per_item = limit;
+    self
   }
 }
 
-/// A low-level, stateful way to decompress small batches of numbers at a time.
-///
-/// After decompressing metadata with a `Decompressor`, you may call
-/// [`Decompressor::get_chunk_body_decompressor`]
-/// to create an instance of `ChunkBodyDecompressor`.
-pub enum ChunkBodyDecompressor<T: NumberLike> {
-  #[doc(hidden)]
-  Simple {
-    num_decompressor: NumDecompressor<T>,
-  },
-  #[doc(hidden)]
-  Delta {
-    n: usize,
-    num_decompressor: NumDecompressor<T::Signed>,
-    delta_moments: DeltaMoments<T>,
-    nums_processed: usize,
-  },
+/// The different types of data encountered when iterating through the
+/// decompressor.
+#[derive(Clone, Debug)]
+pub enum DecompressedItem<T: NumberLike> {
+  Flags(Flags),
+  ChunkMetadata(ChunkMetadata<T>),
+  Numbers(Vec<T>),
+  Footer,
 }
 
-impl<T: NumberLike> ChunkBodyDecompressor<T> {
-  pub(crate) fn new(metadata: &ChunkMetadata<T>) -> QCompressResult<Self> {
-    Ok(match &metadata.prefix_metadata {
-      PrefixMetadata::Simple { prefixes } => Self::Simple {
-        num_decompressor: NumDecompressor::new(
-          metadata.n,
-          metadata.compressed_body_size,
-          prefixes.clone()
-        )?
-      },
-      PrefixMetadata::Delta { prefixes, delta_moments } => Self::Delta {
-        n: metadata.n,
-        num_decompressor: NumDecompressor::new(
-          metadata.n.saturating_sub(delta_moments.order()),
-          metadata.compressed_body_size,
-          prefixes.clone()
-        )?,
-        delta_moments: delta_moments.clone(),
-        nums_processed: 0,
-      },
-    })
+#[derive(Clone, Debug, Default)]
+struct State<T: NumberLike> {
+  bit_idx: usize,
+  flags: Option<Flags>,
+  chunk_body_decompressor: Option<ChunkBodyDecompressor<T>>,
+  terminated: bool,
+}
+
+pub(crate) fn read_header<T: NumberLike>(reader: &mut BitReader) -> QCompressResult<Flags> {
+  let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
+  if bytes != MAGIC_HEADER {
+    return Err(QCompressError::corruption(format!(
+      "magic header does not match {:?}; instead found {:?}",
+      MAGIC_HEADER,
+      bytes,
+    )));
+  }
+  let bytes = reader.read_aligned_bytes(1)?;
+  let byte = bytes[0];
+  if byte != T::HEADER_BYTE {
+    return Err(QCompressError::corruption(format!(
+      "data type byte does not match {:?}; instead found {:?}",
+      T::HEADER_BYTE,
+      byte,
+    )));
   }
 
-  /// Returns up to `limit` numbers from the `BitReader`.
-  /// Will return an error if the reader runs out of data.
-  ///
-  /// This maintains an internal state allowing you to pick up where you left
-  /// off. For example, calling on a chunk containing 11 numbers using limit 5
-  /// repeatedly will return
-  /// * the first 5 numbers in the first batch,
-  /// * then the next 5,
-  /// * then the last number,
-  /// * then an empty vector for each following call.
-  ///
-  /// If this reaches an error, it leaves `reader` unchanged.
-  pub fn decompress_next_batch(
-    &mut self,
-    reader: &mut BitReader,
-    limit: usize,
-  ) -> QCompressResult<Vec<T>> {
-    match self {
-      Self::Simple { num_decompressor } => num_decompressor.decompress_nums_limited(
-        reader,
-        limit
-      ),
-      Self::Delta {
-        n,
-        num_decompressor,
-        delta_moments,
-        nums_processed,
-      } => {
-        let batch_size = min(
-          *n - *nums_processed,
-          limit,
-        );
-        let deltas = num_decompressor.decompress_nums_limited(
-          reader,
-          limit,
-        )?;
-        let nums = delta_encoding::reconstruct_nums(
-          delta_moments,
-          &deltas,
-          batch_size,
-        );
-        *nums_processed += batch_size;
-        Ok(nums)
-      }
-    }
+  Flags::parse_from(reader)
+}
+
+pub(crate) fn read_chunk_meta<T: NumberLike>(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
+  let magic_byte = reader.read_aligned_bytes(1)?[0];
+  if magic_byte == MAGIC_TERMINATION_BYTE {
+    return Ok(None);
+  } else if magic_byte != MAGIC_CHUNK_BYTE {
+    return Err(QCompressError::corruption(format!(
+      "invalid magic chunk byte: {}",
+      magic_byte
+    )));
   }
+
+  // otherwise there is indeed another chunk
+  let metadata = ChunkMetadata::parse_from(reader, flags)?;
+  reader.drain_empty_byte(|| QCompressError::corruption(
+    "nonzero bits in end of final byte of chunk metadata"
+  ))?;
+
+  Ok(Some(metadata))
 }
 
 /// Converts compressed bytes into [`Flags`], [`ChunkMetadata`],
 /// and vectors of numbers.
 ///
-/// You can use the decompressor very easily:
-/// ```
-/// use q_compress::Decompressor;
+/// All `Decompressor` methods leave its state unchanged if they return an
+/// error.
 ///
-/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
-/// let decompressor = Decompressor::<i32>::default();
-/// let nums = decompressor.simple_decompress(&my_bytes).expect("decompression"); // returns Vec<i32>
+/// You can use the decompressor at a file, chunk, or stream level.
 /// ```
-/// You can also get full control over the decompression process:
-/// ```
-/// use q_compress::{BitReader, BitWords, Decompressor};
+/// use std::io::Write;
+/// use q_compress::{DecompressedItem, Decompressor, DecompressorConfig};
 ///
-/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46]; // the simplest possible .qco file; empty
-/// let my_words = BitWords::from(&my_bytes);
-/// let mut reader = BitReader::from(&my_words);
-/// let decompressor = Decompressor::<i32>::default();
+/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46];
 ///
-/// let flags = decompressor.header(&mut reader).expect("header failure");
-/// while let Some(chunk_meta) = decompressor.chunk_metadata(&mut reader, &flags).expect("chunk meta failure") {
-///   let nums = decompressor.chunk_body(&mut reader, &flags, &chunk_meta).expect("chunk body failure");
+/// // DECOMPRESS WHOLE FILE
+/// let mut decompressor = Decompressor::<i32>::default();
+/// decompressor.write_all(&my_bytes).unwrap();
+/// let nums: Vec<i32> = decompressor.simple_decompress().expect("decompression");
+///
+/// // DECOMPRESS BY CHUNK
+/// let mut decompressor = Decompressor::<i32>::default();
+/// decompressor.write_all(&my_bytes);
+/// let flags = decompressor.header().expect("header");
+/// let maybe_chunk_0_meta = decompressor.chunk_metadata().expect("chunk meta");
+/// if maybe_chunk_0_meta.is_some() {
+///   let chunk_0_nums = decompressor.chunk_body().expect("chunk body");
 /// }
-/// // We don't need to explicitly read the footer because `.chunk_metadata()`
-/// // returns `None` when it reaches the footer byte.
+///
+/// // DECOMPRESS BY STREAM
+/// let mut decompressor = Decompressor::<i32>::default();
+/// decompressor.write_all(&my_bytes);
+/// for item in &mut decompressor {
+///   match item.expect("stream") {
+///     DecompressedItem::Numbers(nums) => println!("nums: {:?}", nums),
+///     _ => (),
+///   }
+/// }
 /// ```
 #[derive(Clone, Debug, Default)]
 pub struct Decompressor<T> where T: NumberLike {
-  _config: DecompressorConfig,
-  phantom: PhantomData<T>,
+  config: DecompressorConfig,
+  words: BitWords,
+  state: State<T>,
+}
+
+impl<T: NumberLike> Write for Decompressor<T> {
+  fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    self.words.extend_bytes(buf);
+    Ok(buf.len())
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    Ok(())
+  }
 }
 
 impl<T> Decompressor<T> where T: NumberLike {
   /// Creates a new decompressor, given a [`DecompressorConfig`].
-  /// This config has nothing to do with [`Flags`], which will be parsed out
-  /// of a .qco file's header.
   pub fn from_config(config: DecompressorConfig) -> Self {
     Self {
-      _config: config,
+      config,
       ..Default::default()
     }
   }
 
-  /// Reads the header, returning its [`Flags`].
-  /// Will return an error if the reader is not byte-aligned,
-  /// if the reader runs out of data, if the data type byte does not agree,
-  /// if the flags are from a newer, incompatible version of q_compress,
-  /// or if any corruptions are found.
-  ///
-  /// If this reaches an error, it leaves `reader` unchanged.
-  pub fn header(&self, reader: &mut BitReader) -> QCompressResult<Flags> {
-    atomically(reader, |reader| {
-      let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
-      if bytes != MAGIC_HEADER {
-        return Err(QCompressError::corruption(format!(
-          "magic header does not match {:?}; instead found {:?}",
-          MAGIC_HEADER,
-          bytes,
-        )));
-      }
-      let bytes = reader.read_aligned_bytes(1)?;
-      let byte = bytes[0];
-      if byte != T::HEADER_BYTE {
-        return Err(QCompressError::corruption(format!(
-          "data type byte does not match {:?}; instead found {:?}",
-          T::HEADER_BYTE,
-          byte,
-        )));
-      }
+  /// Returns the current bit position into the compressed data the
+  /// decompressor is pointed at.
+  /// Note that when memory is freed, this will decrease.
+  pub fn bit_idx(&self) -> usize {
+    self.state.bit_idx
+  }
 
-      Flags::parse_from(reader)
+  fn with_reader<X, F>(&mut self, f: F) -> QCompressResult<X>
+  where F: FnOnce(&mut BitReader, &mut State<T>, &DecompressorConfig) -> QCompressResult<X> {
+    let mut reader = BitReader::from(&self.words);
+    reader.seek_to(self.state.bit_idx);
+    let res = f(&mut reader, &mut self.state, &self.config);
+    if res.is_ok() {
+      self.state.bit_idx = reader.bit_idx();
+    }
+    res
+  }
+
+  fn check_not_terminated(&self) -> QCompressResult<()> {
+    if self.state.terminated {
+      Err(QCompressError::invalid_argument("attempted to write to terminated decompressor"))
+    } else {
+      Ok(())
+    }
+  }
+
+  /// Reads the header, returning its [`Flags`] and updating this
+  /// `Decompressor`'s state.
+  /// Will return an error if this decompressor has already parsed a header,
+  /// is not byte-aligned,
+  /// runs out of data,
+  /// finds flags from a newer, incompatible version of q_compress,
+  /// or finds any corruptions.
+  pub fn header(&mut self) -> QCompressResult<Flags> {
+    self.check_not_terminated()?;
+    if self.state.flags.is_some() {
+      return Err(QCompressError::invalid_argument(
+        "attempted to decompress header for the 2nd time"
+      ))
+    }
+    self.with_reader(|reader, state, _| {
+      let flags = read_header::<T>(reader)?;
+      state.flags = Some(flags.clone());
+      Ok(flags)
     })
   }
 
   /// Reads a [`ChunkMetadata`], returning it.
   /// Will return `None` if it instead finds a termination footer
   /// (indicating end of the .qco file).
-  /// Will return an error if the reader is not byte-aligned,
-  /// the reader runs out of data, or any corruptions are found.
-  ///
-  /// Typically one would pass in the [`Flags`] obtained from an earlier
-  /// [`.header()`][Self::header] call.
-  ///
-  /// If this reaches an error, it leaves `reader` unchanged.
-  pub fn chunk_metadata(&self, reader: &mut BitReader, flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
-    atomically(reader, |reader| {
-      let magic_byte = reader.read_aligned_bytes(1)?[0];
-      if magic_byte == MAGIC_TERMINATION_BYTE {
-        return Ok(None);
-      } else if magic_byte != MAGIC_CHUNK_BYTE {
-        return Err(QCompressError::corruption(format!(
-          "invalid magic chunk byte: {}",
-          magic_byte
-        )));
+  /// Will return an error if the decompressor has not parsed the header,
+  /// has not finished the last chunk body,
+  /// is not byte-aligned,
+  /// runs out of data,
+  /// or finds any corruptions.
+  pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
+    self.check_not_terminated()?;
+    if self.state.flags.is_none() {
+      return Err(QCompressError::invalid_argument(
+        "attempted to decompress chunk metadata before header"
+      ));
+    }
+    if self.state.chunk_body_decompressor.is_some() {
+      return Err(QCompressError::invalid_argument(
+        "attempted to decompress chunk metadata before chunk body was finished"
+      ));
+    }
+    self.with_reader(|reader, state, _| {
+      let flags = state.flags.as_ref().unwrap();
+      let maybe_meta = read_chunk_meta(reader, flags)?;
+      if let Some(meta) = &maybe_meta {
+        state.chunk_body_decompressor = Some(ChunkBodyDecompressor::new(meta)?)
       }
-
-      // otherwise there is indeed another chunk
-      let metadata = ChunkMetadata::parse_from(reader, flags)?;
-      reader.drain_empty_byte(|| QCompressError::corruption(
-        "nonzero bits in end of final byte of chunk metadata"
-      ))?;
-
-      Ok(Some(metadata))
+      Ok(maybe_meta)
     })
   }
 
-  /// The lowest-level way to decompress numbers from a chunk.
-  ///
-  /// Returns a stateful `ChunkBodyDecompressor` that supports decompressing
-  /// one batch of numbers at a time, rather than all numbers at once.
-  /// Will return an error if the metadata is corrupt.
-  /// This can be useful if you only need the first few numbers or you are
-  /// working in memory-constrained conditions and cannot decompress a whole
-  /// chunk at a time.
-  ///
-  /// ```
-  /// use q_compress::{BitReader, BitWords, Decompressor};
-  ///
-  /// // .qco bytes for the boolean `true` repeated 2^24 - 1 times.
-  /// // We'll read just the first 3.
-  /// let my_bytes = vec![113, 99, 111, 33, 7, 0, 44, 255, 255, 255, 0, 0, 0, 0, 0, 3, 255, 255, 254, 2, 2, 0, 46];
-  /// let my_words = BitWords::from(&my_bytes);
-  /// let mut reader = BitReader::from(&my_words);
-  /// let decompressor = Decompressor::<bool>::default();
-  ///
-  /// let flags = decompressor.header(&mut reader).unwrap();
-  /// let metadata = decompressor.chunk_metadata(&mut reader, &flags).unwrap().unwrap();
-  /// let mut chunk_body_decompressor = decompressor.get_chunk_body_decompressor(&flags, &metadata).unwrap();
-  /// let head = chunk_body_decompressor.decompress_next_batch(&mut reader, 3).unwrap();
-  /// assert_eq!(head, vec![true, true, true]);
-  /// ```
-  pub fn get_chunk_body_decompressor(
-    &self,
-    _flags: &Flags,
-    metadata: &ChunkMetadata<T>,
-  ) -> QCompressResult<ChunkBodyDecompressor<T>> {
-    ChunkBodyDecompressor::new(metadata)
+  fn check_in_chunk_body(&self) -> QCompressResult<()> {
+    self.check_not_terminated()?;
+    if self.state.chunk_body_decompressor.is_none() {
+      return Err(QCompressError::invalid_argument(
+        "attempted to decompress chunk body before its chunk metadata"
+      ));
+    }
+    Ok(())
+  }
+
+  /// Skips the chunk body, returning nothing.
+  /// Will return an error if the decompressor is not in a chunk body,
+  /// or runs out of data.
+  pub fn skip_chunk_body(&mut self) -> QCompressResult<()> {
+    self.check_in_chunk_body()?;
+    let cbd = self.state.chunk_body_decompressor.as_ref().unwrap();
+    let skipped_bit_idx = self.state.bit_idx + cbd.bits_remaining();
+    if skipped_bit_idx <= self.words.total_bits {
+      self.state.bit_idx = skipped_bit_idx;
+      self.state.chunk_body_decompressor = None;
+      Ok(())
+    } else {
+      Err(QCompressError::insufficient_data(format!(
+        "unable to skip chunk body to bit index {} when only {} bits available",
+        skipped_bit_idx,
+        self.words.total_bits,
+      )))
+    }
   }
 
   /// Reads a chunk body, returning it as a vector of numbers.
-  /// Will return an error if the reader runs out of data
-  /// or any corruptions are found.
-  ///
-  /// Typically one would pass in the [`Flags`] obtained from an earlier
-  /// [`.header()`][Self::header] call and the [`ChunkMetadata`] obtained
-  /// from an earlier [`.chunk_metadata()`][Self::chunk_metadata] call.
-  pub fn chunk_body(
-    &self,
-    reader: &mut BitReader,
-    flags: &Flags,
-    metadata: &ChunkMetadata<T>,
-  ) -> QCompressResult<Vec<T>> {
-    let mut chunk_body_decompressor = self.get_chunk_body_decompressor(
-      flags,
-      metadata,
-    )?;
-    chunk_body_decompressor.decompress_next_batch(
-      reader,
-      metadata.n,
-    )
-  }
-
-  /// Reads a [`ChunkMetadata`] and the chunk body into a vector of numbers,
-  /// returning both.
-  /// Will return `None` if it instead finds a termination footer
-  /// (indicating end of the .qco file).
-  /// Will return an error if the reader is not byte-aligned,
-  /// the reader runs out of data, or any corruptions are found.
-  ///
-  /// The same effect can be achieved via
-  /// [`.chunk_metadata()`][Self::chunk_metadata] and
-  /// [`.chunk_body()`][Self::chunk_body].
-  /// If this reaches an error, it leaves `reader` unchanged.
-  pub fn chunk(
-    &self,
-    reader: &mut BitReader,
-    flags: &Flags,
-  ) -> QCompressResult<Option<DecompressedChunk<T>>> {
-    atomically(reader, |reader| {
-      let maybe_metadata = self.chunk_metadata(reader, flags)?;
-      match maybe_metadata {
-        Some(metadata) => {
-          let nums = self.chunk_body(
-            reader,
-            flags,
-            &metadata,
-          )?;
-          Ok(Some(DecompressedChunk {
-            metadata,
-            nums,
-          }))
-        },
-        None => Ok(None)
-      }
+  /// Will return an error if the decompressor is not in a chunk body,
+  /// runs out of data,
+  /// or finds any corruptions.
+  pub fn chunk_body(&mut self) -> QCompressResult<Vec<T>> {
+    self.check_in_chunk_body()?;
+    self.with_reader(|reader, state, _| {
+      let chunk_body_decompressor = state.chunk_body_decompressor.as_mut().unwrap();
+      let numbers = chunk_body_decompressor.decompress_next_batch(
+        reader,
+        usize::MAX,
+        true,
+      )?;
+      state.chunk_body_decompressor = None;
+      Ok(numbers.nums)
     })
   }
 
   /// Takes in compressed bytes and returns a vector of numbers.
   /// Will return an error if there are any compatibility, corruption,
   /// or insufficient data issues.
-  pub fn simple_decompress(&self, bytes: &[u8]) -> QCompressResult<Vec<T>> {
+  pub fn simple_decompress(&mut self) -> QCompressResult<Vec<T>> {
     // cloning/extending by a single chunk's numbers can slow down by 2%
     // so we just take ownership of the first chunk's numbers instead
-    let words = BitWords::from(bytes);
-    let mut reader = BitReader::from(&words);
     let mut res: Option<Vec<T>> = None;
-    let flags = self.header(&mut reader)?;
-    while let Some(chunk) = self.chunk(&mut reader, &flags)? {
+    self.header()?;
+    while self.chunk_metadata()?.is_some() {
+      let nums = self.chunk_body()?;
       res = match res {
         Some(mut existing) => {
-          existing.extend(chunk.nums);
+          existing.extend(nums);
           Some(existing)
         }
         None => {
-          Some(chunk.nums)
+          Some(nums)
         }
       };
     }
     Ok(res.unwrap_or_default())
   }
-}
 
-#[cfg(test)]
-mod tests {
-  use std::marker::PhantomData;
-  use crate::{BitReader, Decompressor, Flags};
-  use crate::bit_words::BitWords;
-  use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
-  use crate::errors::{ErrorKind, QCompressResult};
-  use crate::prefix::Prefix;
-
-  fn prefix_w_code(code: Vec<bool>) -> Prefix<i64> {
-    Prefix {
-      count: 1,
-      code,
-      lower: 100,
-      upper: 200,
-      run_len_jumpstart: None,
-      gcd: 1,
-      phantom: PhantomData,
+  /// Frees memory used for storing compressed bytes the decompressor has
+  /// already decoded.
+  /// Note that calling this too frequently can cause performance issues.
+  pub fn free_compressed_memory(&mut self) {
+    let words_to_free = self.state.bit_idx / WORD_SIZE;
+    if words_to_free > 0 {
+      self.words.truncate_left(words_to_free);
+      self.state.bit_idx -= words_to_free * WORD_SIZE;
     }
-  }
-
-  #[test]
-  fn test_corrupt_prefixes_error_not_panic() -> QCompressResult<()> {
-    let decompressor = Decompressor::<i64>::default();
-    let bytes = vec![1, 2, 3, 4, 5, 6]; // not important for test
-
-    let metadata_missing_prefix = ChunkMetadata::<i64> {
-      n: 2,
-      compressed_body_size: 1,
-      prefix_metadata: PrefixMetadata::Simple { prefixes: vec![
-        prefix_w_code(vec![false]),
-        prefix_w_code(vec![true, false]),
-      ]},
-      phantom: PhantomData,
-    };
-    let metadata_duplicating_prefix = ChunkMetadata::<i64> {
-      n: 2,
-      compressed_body_size: 1,
-      prefix_metadata: PrefixMetadata::Simple { prefixes: vec![
-        prefix_w_code(vec![false]),
-        prefix_w_code(vec![false]),
-        prefix_w_code(vec![true]),
-      ]},
-      phantom: PhantomData,
-    };
-
-    let flags = Flags {
-      use_5_bit_code_len: true,
-      delta_encoding_order: 0,
-      use_min_count_encoding: true,
-      use_gcds: false,
-      phantom: PhantomData,
-    };
-
-    for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
-      let words = BitWords::from(&bytes);
-      let mut reader = BitReader::from(&words);
-      let result = decompressor.chunk_body(
-        &mut reader,
-        &flags,
-        &bad_metadata,
-      );
-      assert!(matches!(result.unwrap_err().kind, ErrorKind::Corruption));
-    }
-
-    Ok(())
   }
 }
 
+impl<T: NumberLike> Iterator for &mut Decompressor<T> {
+  type Item = QCompressResult<DecompressedItem<T>>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    let res = self.with_reader(|reader, state, config| {
+      if state.terminated {
+        return Ok(None);
+      }
+
+      if state.flags.is_none() {
+        match read_header::<T>(reader) {
+          Ok(flags) => {
+            state.flags = Some(flags.clone());
+            Ok(Some(DecompressedItem::Flags(flags)))
+          },
+          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
+          Err(e) => Err(e),
+        }
+      } else if state.chunk_body_decompressor.is_none() {
+        match read_chunk_meta::<T>(reader, state.flags.as_ref().unwrap()) {
+          Ok(Some(meta)) => {
+            match ChunkBodyDecompressor::new(&meta) {
+              Ok(cbd) => {
+                state.chunk_body_decompressor = Some(cbd);
+                Ok(Some(DecompressedItem::ChunkMetadata(meta)))
+              }
+              Err(e) => Err(e)
+            }
+          },
+          Ok(None) => {
+            state.terminated = true;
+            Ok(Some(DecompressedItem::Footer))
+          },
+          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
+          Err(e) => Err(e),
+        }
+      } else {
+        let nums_result = state.chunk_body_decompressor.as_mut()
+          .unwrap()
+          .decompress_next_batch(reader, config.numbers_limit_per_item, false);
+        match nums_result {
+          Ok(numbers) => {
+            if numbers.nums.is_empty() {
+              Ok(None)
+            } else {
+              if numbers.finished_chunk_body {
+                state.chunk_body_decompressor = None;
+              }
+              Ok(Some(DecompressedItem::Numbers(numbers.nums)))
+            }
+          }
+          Err(e) => Err(e),
+        }
+      }
+    });
+    match res {
+      Ok(Some(x)) => Some(Ok(x)),
+      Ok(None) => None,
+      Err(e) => Some(Err(e))
+    }
+  }
+}

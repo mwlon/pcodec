@@ -1,12 +1,11 @@
-use q_compress::{BitWriter, BitReader, Compressor, Decompressor, BitWords};
+use std::io::Write;
+use q_compress::{Compressor, Decompressor};
 use rand::Rng;
 use std::time::Instant;
 
 fn main() {
-  let mut writer = BitWriter::default();
-
-  let compressor = Compressor::<f64>::default();
-  compressor.header(&mut writer).expect("header");
+  let mut compressor = Compressor::<f64>::default();
+  compressor.header().expect("header");
   let n_chunks = 10;
   let mut rng = rand::thread_rng();
 
@@ -15,21 +14,20 @@ fn main() {
     for _ in 0..100000 {
       nums.push(rng.gen::<f64>());
     }
-    compressor.chunk(&nums, &mut writer).expect("write chunk");
+    compressor.chunk(&nums).expect("write chunk");
   }
-  compressor.footer(&mut writer).expect("footer");
+  compressor.footer().expect("footer");
 
   // now read back only the metadata
-  let bytes = writer.bytes();
-  let words = BitWords::from(&bytes);
-  let mut reader = BitReader::from(&words);
+  let bytes = compressor.drain_bytes();
+  let mut decompressor = Decompressor::<f64>::default();
+  decompressor.write_all(&bytes).unwrap();
   let start_t = Instant::now();
-  let decompressor = Decompressor::<f64>::default();
-  let flags = decompressor.header(&mut reader).expect("flags");
+  decompressor.header().expect("flags");
   let mut metadatas = Vec::new();
-  while let Some(meta) = decompressor.chunk_metadata(&mut reader, &flags).expect("read chunk") {
-    reader.seek(meta.compressed_body_size * 8);
+  while let Some(meta) = decompressor.chunk_metadata().expect("read chunk") {
     metadatas.push(meta);
+    decompressor.skip_chunk_body().expect("skipping");
   }
 
   let n: usize = metadatas.iter()

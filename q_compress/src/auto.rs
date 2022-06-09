@@ -1,6 +1,7 @@
 use std::cmp::min;
+use std::io::Write;
 
-use crate::{BitWriter, Compressor, CompressorConfig, Decompressor};
+use crate::{Compressor, CompressorConfig, Decompressor};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 
@@ -17,7 +18,7 @@ const AUTO_DELTA_LIMIT: usize = 1000;
 /// the compute cost.
 /// See [`CompressorConfig`] for information about compression levels.
 pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
-  let compressor = Compressor::from_config(auto_compressor_config(nums, compression_level));
+  let mut compressor = Compressor::from_config(auto_compressor_config(nums, compression_level));
   compressor.simple_compress(nums)
 }
 
@@ -27,8 +28,9 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 /// There are currently no fields in the decompression configuration, so there
 /// is no compute downside to using this function.
 pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> QCompressResult<Vec<T>> {
-  let decompressor = Decompressor::<T>::default();
-  decompressor.simple_decompress(bytes)
+  let mut decompressor = Decompressor::<T>::default();
+  decompressor.write_all(bytes).unwrap();
+  decompressor.simple_decompress()
 }
 
 /// Automatically makes an educated guess for the best compression
@@ -63,10 +65,10 @@ fn auto_delta_encoding_order<T: NumberLike>(
       .with_delta_encoding_order(delta_encoding_order)
       .with_compression_level(min(compression_level, 6))
       .with_use_gcds(false);
-    let compressor = Compressor::<T>::from_config(config);
-    let mut writer = BitWriter::default();
-    compressor.chunk(head_nums, &mut writer).unwrap(); // only unreachable errors
-    let size = writer.byte_size();
+    let mut compressor = Compressor::<T>::from_config(config);
+    compressor.header().unwrap();
+    compressor.chunk(head_nums).unwrap(); // only unreachable errors
+    let size = compressor.byte_size();
     if size < best_size {
       best_order = delta_encoding_order;
       best_size = size;

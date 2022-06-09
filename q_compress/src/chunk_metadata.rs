@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
-use crate::{BitReader, BitWriter, Flags, gcd_utils};
+use crate::bit_reader::BitReader;
+use crate::{Flags, gcd_utils};
+use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::delta_encoding::DeltaMoments;
 use crate::prefix::Prefix;
@@ -204,12 +206,4 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
     );
   }
-}
-
-/// A whole chunk of decompressed data - both the metadata
-/// and the numbers it contained.
-#[derive(Clone)]
-pub struct DecompressedChunk<T> where T: NumberLike {
-  pub metadata: ChunkMetadata<T>,
-  pub nums: Vec<T>,
 }

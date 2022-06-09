@@ -1,6 +1,8 @@
-use crate::{BitReader, BitWriter, Compressor, CompressorConfig, Decompressor};
-use crate::bit_words::BitWords;
+use std::io::Write;
+use crate::{Compressor, CompressorConfig, DecompressedItem, Decompressor};
 use crate::data_types::NumberLike;
+use crate::decompressor::DecompressorConfig;
+use crate::errors::ErrorKind;
 
 #[test]
 fn test_low_level_short() {
@@ -28,50 +30,55 @@ fn test_low_level_sparse() {
 
 fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
-    let mut writer = BitWriter::default();
-    let compressor = Compressor::<T>::from_config(
+    println!("deo={}", delta_encoding_order);
+    let mut compressor = Compressor::<T>::from_config(
       CompressorConfig::default().with_delta_encoding_order(delta_encoding_order)
     );
-    compressor.header(&mut writer).unwrap();
+    compressor.header().unwrap();
     let mut metadatas = Vec::new();
     for nums in &numss {
-      metadatas.push(compressor.chunk(nums, &mut writer).unwrap());
+      metadatas.push(compressor.chunk(nums).unwrap());
     }
-    compressor.footer(&mut writer).unwrap();
+    compressor.footer().unwrap();
 
-    let bytes = writer.bytes();
-    let words = BitWords::from(&bytes);
-    let mut reader = BitReader::from(&words);
+    let bytes = compressor.drain_bytes();
 
-    let decompressor = Decompressor::<T>::default();
-    let flags = decompressor.header(&mut reader).unwrap();
+    let mut decompressor = Decompressor::<T>::from_config(
+      DecompressorConfig::default().with_numbers_limit_per_item(2)
+    );
+    decompressor.write_all(&bytes).unwrap();
+    let flags = decompressor.header().unwrap();
     assert_eq!(&flags, compressor.flags());
-    for i in 0..numss.len() {
-      let metadata = decompressor.chunk_metadata(
-        &mut reader,
-        &flags
-      ).unwrap().unwrap();
-      assert_eq!(&metadata, &metadatas[i]);
-
-      let nums = &numss[i];
-      let mut rec_nums = Vec::<T>::new();
-      let mut chunk_body = decompressor.get_chunk_body_decompressor(
-        &flags,
-        &metadata,
-      ).unwrap();
-      for j in 0..nums.len() + 2 { // +2 to make sure there's no weird behavior after end
-        let batch = chunk_body.decompress_next_batch(
-          &mut reader,
-          1,
-        ).unwrap();
-        assert_eq!(
-          batch.len(),
-          if j < nums.len() { 1 } else { 0 },
-        );
-        rec_nums.extend(&batch);
+    let mut chunk_idx = 0;
+    let mut chunk_nums = Vec::<T>::new();
+    let mut terminated = false;
+    for maybe_item in &mut decompressor {
+      let item = maybe_item.unwrap();
+      match item {
+        DecompressedItem::Flags(_) => panic!("already read flags"),
+        DecompressedItem::ChunkMetadata(meta) => {
+          assert!(!terminated);
+          assert_eq!(&meta, &metadatas[chunk_idx]);
+          if chunk_idx > 0 {
+            assert_eq!(&chunk_nums, &numss[chunk_idx - 1]);
+            chunk_nums = Vec::new();
+          }
+          chunk_idx += 1;
+        },
+        DecompressedItem::Numbers(nums) => {
+          assert!(!terminated);
+          chunk_nums.extend(&nums);
+        }
+        DecompressedItem::Footer => {
+          assert!(!terminated);
+          terminated = true;
+        }
       }
-      assert_eq!(&rec_nums, nums);
     }
-    assert!(decompressor.chunk_metadata(&mut reader, &flags).unwrap().is_none());
+    assert_eq!(&chunk_nums, numss.last().unwrap());
+
+    let terminated_err = decompressor.chunk_metadata().unwrap_err();
+    assert!(matches!(terminated_err.kind, ErrorKind::InvalidArgument));
+    assert!(terminated);
   }
 }

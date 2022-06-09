@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -8,7 +9,7 @@ use arrow::datatypes::ArrowPrimitiveType;
 use arrow::record_batch::RecordBatch;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
 
-use q_compress::{BitReader, BitWords, Decompressor};
+use q_compress::Decompressor;
 
 use crate::arrow_number_like::ArrowNumberLike;
 use crate::handlers::HandlerImpl;
@@ -20,10 +21,9 @@ pub trait DecompressHandler {
 
 impl<T: ArrowNumberLike> DecompressHandler for HandlerImpl<T> {
   fn decompress(&self, opt: &DecompressOpt, bytes: &[u8]) -> Result<()> {
-    let decompressor = Decompressor::<T>::default();
-    let words = BitWords::from(bytes);
-    let mut reader = BitReader::from(&words);
-    let flags = decompressor.header(&mut reader)?;
+    let mut decompressor = Decompressor::<T>::default();
+    decompressor.write_all(bytes).unwrap();
+    decompressor.header()?;
 
     let mut writer = new_column_writer(opt)?;
     let mut remaining_limit = opt.limit.unwrap_or(usize::MAX);
@@ -33,8 +33,8 @@ impl<T: ArrowNumberLike> DecompressHandler for HandlerImpl<T> {
         break;
       }
 
-      if let Some(chunk) = decompressor.chunk(&mut reader, &flags)? {
-        let nums = chunk.nums;
+      if decompressor.chunk_metadata()?.is_some() {
+        let nums = decompressor.chunk_body()?;
         let num_slice = if nums.len() <= remaining_limit {
           remaining_limit -= nums.len();
           nums.as_slice()

@@ -6,6 +6,10 @@
 in cases where all numbers in some ranges share a nontrivial common divisor.
 * Made `CompressorConfig`, `DecompressorConfig`, `Prefix`, `Flags`, and
 `ChunkMetadata` more API-stable by adding a phantom private field.
+* Removed `BitReader`, `BitWords`, `BitWriter` from the public API in favor of
+mutable `Compressor`s and `Decompressor`s. See the docs for new examples.
+* Removed `ChunkBodyDecompressor` from the public API in favor of a
+`Decompressor` `Iterator` implementation that makes streaming much easier.
 
 ## 0.9.3
 

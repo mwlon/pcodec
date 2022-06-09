@@ -12,7 +12,7 @@ use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WO
 ///
 /// The writer is consider is considered "aligned" if the current bit index
 /// is byte-aligned; e.g. `bit_idx % 8 == 0`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BitWriter {
   words: Vec<usize>,
   j: usize,
@@ -169,11 +169,14 @@ impl BitWriter {
     }
   }
 
-  /// Returns the bytes produced by the writer.
-  pub fn bytes(&self) -> Vec<u8> {
+  pub fn drain_bytes(&mut self) -> Vec<u8> {
     let byte_size = self.byte_size();
     let mut res = bits::words_to_bytes(&self.words);
     res.truncate(byte_size);
+
+    self.words.clear();
+    self.j = WORD_SIZE;
+
     res
   }
 }
@@ -187,7 +190,7 @@ mod tests {
     let mut writer = BitWriter::default();
     writer.write(&[true, true, true, true]);
     writer.write_usize(187, 4);
-    let bytes = writer.bytes();
+    let bytes = writer.drain_bytes();
     assert_eq!(
       bytes,
       vec![251],
@@ -205,7 +208,7 @@ mod tests {
     writer.write_usize(1 << 1, 13);
     writer.write_usize((1 << 23) + (1 << 15), 24);
 
-    let bytes = writer.bytes();
+    let bytes = writer.drain_bytes();
     assert_eq!(
       bytes,
       vec![128, 192, 8, 64, 0, 64, 2, 128, 128, 0],
@@ -225,7 +228,7 @@ mod tests {
     writer.write_usize(5, 4);
     writer.write_usize(5, 4);
 
-    let bytes = writer.bytes();
+    let bytes = writer.drain_bytes();
     assert_eq!(
       bytes,
       vec![136, 64, 123, 149, 229, 80],
@@ -237,7 +240,7 @@ mod tests {
     let mut writer = BitWriter::default();
     writer.write_usize(0, 24);
     writer.overwrite_usize(9, 129, 9);
-    let bytes = writer.bytes();
+    let bytes = writer.drain_bytes();
     assert_eq!(
       bytes,
       vec![0, 32, 64],

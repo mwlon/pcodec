@@ -1,6 +1,6 @@
 use std::cmp::min;
-use crate::bit_words::BitWords;
 
+use crate::bit_words::BitWords;
 use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_SIZE};
 use crate::data_types::UnsignedLike;
@@ -338,7 +338,7 @@ impl<'a> BitReader<'a> {
 #[cfg(test)]
 mod tests {
   use crate::bit_words::BitWords;
-  use crate::BitReader;
+  use super::BitReader;
   use crate::errors::QCompressResult;
 
   #[test]

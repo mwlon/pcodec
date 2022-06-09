@@ -35,12 +35,16 @@ with high compression ratio and moderately fast speed.
 * preserves ordering and exact bit representation (including `NaN` floats)
 * supports nth-order delta encoding up to order 7 (e.g. 2nd order is delta-of-deltas)
 * compresses faster or slower depending on compression level from 0 to 12
+* greatest common divisor detection
+* chunked compression and streaming decompression
 
 ## Get Started
 
 [Use the CLI](./q_compress_cli/README.md)
 
-[Use the rust API](./q_compress/README.md)
+[Use the Rust API](./q_compress/README.md)
+
+[Use the JVM API](https://github.com/mwlon/q-compress-jni)
 
 ## Performance
 
@@ -73,6 +77,7 @@ Compression happens in this order for each chunk:
 2. Determine unoptimized _prefixes_ by taking `2^compression_level` roughly evenly-spaced
    quantiles of the distribution.
    Each prefix is simply a range and associated metadata.
+   If GCD is on, this also detects the greatest common divisor for each range.
 3. Optimize prefixes, combining adjacent ones if advantageous.
 4. Determine Huffman codes for each prefix based on its weight in the data.
 5. Encode deltas using prefixes.
