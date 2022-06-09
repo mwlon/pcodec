@@ -35,6 +35,8 @@ with high compression ratio and moderately fast speed.
 * preserves ordering and exact bit representation (including `NaN` floats)
 * supports nth-order delta encoding up to order 7 (e.g. 2nd order is delta-of-deltas)
 * compresses faster or slower depending on compression level from 0 to 12
+* greatest common divisor detection
+* chunked compression and streaming decompression
 
 ## Get Started
 
