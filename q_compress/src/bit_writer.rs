@@ -12,7 +12,7 @@ use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WO
 ///
 /// The writer is consider is considered "aligned" if the current bit index
 /// is byte-aligned; e.g. `bit_idx % 8 == 0`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BitWriter {
   words: Vec<usize>,
   j: usize,

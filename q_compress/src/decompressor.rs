@@ -39,7 +39,7 @@ impl DecompressorConfig {
 
 /// The different types of data encountered when iterating through the
 /// decompressor.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DecompressedItem<T: NumberLike> {
   Flags(Flags),
   ChunkMetadata(ChunkMetadata<T>),
@@ -47,7 +47,7 @@ pub enum DecompressedItem<T: NumberLike> {
   Footer,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 struct State<T: NumberLike> {
   bit_idx: usize,
   flags: Option<Flags>,
@@ -134,7 +134,7 @@ pub(crate) fn read_chunk_meta<T: NumberLike>(reader: &mut BitReader, flags: &Fla
 ///   }
 /// }
 /// ```
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Decompressor<T> where T: NumberLike {
   config: DecompressorConfig,
   words: BitWords,

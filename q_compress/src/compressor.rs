@@ -353,7 +353,7 @@ impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, 
   }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 struct State {
   has_written_header: bool,
   has_written_footer: bool,
@@ -384,7 +384,7 @@ struct State {
 /// ```
 /// Note that in practice we would need larger chunks than this to
 /// achieve good compression, preferably containing 3k-10M numbers.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Compressor<T> where T: NumberLike {
   internal_config: InternalCompressorConfig,
   flags: Flags,

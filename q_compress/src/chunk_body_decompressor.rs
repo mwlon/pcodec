@@ -9,7 +9,7 @@ use crate::num_decompressor::{Numbers, NumDecompressor};
 
 // ChunkBodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ChunkBodyDecompressor<T: NumberLike> {
   Simple {
     num_decompressor: NumDecompressor<T>,

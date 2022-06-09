@@ -91,7 +91,7 @@ struct IncompletePrefix<Diff: UnsignedLike> {
   remaining_reps: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct State<Diff: UnsignedLike> {
   nums_processed: usize,
   bits_processed: usize,
@@ -99,7 +99,7 @@ struct State<Diff: UnsignedLike> {
 }
 
 // NumDecompressor does the main work of decoding bytes into NumberLikes
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NumDecompressor<T> where T: NumberLike {
   // known information about the chunk
   huffman_table: HuffmanTable<T::Unsigned>,

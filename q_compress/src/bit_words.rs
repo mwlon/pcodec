@@ -9,7 +9,7 @@ use crate::constants::{BYTES_PER_WORD, WORD_SIZE};
 /// This is used during decompression because doing bit-level operations on a
 /// `Vec<usize>` is faster than on a `Vec<u8>`; `usize` represents the
 /// true word size of the processor.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BitWords {
   pub(crate) words: Vec<usize>,
   pub(crate) total_bits: usize,
