@@ -1,3 +1,8 @@
+[![Crates.io][crates-badge]][crates-url]
+
+[crates-badge]: https://img.shields.io/crates/v/q_compress_cli.svg
+[crates-url]: https://crates.io/crates/q_compress_cli
+
 # `q_compress` CLI
 
 ## Setup
