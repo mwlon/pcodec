@@ -25,8 +25,8 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 /// Automatically makes an educated guess for the best decompression
 /// configuration, then decompresses the bytes into numbers.
 ///
-/// There are currently no fields in the decompression configuration, so there
-/// is no compute downside to using this function.
+/// There are currently no relevant fields in the decompression configuration,
+/// so there is no compute downside to using this function.
 pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> QCompressResult<Vec<T>> {
   let mut decompressor = Decompressor::<T>::default();
   decompressor.write_all(bytes).unwrap();

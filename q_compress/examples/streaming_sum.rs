@@ -1,19 +1,21 @@
 use std::io::Write;
 use std::time::Instant;
+
 use futures::{StreamExt, TryStreamExt};
 use rand::Rng;
-use q_compress::{Decompressor, DecompressedItem};
+
+use q_compress::{DecompressedItem, Decompressor};
 use q_compress::errors::QCompressResult;
 
 async fn streaming_sum_reduce(
   state: (Decompressor<i32>, i32),
-  compressed_bytes: &[u8],
+  compressed_blob: &[u8],
 ) -> QCompressResult<(Decompressor<i32>, i32)> {
   let (mut decompressor, mut sum) = state;
-  decompressor.write_all(compressed_bytes).unwrap();
+  decompressor.write_all(compressed_blob).unwrap();
   for maybe_item in &mut decompressor {
-    let chunk = maybe_item?;
-    if let DecompressedItem::Numbers(nums) = chunk {
+    let item = maybe_item?;
+    if let DecompressedItem::Numbers(nums) = item {
       for n in nums {
         sum += n;
       }
@@ -32,10 +34,10 @@ async fn main() -> QCompressResult<()> {
   for _ in 0..1000000 {
     nums.push(rng.gen_range(0..1000));
   }
-  let compressed = q_compress::auto_compress(&nums, 6);
-  let chunks = compressed.chunks(10000);
+  let compressed_bytes = q_compress::auto_compress(&nums, 6);
+  let compressed_blobs = compressed_bytes.chunks(10000);
 
-  let input_stream = futures::stream::iter(chunks);
+  let input_stream = futures::stream::iter(compressed_blobs);
   let start_t = Instant::now();
   let (_, sum) = input_stream
     .map(Ok)

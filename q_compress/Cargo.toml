@@ -5,7 +5,7 @@ edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding"]
-description = "Good data compression columnar numerical data and time series"
+description = "Good compression for numerical sequences and time series"
 include = ["src/**/*.rs", "Cargo.toml", "README.md"]
 keywords = ["compression", "numerical", "quantile", "delta"]
 license = "Apache-2.0"

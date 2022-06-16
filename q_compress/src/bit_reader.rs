@@ -239,9 +239,8 @@ impl<'a> BitReader<'a> {
       self.j = n_plus_j;
       res
     } else {
-      let mut res = Diff::ZERO;
       let mut remaining = n_plus_j - WORD_SIZE;
-      res |= Diff::from_word(self.unchecked_word() & (usize::MAX >> self.j)) << remaining;
+      let mut res = Diff::from_word(self.unchecked_word() & (usize::MAX >> self.j)) << remaining;
       while remaining >= WORD_SIZE {
         self.i += 1;
         remaining -= WORD_SIZE;

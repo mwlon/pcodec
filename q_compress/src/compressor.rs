@@ -25,7 +25,7 @@ struct JumpstartConfiguration {
   jumpstart: usize,
 }
 
-/// All the settings you can specify about compression.
+/// All configurations available for a [`Compressor`].
 ///
 /// Some, like `delta_encoding_order`, are explicitly stored as `Flags` in the
 /// compressed bytes.
