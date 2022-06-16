@@ -134,17 +134,17 @@ impl<T: NumberLike> WeightedPrefix<T> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PrefixCompressionInfo<Diff> where Diff: UnsignedLike {
+pub struct PrefixCompressionInfo<U> where U: UnsignedLike {
   pub count: usize,
   pub code: usize,
   pub code_len: usize,
-  pub lower: Diff,
-  pub upper: Diff,
+  pub lower: U,
+  pub upper: U,
   pub k: usize,
-  pub only_k_bits_lower: Diff,
-  pub only_k_bits_upper: Diff,
+  pub only_k_bits_lower: U,
+  pub only_k_bits_upper: U,
   pub run_len_jumpstart: Option<usize>,
-  pub gcd: Diff,
+  pub gcd: U,
 }
 
 impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
@@ -167,50 +167,50 @@ impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
   }
 }
 
-impl<Diff: UnsignedLike> PrefixCompressionInfo<Diff> {
-  pub fn contains(&self, unsigned: Diff) -> bool {
+impl<U: UnsignedLike> PrefixCompressionInfo<U> {
+  pub fn contains(&self, unsigned: U) -> bool {
     self.lower <= unsigned && self.upper >= unsigned
   }
 }
 
-impl<Diff: UnsignedLike> Default for PrefixCompressionInfo<Diff> {
+impl<U: UnsignedLike> Default for PrefixCompressionInfo<U> {
   fn default() -> Self {
     PrefixCompressionInfo {
       count: 0,
       code: 0,
       code_len: 0,
-      lower: Diff::ZERO,
-      upper: Diff::MAX,
-      k: Diff::BITS,
-      only_k_bits_lower: Diff::ZERO,
-      only_k_bits_upper: Diff::MAX,
+      lower: U::ZERO,
+      upper: U::MAX,
+      k: U::BITS,
+      only_k_bits_lower: U::ZERO,
+      only_k_bits_upper: U::MAX,
       run_len_jumpstart: None,
-      gcd: Diff::ONE,
+      gcd: U::ONE,
     }
   }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PrefixDecompressionInfo<Diff> where Diff: UnsignedLike {
-  pub lower_unsigned: Diff,
-  pub k_range: Diff,
+pub struct PrefixDecompressionInfo<U> where U: UnsignedLike {
+  pub lower_unsigned: U,
+  pub k_range: U,
   pub k: usize,
   pub depth: usize,
   pub run_len_jumpstart: Option<usize>,
-  pub most_significant: Diff,
-  pub gcd: Diff,
+  pub most_significant: U,
+  pub gcd: U,
 }
 
-impl<Diff: UnsignedLike> Default for PrefixDecompressionInfo<Diff> {
+impl<U: UnsignedLike> Default for PrefixDecompressionInfo<U> {
   fn default() -> Self {
     PrefixDecompressionInfo {
-      lower_unsigned: Diff::ZERO,
-      k_range: Diff::MAX,
-      k: Diff::BITS,
+      lower_unsigned: U::ZERO,
+      k_range: U::MAX,
+      k: U::BITS,
       depth: 0,
       run_len_jumpstart: None,
-      most_significant: Diff::ZERO,
-      gcd: Diff::ONE,
+      most_significant: U::ZERO,
+      gcd: U::ONE,
     }
   }
 }

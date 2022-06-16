@@ -1,4 +1,4 @@
-// Different from compressor and decompressor configs, flags change the format
+// Uerent from compressor and decompressor configs, flags change the format
 // of the .qco file.
 // New flags may be added in over time in a backward-compatible way.
 

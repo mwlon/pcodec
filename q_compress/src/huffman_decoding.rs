@@ -2,27 +2,27 @@ use std::cmp::min;
 
 use crate::bit_reader::BitReader;
 use crate::constants::MAX_PREFIX_TABLE_SIZE_LOG;
-use crate::prefix::{PrefixDecompressionInfo, Prefix};
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::{QCompressResult, QCompressError};
+use crate::errors::{QCompressError, QCompressResult};
+use crate::prefix::{Prefix, PrefixDecompressionInfo};
 
 #[derive(Clone, Debug)]
-pub enum HuffmanTable<Diff: UnsignedLike> {
-  Leaf(PrefixDecompressionInfo<Diff>),
+pub enum HuffmanTable<U: UnsignedLike> {
+  Leaf(PrefixDecompressionInfo<U>),
   NonLeaf {
     table_size_log: usize,
-    children: Vec<HuffmanTable<Diff>>,
+    children: Vec<HuffmanTable<U>>,
   },
 }
 
-impl<Diff: UnsignedLike> Default for HuffmanTable<Diff> {
+impl<U: UnsignedLike> Default for HuffmanTable<U> {
   fn default() -> Self {
     HuffmanTable::Leaf(PrefixDecompressionInfo::default())
   }
 }
 
-impl<Diff: UnsignedLike> HuffmanTable<Diff> {
-  pub fn search_with_reader(&self, reader: &mut BitReader) -> QCompressResult<PrefixDecompressionInfo<Diff>> {
+impl<U: UnsignedLike> HuffmanTable<U> {
+  pub fn search_with_reader(&self, reader: &mut BitReader) -> QCompressResult<PrefixDecompressionInfo<U>> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
@@ -52,7 +52,7 @@ impl<Diff: UnsignedLike> HuffmanTable<Diff> {
     }
   }
 
-  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<Diff> {
+  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> PrefixDecompressionInfo<U> {
     let mut node = self;
     let mut read_depth = 0;
     loop {

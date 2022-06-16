@@ -94,7 +94,7 @@ impl BitWriter {
     self.write_diff(x as u64, n);
   }
 
-  pub(crate) fn write_diff<Diff: UnsignedLike>(&mut self, x: Diff, n: usize) {
+  pub(crate) fn write_diff<U: UnsignedLike>(&mut self, x: U, n: usize) {
     if n == 0 {
       return;
     }

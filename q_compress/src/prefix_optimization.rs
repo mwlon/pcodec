@@ -4,17 +4,17 @@ use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::prefix::WeightedPrefix;
 
-fn prefix_bit_cost<Diff: UnsignedLike>(
+fn prefix_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
-  lower: Diff,
-  upper: Diff,
+  lower: U,
+  upper: U,
   weight: usize,
   total_weight: usize,
-  gcd: Diff,
+  gcd: U,
 ) -> f64 {
   let offset_cost = avg_offset_bits(lower, upper, gcd);
   let huffman_cost = avg_depth_bits(weight, total_weight);
-  let gcd_cost = if gcd > Diff::ONE {
+  let gcd_cost = if gcd > U::ONE {
     gcd_utils::gcd_bits_required(upper - lower) as f64
   } else {
     0.0

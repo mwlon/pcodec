@@ -146,10 +146,10 @@ impl<'a> BitReader<'a> {
     Ok(res)
   }
 
-  pub(crate) fn read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> QCompressResult<Diff> {
+  pub(crate) fn read_diff<U: UnsignedLike>(&mut self, n: usize) -> QCompressResult<U> {
     self.insufficient_data_check("read_diff", n)?;
 
-    Ok(self.unchecked_read_diff::<Diff>(n))
+    Ok(self.unchecked_read_diff::<U>(n))
   }
 
   pub(crate) fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
@@ -224,9 +224,9 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  pub(crate) fn unchecked_read_diff<Diff: UnsignedLike>(&mut self, n: usize) -> Diff {
+  pub(crate) fn unchecked_read_diff<U: UnsignedLike>(&mut self, n: usize) -> U {
     if n == 0 {
-      return Diff::ZERO;
+      return U::ZERO;
     }
 
     self.refresh_if_needed();
@@ -235,21 +235,21 @@ impl<'a> BitReader<'a> {
     if n_plus_j <= WORD_SIZE {
       // it's all in the current word
       let shift = WORD_SIZE - n_plus_j;
-      let res = Diff::from_word((self.unchecked_word() & (usize::MAX >> self.j)) >> shift);
+      let res = U::from_word((self.unchecked_word() & (usize::MAX >> self.j)) >> shift);
       self.j = n_plus_j;
       res
     } else {
       let mut remaining = n_plus_j - WORD_SIZE;
-      let mut res = Diff::from_word(self.unchecked_word() & (usize::MAX >> self.j)) << remaining;
+      let mut res = U::from_word(self.unchecked_word() & (usize::MAX >> self.j)) << remaining;
       while remaining >= WORD_SIZE {
         self.i += 1;
         remaining -= WORD_SIZE;
-        res |= Diff::from_word(self.unchecked_word()) << remaining;
+        res |= U::from_word(self.unchecked_word()) << remaining;
       }
       if remaining > 0 {
         self.i += 1;
         let shift = WORD_SIZE - remaining;
-        res |= Diff::from_word(self.unchecked_word() >> shift);
+        res |= U::from_word(self.unchecked_word() >> shift);
         self.j = remaining;
       } else {
         self.j = WORD_SIZE;

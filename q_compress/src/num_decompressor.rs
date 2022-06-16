@@ -86,16 +86,16 @@ pub struct Numbers<T: NumberLike> {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct IncompletePrefix<Diff: UnsignedLike> {
-  prefix: PrefixDecompressionInfo<Diff>,
+struct IncompletePrefix<U: UnsignedLike> {
+  prefix: PrefixDecompressionInfo<U>,
   remaining_reps: usize,
 }
 
 #[derive(Clone, Debug)]
-struct State<Diff: UnsignedLike> {
+struct State<U: UnsignedLike> {
   nums_processed: usize,
   bits_processed: usize,
-  incomplete_prefix: Option<IncompletePrefix<Diff>>,
+  incomplete_prefix: Option<IncompletePrefix<U>>,
 }
 
 // NumDecompressor does the main work of decoding bytes into NumberLikes

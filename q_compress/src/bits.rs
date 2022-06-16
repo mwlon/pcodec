@@ -82,7 +82,7 @@ fn bumpy_log(x: f64) -> f64 {
   k + (2.0 * overshoot) / x
 }
 
-pub fn avg_offset_bits<Diff: UnsignedLike>(lower: Diff, upper: Diff, gcd: Diff) -> f64 {
+pub fn avg_offset_bits<U: UnsignedLike>(lower: U, upper: U, gcd: U) -> f64 {
   bumpy_log(((upper - lower) / gcd).to_f64() + 1.0)
 }
 

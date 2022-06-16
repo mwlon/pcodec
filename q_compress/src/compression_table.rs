@@ -6,15 +6,15 @@ use crate::Prefix;
 const TARGET_BRANCHING_FACTOR: usize = 16; // chosen for performance
 
 #[derive(Debug, Clone)]
-pub struct CompressionTableItem<Diff: UnsignedLike> {
-  pub upper: Diff,
-  pub table: CompressionTable<Diff>
+pub struct CompressionTableItem<U: UnsignedLike> {
+  pub upper: U,
+  pub table: CompressionTable<U>
 }
 
 #[derive(Debug, Clone)]
-pub enum CompressionTable<Diff: UnsignedLike> {
-  Leaf(PrefixCompressionInfo<Diff>),
-  NonLeaf(Vec<CompressionTableItem<Diff>>),
+pub enum CompressionTable<U: UnsignedLike> {
+  Leaf(PrefixCompressionInfo<U>),
+  NonLeaf(Vec<CompressionTableItem<U>>),
 }
 
 impl<T: NumberLike> From<&[Prefix<T>]> for CompressionTable<T::Unsigned> {
@@ -27,8 +27,8 @@ impl<T: NumberLike> From<&[Prefix<T>]> for CompressionTable<T::Unsigned> {
   }
 }
 
-impl<Diff: UnsignedLike> CompressionTable<Diff> {
-  fn from_sorted(prefixes: &[PrefixCompressionInfo<Diff>]) -> Self {
+impl<U: UnsignedLike> CompressionTable<U> {
+  fn from_sorted(prefixes: &[PrefixCompressionInfo<U>]) -> Self {
     if prefixes.is_empty() {
       return CompressionTable::Leaf(PrefixCompressionInfo::default());
     } else if prefixes.len() == 1 {
@@ -66,7 +66,7 @@ impl<Diff: UnsignedLike> CompressionTable<Diff> {
     CompressionTable::NonLeaf(children)
   }
 
-  pub fn search(&self, unsigned: Diff) -> QCompressResult<&PrefixCompressionInfo<Diff>> {
+  pub fn search(&self, unsigned: U) -> QCompressResult<&PrefixCompressionInfo<U>> {
     let mut node = self;
     loop {
       match node {

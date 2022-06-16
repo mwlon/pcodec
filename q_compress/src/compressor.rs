@@ -282,8 +282,8 @@ fn train_prefixes<T: NumberLike>(
 }
 
 #[derive(Clone)]
-struct TrainedChunkCompressor<Diff: UnsignedLike, GcdOp: GcdOperator<Diff>> {
-  pub table: CompressionTable<Diff>,
+struct TrainedChunkCompressor<U: UnsignedLike, GcdOp: GcdOperator<U>> {
+  pub table: CompressionTable<U>,
   op: PhantomData<GcdOp>,
 }
 
@@ -302,8 +302,8 @@ fn trained_compress_chunk_nums<T: NumberLike>(
   }
 }
 
-impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, GcdOp: GcdOperator<Diff> {
-  fn compress_nums(&self, unsigneds: &[Diff], writer: &mut BitWriter) -> QCompressResult<()> {
+impl<U, GcdOp> TrainedChunkCompressor<U, GcdOp> where U: UnsignedLike, GcdOp: GcdOperator<U> {
+  fn compress_nums(&self, unsigneds: &[U], writer: &mut BitWriter) -> QCompressResult<()> {
     let mut i = 0;
     while i < unsigneds.len() {
       let unsigned = unsigneds[i];
@@ -340,15 +340,15 @@ impl<Diff, GcdOp> TrainedChunkCompressor<Diff, GcdOp> where Diff: UnsignedLike, 
   }
 
   fn compress_offset_bits_w_prefix(
-    unsigned: Diff,
-    p: &PrefixCompressionInfo<Diff>,
+    unsigned: U,
+    p: &PrefixCompressionInfo<U>,
     writer: &mut BitWriter,
   ) {
     let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
     writer.write_diff(off, p.k);
     if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
       // most significant bit, if necessary, comes last
-      writer.write_one((off & (Diff::ONE << p.k)) > Diff::ZERO);
+      writer.write_one((off & (U::ONE << p.k)) > U::ZERO);
     }
   }
 }

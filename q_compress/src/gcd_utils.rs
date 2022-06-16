@@ -5,28 +5,28 @@ use crate::{Flags, Prefix};
 use crate::errors::{QCompressError, QCompressResult};
 
 // fast if b is small, requires b > 0
-pub fn pair_gcd<Diff: UnsignedLike>(mut a: Diff, mut b: Diff) -> Diff {
+pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {
   loop {
     a %= b;
-    if a == Diff::ZERO {
+    if a == U::ZERO {
       return b;
     }
     b %= a;
-    if b == Diff::ZERO {
+    if b == U::ZERO {
       return a;
     }
   }
 }
 
-pub fn gcd<Diff: UnsignedLike>(sorted: &[Diff]) -> Diff {
+pub fn gcd<U: UnsignedLike>(sorted: &[U]) -> U {
   let lower = sorted[0];
   let upper = sorted[sorted.len() - 1];
   if lower == upper {
-    return Diff::ONE;
+    return U::ONE;
   }
   let mut res = upper - lower;
   for &x in sorted.iter().skip(1) {
-    if res == Diff::ONE {
+    if res == U::ONE {
       break;
     }
     res = pair_gcd(x - lower, res);
@@ -91,23 +91,23 @@ pub fn use_gcd_arithmetic<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
     .any(|p| p.gcd > T::Unsigned::ONE && p.upper != p.lower)
 }
 
-pub fn gcd_bits_required<Diff: UnsignedLike>(range: Diff) -> usize {
+pub fn gcd_bits_required<U: UnsignedLike>(range: U) -> usize {
   range.to_f64().log2().ceil() as usize
 }
 
 // to store gcd, we write and read gcd - 1 in the minimum number of bits
 // since we know gcd <= upper - lower
-pub fn write_gcd<Diff: UnsignedLike>(range: Diff, gcd: Diff, writer: &mut BitWriter) {
-  let nontrivial = gcd != Diff::ONE;
+pub fn write_gcd<U: UnsignedLike>(range: U, gcd: U, writer: &mut BitWriter) {
+  let nontrivial = gcd != U::ONE;
   writer.write_one(nontrivial);
   if nontrivial {
-    writer.write_diff(gcd - Diff::ONE, gcd_bits_required(range));
+    writer.write_diff(gcd - U::ONE, gcd_bits_required(range));
   }
 }
 
-pub fn read_gcd<Diff: UnsignedLike>(range: Diff, reader: &mut BitReader) -> QCompressResult<Diff> {
+pub fn read_gcd<U: UnsignedLike>(range: U, reader: &mut BitReader) -> QCompressResult<U> {
   if reader.read_one()? {
-    let gcd_minus_one = reader.read_diff::<Diff>(gcd_bits_required(range))?;
+    let gcd_minus_one = reader.read_diff::<U>(gcd_bits_required(range))?;
     if gcd_minus_one >= range {
       Err(QCompressError::corruption(format!(
         "stored GCD was {} + 1, greater than range {}",
@@ -115,19 +115,19 @@ pub fn read_gcd<Diff: UnsignedLike>(range: Diff, reader: &mut BitReader) -> QCom
         range,
       )))
     } else {
-      Ok(gcd_minus_one + Diff::ONE)
+      Ok(gcd_minus_one + U::ONE)
     }
   } else {
-    Ok(Diff::ONE)
+    Ok(U::ONE)
   }
 }
 
-pub fn fold_prefix_gcds_left<Diff: UnsignedLike>(
-  left_lower: Diff,
-  left_upper: Diff,
-  left_gcd: Diff,
-  right_upper: Diff,
-  acc: &mut Option<Diff>,
+pub fn fold_prefix_gcds_left<U: UnsignedLike>(
+  left_lower: U,
+  left_upper: U,
+  left_gcd: U,
+  right_upper: U,
+  acc: &mut Option<U>,
 ) {
   // folding GCD's involves GCD'ing with their modulo offset and (if the new
   // range is nontrivial) with the new prefix's GCD
@@ -145,9 +145,9 @@ pub fn fold_prefix_gcds_left<Diff: UnsignedLike>(
   }
 }
 
-pub trait GcdOperator<Diff: UnsignedLike> {
-  fn get_offset(diff: Diff, gcd: Diff) -> Diff;
-  fn get_diff(offset: Diff, gcd: Diff) -> Diff;
+pub trait GcdOperator<U: UnsignedLike> {
+  fn get_offset(diff: U, gcd: U) -> U;
+  fn get_diff(offset: U, gcd: U) -> U;
 }
 
 pub struct TrivialGcdOp;
@@ -155,21 +155,21 @@ pub struct TrivialGcdOp;
 pub struct GeneralGcdOp;
 
 // When all prefix GCD's are 1
-impl<Diff: UnsignedLike> GcdOperator<Diff> for TrivialGcdOp {
-  fn get_offset(diff: Diff, _: Diff) -> Diff {
+impl<U: UnsignedLike> GcdOperator<U> for TrivialGcdOp {
+  fn get_offset(diff: U, _: U) -> U {
     diff
   }
-  fn get_diff(offset: Diff, _: Diff) -> Diff {
+  fn get_diff(offset: U, _: U) -> U {
     offset
   }
 }
 
 // General case when GCD might not be 1
-impl<Diff: UnsignedLike> GcdOperator<Diff> for GeneralGcdOp {
-  fn get_offset(diff: Diff, gcd: Diff) -> Diff {
+impl<U: UnsignedLike> GcdOperator<U> for GeneralGcdOp {
+  fn get_offset(diff: U, gcd: U) -> U {
     diff / gcd
   }
-  fn get_diff(offset: Diff, gcd: Diff) -> Diff {
+  fn get_diff(offset: U, gcd: U) -> U {
     offset * gcd
   }
 }
