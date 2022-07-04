@@ -113,6 +113,7 @@ pub struct NumDecompressor<T> where T: NumberLike {
   state: State<T::Unsigned>,
 }
 
+#[inline(always)]
 fn unchecked_decompress_offsets<T: NumberLike, GcdOp: GcdOperator<T::Unsigned>>(
   reader: &mut BitReader,
   nums: &mut Vec<T>,
@@ -218,6 +219,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
     }
   }
 
+  #[inline(always)]
   fn unchecked_decompress_num_block<GcdOp: GcdOperator<T::Unsigned>>(
     &mut self,
     reader: &mut BitReader,
