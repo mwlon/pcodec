@@ -15,7 +15,6 @@ use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
 use crate::prefix_optimization;
 
-const DEFAULT_COMPRESSION_LEVEL: usize = 6;
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
 const DEFAULT_CHUNK_SIZE: usize = 1000000;
@@ -33,17 +32,17 @@ struct JumpstartConfiguration {
 /// stored in the output.
 #[derive(Clone, Debug)]
 pub struct CompressorConfig {
-  /// `compression_level` ranges from 0 to 12 inclusive (default 6).
+  /// `compression_level` ranges from 0 to 12 inclusive (default 8).
   ///
   /// The compressor uses up to 2^`compression_level` prefixes.
   ///
   /// For example,
   /// * Level 0 achieves a modest amount of compression with 1 prefix and can
-  /// be twice as fast as level 6.
-  /// * Level 6 achieves nearly the best compression with 64 prefixes and still
+  /// be twice as fast as level 8.
+  /// * Level 8 achieves nearly the best compression with 256 prefixes and still
   /// runs in reasonable time. In some cases, its compression ratio is 3-4x as
   /// high as level level 0's.
-  /// * Level 12 can achieve a few % better compression than 6 with 4096
+  /// * Level 12 can achieve a few % better compression than 8 with 4096
   /// prefixes but runs ~5x slower in many cases.
   pub compression_level: usize,
   /// `delta_encoding_order` ranges from 0 to 7 inclusive (default 0).

@@ -1,6 +1,14 @@
 # `q_compress` Changelog
 
-## 0.10.0 (not yet released)
+## 0.10.2
+
+* Changed default compression level to 8.
+
+## 0.10.1
+
+* Rust 1.60 performance regression fix via inlining.
+
+## 0.10.0
 
 * Added `use_gcds` compressor config and flag to improve compression ratio
 in cases where all numbers in some ranges share a nontrivial common divisor.

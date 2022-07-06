@@ -20,6 +20,8 @@ pub const MAX_PREFIX_TABLE_SIZE_LOG: usize = 6;
 pub const WORD_SIZE: usize = usize::BITS as usize;
 pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
 
+pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
+
 #[cfg(test)]
 mod tests {
   use crate::constants::*;

@@ -39,7 +39,7 @@ impl HuffmanItem {
 
   pub fn create_bits<T: NumberLike>(
     &self,
-    item_idx: &mut Vec<HuffmanItem>,
+    item_idx: &mut [HuffmanItem],
     leaf_idx: &mut [WeightedPrefix<T>],
   ) {
     self.create_bits_from(Vec::new(), item_idx, leaf_idx);
