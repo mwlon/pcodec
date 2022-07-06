@@ -25,7 +25,7 @@ pub struct CompressOpt {
   #[structopt(long = "parquet")]
   pub parquet_path: Option<PathBuf>,
 
-  #[structopt(long, default_value = "6")]
+  #[structopt(long, default_value = "8")]
   pub level: usize,
   #[structopt(long = "delta-order")]
   pub delta_encoding_order: Option<usize>,

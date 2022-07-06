@@ -6,7 +6,7 @@ use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use q_compress::{auto_decompress, Compressor, CompressorConfig};
+use q_compress::{auto_decompress, Compressor, CompressorConfig, DEFAULT_COMPRESSION_LEVEL};
 use q_compress::data_types::{NumberLike, TimestampMicros};
 use structopt::StructOpt;
 
@@ -98,7 +98,7 @@ impl Opt {
           };
           let use_gcds = !(parts.len() > 3 && &parts[3].to_lowercase()[0..3] == "off");
           let config = CompressorConfig::default()
-            .with_compression_level(level.unwrap_or(6))
+            .with_compression_level(level.unwrap_or(DEFAULT_COMPRESSION_LEVEL))
             .with_delta_encoding_order(delta_encoding_order)
             .with_use_gcds(use_gcds);
           MultiCompressorConfig::QCompress(config)

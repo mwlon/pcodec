@@ -4,7 +4,7 @@ use std::time::Instant;
 use futures::{StreamExt, TryStreamExt};
 use rand::Rng;
 
-use q_compress::{DecompressedItem, Decompressor};
+use q_compress::{DecompressedItem, Decompressor, DEFAULT_COMPRESSION_LEVEL};
 use q_compress::errors::QCompressResult;
 
 async fn streaming_sum_reduce(
@@ -34,7 +34,7 @@ async fn main() -> QCompressResult<()> {
   for _ in 0..1000000 {
     nums.push(rng.gen_range(0..1000));
   }
-  let compressed_bytes = q_compress::auto_compress(&nums, 6);
+  let compressed_bytes = q_compress::auto_compress(&nums, DEFAULT_COMPRESSION_LEVEL);
   let compressed_blobs = compressed_bytes.chunks(10000);
 
   let input_stream = futures::stream::iter(compressed_blobs);

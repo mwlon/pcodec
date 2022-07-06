@@ -6,6 +6,7 @@ use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 
 const AUTO_DELTA_LIMIT: usize = 1000;
+const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,
@@ -63,7 +64,7 @@ fn auto_delta_encoding_order<T: NumberLike>(
     // determine the best delta order.
     let config = CompressorConfig::default()
       .with_delta_encoding_order(delta_encoding_order)
-      .with_compression_level(min(compression_level, 6))
+      .with_compression_level(min(compression_level, MAX_AUTO_DELTA_COMPRESSION_LEVEL))
       .with_use_gcds(false);
     let mut compressor = Compressor::<T>::from_config(config);
     compressor.header().unwrap();

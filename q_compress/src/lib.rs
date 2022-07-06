@@ -7,6 +7,7 @@
 pub use auto::{auto_compress, auto_compressor_config, auto_decompress};
 pub use chunk_metadata::{ChunkMetadata, PrefixMetadata};
 pub use compressor::{Compressor, CompressorConfig};
+pub use constants::DEFAULT_COMPRESSION_LEVEL;
 pub use decompressor::{DecompressedItem, Decompressor, DecompressorConfig};
 pub use flags::Flags;
 pub use prefix::Prefix;
