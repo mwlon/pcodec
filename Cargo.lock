@@ -738,7 +738,7 @@ dependencies = [
 
 [[package]]
 name = "q_compress_cli"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "anyhow",
  "arrow",

@@ -121,7 +121,6 @@ trait ColumnReader<T: ArrowNumberLike> {
 
 struct ParquetColumnReader<T> {
   batch_reader: ParquetRecordBatchReader,
-  col_idx: usize,
   phantom: PhantomData<T>,
 }
 
@@ -136,7 +135,6 @@ impl<T: ArrowNumberLike> ColumnReader<T> for ParquetColumnReader<T> {
     )?;
     Ok(Self {
       batch_reader,
-      col_idx,
       phantom: PhantomData,
     })
   }
@@ -146,7 +144,8 @@ impl<T: ArrowNumberLike> ColumnReader<T> for ParquetColumnReader<T> {
   }
 
   fn col_idx(&self) -> usize {
-    self.col_idx
+    // 0 because we told arrow to only read the exact column we want
+    0
   }
 }
 

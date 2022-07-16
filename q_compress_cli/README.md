@@ -94,3 +94,9 @@ compressed byte size: 6967210 (ratio: 1.1482358074465964)
 [min, max] numbers: [-4.628380674508539, 4.919770799153994]
 ...
 ```
+
+## Versioning
+
+The major and minor semver versions of this crate are meant to match that of
+`q_compress`.
+However, the patch version is not related to `q_compress`'s patch version.
