@@ -302,7 +302,7 @@ impl DtypeHandler<TimestampMicros> for TimestampMicrosHandler {
       // apparently numpy writes in le order
       .map(|chunk| {
         let int = i64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file"));
-        TimestampMicros::new(int as i128).expect("timestamp creation")
+        TimestampMicros::new(int)
       })
       .collect()
   }

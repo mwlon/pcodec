@@ -1,6 +1,6 @@
 [package]
 name = "q_compress"
-version = "0.10.2"
+version = "0.11.0"
 edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
@@ -10,6 +10,9 @@ include = ["src/**/*.rs", "Cargo.toml", "README.md"]
 keywords = ["compression", "numerical", "quantile", "delta"]
 license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
+
+[features]
+timestamps_96 = []
 
 [dependencies]
 
@@ -31,6 +34,7 @@ path="examples/fast_seeking.rs"
 [[example]]
 name="compatibility_test_case_generator"
 path="examples/compatibility_test_case_generator.rs"
+required-features = ["timestamps_96"]
 
 [[example]]
 name = "streaming_sum"

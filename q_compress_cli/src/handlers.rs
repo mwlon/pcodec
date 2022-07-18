@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use anyhow::Result;
 
-use q_compress::data_types::{TimestampMicros, TimestampNanos};
+use q_compress::data_types::{TimestampMicros, TimestampNanos, TimestampMicros96, TimestampNanos96};
 
 use crate::arrow_number_like::ArrowNumberLike;
 use crate::compress_handler::CompressHandler;
@@ -30,7 +30,9 @@ pub fn from_dtype(dtype: DType) -> Box<dyn Handler> {
     DType::I64 => new_boxed_handler::<i64>(),
     DType::I128 => new_boxed_handler::<i128>(),
     DType::TimestampMicros => new_boxed_handler::<TimestampMicros>(),
+    DType::TimestampMicros96 => new_boxed_handler::<TimestampMicros96>(),
     DType::TimestampNanos => new_boxed_handler::<TimestampNanos>(),
+    DType::TimestampNanos96 => new_boxed_handler::<TimestampNanos96>(),
     DType::U16 => new_boxed_handler::<u16>(),
     DType::U32 => new_boxed_handler::<u32>(),
     DType::U64 => new_boxed_handler::<u64>(),

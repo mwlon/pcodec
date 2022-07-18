@@ -1,5 +1,10 @@
 # `q_compress` Changelog
 
+## 0.11.0 (not yet released)
+
+* Replaced 96-bit timestamps with 64-bit ones for CPU and memory efficiency.
+Moved 96-bit timestamps and 128-bit integers to a crate feature (`timestamps_96`).
+
 ## 0.10.2
 
 * Changed default compression level to 8.

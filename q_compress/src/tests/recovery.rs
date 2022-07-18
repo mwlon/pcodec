@@ -84,9 +84,10 @@ fn test_f64_codec() {
 fn test_timestamp_ns_codec() {
   assert_recovers(
     vec![
-      TimestampNanos::from_secs_and_nanos(i64::MIN, 0),
-      TimestampNanos::from_secs_and_nanos(i64::MAX, 999_999_999),
-      TimestampNanos::from_secs_and_nanos(i64::MIN, 999_999_999),
+      TimestampNanos::from_secs_and_nanos(i64::MIN / 1_000_000_000, 0),
+      TimestampNanos::from_secs_and_nanos(i64::MAX / 1_000_000_000, 0),
+      TimestampNanos::from_secs_and_nanos(i64::MAX / 1_000_000_000 - 1, 999_999_999),
+      TimestampNanos::from_secs_and_nanos(i64::MIN / 1_000_000_000, 999_999_999),
       TimestampNanos::from_secs_and_nanos(0, 123_456_789),
       TimestampNanos::from_secs_and_nanos(-1, 123_456_789),
     ],
@@ -99,9 +100,10 @@ fn test_timestamp_ns_codec() {
 fn test_timestamp_micros_codec() {
   assert_recovers(
     vec![
-      TimestampMicros::from_secs_and_nanos(i64::MIN, 0),
-      TimestampMicros::from_secs_and_nanos(i64::MAX, 999_999_999),
-      TimestampMicros::from_secs_and_nanos(i64::MIN, 999_999_999),
+      TimestampMicros::from_secs_and_nanos(i64::MIN / 1_000_000, 0),
+      TimestampMicros::from_secs_and_nanos(i64::MAX / 1_000_000, 0),
+      TimestampMicros::from_secs_and_nanos(i64::MAX / 1_000_000 - 1, 999_999_000),
+      TimestampMicros::from_secs_and_nanos(i64::MIN / 1_000_000, 999_999_000),
       TimestampMicros::from_secs_and_nanos(0, 123_456_789),
       TimestampMicros::from_secs_and_nanos(-1, 123_456_789),
     ],

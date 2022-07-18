@@ -1,4 +1,4 @@
-use q_compress::data_types::{NumberLike, TimestampMicros};
+use q_compress::data_types::{NumberLike, TimestampMicros96};
 use q_compress::{Compressor, CompressorConfig};
 use rand::Rng;
 use std::time::{SystemTime, Duration};
@@ -86,7 +86,7 @@ fn main() {
   let mut t = SystemTime::now();
   for _ in 0..2000 {
     t.add_assign(Duration::from_secs_f64(0.5 + rng.gen::<f64>()));
-    timestamp_deltas_2k.push(TimestampMicros::from(t));
+    timestamp_deltas_2k.push(TimestampMicros96::from(t));
   }
   write_case(
     &version,

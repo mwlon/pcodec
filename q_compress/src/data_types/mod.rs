@@ -1,18 +1,23 @@
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
+use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::errors::QCompressResult;
 
 pub use timestamps::{TimestampMicros, TimestampNanos};
-use crate::bit_reader::BitReader;
 
 mod boolean;
 mod floats;
 mod signeds;
 mod timestamps;
 mod unsigneds;
+
+#[cfg(feature="timestamps_96")]
+mod timestamps_96;
+#[cfg(feature="timestamps_96")]
+pub use timestamps_96::{TimestampMicros96, TimestampNanos96};
 
 /// Trait for data types that behave like signed integers.
 ///
@@ -28,7 +33,7 @@ mod unsigneds;
 /// This is important because deltas like +1 and -1 are numerically close to
 /// each other and easily compressible, which would not be the case with
 /// unsigned integers.
-/// Note: API stability of `SignedLike`'s trait requirements is not guaranteed.
+/// Note: API stability of `SignedLike` is not guaranteed.
 pub trait SignedLike {
   const ZERO: Self;
 
@@ -44,7 +49,7 @@ pub trait SignedLike {
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
 ///
-/// Note: API stability of `UnsignedLike`'s trait requirements is not guaranteed.
+/// Note: API stability of `UnsignedLike` is not guaranteed.
 pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
 Copy + Debug + Display + Div<Output=Self> + Mul<Output = Self> + Ord +
 PartialOrd + RemAssign + Shl<usize, Output=Self> + Shr<usize, Output=Self> +
@@ -102,7 +107,7 @@ Sub<Output=Self> {
 /// uncompressed representation is used to store metadata in each chunk of the
 /// Quantile Compression format.
 ///
-/// Note: API stability of `NumberLike`'s trait requirements is not guaranteed.
+/// Note: API stability of `NumberLike` is not guaranteed.
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// A number from 0-255 that corresponds to the number's data type.
   ///

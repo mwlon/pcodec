@@ -1,8 +1,10 @@
 use std::path::PathBuf;
-use structopt::StructOpt;
-use crate::dtype::DType;
+
 use anyhow::anyhow;
 use anyhow::Result;
+use structopt::StructOpt;
+
+use crate::dtype::DType;
 
 #[derive(Clone, Debug, StructOpt)]
 #[structopt {
