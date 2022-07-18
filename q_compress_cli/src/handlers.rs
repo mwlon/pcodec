@@ -48,3 +48,26 @@ pub struct HandlerImpl<T> {
 }
 
 impl<T: ArrowNumberLike> Handler for HandlerImpl<T> {}
+
+#[cfg(test)]
+mod tests {
+  use std::collections::HashSet;
+  use anyhow::Result;
+  use enum_iterator::IntoEnumIterator;
+
+  use crate::dtype::DType;
+
+  #[test]
+  fn test_handlers_have_distinct_header_bytes() -> Result<()> {
+    let mut bytes_seen = HashSet::new();
+    for dtype in DType::into_enum_iter() {
+      let handler = super::from_dtype(dtype);
+      let byte = handler.header_byte();
+      if bytes_seen.contains(&byte) {
+        panic!("saw multiple dtype handlers with header byte {}", byte);
+      }
+      bytes_seen.insert(byte);
+    }
+    Ok(())
+  }
+}

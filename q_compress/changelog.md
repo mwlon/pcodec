@@ -2,8 +2,11 @@
 
 ## 0.11.0 (not yet released)
 
-* Replaced 96-bit timestamps with 64-bit ones for CPU and memory efficiency.
+* Replaced 96-bit timestamps with 64-bit ones for a 30% increase to compression
+and decompression speed.
 Moved 96-bit timestamps and 128-bit integers to a crate feature (`timestamps_96`).
+* Slightly reduced binary size by limiting generics of internal decompressor
+implementation.
 
 ## 0.10.2
 

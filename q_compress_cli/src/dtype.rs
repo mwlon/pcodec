@@ -133,7 +133,7 @@ mod tests {
   use crate::dtype::DType;
 
   #[test]
-  fn test_dtype_header_bytes_consistent() -> Result<()> {
+  fn test_arrow_dtypes_consistent() -> Result<()> {
     for dtype in DType::into_enum_iter() {
       if let Ok(arrow_dtype) = dtype.to_arrow() {
         assert_eq!(DType::from_arrow(&arrow_dtype)?, dtype);
