@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use crate::bit_reader::BitReader;
-use crate::{ChunkMetadata, delta_encoding, num_decompressor, PrefixMetadata};
+use crate::{ChunkMetadata, delta_encoding, PrefixMetadata};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
@@ -31,7 +31,7 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
   pub(crate) fn new(metadata: &ChunkMetadata<T>) -> QCompressResult<Self> {
     Ok(match &metadata.prefix_metadata {
       PrefixMetadata::Simple { prefixes } => Self::Simple {
-        num_decompressor: num_decompressor::new(
+        num_decompressor: NumDecompressor::new(
           metadata.n,
           metadata.compressed_body_size,
           prefixes.clone()
@@ -39,7 +39,7 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
       },
       PrefixMetadata::Delta { prefixes, delta_moments } => Self::Delta {
         n: metadata.n,
-        num_decompressor: num_decompressor::new(
+        num_decompressor: NumDecompressor::new(
           metadata.n.saturating_sub(delta_moments.order()),
           metadata.compressed_body_size,
           prefixes.clone()

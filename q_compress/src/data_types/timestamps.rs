@@ -153,12 +153,13 @@ mod tests {
   use std::time::{Duration, SystemTime};
 
   use crate::data_types::{TimestampMicros, TimestampNanos};
+  use crate::errors::QCompressResult;
 
   #[test]
-  fn test_system_time_conversion() {
+  fn test_system_time_conversion() -> QCompressResult<()> {
     let t = SystemTime::now();
-    let micro_t = TimestampMicros::try_from(t).unwrap();
-    let nano_t = TimestampNanos::try_from(t).unwrap();
+    let micro_t = TimestampMicros::try_from(t)?;
+    let nano_t = TimestampNanos::try_from(t)?;
     let (micro_t_s, micro_t_ns) = micro_t.to_secs_and_nanos();
     let (nano_t_s, nano_t_ns) = nano_t.to_secs_and_nanos();
     assert!(micro_t_s > 1500000000); // would be better if we mocked time
@@ -167,5 +168,6 @@ mod tests {
     assert!(micro_t_ns + 1000 > nano_t_ns);
     assert!(t.duration_since(SystemTime::from(micro_t)).unwrap() < Duration::from_secs(1));
     assert_eq!(SystemTime::from(nano_t), t);
+    Ok(())
   }
 }

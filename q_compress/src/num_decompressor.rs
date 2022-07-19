@@ -92,7 +92,7 @@ struct IncompletePrefix<U: UnsignedLike> {
 
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
-  unsigneds_processed: usize,
+  n_processed: usize,
   bits_processed: usize,
   incomplete_prefix: Option<IncompletePrefix<U>>,
 }
@@ -157,45 +157,45 @@ fn decompress_offset_dirty<U: UnsignedLike>(
   Ok(())
 }
 
-pub(crate) fn new<T: NumberLike>(
-  n: usize,
-  compressed_body_size: usize,
-  prefixes: Vec<Prefix<T>>,
-) -> QCompressResult<NumDecompressor<T::Unsigned>> {
-  if prefixes.is_empty() && n > 0 {
-    return Err(QCompressError::corruption(format!(
-      "unable to decompress chunk with no prefixes and {} numbers",
-      n,
-    )));
-  }
-  validate_prefix_tree(&prefixes)?;
-
-  let max_bits_per_num_block = prefixes.iter()
-    .map(max_bits_read)
-    .max()
-    .unwrap_or(usize::MAX);
-  let max_overshoot_per_num_block = prefixes.iter()
-    .map(max_bits_overshot)
-    .max()
-    .unwrap_or(usize::MAX);
-  let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
-
-  Ok(NumDecompressor {
-    huffman_table: HuffmanTable::from(&prefixes),
-    n,
-    compressed_body_size,
-    max_bits_per_num_block,
-    max_overshoot_per_num_block,
-    use_gcd,
-    state: State {
-      unsigneds_processed: 0,
-      bits_processed: 0,
-      incomplete_prefix: None,
-    },
-  })
-}
-
 impl<U> NumDecompressor<U> where U: UnsignedLike {
+  pub(crate) fn new<T: NumberLike<Unsigned=U>>(
+    n: usize,
+    compressed_body_size: usize,
+    prefixes: Vec<Prefix<T>>,
+  ) -> QCompressResult<Self> {
+    if prefixes.is_empty() && n > 0 {
+      return Err(QCompressError::corruption(format!(
+        "unable to decompress chunk with no prefixes and {} numbers",
+        n,
+      )));
+    }
+    validate_prefix_tree(&prefixes)?;
+
+    let max_bits_per_num_block = prefixes.iter()
+      .map(max_bits_read)
+      .max()
+      .unwrap_or(usize::MAX);
+    let max_overshoot_per_num_block = prefixes.iter()
+      .map(max_bits_overshot)
+      .max()
+      .unwrap_or(usize::MAX);
+    let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
+
+    Ok(NumDecompressor {
+      huffman_table: HuffmanTable::from(&prefixes),
+      n,
+      compressed_body_size,
+      max_bits_per_num_block,
+      max_overshoot_per_num_block,
+      use_gcd,
+      state: State {
+        n_processed: 0,
+        bits_processed: 0,
+        incomplete_prefix: None,
+      },
+    })
+  }
+
   pub fn bits_remaining(&self) -> usize {
     self.compressed_body_size * 8 - self.state.bits_processed
   }
@@ -278,7 +278,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
   }
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
-  // State managed here: unsigneds_processed, bits_processed
+  // State managed here: n_processed, bits_processed
   pub fn decompress_unsigneds_limited(
     &mut self,
     reader: &mut BitReader,
@@ -294,7 +294,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
     };
     match &res {
       Ok(numbers) => {
-        self.state.unsigneds_processed += numbers.unsigneds.len();
+        self.state.n_processed += numbers.unsigneds.len();
 
         if numbers.finished_chunk_body {
           reader.drain_empty_byte(|| QCompressError::corruption(
@@ -336,11 +336,11 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
     error_on_insufficient_data: bool,
   ) -> QCompressResult<Unsigneds<U>> {
     let batch_size = min(
-      self.n - self.state.unsigneds_processed,
+      self.n - self.state.n_processed,
       limit,
     );
     // we'll modify this result as we decode numbers and if we encounter an insufficient data error
-    let completed_body = limit >= self.n - self.state.unsigneds_processed;
+    let completed_body = limit >= self.n - self.state.n_processed;
     let mut numbers = Unsigneds {
       unsigneds: Vec::with_capacity(batch_size),
       finished_chunk_body: completed_body,
