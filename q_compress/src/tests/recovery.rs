@@ -1,6 +1,7 @@
 use std::io::Write;
 use crate::{Compressor, CompressorConfig, Decompressor};
 use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
+use crate::errors::QCompressResult;
 
 #[test]
 fn test_edge_cases() {
@@ -81,35 +82,37 @@ fn test_f64_codec() {
 }
 
 #[test]
-fn test_timestamp_ns_codec() {
+fn test_timestamp_ns_codec() -> QCompressResult<()> {
   assert_recovers(
     vec![
-      TimestampNanos::from_secs_and_nanos(i64::MIN / 1_000_000_000, 0),
-      TimestampNanos::from_secs_and_nanos(i64::MAX / 1_000_000_000, 0),
-      TimestampNanos::from_secs_and_nanos(i64::MAX / 1_000_000_000 - 1, 999_999_999),
-      TimestampNanos::from_secs_and_nanos(i64::MIN / 1_000_000_000, 999_999_999),
-      TimestampNanos::from_secs_and_nanos(0, 123_456_789),
-      TimestampNanos::from_secs_and_nanos(-1, 123_456_789),
+      TimestampNanos::new(i64::MIN),
+      TimestampNanos::new(i64::MAX),
+      TimestampNanos::from_secs_and_nanos(i64::MAX / 1_000_000_000, 0)?,
+      TimestampNanos::from_secs_and_nanos(i64::MIN / 1_000_000_000, 999_999_999)?,
+      TimestampNanos::from_secs_and_nanos(0, 123_456_789)?,
+      TimestampNanos::from_secs_and_nanos(-1, 123_456_789)?,
     ],
     1,
     "TimestampNanos",
   );
+  Ok(())
 }
 
 #[test]
-fn test_timestamp_micros_codec() {
+fn test_timestamp_micros_codec() -> QCompressResult<()> {
   assert_recovers(
     vec![
-      TimestampMicros::from_secs_and_nanos(i64::MIN / 1_000_000, 0),
-      TimestampMicros::from_secs_and_nanos(i64::MAX / 1_000_000, 0),
-      TimestampMicros::from_secs_and_nanos(i64::MAX / 1_000_000 - 1, 999_999_000),
-      TimestampMicros::from_secs_and_nanos(i64::MIN / 1_000_000, 999_999_000),
-      TimestampMicros::from_secs_and_nanos(0, 123_456_789),
-      TimestampMicros::from_secs_and_nanos(-1, 123_456_789),
+      TimestampMicros::new(i64::MIN),
+      TimestampMicros::new(i64::MAX),
+      TimestampMicros::from_secs_and_nanos(i64::MAX / 1_000_000, 0)?,
+      TimestampMicros::from_secs_and_nanos(i64::MIN / 1_000_000, 999_999_000)?,
+      TimestampMicros::from_secs_and_nanos(0, 123_456_789)?,
+      TimestampMicros::from_secs_and_nanos(-1, 123_456_789)?,
     ],
     1,
     "TimestampMicros",
   );
+  Ok(())
 }
 
 #[test]

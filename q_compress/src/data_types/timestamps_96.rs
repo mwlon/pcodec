@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -21,6 +21,8 @@ macro_rules! impl_timestamp_96 {
     /// years.
     /// This is (generally) the most generous timestamp range standard used by
     /// other major tools today.
+    ///
+    /// Provides conversions to/from `SystemTime`.
     #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
     pub struct $t(i128);
 
@@ -75,8 +77,8 @@ macro_rules! impl_timestamp_96 {
       /// cause a decompressor to return invalid timestamps.
       /// If you are concerned about a data corruption affecting such a case
       /// without being noticed, you may want to `.validate()` every returned
-      /// timestamp. Otherwise, it is possible that a panic occurs when you try
-      /// to use the corrupt timestamps.
+      /// timestamp.
+      /// This is also done during `TryFrom` converter to `SystemTime`.
       pub fn validate(&self) -> QCompressResult<()> {
         if Self::is_valid(self.0) {
           Ok(())
@@ -114,10 +116,14 @@ macro_rules! impl_timestamp_96 {
       }
     }
 
-    impl From<$t> for SystemTime {
-      fn from(value: $t) -> SystemTime {
+    impl TryFrom<$t> for SystemTime {
+      type Error = QCompressError;
+
+      fn try_from(value: $t) -> QCompressResult<SystemTime> {
+        value.validate()?;
+
         let (seconds, subsec_nanos) = value.to_secs_and_nanos();
-        if seconds >= 0 {
+        let res = if seconds >= 0 {
           let dur = Duration::new(seconds as u64, subsec_nanos);
           UNIX_EPOCH + dur
         } else {
@@ -127,7 +133,8 @@ macro_rules! impl_timestamp_96 {
             Duration::new((-seconds - 1) as u64, BILLION_U32 - subsec_nanos)
           };
           UNIX_EPOCH - dur
-        }
+        };
+        Ok(res)
       }
     }
 
@@ -184,11 +191,13 @@ impl_timestamp_96!(TimestampMicros96, 1_000_000_u32, 9, "microsecond");
 
 #[cfg(test)]
 mod tests {
+  use std::convert::TryFrom;
   use std::time::{Duration, SystemTime};
   use crate::data_types::{TimestampMicros96, TimestampNanos96};
+  use crate::errors::QCompressResult;
 
   #[test]
-  fn test_system_time_conversion() {
+  fn test_system_time_conversion() -> QCompressResult<()> {
     let t = SystemTime::now();
     let micro_t = TimestampMicros96::from(t);
     let nano_t = TimestampNanos96::from(t);
@@ -198,7 +207,8 @@ mod tests {
     assert_eq!(micro_t_s, nano_t_s);
     assert!(micro_t_ns <= nano_t_ns);
     assert!(micro_t_ns + 1000 > nano_t_ns);
-    assert!(t.duration_since(SystemTime::from(micro_t)).unwrap() < Duration::from_secs(1));
-    assert_eq!(SystemTime::from(nano_t), t);
+    assert!(t.duration_since(SystemTime::try_from(micro_t)?).unwrap() < Duration::from_secs(1));
+    assert_eq!(SystemTime::try_from(nano_t)?, t);
+    Ok(())
   }
 }

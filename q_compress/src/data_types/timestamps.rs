@@ -1,9 +1,9 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::errors::QCompressResult;
 use crate::data_types::NumberLike;
+use crate::errors::{QCompressError, QCompressResult};
 
 const BILLION_I64: i64 = 1_000_000_000;
 
@@ -21,6 +21,8 @@ macro_rules! impl_timestamp {
     /// `TimestampNanos` covers from about year 1678 to 2262.
     /// Constructors will panic if the input time lies outside the valid range
     /// for this type.
+    ///
+    /// Provides conversions to/from `SystemTime`.
     #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
     pub struct $t(i64);
 
@@ -28,9 +30,7 @@ macro_rules! impl_timestamp {
       const NS_PER_PART: i64 = BILLION_I64 / $parts_per_sec;
 
       /// Returns a timestamp with the corresponding `parts` since the Unix
-      /// Epoch. Will return an error if outside the bounds of a 64-bit signed
-      /// integer for seconds and 32-bit unsigned integer for
-      /// fractional parts.
+      /// Epoch.
       pub fn new(parts: i64) -> Self {
         Self(parts)
       }
@@ -38,12 +38,15 @@ macro_rules! impl_timestamp {
       /// Returns a timestamp with the corresponding seconds and fractional
       /// nanoseconds since the Unix Epoch.
       /// Will panic if the time specified is outside the valid range.
-      pub fn from_secs_and_nanos(seconds: i64, subsec_nanos: i64) -> Self {
-        Self(seconds * $parts_per_sec + subsec_nanos / Self::NS_PER_PART)
+      pub(crate) fn from_secs_and_nanos(seconds: i64, subsec_nanos: i64) -> QCompressResult<Self> {
+        seconds.checked_mul($parts_per_sec)
+          .and_then(|seconds_parts| seconds_parts.checked_add(subsec_nanos / Self::NS_PER_PART))
+          .map($t::new)
+          .ok_or_else(|| QCompressError::invalid_argument("timestamp out of range"))
       }
 
       /// Returns the `(seconds, subsec_nanos)` since the Unix Epoch.
-      pub fn to_secs_and_nanos(self) -> (i64, i64) {
+      fn to_secs_and_nanos(self) -> (i64, i64) {
         let parts = self.0;
         let seconds = parts.div_euclid($parts_per_sec);
         let subsec_nanos = parts.rem_euclid($parts_per_sec) * Self::NS_PER_PART;
@@ -57,8 +60,10 @@ macro_rules! impl_timestamp {
       }
     }
 
-    impl From<SystemTime> for $t {
-      fn from(system_time: SystemTime) -> Self {
+    impl TryFrom<SystemTime> for $t {
+      type Error = QCompressError;
+
+      fn try_from(system_time: SystemTime) -> QCompressResult<Self> {
         let (seconds, subsec_nanos) = match system_time.duration_since(UNIX_EPOCH) {
           Ok(dur) => (dur.as_secs() as i64, dur.subsec_nanos() as i64),
           Err(e) => {
@@ -144,14 +149,16 @@ impl_timestamp!(TimestampMicros, 1_000_000_i64, 15, "microsecond");
 
 #[cfg(test)]
 mod tests {
+  use std::convert::TryFrom;
   use std::time::{Duration, SystemTime};
+
   use crate::data_types::{TimestampMicros, TimestampNanos};
 
   #[test]
   fn test_system_time_conversion() {
     let t = SystemTime::now();
-    let micro_t = TimestampMicros::from(t);
-    let nano_t = TimestampNanos::from(t);
+    let micro_t = TimestampMicros::try_from(t).unwrap();
+    let nano_t = TimestampNanos::try_from(t).unwrap();
     let (micro_t_s, micro_t_ns) = micro_t.to_secs_and_nanos();
     let (nano_t_s, nano_t_ns) = nano_t.to_secs_and_nanos();
     assert!(micro_t_s > 1500000000); // would be better if we mocked time
