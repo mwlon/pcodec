@@ -25,10 +25,11 @@ with high compression ratio and moderately fast speed.
 
 **Data types:**
 `bool`,
-`i16`, `i32`, `i64`, `i128`,
-`u16`, `u32`, `u64`, `u128`,
+`i16`, `i32`, `i64`,
+`u16`, `u32`, `u64`,
 `f32`, `f64`,
-`TimestampMicros`, `TimestampNanos`
+`TimestampMicros`, `TimestampNanos`,
+and optionally `i128`, `u128`, `TimestampMicros96`, `TimestampNanos96`
 
 **Features:**
 * stable file format (`.qco`)
