@@ -45,7 +45,7 @@ pub struct CompressOpt {
   pub overwrite: bool,
   #[structopt(long = "csv-has-header")]
   pub has_csv_header: bool,
-  #[structopt(long = "csv-timestamp-format", default_value = "%Y-%m-%dT%H:%M:%s%.f%z")]
+  #[structopt(long = "csv-timestamp-format", default_value = "%Y-%m-%dT%H:%M:%S%.f%z")]
   pub timestamp_format: String,
   #[structopt(long = "csv-delimiter", default_value = ",")]
   pub delimiter: char,
@@ -69,7 +69,7 @@ impl CompressOpt {
 pub struct DecompressOpt {
   #[structopt(long)]
   pub limit: Option<usize>,
-  #[structopt(long, default_value = "%Y-%m-%dT%H:%M:%s%.f")]
+  #[structopt(long, default_value = "%Y-%m-%dT%H:%M:%S%.f")]
   pub timestamp_format: String,
 
   pub qco_path: PathBuf,
