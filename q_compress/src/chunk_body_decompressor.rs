@@ -5,18 +5,23 @@ use crate::{ChunkMetadata, delta_encoding, PrefixMetadata};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
-use crate::num_decompressor::{Numbers, NumDecompressor};
+use crate::num_decompressor::NumDecompressor;
+
+pub struct Numbers<T: NumberLike> {
+  pub nums: Vec<T>,
+  pub finished_chunk_body: bool,
+}
 
 // ChunkBodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
 #[derive(Clone, Debug)]
 pub enum ChunkBodyDecompressor<T: NumberLike> {
   Simple {
-    num_decompressor: NumDecompressor<T>,
+    num_decompressor: NumDecompressor<T::Unsigned>,
   },
   Delta {
     n: usize,
-    num_decompressor: NumDecompressor<T::Signed>,
+    num_decompressor: NumDecompressor<T::Unsigned>,
     delta_moments: DeltaMoments<T>,
     nums_processed: usize,
   },
@@ -52,30 +57,38 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
     error_on_insufficient_data: bool,
   ) -> QCompressResult<Numbers<T>> {
     match self {
-      Self::Simple { num_decompressor } => num_decompressor.decompress_nums_limited(
+      Self::Simple { num_decompressor } => num_decompressor.decompress_unsigneds_limited(
         reader,
         limit,
         error_on_insufficient_data,
-      ),
+      ).map(|u| {
+        Numbers {
+          nums: u.unsigneds.into_iter().map(T::from_unsigned).collect(),
+          finished_chunk_body: u.finished_chunk_body,
+        }
+      }),
       Self::Delta {
         n,
         num_decompressor,
         delta_moments,
         nums_processed,
       } => {
-        let deltas = num_decompressor.decompress_nums_limited(
+        let u_deltas = num_decompressor.decompress_unsigneds_limited(
           reader,
           limit,
           error_on_insufficient_data,
         )?;
-        let batch_size = if deltas.finished_chunk_body {
+        let batch_size = if u_deltas.finished_chunk_body {
           min(limit, *n - *nums_processed)
         } else {
-          deltas.nums.len()
+          u_deltas.unsigneds.len()
         };
+        let signeds = u_deltas.unsigneds.into_iter()
+          .map(T::Signed::from_unsigned)
+          .collect::<Vec<_>>();
         let nums = delta_encoding::reconstruct_nums(
           delta_moments,
-          &deltas.nums,
+          &signeds,
           batch_size,
         );
         *nums_processed += batch_size;

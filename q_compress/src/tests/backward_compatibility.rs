@@ -1,7 +1,9 @@
 use std::fs;
 
 use crate::auto_decompress;
-use crate::data_types::{NumberLike, TimestampMicros};
+use crate::data_types::NumberLike;
+#[cfg(feature = "timestamps_96")]
+use crate::data_types::TimestampMicros96;
 
 fn assert_compatible<T: NumberLike>(
   filename: &str,
@@ -38,9 +40,10 @@ fn test_v0_4_f32() {
   assert_compatible::<f32>("v0.4_f32_2k");
 }
 
+#[cfg(feature = "timestamps_96")]
 #[test]
 fn test_v0_6_timestamp_deltas() {
-  assert_compatible::<TimestampMicros>("v0.6_timestamp_deltas_2k");
+  assert_compatible::<TimestampMicros96>("v0.6_timestamp_deltas_2k");
 }
 
 #[test]

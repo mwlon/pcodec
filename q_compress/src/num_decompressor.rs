@@ -79,9 +79,8 @@ fn max_bits_overshot<T: NumberLike>(p: &Prefix<T>) -> usize {
   }
 }
 
-pub struct Numbers<T: NumberLike> {
-  pub nums: Vec<T>,
-  // pub insufficient_data_err: Option<QCompressError>,
+pub struct Unsigneds<U: UnsignedLike> {
+  pub unsigneds: Vec<U>,
   pub finished_chunk_body: bool,
 }
 
@@ -93,16 +92,16 @@ struct IncompletePrefix<U: UnsignedLike> {
 
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
-  nums_processed: usize,
+  n_processed: usize,
   bits_processed: usize,
   incomplete_prefix: Option<IncompletePrefix<U>>,
 }
 
 // NumDecompressor does the main work of decoding bytes into NumberLikes
 #[derive(Clone, Debug)]
-pub struct NumDecompressor<T> where T: NumberLike {
+pub struct NumDecompressor<U> where U: UnsignedLike {
   // known information about the chunk
-  huffman_table: HuffmanTable<T::Unsigned>,
+  huffman_table: HuffmanTable<U>,
   n: usize,
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
@@ -110,57 +109,56 @@ pub struct NumDecompressor<T> where T: NumberLike {
   use_gcd: bool,
 
   // mutable state
-  state: State<T::Unsigned>,
+  state: State<U>,
 }
 
 #[inline(always)]
-fn unchecked_decompress_offsets<T: NumberLike, GcdOp: GcdOperator<T::Unsigned>>(
+fn unchecked_decompress_offsets<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   reader: &mut BitReader,
-  nums: &mut Vec<T>,
-  p: PrefixDecompressionInfo<T::Unsigned>,
+  unsigneds: &mut Vec<U>,
+  p: PrefixDecompressionInfo<U>,
   reps: usize,
 ) {
   if reps > 1 && p.k == 0 {
     // this branch is purely for performance reasons
     // the reps > 1 check also improves performance
-    let num = T::from_unsigned(p.lower_unsigned);
     for _ in 0..reps {
-      nums.push(num);
+      unsigneds.push(p.lower_unsigned);
     }
   } else {
     for _ in 0..reps {
       let mut offset = reader.unchecked_read_diff(p.k);
-      if p.k < T::Unsigned::BITS &&
+      if p.k < U::BITS &&
         p.k_range - offset >= p.most_significant &&
         reader.unchecked_read_one() {
         offset |= p.most_significant;
       }
-      let num = T::from_unsigned(p.lower_unsigned + GcdOp::get_diff(offset, p.gcd));
-      nums.push(num);
+      let unsigned = p.lower_unsigned + GcdOp::get_diff(offset, p.gcd);
+      unsigneds.push(unsigned);
     }
   }
 }
 
 // errors on insufficient data
-fn decompress_offset_dirty<T: NumberLike>(
+fn decompress_offset_dirty<U: UnsignedLike>(
   reader: &mut BitReader,
-  nums: &mut Vec<T>,
-  p: PrefixDecompressionInfo<T::Unsigned>,
+  unsigneds: &mut Vec<U>,
+  p: PrefixDecompressionInfo<U>,
 ) -> QCompressResult<()> {
   let mut offset = reader.read_diff(p.k)?;
-  if p.k < T::Unsigned::BITS {
-    let most_significant = T::Unsigned::ONE << p.k;
+  if p.k < U::BITS {
+    let most_significant = U::ONE << p.k;
     if p.k_range - offset >= most_significant && reader.read_one()? {
       offset |= most_significant;
     }
   }
-  let num = T::from_unsigned(p.lower_unsigned + offset * p.gcd);
-  nums.push(num);
+  let unsigned = p.lower_unsigned + offset * p.gcd;
+  unsigneds.push(unsigned);
   Ok(())
 }
 
-impl<T> NumDecompressor<T> where T: NumberLike {
-  pub(crate) fn new(
+impl<U> NumDecompressor<U> where U: UnsignedLike {
+  pub(crate) fn new<T: NumberLike<Unsigned=U>>(
     n: usize,
     compressed_body_size: usize,
     prefixes: Vec<Prefix<T>>,
@@ -191,7 +189,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       max_overshoot_per_num_block,
       use_gcd,
       state: State {
-        nums_processed: 0,
+        n_processed: 0,
         bits_processed: 0,
         incomplete_prefix: None,
       },
@@ -204,7 +202,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
 
   fn limit_reps(
     &mut self,
-    prefix: PrefixDecompressionInfo<T::Unsigned>,
+    prefix: PrefixDecompressionInfo<U>,
     full_reps: usize,
     limit: usize,
   ) -> usize {
@@ -220,21 +218,21 @@ impl<T> NumDecompressor<T> where T: NumberLike {
   }
 
   #[inline(always)]
-  fn unchecked_decompress_num_block<GcdOp: GcdOperator<T::Unsigned>>(
+  fn unchecked_decompress_num_block<GcdOp: GcdOperator<U>>(
     &mut self,
     reader: &mut BitReader,
-    nums: &mut Vec<T>,
+    unsigneds: &mut Vec<U>,
     batch_size: usize,
   ) {
     let p = self.huffman_table.unchecked_search_with_reader(reader);
 
     match p.run_len_jumpstart {
-      None => unchecked_decompress_offsets::<T, GcdOp>(reader, nums, p, 1),
+      None => unchecked_decompress_offsets::<U, GcdOp>(reader, unsigneds, p, 1),
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = self.limit_reps(p, full_reps, batch_size - nums.len());
-        unchecked_decompress_offsets::<T, GcdOp>(reader, nums, p, reps);
+        let reps = self.limit_reps(p, full_reps, batch_size - unsigneds.len());
+        unchecked_decompress_offsets::<U, GcdOp>(reader, unsigneds, p, reps);
       },
     };
   }
@@ -242,7 +240,7 @@ impl<T> NumDecompressor<T> where T: NumberLike {
   fn decompress_num_block(
     &mut self,
     reader: &mut BitReader,
-    nums: &mut Vec<T>,
+    unsigneds: &mut Vec<U>,
     batch_size: usize,
   ) -> QCompressResult<()> {
     let p = self.huffman_table.search_with_reader(reader)?;
@@ -252,24 +250,24 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.read_varint(jumpstart)? + 1;
-        self.limit_reps(p, full_reps, batch_size - nums.len())
+        self.limit_reps(p, full_reps, batch_size - unsigneds.len())
       },
     };
-    self.decompress_offsets(reader, nums, p, reps)
+    self.decompress_offsets(reader, unsigneds, p, reps)
   }
 
-  // errors on insufficient data, but updates nums with last complete number
+  // errors on insufficient data, but updates unsigneds with last complete number
   // and leaves reader at end end of last complete number
   fn decompress_offsets(
     &self,
     reader: &mut BitReader,
-    nums: &mut Vec<T>,
-    p: PrefixDecompressionInfo<T::Unsigned>,
+    unsigneds: &mut Vec<U>,
+    p: PrefixDecompressionInfo<U>,
     reps: usize,
   ) -> QCompressResult<()> {
     for _ in 0..reps {
       let start_bit_idx = reader.bit_idx();
-      let maybe_err = decompress_offset_dirty(reader, nums, p);
+      let maybe_err = decompress_offset_dirty(reader, unsigneds, p);
       if maybe_err.is_err() {
         reader.seek_to(start_bit_idx);
         return maybe_err;
@@ -280,23 +278,23 @@ impl<T> NumDecompressor<T> where T: NumberLike {
   }
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
-  // State managed here: nums_processed, bits_processed
-  pub fn decompress_nums_limited(
+  // State managed here: n_processed, bits_processed
+  pub fn decompress_unsigneds_limited(
     &mut self,
     reader: &mut BitReader,
     limit: usize,
     error_on_insufficient_data: bool,
-  ) -> QCompressResult<Numbers<T>> {
+  ) -> QCompressResult<Unsigneds<U>> {
     let initial_reader = reader.clone();
     let initial_state = self.state.clone();
     let res = if self.use_gcd {
-      self.decompress_nums_limited_dirty::<GeneralGcdOp>(reader, limit, error_on_insufficient_data)
+      self.decompress_unsigneds_limited_dirty::<GeneralGcdOp>(reader, limit, error_on_insufficient_data)
     } else {
-      self.decompress_nums_limited_dirty::<TrivialGcdOp>(reader, limit, error_on_insufficient_data)
+      self.decompress_unsigneds_limited_dirty::<TrivialGcdOp>(reader, limit, error_on_insufficient_data)
     };
     match &res {
       Ok(numbers) => {
-        self.state.nums_processed += numbers.nums.len();
+        self.state.n_processed += numbers.unsigneds.len();
 
         if numbers.finished_chunk_body {
           reader.drain_empty_byte(|| QCompressError::corruption(
@@ -331,29 +329,29 @@ impl<T> NumDecompressor<T> where T: NumberLike {
   //
   // state managed here: incomplete_prefix
   #[inline(never)]
-  fn decompress_nums_limited_dirty<GcdOp: GcdOperator<T::Unsigned>>(
+  fn decompress_unsigneds_limited_dirty<GcdOp: GcdOperator<U>>(
     &mut self,
     reader: &mut BitReader,
     limit: usize,
     error_on_insufficient_data: bool,
-  ) -> QCompressResult<Numbers<T>> {
+  ) -> QCompressResult<Unsigneds<U>> {
     let batch_size = min(
-      self.n - self.state.nums_processed,
+      self.n - self.state.n_processed,
       limit,
     );
     // we'll modify this result as we decode numbers and if we encounter an insufficient data error
-    let completed_body = limit >= self.n - self.state.nums_processed;
-    let mut numbers = Numbers {
-      nums: Vec::with_capacity(batch_size),
+    let completed_body = limit >= self.n - self.state.n_processed;
+    let mut numbers = Unsigneds {
+      unsigneds: Vec::with_capacity(batch_size),
       finished_chunk_body: completed_body,
     };
-    let nums = &mut numbers.nums;
+    let unsigneds = &mut numbers.unsigneds;
 
     if batch_size == 0 {
       return Ok(numbers);
     }
 
-    let mark_insufficient = |mut numbers: Numbers<T>, e: QCompressError| {
+    let mark_insufficient = |mut numbers: Unsigneds<U>, e: QCompressError| {
       if error_on_insufficient_data {
         Err(e)
       } else {
@@ -369,11 +367,11 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       let reps = min(remaining_reps, batch_size);
       let incomplete_res = self.decompress_offsets(
         reader,
-        nums,
+        unsigneds,
         prefix,
         reps,
       );
-      let remaining_reps = remaining_reps - nums.len();
+      let remaining_reps = remaining_reps - unsigneds.len();
       if remaining_reps == 0 {
         self.state.incomplete_prefix = None;
       } else {
@@ -391,22 +389,22 @@ impl<T> NumDecompressor<T> where T: NumberLike {
       let mut temp = Vec::with_capacity(1);
       self.unchecked_decompress_num_block::<GcdOp>(reader, &mut temp, 1);
       let constant_num = temp[0];
-      while nums.len() < batch_size {
-        nums.push(constant_num);
+      while unsigneds.len() < batch_size {
+        unsigneds.push(constant_num);
       }
     } else {
       loop {
-        let remaining_nums = batch_size - nums.len();
+        let remaining_unsigneds = batch_size - unsigneds.len();
         let guaranteed_safe_num_blocks = min(
-          remaining_nums,
+          remaining_unsigneds,
           reader.bits_remaining().saturating_sub(self.max_overshoot_per_num_block) /
             self.max_bits_per_num_block,
         );
 
         if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
           let mut block_idx = 0;
-          while block_idx < guaranteed_safe_num_blocks && nums.len() < self.n {
-            self.unchecked_decompress_num_block::<GcdOp>(reader, nums, batch_size);
+          while block_idx < guaranteed_safe_num_blocks && unsigneds.len() < self.n {
+            self.unchecked_decompress_num_block::<GcdOp>(reader, unsigneds, batch_size);
             block_idx += 1;
           }
         } else {
@@ -414,8 +412,8 @@ impl<T> NumDecompressor<T> where T: NumberLike {
         }
       }
 
-      while nums.len() < batch_size {
-        match self.decompress_num_block(reader, nums, batch_size) {
+      while unsigneds.len() < batch_size {
+        match self.decompress_num_block(reader, unsigneds, batch_size) {
           Ok(_) => (),
           Err(e) if matches!(e.kind, ErrorKind::InsufficientData) =>
             return mark_insufficient(numbers, e),

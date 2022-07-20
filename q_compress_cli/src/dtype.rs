@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes::{DataType as ArrowDataType, TimeUnit};
 
-use q_compress::data_types::{NumberLike, TimestampMicros, TimestampNanos};
+use q_compress::data_types::{NumberLike, TimestampMicros, TimestampNanos, TimestampMicros96, TimestampNanos96};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]
@@ -18,7 +18,9 @@ pub enum DType {
   I64,
   I128,
   TimestampMicros,
+  TimestampMicros96,
   TimestampNanos,
+  TimestampNanos96,
   U16,
   U32,
   U64,
@@ -42,7 +44,9 @@ impl FromStr for DType {
       "u64" => DType::U64,
       "u128" => DType::U128,
       "micros" | "timestampmicros" => DType::TimestampMicros,
+      "micros96" | "timestampmicros96" => DType::TimestampMicros96,
       "nanos" | "timestampnanos" => DType::TimestampNanos,
+      "nanos96" | "timestampnanos96" => DType::TimestampNanos96,
       _ => {
         return Err(anyhow!("unknown dtype {}", s));
       }
@@ -63,7 +67,9 @@ impl TryFrom<u8> for DType {
       i64::HEADER_BYTE => DType::I64,
       i128::HEADER_BYTE => DType::I128,
       TimestampMicros::HEADER_BYTE => DType::TimestampMicros,
+      TimestampMicros96::HEADER_BYTE => DType::TimestampMicros96,
       TimestampNanos::HEADER_BYTE => DType::TimestampNanos,
+      TimestampNanos96::HEADER_BYTE => DType::TimestampNanos96,
       u16::HEADER_BYTE => DType::U16,
       u32::HEADER_BYTE => DType::U32,
       u64::HEADER_BYTE => DType::U64,
@@ -127,7 +133,7 @@ mod tests {
   use crate::dtype::DType;
 
   #[test]
-  fn test_dtype_header_bytes_consistent() -> Result<()> {
+  fn test_arrow_dtypes_consistent() -> Result<()> {
     for dtype in DType::into_enum_iter() {
       if let Ok(arrow_dtype) = dtype.to_arrow() {
         assert_eq!(DType::from_arrow(&arrow_dtype)?, dtype);
