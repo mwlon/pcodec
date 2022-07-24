@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+
 use crate::{Flags, gcd_utils, Prefix};
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -149,6 +150,7 @@ pub fn optimize_prefixes<T: NumberLike>(
 #[cfg(test)]
 mod tests {
   use std::marker::PhantomData;
+
   use crate::Flags;
   use crate::prefix::WeightedPrefix;
   use crate::prefix_optimization::optimize_prefixes;

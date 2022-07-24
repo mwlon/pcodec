@@ -7,7 +7,6 @@ pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: usize = 3;
 pub const MAX_ENTRIES: usize = (1 << 24) - 1;
 pub const BITS_TO_ENCODE_N_ENTRIES: usize = 24;
 pub const BITS_TO_ENCODE_N_PREFIXES: usize = 15;
-pub const MAX_COMPRESSION_LEVEL: usize = 12;
 pub const MAX_JUMPSTART: usize = BITS_TO_ENCODE_N_ENTRIES;
 pub const BITS_TO_ENCODE_JUMPSTART: usize = 5;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: usize = 32;
@@ -21,6 +20,7 @@ pub const WORD_SIZE: usize = usize::BITS as usize;
 pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
 
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
+pub const MAX_COMPRESSION_LEVEL: usize = 12;
 
 #[cfg(test)]
 mod tests {
