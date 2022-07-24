@@ -154,6 +154,6 @@ int_floats = np.random.randint(0, 2 ** 30, size=n)
 write_f64(int_floats, 'integers')
 
 # decimal floats, a very antagonistic case
-antagonistic_floats = np.random.randint(1000, 10000, size=n) / 100
-write_f64(antagonistic_floats[:short_n], 'antag_short')
-write_f64(antagonistic_floats, 'antag_long')
+decimal_floats = np.random.randint(1000, 10000, size=n) / 100
+write_f64(decimal_floats[:short_n], 'decimal_short')
+write_f64(decimal_floats, 'decimal_long')
