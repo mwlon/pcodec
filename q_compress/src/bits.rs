@@ -2,12 +2,12 @@ use crate::constants::WORD_SIZE;
 use crate::data_types::UnsignedLike;
 
 pub const BASE_BIT_MASK: usize = 1 << (WORD_SIZE - 1);
-const MAX_K: usize = 129;
-const LOG_POWS: [(f64, f64); MAX_K] = {
-  let mut res = [(0.0, 0.0); MAX_K];
+const BUMPY_MAX_K: usize = 129;
+const BUMPY_LOG_TABLE: [(f64, f64); BUMPY_MAX_K] = {
+  let mut res = [(0.0, 0.0); BUMPY_MAX_K];
   let mut k = 0;
   let exp_bit = 1_u64 << 52;
-  while k < MAX_K {
+  while k < BUMPY_MAX_K {
     let mem_repr_exp = exp_bit * (k + 1023 + 1) as u64;
     res[k] = ((k + 2) as f64, unsafe { std::mem::transmute(mem_repr_exp) });
     k += 1;
@@ -90,7 +90,7 @@ pub fn bits_to_string(bits: &[bool]) -> String {
 #[inline(always)]
 fn bumpy_log(x: f64) -> f64 {
   let k = x.log2() as usize;
-  let (base, exp) = LOG_POWS[k];
+  let (base, exp) = BUMPY_LOG_TABLE[k];
   base - exp / x
 }
 
@@ -175,10 +175,10 @@ mod tests {
 
   #[test]
   fn test_log_pows() {
-    assert_eq!(LOG_POWS[0], (2.0, 2.0));
-    assert_eq!(LOG_POWS[1], (3.0, 4.0));
-    assert_eq!(LOG_POWS[2], (4.0, 8.0));
-    assert_eq!(LOG_POWS[70], (72.0, 2.0_f64.powi(71)));
+    assert_eq!(BUMPY_LOG_TABLE[0], (2.0, 2.0));
+    assert_eq!(BUMPY_LOG_TABLE[1], (3.0, 4.0));
+    assert_eq!(BUMPY_LOG_TABLE[2], (4.0, 8.0));
+    assert_eq!(BUMPY_LOG_TABLE[70], (72.0, 2.0_f64.powi(71)));
   }
 
   #[test]
