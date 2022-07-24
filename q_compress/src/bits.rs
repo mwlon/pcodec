@@ -15,7 +15,6 @@ const LOG_POWS: [(f64, f64); MAX_K] = {
   res
 };
 
-
 pub fn bit_from_word(word: usize, j: usize) -> bool {
   (word & (BASE_BIT_MASK >> j)) > 0
 }
@@ -95,12 +94,17 @@ fn bumpy_log(x: f64) -> f64 {
   base - exp / x
 }
 
+// This bumpy log gives a more accurate average number of offset bits used.
 pub fn avg_offset_bits<U: UnsignedLike>(lower: U, upper: U, gcd: U) -> f64 {
   bumpy_log(((upper - lower) / gcd).to_f64() + 1.0)
 }
 
+// The true Huffman cost of course depends on the tree. We can statistically
+// model this cost and get slightly different bumpy log formulas,
+// but I haven't found
+// anything that beats a simple log. Plus it's computationally cheap.
 pub fn avg_depth_bits(weight: usize, total_weight: usize) -> f64 {
-  bumpy_log(total_weight as f64 / weight as f64)
+  (total_weight as f64 / weight as f64).log2()
 }
 
 pub fn ceil_div(x: usize, divisor: usize) -> usize {
