@@ -204,6 +204,59 @@ fn push_pref<T: NumberLike>(
   *buffer.prefix_idx = new_prefix_idx;
 }
 
+// 2 ^ comp level, with 2 caveats:
+// * Enforce n_prefixes <= n_unsigneds
+// * Due to prefix optimization compute cost ~ O(4 ^ comp level), limit max comp level when
+// n_unsigneds is small
+fn choose_max_n_prefixes(comp_level: usize, n_unsigneds: usize) -> usize {
+  let log_n = (n_unsigneds as f64).log2().floor() as usize;
+  let max_comp_level_for_n = min(MAX_COMPRESSION_LEVEL, log_n / 2 + 5);
+  let real_comp_level = comp_level.saturating_sub(MAX_COMPRESSION_LEVEL - max_comp_level_for_n);
+  min(1_usize << real_comp_level, n_unsigneds)
+}
+
+fn choose_unoptimized_prefixes<T: NumberLike>(
+  sorted: &[T::Unsigned],
+  internal_config: &InternalCompressorConfig,
+  flags: &Flags,
+) -> Vec<WeightedPrefix<T>> {
+  let n_unsigneds = sorted.len();
+  let max_n_pref = choose_max_n_prefixes(internal_config.compression_level, n_unsigneds);
+  let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
+  let mut pref_idx = 0_usize;
+
+  let use_gcd = flags.use_gcds;
+  let mut i = 0;
+  let mut backup_j = 0_usize;
+  let mut prefix_buffer = PrefixBuffer::<T> {
+    seq: &mut raw_prefs,
+    prefix_idx: &mut pref_idx,
+    max_n_pref,
+    n_unsigneds,
+    sorted,
+    use_gcd,
+  };
+
+  for j in 0..n_unsigneds {
+    let target_j = ((*prefix_buffer.prefix_idx + 1) * n_unsigneds) / max_n_pref;
+    if j > 0 && sorted[j] == sorted[j - 1] {
+      if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
+        push_pref(&mut prefix_buffer, i, backup_j);
+        i = backup_j;
+      }
+    } else {
+      backup_j = j;
+      if j >= target_j {
+        push_pref(&mut prefix_buffer, i, j);
+        i = j;
+      }
+    }
+  }
+  push_pref(&mut prefix_buffer, i, n_unsigneds);
+
+  raw_prefs
+}
+
 fn train_prefixes<T: NumberLike>(
   unsigneds: Vec<T::Unsigned>,
   internal_config: &InternalCompressorConfig,
@@ -230,44 +283,18 @@ fn train_prefixes<T: NumberLike>(
     )));
   }
 
-  let n_unsigneds = unsigneds.len();
-  let mut sorted = unsigneds;
-  sorted.sort_unstable();
-  let safe_comp_level = min(comp_level, (n_unsigneds as f64).log2() as usize);
-  let max_n_pref = 1_usize << safe_comp_level;
-  let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
-  let mut pref_idx = 0_usize;
-
-  let use_gcd = flags.use_gcds;
-  let mut i = 0;
-  let mut backup_j = 0_usize;
-  let mut prefix_buffer = PrefixBuffer::<T> {
-    seq: &mut raw_prefs,
-    prefix_idx: &mut pref_idx,
-    max_n_pref,
-    n_unsigneds,
-    sorted: &sorted,
-    use_gcd,
+  let unoptimized_prefs = {
+    let mut sorted = unsigneds;
+    sorted.sort_unstable();
+    choose_unoptimized_prefixes(
+      &sorted,
+      internal_config,
+      flags
+    )
   };
-  for j in 0..n_unsigneds {
-    let target_j = ((*prefix_buffer.prefix_idx + 1) * n_unsigneds) / max_n_pref;
-    if j > 0 && sorted[j] == sorted[j - 1] {
-      if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        push_pref(&mut prefix_buffer, i, backup_j);
-        i = backup_j;
-      }
-    } else {
-      backup_j = j;
-      if j >= target_j {
-        push_pref(&mut prefix_buffer, i, j);
-        i = j;
-      }
-    }
-  }
-  push_pref(&mut prefix_buffer, i, n_unsigneds);
 
   let mut optimized_prefs = prefix_optimization::optimize_prefixes(
-    raw_prefs,
+    unoptimized_prefs,
     flags,
     n,
   );
@@ -583,5 +610,24 @@ impl<T> Compressor<T> where T: NumberLike {
   /// not yet been read.
   pub fn byte_size(&mut self) -> usize {
     self.writer.byte_size()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::choose_max_n_prefixes;
+
+  #[test]
+  fn test_choose_max_n_prefixes() {
+    assert_eq!(choose_max_n_prefixes(0, 100), 1);
+    assert_eq!(choose_max_n_prefixes(12, 100), 100);
+    assert_eq!(choose_max_n_prefixes(12, 1 << 10), 1 << 10);
+    assert_eq!(choose_max_n_prefixes(8, 1 << 10), 1 << 6);
+    assert_eq!(choose_max_n_prefixes(1, 1 << 10), 1);
+    assert_eq!(choose_max_n_prefixes(12, (1 << 12) - 1), 1 << 10);
+    assert_eq!(choose_max_n_prefixes(12, 1 << 12), 1 << 11);
+    assert_eq!(choose_max_n_prefixes(12, (1 << 14) - 1), 1 << 11);
+    assert_eq!(choose_max_n_prefixes(12, 1 << 14), 1 << 12);
+    assert_eq!(choose_max_n_prefixes(12, 1 << 20), 1 << 12);
   }
 }

@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+
 use crate::{Flags, gcd_utils, Prefix};
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -20,8 +21,8 @@ fn prefix_bit_cost<U: UnsignedLike>(
     0.0
   };
   base_meta_cost +
-    gcd_cost +
-    huffman_cost + // extra meta cost depending on length of huffman code
+    gcd_cost + // extra meta cost of storing GCD
+    huffman_cost + // extra meta cost of storing Huffman code
     (offset_cost + huffman_cost) * weight as f64 // body cost
 }
 
@@ -84,7 +85,7 @@ pub fn optimize_prefixes<T: NumberLike>(
       let lower = lower_unsigneds[j];
       if fold_gcd {
         gcd_utils::fold_prefix_gcds_left(
-          lower_unsigneds[j],
+          lower,
           upper_unsigneds[j],
           gcds[j],
           upper,
@@ -149,6 +150,7 @@ pub fn optimize_prefixes<T: NumberLike>(
 #[cfg(test)]
 mod tests {
   use std::marker::PhantomData;
+
   use crate::Flags;
   use crate::prefix::WeightedPrefix;
   use crate::prefix_optimization::optimize_prefixes;

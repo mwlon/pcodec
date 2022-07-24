@@ -9,6 +9,7 @@ import os
 
 np.random.seed(0)
 n = 1000000
+short_n = 3000
 
 base_dir = 'q_compress/examples/data'
 
@@ -22,9 +23,9 @@ os.makedirs(f'{base_dir}/binary', exist_ok=True)
 def write_parquet_tables(nums, full_name):
   print(f'writing parquet for {full_name}...')
   table = pa.Table.from_pydict({'nums': nums})
-  pq.write_table(table, f'{base_dir}/parquet/{full_name}.parquet', compression='NONE')
-  pq.write_table(table, f'{base_dir}/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
-  pq.write_table(table, f'{base_dir}/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=9)
+#   pq.write_table(table, f'{base_dir}/parquet/{full_name}.parquet', compression='NONE')
+#   pq.write_table(table, f'{base_dir}/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
+#   pq.write_table(table, f'{base_dir}/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=9)
   pq.write_table(table, f'{base_dir}/zstd_parquet/{full_name}.zstd.parquet', compression='zstd', compression_level=22)
 
 def write_i64(arr, name):
@@ -151,3 +152,8 @@ write_timestamp_micros(milli_micro_timestamps, 'millis')
 # integers compressed as floats
 int_floats = np.random.randint(0, 2 ** 30, size=n)
 write_f64(int_floats, 'integers')
+
+# decimal floats, a very antagonistic case
+decimal_floats = np.random.randint(1000, 10000, size=n) / 100
+write_f64(decimal_floats[:short_n], 'decimal_short')
+write_f64(decimal_floats, 'decimal_long')
