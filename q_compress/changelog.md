@@ -1,6 +1,11 @@
 # `q_compress` Changelog
 
-## 0.11.0 (not yet released)
+## 0.11.1
+
+* Improved prefix optimization speed (part of compression) by 30%.
+* Changed compression levels for small data to use fewer prefixes.
+
+## 0.11.0
 
 * Replaced 96-bit timestamps with 64-bit ones for a 30% increase to compression
 and decompression speed.
