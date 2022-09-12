@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+  "ffi",
   "q_compress",
   "q_compress_cli",
 ]
