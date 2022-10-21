@@ -1,5 +1,15 @@
 # `q_compress` Changelog
 
+## 0.11.2
+
+* Added a new always-on flag to enable data pages within a chunk body.
+This deprecates 2 items from the chunk metadata: compressed body size and
+delta moments. These are now found in each data page. When decoding older
+files, these fields will still be populated, plus their values will be
+copied into the only data page's metadata.
+This change enables wrapping formats to interleave data with q_compress
+at a finer scale.
+
 ## 0.11.1
 
 * Improved prefix optimization speed (part of compression) by 30%.

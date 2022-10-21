@@ -130,3 +130,6 @@ Then an offset (for each repetition if necessary) follows,
 specifying the exact value within the range.
 
 At the end of the file is a termination byte.
+
+Quantle compression can also be used to write data pages interleaved into a
+columnar format, as opposed to writing a standalone file.

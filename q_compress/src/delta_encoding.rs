@@ -5,7 +5,7 @@ use crate::bit_writer::BitWriter;
 use crate::data_types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeltaMoments<T: NumberLike> {
   pub moments: Vec<T::Signed>,
   pub phantom: PhantomData<T>,

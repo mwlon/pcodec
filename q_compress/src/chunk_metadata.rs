@@ -34,6 +34,10 @@ pub enum PrefixMetadata<T: NumberLike> {
   /// the start of the chunk, each of which is also a `SignedLike`.
   Delta {
     prefixes: Vec<Prefix<T::Signed>>,
+    #[deprecated(
+      since = "0.11.2",
+      note = "use data page delta moments instead; on newer files, this is empty"
+    )]
     delta_moments: DeltaMoments<T>,
   }
 }
@@ -49,8 +53,10 @@ pub enum PrefixMetadata<T: NumberLike> {
 pub struct ChunkMetadata<T> where T: NumberLike {
   /// The count of numbers in the chunk.
   pub n: usize,
-  /// The compressed byte length of the compressed numbers that immediately
-  /// follow this chunk metadata section.
+  /// For older .qco files without data pages, the compressed byte length of
+  /// the compressed numbers in this chunk's body. This is an
+  /// If the file uses data pages, this will instead be 0.
+  #[deprecated(since = "0.11.2", note = "use data page compressed size instead")]
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
   pub prefix_metadata: PrefixMetadata<T>,
@@ -155,9 +161,21 @@ fn write_prefixes<T: NumberLike>(
 }
 
 impl<T> ChunkMetadata<T> where T: NumberLike {
+  pub(crate) fn new(n: usize, prefix_metadata: PrefixMetadata<T>) -> Self {
+    ChunkMetadata {
+      n,
+      compressed_body_size: 0,
+      prefix_metadata,
+      phantom: PhantomData,
+    }
+  }
   pub fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)?;
-    let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?;
+    let compressed_body_size = if flags.use_data_pages {
+      0
+    } else {
+      reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?
+    };
     let prefix_metadata = if flags.delta_encoding_order == 0 {
       let prefixes = parse_prefixes::<T>(reader, flags, n)?;
       PrefixMetadata::Simple {
@@ -182,7 +200,9 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
 
   pub fn write_to(&self, writer: &mut BitWriter, flags: &Flags) {
     writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
-    writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
+    if !flags.use_data_pages {
+      writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
+    }
     match &self.prefix_metadata {
       PrefixMetadata::Simple { prefixes} => {
         write_prefixes(prefixes, writer, flags, self.n);

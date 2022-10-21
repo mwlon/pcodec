@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use crate::{Flags, gcd_utils, huffman_encoding};
 use crate::bit_writer::BitWriter;
+use crate::chunk_body_decompressor::ChunkBodyDecompressor::Delta;
 use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -270,7 +271,7 @@ fn train_prefixes<T: NumberLike>(
   let comp_level = internal_config.compression_level;
   if comp_level > MAX_COMPRESSION_LEVEL {
     return Err(QCompressError::invalid_argument(format!(
-      "compresion level may not exceed {} (was {})",
+      "compression level may not exceed {} (was {})",
       MAX_COMPRESSION_LEVEL,
       comp_level,
     )));
@@ -308,28 +309,37 @@ fn train_prefixes<T: NumberLike>(
 }
 
 #[derive(Clone)]
-struct TrainedChunkCompressor<U: UnsignedLike, GcdOp: GcdOperator<U>> {
-  pub table: CompressionTable<U>,
+struct TrainedChunkCompressor<'a, U: UnsignedLike, GcdOp: GcdOperator<U>> {
+  pub table: &'a CompressionTable<U>,
   op: PhantomData<GcdOp>,
 }
 
-fn trained_compress_chunk_nums<T: NumberLike>(
-  prefixes: &[Prefix<T>],
+fn trained_compress_data_page<T: NumberLike>(
+  // prefixes: &[Prefix<T>],
+  table: &CompressionTable<T::Unsigned>,
+  use_gcd: bool,
+  moments: DeltaMoments<T>,
   unsigneds: &[T::Unsigned],
+  limit: usize,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
-  let table = CompressionTable::from(prefixes);
-  if gcd_utils::use_gcd_arithmetic(prefixes) {
+  if use_gcd {
     TrainedChunkCompressor::<T::Unsigned, GeneralGcdOp> { table, op: PhantomData }
-      .compress_nums(unsigneds, writer)
+      .compress_data_page(moments, unsigneds, limit, writer)
   } else {
     TrainedChunkCompressor::<T::Unsigned, TrivialGcdOp> { table, op: PhantomData }
-      .compress_nums(unsigneds, writer)
+      .compress_data_page(moments, unsigneds, limit, writer)
   }
 }
 
 impl<U, GcdOp> TrainedChunkCompressor<U, GcdOp> where U: UnsignedLike, GcdOp: GcdOperator<U> {
-  fn compress_nums(&self, unsigneds: &[U], writer: &mut BitWriter) -> QCompressResult<()> {
+  fn compress_data_page(
+    &self,
+    moments: DeltaMoments<>,
+    unsigneds: &[U],
+    limit: usize,
+    writer: &mut BitWriter,
+  ) -> QCompressResult<()> {
     let mut i = 0;
     while i < unsigneds.len() {
       let unsigned = unsigneds[i];
@@ -379,10 +389,56 @@ impl<U, GcdOp> TrainedChunkCompressor<U, GcdOp> where U: UnsignedLike, GcdOp: Gc
   }
 }
 
-#[derive(Clone, Debug, Default)]
-struct State {
-  has_written_header: bool,
-  has_written_footer: bool,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+  PreHeader,
+  StartOfChunk,
+  MidChunk,
+  PostFooter,
+}
+
+#[derive(Clone, Debug)]
+struct MidChunkInfo<T: NumberLike> {
+  unsigneds: Vec<T::Unsigned>,
+  idx: usize,
+  delta_moments: DeltaMoments<T>,
+  use_gcd: bool,
+  table: CompressionTable<T::Unsigned>,
+}
+
+#[derive(Clone, Debug)]
+enum State<T: NumberLike> {
+  PreHeader,
+  StartOfChunk,
+  MidChunk(MidChunkInfo<T>),
+  PostFooter,
+}
+
+impl<T: NumberLike> Default for State<T> {
+  fn default() -> Self {
+    State::PreHeader
+  }
+}
+
+impl<T: NumberLike> State<T> {
+  fn wrong_step_err(&self, description: &str) -> QCompressError {
+    let step_str = match self {
+      State::PreHeader => "has not yet written header",
+      State::StartOfChunk => "is at the start of a chunk",
+      State::MidChunk(_) => "is mid-chunk",
+      State::PostFooter => "has already written the footer",
+    };
+    QCompressError::invalid_argument(format!(
+      "attempted to write {} when compressor {}",
+      description,
+      step_str,
+    ))
+  }
+}
+
+struct InternalChunkInfo<T: NumberLike> {
+  meta: ChunkMetadata<T>,
+  pre_meta_bit_idx: usize,
 }
 
 /// Converts vectors of numbers into compressed bytes.
@@ -415,8 +471,7 @@ pub struct Compressor<T> where T: NumberLike {
   internal_config: InternalCompressorConfig,
   flags: Flags,
   writer: BitWriter,
-  state: State,
-  phantom: PhantomData<T>,
+  state: State<T>,
 }
 
 impl<T: NumberLike> Default for Compressor<T> {
@@ -436,7 +491,6 @@ impl<T> Compressor<T> where T: NumberLike {
       flags: Flags::from(&config),
       writer: BitWriter::default(),
       state: State::default(),
-      phantom: PhantomData,
     }
   }
 
@@ -455,40 +509,22 @@ impl<T> Compressor<T> where T: NumberLike {
   /// 5), and
   /// * bytes for the flags used to compress.
   pub fn header(&mut self) -> QCompressResult<()> {
-    if self.state.has_written_header {
-      return Err(QCompressError::invalid_argument(
-        "attempted to write second header with compressor"
-      ));
+    if !matches!(self.state, State::PreHeader) {
+      return Err(self.state.wrong_step_err("header"));
     }
-    if self.state.has_written_footer {
-      return Err(QCompressError::invalid_argument(
-        "attempted to write header after footer"
-      ));
-    }
+
     self.writer.write_aligned_bytes(&MAGIC_HEADER)?;
     self.writer.write_aligned_byte(T::HEADER_BYTE)?;
     self.flags.write(&mut self.writer)?;
-    self.state.has_written_header = true;
+    self.state = State::StartOfChunk;
     Ok(())
   }
 
-  /// Writes out a chunk of data representing the provided numbers.
-  /// Will return an error if the compressor has not yet written the header
-  /// or already written the footer.
-  ///
-  /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
-  /// The chunk body encodes the numbers passed in here.
-  pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
-    if !self.state.has_written_header {
-      return Err(QCompressError::invalid_argument(
-        "attempted to write chunk before header"
-      ));
+  pub fn chunk_metadata(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
+    if !matches!(self.state, State::StartOfChunk) {
+      return Err(self.state.wrong_step_err("chunk metadata"));
     }
-    if self.state.has_written_footer {
-      return Err(QCompressError::invalid_argument(
-        "attempted to write chunk to terminated compressor"
-      ));
-    }
+
     if nums.is_empty() {
       return Err(QCompressError::invalid_argument(
         "cannot compress empty chunk"
@@ -498,10 +534,15 @@ impl<T> Compressor<T> where T: NumberLike {
     self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
 
     let n = nums.len();
-    let pre_meta_bit_idx = self.writer.bit_size();
 
     let order = self.flags.delta_encoding_order;
-    let (mut metadata, post_meta_byte_idx) = if order == 0 {
+    let (
+      unsigneds,
+      prefix_meta,
+      use_gcd,
+      table,
+      delta_moments,
+    ) = if order == 0 {
       let unsigneds = nums.iter()
         .map(|x| x.to_unsigned())
         .collect::<Vec<_>>();
@@ -511,23 +552,12 @@ impl<T> Compressor<T> where T: NumberLike {
         &self.flags,
         n,
       )?;
+      let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
+      let table = CompressionTable::from(prefixes.as_slice());
       let prefix_metadata = PrefixMetadata::Simple {
-        prefixes: prefixes.clone(),
+        prefixes,
       };
-      let metadata = ChunkMetadata {
-        n,
-        compressed_body_size: 0,
-        prefix_metadata,
-        phantom: PhantomData,
-      };
-      metadata.write_to(&mut self.writer, &self.flags);
-      let post_meta_idx = self.writer.byte_size();
-      trained_compress_chunk_nums(
-        &prefixes,
-        &unsigneds,
-        &mut self.writer
-      )?;
-      (metadata, post_meta_idx)
+      (unsigneds, prefix_metadata, use_gcd, table, DeltaMoments::default())
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
       let deltas = delta_encoding::nth_order_deltas(nums, order);
@@ -540,46 +570,86 @@ impl<T> Compressor<T> where T: NumberLike {
         &self.flags,
         n,
       )?;
+      let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
+      let table = CompressionTable::from(prefixes.as_slice());
       let prefix_metadata = PrefixMetadata::Delta {
-        delta_moments,
-        prefixes: prefixes.clone(),
+        delta_moments: delta_moments.clone(),
+        prefixes,
       };
-      let metadata = ChunkMetadata {
-        n,
-        compressed_body_size: 0,
-        prefix_metadata,
-        phantom: PhantomData,
-      };
-      metadata.write_to(&mut self.writer, &self.flags);
-      let post_meta_idx = self.writer.byte_size();
-      trained_compress_chunk_nums(
-        &prefixes,
-        &unsigneds,
-        &mut self.writer
-      )?;
-      (metadata, post_meta_idx)
+      (unsigneds, prefix_metadata, use_gcd, table, delta_moments)
     };
-    metadata.compressed_body_size = self.writer.byte_size() - post_meta_byte_idx;
-    metadata.update_write_compressed_body_size(&mut self.writer, pre_meta_bit_idx);
-    Ok(metadata)
+
+    let meta = ChunkMetadata::new(n, prefix_meta);
+    meta.write_to(&mut self.writer, &self.flags);
+
+    self.state = State::MidChunk(MidChunkInfo {
+      unsigneds,
+      idx: 0,
+      use_gcd,
+      table,
+      delta_moments,
+    });
+
+    Ok(meta)
+  }
+
+  /// TODO documentation
+  pub fn data_page(&mut self, limit: usize) -> QCompressResult<bool> {
+    let info = match &mut self.state {
+      State::MidChunk(info) => Ok(info),
+      other => Err(other.wrong_step_err("data page")),
+    }?;
+
+    if limit == 0 {
+      return Err(QCompressError::invalid_argument("cannot write empty data page"))
+    }
+
+    let new_delta_moments = trained_compress_data_page(
+      &info.table,
+      info.use_gcd,
+      &info.unsigneds[info.idx..],
+      info.delta_moments,
+    )?;
+    info.delta_moments = new_delta_moments;
+
+    match info..as_ref().unwrap() {
+      PrefixMetadata::Simple { prefixes } => trained_compress_data_page(
+        prefixes,
+        self.state.chunk_unsigned_slice(),
+        limit,
+        &mut self.writer
+      )?,
+      PrefixMetadata::Delta { prefixes, delta_moments: _ } => trained_compress_data_page(
+        prefixes,
+        self.state.chunk_unsigned_slice(),
+        limit,
+        &mut self.writer,
+      )?,
+    }
+  }
+
+  /// Writes out a chunk of data representing the provided numbers.
+  /// Will return an error if the compressor has not yet written the header
+  /// or already written the footer.
+  ///
+  /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
+  /// The chunk body encodes the numbers passed in here.
+  pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
+    let meta = self.chunk_metadata(nums)?;
+    self.data_page(nums.len())?;
+    Ok(meta)
   }
 
   /// Writes out a single footer byte indicating that the .qco file has ended.
   /// Will return an error if the compressor has not yet written the header
   /// or already written the footer.
   pub fn footer(&mut self) -> QCompressResult<()> {
-    if !self.state.has_written_header {
-      return Err(QCompressError::invalid_argument(
-        "attempted to write footer before header"
-      ));
+    if !matches!(self.state, State::StartOfChunk) {
+      return Err(self.state.wrong_step_err("footer"));
     }
-    if self.state.has_written_footer {
-      return Err(QCompressError::invalid_argument(
-        "attempted to write second footer"
-      ));
-    }
+
     self.writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)?;
-    self.state.has_written_footer = true;
+    self.state = State::PostFooter;
     Ok(())
   }
 

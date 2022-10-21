@@ -58,6 +58,13 @@ pub struct Flags {
   ///
   /// Introduced in 0.10.0.
   pub use_gcds: bool,
+  /// Whether to further split each chunk body into data pages.
+  /// This is useful for columnar formats that interleave nulls, repetition
+  /// levels, and/or metadata with the data pages.
+  /// In later versions, this flag is always true.
+  ///
+  /// Introduced in 0.11.2.
+  pub use_data_pages: bool,
   // Make it API-stable to add more fields in the future
   pub(crate) phantom: PhantomData<()>,
 }
@@ -71,6 +78,7 @@ impl TryFrom<Vec<bool>> for Flags {
       delta_encoding_order: 0,
       use_min_count_encoding: false,
       use_gcds: false,
+      use_data_pages: false,
       phantom: PhantomData,
     };
 
@@ -86,6 +94,8 @@ impl TryFrom<Vec<bool>> for Flags {
     flags.use_min_count_encoding = bit_iter.next() == Some(&true);
 
     flags.use_gcds = bit_iter.next() == Some(&true);
+
+    flags.use_data_pages = bit_iter.next() == Some(&true);
 
     for &bit in bit_iter {
       if bit {
@@ -184,6 +194,7 @@ impl From<&CompressorConfig> for Flags {
       delta_encoding_order: config.delta_encoding_order,
       use_min_count_encoding: true,
       use_gcds: config.use_gcds,
+      use_data_pages: true,
       phantom: PhantomData,
     }
   }
