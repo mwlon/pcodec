@@ -8,7 +8,7 @@ use crate::errors::QCompressResult;
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeltaMoments<T: NumberLike> {
   pub moments: Vec<T::Signed>,
-  pub phantom: PhantomData<T>,
+  phantom: PhantomData<T>,
 }
 
 impl<T: NumberLike> DeltaMoments<T> {
@@ -121,8 +121,6 @@ pub fn sum_deltas_in_place<S: NumberLike<Signed=S> + SignedLike>(
   }
 }
 
-// to use this efficiently, deltas must have capacity n
-// assumes n > 0
 pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &DeltaMoments<T>,
   u_deltas: &[T::Unsigned],
