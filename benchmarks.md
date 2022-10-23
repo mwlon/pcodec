@@ -8,13 +8,13 @@ per second with 2 significant figures.
 Compression ratio is reported with 3 significant figures.
 For the `i64` heavy-tail integers, a lomax distribution with alpha parameter 0.5 and median 1000 was used.
 
-| dataset | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
---- | --- | --- | ---
-| `i64` constant | 55 | 340 | 216,000 |
-| `i64` sparse | 62 | 290 | 597 |
-| `i64` uniform (incompressible) | 13 | 51 | 1.00 |
-| `i64` heavy-tail integers | 13 | 39 | 4.63 |
-| `f64` standard normal | 10 | 31 | 1.15 |
+| dataset                        | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
+|--------------------------------|---------------------------------|-----------------------------------|-------------------|
+| `i64` constant                 | 55                              | 340                               | 216,000           |
+| `i64` sparse                   | 62                              | 290                               | 597               |
+| `i64` uniform (incompressible) | 13                              | 51                                | 1.00              |
+| `i64` heavy-tail integers      | 13                              | 39                                | 4.63              |
+| `f64` standard normal          | 10                              | 31                                | 1.15              |
 
 `i64` and `f64` are each 8 bytes, so for the more interesting distributions
 (e.g. heavy-tail integers and standard normal),

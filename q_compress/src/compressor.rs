@@ -530,7 +530,7 @@ impl<T> Compressor<T> where T: NumberLike {
       (metadata, post_meta_idx)
     } else {
       let delta_moments = DeltaMoments::from(nums, order);
-      let deltas = delta_encoding::nth_order_deltas(nums, order);
+      let (deltas, _) = delta_encoding::nth_order_deltas(nums, order, vec![]);
       let unsigneds = deltas.iter()
         .map(|x| x.to_unsigned())
         .collect::<Vec<_>>();
