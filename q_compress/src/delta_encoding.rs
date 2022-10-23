@@ -1,40 +1,27 @@
-use std::marker::PhantomData;
-
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::data_types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DeltaMoments<T: NumberLike> {
-  pub moments: Vec<T::Signed>,
-  phantom: PhantomData<T>,
+pub struct DeltaMoments<S: SignedLike> {
+  pub moments: Vec<S>,
 }
 
-impl<T: NumberLike> DeltaMoments<T> {
-  fn new(moments: Vec<T::Signed>) -> Self {
+impl<S: SignedLike> DeltaMoments<S> {
+  fn new(moments: Vec<S>) -> Self {
     Self {
       moments,
-      phantom: PhantomData,
-    }
-  }
-
-  pub fn from(nums: &[T], order: usize) -> Self {
-    let moments = nth_order_moments(nums, order);
-    DeltaMoments {
-      moments,
-      phantom: PhantomData,
     }
   }
 
   pub fn parse_from(reader: &mut BitReader, order: usize) -> QCompressResult<Self> {
     let mut moments = Vec::new();
     for _ in 0..order {
-      moments.push(T::Signed::read_from(reader)?);
+      moments.push(S::read_from(reader)?);
     }
     Ok(DeltaMoments {
       moments,
-      phantom: PhantomData,
     })
   }
 
@@ -49,7 +36,14 @@ impl<T: NumberLike> DeltaMoments<T> {
   }
 }
 
-fn first_order_deltas_in_place<T: NumberLike<Signed=T> + SignedLike>(nums: &mut Vec<T>) {
+pub fn from<T: NumberLike>(nums: &[T], order: usize) -> DeltaMoments<T::Signed> {
+  let moments = nth_order_moments(nums, order);
+  DeltaMoments {
+    moments,
+  }
+}
+
+fn first_order_deltas_in_place<S: SignedLike>(nums: &mut Vec<S>) {
   if nums.is_empty() {
     return;
   }
@@ -65,7 +59,7 @@ pub fn nth_order_deltas<T: NumberLike>(
   nums: &[T],
   order: usize,
   data_page_idxs: Vec<usize>,
-) -> (Vec<T::Signed>, Vec<DeltaMoments<T>>) {
+) -> (Vec<T::Signed>, Vec<DeltaMoments<T::Signed>>) {
   let mut data_page_moments = vec![Vec::new(); data_page_idxs.len()];
   let mut res = nums
     .iter()
@@ -79,7 +73,7 @@ pub fn nth_order_deltas<T: NumberLike>(
   }
   let moments = data_page_moments.into_iter()
     .map(|moments| DeltaMoments::new(moments))
-    .collect::<Vec<DeltaMoments<T>>>();
+    .collect::<Vec<DeltaMoments<T::Signed>>>();
   (res, moments)
 }
 
@@ -111,7 +105,7 @@ fn nth_order_moments<T: NumberLike>(
   res
 }
 
-pub fn sum_deltas_in_place<S: NumberLike<Signed=S> + SignedLike>(
+pub fn sum_deltas_in_place<S: SignedLike>(
   moment: S,
   deltas: &mut [S],
 ) {
@@ -122,10 +116,10 @@ pub fn sum_deltas_in_place<S: NumberLike<Signed=S> + SignedLike>(
 }
 
 pub fn reconstruct_nums<T: NumberLike>(
-  delta_moments: &DeltaMoments<T>,
+  delta_moments: &DeltaMoments<T::Signed>,
   u_deltas: &[T::Unsigned],
   n: usize,
-) -> (Vec<T>, DeltaMoments<T>) {
+) -> (Vec<T>, DeltaMoments<T::Signed>) {
   let order = delta_moments.order();
   let mut signeds = vec![T::Signed::ZERO; u_deltas.len() + order];
   for i in 0..u_deltas.len() {
@@ -163,12 +157,12 @@ mod tests {
     let moments: DeltaMoments<i16> = DeltaMoments::new(vec![77, 1]);
 
     // full
-    let (nums, new_moments) = reconstruct_nums(&moments, &u_deltas, 5);
+    let (nums, new_moments) = reconstruct_nums::<i16>(&moments, &u_deltas, 5);
     assert_eq!(nums, vec![77, 78, 80, 84, 85]);
     assert_eq!(new_moments, DeltaMoments::new(vec![0, 0]));
 
     //partial
-    let (nums, new_moments) = reconstruct_nums(&moments, &u_deltas, 3);
+    let (nums, new_moments) = reconstruct_nums::<i16>(&moments, &u_deltas, 3);
     assert_eq!(nums, vec![77, 78, 80]);
     assert_eq!(new_moments, DeltaMoments::new(vec![84, 1]));
   }

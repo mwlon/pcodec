@@ -34,7 +34,7 @@ pub enum PrefixMetadata<T: NumberLike> {
   /// the start of the chunk, each of which is also a `SignedLike`.
   Delta {
     prefixes: Vec<Prefix<T::Signed>>,
-    delta_moments: DeltaMoments<T>,
+    delta_moments: DeltaMoments<T::Signed>,
   }
 }
 
@@ -164,7 +164,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
         prefixes,
       }
     } else {
-      let delta_moments = DeltaMoments::<T>::parse_from(reader, flags.delta_encoding_order)?;
+      let delta_moments = DeltaMoments::<T::Signed>::parse_from(reader, flags.delta_encoding_order)?;
       let prefixes = parse_prefixes::<T::Signed>(reader, flags, n)?;
       PrefixMetadata::Delta {
         prefixes,

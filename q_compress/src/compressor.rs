@@ -9,7 +9,6 @@ use crate::compression_table::CompressionTable;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
-use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
@@ -529,7 +528,7 @@ impl<T> Compressor<T> where T: NumberLike {
       )?;
       (metadata, post_meta_idx)
     } else {
-      let delta_moments = DeltaMoments::from(nums, order);
+      let delta_moments = delta_encoding::from(nums, order);
       let (deltas, _) = delta_encoding::nth_order_deltas(nums, order, vec![]);
       let unsigneds = deltas.iter()
         .map(|x| x.to_unsigned())
