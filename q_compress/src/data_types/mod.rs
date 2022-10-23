@@ -34,7 +34,7 @@ pub use timestamps_96::{TimestampMicros96, TimestampNanos96};
 /// each other and easily compressible, which would not be the case with
 /// unsigned integers.
 /// Note: API stability of `SignedLike` is not guaranteed.
-pub trait SignedLike {
+pub trait SignedLike: NumberLike<Signed=Self> {
   const ZERO: Self;
 
   fn wrapping_add(self, other: Self) -> Self;

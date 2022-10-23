@@ -22,7 +22,7 @@ pub enum ChunkBodyDecompressor<T: NumberLike> {
   Delta {
     n: usize,
     num_decompressor: NumDecompressor<T::Unsigned>,
-    delta_moments: DeltaMoments<T>,
+    delta_moments: DeltaMoments<T::Signed>,
     nums_processed: usize,
   },
 }
