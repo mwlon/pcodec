@@ -25,6 +25,7 @@ mod chunk_metadata;
 mod constants;
 mod compression_table;
 mod compressor;
+mod data_page;
 mod decompressor;
 mod delta_encoding;
 mod flags;

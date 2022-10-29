@@ -4,10 +4,10 @@ use std::marker::PhantomData;
 
 use crate::{Flags, gcd_utils, huffman_encoding};
 use crate::bit_writer::BitWriter;
-use crate::chunk_body_decompressor::ChunkBodyDecompressor::Delta;
-use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
+use crate::chunk_metadata::{ChunkMetadata, ChunkSpec, PrefixMetadata};
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
+use crate::data_page::DataPageMetadata;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
@@ -315,29 +315,24 @@ struct TrainedChunkCompressor<'a, U: UnsignedLike, GcdOp: GcdOperator<U>> {
 }
 
 fn trained_compress_data_page<T: NumberLike>(
-  // prefixes: &[Prefix<T>],
   table: &CompressionTable<T::Unsigned>,
   use_gcd: bool,
-  moments: DeltaMoments<T>,
   unsigneds: &[T::Unsigned],
-  limit: usize,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   if use_gcd {
     TrainedChunkCompressor::<T::Unsigned, GeneralGcdOp> { table, op: PhantomData }
-      .compress_data_page(moments, unsigneds, limit, writer)
+      .compress_data_page(unsigneds, writer)
   } else {
     TrainedChunkCompressor::<T::Unsigned, TrivialGcdOp> { table, op: PhantomData }
-      .compress_data_page(moments, unsigneds, limit, writer)
+      .compress_data_page(unsigneds, writer)
   }
 }
 
-impl<U, GcdOp> TrainedChunkCompressor<U, GcdOp> where U: UnsignedLike, GcdOp: GcdOperator<U> {
+impl<'a, U, GcdOp> TrainedChunkCompressor<'a, U, GcdOp> where U: UnsignedLike, GcdOp: GcdOperator<U> {
   fn compress_data_page(
     &self,
-    moments: DeltaMoments<>,
     unsigneds: &[U],
-    limit: usize,
     writer: &mut BitWriter,
   ) -> QCompressResult<()> {
     let mut i = 0;
@@ -389,21 +384,23 @@ impl<U, GcdOp> TrainedChunkCompressor<U, GcdOp> where U: UnsignedLike, GcdOp: Gc
   }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Step {
-  PreHeader,
-  StartOfChunk,
-  MidChunk,
-  PostFooter,
-}
-
 #[derive(Clone, Debug)]
 struct MidChunkInfo<T: NumberLike> {
+  // immutable:
+  chunk_n: usize,
   unsigneds: Vec<T::Unsigned>,
-  idx: usize,
-  delta_moments: DeltaMoments<T>,
   use_gcd: bool,
   table: CompressionTable<T::Unsigned>,
+  data_pages: Vec<DataPageMetadata<T>>,
+  // mutable:
+  idx: usize,
+  page_idx: usize,
+}
+
+impl<T: NumberLike> MidChunkInfo<T> {
+  fn data_page(&self) -> &DataPageMetadata<T> {
+    &self.data_pages[self.page_idx]
+  }
 }
 
 #[derive(Clone, Debug)]
@@ -434,11 +431,6 @@ impl<T: NumberLike> State<T> {
       step_str,
     ))
   }
-}
-
-struct InternalChunkInfo<T: NumberLike> {
-  meta: ChunkMetadata<T>,
-  pre_meta_bit_idx: usize,
 }
 
 /// Converts vectors of numbers into compressed bytes.
@@ -520,7 +512,12 @@ impl<T> Compressor<T> where T: NumberLike {
     Ok(())
   }
 
-  pub fn chunk_metadata(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
+  /// TODO: documentation
+  pub fn chunk_metadata(
+    &mut self,
+    nums: &[T],
+    spec: &ChunkSpec,
+  ) -> QCompressResult<ChunkMetadata<T>> {
     if !matches!(self.state, State::StartOfChunk) {
       return Err(self.state.wrong_step_err("chunk metadata"));
     }
@@ -531,9 +528,11 @@ impl<T> Compressor<T> where T: NumberLike {
       ));
     }
 
-    self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
-
     let n = nums.len();
+    let page_sizes = spec.page_sizes(nums.len())?;
+    let n_pages = page_sizes.len();
+
+    self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
 
     let order = self.flags.delta_encoding_order;
     let (
@@ -541,7 +540,7 @@ impl<T> Compressor<T> where T: NumberLike {
       prefix_meta,
       use_gcd,
       table,
-      delta_moments,
+      delta_momentss,
     ) = if order == 0 {
       let unsigneds = nums.iter()
         .map(|x| x.to_unsigned())
@@ -557,10 +556,13 @@ impl<T> Compressor<T> where T: NumberLike {
       let prefix_metadata = PrefixMetadata::Simple {
         prefixes,
       };
-      (unsigneds, prefix_metadata, use_gcd, table, DeltaMoments::default())
+      (unsigneds, prefix_metadata, use_gcd, table, vec![DeltaMoments::default(); n_pages])
     } else {
-      let delta_moments = DeltaMoments::from(nums, order);
-      let deltas = delta_encoding::nth_order_deltas(nums, order);
+      let (deltas, momentss) = delta_encoding::nth_order_deltas(
+        nums,
+        order,
+        page_sizes,
+      );
       let unsigneds = deltas.iter()
         .map(|x| x.to_unsigned())
         .collect::<Vec<_>>();
@@ -573,59 +575,75 @@ impl<T> Compressor<T> where T: NumberLike {
       let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
       let table = CompressionTable::from(prefixes.as_slice());
       let prefix_metadata = PrefixMetadata::Delta {
-        delta_moments: delta_moments.clone(),
+        delta_moments: DeltaMoments::default(),
         prefixes,
       };
-      (unsigneds, prefix_metadata, use_gcd, table, delta_moments)
+      (unsigneds, prefix_metadata, use_gcd, table, momentss)
     };
 
+    let data_pages = delta_momentss.into_iter()
+      .map(|moments| DataPageMetadata::new(n, moments))
+      .collect::<Vec<_>>();
     let meta = ChunkMetadata::new(n, prefix_meta);
     meta.write_to(&mut self.writer, &self.flags);
 
     self.state = State::MidChunk(MidChunkInfo {
+      chunk_n: meta.n,
       unsigneds,
-      idx: 0,
       use_gcd,
       table,
-      delta_moments,
+      data_pages,
+      idx: 0,
+      page_idx: 0,
     });
 
     Ok(meta)
   }
 
   /// TODO documentation
-  pub fn data_page(&mut self, limit: usize) -> QCompressResult<bool> {
-    let info = match &mut self.state {
-      State::MidChunk(info) => Ok(info),
-      other => Err(other.wrong_step_err("data page")),
-    }?;
+  pub fn data_page(&mut self) -> QCompressResult<bool> {
+    let has_pages_remaining = {
+      let info = match &mut self.state {
+        State::MidChunk(info) => Ok(info),
+        other => Err(other.wrong_step_err("data page")),
+      }?;
 
-    if limit == 0 {
-      return Err(QCompressError::invalid_argument("cannot write empty data page"))
-    }
-
-    let new_delta_moments = trained_compress_data_page(
-      &info.table,
-      info.use_gcd,
-      &info.unsigneds[info.idx..],
-      info.delta_moments,
-    )?;
-    info.delta_moments = new_delta_moments;
-
-    match info..as_ref().unwrap() {
-      PrefixMetadata::Simple { prefixes } => trained_compress_data_page(
-        prefixes,
-        self.state.chunk_unsigned_slice(),
-        limit,
-        &mut self.writer
-      )?,
-      PrefixMetadata::Delta { prefixes, delta_moments: _ } => trained_compress_data_page(
-        prefixes,
-        self.state.chunk_unsigned_slice(),
-        limit,
+      let start = info.idx;
+      let data_page = info.data_page();
+      data_page.write_to(info.chunk_n, &mut self.writer);
+      trained_compress_data_page::<T>(
+        &info.table,
+        info.use_gcd,
+        &info.unsigneds[start..start + data_page.n],
         &mut self.writer,
-      )?,
+      )?;
+
+      info.idx += data_page.n;
+      info.page_idx += 1;
+
+      info.page_idx < info.data_pages.len()
+    };
+
+    if !has_pages_remaining {
+      self.state = State::StartOfChunk;
     }
+
+    Ok(has_pages_remaining)
+
+    // match info.as_ref().unwrap() {
+    //   PrefixMetadata::Simple { prefixes } => trained_compress_data_page(
+    //     prefixes,
+    //     self.state.chunk_unsigned_slice(),
+    //     limit,
+    //     &mut self.writer
+    //   )?,
+    //   PrefixMetadata::Delta { prefixes, delta_moments: _ } => trained_compress_data_page(
+    //     prefixes,
+    //     self.state.chunk_unsigned_slice(),
+    //     limit,
+    //     &mut self.writer,
+    //   )?,
+    // }
   }
 
   /// Writes out a chunk of data representing the provided numbers.
@@ -635,8 +653,8 @@ impl<T> Compressor<T> where T: NumberLike {
   /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
   /// The chunk body encodes the numbers passed in here.
   pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
-    let meta = self.chunk_metadata(nums)?;
-    self.data_page(nums.len())?;
+    let meta = self.chunk_metadata(nums, &ChunkSpec::default())?;
+    self.data_page()?;
     Ok(meta)
   }
 

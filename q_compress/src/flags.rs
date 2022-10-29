@@ -180,7 +180,7 @@ impl Flags {
 
   pub(crate) fn bits_to_encode_count(&self, n: usize) -> usize {
     if self.use_min_count_encoding {
-      ((n + 1) as f64).log2().ceil() as usize
+      bits::bits_to_encode(n)
     } else {
       BITS_TO_ENCODE_N_ENTRIES
     }

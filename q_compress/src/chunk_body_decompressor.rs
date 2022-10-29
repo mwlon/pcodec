@@ -15,19 +15,19 @@ pub struct Numbers<T: NumberLike> {
 // ChunkBodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
 #[derive(Clone, Debug)]
-pub enum ChunkBodyDecompressor<T: NumberLike> {
+pub enum BodyDecompressor<T: NumberLike> {
   Simple {
     num_decompressor: NumDecompressor<T::Unsigned>,
   },
   Delta {
     n: usize,
     num_decompressor: NumDecompressor<T::Unsigned>,
-    delta_moments: DeltaMoments<T>,
+    delta_moments: DeltaMoments<T::Signed>,
     nums_processed: usize,
   },
 }
 
-impl<T: NumberLike> ChunkBodyDecompressor<T> {
+impl<T: NumberLike> BodyDecompressor<T> {
   pub(crate) fn new(metadata: &ChunkMetadata<T>) -> QCompressResult<Self> {
     Ok(match &metadata.prefix_metadata {
       PrefixMetadata::Simple { prefixes } => Self::Simple {
@@ -83,15 +83,13 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
         } else {
           u_deltas.unsigneds.len()
         };
-        let signeds = u_deltas.unsigneds.into_iter()
-          .map(T::Signed::from_unsigned)
-          .collect::<Vec<_>>();
-        let nums = delta_encoding::reconstruct_nums(
+        let (nums, new_delta_moments) = delta_encoding::reconstruct_nums(
           delta_moments,
-          &signeds,
+          &u_deltas.unsigneds,
           batch_size,
         );
         *nums_processed += batch_size;
+        *delta_moments = new_delta_moments;
         Ok(Numbers {
           nums,
           finished_chunk_body: nums_processed == n,
@@ -112,7 +110,7 @@ impl<T: NumberLike> ChunkBodyDecompressor<T> {
 mod tests {
   use std::marker::PhantomData;
 
-  use super::ChunkBodyDecompressor;
+  use super::BodyDecompressor;
   use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
   use crate::errors::ErrorKind;
   use crate::prefix::Prefix;
@@ -152,7 +150,7 @@ mod tests {
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
-      let result = ChunkBodyDecompressor::new(&bad_metadata);
+      let result = BodyDecompressor::new(&bad_metadata);
       match result {
         Ok(_) => panic!("expected an error for bad metadata: {:?}", bad_metadata),
         Err(e) if matches!(e.kind, ErrorKind::Corruption) => (),

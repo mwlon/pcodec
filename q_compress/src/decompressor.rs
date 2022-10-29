@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use crate::Flags;
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
-use crate::chunk_body_decompressor::ChunkBodyDecompressor;
+use crate::chunk_body_decompressor::BodyDecompressor;
 use crate::chunk_metadata::{ChunkMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, WORD_SIZE};
 use crate::data_types::NumberLike;
@@ -50,9 +50,41 @@ pub enum DecompressedItem<T: NumberLike> {
 #[derive(Clone, Debug, Default)]
 struct State<T: NumberLike> {
   bit_idx: usize,
-  flags: Option<Flags>,
-  chunk_body_decompressor: Option<ChunkBodyDecompressor<T>>,
-  terminated: bool,
+  step: Step<T>,
+}
+
+#[derive(Clone, Debug)]
+enum Step<T: NumberLike> {
+  PreHeader,
+  StartOfChunk(Flags),
+  MidChunk(DataPageDecompressor<T>),
+  Terminated,
+  // bit_idx: usize,
+  // flags: Option<Flags>,
+  // chunk_body_decompressor: Option<ChunkBodyDecompressor<T>>,
+  // terminated: bool,
+}
+
+impl<T: NumberLike> Step<T> {
+  fn wrong_step_err(&self, description: &str) -> QCompressError {
+    let step_str = match self {
+      State::PreHeader => "has not yet parsed header",
+      State::StartOfChunk(_) => "is at the start of a chunk",
+      State::MidChunk(_) => "is mid-chunk",
+      State::PostFooter => "has already parsed the footer",
+    };
+    QCompressError::invalid_argument(format!(
+      "attempted to read {} when compressor {}",
+      description,
+      step_str,
+    ))
+  }
+}
+
+impl<T: NumberLike> Default for Step<T> {
+  fn default() -> Self {
+    Step::PreHeader
+  }
 }
 
 pub(crate) fn read_header<T: NumberLike>(reader: &mut BitReader) -> QCompressResult<Flags> {
@@ -179,14 +211,6 @@ impl<T> Decompressor<T> where T: NumberLike {
     res
   }
 
-  fn check_not_terminated(&self) -> QCompressResult<()> {
-    if self.state.terminated {
-      Err(QCompressError::invalid_argument("attempted to write to terminated decompressor"))
-    } else {
-      Ok(())
-    }
-  }
-
   /// Reads the header, returning its [`Flags`] and updating this
   /// `Decompressor`'s state.
   /// Will return an error if this decompressor has already parsed a header,
@@ -195,12 +219,10 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// finds flags from a newer, incompatible version of q_compress,
   /// or finds any corruptions.
   pub fn header(&mut self) -> QCompressResult<Flags> {
-    self.check_not_terminated()?;
-    if self.state.flags.is_some() {
-      return Err(QCompressError::invalid_argument(
-        "attempted to decompress header for the 2nd time"
-      ))
+    if !matches!(self.state.step, Step::PreHeader) {
+      return Err(self.state.step.wrong_step_err("header"));
     }
+
     self.with_reader(|reader, state, _| {
       let flags = read_header::<T>(reader)?;
       state.flags = Some(flags.clone());
@@ -217,37 +239,23 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// runs out of data,
   /// or finds any corruptions.
   pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
-    self.check_not_terminated()?;
-    if self.state.flags.is_none() {
-      return Err(QCompressError::invalid_argument(
-        "attempted to decompress chunk metadata before header"
-      ));
-    }
-    if self.state.chunk_body_decompressor.is_some() {
-      return Err(QCompressError::invalid_argument(
-        "attempted to decompress chunk metadata before chunk body was finished"
-      ));
-    }
+    let flags = match &self.state.step {
+      Step::StartOfChunk(flags) => Ok(flags),
+      _ => Err(self.state.step.wrong_step_err("chunk metadata")),
+    }?;
+
     self.with_reader(|reader, state, _| {
-      let flags = state.flags.as_ref().unwrap();
       let maybe_meta = read_chunk_meta(reader, flags)?;
       if let Some(meta) = &maybe_meta {
-        state.chunk_body_decompressor = Some(ChunkBodyDecompressor::new(meta)?)
+        state.step = Step::MidChunk(BodyDecompressor::new(meta)?)
+      } else {
+        state.step = Step::Terminated;
       }
       Ok(maybe_meta)
     })
   }
 
-  fn check_in_chunk_body(&self) -> QCompressResult<()> {
-    self.check_not_terminated()?;
-    if self.state.chunk_body_decompressor.is_none() {
-      return Err(QCompressError::invalid_argument(
-        "attempted to decompress chunk body before its chunk metadata"
-      ));
-    }
-    Ok(())
-  }
-
+  // TODO
   /// Skips the chunk body, returning nothing.
   /// Will return an error if the decompressor is not in a chunk body,
   /// or runs out of data.
@@ -268,10 +276,12 @@ impl<T> Decompressor<T> where T: NumberLike {
     }
   }
 
+  // TODO
   /// Reads a chunk body, returning it as a vector of numbers.
   /// Will return an error if the decompressor is not in a chunk body,
   /// runs out of data,
   /// or finds any corruptions.
+  #[deprecated(since = "0.11.2", note = "use data_page instead")]
   pub fn chunk_body(&mut self) -> QCompressResult<Vec<T>> {
     self.check_in_chunk_body()?;
     self.with_reader(|reader, state, _| {
@@ -342,7 +352,7 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
       } else if state.chunk_body_decompressor.is_none() {
         match read_chunk_meta::<T>(reader, state.flags.as_ref().unwrap()) {
           Ok(Some(meta)) => {
-            match ChunkBodyDecompressor::new(&meta) {
+            match BodyDecompressor::new(&meta) {
               Ok(cbd) => {
                 state.chunk_body_decompressor = Some(cbd);
                 Ok(Some(DecompressedItem::ChunkMetadata(meta)))

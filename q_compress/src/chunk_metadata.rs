@@ -1,12 +1,13 @@
 use std::marker::PhantomData;
-use crate::bit_reader::BitReader;
+
 use crate::{Flags, gcd_utils};
+use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::*;
-use crate::delta_encoding::DeltaMoments;
-use crate::prefix::Prefix;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::{QCompressResult, QCompressError};
+use crate::delta_encoding::DeltaMoments;
+use crate::errors::{QCompressError, QCompressResult};
+use crate::prefix::Prefix;
 
 /// A wrapper for prefixes in the two cases cases: delta encoded or not.
 /// 
@@ -38,7 +39,7 @@ pub enum PrefixMetadata<T: NumberLike> {
       since = "0.11.2",
       note = "use data page delta moments instead; on newer files, this is empty"
     )]
-    delta_moments: DeltaMoments<T>,
+    delta_moments: DeltaMoments<T::Signed>,
   }
 }
 
@@ -54,7 +55,7 @@ pub struct ChunkMetadata<T> where T: NumberLike {
   /// The count of numbers in the chunk.
   pub n: usize,
   /// For older .qco files without data pages, the compressed byte length of
-  /// the compressed numbers in this chunk's body. This is an
+  /// this chunk's body.
   /// If the file uses data pages, this will instead be 0.
   #[deprecated(since = "0.11.2", note = "use data page compressed size instead")]
   pub compressed_body_size: usize,
@@ -182,7 +183,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
         prefixes,
       }
     } else {
-      let delta_moments = DeltaMoments::<T>::parse_from(reader, flags.delta_encoding_order)?;
+      let delta_moments = DeltaMoments::<T::Signed>::parse_from(reader, flags.delta_encoding_order)?;
       let prefixes = parse_prefixes::<T::Signed>(reader, flags, n)?;
       PrefixMetadata::Delta {
         prefixes,
@@ -225,5 +226,55 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       self.compressed_body_size,
       BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
     );
+  }
+}
+
+#[derive(Clone, Debug)]
+pub enum DataPagingSpec {
+  SinglePage,
+  ExactPageSizes(Vec<usize>),
+}
+
+impl Default for DataPagingSpec {
+  fn default() -> Self {
+    DataPagingSpec::SinglePage
+  }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ChunkSpec {
+  data_paging_spec: DataPagingSpec,
+}
+
+impl ChunkSpec {
+  pub fn with_exact_page_sizes(mut self, sizes: Vec<usize>) -> Self {
+    self.data_paging_spec = DataPagingSpec::ExactPageSizes(sizes);
+    self
+  }
+
+  pub(crate) fn page_sizes(&self, n: usize) -> QCompressResult<Vec<usize>> {
+    let page_sizes = match &self.data_paging_spec {
+      DataPagingSpec::SinglePage => Ok(vec![n]),
+      DataPagingSpec::ExactPageSizes(sizes) => {
+        let sizes_n: usize = sizes.iter().sum();
+        if sizes_n == n {
+          Ok(sizes.clone())
+        } else {
+          Err(QCompressError::invalid_argument(format!(
+            "chunk spec suggests {} numbers but {} were given",
+            sizes_n,
+            n,
+          )))
+        }
+      }
+    }?;
+
+    for &size in &page_sizes {
+      if size == 0 {
+        return Err(QCompressError::invalid_argument("cannot write data page of 0 numbers"));
+      }
+    }
+
+    Ok(page_sizes)
   }
 }
