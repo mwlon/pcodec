@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use crate::{Flags, gcd_utils};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -35,10 +33,6 @@ pub enum PrefixMetadata<T: NumberLike> {
   /// the start of the chunk, each of which is also a `SignedLike`.
   Delta {
     prefixes: Vec<Prefix<T::Signed>>,
-    #[deprecated(
-      since = "0.11.2",
-      note = "use data page delta moments instead; on newer files, this is empty"
-    )]
     delta_moments: DeltaMoments<T::Signed>,
   }
 }
@@ -51,18 +45,16 @@ pub enum PrefixMetadata<T: NumberLike> {
 /// One can also create a rough histogram (or a histogram of deltas, if
 /// delta encoding was used) by aggregating chunk metadata.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ChunkMetadata<T> where T: NumberLike {
   /// The count of numbers in the chunk.
+  /// Not available in wrapped mode.
   pub n: usize,
-  /// For older .qco files without data pages, the compressed byte length of
-  /// this chunk's body.
-  /// If the file uses data pages, this will instead be 0.
-  #[deprecated(since = "0.11.2", note = "use data page compressed size instead")]
+  /// The compressed byte length of the body that immediately follow this chunk metadata section.
+  /// Not available in wrapped mode.
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
   pub prefix_metadata: PrefixMetadata<T>,
-  // Make it API-stable to add more fields in the future
-  pub(crate) phantom: PhantomData<()>,
 }
 
 fn parse_prefixes<T: NumberLike>(
@@ -83,6 +75,7 @@ fn parse_prefixes<T: NumberLike>(
   } else {
     Some(T::Unsigned::ONE)
   };
+  println!("asdf {} {:?}", n_pref, maybe_common_gcd);
   for _ in 0..n_pref {
     let count = reader.read_usize(bits_to_encode_count)?;
     let lower = T::read_from(reader)?;
@@ -108,6 +101,7 @@ fn parse_prefixes<T: NumberLike>(
     } else {
       gcd_utils::read_gcd(upper.to_unsigned() - lower.to_unsigned(), reader)?
     };
+    println!("PREFIX {} {:?} {} {} {:?} {}", count, code, lower, upper, run_len_jumpstart, gcd);
     prefixes.push(Prefix {
       count,
       code,
@@ -115,7 +109,6 @@ fn parse_prefixes<T: NumberLike>(
       upper,
       run_len_jumpstart,
       gcd,
-      phantom: PhantomData,
     });
   }
   Ok(prefixes)
@@ -167,16 +160,20 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       n,
       compressed_body_size: 0,
       prefix_metadata,
-      phantom: PhantomData,
     }
   }
+
   pub fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
-    let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)?;
-    let compressed_body_size = if flags.use_data_pages {
-      0
+    let (n, compressed_body_size) = if flags.use_wrapped_mode {
+      (0, 0)
     } else {
-      reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?
+      (
+        reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)?,
+        reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?
+      )
     };
+    println!("READ n={} cbs={}", n, compressed_body_size);
+
     let prefix_metadata = if flags.delta_encoding_order == 0 {
       let prefixes = parse_prefixes::<T>(reader, flags, n)?;
       PrefixMetadata::Simple {
@@ -184,6 +181,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       }
     } else {
       let delta_moments = DeltaMoments::<T::Signed>::parse_from(reader, flags.delta_encoding_order)?;
+      println!("moments {:?}", delta_moments);
       let prefixes = parse_prefixes::<T::Signed>(reader, flags, n)?;
       PrefixMetadata::Delta {
         prefixes,
@@ -195,13 +193,12 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       n,
       compressed_body_size,
       prefix_metadata,
-      phantom: PhantomData,
     })
   }
 
   pub fn write_to(&self, writer: &mut BitWriter, flags: &Flags) {
-    writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
-    if !flags.use_data_pages {
+    if !flags.use_wrapped_mode {
+      writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
       writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
     }
     match &self.prefix_metadata {
@@ -209,7 +206,10 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
         write_prefixes(prefixes, writer, flags, self.n);
       },
       PrefixMetadata::Delta { prefixes, delta_moments } => {
-        delta_moments.write_to(writer);
+        println!("WRITING MOMENTS {:?}", delta_moments);
+        if !flags.use_wrapped_mode {
+          delta_moments.write_to(writer);
+        }
         write_prefixes(prefixes, writer, flags, self.n);
       },
     }
@@ -222,7 +222,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     bit_idx: usize,
   ) {
     writer.overwrite_usize(
-      bit_idx + BITS_TO_ENCODE_N_ENTRIES,
+      bit_idx + BITS_TO_ENCODE_N_ENTRIES + 8,
       self.compressed_body_size,
       BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
     );

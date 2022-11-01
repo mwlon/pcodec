@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fmt;
 
+// TODO in 1.0 make this #[non_exhaustive]
 /// The different kinds of errors for `q_compress`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
@@ -45,7 +46,7 @@ impl QCompressError {
   pub(crate) fn insufficient_data<S: AsRef<str>>(message: S) -> Self {
     Self::new(ErrorKind::InsufficientData, message)
   }
-  
+
   pub(crate) fn insufficient_data_recipe(
     name: &str,
     bits_to_read: usize,

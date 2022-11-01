@@ -1,11 +1,10 @@
 use std::fmt::Debug;
 use std::io::Write;
-use std::marker::PhantomData;
 
 use crate::Flags;
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
-use crate::chunk_body_decompressor::BodyDecompressor;
+use crate::body_decompressor::BodyDecompressor;
 use crate::chunk_metadata::{ChunkMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, WORD_SIZE};
 use crate::data_types::NumberLike;
@@ -13,18 +12,17 @@ use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 
 /// All configurations available for a [`Decompressor`].
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct DecompressorConfig {
   /// The maximum number of numbers to decode at a time when streaming through
   /// the decompressor as an iterator.
   pub numbers_limit_per_item: usize,
-  phantom: PhantomData<()>, // for API stability
 }
 
 impl Default for DecompressorConfig {
   fn default() -> Self {
     Self {
       numbers_limit_per_item: 100000,
-      phantom: PhantomData,
     }
   }
 }
@@ -50,40 +48,71 @@ pub enum DecompressedItem<T: NumberLike> {
 #[derive(Clone, Debug, Default)]
 struct State<T: NumberLike> {
   bit_idx: usize,
-  step: Step<T>,
+  flags: Option<Flags>,
+  chunk_meta: Option<ChunkMetadata<T>>,
+  body_decompressor: Option<BodyDecompressor<T>>,
+  terminated: bool,
 }
 
-#[derive(Clone, Debug)]
-enum Step<T: NumberLike> {
+impl<T: NumberLike> State<T> {
+  fn check_step(&self, expected: Step, desc: &'static str) -> QCompressResult<()> {
+    let step = self.step();
+    if step == expected {
+      Ok(())
+    } else {
+      Err(step.wrong_step_err(desc))
+    }
+  }
+
+  fn step(&self) -> Step {
+    if self.flags.is_none() {
+      Step::PreHeader
+    } else if self.terminated {
+      Step::Terminated
+    } else if self.chunk_meta.is_none() {
+      Step::StartOfChunk
+    } else {
+      Step::MidChunk
+    }
+  }
+
+  fn ensure_body_decompressor(
+    &mut self,
+    n: usize,
+    compressed_body_size: usize,
+  ) -> QCompressResult<()> {
+    if self.body_decompressor.is_none() {
+      self.body_decompressor = Some(BodyDecompressor::new(
+        n,
+        compressed_body_size,
+        &self.chunk_meta.as_ref().unwrap().prefix_metadata,
+      )?);
+    }
+    Ok(())
+  }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
   PreHeader,
-  StartOfChunk(Flags),
-  MidChunk(DataPageDecompressor<T>),
+  StartOfChunk,
+  MidChunk,
   Terminated,
-  // bit_idx: usize,
-  // flags: Option<Flags>,
-  // chunk_body_decompressor: Option<ChunkBodyDecompressor<T>>,
-  // terminated: bool,
 }
 
-impl<T: NumberLike> Step<T> {
+impl Step {
   fn wrong_step_err(&self, description: &str) -> QCompressError {
     let step_str = match self {
-      State::PreHeader => "has not yet parsed header",
-      State::StartOfChunk(_) => "is at the start of a chunk",
-      State::MidChunk(_) => "is mid-chunk",
-      State::PostFooter => "has already parsed the footer",
+      Step::PreHeader => "has not yet parsed header",
+      Step::StartOfChunk => "is at the start of a chunk",
+      Step::MidChunk => "is mid-chunk",
+      Step::Terminated => "has already parsed the footer",
     };
     QCompressError::invalid_argument(format!(
       "attempted to read {} when compressor {}",
       description,
       step_str,
     ))
-  }
-}
-
-impl<T: NumberLike> Default for Step<T> {
-  fn default() -> Self {
-    Step::PreHeader
   }
 }
 
@@ -149,7 +178,7 @@ pub(crate) fn read_chunk_meta<T: NumberLike>(reader: &mut BitReader, flags: &Fla
 ///
 /// // DECOMPRESS BY CHUNK
 /// let mut decompressor = Decompressor::<i32>::default();
-/// decompressor.write_all(&my_bytes);
+/// decompressor.write_all(&my_bytes).unwrap();
 /// let flags = decompressor.header().expect("header");
 /// let maybe_chunk_0_meta = decompressor.chunk_metadata().expect("chunk meta");
 /// if maybe_chunk_0_meta.is_some() {
@@ -158,7 +187,7 @@ pub(crate) fn read_chunk_meta<T: NumberLike>(reader: &mut BitReader, flags: &Fla
 ///
 /// // DECOMPRESS BY STREAM
 /// let mut decompressor = Decompressor::<i32>::default();
-/// decompressor.write_all(&my_bytes);
+/// decompressor.write_all(&my_bytes).unwrap();
 /// for item in &mut decompressor {
 ///   match item.expect("stream") {
 ///     DecompressedItem::Numbers(nums) => println!("nums: {:?}", nums),
@@ -219,9 +248,7 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// finds flags from a newer, incompatible version of q_compress,
   /// or finds any corruptions.
   pub fn header(&mut self) -> QCompressResult<Flags> {
-    if !matches!(self.state.step, Step::PreHeader) {
-      return Err(self.state.step.wrong_step_err("header"));
-    }
+    self.state.check_step(Step::PreHeader, "header")?;
 
     self.with_reader(|reader, state, _| {
       let flags = read_header::<T>(reader)?;
@@ -239,17 +266,15 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// runs out of data,
   /// or finds any corruptions.
   pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
-    let flags = match &self.state.step {
-      Step::StartOfChunk(flags) => Ok(flags),
-      _ => Err(self.state.step.wrong_step_err("chunk metadata")),
-    }?;
+    self.state.check_step(Step::StartOfChunk, "chunk metadata")?;
 
     self.with_reader(|reader, state, _| {
+      let flags = state.flags.as_ref().unwrap();
       let maybe_meta = read_chunk_meta(reader, flags)?;
       if let Some(meta) = &maybe_meta {
-        state.step = Step::MidChunk(BodyDecompressor::new(meta)?)
+        state.chunk_meta = Some(meta.clone())
       } else {
-        state.step = Step::Terminated;
+        state.terminated = true;
       }
       Ok(maybe_meta)
     })
@@ -260,12 +285,21 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// Will return an error if the decompressor is not in a chunk body,
   /// or runs out of data.
   pub fn skip_chunk_body(&mut self) -> QCompressResult<()> {
-    self.check_in_chunk_body()?;
-    let cbd = self.state.chunk_body_decompressor.as_ref().unwrap();
-    let skipped_bit_idx = self.state.bit_idx + cbd.bits_remaining();
+    self.state.check_step(Step::MidChunk, "skip chunk body")?;
+    self.state.flags.as_ref().unwrap().check_standalone_mode()?;
+
+    let bits_remaining = match &self.state.body_decompressor {
+      Some(bd) => bd.bits_remaining(),
+      None => {
+        let meta = self.state.chunk_meta.as_ref().unwrap();
+        meta.compressed_body_size * 8
+      }
+    };
+
+    let skipped_bit_idx = self.state.bit_idx + bits_remaining;
     if skipped_bit_idx <= self.words.total_bits {
       self.state.bit_idx = skipped_bit_idx;
-      self.state.chunk_body_decompressor = None;
+      self.state.body_decompressor = None;
       Ok(())
     } else {
       Err(QCompressError::insufficient_data(format!(
@@ -281,17 +315,48 @@ impl<T> Decompressor<T> where T: NumberLike {
   /// Will return an error if the decompressor is not in a chunk body,
   /// runs out of data,
   /// or finds any corruptions.
-  #[deprecated(since = "0.11.2", note = "use data_page instead")]
   pub fn chunk_body(&mut self) -> QCompressResult<Vec<T>> {
-    self.check_in_chunk_body()?;
+    self.state.check_step(Step::MidChunk, "chunk body")?;
+    let &ChunkMetadata { n, compressed_body_size, ..} = self.state.chunk_meta.as_ref().unwrap();
+
+    let res = self.data_page_internal(
+      n,
+      compressed_body_size,
+      usize::MAX,
+    )?;
+    self.state.chunk_meta = None;
+    Ok(res)
+  }
+
+  // TODO
+  pub fn data_page(
+    &mut self,
+    n: usize,
+    compressed_body_size: usize,
+    limit: usize,
+  ) -> QCompressResult<Vec<T>> {
+    self.data_page_internal(n, compressed_body_size, limit)
+  }
+
+  fn data_page_internal(
+    &mut self,
+    n: usize,
+    compressed_body_size: usize,
+    limit: usize,
+  ) -> QCompressResult<Vec<T>> {
     self.with_reader(|reader, state, _| {
-      let chunk_body_decompressor = state.chunk_body_decompressor.as_mut().unwrap();
-      let numbers = chunk_body_decompressor.decompress_next_batch(
+      state.check_step(Step::MidChunk, "data page")?;
+      state.ensure_body_decompressor(n, compressed_body_size)?;
+
+      println!("DECOMPRESSING W LIMIT {} META {:?}", limit, state.chunk_meta.as_ref().unwrap());
+      let numbers = state.body_decompressor.as_mut().unwrap().decompress_next_batch(
         reader,
-        usize::MAX,
+        limit,
         true,
       )?;
-      state.chunk_body_decompressor = None;
+      if numbers.finished_body {
+        state.body_decompressor = None;
+      }
       Ok(numbers.nums)
     })
   }
@@ -331,61 +396,69 @@ impl<T> Decompressor<T> where T: NumberLike {
   }
 }
 
+fn next_dirty<T: NumberLike>(reader: &mut BitReader, state: &mut State<T>, config: &DecompressorConfig) -> QCompressResult<Option<DecompressedItem<T>>> {
+  match state.step() {
+    Step::PreHeader => {
+      match read_header::<T>(reader) {
+        Ok(flags) => {
+          if flags.use_wrapped_mode {
+            return Err(QCompressError::corruption(
+              "expected standalone mode for decompression iterator but found wrapped mode"
+            ));
+          }
+          state.flags = Some(flags.clone());
+          Ok(Some(DecompressedItem::Flags(flags)))
+        },
+        Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
+        Err(e) => Err(e),
+      }
+    },
+    Step::StartOfChunk => {
+      match read_chunk_meta::<T>(reader, state.flags.as_ref().unwrap()) {
+        Ok(Some(meta)) => {
+          state.chunk_meta = Some(meta.clone());
+          Ok(Some(DecompressedItem::ChunkMetadata(meta)))
+        },
+        Ok(None) => {
+          state.terminated = true;
+          Ok(Some(DecompressedItem::Footer))
+        },
+        Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
+        Err(e) => Err(e),
+      }
+    },
+    Step::MidChunk => {
+      let &ChunkMetadata { n, compressed_body_size, .. } = state.chunk_meta.as_ref().unwrap();
+      state.ensure_body_decompressor(n, compressed_body_size)?;
+      let bd = state.body_decompressor.as_mut().unwrap();
+      let nums_result = bd
+        .decompress_next_batch(reader, config.numbers_limit_per_item, false);
+      match nums_result {
+        Ok(numbers) => {
+          if numbers.nums.is_empty() {
+            Ok(None)
+          } else {
+            if numbers.finished_body {
+              state.body_decompressor = None;
+              state.chunk_meta = None;
+            }
+            Ok(Some(DecompressedItem::Numbers(numbers.nums)))
+          }
+        }
+        Err(e) => Err(e),
+      }
+    },
+    Step::Terminated => Ok(None)
+  }
+}
+
+/// Will return an error for files in wrapped mode.
 impl<T: NumberLike> Iterator for &mut Decompressor<T> {
   type Item = QCompressResult<DecompressedItem<T>>;
 
   fn next(&mut self) -> Option<Self::Item> {
-    let res = self.with_reader(|reader, state, config| {
-      if state.terminated {
-        return Ok(None);
-      }
+    let res: QCompressResult<Option<DecompressedItem<T>>> = self.with_reader(next_dirty);
 
-      if state.flags.is_none() {
-        match read_header::<T>(reader) {
-          Ok(flags) => {
-            state.flags = Some(flags.clone());
-            Ok(Some(DecompressedItem::Flags(flags)))
-          },
-          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
-          Err(e) => Err(e),
-        }
-      } else if state.chunk_body_decompressor.is_none() {
-        match read_chunk_meta::<T>(reader, state.flags.as_ref().unwrap()) {
-          Ok(Some(meta)) => {
-            match BodyDecompressor::new(&meta) {
-              Ok(cbd) => {
-                state.chunk_body_decompressor = Some(cbd);
-                Ok(Some(DecompressedItem::ChunkMetadata(meta)))
-              }
-              Err(e) => Err(e)
-            }
-          },
-          Ok(None) => {
-            state.terminated = true;
-            Ok(Some(DecompressedItem::Footer))
-          },
-          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
-          Err(e) => Err(e),
-        }
-      } else {
-        let nums_result = state.chunk_body_decompressor.as_mut()
-          .unwrap()
-          .decompress_next_batch(reader, config.numbers_limit_per_item, false);
-        match nums_result {
-          Ok(numbers) => {
-            if numbers.nums.is_empty() {
-              Ok(None)
-            } else {
-              if numbers.finished_chunk_body {
-                state.chunk_body_decompressor = None;
-              }
-              Ok(Some(DecompressedItem::Numbers(numbers.nums)))
-            }
-          }
-          Err(e) => Err(e),
-        }
-      }
-    });
     match res {
       Ok(Some(x)) => Some(Ok(x)),
       Ok(None) => None,

@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use crate::{Flags, gcd_utils, Prefix};
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -137,7 +135,6 @@ pub fn optimize_prefixes<T: NumberLike>(
       upper: prefixes[i].upper,
       run_len_jumpstart: prefixes[i].run_len_jumpstart,
       gcd: gcd_acc.unwrap_or(T::Unsigned::ONE),
-      phantom: PhantomData,
     };
     res.push(WeightedPrefix {
       weight: cum_weight[i + 1] - cum_weight[j],
@@ -149,8 +146,6 @@ pub fn optimize_prefixes<T: NumberLike>(
 
 #[cfg(test)]
 mod tests {
-  use std::marker::PhantomData;
-
   use crate::Flags;
   use crate::prefix::WeightedPrefix;
   use crate::prefix_optimization::optimize_prefixes;
@@ -161,7 +156,7 @@ mod tests {
       use_min_count_encoding: true,
       use_5_bit_code_len: true,
       delta_encoding_order: 0,
-      phantom: PhantomData,
+      use_wrapped_mode: false,
     }
   }
 

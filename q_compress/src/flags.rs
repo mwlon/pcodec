@@ -1,10 +1,9 @@
-// Uerent from compressor and decompressor configs, flags change the format
+// Different from compressor and decompressor configs, flags change the format
 // of the .qco file.
 // New flags may be added in over time in a backward-compatible way.
 
 use std::cmp::min;
 use std::convert::{TryFrom, TryInto};
-use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
 use crate::{CompressorConfig};
@@ -25,6 +24,7 @@ use crate::errors::{QCompressError, QCompressResult};
 /// However, in some circumstances you may want to inspect flags during
 /// decompression.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Flags {
   /// Whether to use 5 bits to encode the length of a prefix Huffman code,
   /// as opposed to 4.
@@ -58,15 +58,12 @@ pub struct Flags {
   ///
   /// Introduced in 0.10.0.
   pub use_gcds: bool,
-  /// Whether to further split each chunk body into data pages.
-  /// This is useful for columnar formats that interleave nulls, repetition
-  /// levels, and/or metadata with the data pages.
-  /// In later versions, this flag is always true.
+  /// Whether to release control to a wrapping columnar format.
+  /// This causes q_compress to omit count and compressed size metadata
+  /// and also break each chuk into finer data pages.
   ///
   /// Introduced in 0.11.2.
-  pub use_data_pages: bool,
-  // Make it API-stable to add more fields in the future
-  pub(crate) phantom: PhantomData<()>,
+  pub use_wrapped_mode: bool,
 }
 
 impl TryFrom<Vec<bool>> for Flags {
@@ -78,8 +75,7 @@ impl TryFrom<Vec<bool>> for Flags {
       delta_encoding_order: 0,
       use_min_count_encoding: false,
       use_gcds: false,
-      use_data_pages: false,
-      phantom: PhantomData,
+      use_wrapped_mode: false,
     };
 
     let mut bit_iter = bools.iter();
@@ -95,7 +91,9 @@ impl TryFrom<Vec<bool>> for Flags {
 
     flags.use_gcds = bit_iter.next() == Some(&true);
 
-    flags.use_data_pages = bit_iter.next() == Some(&true);
+    flags.use_wrapped_mode = bit_iter.next() == Some(&true);
+
+    // if we ever add another bit flag, it will increase file size by 1 byte when on
 
     for &bit in bit_iter {
       if bit {
@@ -104,6 +102,7 @@ impl TryFrom<Vec<bool>> for Flags {
         ));
       }
     }
+    println!("{:?}", flags);
 
     Ok(flags)
   }
@@ -169,6 +168,21 @@ impl Flags {
     Ok(())
   }
 
+  pub(crate) fn check_standalone_mode(&self) -> QCompressResult<()> {
+    if self.use_wrapped_mode {
+      Err(QCompressError::invalid_argument("operation not supported in wrapped mode"))
+    } else {
+      Ok(())
+    }
+  }
+
+  pub(crate) fn check_wrapped_mode(&self) -> QCompressResult<()> {
+    if !self.use_wrapped_mode {
+      Err(QCompressError::invalid_argument("operation not supported in standalone mode"))
+    } else {
+      Ok(())
+    }
+  }
 
   pub(crate) fn bits_to_encode_code_len(&self) -> usize {
     if self.use_5_bit_code_len {
@@ -179,7 +193,9 @@ impl Flags {
   }
 
   pub(crate) fn bits_to_encode_count(&self, n: usize) -> usize {
-    if self.use_min_count_encoding {
+    if self.use_wrapped_mode {
+      0
+    } else if self.use_min_count_encoding {
       bits::bits_to_encode(n)
     } else {
       BITS_TO_ENCODE_N_ENTRIES
@@ -194,8 +210,7 @@ impl From<&CompressorConfig> for Flags {
       delta_encoding_order: config.delta_encoding_order,
       use_min_count_encoding: true,
       use_gcds: config.use_gcds,
-      use_data_pages: true,
-      phantom: PhantomData,
+      use_wrapped_mode: config.use_wrapped_mode,
     }
   }
 }

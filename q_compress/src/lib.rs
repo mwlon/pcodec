@@ -20,7 +20,7 @@ mod bit_reader;
 mod bit_words;
 mod bit_writer;
 mod bits;
-mod chunk_body_decompressor;
+mod body_decompressor;
 mod chunk_metadata;
 mod constants;
 mod compression_table;

@@ -103,7 +103,6 @@ pub fn make_huffman_code<T: NumberLike>(prefix_sequence: &mut [WeightedPrefix<T>
 
 #[cfg(test)]
 mod tests {
-  use std::marker::PhantomData;
   use crate::huffman_encoding::make_huffman_code;
   use crate::prefix::{WeightedPrefix, Prefix};
 
@@ -117,7 +116,6 @@ mod tests {
         upper: 0,
         run_len_jumpstart: None,
         gcd: 1,
-        phantom: PhantomData,
       }
     }
   }

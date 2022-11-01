@@ -81,7 +81,7 @@ fn max_bits_overshot<T: NumberLike>(p: &Prefix<T>) -> usize {
 
 pub struct Unsigneds<U: UnsignedLike> {
   pub unsigneds: Vec<U>,
-  pub finished_chunk_body: bool,
+  pub finished_body: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -296,13 +296,13 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       Ok(numbers) => {
         self.state.n_processed += numbers.unsigneds.len();
 
-        if numbers.finished_chunk_body {
+        if numbers.finished_body {
           reader.drain_empty_byte(|| QCompressError::corruption(
             "nonzero bits in end of final byte of chunk numbers"
           ))?;
         }
         self.state.bits_processed += reader.bit_idx() - initial_reader.bit_idx();
-        if numbers.finished_chunk_body {
+        if numbers.finished_body {
           let compressed_body_bit_size = self.compressed_body_size * 8;
           if compressed_body_bit_size != self.state.bits_processed {
             return Err(QCompressError::corruption(format!(
@@ -343,7 +343,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
     let completed_body = limit >= self.n - self.state.n_processed;
     let mut numbers = Unsigneds {
       unsigneds: Vec::with_capacity(batch_size),
-      finished_chunk_body: completed_body,
+      finished_body: completed_body,
     };
     let unsigneds = &mut numbers.unsigneds;
 
@@ -355,7 +355,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       if error_on_insufficient_data {
         Err(e)
       } else {
-        numbers.finished_chunk_body = false;
+        numbers.finished_body = false;
         Ok(numbers)
       }
     };

@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use crate::bit_reader::BitReader;
-use crate::{ChunkMetadata, delta_encoding, PrefixMetadata};
+use crate::{delta_encoding, PrefixMetadata};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
@@ -9,10 +9,10 @@ use crate::num_decompressor::NumDecompressor;
 
 pub struct Numbers<T: NumberLike> {
   pub nums: Vec<T>,
-  pub finished_chunk_body: bool,
+  pub finished_body: bool,
 }
 
-// ChunkBodyDecompressor wraps NumDecompressor and handles reconstruction from
+// BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
 #[derive(Clone, Debug)]
 pub enum BodyDecompressor<T: NumberLike> {
@@ -28,20 +28,24 @@ pub enum BodyDecompressor<T: NumberLike> {
 }
 
 impl<T: NumberLike> BodyDecompressor<T> {
-  pub(crate) fn new(metadata: &ChunkMetadata<T>) -> QCompressResult<Self> {
-    Ok(match &metadata.prefix_metadata {
+  pub(crate) fn new(
+    n: usize,
+    compressed_body_size: usize,
+    prefix_metadata: &PrefixMetadata<T>,
+  ) -> QCompressResult<Self> {
+    Ok(match prefix_metadata {
       PrefixMetadata::Simple { prefixes } => Self::Simple {
         num_decompressor: NumDecompressor::new(
-          metadata.n,
-          metadata.compressed_body_size,
+          n,
+          compressed_body_size,
           prefixes.clone()
         )?
       },
       PrefixMetadata::Delta { prefixes, delta_moments } => Self::Delta {
-        n: metadata.n,
+        n,
         num_decompressor: NumDecompressor::new(
-          metadata.n.saturating_sub(delta_moments.order()),
-          metadata.compressed_body_size,
+          n.saturating_sub(delta_moments.order()),
+          compressed_body_size,
           prefixes.clone()
         )?,
         delta_moments: delta_moments.clone(),
@@ -64,7 +68,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
       ).map(|u| {
         Numbers {
           nums: u.unsigneds.into_iter().map(T::from_unsigned).collect(),
-          finished_chunk_body: u.finished_chunk_body,
+          finished_body: u.finished_body,
         }
       }),
       Self::Delta {
@@ -78,7 +82,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
           limit,
           error_on_insufficient_data,
         )?;
-        let batch_size = if u_deltas.finished_chunk_body {
+        let batch_size = if u_deltas.finished_body {
           min(limit, *n - *nums_processed)
         } else {
           u_deltas.unsigneds.len()
@@ -92,7 +96,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
         *delta_moments = new_delta_moments;
         Ok(Numbers {
           nums,
-          finished_chunk_body: nums_processed == n,
+          finished_body: nums_processed == n,
         })
       }
     }
@@ -101,15 +105,13 @@ impl<T: NumberLike> BodyDecompressor<T> {
   pub fn bits_remaining(&self) -> usize {
     match self {
       Self::Simple { num_decompressor } => num_decompressor.bits_remaining(),
-      Self::Delta { num_decompressor, n: _, delta_moments: _, nums_processed: _ } => num_decompressor.bits_remaining(),
+      Self::Delta { num_decompressor, .. } => num_decompressor.bits_remaining(),
     }
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use std::marker::PhantomData;
-
   use super::BodyDecompressor;
   use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
   use crate::errors::ErrorKind;
@@ -123,7 +125,6 @@ mod tests {
       upper: 200,
       run_len_jumpstart: None,
       gcd: 1,
-      phantom: PhantomData,
     }
   }
 
@@ -136,7 +137,6 @@ mod tests {
         prefix_w_code(vec![false]),
         prefix_w_code(vec![true, false]),
       ]},
-      phantom: PhantomData,
     };
     let metadata_duplicating_prefix = ChunkMetadata::<i64> {
       n: 2,
@@ -146,11 +146,14 @@ mod tests {
         prefix_w_code(vec![false]),
         prefix_w_code(vec![true]),
       ]},
-      phantom: PhantomData,
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
-      let result = BodyDecompressor::new(&bad_metadata);
+      let result = BodyDecompressor::new(
+        bad_metadata.n,
+        bad_metadata.compressed_body_size,
+        &bad_metadata.prefix_metadata,
+      );
       match result {
         Ok(_) => panic!("expected an error for bad metadata: {:?}", bad_metadata),
         Err(e) if matches!(e.kind, ErrorKind::Corruption) => (),
