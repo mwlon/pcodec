@@ -35,7 +35,6 @@ mod flags;
 mod gcd_utils;
 mod huffman_decoding;
 mod huffman_encoding;
-mod mode;
 mod num_decompressor;
 mod prefix;
 mod prefix_optimization;

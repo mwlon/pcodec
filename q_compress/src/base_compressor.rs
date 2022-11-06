@@ -13,7 +13,6 @@ use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
-use crate::mode::Mode;
 use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
 use crate::prefix_optimization;
 
@@ -318,7 +317,7 @@ fn train_prefixes<T: NumberLike>(
 }
 
 #[derive(Clone)]
-struct TrainedChunkCompressor<'a, U: UnsignedLike, GcdOp: GcdOperator<U>> {
+struct TrainedBodyCompressor<'a, U: UnsignedLike, GcdOp: GcdOperator<U>> {
   pub table: &'a CompressionTable<U>,
   op: PhantomData<GcdOp>,
 }
@@ -330,15 +329,15 @@ fn trained_compress_body<U: UnsignedLike>(
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   if use_gcd {
-    TrainedChunkCompressor::<U, GeneralGcdOp> { table, op: PhantomData }
+    TrainedBodyCompressor::<U, GeneralGcdOp> { table, op: PhantomData }
       .compress_data_page(unsigneds, writer)
   } else {
-    TrainedChunkCompressor::<U, TrivialGcdOp> { table, op: PhantomData }
+    TrainedBodyCompressor::<U, TrivialGcdOp> { table, op: PhantomData }
       .compress_data_page(unsigneds, writer)
   }
 }
 
-impl<'a, U, GcdOp> TrainedChunkCompressor<'a, U, GcdOp> where U: UnsignedLike, GcdOp: GcdOperator<U> {
+impl<'a, U, GcdOp> TrainedBodyCompressor<'a, U, GcdOp> where U: UnsignedLike, GcdOp: GcdOperator<U> {
   fn compress_data_page(
     &self,
     unsigneds: &[U],
@@ -442,28 +441,20 @@ impl<T: NumberLike> State<T> {
 }
 
 #[derive(Clone, Debug)]
-pub struct BaseCompressor<T, M> where T: NumberLike, M: Mode {
+pub struct BaseCompressor<T> where T: NumberLike {
   internal_config: InternalCompressorConfig,
   pub(crate) flags: Flags,
   pub(crate) writer: BitWriter,
   state: State<T>,
-  phantom: PhantomData<M>,
 }
 
-impl<T: NumberLike, M: Mode> Default for BaseCompressor<T, M> {
-  fn default() -> Self {
-    Self::from_config(CompressorConfig::default())
-  }
-}
-
-impl<T, M: Mode> BaseCompressor<T, M> where T: NumberLike {
-  pub fn from_config(config: CompressorConfig) -> Self {
+impl<T> BaseCompressor<T> where T: NumberLike {
+  pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> Self {
     Self {
       internal_config: InternalCompressorConfig::from(&config),
-      flags: Flags::from_config::<M>(&config),
+      flags: Flags::from_config(&config, use_wrapped_mode),
       writer: BitWriter::default(),
       state: State::default(),
-      phantom: PhantomData,
     }
   }
 
@@ -578,7 +569,7 @@ impl<T, M: Mode> BaseCompressor<T, M> where T: NumberLike {
       let start = info.idx;
       let data_page_meta = info.data_page();
       let end = start + data_page_meta.n.saturating_sub(self.flags.delta_encoding_order);
-      if M::IS_WRAPPED {
+      if self.flags.use_wrapped_mode {
         data_page_meta.write_to(&mut self.writer);
       }
       let slice = if end > start { &info.unsigneds[start..end] } else { &[] };

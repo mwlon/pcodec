@@ -3,10 +3,15 @@ use crate::base_compressor::BaseCompressor;
 use crate::chunk_metadata::ChunkSpec;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::mode::Wrapped;
 
-#[derive(Clone, Debug, Default)]
-pub struct Compressor<T: NumberLike>(BaseCompressor<T, Wrapped>);
+#[derive(Clone, Debug)]
+pub struct Compressor<T: NumberLike>(BaseCompressor<T>);
+
+impl<T: NumberLike> Default for Compressor<T> {
+  fn default() -> Self {
+    Self::from_config(CompressorConfig::default())
+  }
+}
 
 impl<T: NumberLike> Compressor<T> {
   /// Creates a new compressor, given a [`CompressorConfig`].
@@ -14,7 +19,7 @@ impl<T: NumberLike> Compressor<T> {
   /// configuration that doesn't show up in the output file.
   /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
   pub fn from_config(config: CompressorConfig) -> Self {
-    Self(BaseCompressor::<T, Wrapped>::from_config(config))
+    Self(BaseCompressor::<T>::from_config(config, true))
   }
 
   /// Returns a reference to the compressor's flags.

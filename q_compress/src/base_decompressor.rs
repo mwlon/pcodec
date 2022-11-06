@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 use std::io::Write;
-use std::marker::PhantomData;
 
 use crate::Flags;
 use crate::bit_reader::BitReader;
@@ -11,7 +10,6 @@ use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, W
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::mode::Mode;
 
 /// All configurations available for a Decompressor.
 #[derive(Clone, Debug)]
@@ -102,7 +100,10 @@ impl Step {
   }
 }
 
-pub(crate) fn read_header<T: NumberLike, M: Mode>(reader: &mut BitReader) -> QCompressResult<Flags> {
+pub(crate) fn read_header<T: NumberLike>(
+  reader: &mut BitReader,
+  use_wrapped_mode: bool,
+) -> QCompressResult<Flags> {
   let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
   if bytes != MAGIC_HEADER {
     return Err(QCompressError::corruption(format!(
@@ -122,7 +123,7 @@ pub(crate) fn read_header<T: NumberLike, M: Mode>(reader: &mut BitReader) -> QCo
   }
 
   let res = Flags::parse_from(reader)?;
-  res.check_mode::<M>()?;
+  res.check_mode(use_wrapped_mode)?;
   Ok(res)
 }
 
@@ -180,14 +181,13 @@ pub(crate) fn begin_data_page<T: NumberLike>(
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct BaseDecompressor<T, M> where T: NumberLike, M: Mode {
+pub struct BaseDecompressor<T: NumberLike> {
   pub(crate) config: DecompressorConfig,
   pub(crate) words: BitWords,
   pub(crate) state: State<T>,
-  phantom: PhantomData<M>,
 }
 
-impl<T: NumberLike, M: Mode> Write for BaseDecompressor<T, M> {
+impl<T: NumberLike> Write for BaseDecompressor<T> {
   fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
     self.words.extend_bytes(buf);
     Ok(buf.len())
@@ -198,7 +198,7 @@ impl<T: NumberLike, M: Mode> Write for BaseDecompressor<T, M> {
   }
 }
 
-impl<T, M> BaseDecompressor<T, M> where T: NumberLike, M: Mode {
+impl<T: NumberLike> BaseDecompressor<T> {
   pub fn from_config(config: DecompressorConfig) -> Self {
     Self {
       config,
@@ -221,11 +221,11 @@ impl<T, M> BaseDecompressor<T, M> where T: NumberLike, M: Mode {
     res
   }
 
-  pub fn header(&mut self) -> QCompressResult<Flags> {
+  pub fn header(&mut self, use_wrapped_mode: bool) -> QCompressResult<Flags> {
     self.state.check_step(Step::PreHeader, "read header")?;
 
     self.with_reader(|reader, state, _| {
-      let flags = read_header::<T, M>(reader)?;
+      let flags = read_header::<T>(reader, use_wrapped_mode)?;
       state.flags = Some(flags.clone());
       Ok(flags)
     })
@@ -252,7 +252,7 @@ impl<T, M> BaseDecompressor<T, M> where T: NumberLike, M: Mode {
         state,
         n,
         compressed_page_size,
-        M::IS_WRAPPED,
+        state.flags.as_ref().unwrap().use_wrapped_mode
       )?;
       let bd = state.body_decompressor.as_mut().unwrap();
       // this error atomic error handling is confusing and I should find a cleaner way to do it

@@ -3,7 +3,6 @@ use crate::base_compressor::BaseCompressor;
 use crate::chunk_metadata::ChunkSpec;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::mode::Standalone;
 
 /// Converts vectors of numbers into compressed bytes.
 ///
@@ -30,8 +29,14 @@ use crate::mode::Standalone;
 /// ```
 /// Note that in practice we would need larger chunks than this to
 /// achieve good compression, preferably containing 3k-10M numbers.
-#[derive(Clone, Debug, Default)]
-pub struct Compressor<T: NumberLike>(BaseCompressor<T, Standalone>);
+#[derive(Clone, Debug)]
+pub struct Compressor<T: NumberLike>(BaseCompressor<T>);
+
+impl<T: NumberLike> Default for Compressor<T> {
+  fn default() -> Self {
+    Self::from_config(CompressorConfig::default())
+  }
+}
 
 const DEFAULT_CHUNK_SIZE: usize = 1000000;
 
@@ -41,7 +46,7 @@ impl<T: NumberLike> Compressor<T> {
   /// configuration that doesn't show up in the output file.
   /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
   pub fn from_config(config: CompressorConfig) -> Self {
-    Self(BaseCompressor::<T, Standalone>::from_config(config))
+    Self(BaseCompressor::<T>::from_config(config, false))
   }
   /// Returns a reference to the compressor's flags.
   pub fn flags(&self) -> &Flags {

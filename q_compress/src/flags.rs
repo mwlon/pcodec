@@ -11,7 +11,6 @@ use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::mode::Mode;
 
 /// The configuration stored in a .qco file's header.
 ///
@@ -170,12 +169,11 @@ impl Flags {
     Ok(())
   }
 
-  pub(crate) fn check_mode<M: Mode>(&self) -> QCompressResult<()> {
-    if self.use_wrapped_mode != M::IS_WRAPPED {
-      Err(QCompressError::invalid_argument(format!(
-        "expected {} mode while decompressing but found contrary flags",
-        M::NAME,
-      )))
+  pub(crate) fn check_mode(&self, expect_wrapped_mode: bool) -> QCompressResult<()> {
+    if self.use_wrapped_mode != expect_wrapped_mode {
+      Err(QCompressError::invalid_argument(
+        "found conflicting standalone/wrapped modes between decompressor and header",
+      ))
     } else {
       Ok(())
     }
@@ -199,13 +197,13 @@ impl Flags {
     }
   }
 
-  pub(crate) fn from_config<M: Mode>(config: &CompressorConfig) -> Self {
+  pub(crate) fn from_config(config: &CompressorConfig, use_wrapped_mode: bool) -> Self {
     Flags {
       use_5_bit_code_len: true,
       delta_encoding_order: config.delta_encoding_order,
       use_min_count_encoding: true,
       use_gcds: config.use_gcds,
-      use_wrapped_mode: M::IS_WRAPPED,
+      use_wrapped_mode,
     }
   }
 }

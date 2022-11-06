@@ -4,7 +4,6 @@ use crate::base_decompressor::{BaseDecompressor, begin_data_page, read_chunk_met
 use crate::bit_reader::BitReader;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
-use crate::mode::Standalone;
 
 /// Converts compressed bytes into [`Flags`], [`ChunkMetadata`],
 /// and vectors of numbers.
@@ -45,7 +44,7 @@ use crate::mode::Standalone;
 /// }
 /// ```
 #[derive(Clone, Debug, Default)]
-pub struct Decompressor<T: NumberLike>(BaseDecompressor<T, Standalone>);
+pub struct Decompressor<T: NumberLike>(BaseDecompressor<T>);
 
 /// The different types of data encountered when iterating through the
 /// decompressor.
@@ -60,7 +59,7 @@ pub enum DecompressedItem<T: NumberLike> {
 impl<T: NumberLike> Decompressor<T> {
   /// Creates a new decompressor, given a [`DecompressorConfig`].
   pub fn from_config(config: DecompressorConfig) -> Self {
-    Self(BaseDecompressor::<T, Standalone>::from_config(config))
+    Self(BaseDecompressor::<T>::from_config(config))
   }
 
   /// Reads the header, returning its [`Flags`] and updating this
@@ -71,7 +70,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// finds flags from a newer, incompatible version of q_compress,
   /// or finds any corruptions.
   pub fn header(&mut self) -> QCompressResult<Flags> {
-    self.0.header()
+    self.0.header(false)
   }
 
   /// Reads a [`ChunkMetadata`], returning it.
@@ -194,7 +193,7 @@ fn next_nums_dirty<T: NumberLike>(
 fn next_dirty<T: NumberLike>(reader: &mut BitReader, state: &mut State<T>, config: &DecompressorConfig) -> QCompressResult<Option<DecompressedItem<T>>> {
   match state.step() {
     Step::PreHeader => {
-      match read_header::<T, Standalone>(reader) {
+      match read_header::<T>(reader, false) {
         Ok(flags) => {
           state.flags = Some(flags.clone());
           Ok(Some(DecompressedItem::Flags(flags)))

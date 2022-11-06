@@ -3,15 +3,14 @@ use crate::base_decompressor::{BaseDecompressor, Step};
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::mode::Wrapped;
 
 #[derive(Clone, Debug, Default)]
-pub struct Decompressor<T: NumberLike>(BaseDecompressor<T, Wrapped>);
+pub struct Decompressor<T: NumberLike>(BaseDecompressor<T>);
 
 impl<T: NumberLike> Decompressor<T> {
   /// Creates a new decompressor, given a [`DecompressorConfig`].
   pub fn from_config(config: DecompressorConfig) -> Self {
-    Self(BaseDecompressor::<T, Wrapped>::from_config(config))
+    Self(BaseDecompressor::<T>::from_config(config))
   }
 
   /// Reads the header, returning its [`Flags`] and updating this
@@ -22,7 +21,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// finds flags from a newer, incompatible version of q_compress,
   /// or finds any corruptions.
   pub fn header(&mut self) -> QCompressResult<Flags> {
-    self.0.header()
+    self.0.header(true)
   }
 
   /// TODO
