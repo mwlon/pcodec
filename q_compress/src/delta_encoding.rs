@@ -53,7 +53,6 @@ pub fn nth_order_deltas<T: NumberLike>(
   order: usize,
   data_page_idxs: &[usize],
 ) -> (Vec<T::Signed>, Vec<DeltaMoments<T::Signed>>) {
-  println!("ORDER IS {}", order);
   let mut data_page_moments = vec![Vec::with_capacity(order); data_page_idxs.len()];
   let mut res = nums
     .iter()

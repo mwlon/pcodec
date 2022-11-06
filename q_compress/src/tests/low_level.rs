@@ -30,7 +30,6 @@ fn test_low_level_sparse() {
 
 fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
-    println!("deo={}", delta_encoding_order);
     let mut compressor = Compressor::<T>::from_config(
       CompressorConfig::default().with_delta_encoding_order(delta_encoding_order)
     );
@@ -42,7 +41,6 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
     compressor.footer().unwrap();
 
     let bytes = compressor.drain_bytes();
-    println!("compressed to {} bytes: {:?}", bytes.len(), bytes);
 
     let mut decompressor = Decompressor::<T>::from_config(
       DecompressorConfig::default().with_numbers_limit_per_item(2)

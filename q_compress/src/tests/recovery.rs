@@ -158,7 +158,6 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         delta_encoding_order,
         use_gcds,
       );
-      println!("{}", debug_info);
       let mut compressor = Compressor::<T>::from_config(
         CompressorConfig::default()
           .with_compression_level(compression_level)
@@ -166,7 +165,6 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
           .with_use_gcds(use_gcds)
       );
       let compressed = compressor.simple_compress(&nums);
-      println!("{:?}", compressed);
       let mut decompressor = Decompressor::<T>::default();
       decompressor.write_all(&compressed).unwrap();
       let decompressed = decompressor.simple_decompress()

@@ -169,7 +169,6 @@ pub(crate) fn begin_data_page<T: NumberLike>(
   } else {
     (chunk_meta.delta_moments.clone(), compressed_page_size)
   };
-  println!("DM {:?}", delta_moments);
   state.body_decompressor = Some(BodyDecompressor::new(
     &chunk_meta.prefix_metadata,
     n,

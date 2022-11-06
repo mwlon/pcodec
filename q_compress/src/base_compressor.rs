@@ -521,7 +521,6 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         order,
         &page_idxs,
       );
-      println!("MOMENTSS {:?}", momentss);
       let unsigneds = deltas.iter()
         .map(|x| x.to_unsigned())
         .collect::<Vec<_>>();
@@ -573,7 +572,6 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         data_page_meta.write_to(&mut self.writer);
       }
       let slice = if end > start { &info.unsigneds[start..end] } else { &[] };
-      println!("WRITING FROM {} TO {} OUT OF {}", start, end, data_page_meta.n);
       trained_compress_body(
         &info.table,
         info.use_gcd,
