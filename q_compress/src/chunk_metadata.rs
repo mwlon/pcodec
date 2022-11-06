@@ -31,9 +31,9 @@ pub enum PrefixMetadata<T: NumberLike> {
   ///
   /// `Delta` prefix info also contains a `Vec` of initial delta moments at
   /// the start of the chunk, each of which is also a `SignedLike`.
+  #[non_exhaustive]
   Delta {
     prefixes: Vec<Prefix<T::Signed>>,
-    delta_moments: DeltaMoments<T::Signed>,
   }
 }
 
@@ -55,6 +55,7 @@ pub struct ChunkMetadata<T> where T: NumberLike {
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
   pub prefix_metadata: PrefixMetadata<T>,
+  pub(crate) delta_moments: DeltaMoments<T::Signed>,
 }
 
 fn parse_prefixes<T: NumberLike>(
@@ -75,7 +76,6 @@ fn parse_prefixes<T: NumberLike>(
   } else {
     Some(T::Unsigned::ONE)
   };
-  println!("asdf {} {:?}", n_pref, maybe_common_gcd);
   for _ in 0..n_pref {
     let count = reader.read_usize(bits_to_encode_count)?;
     let lower = T::read_from(reader)?;
@@ -101,7 +101,6 @@ fn parse_prefixes<T: NumberLike>(
     } else {
       gcd_utils::read_gcd(upper.to_unsigned() - lower.to_unsigned(), reader)?
     };
-    println!("PREFIX {} {:?} {} {} {:?} {}", count, code, lower, upper, run_len_jumpstart, gcd);
     prefixes.push(Prefix {
       count,
       code,
@@ -155,24 +154,29 @@ fn write_prefixes<T: NumberLike>(
 }
 
 impl<T> ChunkMetadata<T> where T: NumberLike {
-  pub(crate) fn new(n: usize, prefix_metadata: PrefixMetadata<T>) -> Self {
+  pub(crate) fn new(n: usize, prefix_metadata: PrefixMetadata<T>, delta_moments: DeltaMoments<T::Signed>) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
       prefix_metadata,
+      delta_moments,
     }
   }
 
   pub fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
-    let (n, compressed_body_size) = if flags.use_wrapped_mode {
-      (0, 0)
+    let (n, compressed_body_size, delta_moments) = if flags.use_wrapped_mode {
+      (
+        0,
+        0,
+        DeltaMoments::default(),
+      )
     } else {
       (
         reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)?,
-        reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?
+        reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?,
+        DeltaMoments::<T::Signed>::parse_from(reader, flags.delta_encoding_order)?,
       )
     };
-    println!("READ n={} cbs={}", n, compressed_body_size);
 
     let prefix_metadata = if flags.delta_encoding_order == 0 {
       let prefixes = parse_prefixes::<T>(reader, flags, n)?;
@@ -180,12 +184,9 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
         prefixes,
       }
     } else {
-      let delta_moments = DeltaMoments::<T::Signed>::parse_from(reader, flags.delta_encoding_order)?;
-      println!("moments {:?}", delta_moments);
       let prefixes = parse_prefixes::<T::Signed>(reader, flags, n)?;
       PrefixMetadata::Delta {
         prefixes,
-        delta_moments,
       }
     };
 
@@ -193,6 +194,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       n,
       compressed_body_size,
       prefix_metadata,
+      delta_moments,
     })
   }
 
@@ -200,16 +202,13 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     if !flags.use_wrapped_mode {
       writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
       writer.write_usize(self.compressed_body_size, BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
+      self.delta_moments.write_to(writer);
     }
     match &self.prefix_metadata {
       PrefixMetadata::Simple { prefixes} => {
         write_prefixes(prefixes, writer, flags, self.n);
       },
-      PrefixMetadata::Delta { prefixes, delta_moments } => {
-        println!("WRITING MOMENTS {:?}", delta_moments);
-        if !flags.use_wrapped_mode {
-          delta_moments.write_to(writer);
-        }
+      PrefixMetadata::Delta { prefixes } => {
         write_prefixes(prefixes, writer, flags, self.n);
       },
     }
@@ -230,6 +229,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
 }
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum DataPagingSpec {
   SinglePage,
   ExactPageSizes(Vec<usize>),
@@ -247,7 +247,7 @@ pub struct ChunkSpec {
 }
 
 impl ChunkSpec {
-  pub fn with_exact_page_sizes(mut self, sizes: Vec<usize>) -> Self {
+  pub fn with_page_sizes(mut self, sizes: Vec<usize>) -> Self {
     self.data_paging_spec = DataPagingSpec::ExactPageSizes(sizes);
     self
   }

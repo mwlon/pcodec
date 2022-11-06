@@ -7,6 +7,7 @@ use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
 use crate::num_decompressor::NumDecompressor;
 
+#[derive(Debug)]
 pub struct Numbers<T: NumberLike> {
   pub nums: Vec<T>,
   pub finished_body: bool,
@@ -29,9 +30,10 @@ pub enum BodyDecompressor<T: NumberLike> {
 
 impl<T: NumberLike> BodyDecompressor<T> {
   pub(crate) fn new(
+    prefix_metadata: &PrefixMetadata<T>,
     n: usize,
     compressed_body_size: usize,
-    prefix_metadata: &PrefixMetadata<T>,
+    delta_moments: &DeltaMoments<T::Signed>,
   ) -> QCompressResult<Self> {
     Ok(match prefix_metadata {
       PrefixMetadata::Simple { prefixes } => Self::Simple {
@@ -41,7 +43,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
           prefixes.clone()
         )?
       },
-      PrefixMetadata::Delta { prefixes, delta_moments } => Self::Delta {
+      PrefixMetadata::Delta { prefixes } => Self::Delta {
         n,
         num_decompressor: NumDecompressor::new(
           n.saturating_sub(delta_moments.order()),
@@ -114,6 +116,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
 mod tests {
   use super::BodyDecompressor;
   use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
+  use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
   use crate::prefix::Prefix;
 
@@ -137,6 +140,7 @@ mod tests {
         prefix_w_code(vec![false]),
         prefix_w_code(vec![true, false]),
       ]},
+      delta_moments: DeltaMoments::default(),
     };
     let metadata_duplicating_prefix = ChunkMetadata::<i64> {
       n: 2,
@@ -146,13 +150,15 @@ mod tests {
         prefix_w_code(vec![false]),
         prefix_w_code(vec![true]),
       ]},
+      delta_moments: DeltaMoments::default(),
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
       let result = BodyDecompressor::new(
+        &bad_metadata.prefix_metadata,
         bad_metadata.n,
         bad_metadata.compressed_body_size,
-        &bad_metadata.prefix_metadata,
+        &DeltaMoments::default(),
       );
       match result {
         Ok(_) => panic!("expected an error for bad metadata: {:?}", bad_metadata),

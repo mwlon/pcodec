@@ -9,7 +9,7 @@ use arrow::datatypes::ArrowPrimitiveType;
 use arrow::record_batch::RecordBatch;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
 
-use q_compress::Decompressor;
+use q_compress::BaseDecompressor;
 
 use crate::arrow_number_like::ArrowNumberLike;
 use crate::handlers::HandlerImpl;
@@ -21,7 +21,7 @@ pub trait DecompressHandler {
 
 impl<T: ArrowNumberLike> DecompressHandler for HandlerImpl<T> {
   fn decompress(&self, opt: &DecompressOpt, bytes: &[u8]) -> Result<()> {
-    let mut decompressor = Decompressor::<T>::default();
+    let mut decompressor = BaseDecompressor::<T>::default();
     decompressor.write_all(bytes).unwrap();
     decompressor.header()?;
 

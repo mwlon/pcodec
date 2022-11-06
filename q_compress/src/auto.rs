@@ -1,7 +1,8 @@
 use std::cmp::min;
 use std::io::Write;
 
-use crate::{Compressor, CompressorConfig, Decompressor};
+use crate::standalone::{Compressor, Decompressor};
+use crate::{CompressorConfig};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 

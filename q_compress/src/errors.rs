@@ -11,6 +11,8 @@ pub enum ErrorKind {
   Compatibility,
   /// `Corruption` errors occur during decompression, indicating the
   /// provided data is inconsistent or violates the Quantile Compression format.
+  /// It also applies to cases where standalone files were read but a wrapped
+  /// format was detected, or vice versa.
   Corruption,
   /// `InsufficientData` errors occur during decompression, indicating
   /// the decompressor reached the end of the provided data before finishing.

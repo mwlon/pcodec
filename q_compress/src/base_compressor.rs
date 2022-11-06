@@ -13,12 +13,12 @@ use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
+use crate::mode::Mode;
 use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
 use crate::prefix_optimization;
 
 const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
-const DEFAULT_CHUNK_SIZE: usize = 1000000;
 
 struct JumpstartConfiguration {
   weight: usize,
@@ -81,8 +81,6 @@ pub struct CompressorConfig {
   /// When this is helpful and in rare cases when it isn't, compression speed
   /// is slightly reduced.
   pub use_gcds: bool,
-  // TODO
-  pub use_wrapped_mode: bool,
 }
 
 impl Default for CompressorConfig {
@@ -91,7 +89,6 @@ impl Default for CompressorConfig {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
       use_gcds: true,
-      use_wrapped_mode: false,
     }
   }
 }
@@ -112,12 +109,6 @@ impl CompressorConfig {
   /// Sets [`use_gcds`][CompressorConfig::use_gcds].
   pub fn with_use_gcds(mut self, use_gcds: bool) -> Self {
     self.use_gcds = use_gcds;
-    self
-  }
-
-  /// Sets [`use_wrapped_mode`][CompressorConfig::use_wrapped_mode]
-  pub fn with_use_wrapped_mode(mut self, use_wrapped_mode: bool) -> Self {
-    self.use_wrapped_mode = use_wrapped_mode;
     self
   }
 }
@@ -450,46 +441,22 @@ impl<T: NumberLike> State<T> {
   }
 }
 
-/// Converts vectors of numbers into compressed bytes.
-///
-/// All `Compressor` methods leave its state unchanged if they return an error.
-/// You can configure behavior like compression level by instantiating with
-/// [`.from_config()`][Compressor::from_config]
-///
-/// You can use the compressor at a file or chunk level.
-/// ```
-/// use q_compress::Compressor;
-///
-/// let my_nums = vec![1, 2, 3];
-///
-/// // FILE LEVEL
-/// let mut compressor = Compressor::<i32>::default();
-/// let bytes = compressor.simple_compress(&my_nums);
-///
-/// // CHUNK LEVEL
-/// let mut compressor = Compressor::<i32>::default();
-/// compressor.header().expect("header");
-/// compressor.chunk(&my_nums).expect("chunk");
-/// compressor.footer().expect("footer");
-/// let bytes = compressor.drain_bytes();
-/// ```
-/// Note that in practice we would need larger chunks than this to
-/// achieve good compression, preferably containing 3k-10M numbers.
 #[derive(Clone, Debug)]
-pub struct Compressor<T> where T: NumberLike {
+pub struct BaseCompressor<T, M> where T: NumberLike, M: Mode {
   internal_config: InternalCompressorConfig,
-  flags: Flags,
-  writer: BitWriter,
+  pub(crate) flags: Flags,
+  pub(crate) writer: BitWriter,
   state: State<T>,
+  phantom: PhantomData<M>,
 }
 
-impl<T: NumberLike> Default for Compressor<T> {
+impl<T: NumberLike, M: Mode> Default for BaseCompressor<T, M> {
   fn default() -> Self {
     Self::from_config(CompressorConfig::default())
   }
 }
 
-impl<T> Compressor<T> where T: NumberLike {
+impl<T, M: Mode> BaseCompressor<T, M> where T: NumberLike {
   /// Creates a new compressor, given a [`CompressorConfig`].
   /// Internally, the compressor builds [`Flags`] as well as an internal
   /// configuration that doesn't show up in the output file.
@@ -497,9 +464,10 @@ impl<T> Compressor<T> where T: NumberLike {
   pub fn from_config(config: CompressorConfig) -> Self {
     Self {
       internal_config: InternalCompressorConfig::from(&config),
-      flags: Flags::from(&config),
+      flags: Flags::from_config::<M>(&config),
       writer: BitWriter::default(),
       state: State::default(),
+      phantom: PhantomData,
     }
   }
 
@@ -529,17 +497,7 @@ impl<T> Compressor<T> where T: NumberLike {
     Ok(())
   }
 
-  /// TODO: documentation
-  pub fn chunk_metadata(
-    &mut self,
-    nums: &[T],
-    spec: &ChunkSpec,
-  ) -> QCompressResult<ChunkMetadata<T>> {
-    self.flags.check_wrapped_mode()?;
-    self.chunk_metadata_internal(nums, spec)
-  }
-
-  fn chunk_metadata_internal(
+  pub(crate) fn chunk_metadata_internal(
     &mut self,
     nums: &[T],
     spec: &ChunkSpec,
@@ -603,17 +561,17 @@ impl<T> Compressor<T> where T: NumberLike {
       let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
       let table = CompressionTable::from(prefixes.as_slice());
       let prefix_metadata = PrefixMetadata::Delta {
-        delta_moments: momentss[0].clone(),
         prefixes,
       };
       (unsigneds, prefix_metadata, use_gcd, table, momentss)
     };
 
+    let chunk_meta_moments = delta_momentss[0].clone();
     let data_pages = delta_momentss.into_iter()
       .zip(page_sizes.into_iter())
       .map(|(moments, n)| DataPageMetadata::new(moments, n))
       .collect::<Vec<_>>();
-    let meta = ChunkMetadata::new(n, prefix_meta);
+    let meta = ChunkMetadata::new(n, prefix_meta, chunk_meta_moments);
     meta.write_to(&mut self.writer, &self.flags);
 
     self.state = State::MidChunk(MidChunkInfo {
@@ -628,17 +586,7 @@ impl<T> Compressor<T> where T: NumberLike {
     Ok(meta)
   }
 
-  /// TODO documentation
-  pub fn data_page(&mut self) -> QCompressResult<bool> {
-    if !self.flags.use_wrapped_mode {
-      return Err(QCompressError::invalid_argument(
-        "data pages are not supported in standalone mode"
-      ))
-    }
-    self.data_page_internal()
-  }
-
-  fn data_page_internal(&mut self) -> QCompressResult<bool> {
+  pub(crate) fn data_page_internal(&mut self) -> QCompressResult<bool> {
     let has_pages_remaining = {
       let info = match &mut self.state {
         State::MidChunk(info) => Ok(info),
@@ -648,14 +596,15 @@ impl<T> Compressor<T> where T: NumberLike {
       let start = info.idx;
       let data_page_meta = info.data_page();
       let end = start + data_page_meta.n.saturating_sub(self.flags.delta_encoding_order);
-      if self.flags.use_wrapped_mode {
+      if M::IS_WRAPPED {
         data_page_meta.write_to(&mut self.writer);
       }
+      let slice = if end > start { &info.unsigneds[start..end] } else { &[] };
       println!("WRITING FROM {} TO {} OUT OF {}", start, end, data_page_meta.n);
       trained_compress_body(
         &info.table,
         info.use_gcd,
-        &info.unsigneds[start..end],
+        slice,
         &mut self.writer,
       )?;
 
@@ -672,24 +621,6 @@ impl<T> Compressor<T> where T: NumberLike {
     Ok(has_pages_remaining)
   }
 
-  /// Writes out a chunk of data representing the provided numbers.
-  /// Will return an error if the compressor has not yet written the header
-  /// or already written the footer.
-  ///
-  /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
-  /// The chunk body encodes the numbers passed in here.
-  pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
-    let pre_meta_bit_idx = self.writer.bit_size();
-    let mut meta = self.chunk_metadata_internal(nums, &ChunkSpec::default())?;
-    let post_meta_byte_idx = self.writer.byte_size();
-
-    self.data_page_internal()?;
-
-    meta.compressed_body_size = self.writer.byte_size() - post_meta_byte_idx;
-    meta.update_write_compressed_body_size(&mut self.writer, pre_meta_bit_idx);
-    Ok(meta)
-  }
-
   /// Writes out a single footer byte indicating that the .qco file has ended.
   /// Will return an error if the compressor has not yet written the header
   /// or already written the footer.
@@ -701,20 +632,6 @@ impl<T> Compressor<T> where T: NumberLike {
     self.writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)?;
     self.state = State::Terminated;
     Ok(())
-  }
-
-  /// Takes in a slice of numbers and returns compressed bytes.
-  pub fn simple_compress(&mut self, nums: &[T]) -> Vec<u8> {
-    // The following unwraps are safe because the writer will be byte-aligned
-    // after each step and ensure each chunk has appropriate size.
-    self.header().unwrap();
-    nums.chunks(DEFAULT_CHUNK_SIZE)
-      .for_each(|chunk| {
-        self.chunk(chunk).unwrap();
-      });
-
-    self.footer().unwrap();
-    self.drain_bytes()
   }
 
   /// Returns all bytes produced by the compressor so far that have not yet

@@ -11,6 +11,7 @@ use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
+use crate::mode::Mode;
 
 /// The configuration stored in a .qco file's header.
 ///
@@ -102,7 +103,6 @@ impl TryFrom<Vec<bool>> for Flags {
         ));
       }
     }
-    println!("{:?}", flags);
 
     Ok(flags)
   }
@@ -127,6 +127,8 @@ impl TryInto<Vec<bool>> for &Flags {
     res.push(self.use_min_count_encoding);
 
     res.push(self.use_gcds);
+
+    res.push(self.use_wrapped_mode);
 
     let necessary_len = res.iter()
       .rposition(|&bit| bit)
@@ -168,17 +170,12 @@ impl Flags {
     Ok(())
   }
 
-  pub(crate) fn check_standalone_mode(&self) -> QCompressResult<()> {
-    if self.use_wrapped_mode {
-      Err(QCompressError::invalid_argument("operation not supported in wrapped mode"))
-    } else {
-      Ok(())
-    }
-  }
-
-  pub(crate) fn check_wrapped_mode(&self) -> QCompressResult<()> {
-    if !self.use_wrapped_mode {
-      Err(QCompressError::invalid_argument("operation not supported in standalone mode"))
+  pub(crate) fn check_mode<M: Mode>(&self) -> QCompressResult<()> {
+    if self.use_wrapped_mode != M::IS_WRAPPED {
+      Err(QCompressError::invalid_argument(format!(
+        "expected {} mode while decompressing but found contrary flags",
+        M::NAME,
+      )))
     } else {
       Ok(())
     }
@@ -201,16 +198,14 @@ impl Flags {
       BITS_TO_ENCODE_N_ENTRIES
     }
   }
-}
 
-impl From<&CompressorConfig> for Flags {
-  fn from(config: &CompressorConfig) -> Self {
+  pub(crate) fn from_config<M: Mode>(config: &CompressorConfig) -> Self {
     Flags {
       use_5_bit_code_len: true,
       delta_encoding_order: config.delta_encoding_order,
       use_min_count_encoding: true,
       use_gcds: config.use_gcds,
-      use_wrapped_mode: config.use_wrapped_mode,
+      use_wrapped_mode: M::IS_WRAPPED,
     }
   }
 }

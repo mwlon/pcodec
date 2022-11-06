@@ -1,5 +1,5 @@
 use std::io::Write;
-use crate::{Compressor, CompressorConfig, Decompressor};
+use crate::{CompressorConfig, Decompressor, Compressor};
 use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 use crate::errors::QCompressResult;
 
