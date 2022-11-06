@@ -1,21 +1,10 @@
+use std::io::Write;
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
 use crate::base_decompressor::{BaseDecompressor, begin_data_page, read_chunk_meta, read_header, State, Step};
 use crate::bit_reader::BitReader;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::mode::Standalone;
-
-pub type Decompressor<T> = BaseDecompressor<T, Standalone>;
-
-/// The different types of data encountered when iterating through the
-/// decompressor.
-#[derive(Clone, Debug)]
-pub enum DecompressedItem<T: NumberLike> {
-  Flags(Flags),
-  ChunkMetadata(ChunkMetadata<T>),
-  Numbers(Vec<T>),
-  Footer,
-}
 
 /// Converts compressed bytes into [`Flags`], [`ChunkMetadata`],
 /// and vectors of numbers.
@@ -55,7 +44,36 @@ pub enum DecompressedItem<T: NumberLike> {
 ///   }
 /// }
 /// ```
+#[derive(Clone, Debug, Default)]
+pub struct Decompressor<T: NumberLike>(BaseDecompressor<T, Standalone>);
+
+/// The different types of data encountered when iterating through the
+/// decompressor.
+#[derive(Clone, Debug)]
+pub enum DecompressedItem<T: NumberLike> {
+  Flags(Flags),
+  ChunkMetadata(ChunkMetadata<T>),
+  Numbers(Vec<T>),
+  Footer,
+}
+
 impl<T: NumberLike> Decompressor<T> {
+  /// Creates a new decompressor, given a [`DecompressorConfig`].
+  pub fn from_config(config: DecompressorConfig) -> Self {
+    Self(BaseDecompressor::<T, Standalone>::from_config(config))
+  }
+
+  /// Reads the header, returning its [`Flags`] and updating this
+  /// `Decompressor`'s state.
+  /// Will return an error if this decompressor has already parsed a header,
+  /// is not byte-aligned,
+  /// runs out of data,
+  /// finds flags from a newer, incompatible version of q_compress,
+  /// or finds any corruptions.
+  pub fn header(&mut self) -> QCompressResult<Flags> {
+    self.0.header()
+  }
+
   /// Reads a [`ChunkMetadata`], returning it.
   /// Will return `None` if it instead finds a termination footer
   /// (indicating end of the .qco file).
@@ -65,35 +83,35 @@ impl<T: NumberLike> Decompressor<T> {
   /// runs out of data,
   /// or finds any corruptions.
   pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
-    self.state.check_step(Step::StartOfChunk, "read chunk metadata")?;
+    self.0.state.check_step(Step::StartOfChunk, "read chunk metadata")?;
 
-    self.chunk_metadata_internal()
+    self.0.chunk_metadata_internal()
   }
   // TODO
   /// Skips the chunk body, returning nothing.
   /// Will return an error if the decompressor is not in a chunk body,
   /// or runs out of data.
   pub fn skip_chunk_body(&mut self) -> QCompressResult<()> {
-    self.state.check_step(Step::StartOfDataPage, "skip chunk body")?;
+    self.0.state.check_step(Step::StartOfDataPage, "skip chunk body")?;
 
-    let bits_remaining = match &self.state.body_decompressor {
+    let bits_remaining = match &self.0.state.body_decompressor {
       Some(bd) => bd.bits_remaining(),
       None => {
-        let meta = self.state.chunk_meta.as_ref().unwrap();
+        let meta = self.0.state.chunk_meta.as_ref().unwrap();
         meta.compressed_body_size * 8
       }
     };
 
-    let skipped_bit_idx = self.state.bit_idx + bits_remaining;
-    if skipped_bit_idx <= self.words.total_bits {
-      self.state.bit_idx = skipped_bit_idx;
-      self.state.body_decompressor = None;
+    let skipped_bit_idx = self.0.state.bit_idx + bits_remaining;
+    if skipped_bit_idx <= self.0.words.total_bits {
+      self.0.state.bit_idx = skipped_bit_idx;
+      self.0.state.body_decompressor = None;
       Ok(())
     } else {
       Err(QCompressError::insufficient_data(format!(
         "unable to skip chunk body to bit index {} when only {} bits available",
         skipped_bit_idx,
-        self.words.total_bits,
+        self.0.words.total_bits,
       )))
     }
   }
@@ -104,10 +122,10 @@ impl<T: NumberLike> Decompressor<T> {
   /// runs out of data,
   /// or finds any corruptions.
   pub fn chunk_body(&mut self) -> QCompressResult<Vec<T>> {
-    self.state.check_step(Step::StartOfDataPage, "read chunk body")?;
-    let &ChunkMetadata { n, compressed_body_size, ..} = self.state.chunk_meta.as_ref().unwrap();
-    let res = self.data_page_internal(n, compressed_body_size)?;
-    self.state.chunk_meta = None;
+    self.0.state.check_step(Step::StartOfDataPage, "read chunk body")?;
+    let &ChunkMetadata { n, compressed_body_size, ..} = self.0.state.chunk_meta.as_ref().unwrap();
+    let res = self.0.data_page_internal(n, compressed_body_size)?;
+    self.0.state.chunk_meta = None;
     Ok(res)
   }
 
@@ -119,7 +137,7 @@ impl<T: NumberLike> Decompressor<T> {
     // so we just take ownership of the first chunk's numbers instead
     let mut res: Option<Vec<T>> = None;
     self.header()?;
-    while self.chunk_metadata_internal()?.is_some() {
+    while self.0.chunk_metadata_internal()?.is_some() {
       let nums = self.chunk_body()?;
       res = match res {
         Some(mut existing) => {
@@ -132,6 +150,20 @@ impl<T: NumberLike> Decompressor<T> {
       };
     }
     Ok(res.unwrap_or_default())
+  }
+
+  /// Frees memory used for storing compressed bytes the decompressor has
+  /// already decoded.
+  /// Note that calling this too frequently can cause performance issues.
+  pub fn free_compressed_memory(&mut self) {
+    self.0.free_compressed_memory()
+  }
+
+  /// Returns the current bit position into the compressed data the
+  /// decompressor is pointed at.
+  /// Note that when memory is freed, this will decrease.
+  pub fn bit_idx(&self) -> usize {
+    self.0.bit_idx()
   }
 }
 
@@ -200,12 +232,22 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
   type Item = QCompressResult<DecompressedItem<T>>;
 
   fn next(&mut self) -> Option<Self::Item> {
-    let res: QCompressResult<Option<DecompressedItem<T>>> = self.with_reader(next_dirty);
+    let res: QCompressResult<Option<DecompressedItem<T>>> = self.0.with_reader(next_dirty);
 
     match res {
       Ok(Some(x)) => Some(Ok(x)),
       Ok(None) => None,
       Err(e) => Some(Err(e))
     }
+  }
+}
+
+impl<T: NumberLike> Write for Decompressor<T> {
+  fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    self.0.write(buf)
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    self.0.flush()
   }
 }

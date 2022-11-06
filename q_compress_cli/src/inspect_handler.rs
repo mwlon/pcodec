@@ -1,7 +1,7 @@
 use std::io::Write;
 use anyhow::Result;
 
-use q_compress::{BaseDecompressor, Prefix, PrefixMetadata};
+use q_compress::{Decompressor, Prefix, PrefixMetadata};
 use q_compress::data_types::NumberLike;
 
 use crate::handlers::HandlerImpl;
@@ -29,7 +29,7 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
 
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()> {
     println!("inspecting {:?}", opt.path);
-    let mut decompressor = BaseDecompressor::<T>::default();
+    let mut decompressor = Decompressor::<T>::default();
     decompressor.write_all(bytes).unwrap();
 
     let flags = decompressor.header()?;
@@ -96,7 +96,7 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
       println!("{}n: {}", INDENT, m.n);
       match &m.prefix_metadata {
         PrefixMetadata::Simple { prefixes } => print_prefixes(prefixes),
-        PrefixMetadata::Delta {delta_moments: _, prefixes} => print_prefixes(prefixes),
+        PrefixMetadata::Delta { prefixes, .. } => print_prefixes(prefixes),
       }
     }
 

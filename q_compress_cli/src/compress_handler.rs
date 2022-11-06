@@ -12,7 +12,7 @@ use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::file::reader::SerializedFileReader;
 
-use q_compress::{BaseCompressor, CompressorConfig};
+use q_compress::{Compressor, CompressorConfig};
 use q_compress::data_types::NumberLike;
 
 use crate::arrow_number_like::ArrowNumberLike;
@@ -61,7 +61,7 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
       .with_compression_level(opt.level)
       .with_delta_encoding_order(delta_encoding_order)
       .with_use_gcds(!opt.disable_gcds);
-    let mut compressor = BaseCompressor::<T>::from_config(config);
+    let mut compressor = Compressor::<T>::from_config(config);
 
     compressor.header()?;
 
@@ -186,7 +186,7 @@ impl<T: ArrowNumberLike> ColumnReader<T> for CsvColumnReader<T> {
 }
 
 fn write_chunk<T: NumberLike>(
-  compressor: &mut BaseCompressor<T>,
+  compressor: &mut Compressor<T>,
   nums: &[T],
   file: &mut File,
 ) -> Result<()> {

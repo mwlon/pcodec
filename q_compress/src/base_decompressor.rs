@@ -13,7 +13,7 @@ use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::mode::Mode;
 
-/// All configurations available for a [`Decompressor`].
+/// All configurations available for a Decompressor.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct DecompressorConfig {
@@ -199,7 +199,6 @@ impl<T: NumberLike, M: Mode> Write for BaseDecompressor<T, M> {
 }
 
 impl<T, M> BaseDecompressor<T, M> where T: NumberLike, M: Mode {
-  /// Creates a new decompressor, given a [`DecompressorConfig`].
   pub fn from_config(config: DecompressorConfig) -> Self {
     Self {
       config,
@@ -207,9 +206,6 @@ impl<T, M> BaseDecompressor<T, M> where T: NumberLike, M: Mode {
     }
   }
 
-  /// Returns the current bit position into the compressed data the
-  /// decompressor is pointed at.
-  /// Note that when memory is freed, this will decrease.
   pub fn bit_idx(&self) -> usize {
     self.state.bit_idx
   }
@@ -225,13 +221,6 @@ impl<T, M> BaseDecompressor<T, M> where T: NumberLike, M: Mode {
     res
   }
 
-  /// Reads the header, returning its [`Flags`] and updating this
-  /// `Decompressor`'s state.
-  /// Will return an error if this decompressor has already parsed a header,
-  /// is not byte-aligned,
-  /// runs out of data,
-  /// finds flags from a newer, incompatible version of q_compress,
-  /// or finds any corruptions.
   pub fn header(&mut self) -> QCompressResult<Flags> {
     self.state.check_step(Step::PreHeader, "read header")?;
 
@@ -278,9 +267,6 @@ impl<T, M> BaseDecompressor<T, M> where T: NumberLike, M: Mode {
     })
   }
 
-  /// Frees memory used for storing compressed bytes the decompressor has
-  /// already decoded.
-  /// Note that calling this too frequently can cause performance issues.
   pub fn free_compressed_memory(&mut self) {
     let words_to_free = self.state.bit_idx / WORD_SIZE;
     if words_to_free > 0 {

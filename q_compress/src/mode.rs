@@ -1,9 +1,11 @@
-pub trait Mode: Default {
+use std::fmt::Debug;
+
+pub trait Mode: Copy + Debug + Default {
   const IS_WRAPPED: bool;
   const NAME: &'static str;
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Standalone;
 
 impl Mode for Standalone {
@@ -11,7 +13,7 @@ impl Mode for Standalone {
   const NAME: &'static str = "standalone";
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Wrapped;
 
 impl Mode for Wrapped {

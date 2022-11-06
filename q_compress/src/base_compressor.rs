@@ -25,7 +25,7 @@ struct JumpstartConfiguration {
   jumpstart: usize,
 }
 
-/// All configurations available for a [`Compressor`].
+/// All configurations available for a Compressor.
 ///
 /// Some, like `delta_encoding_order`, are explicitly stored as `Flags` in the
 /// compressed bytes.
@@ -457,10 +457,6 @@ impl<T: NumberLike, M: Mode> Default for BaseCompressor<T, M> {
 }
 
 impl<T, M: Mode> BaseCompressor<T, M> where T: NumberLike {
-  /// Creates a new compressor, given a [`CompressorConfig`].
-  /// Internally, the compressor builds [`Flags`] as well as an internal
-  /// configuration that doesn't show up in the output file.
-  /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
   pub fn from_config(config: CompressorConfig) -> Self {
     Self {
       internal_config: InternalCompressorConfig::from(&config),
@@ -471,20 +467,6 @@ impl<T, M: Mode> BaseCompressor<T, M> where T: NumberLike {
     }
   }
 
-  /// Returns a reference to the compressor's flags.
-  pub fn flags(&self) -> &Flags {
-    &self.flags
-  }
-
-  /// Writes out a header using the compressor's data type and flags.
-  /// Will return an error if the compressor has already written the header or
-  /// footer.
-  ///
-  /// Each .qco file must start with such a header, which contains:
-  /// * a 4-byte magic header for "qco!" in ascii,
-  /// * a byte for the data type (e.g. `i64` has byte 1 and `f64` has byte
-  /// 5), and
-  /// * bytes for the flags used to compress.
   pub fn header(&mut self) -> QCompressResult<()> {
     if !matches!(self.state, State::PreHeader) {
       return Err(self.state.wrong_step_err("header"));
@@ -621,9 +603,6 @@ impl<T, M: Mode> BaseCompressor<T, M> where T: NumberLike {
     Ok(has_pages_remaining)
   }
 
-  /// Writes out a single footer byte indicating that the .qco file has ended.
-  /// Will return an error if the compressor has not yet written the header
-  /// or already written the footer.
   pub fn footer(&mut self) -> QCompressResult<()> {
     if !matches!(self.state, State::StartOfChunk) {
       return Err(self.state.wrong_step_err("footer"));
@@ -632,21 +611,6 @@ impl<T, M: Mode> BaseCompressor<T, M> where T: NumberLike {
     self.writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)?;
     self.state = State::Terminated;
     Ok(())
-  }
-
-  /// Returns all bytes produced by the compressor so far that have not yet
-  /// been read.
-  ///
-  /// In the future we may implement a method to write to a `std::io::Write` or
-  /// implement `Compressor` as `std::io::Read`, TBD.
-  pub fn drain_bytes(&mut self) -> Vec<u8> {
-    self.writer.drain_bytes()
-  }
-
-  /// Returns the number of bytes produced by the compressor so far that have
-  /// not yet been read.
-  pub fn byte_size(&mut self) -> usize {
-    self.writer.byte_size()
   }
 }
 

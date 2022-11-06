@@ -1,5 +1,5 @@
 use q_compress::data_types::{NumberLike, TimestampMicros96};
-use q_compress::{BaseCompressor, CompressorConfig};
+use q_compress::{Compressor, CompressorConfig};
 use rand::Rng;
 use std::time::{SystemTime, Duration};
 use std::ops::AddAssign;
@@ -11,7 +11,7 @@ fn write_case<T: NumberLike>(version: &str, case_version: &str, name: &str, nums
     return;
   }
 
-  let mut compressor = BaseCompressor::<T>::from_config(config);
+  let mut compressor = Compressor::<T>::from_config(config);
   let compressed = compressor.simple_compress(&nums);
   let raw = nums.iter()
     // .flat_map(|&x| T::bytes_from(x)) // for 0.4 to 0.5
