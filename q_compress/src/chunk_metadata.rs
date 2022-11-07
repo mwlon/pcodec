@@ -37,7 +37,7 @@ pub enum PrefixMetadata<T: NumberLike> {
   }
 }
 
-/// The metadata of a .qco file chunk.
+/// The metadata of a Quantile-compressed chunk.
 ///
 /// Each file may contain multiple metadata sections, so to count the
 /// entries, one must sum the count `n` for each chunk metadata. This can

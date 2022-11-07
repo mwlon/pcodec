@@ -7,7 +7,7 @@ use crate::body_decompressor::{BodyDecompressor, Numbers};
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 
-/// Converts standalone .qco compressed bytes into [`Flags`],
+/// Converts .qco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
 ///
 /// Most `Decompressor` methods leave its state unchanged if they return an

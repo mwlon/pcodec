@@ -32,7 +32,8 @@ with high compression ratio and moderately fast speed.
 and optionally `i128`, `u128`, `TimestampMicros96`, `TimestampNanos96`
 
 **Features:**
-* stable file format (`.qco`)
+* stable standalone file format (`.qco`)
+* wrapped format for interleaving within a columnar table
 * preserves ordering and exact bit representation (including `NaN` floats)
 * supports nth-order delta encoding up to order 7 (e.g. 2nd order is delta-of-deltas)
 * compresses faster or slower depending on compression level from 0 to 12

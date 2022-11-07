@@ -1,5 +1,5 @@
 // Different from compressor and decompressor configs, flags change the format
-// of the .qco file.
+// of the compressed data.
 // New flags may be added in over time in a backward-compatible way.
 
 use std::cmp::min;
@@ -12,7 +12,7 @@ use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
 
-/// The configuration stored in a .qco file's header.
+/// The configuration stored in a Quantile-compressed header.
 ///
 /// During compression, flags are determined based on your `CompressorConfig`
 /// and the `q_compress` version.

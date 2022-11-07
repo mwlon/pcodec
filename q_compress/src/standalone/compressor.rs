@@ -5,7 +5,7 @@ use crate::constants::MAGIC_TERMINATION_BYTE;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 
-/// Converts vectors of numbers into compressed bytes as a standalone
+/// Converts vectors of numbers into compressed bytes in
 /// .qco format.
 ///
 /// Most `Compressor` methods leave its state unchanged if they return an error.
