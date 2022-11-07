@@ -11,7 +11,7 @@ use crate::errors::QCompressResult;
 /// You can configure behavior like compression level by instantiating with
 /// [`.from_config()`][Compressor::from_config]
 ///
-/// You can use the compressor at a data page level.
+/// You can use the wrapped compressor at a data page level.
 #[derive(Clone, Debug)]
 pub struct Compressor<T: NumberLike>(BaseCompressor<T>);
 

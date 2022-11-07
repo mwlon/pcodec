@@ -12,7 +12,7 @@ use crate::errors::QCompressResult;
 /// All decompressor methods leave its state unchanged if they return an
 /// error.
 ///
-/// You can use the decompressor at a data page level.
+/// You can use the wrapped decompressor at a data page level.
 #[derive(Clone, Debug, Default)]
 pub struct Decompressor<T: NumberLike>(BaseDecompressor<T>);
 
@@ -58,7 +58,7 @@ impl<T: NumberLike> Decompressor<T> {
   
   /// Initializes the decompressor for the next data page, reading in the
   /// data page's metadata but not the compressed body.
-  /// Will return an error if the decompressor is not in the middle of a
+  /// Will return an error if the decompressor is not in a
   /// chunk, runs out of data, or finds any corruptions. 
   ///
   /// This can be used regardless of whether the decompressor has finished
@@ -75,7 +75,9 @@ impl<T: NumberLike> Decompressor<T> {
     })
   }
 
-  /// TODO
+  /// Reads up to `limit` numbers from the current data page.
+  /// Will return an error if the decompressor is not in a data page,
+  /// it runs out of data, or any corruptions are found.
   pub fn next_batch(
     &mut self,
     limit: usize,
@@ -92,6 +94,11 @@ impl<T: NumberLike> Decompressor<T> {
   }
 
   /// Reads an entire data page, returning its numbers.
+  /// Will return an error if the decompressor is not in a chunk,
+  /// it runs out of data, or any corruptions are found.
+  ///
+  /// This is similar to calling [`begin_data_page`] and then
+  /// [`next_batch(usize::MAX)`].
   pub fn data_page(
     &mut self,
     n: usize,

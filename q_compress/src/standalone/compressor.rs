@@ -8,11 +8,11 @@ use crate::errors::QCompressResult;
 /// Converts vectors of numbers into compressed bytes as a standalone
 /// .qco format.
 ///
-/// All `Compressor` methods leave its state unchanged if they return an error.
+/// Most `Compressor` methods leave its state unchanged if they return an error.
 /// You can configure behavior like compression level by instantiating with
 /// [`.from_config()`][Compressor::from_config]
 ///
-/// You can use the compressor at a file or chunk level.
+/// You can use the standalone compressor at a file or chunk level.
 /// ```
 /// use q_compress::standalone::Compressor;
 ///

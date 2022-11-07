@@ -10,10 +10,10 @@ use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 /// Converts standalone .qco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
 ///
-/// All `Decompressor` methods leave its state unchanged if they return an
+/// Most `Decompressor` methods leave its state unchanged if they return an
 /// error.
 ///
-/// You can use the decompressor at a file, chunk, or stream level.
+/// You can use the standalone decompressor at a file, chunk, or stream level.
 /// ```
 /// use std::io::Write;
 /// use q_compress::standalone::{DecompressedItem, Decompressor};
@@ -136,8 +136,6 @@ impl<T: NumberLike> Decompressor<T> {
     self.0.state.chunk_meta = None;
     Ok(res)
   }
-
-  // TODO am I missing footer?
 
   // TODO in 1.0 just make this a function
   /// Takes in compressed bytes and returns a vector of numbers.
