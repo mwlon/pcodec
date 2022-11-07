@@ -1,12 +1,14 @@
 use std::io::Write;
+
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
-use crate::base_decompressor::{BaseDecompressor, begin_data_page, read_chunk_meta, read_header, State, Step};
+use crate::base_decompressor::{BaseDecompressor, header_dirty, State, Step};
 use crate::bit_reader::BitReader;
+use crate::body_decompressor::{BodyDecompressor, Numbers};
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 
-/// Converts compressed bytes into [`Flags`], [`ChunkMetadata`],
-/// and vectors of numbers.
+/// Converts standalone .qco compressed bytes into [`Flags`],
+/// [`ChunkMetadata`], and vectors of numbers.
 ///
 /// All `Decompressor` methods leave its state unchanged if they return an
 /// error.
@@ -84,14 +86,21 @@ impl<T: NumberLike> Decompressor<T> {
   pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
     self.0.state.check_step(Step::StartOfChunk, "read chunk metadata")?;
 
-    self.0.chunk_metadata_internal()
+    self.0.with_reader(|reader, state, _| {
+      let maybe_meta = state.chunk_meta_option_dirty(reader)?;
+      if maybe_meta.is_none() {
+        state.terminated = true;
+      }
+      state.chunk_meta = maybe_meta.clone();
+      Ok(maybe_meta)
+    })
   }
-  // TODO
+
   /// Skips the chunk body, returning nothing.
   /// Will return an error if the decompressor is not in a chunk body,
   /// or runs out of data.
   pub fn skip_chunk_body(&mut self) -> QCompressResult<()> {
-    self.0.state.check_step(Step::StartOfDataPage, "skip chunk body")?;
+    self.0.state.check_step_among(&[Step::StartOfDataPage, Step::MidDataPage], "skip chunk body")?;
 
     let bits_remaining = match &self.0.state.body_decompressor {
       Some(bd) => bd.bits_remaining(),
@@ -104,6 +113,7 @@ impl<T: NumberLike> Decompressor<T> {
     let skipped_bit_idx = self.0.state.bit_idx + bits_remaining;
     if skipped_bit_idx <= self.0.words.total_bits {
       self.0.state.bit_idx = skipped_bit_idx;
+      self.0.state.chunk_meta = None;
       self.0.state.body_decompressor = None;
       Ok(())
     } else {
@@ -115,7 +125,6 @@ impl<T: NumberLike> Decompressor<T> {
     }
   }
 
-  // TODO
   /// Reads a chunk body, returning it as a vector of numbers.
   /// Will return an error if the decompressor is not in a chunk body,
   /// runs out of data,
@@ -128,15 +137,21 @@ impl<T: NumberLike> Decompressor<T> {
     Ok(res)
   }
 
+  // TODO am I missing footer?
+
+  // TODO in 1.0 just make this a function
   /// Takes in compressed bytes and returns a vector of numbers.
   /// Will return an error if there are any compatibility, corruption,
   /// or insufficient data issues.
+  ///
+  /// Unlike most methods, this does not guarantee atomicity of the
+  /// compressor's state.
   pub fn simple_decompress(&mut self) -> QCompressResult<Vec<T>> {
     // cloning/extending by a single chunk's numbers can slow down by 2%
     // so we just take ownership of the first chunk's numbers instead
     let mut res: Option<Vec<T>> = None;
     self.header()?;
-    while self.0.chunk_metadata_internal()?.is_some() {
+    while self.chunk_metadata()?.is_some() {
       let nums = self.chunk_body()?;
       res = match res {
         Some(mut existing) => {
@@ -168,32 +183,35 @@ impl<T: NumberLike> Decompressor<T> {
 
 fn next_nums_dirty<T: NumberLike>(
   reader: &mut BitReader,
-  state: &mut State<T>,
+  bd: &mut BodyDecompressor<T>,
   config: &DecompressorConfig,
-) -> QCompressResult<Option<DecompressedItem<T>>> {
-  let bd = state.body_decompressor.as_mut().unwrap();
-  let nums_result = bd
-    .decompress_next_batch(reader, config.numbers_limit_per_item, false);
-  match nums_result {
-    Ok(numbers) => {
-      if numbers.nums.is_empty() {
-        Ok(None)
-      } else {
-        if numbers.finished_body {
-          state.body_decompressor = None;
-          state.chunk_meta = None;
-        }
-        Ok(Some(DecompressedItem::Numbers(numbers.nums)))
-      }
+) -> QCompressResult<Numbers<T>> {
+  bd.decompress_next_batch(reader, config.numbers_limit_per_item, false)
+}
+
+fn apply_nums<T: NumberLike>(
+  state: &mut State<T>,
+  numbers: Numbers<T>,
+) -> Option<DecompressedItem<T>> {
+  if numbers.nums.is_empty() {
+    None
+  } else {
+    if numbers.finished_body {
+      state.chunk_meta = None;
+      state.body_decompressor = None;
     }
-    Err(e) => Err(e),
+    Some(DecompressedItem::Numbers(numbers.nums))
   }
 }
 
-fn next_dirty<T: NumberLike>(reader: &mut BitReader, state: &mut State<T>, config: &DecompressorConfig) -> QCompressResult<Option<DecompressedItem<T>>> {
+fn next_dirty<T: NumberLike>(
+  reader: &mut BitReader,
+  state: &mut State<T>,
+  config: &DecompressorConfig,
+) -> QCompressResult<Option<DecompressedItem<T>>> {
   match state.step() {
     Step::PreHeader => {
-      match read_header::<T>(reader, false) {
+      match header_dirty::<T>(reader, false) {
         Ok(flags) => {
           state.flags = Some(flags.clone());
           Ok(Some(DecompressedItem::Flags(flags)))
@@ -203,7 +221,7 @@ fn next_dirty<T: NumberLike>(reader: &mut BitReader, state: &mut State<T>, confi
       }
     },
     Step::StartOfChunk => {
-      match read_chunk_meta::<T>(reader, state.flags.as_ref().unwrap()) {
+      match state.chunk_meta_option_dirty(reader) {
         Ok(Some(meta)) => {
           state.chunk_meta = Some(meta.clone());
           Ok(Some(DecompressedItem::ChunkMetadata(meta)))
@@ -218,10 +236,15 @@ fn next_dirty<T: NumberLike>(reader: &mut BitReader, state: &mut State<T>, confi
     },
     Step::StartOfDataPage => {
       let &ChunkMetadata { n, compressed_body_size, .. } = state.chunk_meta.as_ref().unwrap();
-      begin_data_page(reader, state, n, compressed_body_size, false)?;
-      next_nums_dirty(reader, state, config)
+      let mut bd = state.new_body_decompressor(reader, n, compressed_body_size)?;
+      let numbers = next_nums_dirty(reader, &mut bd, config)?;
+      state.body_decompressor = Some(bd);
+      Ok(apply_nums(state, numbers))
     },
-    Step::MidDataPage => next_nums_dirty(reader, state, config),
+    Step::MidDataPage => {
+      let numbers = next_nums_dirty(reader, state.body_decompressor.as_mut().unwrap(), config)?;
+      Ok(apply_nums(state, numbers))
+    },
     Step::Terminated => Ok(None),
   }
 }

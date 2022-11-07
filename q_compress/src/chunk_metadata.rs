@@ -190,6 +190,10 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       }
     };
 
+    reader.drain_empty_byte(|| QCompressError::corruption(
+      "nonzero bits in end of final byte of chunk metadata"
+    ))?;
+
     Ok(Self {
       n,
       compressed_body_size,
@@ -238,43 +242,5 @@ pub enum DataPagingSpec {
 impl Default for DataPagingSpec {
   fn default() -> Self {
     DataPagingSpec::SinglePage
-  }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct ChunkSpec {
-  data_paging_spec: DataPagingSpec,
-}
-
-impl ChunkSpec {
-  pub fn with_page_sizes(mut self, sizes: Vec<usize>) -> Self {
-    self.data_paging_spec = DataPagingSpec::ExactPageSizes(sizes);
-    self
-  }
-
-  pub(crate) fn page_sizes(&self, n: usize) -> QCompressResult<Vec<usize>> {
-    let page_sizes = match &self.data_paging_spec {
-      DataPagingSpec::SinglePage => Ok(vec![n]),
-      DataPagingSpec::ExactPageSizes(sizes) => {
-        let sizes_n: usize = sizes.iter().sum();
-        if sizes_n == n {
-          Ok(sizes.clone())
-        } else {
-          Err(QCompressError::invalid_argument(format!(
-            "chunk spec suggests {} numbers but {} were given",
-            sizes_n,
-            n,
-          )))
-        }
-      }
-    }?;
-
-    for &size in &page_sizes {
-      if size == 0 {
-        return Err(QCompressError::invalid_argument("cannot write data page of 0 numbers"));
-      }
-    }
-
-    Ok(page_sizes)
   }
 }

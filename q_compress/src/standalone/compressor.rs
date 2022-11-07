@@ -1,10 +1,12 @@
 use crate::{ChunkMetadata, CompressorConfig, Flags};
-use crate::base_compressor::BaseCompressor;
-use crate::chunk_metadata::ChunkSpec;
+use crate::base_compressor::{BaseCompressor, State};
+use crate::chunk_spec::ChunkSpec;
+use crate::constants::MAGIC_TERMINATION_BYTE;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 
-/// Converts vectors of numbers into compressed bytes.
+/// Converts vectors of numbers into compressed bytes as a standalone
+/// .qco format.
 ///
 /// All `Compressor` methods leave its state unchanged if they return an error.
 /// You can configure behavior like compression level by instantiating with
@@ -87,10 +89,20 @@ impl<T: NumberLike> Compressor<T> {
   /// Will return an error if the compressor has not yet written the header
   /// or already written the footer.
   pub fn footer(&mut self) -> QCompressResult<()> {
-    self.0.footer()
+    if !matches!(self.0.state, State::StartOfChunk) {
+      return Err(self.0.state.wrong_step_err("footer"));
+    }
+
+    self.0.writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)?;
+    self.0.state = State::Terminated;
+    Ok(())
   }
 
+  // TODO in 1.0 just make this a function
   /// Takes in a slice of numbers and returns compressed bytes.
+  ///
+  /// Unlike most methods, this does not guarantee atomicity of the
+  /// compressor's state.
   pub fn simple_compress(&mut self, nums: &[T]) -> Vec<u8> {
     // The following unwraps are safe because the writer will be byte-aligned
     // after each step and ensure each chunk has appropriate size.
@@ -106,9 +118,6 @@ impl<T: NumberLike> Compressor<T> {
 
   /// Returns all bytes produced by the compressor so far that have not yet
   /// been read.
-  ///
-  /// In the future we may implement a method to write to a `std::io::Write` or
-  /// implement `Compressor` as `std::io::Read`, TBD.
   pub fn drain_bytes(&mut self) -> Vec<u8> {
     self.0.writer.drain_bytes()
   }

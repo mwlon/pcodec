@@ -1,9 +1,17 @@
 use crate::{ChunkMetadata, CompressorConfig, Flags};
 use crate::base_compressor::BaseCompressor;
-use crate::chunk_metadata::ChunkSpec;
+use crate::chunk_spec::ChunkSpec;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 
+/// Converts vectors of numbers into compressed bytes for use in a wrapping
+/// columnar data format.
+///
+/// All `Compressor` methods leave its state unchanged if they return an error.
+/// You can configure behavior like compression level by instantiating with
+/// [`.from_config()`][Compressor::from_config]
+///
+/// You can use the compressor at a data page level.
 #[derive(Clone, Debug)]
 pub struct Compressor<T: NumberLike>(BaseCompressor<T>);
 
@@ -39,7 +47,16 @@ impl<T: NumberLike> Compressor<T> {
     self.0.header()
   }
 
-  /// TODO: documentation
+  /// Writes out and returns chunk metadata after training the compressor.
+  /// Will return an error if the compressor has not yet written the header,
+  /// in the middle of a chunk, or if the `spec` provided is
+  /// incompatible with the count of `nums`.
+  ///
+  /// The `spec` indicates how the chunk's data pages will be broken up;
+  /// see [`ChunkSpec`] for more detail.
+  ///
+  /// After this method, the compressor retains some precomputed information
+  /// that only gets freed after every data page in the chunk has been written.
   pub fn chunk_metadata(
     &mut self,
     nums: &[T],
@@ -48,23 +65,16 @@ impl<T: NumberLike> Compressor<T> {
     self.0.chunk_metadata_internal(nums, spec)
   }
 
-  /// TODO documentation
-  pub fn data_page(&mut self) -> QCompressResult<bool> {
+  /// Writes out a data page, using precomputed data passed in through
+  /// [`chunk_metadata`], returning (at the moment, trivial) metadata.
+  /// Will return an error if the compressor is not at the start of a data
+  /// page in the middle of a chunk.
+  pub fn data_page(&mut self) -> QCompressResult<()> {
     self.0.data_page_internal()
-  }
-
-  /// Writes out a single footer byte indicating that the .qco file has ended.
-  /// Will return an error if the compressor has not yet written the header
-  /// or already written the footer.
-  pub fn footer(&mut self) -> QCompressResult<()> {
-    self.0.footer()
   }
 
   /// Returns all bytes produced by the compressor so far that have not yet
   /// been read.
-  ///
-  /// In the future we may implement a method to write to a `std::io::Write` or
-  /// implement `Compressor` as `std::io::Read`, TBD.
   pub fn drain_bytes(&mut self) -> Vec<u8> {
     self.0.writer.drain_bytes()
   }

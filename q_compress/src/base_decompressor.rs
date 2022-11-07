@@ -45,6 +45,33 @@ pub(crate) struct State<T: NumberLike> {
   pub terminated: bool,
 }
 
+pub fn header_dirty<T: NumberLike>(
+  reader: &mut BitReader,
+  use_wrapped_mode: bool,
+) -> QCompressResult<Flags> {
+  let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
+  if bytes != MAGIC_HEADER {
+    return Err(QCompressError::corruption(format!(
+      "magic header does not match {:?}; instead found {:?}",
+      MAGIC_HEADER,
+      bytes,
+    )));
+  }
+  let bytes = reader.read_aligned_bytes(1)?;
+  let byte = bytes[0];
+  if byte != T::HEADER_BYTE {
+    return Err(QCompressError::corruption(format!(
+      "data type byte does not match {:?}; instead found {:?}",
+      T::HEADER_BYTE,
+      byte,
+    )));
+  }
+
+  let res = Flags::parse_from(reader)?;
+  res.check_mode(use_wrapped_mode)?;
+  Ok(res)
+}
+
 impl<T: NumberLike> State<T> {
   pub fn check_step(&self, expected: Step, desc: &'static str) -> QCompressResult<()> {
     self.check_step_among(&[expected], desc)
@@ -57,6 +84,52 @@ impl<T: NumberLike> State<T> {
     } else {
       Err(step.wrong_step_err(desc))
     }
+  }
+
+  pub fn chunk_meta_option_dirty(&self, reader: &mut BitReader) -> QCompressResult<Option<ChunkMetadata<T>>> {
+    let magic_byte = reader.read_aligned_bytes(1)?[0];
+    if magic_byte == MAGIC_TERMINATION_BYTE {
+      return Ok(None);
+    } else if magic_byte != MAGIC_CHUNK_BYTE {
+      return Err(QCompressError::corruption(format!(
+        "invalid magic chunk byte: {}",
+        magic_byte
+      )));
+    }
+
+    ChunkMetadata::<T>::parse_from(reader, self.flags.as_ref().unwrap())
+      .map(Some)
+  }
+
+  pub(crate) fn new_body_decompressor(
+    &self,
+    reader: &mut BitReader,
+    n: usize,
+    compressed_page_size: usize,
+  ) -> QCompressResult<BodyDecompressor<T>> {
+    let flags = self.flags.as_ref().unwrap();
+    let chunk_meta = self.chunk_meta.as_ref().unwrap();
+    let use_wrapped_mode = flags.use_wrapped_mode;
+
+    let (delta_moments, compressed_body_size) = if use_wrapped_mode {
+      let start_byte_idx = reader.aligned_byte_idx()?;
+      let moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
+      let end_byte_idx = reader.aligned_byte_idx()?;
+      let cbs = compressed_page_size.checked_sub(end_byte_idx - start_byte_idx)
+        .ok_or_else(|| QCompressError::invalid_argument(
+          "compressed page size {} is less than data page metadata size"
+        ))?;
+      (moments, cbs)
+    } else {
+      (chunk_meta.delta_moments.clone(), compressed_page_size)
+    };
+
+    BodyDecompressor::new(
+      &chunk_meta.prefix_metadata,
+      n,
+      compressed_body_size,
+      &delta_moments,
+    )
   }
 
   pub fn step(&self) -> Step {
@@ -100,85 +173,6 @@ impl Step {
   }
 }
 
-pub(crate) fn read_header<T: NumberLike>(
-  reader: &mut BitReader,
-  use_wrapped_mode: bool,
-) -> QCompressResult<Flags> {
-  let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
-  if bytes != MAGIC_HEADER {
-    return Err(QCompressError::corruption(format!(
-      "magic header does not match {:?}; instead found {:?}",
-      MAGIC_HEADER,
-      bytes,
-    )));
-  }
-  let bytes = reader.read_aligned_bytes(1)?;
-  let byte = bytes[0];
-  if byte != T::HEADER_BYTE {
-    return Err(QCompressError::corruption(format!(
-      "data type byte does not match {:?}; instead found {:?}",
-      T::HEADER_BYTE,
-      byte,
-    )));
-  }
-
-  let res = Flags::parse_from(reader)?;
-  res.check_mode(use_wrapped_mode)?;
-  Ok(res)
-}
-
-pub(crate) fn read_chunk_meta<T: NumberLike>(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Option<ChunkMetadata<T>>> {
-  let magic_byte = reader.read_aligned_bytes(1)?[0];
-  if magic_byte == MAGIC_TERMINATION_BYTE {
-    return Ok(None);
-  } else if magic_byte != MAGIC_CHUNK_BYTE {
-    return Err(QCompressError::corruption(format!(
-      "invalid magic chunk byte: {}",
-      magic_byte
-    )));
-  }
-
-  // otherwise there is indeed another chunk
-  let metadata = ChunkMetadata::parse_from(reader, flags)?;
-  reader.drain_empty_byte(|| QCompressError::corruption(
-    "nonzero bits in end of final byte of chunk metadata"
-  ))?;
-
-  Ok(Some(metadata))
-}
-
-pub(crate) fn begin_data_page<T: NumberLike>(
-  reader: &mut BitReader,
-  state: &mut State<T>,
-  n: usize,
-  compressed_page_size: usize,
-  is_wrapped: bool,
-) -> QCompressResult<()> {
-  state.check_step(Step::StartOfDataPage, "begin data page")?;
-
-  let chunk_meta = state.chunk_meta.as_ref().unwrap();
-  let (delta_moments, compressed_body_size) = if is_wrapped {
-    let start_byte_idx = reader.aligned_byte_idx()?;
-    let moments = DeltaMoments::parse_from(reader, state.flags.as_ref().unwrap().delta_encoding_order)?;
-    let end_byte_idx = reader.aligned_byte_idx()?;
-    let cbs = compressed_page_size.checked_sub(end_byte_idx - start_byte_idx)
-      .ok_or_else(|| QCompressError::invalid_argument(
-        "compressed page size {} is less than data page metadata size"
-      ))?;
-    (moments, cbs)
-  } else {
-    (chunk_meta.delta_moments.clone(), compressed_page_size)
-  };
-  state.body_decompressor = Some(BodyDecompressor::new(
-    &chunk_meta.prefix_metadata,
-    n,
-    compressed_body_size,
-    &delta_moments,
-  )?);
-
-  Ok(())
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct BaseDecompressor<T: NumberLike> {
   pub(crate) config: DecompressorConfig,
@@ -209,6 +203,9 @@ impl<T: NumberLike> BaseDecompressor<T> {
     self.state.bit_idx
   }
 
+  // this only ensures atomicity on the reader, not the state
+  // so we have to be careful to only modify state after everything else
+  // succeeds, or manually handle rolling it back
   pub(crate) fn with_reader<X, F>(&mut self, f: F) -> QCompressResult<X>
   where F: FnOnce(&mut BitReader, &mut State<T>, &DecompressorConfig) -> QCompressResult<X> {
     let mut reader = BitReader::from(&self.words);
@@ -223,40 +220,24 @@ impl<T: NumberLike> BaseDecompressor<T> {
   pub fn header(&mut self, use_wrapped_mode: bool) -> QCompressResult<Flags> {
     self.state.check_step(Step::PreHeader, "read header")?;
 
-    self.with_reader(|reader, state, _| {
-      let flags = read_header::<T>(reader, use_wrapped_mode)?;
+    self.with_reader(|reader, state, _ | {
+      let flags = header_dirty::<T>(reader, use_wrapped_mode)?;
       state.flags = Some(flags.clone());
       Ok(flags)
-    })
-  }
-
-  pub(crate) fn chunk_metadata_internal(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
-    self.with_reader(|reader, state, _| {
-      let flags = state.flags.as_ref().unwrap();
-      let maybe_meta = read_chunk_meta(reader, flags)?;
-      if let Some(meta) = &maybe_meta {
-        state.chunk_meta = Some(meta.clone())
-      } else {
-        state.terminated = true;
-      }
-      Ok(maybe_meta)
     })
   }
 
   pub(crate) fn data_page_internal(&mut self, n: usize, compressed_page_size: usize) -> QCompressResult<Vec<T>> {
     let old_bd = self.state.body_decompressor.clone();
     self.with_reader(|reader, state, _| {
-      begin_data_page(
+      let mut bd = state.new_body_decompressor(
         reader,
-        state,
         n,
         compressed_page_size,
-        state.flags.as_ref().unwrap().use_wrapped_mode
       )?;
-      let bd = state.body_decompressor.as_mut().unwrap();
-      // this error atomic error handling is confusing and I should find a cleaner way to do it
       let res = bd.decompress_next_batch(reader, usize::MAX, true)
         .map(|numbers| numbers.nums);
+      // we need to roll back the body decompressor if this failed
       state.body_decompressor = if res.is_ok() {
         None
       } else {

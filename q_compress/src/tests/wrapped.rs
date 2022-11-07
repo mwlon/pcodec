@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::io::Write;
 
 use crate::{CompressorConfig, DecompressorConfig};
-use crate::chunk_metadata::ChunkSpec;
+use crate::wrapped::ChunkSpec;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 use crate::wrapped::{Compressor, Decompressor};
@@ -76,7 +76,7 @@ impl WrappedFormat {
     let (header_len, buf) = decode_usize(buf);
     let (n_chunks, mut buf) = decode_usize(buf);
     decompressor.write_all(&buf[..header_len]).unwrap();
-    let flags = decompressor.header()?;
+    decompressor.header()?;
     buf = &mut buf[header_len..];
 
     for _ in 0..n_chunks {
@@ -85,7 +85,7 @@ impl WrappedFormat {
       let (n_pages, newbuf) = decode_usize(buf);
       buf = newbuf;
       decompressor.write_all(&buf[..meta_len]).unwrap();
-      let meta = decompressor.chunk_metadata()?.unwrap();
+      decompressor.chunk_metadata()?;
       buf = &mut buf[meta_len..];
 
       for _ in 0..n_pages {

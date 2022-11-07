@@ -4,10 +4,10 @@ use std::marker::PhantomData;
 
 use crate::{Flags, gcd_utils, huffman_encoding};
 use crate::bit_writer::BitWriter;
-use crate::chunk_metadata::{ChunkMetadata, ChunkSpec, PrefixMetadata};
+use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
+use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
-use crate::data_page::DataPageMetadata;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
@@ -393,25 +393,34 @@ impl<'a, U, GcdOp> TrainedBodyCompressor<'a, U, GcdOp> where U: UnsignedLike, Gc
 }
 
 #[derive(Clone, Debug)]
-struct MidChunkInfo<T: NumberLike> {
+pub struct MidChunkInfo<T: NumberLike> {
   // immutable:
   unsigneds: Vec<T::Unsigned>,
   use_gcd: bool,
   table: CompressionTable<T::Unsigned>,
-  data_pages: Vec<DataPageMetadata<T>>,
+  delta_momentss: Vec<DeltaMoments<T::Signed>>,
+  page_sizes: Vec<usize>,
   // mutable:
   idx: usize,
   page_idx: usize,
 }
 
 impl<T: NumberLike> MidChunkInfo<T> {
-  fn data_page(&self) -> &DataPageMetadata<T> {
-    &self.data_pages[self.page_idx]
+  fn data_page_n(&self) -> usize {
+    self.page_sizes[self.page_idx]
+  }
+
+  fn data_page_moments(&self) -> &DeltaMoments<T::Signed> {
+    &self.delta_momentss[self.page_idx]
+  }
+
+  fn n_pages(&self) -> usize {
+    self.page_sizes.len()
   }
 }
 
 #[derive(Clone, Debug)]
-enum State<T: NumberLike> {
+pub(crate) enum State<T: NumberLike> {
   PreHeader,
   StartOfChunk,
   MidChunk(MidChunkInfo<T>),
@@ -425,7 +434,7 @@ impl<T: NumberLike> Default for State<T> {
 }
 
 impl<T: NumberLike> State<T> {
-  fn wrong_step_err(&self, description: &str) -> QCompressError {
+  pub fn wrong_step_err(&self, description: &str) -> QCompressError {
     let step_str = match self {
       State::PreHeader => "has not yet written header",
       State::StartOfChunk => "is at the start of a chunk",
@@ -445,7 +454,7 @@ pub struct BaseCompressor<T> where T: NumberLike {
   internal_config: InternalCompressorConfig,
   pub(crate) flags: Flags,
   pub(crate) writer: BitWriter,
-  state: State<T>,
+  pub(crate) state: State<T>,
 }
 
 impl<T> BaseCompressor<T> where T: NumberLike {
@@ -489,7 +498,9 @@ impl<T> BaseCompressor<T> where T: NumberLike {
     let page_sizes = spec.page_sizes(nums.len())?;
     let n_pages = page_sizes.len();
 
-    self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
+    if !self.flags.use_wrapped_mode {
+      self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
+    }
 
     let order = self.flags.delta_encoding_order;
     let (
@@ -539,10 +550,6 @@ impl<T> BaseCompressor<T> where T: NumberLike {
     };
 
     let chunk_meta_moments = delta_momentss[0].clone();
-    let data_pages = delta_momentss.into_iter()
-      .zip(page_sizes.into_iter())
-      .map(|(moments, n)| DataPageMetadata::new(moments, n))
-      .collect::<Vec<_>>();
     let meta = ChunkMetadata::new(n, prefix_meta, chunk_meta_moments);
     meta.write_to(&mut self.writer, &self.flags);
 
@@ -550,7 +557,8 @@ impl<T> BaseCompressor<T> where T: NumberLike {
       unsigneds,
       use_gcd,
       table,
-      data_pages,
+      delta_momentss,
+      page_sizes,
       idx: 0,
       page_idx: 0,
     });
@@ -558,7 +566,7 @@ impl<T> BaseCompressor<T> where T: NumberLike {
     Ok(meta)
   }
 
-  pub(crate) fn data_page_internal(&mut self) -> QCompressResult<bool> {
+  pub(crate) fn data_page_internal(&mut self) -> QCompressResult<()> {
     let has_pages_remaining = {
       let info = match &mut self.state {
         State::MidChunk(info) => Ok(info),
@@ -566,10 +574,10 @@ impl<T> BaseCompressor<T> where T: NumberLike {
       }?;
 
       let start = info.idx;
-      let data_page_meta = info.data_page();
-      let end = start + data_page_meta.n.saturating_sub(self.flags.delta_encoding_order);
+      let data_page_n = info.data_page_n();
+      let end = start + data_page_n.saturating_sub(self.flags.delta_encoding_order);
       if self.flags.use_wrapped_mode {
-        data_page_meta.write_to(&mut self.writer);
+        info.data_page_moments().write_to(&mut self.writer);
       }
       let slice = if end > start { &info.unsigneds[start..end] } else { &[] };
       trained_compress_body(
@@ -579,28 +587,19 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         &mut self.writer,
       )?;
 
-      info.idx += data_page_meta.n;
+      info.idx += data_page_n;
       info.page_idx += 1;
 
-      info.page_idx < info.data_pages.len()
+      info.page_idx < info.n_pages()
     };
 
     if !has_pages_remaining {
       self.state = State::StartOfChunk;
     }
 
-    Ok(has_pages_remaining)
-  }
-
-  pub fn footer(&mut self) -> QCompressResult<()> {
-    if !matches!(self.state, State::StartOfChunk) {
-      return Err(self.state.wrong_step_err("footer"));
-    }
-
-    self.writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)?;
-    self.state = State::Terminated;
     Ok(())
   }
+
 }
 
 #[cfg(test)]
