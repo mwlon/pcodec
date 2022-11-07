@@ -7,7 +7,7 @@ use crate::errors::QCompressResult;
 /// Converts vectors of numbers into compressed bytes for use in a wrapping
 /// columnar data format.
 ///
-/// All `Compressor` methods leave its state unchanged if they return an error.
+/// All compressor methods leave its state unchanged if they return an error.
 /// You can configure behavior like compression level by instantiating with
 /// [`.from_config()`][Compressor::from_config]
 ///
@@ -66,8 +66,7 @@ impl<T: NumberLike> Compressor<T> {
   }
 
   /// Writes out a data page, using precomputed data passed in through
-  /// [`.chunk_metadata`][Self::chunk_metadata],
-  /// returning (at the moment, trivial) metadata.
+  /// [`.chunk_metadata`][Self::chunk_metadata].
   /// Will return an error if the compressor is not at the start of a data
   /// page in the middle of a chunk.
   pub fn data_page(&mut self) -> QCompressResult<()> {

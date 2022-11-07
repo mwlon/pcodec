@@ -11,7 +11,7 @@ const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,
-/// then compresses the numbers to bytes.
+/// then compresses the numbers to .qco bytes.
 ///
 /// This adds some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
@@ -25,7 +25,7 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 }
 
 /// Automatically makes an educated guess for the best decompression
-/// configuration, then decompresses the bytes into numbers.
+/// configuration, then decompresses .qco bytes into numbers.
 ///
 /// There are currently no relevant fields in the decompression configuration,
 /// so there is no compute downside to using this function.

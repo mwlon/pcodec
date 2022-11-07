@@ -7,6 +7,7 @@ use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::Prefix;
 
+// TODO in 1.0 make this more non_exhaustive
 /// A wrapper for prefixes in the two cases cases: delta encoded or not.
 /// 
 /// This is the part of chunk metadata that describes *how* the data was
@@ -28,9 +29,6 @@ pub enum PrefixMetadata<T: NumberLike> {
   /// with `delta_encoding_order: 1`
   /// will have prefixes of type `i64`, where a delta of n indicates a change
   /// of n * machine epsilon from the last float.
-  ///
-  /// `Delta` prefix info also contains a `Vec` of initial delta moments at
-  /// the start of the chunk, each of which is also a `SignedLike`.
   #[non_exhaustive]
   Delta {
     prefixes: Vec<Prefix<T::Signed>>,
@@ -39,11 +37,13 @@ pub enum PrefixMetadata<T: NumberLike> {
 
 /// The metadata of a Quantile-compressed chunk.
 ///
-/// Each file may contain multiple metadata sections, so to count the
-/// entries, one must sum the count `n` for each chunk metadata. This can
-/// be done easily - see the fast_seeking.rs example.
 /// One can also create a rough histogram (or a histogram of deltas, if
 /// delta encoding was used) by aggregating chunk metadata.
+///
+/// Each .qco file may contain multiple metadata sections, so to count the
+/// entries, one must sum the count `n` for each chunk metadata. This can
+/// be done easily - see the fast_seeking.rs example. For wrapped data,
+/// `n` and `compressed_body_size` are not stored.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ChunkMetadata<T> where T: NumberLike {
@@ -163,6 +163,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     }
   }
 
+  // TODO in 1.0 make this private
   pub fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
     let (n, compressed_body_size, delta_moments) = if flags.use_wrapped_mode {
       (
@@ -202,6 +203,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
     })
   }
 
+  // TODO in 1.0 make this private
   pub fn write_to(&self, writer: &mut BitWriter, flags: &Flags) {
     if !flags.use_wrapped_mode {
       writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);

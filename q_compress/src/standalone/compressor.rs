@@ -8,7 +8,7 @@ use crate::errors::QCompressResult;
 /// Converts vectors of numbers into compressed bytes in
 /// .qco format.
 ///
-/// Most `Compressor` methods leave its state unchanged if they return an error.
+/// Most compressor methods leave its state unchanged if they return an error.
 /// You can configure behavior like compression level by instantiating with
 /// [`.from_config()`][Compressor::from_config]
 ///

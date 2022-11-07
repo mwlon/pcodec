@@ -24,7 +24,7 @@ impl<T: NumberLike> Decompressor<T> {
 
   /// Reads the header, returning its [`Flags`] and updating this
   /// decompressor's state.
-  /// Will return an error if this decompressor has already parsed a header,
+  /// Will return an error if the decompressor has already parsed a header,
   /// is not byte-aligned,
   /// runs out of data,
   /// finds flags from a newer, incompatible version of q_compress,

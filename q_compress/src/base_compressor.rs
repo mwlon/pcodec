@@ -92,6 +92,7 @@ impl Default for CompressorConfig {
   }
 }
 
+// TODO in 1.0: we need these?
 impl CompressorConfig {
   /// Sets [`compression_level`][CompressorConfig::compression_level].
   pub fn with_compression_level(mut self, level: usize) -> Self {

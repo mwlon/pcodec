@@ -23,7 +23,7 @@ impl ChunkSpec {
   /// use q_compress::wrapped::ChunkSpec;
   /// let spec = ChunkSpec::default().with_page_sizes(vec![1, 2, 3]);
   /// ```
-  /// can only be used if the chunk actually contain 1+2+3=6 numbers.
+  /// can only be used if the chunk actually contains 1+2+3=6 numbers.
   pub fn with_page_sizes(mut self, sizes: Vec<usize>) -> Self {
     self.data_paging_spec = DataPagingSpec::ExactPageSizes(sizes);
     self
