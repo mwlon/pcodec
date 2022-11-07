@@ -66,7 +66,8 @@ impl<T: NumberLike> Compressor<T> {
   }
 
   /// Writes out a data page, using precomputed data passed in through
-  /// [`chunk_metadata`], returning (at the moment, trivial) metadata.
+  /// [`.chunk_metadata`][Self::chunk_metadata],
+  /// returning (at the moment, trivial) metadata.
   /// Will return an error if the compressor is not at the start of a data
   /// page in the middle of a chunk.
   pub fn data_page(&mut self) -> QCompressResult<()> {

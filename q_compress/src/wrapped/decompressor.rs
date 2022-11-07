@@ -97,8 +97,8 @@ impl<T: NumberLike> Decompressor<T> {
   /// Will return an error if the decompressor is not in a chunk,
   /// it runs out of data, or any corruptions are found.
   ///
-  /// This is similar to calling [`begin_data_page`] and then
-  /// [`next_batch(usize::MAX)`].
+  /// This is similar to calling [`.begin_data_page`][Self::begin_data_page] and then
+  /// [`.next_batch(usize::MAX)`][Self::next_batch].
   pub fn data_page(
     &mut self,
     n: usize,
@@ -121,7 +121,9 @@ impl<T: NumberLike> Decompressor<T> {
   /// Clears any data written to the decompressor but not yet decompressed.
   /// As an example, if you want to want to read the first 5 numbers from each
   /// data page, you might write each compressed data page to the decompressor,
-  /// then repeatedly call [`begin_data_page`], [`next_nums`], and
+  /// then repeatedly call
+  /// [`.begin_data_page`][Self::begin_data_page],
+  /// [`.next_nums`][Self::next_batch], and
   /// this method.
   pub fn clear_compressed_bytes(&mut self) {
     self.0.words = BitWords::default();

@@ -5,7 +5,8 @@ use crate::errors::{QCompressError, QCompressResult};
 /// data pages.
 ///
 /// By default this specifies a single data page containing all the data.
-/// You can also specify exact data page sizes via [`with_page_sizes`].
+/// You can also specify exact data page sizes via
+/// [`.with_page_sizes`][Self::with_page_sizes].
 /// Data pages must be specified up-front for each chunk for performance
 /// reasons.
 #[derive(Clone, Debug, Default)]
