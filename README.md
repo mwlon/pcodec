@@ -98,7 +98,7 @@ The inefficiency of quantile compression in bits per number is the KL
 divergence from
 the approximated distribution `Q` to the true distribution `P`.
 
-## `.qco` File Format
+## `.qco` Standalone File Format
 
 <img src="./res/file_format.svg">
 
@@ -132,5 +132,11 @@ specifying the exact value within the range.
 
 At the end of the file is a termination byte.
 
-Quantle compression can also be used to write data pages interleaved into a
+## Wrapped API
+
+Quantile compression can also be used to write data pages interleaved into a
 columnar format, as opposed to writing a standalone file.
+As compared to the standalone format, this omits unnecessary metadata such as
+counts, compressed byte size, and chunk/termination bytes.
+It also allows writing finer data pages within a chunk, allowing data to be
+interleaved efficiently.
