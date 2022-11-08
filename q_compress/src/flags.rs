@@ -188,6 +188,9 @@ impl Flags {
   }
 
   pub(crate) fn bits_to_encode_count(&self, n: usize) -> usize {
+    // If we use wrapped mode, we don't encode the prefix counts at all (even
+    // though they are nonzero). This propagates nicely through prefix
+    // optimization.
     if self.use_wrapped_mode {
       0
     } else if self.use_min_count_encoding {

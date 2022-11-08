@@ -24,7 +24,7 @@ struct JumpstartConfiguration {
   jumpstart: usize,
 }
 
-/// All configurations available for a Compressor.
+/// All configurations available for a compressor.
 ///
 /// Some, like `delta_encoding_order`, are explicitly stored as `Flags` in the
 /// compressed bytes.
@@ -421,7 +421,7 @@ impl<T: NumberLike> MidChunkInfo<T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum State<T: NumberLike> {
+pub enum State<T: NumberLike> {
   PreHeader,
   StartOfChunk,
   MidChunk(MidChunkInfo<T>),
@@ -453,9 +453,9 @@ impl<T: NumberLike> State<T> {
 #[derive(Clone, Debug)]
 pub struct BaseCompressor<T> where T: NumberLike {
   internal_config: InternalCompressorConfig,
-  pub(crate) flags: Flags,
-  pub(crate) writer: BitWriter,
-  pub(crate) state: State<T>,
+  pub flags: Flags,
+  pub writer: BitWriter,
+  pub state: State<T>,
 }
 
 impl<T> BaseCompressor<T> where T: NumberLike {
@@ -480,7 +480,7 @@ impl<T> BaseCompressor<T> where T: NumberLike {
     Ok(())
   }
 
-  pub(crate) fn chunk_metadata_internal(
+  pub fn chunk_metadata_internal(
     &mut self,
     nums: &[T],
     spec: &ChunkSpec,
@@ -567,7 +567,7 @@ impl<T> BaseCompressor<T> where T: NumberLike {
     Ok(meta)
   }
 
-  pub(crate) fn data_page_internal(&mut self) -> QCompressResult<()> {
+  pub fn data_page_internal(&mut self) -> QCompressResult<()> {
     let has_pages_remaining = {
       let info = match &mut self.state {
         State::MidChunk(info) => Ok(info),

@@ -80,6 +80,7 @@ pub fn sum_deltas_in_place<S: SignedLike>(
   }
 }
 
+// TODO stop wasting compute when n < u_deltas.len()
 pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &DeltaMoments<T::Signed>,
   u_deltas: &[T::Unsigned],

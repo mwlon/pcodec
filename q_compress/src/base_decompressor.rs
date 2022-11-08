@@ -38,7 +38,7 @@ impl DecompressorConfig {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct State<T: NumberLike> {
+pub struct State<T: NumberLike> {
   pub bit_idx: usize,
   pub flags: Option<Flags>,
   pub chunk_meta: Option<ChunkMetadata<T>>,
@@ -102,7 +102,7 @@ impl<T: NumberLike> State<T> {
       .map(Some)
   }
 
-  pub(crate) fn new_body_decompressor(
+  pub fn new_body_decompressor(
     &self,
     reader: &mut BitReader,
     n: usize,
@@ -176,9 +176,9 @@ impl Step {
 
 #[derive(Clone, Debug, Default)]
 pub struct BaseDecompressor<T: NumberLike> {
-  pub(crate) config: DecompressorConfig,
-  pub(crate) words: BitWords,
-  pub(crate) state: State<T>,
+  pub config: DecompressorConfig,
+  pub words: BitWords,
+  pub state: State<T>,
 }
 
 impl<T: NumberLike> Write for BaseDecompressor<T> {
@@ -207,7 +207,7 @@ impl<T: NumberLike> BaseDecompressor<T> {
   // this only ensures atomicity on the reader, not the state
   // so we have to be careful to only modify state after everything else
   // succeeds, or manually handle rolling it back
-  pub(crate) fn with_reader<X, F>(&mut self, f: F) -> QCompressResult<X>
+  pub fn with_reader<X, F>(&mut self, f: F) -> QCompressResult<X>
   where F: FnOnce(&mut BitReader, &mut State<T>, &DecompressorConfig) -> QCompressResult<X> {
     let mut reader = BitReader::from(&self.words);
     reader.seek_to(self.state.bit_idx);
@@ -228,7 +228,7 @@ impl<T: NumberLike> BaseDecompressor<T> {
     })
   }
 
-  pub(crate) fn data_page_internal(&mut self, n: usize, compressed_page_size: usize) -> QCompressResult<Vec<T>> {
+  pub fn data_page_internal(&mut self, n: usize, compressed_page_size: usize) -> QCompressResult<Vec<T>> {
     let old_bd = self.state.body_decompressor.clone();
     self.with_reader(|reader, state, _| {
       let mut bd = state.new_body_decompressor(
