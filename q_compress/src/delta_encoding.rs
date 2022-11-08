@@ -70,36 +70,27 @@ pub fn nth_order_deltas<T: NumberLike>(
   (res, moments)
 }
 
-pub fn sum_deltas_in_place<S: SignedLike>(
-  moment: S,
-  deltas: &mut [S],
-) {
-  deltas[0] = moment;
-  for i in 1..deltas.len() {
-    deltas[i] = deltas[i].wrapping_add(deltas[i - 1]);
-  }
-}
-
 // TODO stop wasting compute when n < u_deltas.len()
 pub fn reconstruct_nums<T: NumberLike>(
-  delta_moments: &DeltaMoments<T::Signed>,
+  delta_moments: &mut DeltaMoments<T::Signed>,
   u_deltas: &[T::Unsigned],
   n: usize,
-) -> (Vec<T>, DeltaMoments<T::Signed>) {
+) -> Vec<T> {
   let order = delta_moments.order();
-  let mut signeds = vec![T::Signed::ZERO; u_deltas.len() + order];
-  for i in 0..u_deltas.len() {
-    signeds[i + order] = T::Signed::from_unsigned(u_deltas[i]);
-  }
+  let mut res = Vec::with_capacity(n);
 
-  let mut new_moments = vec![T::Signed::ZERO; order];
-  for o in (0..order).rev() {
-    let slice = &mut signeds[o..];
-    sum_deltas_in_place(delta_moments.moments[o], slice);
-    new_moments[o] = slice.get(n).copied().unwrap_or(T::Signed::ZERO);
+  let moments = &mut delta_moments.moments;
+  for i in 0..n {
+    res.push(T::from_signed(moments[0]));
+    for o in 0..order - 1 {
+      moments[o] = moments[o].wrapping_add(moments[o + 1]);
+    }
+    let delta = u_deltas.get(i)
+      .map(|&u| T::Signed::from_unsigned(u))
+      .unwrap_or(T::Signed::ZERO);
+    moments[order - 1] = moments[order - 1].wrapping_add(delta);
   }
-  let res = signeds.into_iter().take(n).map(T::from_signed).collect::<Vec<T>>();
-  (res, DeltaMoments::new(new_moments))
+  res
 }
 
 #[cfg(test)]
@@ -120,16 +111,19 @@ mod tests {
   #[test]
   fn test_reconstruct_nums_full() {
     let u_deltas = vec![1_i16, 2, -3].into_iter().map(u16::from_signed).collect::<Vec<u16>>();
-    let moments: DeltaMoments<i16> = DeltaMoments::new(vec![77, 1]);
+    let mut moments: DeltaMoments<i16> = DeltaMoments::new(vec![77, 1]);
 
     // full
-    let (nums, new_moments) = reconstruct_nums::<i16>(&moments, &u_deltas, 5);
+    let mut new_moments = moments.clone();
+    let nums = reconstruct_nums::<i16>(&mut new_moments, &u_deltas, 5);
     assert_eq!(nums, vec![77, 78, 80, 84, 85]);
-    assert_eq!(new_moments, DeltaMoments::new(vec![0, 0]));
 
     //partial
-    let (nums, new_moments) = reconstruct_nums::<i16>(&moments, &u_deltas, 3);
+    let nums = reconstruct_nums::<i16>(&mut moments, &u_deltas, 3);
     assert_eq!(nums, vec![77, 78, 80]);
-    assert_eq!(new_moments, DeltaMoments::new(vec![84, 1]));
+    assert_eq!(moments, DeltaMoments::new(vec![84, 1]));
+
+    let nums = reconstruct_nums::<i16>(&mut moments, &u_deltas[3..], 2);
+    assert_eq!(nums, vec![84, 85]);
   }
 }
