@@ -30,7 +30,6 @@ mod chunk_spec;
 mod constants;
 mod compression_table;
 mod base_compressor;
-// mod data_page_metadata;
 mod base_decompressor;
 mod delta_encoding;
 mod flags;
