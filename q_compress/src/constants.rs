@@ -24,11 +24,11 @@ pub const MAX_COMPRESSION_LEVEL: usize = 12;
 
 #[cfg(test)]
 mod tests {
+  use crate::bits::bits_to_encode;
   use crate::constants::*;
 
   fn assert_can_encode(n_bits: usize, max_number: usize) {
-    let min_required_bits = ((max_number + 1) as f64).log2().ceil() as usize;
-    assert!(n_bits >= min_required_bits)
+    assert!(n_bits >= bits_to_encode(max_number));
   }
 
   #[test]

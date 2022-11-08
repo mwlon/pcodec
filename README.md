@@ -32,7 +32,8 @@ with high compression ratio and moderately fast speed.
 and optionally `i128`, `u128`, `TimestampMicros96`, `TimestampNanos96`
 
 **Features:**
-* stable file format (`.qco`)
+* stable standalone file format (`.qco`)
+* wrapped format for interleaving within a columnar table
 * preserves ordering and exact bit representation (including `NaN` floats)
 * supports nth-order delta encoding up to order 7 (e.g. 2nd order is delta-of-deltas)
 * compresses faster or slower depending on compression level from 0 to 12
@@ -97,7 +98,7 @@ The inefficiency of quantile compression in bits per number is the KL
 divergence from
 the approximated distribution `Q` to the true distribution `P`.
 
-## `.qco` File Format
+## `.qco` Standalone File Format
 
 <img src="./res/file_format.svg">
 
@@ -130,3 +131,12 @@ Then an offset (for each repetition if necessary) follows,
 specifying the exact value within the range.
 
 At the end of the file is a termination byte.
+
+## Wrapped API
+
+Quantile compression can also be used to write data pages interleaved into a
+columnar format, as opposed to writing a standalone file.
+As compared to the standalone format, this omits unnecessary metadata such as
+counts, compressed byte size, and chunk/termination bytes.
+It also allows writing finer data pages within a chunk, allowing data to be
+interleaved efficiently.

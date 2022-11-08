@@ -96,7 +96,7 @@ impl<T: NumberLike> InspectHandler for HandlerImpl<T> {
       println!("{}n: {}", INDENT, m.n);
       match &m.prefix_metadata {
         PrefixMetadata::Simple { prefixes } => print_prefixes(prefixes),
-        PrefixMetadata::Delta {delta_moments: _, prefixes} => print_prefixes(prefixes),
+        PrefixMetadata::Delta { prefixes, .. } => print_prefixes(prefixes),
       }
     }
 

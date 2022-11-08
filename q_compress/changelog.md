@@ -1,5 +1,15 @@
 # `q_compress` Changelog
 
+## 0.11.2
+
+* Added support for "wrapped mode" - a way to write/read quantile-compressed
+data with finer granularity (data page instead of chunk) and less bloat for
+interleaving within another wrapping columnar data format that manages its own
+count and compressed body size statistics. Usable via
+`::wrapped::{Compressor, Decompressor}`. This includes a new flag for whether
+wrapped mode was used.
+* Fixed some atomicity bugs when returning errors.
+
 ## 0.11.1
 
 * Improved prefix optimization speed (part of compression) by 30%.

@@ -3,7 +3,7 @@ use crate::bit_writer::BitWriter;
 use crate::data_types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeltaMoments<S: SignedLike> {
   pub moments: Vec<S>,
 }
@@ -36,13 +36,6 @@ impl<S: SignedLike> DeltaMoments<S> {
   }
 }
 
-pub fn from<T: NumberLike>(nums: &[T], order: usize) -> DeltaMoments<T::Signed> {
-  let moments = nth_order_moments(nums, order);
-  DeltaMoments {
-    moments,
-  }
-}
-
 fn first_order_deltas_in_place<S: SignedLike>(nums: &mut Vec<S>) {
   if nums.is_empty() {
     return;
@@ -58,51 +51,23 @@ fn first_order_deltas_in_place<S: SignedLike>(nums: &mut Vec<S>) {
 pub fn nth_order_deltas<T: NumberLike>(
   nums: &[T],
   order: usize,
-  data_page_idxs: Vec<usize>,
+  data_page_idxs: &[usize],
 ) -> (Vec<T::Signed>, Vec<DeltaMoments<T::Signed>>) {
-  let mut data_page_moments = vec![Vec::new(); data_page_idxs.len()];
+  let mut data_page_moments = vec![Vec::with_capacity(order); data_page_idxs.len()];
   let mut res = nums
     .iter()
     .map(|x| x.to_signed())
     .collect::<Vec<_>>();
   for _ in 0..order {
     for (page_idx, &i) in data_page_idxs.iter().enumerate() {
-      data_page_moments[page_idx].push(res[i]);
+      data_page_moments[page_idx].push(res.get(i).copied().unwrap_or(T::Signed::ZERO));
     }
     first_order_deltas_in_place(&mut res);
   }
   let moments = data_page_moments.into_iter()
-    .map(|moments| DeltaMoments::new(moments))
+    .map(DeltaMoments::new)
     .collect::<Vec<DeltaMoments<T::Signed>>>();
   (res, moments)
-}
-
-// this could probably be made faster by instead doing a single pass with
-// a short vector of moments, but it isn't a major bottleneck
-fn nth_order_moments<T: NumberLike>(
-  nums: &[T],
-  order: usize,
-) -> Vec<T::Signed> {
-  let limited_nums = if nums.len() <= order {
-    nums
-  } else {
-    &nums[0..order]
-  };
-  let mut deltas = limited_nums
-    .iter()
-    .map(|x| x.to_signed())
-    .collect::<Vec<_>>();
-
-  let mut res = Vec::new();
-  for _ in 0..order {
-    if deltas.is_empty() {
-      res.push(T::Signed::ZERO);
-    } else {
-      res.push(deltas[0]);
-      first_order_deltas_in_place(&mut deltas);
-    }
-  }
-  res
 }
 
 pub fn sum_deltas_in_place<S: SignedLike>(
@@ -115,6 +80,7 @@ pub fn sum_deltas_in_place<S: SignedLike>(
   }
 }
 
+// TODO stop wasting compute when n < u_deltas.len()
 pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &DeltaMoments<T::Signed>,
   u_deltas: &[T::Unsigned],
@@ -143,7 +109,7 @@ mod tests {
   #[test]
   fn test_nth_order_deltas() {
     let nums: Vec<u16> = vec![2, 2, 1, u16::MAX, 0, 1];
-    let (deltas, moments) = nth_order_deltas(&nums, 2, vec![0, 3]);
+    let (deltas, moments) = nth_order_deltas(&nums, 2, &vec![0, 3]);
     assert_eq!(deltas, vec![-1, -1, 3, 0]);
     assert_eq!(moments, vec![
       DeltaMoments::new(vec![i16::MIN + 2, 0]),

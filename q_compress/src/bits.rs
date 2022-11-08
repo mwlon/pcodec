@@ -118,6 +118,10 @@ pub fn words_to_bytes(words: &[usize]) -> Vec<u8> {
     .collect::<Vec<_>>()
 }
 
+pub fn bits_to_encode(max_number: usize) -> usize {
+  ((max_number + 1) as f64).log2().ceil() as usize
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

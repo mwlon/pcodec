@@ -1,7 +1,7 @@
 use std::io::Write;
 use crate::{Compressor, CompressorConfig, DecompressedItem, Decompressor};
 use crate::data_types::NumberLike;
-use crate::decompressor::DecompressorConfig;
+use crate::base_decompressor::DecompressorConfig;
 use crate::errors::ErrorKind;
 
 #[test]
@@ -30,7 +30,6 @@ fn test_low_level_sparse() {
 
 fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
-    println!("deo={}", delta_encoding_order);
     let mut compressor = Compressor::<T>::from_config(
       CompressorConfig::default().with_delta_encoding_order(delta_encoding_order)
     );
