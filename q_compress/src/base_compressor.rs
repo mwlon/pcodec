@@ -16,9 +16,6 @@ use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
 use crate::prefix_optimization;
 
-const MIN_N_TO_USE_RUN_LEN: usize = 1001;
-const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
-
 struct JumpstartConfiguration {
   weight: usize,
   jumpstart: usize,

@@ -1,13 +1,11 @@
 use std::cmp::min;
 use std::io::Write;
 
-use crate::standalone::{Compressor, Decompressor};
-use crate::{CompressorConfig};
+use crate::CompressorConfig;
+use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-
-const AUTO_DELTA_LIMIT: usize = 1000;
-const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
+use crate::standalone::{Compressor, Decompressor};
 
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,
@@ -52,10 +50,16 @@ fn auto_delta_encoding_order<T: NumberLike>(
   nums: &[T],
   compression_level: usize,
 ) -> usize {
+  let mut sampled_nums;
   let head_nums = if nums.len() < AUTO_DELTA_LIMIT {
     nums
   } else {
-    &nums[0..AUTO_DELTA_LIMIT]
+    // take nums from start and end
+    let half_limit = AUTO_DELTA_LIMIT / 2;
+    sampled_nums = Vec::with_capacity(AUTO_DELTA_LIMIT);
+    sampled_nums.extend(&nums[..half_limit]);
+    sampled_nums.extend(&nums[nums.len() - half_limit..]);
+    &sampled_nums
   };
   let mut best_order = usize::MAX;
   let mut best_size = usize::MAX;
@@ -75,7 +79,7 @@ fn auto_delta_encoding_order<T: NumberLike>(
       best_order = delta_encoding_order;
       best_size = size;
     } else {
-      // it's almost always monotonic
+      // it's almost always convex
       break;
     }
   }
@@ -84,7 +88,7 @@ fn auto_delta_encoding_order<T: NumberLike>(
 
 #[cfg(test)]
 mod tests {
-  use crate::auto::auto_delta_encoding_order;
+  use super::*;
 
   #[test]
   fn test_auto_delta_encoding_order() {
@@ -102,5 +106,17 @@ mod tests {
     assert_eq!(auto_delta_encoding_order(&no_trend, 3), 0);
     assert_eq!(auto_delta_encoding_order(&linear_trend, 3), 1);
     assert_eq!(auto_delta_encoding_order(&quadratic_trend, 3), 2);
+  }
+
+  #[test]
+  fn test_auto_delta_encoding_order_step() {
+    let mut nums = Vec::with_capacity(2000);
+    for _ in 0..1000 {
+      nums.push(77);
+    }
+    for _ in 1000..2000 {
+      nums.push(78);
+    }
+    assert_eq!(auto_delta_encoding_order(&nums, 3), 1);
   }
 }
