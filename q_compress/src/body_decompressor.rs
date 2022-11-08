@@ -89,13 +89,12 @@ impl<T: NumberLike> BodyDecompressor<T> {
         } else {
           u_deltas.unsigneds.len()
         };
-        let (nums, new_delta_moments) = delta_encoding::reconstruct_nums(
+        let nums = delta_encoding::reconstruct_nums(
           delta_moments,
           &u_deltas.unsigneds,
           batch_size,
         );
         *nums_processed += batch_size;
-        *delta_moments = new_delta_moments;
         Ok(Numbers {
           nums,
           finished_body: nums_processed == n,
