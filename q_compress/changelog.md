@@ -10,6 +10,7 @@ count and compressed body size statistics. Usable via
 wrapped mode was used.
 * Fixed some atomicity bugs when returning errors.
 * Improved auto delta encoding order heuristic for nearly-constant data.
+* Improved compression speed ~8% by streamlining unoptimized prefix algorithm.
 
 ## 0.11.1
 
