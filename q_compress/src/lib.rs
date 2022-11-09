@@ -2,7 +2,10 @@
 //! <https://crates.io/crates/q_compress> or
 //! <https://github.com/mwlon/quantile-compression/tree/main/q_compress>.
 #![allow(clippy::needless_range_loop)]
+
 #[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+struct ReadmeDoctest;
 
 pub use auto::{auto_compress, auto_compressor_config, auto_decompress};
 pub use base_compressor::CompressorConfig;
