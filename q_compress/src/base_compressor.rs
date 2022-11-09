@@ -158,57 +158,85 @@ fn choose_run_len_jumpstart(
 }
 
 struct PrefixBuffer<'a, T: NumberLike> {
-  pub seq: &'a mut Vec<WeightedPrefix<T>>,
-  pub prefix_idx: &'a mut usize,
-  pub max_n_pref: usize,
-  pub n_unsigneds: usize,
-  pub sorted: &'a [T::Unsigned],
-  pub use_gcd: bool,
+  pub seq: Vec<WeightedPrefix<T>>,
+  prefix_idx: usize,
+  max_n_pref: usize,
+  n_unsigneds: usize,
+  sorted: &'a [T::Unsigned],
+  use_gcd: bool,
+  pub target_j: usize,
 }
 
-fn push_pref<T: NumberLike>(
-  buffer: &mut PrefixBuffer<'_, T>,
-  i: usize,
-  j: usize,
-) {
-  let sorted = buffer.sorted;
-  let n_unsigneds = buffer.n_unsigneds;
-
-  let count = j - i;
-  let frequency = count as f64 / buffer.n_unsigneds as f64;
-  let new_prefix_idx = max(*buffer.prefix_idx + 1, (j * buffer.max_n_pref) / n_unsigneds);
-  let lower = T::from_unsigned(sorted[i]);
-  let upper = T::from_unsigned(sorted[j - 1]);
-  let gcd = if buffer.use_gcd {
-    gcd_utils::gcd(&sorted[i..j])
-  } else {
-    T::Unsigned::ONE
-  };
-  if n_unsigneds < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n_unsigneds {
-    // The usual case - a prefix for a range that represents either 100% or
-    // <=80% of the data.
-    buffer.seq.push(WeightedPrefix::new(
-      count,
-      count,
-      lower,
-      upper,
-      None,
-      gcd,
-    ));
-  } else {
-    // The weird case - a range that represents almost all (but not all) the data.
-    // We create extra prefixes that can describe `reps` copies of the range at once.
-    let config = choose_run_len_jumpstart(count, n_unsigneds);
-    buffer.seq.push(WeightedPrefix::new(
-      count,
-      config.weight,
-      lower,
-      upper,
-      Some(config.jumpstart),
-      gcd,
-    ));
+impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
+  fn calc_target_j(&mut self) {
+    self.target_j = ((self.prefix_idx + 1) * self.n_unsigneds) / self.max_n_pref
   }
-  *buffer.prefix_idx = new_prefix_idx;
+
+  fn new(
+    max_n_pref: usize,
+    n_unsigneds: usize,
+    sorted: &'a [T::Unsigned],
+    use_gcd: bool,
+  ) -> Self {
+    let mut res = Self {
+      seq: Vec::with_capacity(max_n_pref),
+      prefix_idx: 0,
+      max_n_pref,
+      n_unsigneds,
+      sorted,
+      use_gcd,
+      target_j: 0
+    };
+    res.calc_target_j();
+    res
+  }
+
+  fn push_pref(
+    &mut self,
+    i: usize,
+    j: usize,
+  ) {
+    let sorted = self.sorted;
+    let n_unsigneds = self.n_unsigneds;
+
+    let count = j - i;
+    let frequency = count as f64 / self.n_unsigneds as f64;
+    let new_prefix_idx = max(self.prefix_idx + 1, (j * self.max_n_pref) / n_unsigneds);
+    let lower = T::from_unsigned(sorted[i]);
+    let upper = T::from_unsigned(sorted[j - 1]);
+    let gcd = if self.use_gcd {
+      gcd_utils::gcd(&sorted[i..j])
+    } else {
+      T::Unsigned::ONE
+    };
+    let wp = if n_unsigneds < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n_unsigneds {
+      // The usual case - a prefix for a range that represents either 100% or
+      // <=80% of the data.
+      WeightedPrefix::new(
+        count,
+        count,
+        lower,
+        upper,
+        None,
+        gcd,
+      )
+    } else {
+      // The weird case - a range that represents almost all (but not all) the data.
+      // We create extra prefixes that can describe `reps` copies of the range at once.
+      let config = choose_run_len_jumpstart(count, n_unsigneds);
+      WeightedPrefix::new(
+        count,
+        config.weight,
+        lower,
+        upper,
+        Some(config.jumpstart),
+        gcd,
+      )
+    };
+    self.seq.push(wp);
+    self.prefix_idx = new_prefix_idx;
+    self.calc_target_j();
+  }
 }
 
 // 2 ^ comp level, with 2 caveats:
@@ -229,39 +257,35 @@ fn choose_unoptimized_prefixes<T: NumberLike>(
 ) -> Vec<WeightedPrefix<T>> {
   let n_unsigneds = sorted.len();
   let max_n_pref = choose_max_n_prefixes(internal_config.compression_level, n_unsigneds);
-  let mut raw_prefs: Vec<WeightedPrefix<T>> = Vec::new();
-  let mut pref_idx = 0_usize;
 
   let use_gcd = flags.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut prefix_buffer = PrefixBuffer::<T> {
-    seq: &mut raw_prefs,
-    prefix_idx: &mut pref_idx,
+  let mut prefix_buffer = PrefixBuffer::<T>::new(
     max_n_pref,
     n_unsigneds,
     sorted,
     use_gcd,
-  };
+  );
 
-  for j in 0..n_unsigneds {
-    let target_j = ((*prefix_buffer.prefix_idx + 1) * n_unsigneds) / max_n_pref;
-    if j > 0 && sorted[j] == sorted[j - 1] {
+  for j in 1..n_unsigneds {
+    let target_j = prefix_buffer.target_j;
+    if sorted[j] == sorted[j - 1] {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        push_pref(&mut prefix_buffer, i, backup_j);
+        prefix_buffer.push_pref(i, backup_j);
         i = backup_j;
       }
     } else {
       backup_j = j;
       if j >= target_j {
-        push_pref(&mut prefix_buffer, i, j);
+        prefix_buffer.push_pref(i, j);
         i = j;
       }
     }
   }
-  push_pref(&mut prefix_buffer, i, n_unsigneds);
+  prefix_buffer.push_pref(i, n_unsigneds);
 
-  raw_prefs
+  prefix_buffer.seq
 }
 
 fn train_prefixes<T: NumberLike>(
