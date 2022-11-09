@@ -5,7 +5,7 @@
 
 # `q_compress`
 
-## Usage
+## Usage as a Standalone Format
 
 ```rust
 use q_compress::{auto_compress, auto_decompress, DEFAULT_COMPRESSION_LEVEL};
@@ -29,11 +29,20 @@ fn main() {
 }
 ```
 
-To run something right away, see
+To run something right away, try
 [the primary example](./examples/primary.md).
 
-For a lower-level API that allows writing/reading one chunk at a time and
+For a lower-level standalone API that allows writing/reading one chunk at a time and
 extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compress/latest/q_compress/).
+
+## Usage as a Wrapped Format
+
+To embed/interleave `q_compress` in another data format, it is better to use
+the [wrapped API and format](./src/wrapped) than standalone. 
+This allows
+* fine-level data paging with good compression ratio down to page sizes of >20 numbers
+(as long as the overall chunk has >2k or so)
+* less bloat by omitting metadata that the wrapping format must retain
 
 ## Library Changelog
 

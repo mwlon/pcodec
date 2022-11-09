@@ -30,7 +30,7 @@ use crate::errors::QCompressResult;
 /// let bytes = compressor.drain_bytes();
 /// ```
 /// Note that in practice we would need larger chunks than this to
-/// achieve good compression, preferably containing 3k-10M numbers.
+/// achieve good compression, preferably containing 2k-10M numbers.
 #[derive(Clone, Debug)]
 pub struct Compressor<T: NumberLike>(BaseCompressor<T>);
 
