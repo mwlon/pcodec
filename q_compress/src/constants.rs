@@ -21,6 +21,11 @@ pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
 
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
+pub const MIN_N_TO_USE_RUN_LEN: usize = 1001;
+pub const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
+
+pub const AUTO_DELTA_LIMIT: usize = 1100;
+pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 
 #[cfg(test)]
 mod tests {
@@ -55,5 +60,10 @@ mod tests {
   fn test_prefix_table_size_fits_in_word() {
     assert!(MAX_PREFIX_TABLE_SIZE_LOG > 0);
     assert!(MAX_PREFIX_TABLE_SIZE_LOG <= WORD_SIZE);
+  }
+
+  #[test]
+  fn test_auto_detects_sparsity() {
+    assert!(AUTO_DELTA_LIMIT > MIN_N_TO_USE_RUN_LEN + MAX_DELTA_ENCODING_ORDER);
   }
 }
