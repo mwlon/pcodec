@@ -23,7 +23,7 @@ use crate::errors::{QCompressError, QCompressResult};
 /// internally by `Compressor::from_config`.
 /// However, in some circumstances you may want to inspect flags during
 /// decompression.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Flags {
   /// Whether to use 5 bits to encode the length of a prefix Huffman code,

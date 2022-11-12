@@ -8,6 +8,7 @@ use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::huffman_decoding::HuffmanTable;
 use crate::prefix::PrefixDecompressionInfo;
+use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
@@ -107,35 +108,10 @@ pub struct NumDecompressor<U> where U: UnsignedLike {
   max_bits_per_num_block: usize,
   max_overshoot_per_num_block: usize,
   use_gcd: bool,
+  use_run_len: bool,
 
   // mutable state
   state: State<U>,
-}
-
-#[inline(always)]
-fn unchecked_decompress_offsets<U: UnsignedLike, GcdOp: GcdOperator<U>>(
-  reader: &mut BitReader,
-  unsigneds: &mut Vec<U>,
-  p: PrefixDecompressionInfo<U>,
-  reps: usize,
-) {
-  if reps > 1 && p.k == 0 {
-    // this branch is purely for performance reasons
-    // the reps > 1 check also improves performance
-    for _ in 0..reps {
-      unsigneds.push(p.lower_unsigned);
-    }
-  } else {
-    for _ in 0..reps {
-      let mut offset = reader.unchecked_read_diff(p.k);
-      if offset < p.min_unambiguous_k_bit_offset &&
-        reader.unchecked_read_one() {
-        offset |= p.most_significant;
-      }
-      let unsigned = p.lower_unsigned + GcdOp::get_diff(offset, p.gcd);
-      unsigneds.push(unsigned);
-    }
-  }
 }
 
 // errors on insufficient data
@@ -145,8 +121,7 @@ fn decompress_offset_dirty<U: UnsignedLike>(
   p: PrefixDecompressionInfo<U>,
 ) -> QCompressResult<()> {
   let mut offset = reader.read_diff::<U>(p.k)?;
-  if offset < p.min_unambiguous_k_bit_offset &&
-    reader.read_one()? {
+  if offset < p.min_unambiguous_k_bit_offset && reader.read_one()? {
     offset |= p.most_significant;
   }
   let unsigned = p.lower_unsigned + offset * p.gcd;
@@ -177,6 +152,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       .max()
       .unwrap_or(usize::MAX);
     let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
+    let use_run_len = prefixes.iter().any(|p| p.run_len_jumpstart.is_some());
 
     Ok(NumDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
@@ -185,6 +161,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       max_bits_per_num_block,
       max_overshoot_per_num_block,
       use_gcd,
+      use_run_len,
       state: State {
         n_processed: 0,
         bits_processed: 0,
@@ -197,7 +174,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
     self.compressed_body_size * 8 - self.state.bits_processed
   }
 
-  fn limit_reps(
+  pub fn limit_reps(
     &mut self,
     prefix: PrefixDecompressionInfo<U>,
     full_reps: usize,
@@ -215,23 +192,28 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
   }
 
   #[inline(always)]
-  fn unchecked_decompress_num_block<GcdOp: GcdOperator<U>>(
+  fn unchecked_decompress_num_block<GcdOp: GcdOperator<U>, RunLenOp: RunLenOperator>(
     &mut self,
     reader: &mut BitReader,
     unsigneds: &mut Vec<U>,
     batch_size: usize,
   ) {
     let p = self.huffman_table.unchecked_search_with_reader(reader);
+    RunLenOp::unchecked_decompress_offsets::<U, GcdOp>(self, reader, unsigneds, p, batch_size);
+  }
 
-    match p.run_len_jumpstart {
-      None => unchecked_decompress_offsets::<U, GcdOp>(reader, unsigneds, p, 1),
-      // we stored the number of occurrences minus 1 because we knew it's at least 1
-      Some(jumpstart) => {
-        let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = self.limit_reps(p, full_reps, batch_size - unsigneds.len());
-        unchecked_decompress_offsets::<U, GcdOp>(reader, unsigneds, p, reps);
-      },
-    };
+  fn unchecked_decompress_num_blocks<GcdOp: GcdOperator<U>, RunLenOp: RunLenOperator>(
+    &mut self,
+    reader: &mut BitReader,
+    unsigneds: &mut Vec<U>,
+    guaranteed_safe_num_blocks: usize,
+    batch_size: usize,
+  ) {
+    let mut block_idx = 0;
+    while block_idx < guaranteed_safe_num_blocks && unsigneds.len() < self.n {
+      self.unchecked_decompress_num_block::<GcdOp, RunLenOp>(reader, unsigneds, batch_size);
+      block_idx += 1;
+    }
   }
 
   fn decompress_num_block(
@@ -284,11 +266,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
   ) -> QCompressResult<Unsigneds<U>> {
     let initial_reader = reader.clone();
     let initial_state = self.state.clone();
-    let res = if self.use_gcd {
-      self.decompress_unsigneds_limited_dirty::<GeneralGcdOp>(reader, limit, error_on_insufficient_data)
-    } else {
-      self.decompress_unsigneds_limited_dirty::<TrivialGcdOp>(reader, limit, error_on_insufficient_data)
-    };
+    let res = self.decompress_unsigneds_limited_dirty(reader, limit, error_on_insufficient_data);
     match &res {
       Ok(numbers) => {
         self.state.n_processed += numbers.unsigneds.len();
@@ -326,7 +304,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
   //
   // state managed here: incomplete_prefix
   #[inline(never)]
-  fn decompress_unsigneds_limited_dirty<GcdOp: GcdOperator<U>>(
+  fn decompress_unsigneds_limited_dirty(
     &mut self,
     reader: &mut BitReader,
     limit: usize,
@@ -383,9 +361,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
     }
 
     if self.max_bits_per_num_block == 0 {
-      let mut temp = Vec::with_capacity(1);
-      self.unchecked_decompress_num_block::<GcdOp>(reader, &mut temp, 1);
-      let constant_num = temp[0];
+      let constant_num = self.huffman_table.unchecked_search_with_reader(reader).lower_unsigned;
       while unsigneds.len() < batch_size {
         unsigneds.push(constant_num);
       }
@@ -399,10 +375,16 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
         );
 
         if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
-          let mut block_idx = 0;
-          while block_idx < guaranteed_safe_num_blocks && unsigneds.len() < self.n {
-            self.unchecked_decompress_num_block::<GcdOp>(reader, unsigneds, batch_size);
-            block_idx += 1;
+          // don't slow down the tight loops with runtime checks - do these upfront to choose
+          // the best compiled tight loop
+          if self.use_gcd && self.use_run_len {
+            self.unchecked_decompress_num_blocks::<GeneralGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
+          } else if self.use_gcd && !self.use_run_len {
+            self.unchecked_decompress_num_blocks::<GeneralGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
+          } else if !self.use_gcd && self.use_run_len {
+            self.unchecked_decompress_num_blocks::<TrivialGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
+          } else {
+            self.unchecked_decompress_num_blocks::<TrivialGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
           }
         } else {
           break;
