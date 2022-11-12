@@ -192,7 +192,7 @@ impl<U: UnsignedLike> Default for PrefixCompressionInfo<U> {
 #[derive(Clone, Copy, Debug)]
 pub struct PrefixDecompressionInfo<U> where U: UnsignedLike {
   pub lower_unsigned: U,
-  pub k_range: U,
+  pub min_unambiguous_k_bit_offset: U,
   pub k: usize,
   pub depth: usize,
   pub run_len_jumpstart: Option<usize>,
@@ -204,7 +204,7 @@ impl<U: UnsignedLike> Default for PrefixDecompressionInfo<U> {
   fn default() -> Self {
     PrefixDecompressionInfo {
       lower_unsigned: U::ZERO,
-      k_range: U::MAX,
+      min_unambiguous_k_bit_offset: U::MAX,
       k: U::BITS,
       depth: 0,
       run_len_jumpstart: None,
@@ -218,15 +218,20 @@ impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: Numbe
   fn from(p: &Prefix<T>) -> Self {
     let lower_unsigned = p.lower.to_unsigned();
     let upper_unsigned = p.upper.to_unsigned();
-    let KInfo { k, only_k_bits_lower: _, only_k_bits_upper: _ } = p.k_info();
-    let most_significant = if k == T::PHYSICAL_BITS {
-      T::Unsigned::ZERO
+    let KInfo { k, .. } = p.k_info();
+    let (most_significant, min_unambiguous_k_bit_offset) = if k == T::PHYSICAL_BITS {
+      (T::Unsigned::ZERO, T::Unsigned::ZERO)
     } else {
-      T::Unsigned::ONE << k
+      let most_significant = T::Unsigned::ONE << k;
+      let gcd_diff = (upper_unsigned - lower_unsigned) / p.gcd;
+      (
+        most_significant,
+        (gcd_diff + T::Unsigned::ONE) - most_significant
+      )
     };
     PrefixDecompressionInfo {
       lower_unsigned,
-      k_range: (upper_unsigned - lower_unsigned) / p.gcd,
+      min_unambiguous_k_bit_offset,
       k,
       run_len_jumpstart: p.run_len_jumpstart,
       depth: p.code.len(),

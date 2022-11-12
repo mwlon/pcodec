@@ -128,8 +128,7 @@ fn unchecked_decompress_offsets<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   } else {
     for _ in 0..reps {
       let mut offset = reader.unchecked_read_diff(p.k);
-      if p.k < U::BITS &&
-        p.k_range - offset >= p.most_significant &&
+      if offset < p.min_unambiguous_k_bit_offset &&
         reader.unchecked_read_one() {
         offset |= p.most_significant;
       }
@@ -145,12 +144,10 @@ fn decompress_offset_dirty<U: UnsignedLike>(
   unsigneds: &mut Vec<U>,
   p: PrefixDecompressionInfo<U>,
 ) -> QCompressResult<()> {
-  let mut offset = reader.read_diff(p.k)?;
-  if p.k < U::BITS {
-    let most_significant = U::ONE << p.k;
-    if p.k_range - offset >= most_significant && reader.read_one()? {
-      offset |= most_significant;
-    }
+  let mut offset = reader.read_diff::<U>(p.k)?;
+  if offset < p.min_unambiguous_k_bit_offset &&
+    reader.read_one()? {
+    offset |= p.most_significant;
   }
   let unsigned = p.lower_unsigned + offset * p.gcd;
   unsigneds.push(unsigned);
