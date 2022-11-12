@@ -315,10 +315,17 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       limit,
     );
     // we'll modify this result as we decode numbers and if we encounter an insufficient data error
-    let completed_body = limit >= self.n - self.state.n_processed;
+    let finished_body = limit >= self.n - self.state.n_processed;
+
+    // treating this case (constant data) as special improves its performance
+    if self.max_bits_per_num_block == 0 {
+      let constant_num = self.huffman_table.unchecked_search_with_reader(reader).lower_unsigned;
+      return Ok(Unsigneds { unsigneds: vec![constant_num; batch_size], finished_body });
+    }
+
     let mut numbers = Unsigneds {
       unsigneds: Vec::with_capacity(batch_size),
-      finished_body: completed_body,
+      finished_body,
     };
     let unsigneds = &mut numbers.unsigneds;
 
@@ -335,10 +342,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       }
     };
 
-    if let Some(IncompletePrefix {
-      prefix,
-      remaining_reps
-    }) = self.state.incomplete_prefix {
+    if let Some(IncompletePrefix { prefix, remaining_reps }) = self.state.incomplete_prefix {
       let reps = min(remaining_reps, batch_size);
       let incomplete_res = self.decompress_offsets(
         reader,
@@ -360,44 +364,39 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       };
     }
 
-    if self.max_bits_per_num_block == 0 {
-      let constant_num = self.huffman_table.unchecked_search_with_reader(reader).lower_unsigned;
-      while unsigneds.len() < batch_size {
-        unsigneds.push(constant_num);
-      }
-    } else {
-      loop {
-        let remaining_unsigneds = batch_size - unsigneds.len();
-        let guaranteed_safe_num_blocks = min(
-          remaining_unsigneds,
-          reader.bits_remaining().saturating_sub(self.max_overshoot_per_num_block) /
-            self.max_bits_per_num_block,
-        );
+    // as long as there's enough compressed data available, we don't need checked operations
+    loop {
+      let remaining_unsigneds = batch_size - unsigneds.len();
+      let guaranteed_safe_num_blocks = min(
+        remaining_unsigneds,
+        reader.bits_remaining().saturating_sub(self.max_overshoot_per_num_block) /
+          self.max_bits_per_num_block,
+      );
 
-        if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
-          // don't slow down the tight loops with runtime checks - do these upfront to choose
-          // the best compiled tight loop
-          if self.use_gcd && self.use_run_len {
-            self.unchecked_decompress_num_blocks::<GeneralGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
-          } else if self.use_gcd && !self.use_run_len {
-            self.unchecked_decompress_num_blocks::<GeneralGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
-          } else if !self.use_gcd && self.use_run_len {
-            self.unchecked_decompress_num_blocks::<TrivialGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
-          } else {
-            self.unchecked_decompress_num_blocks::<TrivialGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
-          }
+      if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
+        // don't slow down the tight loops with runtime checks - do these upfront to choose
+        // the best compiled tight loop
+        if self.use_gcd && self.use_run_len {
+          self.unchecked_decompress_num_blocks::<GeneralGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
+        } else if self.use_gcd && !self.use_run_len {
+          self.unchecked_decompress_num_blocks::<GeneralGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
+        } else if !self.use_gcd && self.use_run_len {
+          self.unchecked_decompress_num_blocks::<TrivialGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
         } else {
-          break;
+          self.unchecked_decompress_num_blocks::<TrivialGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
         }
+      } else {
+        break;
       }
+    }
 
-      while unsigneds.len() < batch_size {
-        match self.decompress_num_block(reader, unsigneds, batch_size) {
-          Ok(_) => (),
-          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) =>
-            return mark_insufficient(numbers, e),
-          Err(e) => return Err(e),
-        }
+    // do checked operations for the rest
+    while unsigneds.len() < batch_size {
+      match self.decompress_num_block(reader, unsigneds, batch_size) {
+        Ok(_) => (),
+        Err(e) if matches!(e.kind, ErrorKind::InsufficientData) =>
+          return mark_insufficient(numbers, e),
+        Err(e) => return Err(e),
       }
     }
 

@@ -1,5 +1,9 @@
 # `q_compress` Changelog
 
+## 0.11.3
+
+* Improved decompression speed 8-18% for non-sparse distributions.
+
 ## 0.11.2
 
 * Added support for "wrapped mode" - a way to write/read quantile-compressed

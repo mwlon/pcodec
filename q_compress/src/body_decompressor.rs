@@ -68,8 +68,9 @@ impl<T: NumberLike> BodyDecompressor<T> {
         limit,
         error_on_insufficient_data,
       ).map(|u| {
+        let nums = u.unsigneds.into_iter().map(T::from_unsigned).collect();
         Numbers {
-          nums: u.unsigneds.into_iter().map(T::from_unsigned).collect(),
+          nums,
           finished_body: u.finished_body,
         }
       }),
