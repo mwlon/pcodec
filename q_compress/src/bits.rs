@@ -87,7 +87,7 @@ pub fn bits_to_string(bits: &[bool]) -> String {
     .join("");
 }
 
-#[inline(always)]
+#[inline]
 fn bumpy_log(x: f64) -> f64 {
   let k = x.log2() as usize;
   let (base, exp) = BUMPY_LOG_TABLE[k];

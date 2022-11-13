@@ -10,11 +10,11 @@ For the `i64` heavy-tail integers, a lomax distribution with alpha parameter 0.5
 
 | dataset                        | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
 |--------------------------------|---------------------------------|-----------------------------------|-------------------|
-| `i64` constant                 | 62                              | 340                               | 216,000           |
+| `i64` constant                 | 62                              | 480                               | 216,000           |
 | `i64` sparse                   | 77                              | 290                               | 597               |
-| `i64` uniform (incompressible) | 14                              | 51                                | 1.00              |
-| `i64` heavy-tail integers      | 14                              | 39                                | 4.63              |
-| `f64` standard normal          | 10                              | 31                                | 1.15              |
+| `i64` uniform (incompressible) | 14                              | 56                                | 1.00              |
+| `i64` heavy-tail integers      | 14                              | 42                                | 4.63              |
+| `f64` standard normal          | 10                              | 37                                | 1.15              |
 
 `i64` and `f64` are each 8 bytes, so for the more interesting distributions
 (e.g. heavy-tail integers and standard normal),

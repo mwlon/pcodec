@@ -81,7 +81,9 @@ fn parse_prefixes<T: NumberLike>(
     let lower = T::read_from(reader)?;
     let upper = T::read_from(reader)?;
 
-    if lower.to_unsigned() > upper.to_unsigned() {
+    let lower_u = lower.to_unsigned();
+    let upper_u = upper.to_unsigned();
+    if lower_u > upper_u {
       return Err(QCompressError::corruption(format!(
         "prefix lower bound {} may not be greater than upper bound {}",
         lower,
@@ -99,7 +101,7 @@ fn parse_prefixes<T: NumberLike>(
     let gcd = if let Some(common_gcd) = maybe_common_gcd {
       common_gcd
     } else {
-      gcd_utils::read_gcd(upper.to_unsigned() - lower.to_unsigned(), reader)?
+      gcd_utils::read_gcd(upper_u - lower_u, reader)?
     };
     prefixes.push(Prefix {
       count,

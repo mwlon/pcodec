@@ -32,10 +32,12 @@ macro_rules! impl_signed {
         signed
       }
 
+      #[inline]
       fn to_unsigned(self) -> Self::Unsigned {
         self.wrapping_sub(Self::MIN) as $unsigned
       }
 
+      #[inline]
       fn from_unsigned(off: Self::Unsigned) -> Self {
         Self::MIN.wrapping_add(off as $t)
       }

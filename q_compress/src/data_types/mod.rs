@@ -139,9 +139,8 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// bitwise logic and such.
   type Unsigned: UnsignedLike;
 
-  /// Lossless check for bit-exact equality. This is important because not all data types
-  /// support full ordering:
-  /// <https://stackoverflow.com/questions/26489701/why-does-rust-not-implement-total-ordering-via-the-ord-trait-for-f64-and-f32>.
+  // TODO in 1.0 remove this
+  /// This is no longer important and will go away in a future release.
   fn num_eq(&self, other: &Self) -> bool {
     self.to_unsigned() == other.to_unsigned()
   }

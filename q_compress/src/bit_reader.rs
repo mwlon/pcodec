@@ -211,7 +211,7 @@ impl<'a> BitReader<'a> {
     Ok(res)
   }
 
-  #[inline(always)]
+  #[inline]
   fn unchecked_word(&self) -> usize {
     self.words[self.i]
   }
