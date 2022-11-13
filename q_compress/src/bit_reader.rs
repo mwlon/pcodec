@@ -67,7 +67,7 @@ impl<'a> BitReader<'a> {
     bits::ceil_div(self.total_bits, 8)
   }
 
-  #[inline(always)]
+  #[inline]
   fn refresh_if_needed(&mut self) {
     if self.j == WORD_SIZE {
       self.i += 1;
@@ -211,7 +211,7 @@ impl<'a> BitReader<'a> {
     Ok(res)
   }
 
-  #[inline(always)]
+  #[inline]
   fn unchecked_word(&self) -> usize {
     self.words[self.i]
   }

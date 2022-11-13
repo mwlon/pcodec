@@ -191,7 +191,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
     }
   }
 
-  #[inline(always)]
+  #[inline]
   fn unchecked_decompress_num_block<GcdOp: GcdOperator<U>, RunLenOp: RunLenOperator>(
     &mut self,
     reader: &mut BitReader,

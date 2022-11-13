@@ -55,10 +55,12 @@ macro_rules! impl_unsigned_number {
       type Signed = $signed;
       type Unsigned = Self;
 
+      #[inline]
       fn to_signed(self) -> Self::Signed {
         (self as $signed).wrapping_add(<$signed>::MIN)
       }
 
+      #[inline]
       fn from_signed(signed: Self::Signed) -> Self {
         signed.wrapping_sub(<$signed>::MIN) as Self
       }
