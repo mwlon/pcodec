@@ -154,7 +154,9 @@ impl<'a> BitReader<'a> {
   }
 
   pub(crate) fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
-    Ok(self.read_diff::<u64>(n)? as usize)
+    self.insufficient_data_check("read_usize", n)?;
+
+    Ok(self.unchecked_read_usize(n))
   }
 
   // returns (bits read, idx)
@@ -234,52 +236,53 @@ impl<'a> BitReader<'a> {
     self.refresh_if_needed();
 
     let n_plus_j = n + self.j;
+    let first_masked_word = U::from_word(self.unchecked_word() & (usize::MAX >> self.j));
     if n_plus_j <= WORD_SIZE {
       // it's all in the current word
       let shift = WORD_SIZE - n_plus_j;
-      let res = U::from_word((self.unchecked_word() & (usize::MAX >> self.j)) >> shift);
       self.j = n_plus_j;
-      res
+      first_masked_word >> shift
     } else {
       let mut remaining = n_plus_j - WORD_SIZE;
-      let mut res = U::from_word(self.unchecked_word() & (usize::MAX >> self.j)) << remaining;
-      while remaining >= WORD_SIZE {
-        self.i += 1;
+      let mut res = first_masked_word << remaining;
+      self.i += 1;
+      // this for look looks redundant/slow, but its bounds get evaluated at
+      // compile time and actually speeds this up
+      for _ in 0..(U::BITS - 1) / WORD_SIZE {
+        if remaining <= WORD_SIZE {
+          break;
+        }
         remaining -= WORD_SIZE;
         res |= U::from_word(self.unchecked_word()) << remaining;
-      }
-      if remaining > 0 {
         self.i += 1;
-        let shift = WORD_SIZE - remaining;
-        res |= U::from_word(self.unchecked_word() >> shift);
-        self.j = remaining;
-      } else {
-        self.j = WORD_SIZE;
       }
-      res
+
+      self.j = remaining;
+      let shift = WORD_SIZE - remaining;
+      res | U::from_word(self.unchecked_word() >> shift)
     }
   }
 
-  pub(crate) fn unchecked_read_prefix_table_idx(
+  // assumes n > 0
+  // this is pretty redundant with the above code
+  pub(crate) fn unchecked_read_usize(
     &mut self,
-    table_size_log: usize,
+    n: usize,
   ) -> usize {
     self.refresh_if_needed();
 
-    let n_plus_j = table_size_log + self.j;
+    let n_plus_j = n + self.j;
+    let first_word = self.unchecked_word() & (usize::MAX >> self.j);
     if n_plus_j <= WORD_SIZE {
       let shift = WORD_SIZE - n_plus_j;
-      let res = (self.unchecked_word() & (usize::MAX >> self.j)) >> shift;
       self.j = n_plus_j;
-      res
+      first_word >> shift
     } else {
       let remaining = n_plus_j - WORD_SIZE;
-      let mut res = ((self.unchecked_word() & (usize::MAX >> self.j)) as usize) << remaining;
-      self.i += 1;
       let shift = WORD_SIZE - remaining;
-      res |= self.unchecked_word() >> shift;
+      self.i += 1;
       self.j = remaining;
-      res
+      (first_word << remaining) | (self.unchecked_word() >> shift)
     }
   }
 

@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -50,7 +50,7 @@ pub trait SignedLike: NumberLike<Signed=Self> {
 /// corresponding `UnsignedLike` representation.
 ///
 /// Note: API stability of `UnsignedLike` is not guaranteed.
-pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOrAssign +
+pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOr<Output=Self> + BitOrAssign +
 Copy + Debug + Display + Div<Output=Self> + Mul<Output = Self> + Ord +
 PartialOrd + RemAssign + Shl<usize, Output=Self> + Shr<usize, Output=Self> +
 Sub<Output=Self> {

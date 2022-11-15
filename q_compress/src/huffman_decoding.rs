@@ -62,7 +62,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
           return *decompression_info;
         },
         HuffmanTable::NonLeaf { table_size_log, children } => {
-          node = &children[reader.unchecked_read_prefix_table_idx(*table_size_log)];
+          node = &children[reader.unchecked_read_usize(*table_size_log)];
           read_depth += table_size_log;
         },
       }
