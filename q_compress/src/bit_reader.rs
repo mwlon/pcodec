@@ -19,7 +19,10 @@ use crate::errors::{QCompressError, QCompressResult};
 /// is byte-aligned; e.g. `bit_idx % 8 == 0`.
 #[derive(Clone)]
 pub struct BitReader<'a> {
-  unsafe_word: usize,
+  // word = words[i], but must be carefully used and maintained:
+  // * whenever i changes, we need to update word as well
+  // * if we've reached the end of words, word will be 0, so be sure we're not exceeding bounds
+  word: usize,
   words: &'a [usize],
   i: usize,
   j: usize,
@@ -28,9 +31,9 @@ pub struct BitReader<'a> {
 
 impl<'a> From<&'a BitWords> for BitReader<'a> {
   fn from(bit_words: &'a BitWords) -> Self {
-    let unsafe_word = bit_words.words.first().copied().unwrap_or_default();
+    let word = bit_words.words.first().copied().unwrap_or_default();
     BitReader {
-      unsafe_word,
+      word,
       words: &bit_words.words,
       i: 0,
       j: 0,
@@ -55,7 +58,7 @@ impl<'a> BitReader<'a> {
     }
   }
   
-  pub(crate) fn bit_idx(&self) -> usize {
+  pub fn bit_idx(&self) -> usize {
     WORD_SIZE * self.i + self.j
   }
 
@@ -70,10 +73,19 @@ impl<'a> BitReader<'a> {
     bits::ceil_div(self.total_bits, 8)
   }
 
-  #[inline(always)]
+  fn increment_i(&mut self) {
+    self.i += 1;
+    self.update_unsafe_word();
+  }
+
+  fn update_unsafe_word(&mut self) {
+    self.word = self.words[self.i];
+  }
+
+  #[inline]
   fn refresh_if_needed(&mut self) {
     if self.j == WORD_SIZE {
-      self.unchecked_incr_i();
+      self.increment_i();
       self.j = 0;
     }
   }
@@ -96,8 +108,6 @@ impl<'a> BitReader<'a> {
   /// there are not enough bytes remaining in the reader or the reader is
   /// misaligned.
   pub fn read_aligned_bytes(&mut self, n: usize) -> QCompressResult<Vec<u8>> {
-    self.refresh_if_needed();
-
     let byte_idx = self.aligned_byte_idx()?;
     let new_byte_idx = byte_idx + n;
     let byte_size = self.byte_size();
@@ -109,6 +119,8 @@ impl<'a> BitReader<'a> {
         byte_size,
       )))
     } else {
+      self.refresh_if_needed();
+
       let end_word_idx = bits::ceil_div(new_byte_idx, BYTES_PER_WORD);
       let padded_bytes = bits::words_to_bytes(&self.words[byte_idx / BYTES_PER_WORD..end_word_idx]);
 
@@ -135,29 +147,29 @@ impl<'a> BitReader<'a> {
     // implementation not well optimized because this is only used in reading header
     for _ in 0..n {
       if self.j == WORD_SIZE {
-        self.unchecked_incr_i();
+        self.increment_i();
         self.j = 0;
       }
-      res.push(bits::bit_from_word(self.unsafe_word, self.j));
+      res.push(bits::bit_from_word(self.word, self.j));
       self.j += 1;
     }
     Ok(res)
   }
 
-  pub(crate) fn read_diff<U: UnsignedLike>(&mut self, n: usize) -> QCompressResult<U> {
+  pub fn read_diff<U: UnsignedLike>(&mut self, n: usize) -> QCompressResult<U> {
     self.insufficient_data_check("read_diff", n)?;
 
     Ok(self.unchecked_read_diff::<U>(n))
   }
 
-  pub(crate) fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
+  pub fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
     self.insufficient_data_check("read_usize", n)?;
 
     Ok(self.unchecked_read_usize(n))
   }
 
   // returns (bits read, idx)
-  pub(crate) fn read_prefix_table_idx(
+  pub fn read_prefix_table_idx(
     &mut self,
     table_size_log: usize,
   ) -> QCompressResult<(usize, usize)> {
@@ -176,17 +188,17 @@ impl<'a> BitReader<'a> {
     let n_plus_j = table_size_log + self.j;
     if n_plus_j <= WORD_SIZE {
       let rshift = WORD_SIZE - n_plus_j;
-      let res = (self.unsafe_word & (usize::MAX >> self.j)) >> rshift;
+      let res = (self.word & (usize::MAX >> self.j)) >> rshift;
       let bits_read = min(table_size_log, self.total_bits - bit_idx);
       self.j += bits_read;
       Ok((bits_read, res))
     } else {
       let remaining = n_plus_j - WORD_SIZE;
-      let mut res = (self.unsafe_word & (usize::MAX >> self.j)) << remaining;
-      self.unchecked_incr_i();
+      let mut res = (self.word & (usize::MAX >> self.j)) << remaining;
+      self.increment_i();
       if self.i < self.words.len() {
         let shift = WORD_SIZE - remaining;
-        res |= self.unsafe_word >> shift;
+        res |= self.word >> shift;
         self.j = remaining;
         Ok((table_size_log, res))
       } else {
@@ -196,7 +208,7 @@ impl<'a> BitReader<'a> {
     }
   }
 
-  pub(crate) fn read_varint(&mut self, jumpstart: usize) -> QCompressResult<usize> {
+  pub fn read_varint(&mut self, jumpstart: usize) -> QCompressResult<usize> {
     let mut res = self.read_usize(jumpstart)?;
     for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
       if self.read_one()? {
@@ -210,28 +222,17 @@ impl<'a> BitReader<'a> {
     Ok(res)
   }
 
-  #[inline]
-  fn unchecked_incr_i(&mut self) {
-    self.i += 1;
-    self.update_unsafe_word();
-  }
-
-  #[inline]
-  fn update_unsafe_word(&mut self) {
-    self.unsafe_word = self.words[self.i];
-  }
-
   /// Returns the next bit. Will panic if we have reached the end of the
   /// reader. This tends to be much faster than `read_one()`.
   pub fn unchecked_read_one(&mut self) -> bool {
     self.refresh_if_needed();
 
-    let res = bits::bit_from_word(self.unsafe_word, self.j);
+    let res = bits::bit_from_word(self.word, self.j);
     self.j += 1;
     res
   }
 
-  pub(crate) fn unchecked_read_diff<U: UnsignedLike>(&mut self, n: usize) -> U {
+  pub fn unchecked_read_diff<U: UnsignedLike>(&mut self, n: usize) -> U {
     if n == 0 {
       return U::ZERO;
     }
@@ -239,7 +240,7 @@ impl<'a> BitReader<'a> {
     self.refresh_if_needed();
 
     let n_plus_j = n + self.j;
-    let first_masked_word = self.unsafe_word & (usize::MAX >> self.j);
+    let first_masked_word = self.word & (usize::MAX >> self.j);
     if n_plus_j <= WORD_SIZE {
       // it's all in the current word
       let shift = WORD_SIZE - n_plus_j;
@@ -248,34 +249,36 @@ impl<'a> BitReader<'a> {
     } else {
       let mut remaining = n_plus_j - WORD_SIZE;
       let mut res = U::from_word(first_masked_word << remaining);
-      self.unchecked_incr_i();
-      // this for look looks redundant/slow, but its bounds get evaluated at
-      // compile time and actually speeds this up
+      self.increment_i();
+      // This for loop looks redundant/slow, as if it could just be a while
+      // loop, but its bounds get evaluated at compile time and it actually
+      // speeds this up.
       for _ in 0..(U::BITS - 1) / WORD_SIZE {
         if remaining <= WORD_SIZE {
           break;
         }
         remaining -= WORD_SIZE;
-        res |= U::from_word(self.unsafe_word) << remaining;
-        self.unchecked_incr_i();
+        res |= U::from_word(self.word) << remaining;
+        self.increment_i();
       }
 
       self.j = remaining;
       let shift = WORD_SIZE - remaining;
-      res | U::from_word(self.unsafe_word >> shift)
+      res | U::from_word(self.word >> shift)
     }
   }
 
   // assumes n > 0
-  // this is pretty redundant with the above code
-  pub(crate) fn unchecked_read_usize(
+  // this is pretty redundant with unchecked_read_diff
+  // maybe one day we should unify them (without increasing binary size much)
+  pub fn unchecked_read_usize(
     &mut self,
     n: usize,
   ) -> usize {
     self.refresh_if_needed();
 
     let n_plus_j = n + self.j;
-    let first_word = self.unsafe_word & (usize::MAX >> self.j);
+    let first_word = self.word & (usize::MAX >> self.j);
     if n_plus_j <= WORD_SIZE {
       let shift = WORD_SIZE - n_plus_j;
       self.j = n_plus_j;
@@ -283,13 +286,13 @@ impl<'a> BitReader<'a> {
     } else {
       let remaining = n_plus_j - WORD_SIZE;
       let shift = WORD_SIZE - remaining;
-      self.unchecked_incr_i();
+      self.increment_i();
       self.j = remaining;
-      (first_word << remaining) | (self.unsafe_word >> shift)
+      (first_word << remaining) | (self.word >> shift)
     }
   }
 
-  pub(crate) fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
+  pub fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
     let mut res = self.unchecked_read_usize(jumpstart);
     for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
       if self.unchecked_read_one() {
@@ -306,11 +309,11 @@ impl<'a> BitReader<'a> {
   // Seek to the end of the byte.
   // Used to skip to the next metadata or body section of the file, since they
   // always start byte-aligned.
-  pub(crate) fn drain_empty_byte<F>(&mut self, f: F) -> QCompressResult<()>
+  pub fn drain_empty_byte<F>(&mut self, f: F) -> QCompressResult<()>
   where F: FnOnce() -> QCompressError {
     if self.j % 8 != 0 {
       let end_j = 8 * bits::ceil_div(self.j, 8);
-      if self.unsafe_word & (usize::MAX >> self.j) & (usize::MAX << (WORD_SIZE - end_j)) > 0 {
+      if self.word & (usize::MAX >> self.j) & (usize::MAX << (WORD_SIZE - end_j)) > 0 {
         return Err(f());
       }
       self.j = end_j;
@@ -323,7 +326,7 @@ impl<'a> BitReader<'a> {
   pub fn seek_to(&mut self, bit_idx: usize) {
     self.i = bit_idx.div_euclid(WORD_SIZE);
     self.j = bit_idx.rem_euclid(WORD_SIZE);
-    self.unsafe_word = self.words.get(self.i).copied().unwrap_or(0);
+    self.word = self.words.get(self.i).copied().unwrap_or(0);
   }
 
   /// Skips forward `n` bits. Will NOT check whether
@@ -334,11 +337,9 @@ impl<'a> BitReader<'a> {
     self.seek_to(self.bit_idx() + n);
   }
 
-  /// Skips backward `n` bits. Will panic if the resulting position is out of
-  /// bounds.
-  ///
-  /// Wraps [`seek_to`][BitReader::seek_to].
-  pub fn rewind(&mut self, n: usize) {
+  /// Skips backward `n` bits where n <= 32.
+  /// Will panic if the resulting position is out of bounds.
+  pub fn rewind_prefix_overshoot(&mut self, n: usize) {
     if n <= self.j {
       self.j -= n;
     } else {
@@ -394,15 +395,15 @@ mod tests {
     let mut reader = BitReader::from(&words);
     reader.seek(43);
 
-    reader.rewind(2);
+    reader.rewind_prefix_overshoot(2);
     assert_eq!(reader.bit_idx(), 41);
-    reader.rewind(2);
+    reader.rewind_prefix_overshoot(2);
     assert_eq!(reader.bit_idx(), 39);
-    reader.rewind(7);
+    reader.rewind_prefix_overshoot(7);
     assert_eq!(reader.bit_idx(), 32);
-    reader.rewind(8);
+    reader.rewind_prefix_overshoot(8);
     assert_eq!(reader.bit_idx(), 24);
-    reader.rewind(17);
+    reader.rewind_prefix_overshoot(17);
     assert_eq!(reader.bit_idx(), 7);
   }
 }

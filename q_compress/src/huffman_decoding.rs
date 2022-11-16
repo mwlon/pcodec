@@ -28,7 +28,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
     loop {
       match node {
         HuffmanTable::Leaf(decompression_info) => {
-          reader.rewind(read_depth - decompression_info.depth);
+          reader.rewind_prefix_overshoot(read_depth - decompression_info.depth);
           return Ok(*decompression_info);
         },
         HuffmanTable::NonLeaf { table_size_log, children} => {
@@ -58,7 +58,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
     loop {
       match node {
         HuffmanTable::Leaf(decompression_info) => {
-          reader.rewind(read_depth - decompression_info.depth);
+          reader.rewind_prefix_overshoot(read_depth - decompression_info.depth);
           return *decompression_info;
         },
         HuffmanTable::NonLeaf { table_size_log, children } => {
