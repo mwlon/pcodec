@@ -20,8 +20,6 @@ async fn streaming_sum_reduce(
         sum += n;
         count += 1;
       }
-    } else {
-      println!("{:?}", item);
     }
   }
   // Once you have decoded as much as possible from the compressed bytes,
