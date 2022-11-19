@@ -193,9 +193,7 @@ impl<T> ChunkMetadata<T> where T: NumberLike {
       }
     };
 
-    reader.drain_empty_byte(|| QCompressError::corruption(
-      "nonzero bits in end of final byte of chunk metadata"
-    ))?;
+    reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;
 
     Ok(Self {
       n,

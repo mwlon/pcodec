@@ -296,9 +296,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
         self.state.n_processed += numbers.unsigneds.len();
 
         if numbers.finished_body {
-          reader.drain_empty_byte(|| QCompressError::corruption(
-            "nonzero bits in end of final byte of chunk numbers"
-          ))?;
+          reader.drain_empty_byte("nonzero bits in end of final byte of chunk numbers")?;
         }
         self.state.bits_processed += reader.bit_idx() - initial_reader.bit_idx();
         if numbers.finished_body {
