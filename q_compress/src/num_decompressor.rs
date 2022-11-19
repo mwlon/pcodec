@@ -85,17 +85,12 @@ pub struct Unsigneds<U: UnsignedLike> {
   pub finished_body: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct IncompletePrefix<U: UnsignedLike> {
-  prefix: PrefixDecompressionInfo<U>,
-  remaining_reps: usize,
-}
-
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
   n_processed: usize,
   bits_processed: usize,
-  incomplete_prefix: Option<IncompletePrefix<U>>,
+  incomplete_prefix: PrefixDecompressionInfo<U>,
+  incomplete_reps: usize,
 }
 
 // NumDecompressor does the main work of decoding bytes into NumberLikes
@@ -165,30 +160,14 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       state: State {
         n_processed: 0,
         bits_processed: 0,
-        incomplete_prefix: None,
+        incomplete_prefix: PrefixDecompressionInfo::default(),
+        incomplete_reps: 0,
       },
     })
   }
 
   pub fn bits_remaining(&self) -> usize {
     self.compressed_body_size * 8 - self.state.bits_processed
-  }
-
-  pub fn limit_reps(
-    &mut self,
-    prefix: PrefixDecompressionInfo<U>,
-    full_reps: usize,
-    limit: usize,
-  ) -> usize {
-    if full_reps > limit {
-      self.state.incomplete_prefix = Some(IncompletePrefix {
-        prefix,
-        remaining_reps: full_reps - limit,
-      });
-      limit
-    } else {
-      full_reps
-    }
   }
 
   #[inline]
@@ -216,23 +195,68 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
     }
   }
 
+  pub fn unchecked_limit_reps(
+    &mut self,
+    prefix: PrefixDecompressionInfo<U>,
+    full_reps: usize,
+    limit: usize,
+  ) -> usize {
+    if full_reps > limit {
+      self.state.incomplete_prefix = prefix;
+      self.state.incomplete_reps = full_reps - limit;
+      limit
+    } else {
+      full_reps
+    }
+  }
+
+  pub fn limit_reps(
+    &mut self,
+    prefix: PrefixDecompressionInfo<U>,
+    full_reps: usize,
+    limit: usize,
+  ) -> usize {
+    self.state.incomplete_prefix = prefix;
+    self.state.incomplete_reps = full_reps;
+    min(full_reps, limit)
+  }
+
   fn decompress_num_block(
     &mut self,
     reader: &mut BitReader,
     unsigneds: &mut Vec<U>,
     batch_size: usize,
   ) -> QCompressResult<()> {
-    let p = self.huffman_table.search_with_reader(reader)?;
+    let start_bit_idx = reader.bit_idx();
+    let pref_res = self.huffman_table.search_with_reader(reader);
+    if pref_res.is_err() {
+      reader.seek_to(start_bit_idx);
+    }
+    let prefix = pref_res?;
 
-    let reps = match p.run_len_jumpstart {
-      None => 1,
+    match prefix.run_len_jumpstart {
+      None => {
+        let res = decompress_offset_dirty(reader, unsigneds, prefix);
+        if res.is_err() {
+          reader.seek_to(start_bit_idx);
+        }
+        res
+      },
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
-        let full_reps = reader.read_varint(jumpstart)? + 1;
-        self.limit_reps(p, full_reps, batch_size - unsigneds.len())
+        let full_reps_minus_one_res = reader.read_varint(jumpstart);
+        if full_reps_minus_one_res.is_err() {
+          reader.seek_to(start_bit_idx);
+        }
+        let full_reps = full_reps_minus_one_res? + 1;
+        let reps = self.limit_reps(prefix, full_reps, batch_size - unsigneds.len());
+        let start_count = unsigneds.len();
+        let res = self.decompress_offsets(reader, unsigneds, prefix, reps);
+        let n_processed = unsigneds.len() - start_count;
+        self.state.incomplete_reps -= n_processed;
+        res
       },
-    };
-    self.decompress_offsets(reader, unsigneds, p, reps)
+    }
   }
 
   // errors on insufficient data, but updates unsigneds with last complete number
@@ -272,9 +296,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
         self.state.n_processed += numbers.unsigneds.len();
 
         if numbers.finished_body {
-          reader.drain_empty_byte(|| QCompressError::corruption(
-            "nonzero bits in end of final byte of chunk numbers"
-          ))?;
+          reader.drain_empty_byte("nonzero bits in end of final byte of chunk numbers")?;
         }
         self.state.bits_processed += reader.bit_idx() - initial_reader.bit_idx();
         if numbers.finished_body {
@@ -316,21 +338,21 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
     );
     // we'll modify this result as we decode numbers and if we encounter an insufficient data error
     let finished_body = limit >= self.n - self.state.n_processed;
+    let mut res = Unsigneds {
+      unsigneds: Vec::with_capacity(batch_size),
+      finished_body,
+    };
+    let unsigneds = &mut res.unsigneds;
 
     // treating this case (constant data) as special improves its performance
     if self.max_bits_per_num_block == 0 {
       let constant_num = self.huffman_table.unchecked_search_with_reader(reader).lower_unsigned;
-      return Ok(Unsigneds { unsigneds: vec![constant_num; batch_size], finished_body });
+      unsigneds.resize(batch_size, constant_num);
+      return Ok(res);
     }
 
-    let mut numbers = Unsigneds {
-      unsigneds: Vec::with_capacity(batch_size),
-      finished_body,
-    };
-    let unsigneds = &mut numbers.unsigneds;
-
     if batch_size == 0 {
-      return Ok(numbers);
+      return Ok(res);
     }
 
     let mark_insufficient = |mut numbers: Unsigneds<U>, e: QCompressError| {
@@ -342,24 +364,20 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       }
     };
 
-    if let Some(IncompletePrefix { prefix, remaining_reps }) = self.state.incomplete_prefix {
-      let reps = min(remaining_reps, batch_size);
+    let incomplete_reps = self.state.incomplete_reps;
+    if incomplete_reps > 0 {
+      let reps = min(incomplete_reps, batch_size);
       let incomplete_res = self.decompress_offsets(
         reader,
         unsigneds,
-        prefix,
+        self.state.incomplete_prefix,
         reps,
       );
-      let remaining_reps = remaining_reps - unsigneds.len();
-      if remaining_reps == 0 {
-        self.state.incomplete_prefix = None;
-      } else {
-        self.state.incomplete_prefix.as_mut().unwrap().remaining_reps = remaining_reps;
-      }
+      self.state.incomplete_reps -= unsigneds.len();
       match incomplete_res {
         Ok(_) => (),
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) =>
-          return mark_insufficient(numbers, e),
+          return mark_insufficient(res, e),
         Err(e) => return Err(e),
       };
     }
@@ -395,11 +413,11 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       match self.decompress_num_block(reader, unsigneds, batch_size) {
         Ok(_) => (),
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) =>
-          return mark_insufficient(numbers, e),
+          return mark_insufficient(res, e),
         Err(e) => return Err(e),
       }
     }
 
-    Ok(numbers)
+    Ok(res)
   }
 }

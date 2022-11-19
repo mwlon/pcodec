@@ -5,3 +5,4 @@ mod recovery;
 mod stability;
 mod utils;
 mod wrapped;
+mod streaming;
