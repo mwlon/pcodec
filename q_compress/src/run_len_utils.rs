@@ -42,7 +42,7 @@ impl RunLenOperator for GeneralRunLenOp {
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = num_decompressor.limit_reps(p, full_reps, batch_size - unsigneds.len());
+        let reps = num_decompressor.unchecked_limit_reps(p, full_reps, batch_size - unsigneds.len());
         if p.k == 0 {
           for _ in 0..reps {
             unsigneds.push(p.lower_unsigned);

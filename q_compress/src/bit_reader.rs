@@ -195,7 +195,7 @@ impl<'a> BitReader<'a> {
     } else {
       let remaining = n_plus_j - WORD_SIZE;
       let mut res = (self.word & (usize::MAX >> self.j)) << remaining;
-      if self.i < self.words.len() {
+      if self.i + 1 < self.words.len() {
         self.increment_i();
         let shift = WORD_SIZE - remaining;
         res |= self.word >> shift;
