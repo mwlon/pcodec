@@ -1,8 +1,14 @@
 # `q_compress` Changelog
 
+## 0.11.4 (not yet released)
+
+* Increased decompression speed another 8-20% for interesting distributions by
+making `BitReader` implementation cleverer.
+
 ## 0.11.3
 
-* Improved decompression speed 8-18% for non-sparse distributions.
+* Improved decompression speed 8-18% for non-sparse distributions by compiling
+sparse vs non-sparse loops separately.
 
 ## 0.11.2
 
