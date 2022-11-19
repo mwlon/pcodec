@@ -46,7 +46,7 @@ pub struct State<T: NumberLike> {
   pub terminated: bool,
 }
 
-pub fn header_dirty<T: NumberLike>(
+fn header_dirty<T: NumberLike>(
   reader: &mut BitReader,
   use_wrapped_mode: bool,
 ) -> QCompressResult<Flags> {

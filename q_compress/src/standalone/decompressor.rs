@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
-use crate::base_decompressor::{BaseDecompressor, header_dirty, State, Step};
+use crate::base_decompressor::{BaseDecompressor, State, Step};
 use crate::bit_reader::BitReader;
 use crate::body_decompressor::{BodyDecompressor, Numbers};
 use crate::data_types::NumberLike;
@@ -202,57 +202,50 @@ fn apply_nums<T: NumberLike>(
   }
 }
 
-fn next_dirty<T: NumberLike>(
-  reader: &mut BitReader,
-  state: &mut State<T>,
-  config: &DecompressorConfig,
-) -> QCompressResult<Option<DecompressedItem<T>>> {
-  match state.step() {
-    Step::PreHeader => {
-      match header_dirty::<T>(reader, false) {
-        Ok(flags) => {
-          state.flags = Some(flags.clone());
-          Ok(Some(DecompressedItem::Flags(flags)))
-        },
-        Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
-        Err(e) => Err(e),
-      }
-    },
-    Step::StartOfChunk => {
-      match state.chunk_meta_option_dirty(reader) {
-        Ok(Some(meta)) => {
-          state.chunk_meta = Some(meta.clone());
-          Ok(Some(DecompressedItem::ChunkMetadata(meta)))
-        },
-        Ok(None) => {
-          state.terminated = true;
-          Ok(Some(DecompressedItem::Footer))
-        },
-        Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
-        Err(e) => Err(e),
-      }
-    },
-    Step::StartOfDataPage => {
-      let &ChunkMetadata { n, compressed_body_size, .. } = state.chunk_meta.as_ref().unwrap();
-      let mut bd = state.new_body_decompressor(reader, n, compressed_body_size)?;
-      let numbers = next_nums_dirty(reader, &mut bd, config)?;
-      state.body_decompressor = Some(bd);
-      Ok(apply_nums(state, numbers))
-    },
-    Step::MidDataPage => {
-      let numbers = next_nums_dirty(reader, state.body_decompressor.as_mut().unwrap(), config)?;
-      Ok(apply_nums(state, numbers))
-    },
-    Step::Terminated => Ok(None),
-  }
-}
-
 /// Will return an error for files in wrapped mode.
 impl<T: NumberLike> Iterator for &mut Decompressor<T> {
   type Item = QCompressResult<DecompressedItem<T>>;
 
   fn next(&mut self) -> Option<Self::Item> {
-    let res: QCompressResult<Option<DecompressedItem<T>>> = self.0.with_reader(next_dirty);
+    let res: QCompressResult<Option<DecompressedItem<T>>> = match self.0.state.step() {
+      Step::PreHeader => {
+        match self.header() {
+          Ok(flags) => {
+            Ok(Some(DecompressedItem::Flags(flags)))
+          },
+          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
+          Err(e) => Err(e),
+        }
+      },
+      Step::StartOfChunk => {
+        match self.chunk_metadata() {
+          Ok(Some(meta)) => {
+            Ok(Some(DecompressedItem::ChunkMetadata(meta)))
+          },
+          Ok(None) => {
+            Ok(Some(DecompressedItem::Footer))
+          },
+          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
+          Err(e) => Err(e),
+        }
+      },
+      Step::StartOfDataPage => {
+        self.0.with_reader(|reader, state, config| {
+          let &ChunkMetadata { n, compressed_body_size, .. } = state.chunk_meta.as_ref().unwrap();
+          let mut bd = state.new_body_decompressor(reader, n, compressed_body_size)?;
+          let numbers = next_nums_dirty(reader, &mut bd, config)?;
+          state.body_decompressor = Some(bd);
+          Ok(apply_nums(state, numbers))
+        })
+      },
+      Step::MidDataPage => {
+        self.0.with_reader(|reader, state, config| {
+          let numbers = next_nums_dirty(reader, state.body_decompressor.as_mut().unwrap(), config)?;
+          Ok(apply_nums(state, numbers))
+        })
+      },
+      Step::Terminated => Ok(None),
+    };
 
     match res {
       Ok(Some(x)) => Some(Ok(x)),
