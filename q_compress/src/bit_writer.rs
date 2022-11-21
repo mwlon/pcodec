@@ -244,7 +244,6 @@ mod tests {
     writer.write_usize(5, 4);
     writer.write_usize(5, 4);
 
-    println!("!! {:?} :: {}, {}", writer.words, writer.word, writer.j);
     let bytes = writer.drain_bytes();
     assert_eq!(
       bytes,
