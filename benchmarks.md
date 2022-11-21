@@ -14,9 +14,9 @@ For the `i64` heavy-tail integers, a lomax distribution with alpha parameter 0.5
 | `i64` sparse                   | 77                              | 290                               | 597               |
 | `i64` uniform (incompressible) | 14                              | 68                                | 1.00              |
 | `i64` heavy-tail integers      | 14                              | 46                                | 4.63              |
-| `f64` standard normal          | 10                              | 40                                | 1.15              |
+| `f64` standard normal          | 11                              | 40                                | 1.15              |
 | `f64` slow cosine              | 10                              | 26                                | 3.76              |
-| `TimestampMicros` millis       | 10                              | 45                                | 2.14              |
+| `TimestampMicros` millis       | 11                              | 45                                | 2.14              |
 
 `i64` and `f64` are each 8 bytes, so for the more interesting distributions
 (e.g. heavy-tail integers and standard normal),
