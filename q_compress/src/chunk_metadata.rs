@@ -35,6 +35,15 @@ pub enum PrefixMetadata<T: NumberLike> {
   }
 }
 
+impl<T: NumberLike> PrefixMetadata<T> {
+  pub(crate) fn use_gcd(&self) -> bool {
+    match self {
+      PrefixMetadata::Simple { prefixes } => gcd_utils::use_gcd_arithmetic(prefixes),
+      PrefixMetadata::Delta { prefixes } => gcd_utils::use_gcd_arithmetic(prefixes),
+    }
+  }
+}
+
 /// The metadata of a Quantile-compressed chunk.
 ///
 /// One can also create a rough histogram (or a histogram of deltas, if

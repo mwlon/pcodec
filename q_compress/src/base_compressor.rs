@@ -362,7 +362,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
     writer.write_usize(p.code, p.code_len);
     match p.run_len_jumpstart {
       None => {
-        compress_offset_bits_w_prefix::<U, GcdOp>(unsigned, p, writer);
+        compress_offset::<U, GcdOp>(unsigned, p, writer);
         i += 1;
       }
       Some(jumpstart) => {
@@ -380,7 +380,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
         writer.write_varint(reps - 1, jumpstart);
 
         for &unsigned in unsigneds.iter().skip(i).take(reps) {
-          compress_offset_bits_w_prefix::<U, GcdOp>(unsigned, p, writer);
+          compress_offset::<U, GcdOp>(unsigned, p, writer);
         }
         i += reps;
       }
@@ -390,7 +390,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   Ok(())
 }
 
-fn compress_offset_bits_w_prefix<U: UnsignedLike, GcdOp: GcdOperator<U>>(
+fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   unsigned: U,
   p: &PrefixCompressionInfo<U>,
   writer: &mut BitWriter,
@@ -517,7 +517,6 @@ impl<T> BaseCompressor<T> where T: NumberLike {
     let (
       unsigneds,
       prefix_meta,
-      use_gcd,
       table,
       delta_momentss,
     ) = if order == 0 {
@@ -530,12 +529,11 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         &self.flags,
         n,
       )?;
-      let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
       let table = CompressionTable::from(prefixes.as_slice());
       let prefix_metadata = PrefixMetadata::Simple {
         prefixes,
       };
-      (unsigneds, prefix_metadata, use_gcd, table, vec![DeltaMoments::default(); n_pages])
+      (unsigneds, prefix_metadata, table, vec![DeltaMoments::default(); n_pages])
     } else {
       let page_idxs = cumulative_sum(&page_sizes);
       let (deltas, momentss) = delta_encoding::nth_order_deltas(
@@ -552,15 +550,15 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         &self.flags,
         n,
       )?;
-      let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
       let table = CompressionTable::from(prefixes.as_slice());
       let prefix_metadata = PrefixMetadata::Delta {
         prefixes,
       };
-      (unsigneds, prefix_metadata, use_gcd, table, momentss)
+      (unsigneds, prefix_metadata, table, momentss)
     };
 
     let chunk_meta_moments = delta_momentss[0].clone();
+    let use_gcd = prefix_meta.use_gcd();
     let meta = ChunkMetadata::new(n, prefix_meta, chunk_meta_moments);
     meta.write_to(&mut self.writer, &self.flags);
 
