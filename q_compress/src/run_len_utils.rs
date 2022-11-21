@@ -1,8 +1,13 @@
 use crate::bit_reader::BitReader;
-use crate::data_types::UnsignedLike;
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::gcd_utils::GcdOperator;
 use crate::num_decompressor::NumDecompressor;
+use crate::Prefix;
 use crate::prefix::PrefixDecompressionInfo;
+
+pub fn use_run_len<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
+  prefixes.iter().any(|p| p.run_len_jumpstart.is_some())
+}
 
 fn unchecked_decompress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   reader: &mut BitReader,

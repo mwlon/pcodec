@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 
 use crate::bit_reader::BitReader;
-use crate::{bits, gcd_utils, Prefix};
+use crate::{bits, gcd_utils, Prefix, run_len_utils};
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_ENTRIES, MAX_PREFIX_TABLE_SIZE_LOG};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
@@ -147,7 +147,7 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       .max()
       .unwrap_or(usize::MAX);
     let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
-    let use_run_len = prefixes.iter().any(|p| p.run_len_jumpstart.is_some());
+    let use_run_len = run_len_utils::use_run_len(&prefixes);
 
     Ok(NumDecompressor {
       huffman_table: HuffmanTable::from(&prefixes),
@@ -394,14 +394,11 @@ impl<U> NumDecompressor<U> where U: UnsignedLike {
       if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
         // don't slow down the tight loops with runtime checks - do these upfront to choose
         // the best compiled tight loop
-        if self.use_gcd && self.use_run_len {
-          self.unchecked_decompress_num_blocks::<GeneralGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
-        } else if self.use_gcd && !self.use_run_len {
-          self.unchecked_decompress_num_blocks::<GeneralGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
-        } else if !self.use_gcd && self.use_run_len {
-          self.unchecked_decompress_num_blocks::<TrivialGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
-        } else {
-          self.unchecked_decompress_num_blocks::<TrivialGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size);
+        match (self.use_gcd, self.use_run_len) {
+          (false, false) => self.unchecked_decompress_num_blocks::<TrivialGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size),
+          (false, true) => self.unchecked_decompress_num_blocks::<TrivialGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size),
+          (true, false) => self.unchecked_decompress_num_blocks::<GeneralGcdOp, TrivialRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size),
+          (true, true) => self.unchecked_decompress_num_blocks::<GeneralGcdOp, GeneralRunLenOp>(reader, unsigneds, guaranteed_safe_num_blocks, batch_size),
         }
       } else {
         break;

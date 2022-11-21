@@ -1,11 +1,14 @@
 # `q_compress` Changelog
 
+## 0.11.5 (not yet released)
+* Increased compression speed 4% in most cases by making `BitWriter` implementation cleverer.
+
 ## 0.11.4
 
 * Increased decompression speed another 8-20% for interesting distributions by
 making `BitReader` implementation cleverer.
 * Fixed an atomicity bug during streaming decompression that could lead to
-panics or incorrect results
+panics or incorrect results.
 
 ## 0.11.3
 

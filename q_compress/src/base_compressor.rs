@@ -1,6 +1,5 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
-use std::marker::PhantomData;
 
 use crate::{Flags, gcd_utils, huffman_encoding};
 use crate::bit_writer::BitWriter;
@@ -338,12 +337,6 @@ fn train_prefixes<T: NumberLike>(
   Ok(prefixes)
 }
 
-#[derive(Clone)]
-struct TrainedBodyCompressor<'a, U: UnsignedLike, GcdOp: GcdOperator<U>> {
-  pub table: &'a CompressionTable<U>,
-  op: PhantomData<GcdOp>,
-}
-
 fn trained_compress_body<U: UnsignedLike>(
   table: &CompressionTable<U>,
   use_gcd: bool,
@@ -351,66 +344,62 @@ fn trained_compress_body<U: UnsignedLike>(
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   if use_gcd {
-    TrainedBodyCompressor::<U, GeneralGcdOp> { table, op: PhantomData }
-      .compress_data_page(unsigneds, writer)
+    compress_data_page::<U, GeneralGcdOp>(table, unsigneds, writer)
   } else {
-    TrainedBodyCompressor::<U, TrivialGcdOp> { table, op: PhantomData }
-      .compress_data_page(unsigneds, writer)
+    compress_data_page::<U, TrivialGcdOp>(table, unsigneds, writer)
   }
 }
 
-impl<'a, U, GcdOp> TrainedBodyCompressor<'a, U, GcdOp> where U: UnsignedLike, GcdOp: GcdOperator<U> {
-  fn compress_data_page(
-    &self,
-    unsigneds: &[U],
-    writer: &mut BitWriter,
-  ) -> QCompressResult<()> {
-    let mut i = 0;
-    while i < unsigneds.len() {
-      let unsigned = unsigneds[i];
-      let p = self.table.search(unsigned)?;
-      writer.write_usize(p.code, p.code_len);
-      match p.run_len_jumpstart {
-        None => {
-          Self::compress_offset_bits_w_prefix(unsigned, p, writer);
-          i += 1;
-        }
-        Some(jumpstart) => {
-          let mut reps = 1;
-          for &other in unsigneds.iter().skip(i + 1) {
-            if p.contains(other) {
-              reps += 1;
-            } else {
-              break;
-            }
+fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
+  table: &CompressionTable<U>,
+  unsigneds: &[U],
+  writer: &mut BitWriter,
+) -> QCompressResult<()> {
+  let mut i = 0;
+  while i < unsigneds.len() {
+    let unsigned = unsigneds[i];
+    let p = table.search(unsigned)?;
+    writer.write_usize(p.code, p.code_len);
+    match p.run_len_jumpstart {
+      None => {
+        compress_offset::<U, GcdOp>(unsigned, p, writer);
+        i += 1;
+      }
+      Some(jumpstart) => {
+        let mut reps = 1;
+        for &other in unsigneds.iter().skip(i + 1) {
+          if p.contains(other) {
+            reps += 1;
+          } else {
+            break;
           }
-
-          // we store 1 less than the number of occurrences
-          // because the prefix already implies there is at least 1 occurrence
-          writer.write_varint(reps - 1, jumpstart);
-
-          for &unsigned in unsigneds.iter().skip(i).take(reps) {
-            Self::compress_offset_bits_w_prefix(unsigned, p, writer);
-          }
-          i += reps;
         }
+
+        // we store 1 less than the number of occurrences
+        // because the prefix already implies there is at least 1 occurrence
+        writer.write_varint(reps - 1, jumpstart);
+
+        for &unsigned in unsigneds.iter().skip(i).take(reps) {
+          compress_offset::<U, GcdOp>(unsigned, p, writer);
+        }
+        i += reps;
       }
     }
-    writer.finish_byte();
-    Ok(())
   }
+  writer.finish_byte();
+  Ok(())
+}
 
-  fn compress_offset_bits_w_prefix(
-    unsigned: U,
-    p: &PrefixCompressionInfo<U>,
-    writer: &mut BitWriter,
-  ) {
-    let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
-    writer.write_diff(off, p.k);
-    if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
-      // most significant bit, if necessary, comes last
-      writer.write_one((off & (U::ONE << p.k)) > U::ZERO);
-    }
+fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
+  unsigned: U,
+  p: &PrefixCompressionInfo<U>,
+  writer: &mut BitWriter,
+) {
+  let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
+  writer.write_diff(off, p.k);
+  if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
+    // most significant bit, if necessary, comes last
+    writer.write_one((off & (U::ONE << p.k)) > U::ZERO);
   }
 }
 
@@ -528,7 +517,6 @@ impl<T> BaseCompressor<T> where T: NumberLike {
     let (
       unsigneds,
       prefix_meta,
-      use_gcd,
       table,
       delta_momentss,
     ) = if order == 0 {
@@ -541,12 +529,11 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         &self.flags,
         n,
       )?;
-      let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
       let table = CompressionTable::from(prefixes.as_slice());
       let prefix_metadata = PrefixMetadata::Simple {
         prefixes,
       };
-      (unsigneds, prefix_metadata, use_gcd, table, vec![DeltaMoments::default(); n_pages])
+      (unsigneds, prefix_metadata, table, vec![DeltaMoments::default(); n_pages])
     } else {
       let page_idxs = cumulative_sum(&page_sizes);
       let (deltas, momentss) = delta_encoding::nth_order_deltas(
@@ -563,15 +550,15 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         &self.flags,
         n,
       )?;
-      let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
       let table = CompressionTable::from(prefixes.as_slice());
       let prefix_metadata = PrefixMetadata::Delta {
         prefixes,
       };
-      (unsigneds, prefix_metadata, use_gcd, table, momentss)
+      (unsigneds, prefix_metadata, table, momentss)
     };
 
     let chunk_meta_moments = delta_momentss[0].clone();
+    let use_gcd = prefix_meta.use_gcd();
     let meta = ChunkMetadata::new(n, prefix_meta, chunk_meta_moments);
     meta.write_to(&mut self.writer, &self.flags);
 
