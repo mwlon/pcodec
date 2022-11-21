@@ -172,7 +172,6 @@ impl BitWriter {
   }
 
   pub fn overwrite_usize(&mut self, bit_idx: usize, x: usize, n: usize) {
-    // TODO
     let mut i = bit_idx / WORD_SIZE;
     let mut j = bit_idx % WORD_SIZE;
     // not the most efficient implementation but it's ok because we
