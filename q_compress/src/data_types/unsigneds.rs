@@ -19,22 +19,12 @@ macro_rules! impl_unsigned {
         self as f64
       }
 
-      // These lshift an rshift implementations look slow, but all the
-      // conditionals and masks are zero-costed away by the compiler.
       fn rshift_word(self, shift: usize) -> usize {
-        if Self::BITS <= usize::BITS {
-          (self as usize) >> shift
-        } else {
-          ((self >> shift) & (usize::MAX as Self)) as usize
-        }
+        (self >> shift) as usize
       }
 
       fn lshift_word(self, shift: usize) -> usize {
-        if Self::BITS <= usize::BITS {
-          (self as usize) << shift
-        } else {
-          ((self << shift) & (usize::MAX as Self)) as usize
-        }
+        (self as usize) << shift
       }
     }
   }

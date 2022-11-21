@@ -135,11 +135,11 @@ At the end of the file is a termination byte.
 ## Wrapped Format
 
 Quantile compression can also be used to write data pages interleaved into a
-columnar format, as opposed to writing a standalone file.
+columnar format.
 As compared to the standalone format, this omits unnecessary metadata such as
 counts, compressed byte size, and chunk/termination bytes.
-It also allows writing finer data pages within a chunk, allowing data to be
-interleaved efficiently.
+It also allows writing finer data pages within a chunk for efficiently
+interleaving with other data.
 
 ## Extra
 

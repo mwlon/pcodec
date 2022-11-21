@@ -14,6 +14,7 @@ use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WO
 /// is byte-aligned; e.g. `bit_idx % 8 == 0`.
 #[derive(Clone, Debug)]
 pub struct BitWriter {
+  word: usize,
   words: Vec<usize>,
   j: usize,
 }
@@ -21,8 +22,9 @@ pub struct BitWriter {
 impl Default for BitWriter {
   fn default() -> Self {
     BitWriter {
+      word: 0,
       words: Vec::new(),
-      j: WORD_SIZE,
+      j: 0,
     }
   }
 }
@@ -30,15 +32,15 @@ impl Default for BitWriter {
 impl BitWriter {
   /// Returns the number of bytes so far produced by the writer.
   pub fn byte_size(&self) -> usize {
-    self.words.len() * BYTES_PER_WORD - (WORD_SIZE - self.j) / 8
+    self.words.len() * BYTES_PER_WORD + self.j / 8
   }
 
   /// Returns the number of bits so far produced by the writer.
   pub fn bit_size(&self) -> usize {
-    self.words.len() * WORD_SIZE - (WORD_SIZE - self.j)
+    self.words.len() * WORD_SIZE + self.j
   }
 
-  pub(crate) fn write_aligned_byte(&mut self, byte: u8) -> QCompressResult<()> {
+  pub fn write_aligned_byte(&mut self, byte: u8) -> QCompressResult<()> {
     self.write_aligned_bytes(&[byte])
   }
 
@@ -48,7 +50,7 @@ impl BitWriter {
     if self.j % 8 == 0 {
       for &byte in bytes {
         self.refresh_if_needed();
-        *self.last_mut() |= (byte as usize) << (WORD_SIZE - 8 - self.j);
+        self.word |= (byte as usize) << (WORD_SIZE - 8 - self.j);
         self.j += 8;
       }
       Ok(())
@@ -61,15 +63,13 @@ impl BitWriter {
     }
   }
 
+  #[inline]
   fn refresh_if_needed(&mut self) {
     if self.j == WORD_SIZE {
-      self.words.push(0);
+      self.words.push(self.word);
+      self.word = 0;
       self.j = 0;
     }
-  }
-
-  fn last_mut(&mut self) -> &mut usize {
-    self.words.last_mut().unwrap()
   }
 
   /// Appends the bit to the writer.
@@ -77,7 +77,7 @@ impl BitWriter {
     self.refresh_if_needed();
 
     if b {
-      *self.last_mut() |= BASE_BIT_MASK >> self.j;
+      self.word |= BASE_BIT_MASK >> self.j;
     }
 
     self.j += 1;
@@ -90,11 +90,7 @@ impl BitWriter {
     }
   }
 
-  pub(crate) fn write_usize(&mut self, x: usize, n: usize) {
-    self.write_diff(x as u64, n);
-  }
-
-  pub(crate) fn write_diff<U: UnsignedLike>(&mut self, x: U, n: usize) {
+  pub fn write_usize(&mut self, x: usize, n: usize) {
     if n == 0 {
       return;
     }
@@ -104,16 +100,43 @@ impl BitWriter {
     let n_plus_j = n + self.j;
     if n_plus_j <= WORD_SIZE {
       let lshift = WORD_SIZE - n_plus_j;
-      *self.last_mut() |= x.lshift_word(lshift) & (usize::MAX >> self.j);
+      self.word |= (x << lshift) & (usize::MAX >> self.j);
       self.j = n_plus_j;
       return;
     }
 
-    let rshift = n_plus_j - WORD_SIZE;
-    *self.last_mut() |= x.rshift_word(rshift) & (usize::MAX >> self.j);
-    let mut remaining = n + self.j - WORD_SIZE;
+    let remaining = n_plus_j - WORD_SIZE;
+    self.words.push(self.word | ((x >> remaining) & (usize::MAX >> self.j)));
 
-    while remaining > WORD_SIZE {
+    // now remaining bits <= WORD_SIZE
+    let lshift = WORD_SIZE - remaining;
+    self.word = x << lshift;
+    self.j = remaining;
+  }
+
+  pub fn write_diff<U: UnsignedLike>(&mut self, x: U, n: usize) {
+    if n == 0 {
+      return;
+    }
+
+    self.refresh_if_needed();
+
+    let n_plus_j = n + self.j;
+    if n_plus_j <= WORD_SIZE {
+      let lshift = WORD_SIZE - n_plus_j;
+      self.word |= x.lshift_word(lshift) & (usize::MAX >> self.j);
+      self.j = n_plus_j;
+      return;
+    }
+
+    let mut remaining = n_plus_j - WORD_SIZE;
+    self.words.push(self.word | (x.rshift_word(remaining) & (usize::MAX >> self.j)));
+
+    for _ in 0..(U::BITS - 1) / WORD_SIZE {
+      if remaining <= WORD_SIZE {
+        break;
+      }
+
       let rshift = remaining - WORD_SIZE;
       self.words.push(x.rshift_word(rshift));
       remaining -= WORD_SIZE;
@@ -121,11 +144,11 @@ impl BitWriter {
 
     // now remaining bits <= WORD_SIZE
     let lshift = WORD_SIZE - remaining;
-    self.words.push(x.lshift_word(lshift));
+    self.word = x.lshift_word(lshift);
     self.j = remaining;
   }
 
-  pub(crate) fn write_varint(&mut self, mut x: usize, jumpstart: usize) {
+  pub fn write_varint(&mut self, mut x: usize, jumpstart: usize) {
     if x > MAX_ENTRIES {
       panic!("unable to encode varint greater than max number of entries");
     }
@@ -144,11 +167,12 @@ impl BitWriter {
     self.write_one(false);
   }
 
-  pub(crate) fn finish_byte(&mut self) {
+  pub fn finish_byte(&mut self) {
     self.j = bits::ceil_div(self.j, 8) * 8;
   }
 
-  pub(crate) fn overwrite_usize(&mut self, bit_idx: usize, x: usize, n: usize) {
+  pub fn overwrite_usize(&mut self, bit_idx: usize, x: usize, n: usize) {
+    // TODO
     let mut i = bit_idx / WORD_SIZE;
     let mut j = bit_idx % WORD_SIZE;
     // not the most efficient implementation but it's ok because we
@@ -171,11 +195,13 @@ impl BitWriter {
 
   pub fn drain_bytes(&mut self) -> Vec<u8> {
     let byte_size = self.byte_size();
+    self.words.push(self.word);
+    self.word = 0;
     let mut res = bits::words_to_bytes(&self.words);
     res.truncate(byte_size);
 
     self.words.clear();
-    self.j = WORD_SIZE;
+    self.j = 0;
 
     res
   }
