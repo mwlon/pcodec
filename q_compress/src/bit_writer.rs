@@ -32,7 +32,7 @@ impl Default for BitWriter {
 impl BitWriter {
   /// Returns the number of bytes so far produced by the writer.
   pub fn byte_size(&self) -> usize {
-    self.words.len() * BYTES_PER_WORD + self.j / 8
+    self.words.len() * BYTES_PER_WORD + bits::ceil_div(self.j, 8)
   }
 
   /// Returns the number of bits so far produced by the writer.
@@ -186,8 +186,9 @@ impl BitWriter {
       let shift = WORD_SIZE - 1 - j;
       let mask = 1_usize << shift;
       let shifted_bit = (b as usize) << shift;
-      if self.words[i] & mask != shifted_bit {
-        self.words[i] ^= shifted_bit;
+      let word = self.words.get_mut(i).unwrap_or(&mut self.word);
+      if *word & mask != shifted_bit {
+        *word ^= shifted_bit;
       }
       j += 1;
     }
@@ -254,6 +255,7 @@ mod tests {
     writer.write_usize(5, 4);
     writer.write_usize(5, 4);
 
+    println!("!! {:?} :: {}, {}", writer.words, writer.word, writer.j);
     let bytes = writer.drain_bytes();
     assert_eq!(
       bytes,
