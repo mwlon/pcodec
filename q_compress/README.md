@@ -39,6 +39,7 @@ extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compr
 
 To embed/interleave `q_compress` in another data format, it is better to use
 the [wrapped API and format](./src/wrapped) than standalone. 
+See the [wrapped time series](./examples/wrapped_time_series.rs) example.
 This allows
 * fine-level data paging with good compression ratio down to page sizes of >20 numbers
 (as long as the overall chunk has >2k or so)
