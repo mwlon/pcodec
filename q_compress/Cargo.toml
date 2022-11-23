@@ -28,6 +28,10 @@ name="primary"
 path="examples/primary.rs"
 
 [[example]]
+name="wrapped_time_series"
+path="examples/wrapped_time_series.rs"
+
+[[example]]
 name="fast_seeking"
 path="examples/fast_seeking.rs"
 
