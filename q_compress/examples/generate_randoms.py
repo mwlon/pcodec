@@ -25,8 +25,8 @@ def write_parquet_tables(nums, full_name):
   table = pa.Table.from_pydict({'nums': nums})
 #   pq.write_table(table, f'{base_dir}/parquet/{full_name}.parquet', compression='NONE')
 #   pq.write_table(table, f'{base_dir}/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
-#   pq.write_table(table, f'{base_dir}/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=9)
-  pq.write_table(table, f'{base_dir}/zstd_parquet/{full_name}.zstd.parquet', compression='zstd', compression_level=22)
+  pq.write_table(table, f'{base_dir}/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=6)
+  pq.write_table(table, f'{base_dir}/zstd_parquet/{full_name}.zstd.parquet', compression='zstd', compression_level=3)
 
 def write_i64(arr, name):
   if arr.dtype != np.int64:
