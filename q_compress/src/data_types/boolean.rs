@@ -44,7 +44,7 @@ impl NumberLike for bool {
     vec![self as u8]
   }
 
-  fn from_bytes(bytes: Vec<u8>) -> QCompressResult<bool> {
+  fn from_bytes(bytes: &[u8]) -> QCompressResult<bool> {
     Ok(u8::from_be_bytes(bytes.try_into().unwrap()) != 0)
   }
 }

@@ -13,10 +13,11 @@ use structopt::StructOpt;
 const BASE_DIR: &str = "q_compress/examples/data";
 // if this delta order is specified, use a dataset-specific order
 const MAGIC_DELTA_ORDER: usize = 8;
-const SPECIAL_DELTA_ORDERS: [(&str, usize); 3] = [
+const SPECIAL_DELTA_ORDERS: [(&str, usize); 4] = [
   ("f64_slow_cosine", 7),
   ("i64_slow_cosine", 2),
   ("micros_near_linear", 1),
+  ("interl", 1),
 ];
 
 #[derive(StructOpt)]
@@ -27,6 +28,10 @@ struct Opt {
   pub iters: usize,
   #[structopt(long, short, default_value="qco")]
   compressors: String,
+  #[structopt(long)]
+  pub no_compress: bool,
+  #[structopt(long)]
+  pub no_decompress: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -154,10 +159,16 @@ fn delta_order_for_dataset(dataset: &str) -> usize {
   0
 }
 
+struct Precomputed<T: NumberLike> {
+  raw_bytes: Vec<u8>,
+  nums: Vec<T>,
+  compressed: Vec<u8>,
+}
+
 trait DtypeHandler<T: 'static> where T: NumberLike {
   fn parse_nums(bytes: &[u8]) -> Vec<T>;
 
-  fn compress_qco(nums: Vec<T>, config: CompressorConfig) -> Vec<u8> {
+  fn compress_qco(nums: &[T], config: CompressorConfig) -> Vec<u8> {
     Compressor::<T>::from_config(config)
       .simple_compress(&nums)
   }
@@ -166,96 +177,160 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
     auto_decompress(bytes).expect("could not decompress")
   }
 
-  fn handle(
-    path: &Path,
-    mut config: MultiCompressorConfig,
-    warmup: bool,
-  ) -> BenchStat {
-    let dataset = basename_no_ext(path);
-    println!("\ndataset: {} warmup: {} config: {:?}", dataset, warmup, config);
-
-    // compress
-    let bytes = fs::read(path).expect("could not read");
-    let nums = Self::parse_nums(&bytes);
-
-    let (compressed, compress_dt) = match &mut config {
+  fn compress(
+    dataset: &str,
+    raw_bytes: &[u8],
+    nums: &[T],
+    config: &MultiCompressorConfig,
+  ) -> (Duration, Vec<u8>) {
+    let t = Instant::now();
+    let compressed = match &config {
       MultiCompressorConfig::QCompress(qco_conf) => {
-        if qco_conf.delta_encoding_order == MAGIC_DELTA_ORDER {
-          qco_conf.delta_encoding_order = delta_order_for_dataset(&dataset);
+        let mut conf = qco_conf.clone();
+        if conf.delta_encoding_order == MAGIC_DELTA_ORDER {
+          conf.delta_encoding_order = delta_order_for_dataset(&dataset);
         }
-        let compress_start = Instant::now();
-        let compressed = Self::compress_qco(nums.clone(), qco_conf.clone());
-        (compressed, Instant::now() - compress_start)
+        let compressed = Self::compress_qco(&nums, conf);
+        compressed
       }
       MultiCompressorConfig::ZStd(level) => {
-        let compress_start = Instant::now();
-        let compressed = zstd::encode_all(bytes.as_slice(), *level as i32).unwrap();
-        (compressed, Instant::now() - compress_start)
+        let level = *level as i32;
+        zstd::encode_all(raw_bytes, level).unwrap()
       }
     };
-    println!("\tcompressed to {} bytes in {:?}", compressed.len(), compress_dt);
-    let mut fname = dataset.clone();
+    (Instant::now() - t, compressed)
+  }
+
+  fn decompress(
+    compressed: &[u8],
+    config: &MultiCompressorConfig,
+  ) -> (Duration, Vec<T>) {
+    let t = Instant::now();
+    let rec_nums = match config {
+      MultiCompressorConfig::QCompress(_) => {
+        Self::decompress_qco(compressed)
+      }
+      MultiCompressorConfig::ZStd(_) => {
+        let decoded_bytes = zstd::decode_all(compressed).unwrap();
+        Self::parse_nums(&decoded_bytes)
+      }
+    };
+    (Instant::now() - t, rec_nums)
+  }
+
+  fn warmup_iter(
+    path: &Path,
+    dataset: &str,
+    config: &MultiCompressorConfig,
+  ) -> Precomputed<T> {
+    println!("\ndataset warmup: {} config: {:?}", dataset, config);
+
+    // read in data
+    let raw_bytes = fs::read(path).expect("could not read");
+    let nums = Self::parse_nums(&raw_bytes);
+
+    // compress
+    let (_, compressed) = Self::compress(dataset, &raw_bytes, &nums, config);
+
+    println!("\tcompressed to {} bytes", compressed.len());
+    let mut fname = dataset.to_string();
     fname.push('_');
     fname.push_str(&config.details());
     let output_dir = format!("{}/{}", BASE_DIR, config.codec());
     let output_path = format!("{}/{}.qco", output_dir, fname);
 
-    if warmup {
-      match fs::create_dir(&output_dir) {
-        Ok(()) => (),
-        Err(e) => match e.kind() {
-          ErrorKind::AlreadyExists => (),
-          _ => panic!("{}", e)
-        }
+    match fs::create_dir(&output_dir) {
+      Ok(()) => (),
+      Err(e) => match e.kind() {
+        ErrorKind::AlreadyExists => (),
+        _ => panic!("{}", e)
       }
-      fs::write(
-        &output_path,
-        &compressed,
-      ).expect("couldn't write");
     }
+    fs::write(
+      &output_path,
+      &compressed,
+    ).expect("couldn't write");
 
     // decompress
-    let decompress_dt = match config {
-      MultiCompressorConfig::QCompress(_) => {
-        let decompress_start = Instant::now();
-        let rec_nums = Self::decompress_qco(&compressed);
-        let decompress_dt = Instant::now() - decompress_start;
+    let (_, rec_nums) = Self::decompress(&compressed, config);
 
-        // make sure everything came back correct
-        if rec_nums.len() != nums.len() {
-          println!("original len: {} recovered len: {}", nums.len(), rec_nums.len());
-          panic!("got back the wrong number of numbers!");
-        }
-        for i in 0..rec_nums.len() {
-          if !rec_nums[i].num_eq(&nums[i]) {
-            println!(
-              "{} num {} -> {}",
-              i,
-              nums[i],
-              rec_nums[i]
-            );
-            panic!("failed to recover nums by compressing and decompressing!");
-          }
-        }
+    // make sure everything came back correct
+    if rec_nums.len() != nums.len() {
+      println!("original len: {} recovered len: {}", nums.len(), rec_nums.len());
+      panic!("got back the wrong number of numbers!");
+    }
+    for i in 0..rec_nums.len() {
+      if !rec_nums[i].num_eq(&nums[i]) {
+        println!(
+          "{} num {} -> {}",
+          i,
+          nums[i],
+          rec_nums[i]
+        );
+        panic!("failed to recover nums by compressing and decompressing!");
+      }
+    }
 
-        decompress_dt
-      }
-      MultiCompressorConfig::ZStd(_) => {
-        let decompress_start = Instant::now();
-        zstd::decode_all(compressed.as_slice()).unwrap();
-        Instant::now() - decompress_start
-      }
+    Precomputed {
+      raw_bytes,
+      nums,
+      compressed,
+    }
+  }
+
+  fn stats_iter(
+    dataset: &str,
+    config: MultiCompressorConfig,
+    precomputed: &Precomputed<T>,
+    opt: &Opt,
+  ) -> BenchStat {
+    // compress
+    let compress_dt = if !opt.no_compress {
+      let (dt, _) = Self::compress(dataset, &precomputed.raw_bytes, &precomputed.nums, &config);
+      println!("\tcompressed in {:?}", dt);
+      dt
+    } else {
+      Duration::ZERO
     };
-    println!("\tdecompressed in {:?}", decompress_dt);
+
+    // decompress
+    let decompress_dt = if !opt.no_decompress {
+      let (dt, _) = Self::decompress(&precomputed.compressed, &config);
+      println!("\tdecompressed in {:?}", dt);
+      dt
+    } else {
+      Duration::ZERO
+    };
 
     BenchStat {
-      dataset,
+      dataset: dataset.to_string(),
       config,
-      compressed_size: compressed.len(),
+      compressed_size: precomputed.compressed.len(),
       compress_dt,
       decompress_dt,
       iters: 1,
     }
+  }
+
+  fn handle(
+    path: &Path,
+    config: &MultiCompressorConfig,
+    opt: &Opt,
+  ) -> BenchStat {
+    let dataset = basename_no_ext(path);
+    let precomputed = Self::warmup_iter(path, &dataset, &config);
+    let mut full_stat = None;
+    for _ in 0..opt.iters {
+      let config = config.clone();
+      let iter_stat = Self::stats_iter(&dataset, config.clone(), &precomputed, opt);
+
+      if let Some(stat) = &mut full_stat {
+        *stat += iter_stat;
+      } else {
+        full_stat = Some(iter_stat);
+      }
+    }
+    full_stat.unwrap()
   }
 }
 
@@ -265,7 +340,7 @@ impl DtypeHandler<i64> for I64Handler {
   fn parse_nums(bytes: &[u8]) -> Vec<i64> {
     bytes
       .chunks(8)
-      // apparently numpy writes in le order
+      // this might not only work on little-endian machines
       .map(|chunk| i64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")))
       .collect()
   }
@@ -299,7 +374,7 @@ impl DtypeHandler<TimestampMicros> for TimestampMicrosHandler {
   fn parse_nums(bytes: &[u8]) -> Vec<TimestampMicros> {
     bytes
       .chunks(8)
-      // apparently numpy writes in le order
+      // this might not only work on little-endian machines
       .map(|chunk| {
         let int = i64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file"));
         TimestampMicros::new(int)
@@ -369,32 +444,18 @@ fn main() {
     }
 
     for config in &configs {
-      let mut full_stat = None;
-      for i in 0..opt.iters + 1 {
-        let config = config.clone();
-        let warmup = i == 0;
-
-        let iter_stat = if path_str.contains("i64") {
-          I64Handler::handle(&path, config, warmup)
-        } else if path_str.contains("f64") {
-          F64Handler::handle(&path, config, warmup)
-        } else if path_str.contains("bool") {
-          BoolHandler::handle(&path, config, warmup)
-        } else if path_str.contains("micros") {
-          TimestampMicrosHandler::handle(&path, config, warmup)
-        } else {
-          panic!("Could not determine dtype for file {}!", path_str);
-        };
-
-        if !warmup {
-          if let Some(stat) = &mut full_stat {
-            *stat += iter_stat;
-          } else {
-            full_stat = Some(iter_stat);
-          }
-        }
-      }
-      stats.push(full_stat.unwrap());
+      let full_stat = if path_str.contains("i64") {
+        I64Handler::handle(&path, config, &opt)
+      } else if path_str.contains("f64") {
+        F64Handler::handle(&path, config, &opt)
+      } else if path_str.contains("bool") {
+        BoolHandler::handle(&path, config, &opt)
+      } else if path_str.contains("micros") {
+        TimestampMicrosHandler::handle(&path, config, &opt)
+      } else {
+        panic!("Could not determine dtype for file {}!", path_str);
+      };
+      stats.push(full_stat);
     }
   }
 
