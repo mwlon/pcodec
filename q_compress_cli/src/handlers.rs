@@ -12,7 +12,7 @@ use crate::dtype::DType;
 use crate::inspect_handler::InspectHandler;
 
 fn new_boxed_handler<T: ArrowNumberLike>() -> Box<dyn Handler> {
-  Box::new(HandlerImpl::<T>::default())
+  Box::<HandlerImpl<T>>::default()
 }
 
 pub fn from_header_byte(header_byte: u8) -> Result<Box<dyn Handler>> {
