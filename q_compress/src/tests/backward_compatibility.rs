@@ -19,7 +19,7 @@ fn assert_compatible<T: NumberLike>(
   let raw_bytes = fs::read(format!("assets/{}.bin", filename)).expect("read bin");
   let expected = raw_bytes
     .chunks(T::PHYSICAL_BITS / 8)
-    .map(|chunk| T::from_bytes(chunk.to_vec()).expect("raw corruption"))
+    .map(|chunk| T::from_bytes(chunk).expect("raw corruption"))
     .collect::<Vec<_>>();
 
   let compressed = fs::read(format!("assets/{}.qco", filename)).expect("read qco");
