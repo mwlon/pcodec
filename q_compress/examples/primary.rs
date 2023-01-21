@@ -1,7 +1,7 @@
-use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::io::ErrorKind;
+use std::marker::PhantomData;
 use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -165,8 +165,21 @@ struct Precomputed<T: NumberLike> {
   compressed: Vec<u8>,
 }
 
-trait DtypeHandler<T: 'static> where T: NumberLike {
-  fn parse_nums(bytes: &[u8]) -> Vec<T>;
+struct DtypeHandler<T: 'static + NumberLike>(PhantomData<T>);
+
+impl<T: 'static + NumberLike> DtypeHandler<T> {
+  fn cast_to_nums(bytes: Vec<u8>) -> Vec<T> {
+    // Here we're assuming the bytes are in the right format for our data type.
+    // For instance, chunks of 8 little-endian bytes on most platforms for
+    // i64's.
+    // This is fast and should work across platforms.
+    let n = bytes.len() / (T::PHYSICAL_BITS / 8);
+    unsafe {
+      let mut nums = std::mem::transmute::<_, Vec<T>>(bytes);
+      nums.set_len(n);
+      nums
+    }
+  }
 
   fn compress_qco(nums: &[T], config: CompressorConfig) -> Vec<u8> {
     Compressor::<T>::from_config(config)
@@ -211,8 +224,10 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
         Self::decompress_qco(compressed)
       }
       MultiCompressorConfig::ZStd(_) => {
+        // to do justice to zstd, unsafely convert the bytes it writes into T
+        // without copying
         let decoded_bytes = zstd::decode_all(compressed).unwrap();
-        Self::parse_nums(&decoded_bytes)
+        Self::cast_to_nums(decoded_bytes)
       }
     };
     (Instant::now() - t, rec_nums)
@@ -227,12 +242,13 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
 
     // read in data
     let raw_bytes = fs::read(path).expect("could not read");
-    let nums = Self::parse_nums(&raw_bytes);
+    let nums = Self::cast_to_nums(raw_bytes.clone());
 
     // compress
     let (_, compressed) = Self::compress(dataset, &raw_bytes, &nums, config);
-
     println!("\tcompressed to {} bytes", compressed.len());
+
+    // write to disk
     let mut fname = dataset.to_string();
     fname.push('_');
     fname.push_str(&config.details());
@@ -334,55 +350,6 @@ trait DtypeHandler<T: 'static> where T: NumberLike {
   }
 }
 
-struct I64Handler;
-
-impl DtypeHandler<i64> for I64Handler {
-  fn parse_nums(bytes: &[u8]) -> Vec<i64> {
-    bytes
-      .chunks(8)
-      // this might not only work on little-endian machines
-      .map(|chunk| i64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")))
-      .collect()
-  }
-}
-
-struct F64Handler;
-
-impl DtypeHandler<f64> for F64Handler {
-  fn parse_nums(bytes: &[u8]) -> Vec<f64> {
-    bytes
-      .chunks(8)
-      .map(|chunk| f64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")))
-      .collect()
-  }
-}
-
-struct BoolHandler;
-
-impl DtypeHandler<bool> for BoolHandler {
-  fn parse_nums(bytes: &[u8]) -> Vec<bool> {
-    bytes
-      .chunks(1)
-      .map(|chunk| u8::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")) != 0)
-      .collect()
-  }
-}
-
-struct TimestampMicrosHandler;
-
-impl DtypeHandler<TimestampMicros> for TimestampMicrosHandler {
-  fn parse_nums(bytes: &[u8]) -> Vec<TimestampMicros> {
-    bytes
-      .chunks(8)
-      // this might not only work on little-endian machines
-      .map(|chunk| {
-        let int = i64::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file"));
-        TimestampMicros::new(int)
-      })
-      .collect()
-  }
-}
-
 fn left_pad(s: &str, size: usize) -> String {
   let mut res = " ".repeat(size.saturating_sub(s.len()));
   res.push_str(s);
@@ -445,13 +412,13 @@ fn main() {
 
     for config in &configs {
       let full_stat = if path_str.contains("i64") {
-        I64Handler::handle(&path, config, &opt)
+        DtypeHandler::<i64>::handle(&path, config, &opt)
       } else if path_str.contains("f64") {
-        F64Handler::handle(&path, config, &opt)
+        DtypeHandler::<f64>::handle(&path, config, &opt)
       } else if path_str.contains("bool") {
-        BoolHandler::handle(&path, config, &opt)
+        DtypeHandler::<bool>::handle(&path, config, &opt)
       } else if path_str.contains("micros") {
-        TimestampMicrosHandler::handle(&path, config, &opt)
+        DtypeHandler::<TimestampMicros>::handle(&path, config, &opt)
       } else {
         panic!("Could not determine dtype for file {}!", path_str);
       };
