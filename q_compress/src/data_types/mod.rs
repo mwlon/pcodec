@@ -161,13 +161,13 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   fn to_bytes(self) -> Vec<u8>;
 
   /// Creates a number from an uncompressed representation.
-  fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self>;
+  fn from_bytes(bytes: &[u8]) -> QCompressResult<Self>;
 
   /// Parses an uncompressed representation of the number from the
   /// `BitReader`.
   fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
     let bools = reader.read(Self::PHYSICAL_BITS)?;
-    Self::from_bytes(bits::bits_to_bytes(bools))
+    Self::from_bytes(&bits::bits_to_bytes(bools))
   }
 
   /// Appends an uncompressed representation of the number to the

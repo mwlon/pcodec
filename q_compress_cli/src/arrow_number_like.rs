@@ -82,6 +82,6 @@ impl ArrowNumberLike for TimestampNanos {
   }
 
   fn to_arrow(self) -> <Self::ArrowPrimitive as ArrowPrimitiveType>::Native {
-    self.to_total_parts() as i64
+    self.to_total_parts()
   }
 }

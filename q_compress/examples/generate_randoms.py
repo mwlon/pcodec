@@ -25,7 +25,7 @@ def write_parquet_tables(nums, full_name):
   table = pa.Table.from_pydict({'nums': nums})
 #   pq.write_table(table, f'{base_dir}/parquet/{full_name}.parquet', compression='NONE')
 #   pq.write_table(table, f'{base_dir}/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
-  pq.write_table(table, f'{base_dir}/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=6)
+#   pq.write_table(table, f'{base_dir}/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=6)
   pq.write_table(table, f'{base_dir}/zstd_parquet/{full_name}.zstd.parquet', compression='zstd', compression_level=3)
 
 def write_i64(arr, name):
@@ -157,3 +157,16 @@ write_f64(int_floats, 'integers')
 decimal_floats = np.random.randint(1000, 10000, size=n) / 100
 write_f64(decimal_floats[:short_n], 'decimal_short')
 write_f64(decimal_floats, 'decimal_long')
+
+# 10 interleaved 1st order sequences with different scales
+# Rather antagonistic.
+deltas = np.random.randint(-10, 10, size=[n // 10, 10])
+bases = 10 ** np.arange(10)
+interleaved = bases[None, :] + np.cumsum(deltas, axis=0)
+write_i64(interleaved.reshape(-1), 'interleaved')
+
+# the same as interleaved, but shuffled within each group of 10
+# Quite antagonistic.
+idxs = np.random.rand(*interleaved.shape).argsort(axis=1)
+misordered = np.take_along_axis(interleaved, idxs, axis=1)
+write_i64(misordered.reshape(-1), 'misordered')

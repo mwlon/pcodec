@@ -67,7 +67,7 @@ macro_rules! impl_unsigned_number {
         self.to_be_bytes().to_vec()
       }
 
-      fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self> {
+      fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
         Ok(Self::from_be_bytes(bytes.try_into().unwrap()))
       }
     }

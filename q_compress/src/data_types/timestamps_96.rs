@@ -176,7 +176,7 @@ macro_rules! impl_timestamp_96 {
         ((self.0 - Self::MIN) as u128).to_be_bytes()[4..].to_vec()
       }
 
-      fn from_bytes(bytes: Vec<u8>) -> QCompressResult<Self> {
+      fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
         let mut full_bytes = vec![0; 4];
         full_bytes.extend(bytes);
         let parts = (u128::from_be_bytes(full_bytes.try_into().unwrap()) as i128) + Self::MIN;
