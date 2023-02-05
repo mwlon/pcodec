@@ -55,7 +55,7 @@ impl<T: NumberLike> PrefixMetadata<T> {
 /// `n` and `compressed_body_size` are not stored.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
-pub struct ChunkMetadata<T> where T: NumberLike {
+pub struct ChunkMetadata<T: NumberLike> {
   /// The count of numbers in the chunk.
   /// Not available in wrapped mode.
   pub n: usize,
@@ -165,7 +165,7 @@ fn write_prefixes<T: NumberLike>(
   }
 }
 
-impl<T> ChunkMetadata<T> where T: NumberLike {
+impl<T: NumberLike> ChunkMetadata<T> {
   pub(crate) fn new(n: usize, prefix_metadata: PrefixMetadata<T>, delta_moments: DeltaMoments<T::Signed>) -> Self {
     ChunkMetadata {
       n,

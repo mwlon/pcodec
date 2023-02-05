@@ -95,7 +95,7 @@ struct State<U: UnsignedLike> {
 
 // NumDecompressor does the main work of decoding bytes into NumberLikes
 #[derive(Clone, Debug)]
-pub struct NumDecompressor<U> where U: UnsignedLike {
+pub struct NumDecompressor<U: UnsignedLike> {
   // known information about the chunk
   huffman_table: HuffmanTable<U>,
   n: usize,
@@ -124,7 +124,7 @@ fn decompress_offset_dirty<U: UnsignedLike>(
   Ok(())
 }
 
-impl<U> NumDecompressor<U> where U: UnsignedLike {
+impl<U: UnsignedLike> NumDecompressor<U> {
   pub(crate) fn new<T: NumberLike<Unsigned=U>>(
     n: usize,
     compressed_body_size: usize,

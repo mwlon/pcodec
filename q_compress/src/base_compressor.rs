@@ -461,14 +461,14 @@ impl<T: NumberLike> State<T> {
 }
 
 #[derive(Clone, Debug)]
-pub struct BaseCompressor<T> where T: NumberLike {
+pub struct BaseCompressor<T: NumberLike> {
   internal_config: InternalCompressorConfig,
   pub flags: Flags,
   pub writer: BitWriter,
   pub state: State<T>,
 }
 
-impl<T> BaseCompressor<T> where T: NumberLike {
+impl<T: NumberLike> BaseCompressor<T> {
   pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> Self {
     Self {
       internal_config: InternalCompressorConfig::from(&config),

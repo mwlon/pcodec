@@ -80,8 +80,7 @@ impl<T: NumberLike> From<&Vec<Prefix<T>>> for HuffmanTable<T::Unsigned> {
   }
 }
 
-fn build_from_prefixes_recursive<T>(prefixes: &[Prefix<T>], depth: usize) -> HuffmanTable<T::Unsigned>
-where T: NumberLike {
+fn build_from_prefixes_recursive<T: NumberLike>(prefixes: &[Prefix<T>], depth: usize) -> HuffmanTable<T::Unsigned> {
   if prefixes.len() == 1 {
     let prefix = &prefixes[0];
     HuffmanTable::Leaf(PrefixDecompressionInfo::from(prefix))
