@@ -5,16 +5,27 @@ use crate::errors::QCompressResult;
 
 #[test]
 fn test_edge_cases() {
+  println!("A1");
   assert_recovers(vec![true, true, false, true], 0, "bools 0");
+  println!("A2");
   assert_recovers(vec![false, false, false], 0, "falses 0");
+  println!("A3");
   assert_recovers(vec![false], 0, "false 0");
+  println!("A4");
   assert_recovers(vec![u64::MIN, u64::MAX], 0, "int extremes 0");
+  println!("A5");
   assert_recovers(vec![f64::MIN, f64::MAX], 0, "float extremes 0");
+  println!("A6");
   assert_recovers(vec![1.2_f32], 0, "float 0");
+  println!("A7");
   assert_recovers(vec![1.2_f32], 1, "float 1");
+  println!("A8");
   assert_recovers(vec![1.2_f32], 2, "float 2");
+  println!("A9");
   assert_recovers(Vec::<u32>::new(), 6, "empty 6");
+  println!("A10");
   assert_recovers(Vec::<u32>::new(), 0, "empty 0");
+  println!("A11");
 }
 
 #[test]
