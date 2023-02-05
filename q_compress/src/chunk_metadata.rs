@@ -64,6 +64,7 @@ pub struct ChunkMetadata<T> where T: NumberLike {
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
   pub prefix_metadata: PrefixMetadata<T>,
+  // not available in wrapped mode
   pub(crate) delta_moments: DeltaMoments<T::Signed>,
 }
 

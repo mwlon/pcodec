@@ -1,4 +1,4 @@
-use crate::{ChunkMetadata, CompressorConfig, Flags};
+use crate::{bits, ChunkMetadata, CompressorConfig, Flags};
 use crate::base_compressor::{BaseCompressor, State};
 use crate::chunk_spec::ChunkSpec;
 use crate::constants::MAGIC_TERMINATION_BYTE;
@@ -40,7 +40,7 @@ impl<T: NumberLike> Default for Compressor<T> {
   }
 }
 
-const DEFAULT_CHUNK_SIZE: usize = 1000000;
+const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
 impl<T: NumberLike> Compressor<T> {
   /// Creates a new compressor, given a [`CompressorConfig`].
@@ -106,11 +106,17 @@ impl<T: NumberLike> Compressor<T> {
   pub fn simple_compress(&mut self, nums: &[T]) -> Vec<u8> {
     // The following unwraps are safe because the writer will be byte-aligned
     // after each step and ensure each chunk has appropriate size.
+
     self.header().unwrap();
-    nums.chunks(DEFAULT_CHUNK_SIZE)
-      .for_each(|chunk| {
-        self.chunk(chunk).unwrap();
-      });
+
+    if !nums.is_empty() {
+      let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
+      let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
+      nums.chunks(n_per_chunk)
+        .for_each(|chunk| {
+          self.chunk(chunk).unwrap();
+        });
+    }
 
     self.footer().unwrap();
     self.drain_bytes()
