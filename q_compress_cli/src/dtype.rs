@@ -5,7 +5,9 @@ use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes::{DataType as ArrowDataType, TimeUnit};
 
-use q_compress::data_types::{NumberLike, TimestampMicros, TimestampNanos, TimestampMicros96, TimestampNanos96};
+use q_compress::data_types::{
+  NumberLike, TimestampMicros, TimestampMicros96, TimestampNanos, TimestampNanos96,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]
@@ -75,7 +77,10 @@ impl TryFrom<u8> for DType {
       u64::HEADER_BYTE => DType::U64,
       u128::HEADER_BYTE => DType::U128,
       _ => {
-        return Err(anyhow!("unknown data type byte {}", header_byte));
+        return Err(anyhow!(
+          "unknown data type byte {}",
+          header_byte
+        ));
       }
     };
     Ok(res)
@@ -97,7 +102,10 @@ impl DType {
       DType::TimestampMicros => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
       DType::TimestampNanos => ArrowDataType::Timestamp(TimeUnit::Nanosecond, None),
       _ => {
-        return Err(anyhow!("unable to convert q_compress dtype {:?} to arrow", self));
+        return Err(anyhow!(
+          "unable to convert q_compress dtype {:?} to arrow",
+          self
+        ));
       }
     };
     Ok(res)
@@ -117,7 +125,10 @@ impl DType {
       ArrowDataType::Timestamp(TimeUnit::Microsecond, _) => DType::TimestampMicros,
       ArrowDataType::Timestamp(TimeUnit::Nanosecond, _) => DType::TimestampNanos,
       _ => {
-        return Err(anyhow!("unable to convert arrow dtype {:?} to q_compress", arrow_dtype))
+        return Err(anyhow!(
+          "unable to convert arrow dtype {:?} to q_compress",
+          arrow_dtype
+        ))
       }
     };
     Ok(res)
@@ -126,9 +137,9 @@ impl DType {
 
 #[cfg(test)]
 mod tests {
-  use std::str::FromStr;
   use anyhow::Result;
   use enum_iterator::IntoEnumIterator;
+  use std::str::FromStr;
 
   use crate::dtype::DType;
 

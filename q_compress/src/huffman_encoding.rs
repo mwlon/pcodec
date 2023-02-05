@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::prefix::WeightedPrefix;
 use crate::data_types::NumberLike;
+use crate::prefix::WeightedPrefix;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
@@ -59,8 +59,12 @@ impl HuffmanItem {
       left_bits.push(false);
       let mut right_bits = bits;
       right_bits.push(true);
-      item_idx[self.left_id.unwrap()].clone().create_bits_from(left_bits, item_idx, leaf_idx);
-      item_idx[self.right_id.unwrap()].clone().create_bits_from(right_bits, item_idx, leaf_idx);
+      item_idx[self.left_id.unwrap()]
+        .clone()
+        .create_bits_from(left_bits, item_idx, leaf_idx);
+      item_idx[self.right_id.unwrap()]
+        .clone()
+        .create_bits_from(right_bits, item_idx, leaf_idx);
     }
   }
 }
@@ -104,7 +108,7 @@ pub fn make_huffman_code<T: NumberLike>(prefix_sequence: &mut [WeightedPrefix<T>
 #[cfg(test)]
 mod tests {
   use crate::huffman_encoding::make_huffman_code;
-  use crate::prefix::{WeightedPrefix, Prefix};
+  use crate::prefix::{Prefix, WeightedPrefix};
 
   fn coded_prefix(weight: usize, code: Vec<bool>) -> WeightedPrefix<i32> {
     WeightedPrefix {
@@ -116,7 +120,7 @@ mod tests {
         upper: 0,
         run_len_jumpstart: None,
         gcd: 1,
-      }
+      },
     }
   }
 
@@ -126,16 +130,9 @@ mod tests {
 
   #[test]
   fn test_make_huffman_code_single() {
-    let mut prefix_seq = vec![
-      uncoded_prefix(100),
-    ];
+    let mut prefix_seq = vec![uncoded_prefix(100)];
     make_huffman_code(&mut prefix_seq);
-    assert_eq!(
-      prefix_seq,
-      vec![
-        coded_prefix(100, vec![]),
-      ]
-    );
+    assert_eq!(prefix_seq, vec![coded_prefix(100, vec![]),]);
   }
 
   #[test]

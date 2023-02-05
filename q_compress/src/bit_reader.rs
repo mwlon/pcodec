@@ -52,12 +52,11 @@ impl<'a> BitReader<'a> {
     } else {
       Err(QCompressError::invalid_argument(format!(
         "cannot get aligned byte index on misaligned bit reader at word {} bit {}",
-        self.i,
-        self.j,
+        self.i, self.j,
       )))
     }
   }
-  
+
   pub fn bit_idx(&self) -> usize {
     WORD_SIZE * self.i + self.j
   }
@@ -114,9 +113,7 @@ impl<'a> BitReader<'a> {
     if new_byte_idx > byte_size {
       Err(QCompressError::insufficient_data(format!(
         "cannot read {} aligned bytes at byte idx {} out of {}",
-        n,
-        byte_idx,
-        byte_size,
+        n, byte_idx, byte_size,
       )))
     } else {
       self.refresh_if_needed();
@@ -271,10 +268,7 @@ impl<'a> BitReader<'a> {
   // assumes n > 0
   // this is pretty redundant with unchecked_read_diff
   // maybe one day we should unify them (without increasing binary size much)
-  pub fn unchecked_read_usize(
-    &mut self,
-    n: usize,
-  ) -> usize {
+  pub fn unchecked_read_usize(&mut self, n: usize) -> usize {
     self.refresh_if_needed();
 
     let n_plus_j = n + self.j;
@@ -351,26 +345,20 @@ impl<'a> BitReader<'a> {
 
 #[cfg(test)]
 mod tests {
-  use crate::bit_words::BitWords;
   use super::BitReader;
+  use crate::bit_words::BitWords;
   use crate::errors::QCompressResult;
 
   #[test]
-  fn test_bit_reader() -> QCompressResult<()>{
+  fn test_bit_reader() -> QCompressResult<()> {
     // bits: 1001 1010  0110 1011  0010 1101
     let bytes = vec![0x9a, 0x6b, 0x2d];
     let words = BitWords::from(&bytes);
     let mut bit_reader = BitReader::from(&words);
-    assert_eq!(
-      bit_reader.read_aligned_bytes(1)?,
-      vec![0x9a],
-    );
+    assert_eq!(bit_reader.read_aligned_bytes(1)?, vec![0x9a],);
     assert!(!bit_reader.unchecked_read_one());
     assert!(bit_reader.read_one()?);
-    assert_eq!(
-      bit_reader.read(3)?,
-      vec![true, false, true],
-    );
+    assert_eq!(bit_reader.read(3)?, vec![true, false, true],);
     assert_eq!(
       bit_reader.unchecked_read_diff::<u64>(2),
       1_u64
@@ -379,10 +367,7 @@ mod tests {
       bit_reader.unchecked_read_diff::<u32>(3),
       4_u32
     );
-    assert_eq!(
-      bit_reader.unchecked_read_varint(2),
-      6
-    );
+    assert_eq!(bit_reader.unchecked_read_varint(2), 6);
     //leaves 1 bit left over
     Ok(())
   }

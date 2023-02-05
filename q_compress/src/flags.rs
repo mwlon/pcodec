@@ -6,11 +6,13 @@ use std::cmp::min;
 use std::convert::{TryFrom, TryInto};
 
 use crate::bit_reader::BitReader;
-use crate::{CompressorConfig};
 use crate::bit_writer::BitWriter;
 use crate::bits;
-use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER};
+use crate::constants::{
+  BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER,
+};
 use crate::errors::{QCompressError, QCompressResult};
+use crate::CompressorConfig;
 
 /// The configuration stored in a Quantile-compressed header.
 ///
@@ -98,7 +100,7 @@ impl TryFrom<Vec<bool>> for Flags {
     for &bit in bit_iter {
       if bit {
         return Err(QCompressError::compatibility(
-          "cannot parse flags; likely written by newer version of q_compress"
+          "cannot parse flags; likely written by newer version of q_compress",
         ));
       }
     }
@@ -116,11 +118,13 @@ impl TryInto<Vec<bool>> for &Flags {
     if self.delta_encoding_order > MAX_DELTA_ENCODING_ORDER {
       return Err(QCompressError::invalid_argument(format!(
         "delta encoding order may not exceed {} (was {})",
-        MAX_DELTA_ENCODING_ORDER,
-        self.delta_encoding_order,
+        MAX_DELTA_ENCODING_ORDER, self.delta_encoding_order,
       )));
     }
-    let delta_bits = bits::usize_truncated_to_bits(self.delta_encoding_order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
+    let delta_bits = bits::usize_truncated_to_bits(
+      self.delta_encoding_order,
+      BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
+    );
     res.extend(delta_bits);
 
     res.push(self.use_min_count_encoding);
@@ -129,7 +133,8 @@ impl TryInto<Vec<bool>> for &Flags {
 
     res.push(self.use_wrapped_mode);
 
-    let necessary_len = res.iter()
+    let necessary_len = res
+      .iter()
       .rposition(|&bit| bit)
       .map(|idx| idx + 1)
       .unwrap_or(0);

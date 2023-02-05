@@ -125,10 +125,7 @@ impl<T: NumberLike> WeightedPrefix<T> {
       run_len_jumpstart,
       gcd,
     };
-    WeightedPrefix {
-      prefix,
-      weight,
-    }
+    WeightedPrefix { prefix, weight }
   }
 }
 
@@ -148,7 +145,11 @@ pub struct PrefixCompressionInfo<U: UnsignedLike> {
 
 impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
   fn from(prefix: &Prefix<T>) -> Self {
-    let KInfo { k, only_k_bits_upper, only_k_bits_lower } = prefix.k_info();
+    let KInfo {
+      k,
+      only_k_bits_upper,
+      only_k_bits_lower,
+    } = prefix.k_info();
     let code = bits::bits_to_usize(&prefix.code);
 
     PrefixCompressionInfo {
@@ -226,7 +227,7 @@ impl<T: NumberLike> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> {
       let gcd_diff = (upper_unsigned - lower_unsigned) / p.gcd;
       (
         most_significant,
-        (gcd_diff + T::Unsigned::ONE) - most_significant
+        (gcd_diff + T::Unsigned::ONE) - most_significant,
       )
     };
     PrefixDecompressionInfo {

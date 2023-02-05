@@ -1,7 +1,7 @@
-use crate::{Flags, gcd_utils, Prefix};
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::prefix::WeightedPrefix;
+use crate::{gcd_utils, Flags, Prefix};
 
 fn prefix_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
@@ -37,22 +37,22 @@ pub fn optimize_prefixes<T: NumberLike>(
     c += wp.weight;
     cum_weight.push(c);
   }
-  let prefixes = wprefixes.iter()
+  let prefixes = wprefixes
+    .iter()
     .map(|wp| wp.prefix.clone())
     .collect::<Vec<_>>();
-  let gcds = prefixes.iter()
-    .map(|p| p.gcd)
-    .collect::<Vec<_>>();
+  let gcds = prefixes.iter().map(|p| p.gcd).collect::<Vec<_>>();
   let total_weight = c;
-  let lower_unsigneds = prefixes.iter()
+  let lower_unsigneds = prefixes
+    .iter()
     .map(|p| p.lower.to_unsigned())
     .collect::<Vec<_>>();
-  let upper_unsigneds = prefixes.iter()
+  let upper_unsigneds = prefixes
+    .iter()
     .map(|p| p.upper.to_unsigned())
     .collect::<Vec<_>>();
 
-  let maybe_rep_idx = prefixes.iter()
-    .position(|p| p.run_len_jumpstart.is_some());
+  let maybe_rep_idx = prefixes.iter().position(|p| p.run_len_jumpstart.is_some());
 
   let mut best_costs = Vec::with_capacity(wprefixes.len() + 1);
   let mut best_paths = Vec::with_capacity(wprefixes.len() + 1);
@@ -65,7 +65,7 @@ pub fn optimize_prefixes<T: NumberLike>(
     flags.bits_to_encode_code_len() as f64 +
     if flags.use_gcds { 1.0 } else { 0.0 } + // bit to say whether there is GCD or not
     1.0; // bit to say there is no run len jumpstart
-  // determine whether we can skip GCD folding to improve performance in some cases
+         // determine whether we can skip GCD folding to improve performance in some cases
   let fold_gcd = gcd_utils::use_gcd_prefix_optimize(&prefixes, flags);
 
   for i in 0..wprefixes.len() {
@@ -87,17 +87,18 @@ pub fn optimize_prefixes<T: NumberLike>(
           upper_unsigneds[j],
           gcds[j],
           upper,
-          &mut gcd_acc
+          &mut gcd_acc,
         );
       }
-      let cost = best_costs[j] + prefix_bit_cost::<T::Unsigned>(
-        base_meta_cost,
-        lower,
-        upper,
-        cum_weight_i - cum_weight[j],
-        total_weight,
-        gcd_acc.unwrap_or(T::Unsigned::ONE),
-      );
+      let cost = best_costs[j]
+        + prefix_bit_cost::<T::Unsigned>(
+          base_meta_cost,
+          lower,
+          upper,
+          cum_weight_i - cum_weight[j],
+          total_weight,
+          gcd_acc.unwrap_or(T::Unsigned::ONE),
+        );
       if cost < best_cost {
         best_cost = cost;
         best_j = j;
@@ -146,9 +147,9 @@ pub fn optimize_prefixes<T: NumberLike>(
 
 #[cfg(test)]
 mod tests {
-  use crate::Flags;
   use crate::prefix::WeightedPrefix;
   use crate::prefix_optimization::optimize_prefixes;
+  use crate::Flags;
 
   fn basic_flags() -> Flags {
     Flags {
@@ -166,14 +167,8 @@ mod tests {
       WeightedPrefix::new(1, 1, 1000_i32, 1000, None, 1_u32),
       WeightedPrefix::new(1, 1, 2000_i32, 2000, None, 1_u32),
     ];
-    let res = optimize_prefixes(
-      wps,
-      &basic_flags(),
-      100,
-    );
-    let expected = vec![
-      WeightedPrefix::new(2, 2, 1000_i32, 2000, None, 1000_u32),
-    ];
+    let res = optimize_prefixes(wps, &basic_flags(), 100);
+    let expected = vec![WeightedPrefix::new(2, 2, 1000_i32, 2000, None, 1000_u32)];
     assert_eq!(res, expected);
   }
 
@@ -183,14 +178,8 @@ mod tests {
       WeightedPrefix::new(100, 100, 1000_i32, 2000, None, 10_u32),
       WeightedPrefix::new(1, 1, 2100_i32, 2100, None, 1_u32),
     ];
-    let res = optimize_prefixes(
-      wps,
-      &basic_flags(),
-      100,
-    );
-    let expected = vec![
-      WeightedPrefix::new(101, 101, 1000_i32, 2100, None, 10_u32),
-    ];
+    let res = optimize_prefixes(wps, &basic_flags(), 100);
+    let expected = vec![WeightedPrefix::new(101, 101, 1000_i32, 2100, None, 10_u32)];
     assert_eq!(res, expected);
   }
 
@@ -200,14 +189,8 @@ mod tests {
       WeightedPrefix::new(5, 5, 1000_i32, 1100, None, 10_u32),
       WeightedPrefix::new(5, 5, 1105, 1135, None, 15_u32),
     ];
-    let res = optimize_prefixes(
-      wps,
-      &basic_flags(),
-      100,
-    );
-    let expected = vec![
-      WeightedPrefix::new(10, 10, 1000_i32, 1135, None, 5_u32),
-    ];
+    let res = optimize_prefixes(wps, &basic_flags(), 100);
+    let expected = vec![WeightedPrefix::new(10, 10, 1000_i32, 1135, None, 5_u32)];
     assert_eq!(res, expected);
   }
 
@@ -217,11 +200,7 @@ mod tests {
       WeightedPrefix::new(100, 100, 1000_i32, 1100, None, 10_u32),
       WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
     ];
-    let res = optimize_prefixes(
-      wps,
-      &basic_flags(),
-      100,
-    );
+    let res = optimize_prefixes(wps, &basic_flags(), 100);
     let expected = vec![
       WeightedPrefix::new(100, 100, 1000_i32, 1100, None, 10_u32),
       WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),

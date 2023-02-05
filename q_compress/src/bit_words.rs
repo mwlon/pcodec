@@ -1,5 +1,5 @@
-use std::convert::TryInto;
 use std::cmp::min;
+use std::convert::TryInto;
 
 use crate::bits;
 use crate::constants::{BYTES_PER_WORD, WORD_SIZE};
@@ -25,7 +25,8 @@ fn extend<B: AsRef<[u8]>>(words: &mut Vec<usize>, initial_bits: usize, bytes_wra
   let initial_bytes = initial_bits / 8;
   let alignment = (BYTES_PER_WORD - initial_bytes % BYTES_PER_WORD) % BYTES_PER_WORD;
   let first_word_end = min(alignment, bytes.len());
-  let last_aligned_byte = alignment + (bytes.len() - first_word_end) / BYTES_PER_WORD * BYTES_PER_WORD;
+  let last_aligned_byte =
+    alignment + (bytes.len() - first_word_end) / BYTES_PER_WORD * BYTES_PER_WORD;
   for i in 0..first_word_end {
     let lshift = 8 * (alignment - i - 1);
     *words.last_mut().unwrap() |= (bytes[i] as usize) << lshift;
@@ -35,7 +36,7 @@ fn extend<B: AsRef<[u8]>>(words: &mut Vec<usize>, initial_bits: usize, bytes_wra
     words.extend(
       bytes[first_word_end..last_aligned_byte]
         .chunks_exact(BYTES_PER_WORD)
-        .map(|word_bytes| usize::from_be_bytes(word_bytes.try_into().unwrap()))
+        .map(|word_bytes| usize::from_be_bytes(word_bytes.try_into().unwrap())),
     );
   }
   if words.len() < n_words {
@@ -43,7 +44,9 @@ fn extend<B: AsRef<[u8]>>(words: &mut Vec<usize>, initial_bits: usize, bytes_wra
     while last_bytes.len() < BYTES_PER_WORD {
       last_bytes.push(0);
     }
-    words.push(usize::from_be_bytes(last_bytes.try_into().unwrap()));
+    words.push(usize::from_be_bytes(
+      last_bytes.try_into().unwrap(),
+    ));
   }
   total_bits
 }
@@ -53,10 +56,7 @@ impl<B: AsRef<[u8]>> From<B> for BitWords {
     let mut words = Vec::new();
     let total_bits = extend(&mut words, 0, bytes_wrapper);
 
-    BitWords {
-      words,
-      total_bits,
-    }
+    BitWords { words, total_bits }
   }
 }
 

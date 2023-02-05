@@ -22,7 +22,10 @@ impl<U: UnsignedLike> Default for HuffmanTable<U> {
 }
 
 impl<U: UnsignedLike> HuffmanTable<U> {
-  pub fn search_with_reader(&self, reader: &mut BitReader) -> QCompressResult<PrefixDecompressionInfo<U>> {
+  pub fn search_with_reader(
+    &self,
+    reader: &mut BitReader,
+  ) -> QCompressResult<PrefixDecompressionInfo<U>> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
@@ -30,24 +33,31 @@ impl<U: UnsignedLike> HuffmanTable<U> {
         HuffmanTable::Leaf(decompression_info) => {
           reader.rewind_prefix_overshoot(read_depth - decompression_info.depth);
           return Ok(*decompression_info);
-        },
-        HuffmanTable::NonLeaf { table_size_log, children} => {
+        }
+        HuffmanTable::NonLeaf {
+          table_size_log,
+          children,
+        } => {
           let (bits_read, idx) = reader.read_prefix_table_idx(*table_size_log)?;
           read_depth += bits_read;
           node = &children[idx];
           if bits_read != *table_size_log {
             return match node {
-              HuffmanTable::Leaf(decompression_info)
-              if decompression_info.depth == read_depth => Ok(*decompression_info),
+              HuffmanTable::Leaf(decompression_info) if decompression_info.depth == read_depth => {
+                Ok(*decompression_info)
+              }
               HuffmanTable::Leaf(_) => Err(QCompressError::insufficient_data(
-                "search_with_reader(): ran out of data parsing Huffman prefix (reached leaf)"
+                "search_with_reader(): ran out of data parsing Huffman prefix (reached leaf)",
               )),
-              HuffmanTable::NonLeaf {table_size_log: _, children: _} => Err(QCompressError::insufficient_data(
-                "search_with_reader(): ran out of data parsing Huffman prefix (reached parent)"
+              HuffmanTable::NonLeaf {
+                table_size_log: _,
+                children: _,
+              } => Err(QCompressError::insufficient_data(
+                "search_with_reader(): ran out of data parsing Huffman prefix (reached parent)",
               )),
-            }
+            };
           }
-        },
+        }
       }
     }
   }
@@ -60,11 +70,14 @@ impl<U: UnsignedLike> HuffmanTable<U> {
         HuffmanTable::Leaf(decompression_info) => {
           reader.rewind_prefix_overshoot(read_depth - decompression_info.depth);
           return *decompression_info;
-        },
-        HuffmanTable::NonLeaf { table_size_log, children } => {
+        }
+        HuffmanTable::NonLeaf {
+          table_size_log,
+          children,
+        } => {
           node = &children[reader.unchecked_read_usize(*table_size_log)];
           read_depth += table_size_log;
-        },
+        }
       }
     }
   }
@@ -80,19 +93,16 @@ impl<T: NumberLike> From<&Vec<Prefix<T>>> for HuffmanTable<T::Unsigned> {
   }
 }
 
-fn build_from_prefixes_recursive<T: NumberLike>(prefixes: &[Prefix<T>], depth: usize) -> HuffmanTable<T::Unsigned> {
+fn build_from_prefixes_recursive<T: NumberLike>(
+  prefixes: &[Prefix<T>],
+  depth: usize,
+) -> HuffmanTable<T::Unsigned> {
   if prefixes.len() == 1 {
     let prefix = &prefixes[0];
     HuffmanTable::Leaf(PrefixDecompressionInfo::from(prefix))
   } else {
-    let max_depth = prefixes.iter()
-      .map(|p| p.code.len())
-      .max()
-      .unwrap();
-    let table_size_log: usize = min(
-      MAX_PREFIX_TABLE_SIZE_LOG,
-      max_depth - depth,
-    );
+    let max_depth = prefixes.iter().map(|p| p.code.len()).max().unwrap();
+    let table_size_log: usize = min(MAX_PREFIX_TABLE_SIZE_LOG, max_depth - depth);
     let table_size = 1 << table_size_log;
 
     let mut children = Vec::new();
@@ -101,7 +111,8 @@ fn build_from_prefixes_recursive<T: NumberLike>(prefixes: &[Prefix<T>], depth: u
       for depth_incr in 0..table_size_log {
         sub_bits.push((idx >> (table_size_log - 1 - depth_incr)) & 1 > 0);
       }
-      let possible_prefixes = prefixes.iter()
+      let possible_prefixes = prefixes
+        .iter()
         .filter(|&p| {
           for (depth_incr, bit) in sub_bits.iter().enumerate() {
             let total_depth = depth + depth_incr;
@@ -113,10 +124,7 @@ fn build_from_prefixes_recursive<T: NumberLike>(prefixes: &[Prefix<T>], depth: u
         })
         .cloned()
         .collect::<Vec<Prefix<T>>>();
-      let child = build_from_prefixes_recursive(
-        &possible_prefixes,
-        depth + table_size_log,
-      );
+      let child = build_from_prefixes_recursive(&possible_prefixes, depth + table_size_log);
       children.push(child);
     }
     HuffmanTable::NonLeaf {

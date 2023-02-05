@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use arrow::array::PrimitiveArray;
-use arrow::datatypes::{Field, Schema};
-use arrow::datatypes::ArrowPrimitiveType;
-use arrow::record_batch::RecordBatch;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
+use arrow::datatypes::ArrowPrimitiveType;
+use arrow::datatypes::{Field, Schema};
+use arrow::record_batch::RecordBatch;
 
 use q_compress::Decompressor;
 
@@ -60,7 +60,9 @@ fn new_column_writer<T: ArrowNumberLike>(opt: &DecompressOpt) -> Result<Box<dyn 
 }
 
 trait ColumnWriter<T: ArrowNumberLike> {
-  fn from_opt(opt: &DecompressOpt) -> Self where Self: Sized;
+  fn from_opt(opt: &DecompressOpt) -> Self
+  where
+    Self: Sized;
   fn write(&mut self, nums: &[T]) -> Result<()>;
   fn close(&mut self) -> Result<()>;
 }
@@ -81,25 +83,21 @@ impl<T: ArrowNumberLike> ColumnWriter<T> for StdoutWriter<T> {
 
   fn write(&mut self, nums: &[T]) -> Result<()> {
     if T::IS_ARROW {
-      let schema = Schema::new(vec![
-        Field::new("c0", T::ArrowPrimitive::DATA_TYPE, false)
-      ]);
-      let arrow_natives = nums.iter()
-        .map(|x| x.to_arrow());
-      let c0 = PrimitiveArray::<T::ArrowPrimitive>::from_iter_values(
-        arrow_natives
-      );
-      let batch = RecordBatch::try_new(
-        Arc::new(schema),
-        vec![Arc::new(c0)],
-      )?;
+      let schema = Schema::new(vec![Field::new(
+        "c0",
+        T::ArrowPrimitive::DATA_TYPE,
+        false,
+      )]);
+      let arrow_natives = nums.iter().map(|x| x.to_arrow());
+      let c0 = PrimitiveArray::<T::ArrowPrimitive>::from_iter_values(arrow_natives);
+      let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(c0)])?;
       let mut stdout_bytes = Vec::<u8>::new();
       {
         let mut writer = CsvWriterBuilder::new()
           .has_headers(false)
           .with_timestamp_format(self.timestamp_format.clone())
           .build(&mut stdout_bytes);
-          // &mut stdout_bytes);
+        // &mut stdout_bytes);
         writer.write(&batch)?;
       }
       print!("{}", String::from_utf8(stdout_bytes)?);

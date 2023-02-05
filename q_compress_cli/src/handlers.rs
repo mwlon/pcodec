@@ -3,7 +3,9 @@ use std::marker::PhantomData;
 
 use anyhow::Result;
 
-use q_compress::data_types::{TimestampMicros, TimestampNanos, TimestampMicros96, TimestampNanos96};
+use q_compress::data_types::{
+  TimestampMicros, TimestampMicros96, TimestampNanos, TimestampNanos96,
+};
 
 use crate::arrow_number_like::ArrowNumberLike;
 use crate::compress_handler::CompressHandler;
@@ -51,9 +53,9 @@ impl<T: ArrowNumberLike> Handler for HandlerImpl<T> {}
 
 #[cfg(test)]
 mod tests {
-  use std::collections::HashSet;
   use anyhow::Result;
   use enum_iterator::IntoEnumIterator;
+  use std::collections::HashSet;
 
   use crate::dtype::DType;
 
@@ -64,7 +66,10 @@ mod tests {
       let handler = super::from_dtype(dtype);
       let byte = handler.header_byte();
       if bytes_seen.contains(&byte) {
-        panic!("saw multiple dtype handlers with header byte {}", byte);
+        panic!(
+          "saw multiple dtype handlers with header byte {}",
+          byte
+        );
       }
       bytes_seen.insert(byte);
     }

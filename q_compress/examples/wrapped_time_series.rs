@@ -2,10 +2,10 @@
 // The wrapped format here attaches min and max timestamp metadata, which
 // allows faster decompression for queries filtering on a < timestamp < b.
 
+use rand::Rng;
 use std::convert::{TryFrom, TryInto};
 use std::io::Write;
 use std::time::{Duration, Instant, SystemTime};
-use rand::Rng;
 
 use q_compress::data_types::{NumberLike, TimestampNanos};
 use q_compress::errors::QCompressResult;
@@ -45,13 +45,15 @@ fn compress_time_series(series: &TimeSeries) -> QCompressResult<Vec<u8>> {
   let q_timestamps = series.q_timestamps()?;
 
   let mut res = Vec::new();
-  let mut t_compressor = Compressor::<TimestampNanos>::from_config(
-    q_compress::auto_compressor_config(&q_timestamps, q_compress::DEFAULT_COMPRESSION_LEVEL)
-  );
-  let mut v_compressor = Compressor::<f32>::from_config(
-    q_compress::auto_compressor_config(&series.values, q_compress::DEFAULT_COMPRESSION_LEVEL)
-  );
-
+  let mut t_compressor =
+    Compressor::<TimestampNanos>::from_config(q_compress::auto_compressor_config(
+      &q_timestamps,
+      q_compress::DEFAULT_COMPRESSION_LEVEL,
+    ));
+  let mut v_compressor = Compressor::<f32>::from_config(q_compress::auto_compressor_config(
+    &series.values,
+    q_compress::DEFAULT_COMPRESSION_LEVEL,
+  ));
 
   t_compressor.header()?;
   t_compressor.chunk_metadata(&q_timestamps, &chunk_spec)?;
@@ -104,7 +106,11 @@ fn compress_time_series(series: &TimeSeries) -> QCompressResult<Vec<u8>> {
   Ok(res)
 }
 
-fn decompress_time_series_between(mut compressed: &[u8], t0: SystemTime, t1: SystemTime) -> QCompressResult<TimeSeries> {
+fn decompress_time_series_between(
+  mut compressed: &[u8],
+  t0: SystemTime,
+  t1: SystemTime,
+) -> QCompressResult<TimeSeries> {
   let mut series = TimeSeries::default();
   let ts = &mut series.timestamps;
   let vs = &mut series.values;
@@ -162,7 +168,8 @@ fn decompress_time_series_between(mut compressed: &[u8], t0: SystemTime, t1: Sys
       let page_v = v_decompressor.data_page(n, size)?;
       compressed = &compressed[size..];
 
-      let filtered = page_t.into_iter()
+      let filtered = page_t
+        .into_iter()
         .zip(page_v)
         .filter(|(t, _)| (t0..t1).contains(&SystemTime::from(*t)))
         .collect::<Vec<_>>();
@@ -195,11 +202,7 @@ fn main() -> QCompressResult<()> {
   let filter_t0 = t0 + Duration::from_secs(10000);
   let filter_t1 = t0 + Duration::from_secs(20000);
   let benchmark_instant = Instant::now();
-  let decompressed = decompress_time_series_between(
-    &compressed,
-    filter_t0,
-    filter_t1,
-  )?;
+  let decompressed = decompress_time_series_between(&compressed, filter_t0, filter_t1)?;
   let benchmark_dt = Instant::now() - benchmark_instant;
   println!(
     "decompressed {} numbers matching filter in {:?}",

@@ -4,8 +4,8 @@ use std::time::Instant;
 use futures::{StreamExt, TryStreamExt};
 use rand::Rng;
 
-use q_compress::{DecompressedItem, Decompressor, DEFAULT_COMPRESSION_LEVEL};
 use q_compress::errors::QCompressResult;
+use q_compress::{DecompressedItem, Decompressor, DEFAULT_COMPRESSION_LEVEL};
 
 async fn streaming_sum_reduce(
   state: (Decompressor<i32>, i32, usize),
@@ -45,7 +45,11 @@ async fn main() -> QCompressResult<()> {
   let (_, sum, count) = input_stream
     .map(Ok)
     .try_fold(
-      (Decompressor::<i32>::default(), 0_i32, 0_usize),
+      (
+        Decompressor::<i32>::default(),
+        0_i32,
+        0_usize,
+      ),
       streaming_sum_reduce,
     )
     .await?;

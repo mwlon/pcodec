@@ -1,12 +1,10 @@
+use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
 use crate::data_types::NumberLike;
-use crate::{Compressor, CompressorConfig};
 use crate::errors::ErrorKind;
-use crate::chunk_metadata::{PrefixMetadata, ChunkMetadata};
+use crate::{Compressor, CompressorConfig};
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
-  let mut compressor = Compressor::from_config(
-    CompressorConfig::default().with_use_gcds(false)
-  );
+  let mut compressor = Compressor::from_config(CompressorConfig::default().with_use_gcds(false));
   compressor.header().expect("header");
   let metadata = compressor.chunk(&nums).expect("chunk");
   compressor.footer().expect("footer");
@@ -16,7 +14,10 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
     match crate::auto_decompress::<T>(&compressed[0..i]) {
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (), // good
       Ok(_) => panic!("expected decompressor to notice insufficient data (got Ok)"),
-      Err(e) => panic!("expected decompressor to notice insufficient data (got {})", e),
+      Err(e) => panic!(
+        "expected decompressor to notice insufficient data (got {})",
+        e
+      ),
     }
   }
 
@@ -40,7 +41,7 @@ fn test_insufficient_data_short_prefixes() {
       for p in &prefixes {
         assert_eq!(p.code.len(), 1);
       }
-    },
+    }
     _ => panic!("expected simple prefix info"),
   }
 }
@@ -56,12 +57,11 @@ fn test_insufficient_data_many_reps() {
   match metadata.prefix_metadata {
     PrefixMetadata::Simple { prefixes } => {
       assert_eq!(prefixes.len(), 2);
-      let has_reps = prefixes.iter()
-        .any(|p| p.run_len_jumpstart.is_some());
+      let has_reps = prefixes.iter().any(|p| p.run_len_jumpstart.is_some());
       if !has_reps {
         panic!("expected a prefix to have reps");
       }
-    },
+    }
     _ => panic!("expected simple prefix info"),
   }
 }
@@ -74,13 +74,12 @@ fn test_insufficient_data_long_offsets() {
     nums.push((u64::MAX / n) * i);
   }
 
-
   let metadata = assert_panic_safe(nums);
   match metadata.prefix_metadata {
     PrefixMetadata::Simple { prefixes } => {
       assert_eq!(prefixes.len(), 1);
       assert_eq!(prefixes[0].k_info().k, 63);
-    },
+    }
     _ => panic!("expected simple prefix info"),
   }
 }

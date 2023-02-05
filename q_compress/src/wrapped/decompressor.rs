@@ -1,10 +1,10 @@
 use std::io::Write;
 
-use crate::{ChunkMetadata, DecompressorConfig, Flags};
 use crate::base_decompressor::{BaseDecompressor, Step};
 use crate::bit_words::BitWords;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
+use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
 /// Converts wrapped Quantile-compressed data into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
@@ -55,22 +55,22 @@ impl<T: NumberLike> Decompressor<T> {
       Ok(meta)
     })
   }
-  
+
   /// Initializes the decompressor for the next data page, reading in the
   /// data page's metadata but not the compressed body.
   /// Will return an error if the decompressor is not in a
-  /// chunk, runs out of data, or finds any corruptions. 
+  /// chunk, runs out of data, or finds any corruptions.
   ///
   /// This can be used regardless of whether the decompressor has finished
   /// reading the previous data page.
-  pub fn begin_data_page(
-    &mut self,
-    n: usize,
-    compressed_page_size: usize,
-  ) -> QCompressResult<()> {
-    self.0.state.check_step_among(&[Step::StartOfDataPage, Step::MidDataPage], "begin data page")?;
+  pub fn begin_data_page(&mut self, n: usize, compressed_page_size: usize) -> QCompressResult<()> {
+    self.0.state.check_step_among(
+      &[Step::StartOfDataPage, Step::MidDataPage],
+      "begin data page",
+    )?;
     self.0.with_reader(|reader, state, _| {
-      state.body_decompressor = Some(state.new_body_decompressor(reader, n, compressed_page_size)?);
+      state.body_decompressor =
+        Some(state.new_body_decompressor(reader, n, compressed_page_size)?);
       Ok(())
     })
   }
@@ -78,11 +78,11 @@ impl<T: NumberLike> Decompressor<T> {
   /// Reads up to `limit` numbers from the current data page.
   /// Will return an error if the decompressor is not in a data page,
   /// it runs out of data, or any corruptions are found.
-  pub fn next_batch(
-    &mut self,
-    limit: usize,
-  ) -> QCompressResult<Vec<T>> {
-    self.0.state.check_step(Step::MidDataPage, "read next batch")?;
+  pub fn next_batch(&mut self, limit: usize) -> QCompressResult<Vec<T>> {
+    self
+      .0
+      .state
+      .check_step(Step::MidDataPage, "read next batch")?;
     self.0.with_reader(|reader, state, _| {
       let bd = state.body_decompressor.as_mut().unwrap();
       let numbers = bd.decompress_next_batch(reader, limit, true)?;
@@ -99,11 +99,7 @@ impl<T: NumberLike> Decompressor<T> {
   ///
   /// This is similar to calling [`.begin_data_page`][Self::begin_data_page] and then
   /// [`.next_batch(usize::MAX)`][Self::next_batch].
-  pub fn data_page(
-    &mut self,
-    n: usize,
-    compressed_page_size: usize,
-  ) -> QCompressResult<Vec<T>> {
+  pub fn data_page(&mut self, n: usize, compressed_page_size: usize) -> QCompressResult<Vec<T>> {
     self.0.state.check_step_among(
       &[Step::StartOfDataPage, Step::MidDataPage],
       "data page",
@@ -117,7 +113,7 @@ impl<T: NumberLike> Decompressor<T> {
   pub fn free_compressed_memory(&mut self) {
     self.0.free_compressed_memory()
   }
-  
+
   /// Clears any data written to the decompressor but not yet decompressed.
   /// As an example, if you want to want to read the first 5 numbers from each
   /// data page, you might write each compressed data page to the decompressor,

@@ -1,8 +1,8 @@
-use crate::data_types::{NumberLike, UnsignedLike};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::{Flags, Prefix};
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
+use crate::{Flags, Prefix};
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {
@@ -54,7 +54,11 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(prefixes: &[Prefix<T>]) -> Optio
     }
   }
 
-  match (prefixes.len(), nontrivial_ranges_share_gcd, gcd) {
+  match (
+    prefixes.len(),
+    nontrivial_ranges_share_gcd,
+    gcd,
+  ) {
     (0, _, _) => None,
     (_, false, _) => None,
     (_, true, Some(gcd)) => Some(gcd),
@@ -62,10 +66,7 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(prefixes: &[Prefix<T>]) -> Optio
   }
 }
 
-pub fn use_gcd_prefix_optimize<T: NumberLike>(
-  prefixes: &[Prefix<T>],
-  flags: &Flags,
-) -> bool {
+pub fn use_gcd_prefix_optimize<T: NumberLike>(prefixes: &[Prefix<T>], flags: &Flags) -> bool {
   if !flags.use_gcds {
     return false;
   }
@@ -77,9 +78,10 @@ pub fn use_gcd_prefix_optimize<T: NumberLike>(
   }
   for (i, pi) in prefixes.iter().enumerate().skip(1) {
     let pj = &prefixes[i - 1];
-    if pi.lower == pi.upper &&
-      pj.lower == pj.upper &&
-      pj.upper.to_unsigned() + T::Unsigned::ONE < pi.lower.to_unsigned() {
+    if pi.lower == pi.upper
+      && pj.lower == pj.upper
+      && pj.upper.to_unsigned() + T::Unsigned::ONE < pi.lower.to_unsigned()
+    {
       return true;
     }
   }
@@ -87,7 +89,8 @@ pub fn use_gcd_prefix_optimize<T: NumberLike>(
 }
 
 pub fn use_gcd_arithmetic<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
-  prefixes.iter()
+  prefixes
+    .iter()
     .any(|p| p.gcd > T::Unsigned::ONE && p.upper != p.lower)
 }
 
@@ -111,8 +114,7 @@ pub fn read_gcd<U: UnsignedLike>(range: U, reader: &mut BitReader) -> QCompressR
     if gcd_minus_one >= range {
       Err(QCompressError::corruption(format!(
         "stored GCD was {} + 1, greater than range {}",
-        gcd_minus_one,
-        range,
+        gcd_minus_one, range,
       )))
     } else {
       Ok(gcd_minus_one + U::ONE)

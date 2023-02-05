@@ -1,11 +1,11 @@
 use std::cmp::min;
 use std::io::Write;
 
-use crate::CompressorConfig;
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 use crate::standalone::{Compressor, Decompressor};
+use crate::CompressorConfig;
 
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,
@@ -18,7 +18,10 @@ use crate::standalone::{Compressor, Decompressor};
 /// the compute cost.
 /// See [`CompressorConfig`] for information about compression levels.
 pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
-  let mut compressor = Compressor::from_config(auto_compressor_config(nums, compression_level));
+  let mut compressor = Compressor::from_config(auto_compressor_config(
+    nums,
+    compression_level,
+  ));
   compressor.simple_compress(nums)
 }
 
@@ -39,17 +42,17 @@ pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> QCompressResult<Vec<T>> {
 /// This has some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
 /// See [`CompressorConfig`] for information about compression levels.
-pub fn auto_compressor_config<T: NumberLike>(nums: &[T], compression_level: usize) -> CompressorConfig {
+pub fn auto_compressor_config<T: NumberLike>(
+  nums: &[T],
+  compression_level: usize,
+) -> CompressorConfig {
   let delta_encoding_order = auto_delta_encoding_order(nums, compression_level);
   CompressorConfig::default()
     .with_compression_level(compression_level)
     .with_delta_encoding_order(delta_encoding_order)
 }
 
-fn auto_delta_encoding_order<T: NumberLike>(
-  nums: &[T],
-  compression_level: usize,
-) -> usize {
+fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> usize {
   let mut sampled_nums;
   let head_nums = if nums.len() < AUTO_DELTA_LIMIT {
     nums
@@ -77,7 +80,10 @@ fn auto_delta_encoding_order<T: NumberLike>(
     // determine the best delta order.
     let config = CompressorConfig::default()
       .with_delta_encoding_order(delta_encoding_order)
-      .with_compression_level(min(compression_level, MAX_AUTO_DELTA_COMPRESSION_LEVEL))
+      .with_compression_level(min(
+        compression_level,
+        MAX_AUTO_DELTA_COMPRESSION_LEVEL,
+      ))
       .with_use_gcds(false);
     let mut compressor = Compressor::<T>::from_config(config);
     compressor.header().unwrap();
@@ -113,8 +119,14 @@ mod tests {
       quadratic_trend.push(i * i);
     }
     assert_eq!(auto_delta_encoding_order(&no_trend, 3), 0);
-    assert_eq!(auto_delta_encoding_order(&linear_trend, 3), 1);
-    assert_eq!(auto_delta_encoding_order(&quadratic_trend, 3), 2);
+    assert_eq!(
+      auto_delta_encoding_order(&linear_trend, 3),
+      1
+    );
+    assert_eq!(
+      auto_delta_encoding_order(&quadratic_trend, 3),
+      2
+    );
   }
 
   #[test]

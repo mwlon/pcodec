@@ -3,11 +3,11 @@ use std::time::{Duration, SystemTime};
 
 use rand::Rng;
 
-use q_compress::{Compressor, CompressorConfig};
 use q_compress::data_types::{NumberLike, TimestampMicros96};
 use q_compress::errors::QCompressResult;
 use q_compress::wrapped;
 use q_compress::wrapped::ChunkSpec;
+use q_compress::{Compressor, CompressorConfig};
 
 const BASE_DIR: &str = "q_compress/assets";
 
@@ -55,23 +55,22 @@ pub fn wrapped_compress<T: NumberLike>(
 }
 
 #[derive(Clone, Copy, Debug)]
-enum Mode { Standalone, Wrapped }
+enum Mode {
+  Standalone,
+  Wrapped,
+}
 
-fn get_bytes<T: NumberLike>(
-  nums: &[T],
-  config: CompressorConfig,
-  mode: Mode,
-) -> Vec<u8> {
+fn get_bytes<T: NumberLike>(nums: &[T], config: CompressorConfig, mode: Mode) -> Vec<u8> {
   match mode {
     Mode::Standalone => {
       let mut compressor = Compressor::<T>::from_config(config);
       compressor.simple_compress(nums)
-    },
+    }
     Mode::Wrapped => {
       let n = nums.len();
       let sizess = vec![vec![1], vec![(n - 1) / 2, n / 2]];
       wrapped_compress(&nums, config, sizess).unwrap()
-    },
+    }
   }
 }
 
@@ -89,18 +88,21 @@ fn write_case<T: NumberLike>(
 
   let compressed = get_bytes(&nums, config, mode);
 
-  let raw = nums.iter()
+  let raw = nums
+    .iter()
     // .flat_map(|&x| T::bytes_from(x)) // for 0.4 to 0.5
     .flat_map(|&x| x.to_bytes()) // for 0.6+
     .collect::<Vec<u8>>();
   std::fs::write(
     format!("{}/v{}_{}.qco", BASE_DIR, version, name),
     compressed,
-  ).expect("write qco");
+  )
+  .expect("write qco");
   std::fs::write(
     format!("{}/v{}_{}.bin", BASE_DIR, version, name),
     raw,
-  ).expect("write bin");
+  )
+  .expect("write bin");
 }
 
 fn main() {
@@ -163,7 +165,9 @@ fn main() {
   let mut timestamp_deltas_2k = Vec::new();
   let mut t = SystemTime::now();
   for _ in 0..2000 {
-    t.add_assign(Duration::from_secs_f64(0.5 + rng.gen::<f64>()));
+    t.add_assign(Duration::from_secs_f64(
+      0.5 + rng.gen::<f64>(),
+    ));
     timestamp_deltas_2k.push(TimestampMicros96::from(t));
   }
   write_case(
@@ -171,8 +175,7 @@ fn main() {
     "0.6.0",
     "timestamp_deltas_2k",
     timestamp_deltas_2k,
-    CompressorConfig::default()
-      .with_delta_encoding_order(1),
+    CompressorConfig::default().with_delta_encoding_order(1),
     Mode::Standalone,
   );
 
@@ -226,8 +229,7 @@ fn main() {
     "0.11.2",
     "wrapped_brownian",
     wrapped_brownian,
-    CompressorConfig::default()
-      .with_delta_encoding_order(1),
+    CompressorConfig::default().with_delta_encoding_order(1),
     Mode::Wrapped,
   );
 }

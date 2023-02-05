@@ -14,9 +14,9 @@ mod signeds;
 mod timestamps;
 mod unsigneds;
 
-#[cfg(feature="timestamps_96")]
+#[cfg(feature = "timestamps_96")]
 mod timestamps_96;
-#[cfg(feature="timestamps_96")]
+#[cfg(feature = "timestamps_96")]
 pub use timestamps_96::{TimestampMicros96, TimestampNanos96};
 
 /// Trait for data types that behave like signed integers.
@@ -34,7 +34,7 @@ pub use timestamps_96::{TimestampMicros96, TimestampNanos96};
 /// each other and easily compressible, which would not be the case with
 /// unsigned integers.
 /// Note: API stability of `SignedLike` is not guaranteed.
-pub trait SignedLike: NumberLike<Signed=Self> {
+pub trait SignedLike: NumberLike<Signed = Self> {
   const ZERO: Self;
 
   fn wrapping_add(self, other: Self) -> Self;
@@ -50,10 +50,23 @@ pub trait SignedLike: NumberLike<Signed=Self> {
 /// corresponding `UnsignedLike` representation.
 ///
 /// Note: API stability of `UnsignedLike` is not guaranteed.
-pub trait UnsignedLike: Add<Output=Self> + BitAnd<Output=Self> + BitOr<Output=Self> + BitOrAssign +
-Copy + Debug + Display + Div<Output=Self> + Mul<Output = Self> + Ord +
-PartialOrd + RemAssign + Shl<usize, Output=Self> + Shr<usize, Output=Self> +
-Sub<Output=Self> {
+pub trait UnsignedLike:
+  Add<Output = Self>
+  + BitAnd<Output = Self>
+  + BitOr<Output = Self>
+  + BitOrAssign
+  + Copy
+  + Debug
+  + Display
+  + Div<Output = Self>
+  + Mul<Output = Self>
+  + Ord
+  + PartialOrd
+  + RemAssign
+  + Shl<usize, Output = Self>
+  + Shr<usize, Output = Self>
+  + Sub<Output = Self>
+{
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
@@ -134,7 +147,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// Must be another `NumberLike` with the same `Signed` and `Unsigned` as
   /// this type; in this way, if we take 7th order deltas, they are ensured to
   /// have the same type as 1st order deltas.
-  type Signed: SignedLike + NumberLike<Signed=Self::Signed, Unsigned=Self::Unsigned>;
+  type Signed: SignedLike + NumberLike<Signed = Self::Signed, Unsigned = Self::Unsigned>;
   /// The unsigned integer this type can convert between to do
   /// bitwise logic and such.
   type Unsigned: UnsignedLike;

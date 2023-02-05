@@ -8,12 +8,12 @@ use anyhow::{anyhow, Result};
 use arrow::csv::Reader as CsvReader;
 use arrow::datatypes::{Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::file::reader::SerializedFileReader;
 
-use q_compress::{Compressor, CompressorConfig};
 use q_compress::data_types::NumberLike;
+use q_compress::{Compressor, CompressorConfig};
 
 use crate::arrow_number_like::ArrowNumberLike;
 use crate::handlers::HandlerImpl;
@@ -52,8 +52,12 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
         "automatically choosing delta encoding order based on first nums (specify --delta-order to skip)",
       );
       let head_nums = head_nums::<T>(schema, opt)?;
-      let best_order = q_compress::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
-      println!("determined best delta encoding order: {}", best_order);
+      let best_order =
+        q_compress::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
+      println!(
+        "determined best delta encoding order: {}",
+        best_order
+      );
       best_order
     };
 
@@ -71,7 +75,11 @@ impl<T: ArrowNumberLike> CompressHandler for HandlerImpl<T> {
       let batch = batch_result?;
       num_buffer.extend(&batch);
       if num_buffer.len() >= opt.chunk_size {
-        write_chunk(&mut compressor, &num_buffer[..opt.chunk_size], &mut file)?;
+        write_chunk(
+          &mut compressor,
+          &num_buffer[..opt.chunk_size],
+          &mut file,
+        )?;
         num_buffer = num_buffer[opt.chunk_size..].to_vec();
       }
     }
@@ -90,23 +98,21 @@ fn new_column_reader<T: ArrowNumberLike>(
   opt: &CompressOpt,
 ) -> Result<Box<dyn ColumnReader<T>>> {
   let res: Box<dyn ColumnReader<T>> = match (&opt.csv_path, &opt.parquet_path) {
-    (Some(csv_path), None) => Box::new(CsvColumnReader::new(
-      schema,
-      csv_path,
-      opt,
-    )?),
+    (Some(csv_path), None) => Box::new(CsvColumnReader::new(schema, csv_path, opt)?),
     (None, Some(parquet_path)) => Box::new(ParquetColumnReader::new(
       schema,
       parquet_path,
       opt,
     )?),
-    _ => unreachable!("should have already checked that file is uniquely specified")
+    _ => unreachable!("should have already checked that file is uniquely specified"),
   };
   Ok(res)
 }
 
 trait ColumnReader<T: ArrowNumberLike> {
-  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self> where Self: Sized;
+  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self>
+  where
+    Self: Sized;
   fn next_arrow_batch(&mut self) -> Option<arrow::error::Result<RecordBatch>>;
   fn col_idx(&self) -> usize;
 
@@ -129,10 +135,7 @@ impl<T: ArrowNumberLike> ColumnReader<T> for ParquetColumnReader<T> {
     let reader = SerializedFileReader::new(File::open(path)?)?;
     let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(reader));
     let col_idx = utils::find_col_idx(schema, opt);
-    let batch_reader = arrow_reader.get_record_reader_by_columns(
-      vec![col_idx],
-      opt.chunk_size,
-    )?;
+    let batch_reader = arrow_reader.get_record_reader_by_columns(vec![col_idx], opt.chunk_size)?;
     Ok(Self {
       batch_reader,
       phantom: PhantomData,
@@ -156,7 +159,10 @@ struct CsvColumnReader<T: ArrowNumberLike> {
 }
 
 impl<T: ArrowNumberLike> ColumnReader<T> for CsvColumnReader<T> {
-  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self> where Self: Sized {
+  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self>
+  where
+    Self: Sized,
+  {
     let csv_reader = CsvReader::from_reader(
       File::open(path)?,
       SchemaRef::new(schema.clone()),
@@ -195,10 +201,7 @@ fn write_chunk<T: NumberLike>(
   Ok(())
 }
 
-fn head_nums<T: ArrowNumberLike>(
-  schema: &Schema,
-  opt: &CompressOpt,
-) -> Result<Vec<T>> {
+fn head_nums<T: ArrowNumberLike>(schema: &Schema, opt: &CompressOpt) -> Result<Vec<T>> {
   let mut reader = new_column_reader::<T>(schema, opt)?;
   let mut head_nums = Vec::with_capacity(AUTO_DELTA_LIMIT);
   while let Some(batch_result) = reader.next_batch() {

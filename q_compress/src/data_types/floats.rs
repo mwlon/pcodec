@@ -51,10 +51,12 @@ macro_rules! impl_float_number {
       }
 
       fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self::from_be_bytes(bytes.try_into().unwrap()))
+        Ok(Self::from_be_bytes(
+          bytes.try_into().unwrap(),
+        ))
       }
     }
-  }
+  };
 }
 
 impl_float_number!(f32, i32, u32, 32, 1_u32 << 31, 6);

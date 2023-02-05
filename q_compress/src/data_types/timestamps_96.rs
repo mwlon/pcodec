@@ -2,18 +2,18 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::errors::{QCompressError, QCompressResult};
 use crate::data_types::NumberLike;
+use crate::errors::{QCompressError, QCompressResult};
 
 const BILLION_U32: u32 = 1_000_000_000;
 
 macro_rules! impl_timestamp_96 {
   ($t: ident, $parts_per_sec: expr, $header_byte: expr, $precision: expr) => {
     #[doc = concat!(
-      "A ",
-      $precision,
-      "-precise, timezone-naive, 96-bit timestamp."
-    )]
+          "A ",
+          $precision,
+          "-precise, timezone-naive, 96-bit timestamp."
+        )]
     ///
     /// All `q_compress` 96-bit timestamps use a signed 64 bit integer for the
     /// number of
@@ -41,8 +41,7 @@ macro_rules! impl_timestamp_96 {
         } else {
           Err(QCompressError::invalid_argument(format!(
             "invalid timestamp with {}/{} seconds",
-            parts,
-            $parts_per_sec,
+            parts, $parts_per_sec,
           )))
         }
       }
@@ -85,8 +84,7 @@ macro_rules! impl_timestamp_96 {
         } else {
           Err(QCompressError::corruption(format!(
             "corrupt timestamp with {}/{} seconds",
-            self.0,
-            $parts_per_sec,
+            self.0, $parts_per_sec,
           )))
         }
       }
@@ -130,7 +128,10 @@ macro_rules! impl_timestamp_96 {
           let dur = if subsec_nanos == 0 {
             Duration::new((-seconds) as u64, 0)
           } else {
-            Duration::new((-seconds - 1) as u64, BILLION_U32 - subsec_nanos)
+            Duration::new(
+              (-seconds - 1) as u64,
+              BILLION_U32 - subsec_nanos,
+            )
           };
           UNIX_EPOCH - dur
         };
@@ -143,8 +144,7 @@ macro_rules! impl_timestamp_96 {
         write!(
           f,
           "Timestamp96({}/{})",
-          self.0,
-          $parts_per_sec,
+          self.0, $parts_per_sec,
         )
       }
     }
@@ -183,18 +183,28 @@ macro_rules! impl_timestamp_96 {
         Self::new(parts)
       }
     }
-  }
+  };
 }
 
-impl_timestamp_96!(TimestampNanos96, BILLION_U32, 8, "nanosecond");
-impl_timestamp_96!(TimestampMicros96, 1_000_000_u32, 9, "microsecond");
+impl_timestamp_96!(
+  TimestampNanos96,
+  BILLION_U32,
+  8,
+  "nanosecond"
+);
+impl_timestamp_96!(
+  TimestampMicros96,
+  1_000_000_u32,
+  9,
+  "microsecond"
+);
 
 #[cfg(test)]
 mod tests {
-  use std::convert::TryFrom;
-  use std::time::{Duration, SystemTime};
   use crate::data_types::{TimestampMicros96, TimestampNanos96};
   use crate::errors::QCompressResult;
+  use std::convert::TryFrom;
+  use std::time::{Duration, SystemTime};
 
   #[test]
   fn test_system_time_conversion() -> QCompressResult<()> {
