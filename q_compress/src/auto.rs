@@ -54,13 +54,21 @@ fn auto_delta_encoding_order<T: NumberLike>(
   let head_nums = if nums.len() < AUTO_DELTA_LIMIT {
     nums
   } else {
-    // take nums from start and end
+    // We take nums from start and maybe the end.
+    // If the first numbers are all constant, we need to sample from the end.
+    // Otherwise we'll do well enough by just using the start.
     let half_limit = AUTO_DELTA_LIMIT / 2;
     sampled_nums = Vec::with_capacity(AUTO_DELTA_LIMIT);
     sampled_nums.extend(&nums[..half_limit]);
-    sampled_nums.extend(&nums[nums.len() - half_limit..]);
+    let zeroth_num = sampled_nums[0];
+    if sampled_nums.iter().all(|num| *num == zeroth_num) {
+      sampled_nums.extend(&nums[nums.len() - half_limit..]);
+    } else {
+      sampled_nums.extend(&nums[half_limit..AUTO_DELTA_LIMIT]);
+    }
     &sampled_nums
   };
+
   let mut best_order = usize::MAX;
   let mut best_size = usize::MAX;
   for delta_encoding_order in 0..8 {
@@ -75,6 +83,7 @@ fn auto_delta_encoding_order<T: NumberLike>(
     compressor.header().unwrap();
     compressor.chunk(head_nums).unwrap(); // only unreachable errors
     let size = compressor.byte_size();
+
     if size < best_size {
       best_order = delta_encoding_order;
       best_size = size;
