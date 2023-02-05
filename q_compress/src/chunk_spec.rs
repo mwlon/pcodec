@@ -39,8 +39,7 @@ impl ChunkSpec {
         } else {
           Err(QCompressError::invalid_argument(format!(
             "chunk spec suggests {} numbers but {} were given",
-            sizes_n,
-            n,
+            sizes_n, n,
           )))
         }
       }
@@ -48,7 +47,9 @@ impl ChunkSpec {
 
     for &size in &page_sizes {
       if size == 0 {
-        return Err(QCompressError::invalid_argument("cannot write data page of 0 numbers"));
+        return Err(QCompressError::invalid_argument(
+          "cannot write data page of 0 numbers",
+        ));
       }
     }
 

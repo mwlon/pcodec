@@ -10,10 +10,10 @@ const BILLION_I64: i64 = 1_000_000_000;
 macro_rules! impl_timestamp {
   ($t: ident, $parts_per_sec: expr, $header_byte: expr, $precision: expr) => {
     #[doc = concat!(
-      "A ",
-      $precision,
-      "-precise, timezone-naive, 64-bit timestamp."
-    )]
+          "A ",
+          $precision,
+          "-precise, timezone-naive, 64-bit timestamp."
+        )]
     ///
     /// All `q_compress` 64-bit timestamps use a single signed 64 bit integer
     /// for the number of units since 1970.
@@ -39,7 +39,8 @@ macro_rules! impl_timestamp {
       /// nanoseconds since the Unix Epoch.
       /// Will panic if the time specified is outside the valid range.
       pub(crate) fn from_secs_and_nanos(seconds: i64, subsec_nanos: i64) -> QCompressResult<Self> {
-        seconds.checked_mul($parts_per_sec)
+        seconds
+          .checked_mul($parts_per_sec)
           .and_then(|seconds_parts| seconds_parts.checked_add(subsec_nanos / Self::NS_PER_PART))
           .map($t::new)
           .ok_or_else(|| QCompressError::invalid_argument("timestamp out of range"))
@@ -65,7 +66,10 @@ macro_rules! impl_timestamp {
 
       fn try_from(system_time: SystemTime) -> QCompressResult<Self> {
         let (seconds, subsec_nanos) = match system_time.duration_since(UNIX_EPOCH) {
-          Ok(dur) => (dur.as_secs() as i64, dur.subsec_nanos() as i64),
+          Ok(dur) => (
+            dur.as_secs() as i64,
+            dur.subsec_nanos() as i64,
+          ),
           Err(e) => {
             let dur = e.duration();
             let complement_nanos = dur.subsec_nanos();
@@ -73,7 +77,10 @@ macro_rules! impl_timestamp {
             if complement_nanos == 0 {
               (ceil_secs, 0)
             } else {
-              (ceil_secs - 1, BILLION_I64 - complement_nanos as i64)
+              (
+                ceil_secs - 1,
+                BILLION_I64 - complement_nanos as i64,
+              )
             }
           }
         };
@@ -92,7 +99,10 @@ macro_rules! impl_timestamp {
           let dur = if subsec_nanos == 0 {
             Duration::new((-seconds) as u64, 0)
           } else {
-            Duration::new((-seconds - 1) as u64, (BILLION_I64 - subsec_nanos) as u32)
+            Duration::new(
+              (-seconds - 1) as u64,
+              (BILLION_I64 - subsec_nanos) as u32,
+            )
           };
           UNIX_EPOCH - dur
         }
@@ -101,12 +111,7 @@ macro_rules! impl_timestamp {
 
     impl Display for $t {
       fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-          f,
-          "Timestamp({}/{})",
-          self.0,
-          $parts_per_sec,
-        )
+        write!(f, "Timestamp({}/{})", self.0, $parts_per_sec,)
       }
     }
 
@@ -138,14 +143,21 @@ macro_rules! impl_timestamp {
       }
 
       fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self(i64::from_be_bytes(bytes.try_into().unwrap())))
+        Ok(Self(i64::from_be_bytes(
+          bytes.try_into().unwrap(),
+        )))
       }
     }
-  }
+  };
 }
 
 impl_timestamp!(TimestampNanos, BILLION_I64, 14, "nanosecond");
-impl_timestamp!(TimestampMicros, 1_000_000_i64, 15, "microsecond");
+impl_timestamp!(
+  TimestampMicros,
+  1_000_000_i64,
+  15,
+  "microsecond"
+);
 
 #[cfg(test)]
 mod tests {

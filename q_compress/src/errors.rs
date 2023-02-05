@@ -1,6 +1,6 @@
 use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::fmt;
+use std::fmt::{Display, Formatter};
 
 // TODO in 1.0 make this #[non_exhaustive]
 /// The different kinds of errors for `q_compress`.
@@ -56,11 +56,8 @@ impl QCompressError {
     total_bits: usize,
   ) -> Self {
     Self::insufficient_data(format!(
-        "{}: cannot read {} bits at bit idx {} out of {}",
-        name,
-        bits_to_read,
-        bit_idx,
-        total_bits,
+      "{}: cannot read {} bits at bit idx {} out of {}",
+      name, bits_to_read, bit_idx, total_bits,
     ))
   }
 
@@ -74,8 +71,7 @@ impl Display for QCompressError {
     write!(
       f,
       "q_compress {:?} error: {}",
-      self.kind,
-      &self.message
+      self.kind, &self.message
     )
   }
 }

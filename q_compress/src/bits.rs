@@ -9,7 +9,9 @@ const BUMPY_LOG_TABLE: [(f64, f64); BUMPY_MAX_K] = {
   let exp_bit = 1_u64 << 52;
   while k < BUMPY_MAX_K {
     let mem_repr_exp = exp_bit * (k + 1023 + 1) as u64;
-    res[k] = ((k + 2) as f64, unsafe { std::mem::transmute(mem_repr_exp) });
+    res[k] = ((k + 2) as f64, unsafe {
+      std::mem::transmute(mem_repr_exp)
+    });
     k += 1;
   }
   res
@@ -82,7 +84,7 @@ pub fn usize_truncated_to_bits(x: usize, max_depth: usize) -> Vec<bool> {
 pub fn bits_to_string(bits: &[bool]) -> String {
   return bits
     .iter()
-    .map(|b| if *b {"1"} else {"0"})
+    .map(|b| if *b { "1" } else { "0" })
     .collect::<Vec<&str>>()
     .join("");
 }
@@ -113,7 +115,8 @@ pub fn ceil_div(x: usize, divisor: usize) -> usize {
 
 pub fn words_to_bytes(words: &[usize]) -> Vec<u8> {
   // We can't just transmute because many machines are little-endian.
-  words.iter()
+  words
+    .iter()
     .flat_map(|w| w.to_be_bytes())
     .collect::<Vec<_>>()
 }
@@ -129,7 +132,10 @@ mod tests {
   #[test]
   fn test_bits_to_string() {
     assert_eq!(bits_to_string(&[]), "".to_string());
-    assert_eq!(bits_to_string(&[true, false, false]), "100".to_string());
+    assert_eq!(
+      bits_to_string(&[true, false, false]),
+      "100".to_string()
+    );
   }
 
   #[test]
@@ -156,25 +162,25 @@ mod tests {
     assert_eq!(bits_to_usize_truncated(&[], 0), 0);
     assert_eq!(bits_to_usize_truncated(&[true], 4), 8);
     assert_eq!(bits_to_usize_truncated(&[true], 3), 4);
-    assert_eq!(bits_to_usize_truncated(&[true, false, true], 4), 10);
-    assert_eq!(bits_to_usize_truncated(&[true, false, true, true], 4), 11);
+    assert_eq!(
+      bits_to_usize_truncated(&[true, false, true], 4),
+      10
+    );
+    assert_eq!(
+      bits_to_usize_truncated(&[true, false, true, true], 4),
+      11
+    );
   }
 
   #[test]
   fn test_bits_to_bytes_to_bits() {
     let bits_28 = vec![false, false, false, true, true, true, false, false];
     let byte_28 = bits_to_bytes(bits_28);
-    assert_eq!(
-      byte_28,
-      vec![28]
-    );
+    assert_eq!(byte_28, vec![28]);
 
     let bits_28_128 = vec![false, false, false, true, true, true, false, false, true];
     let byte_28_128 = bits_to_bytes(bits_28_128);
-    assert_eq!(
-      byte_28_128,
-      vec![28, 128]
-    );
+    assert_eq!(byte_28_128, vec![28, 128]);
   }
 
   #[test]

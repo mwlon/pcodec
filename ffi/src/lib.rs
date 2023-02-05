@@ -21,58 +21,40 @@ impl<T: Sized> FfiVec<T> {
   }
 
   pub fn free(self) {
-    unsafe {
-      drop(Box::from_raw(self.raw_box))
-    }
+    unsafe { drop(Box::from_raw(self.raw_box)) }
   }
 }
 
-fn auto_compress<T: NumberLike>(
-  nums: *const T,
-  len: c_uint,
-  level: c_uint,
-) -> FfiVec<u8> {
-  let slice = unsafe { std::slice::from_raw_parts(nums, len as usize)};
-  FfiVec::from_vec(q_compress::auto_compress(slice, level as usize))
+fn auto_compress<T: NumberLike>(nums: *const T, len: c_uint, level: c_uint) -> FfiVec<u8> {
+  let slice = unsafe { std::slice::from_raw_parts(nums, len as usize) };
+  FfiVec::from_vec(q_compress::auto_compress(
+    slice,
+    level as usize,
+  ))
 }
 
-fn auto_decompress<T: NumberLike>(
-  compressed: *const u8,
-  len: c_uint,
-) -> FfiVec<T> {
-  let slice = unsafe { std::slice::from_raw_parts(compressed, len as usize)};
-  let decompressed = q_compress::auto_decompress::<T>(slice)
-    .expect("decompression error!"); // TODO surface error string in CVec instead of panicking
+fn auto_decompress<T: NumberLike>(compressed: *const u8, len: c_uint) -> FfiVec<T> {
+  let slice = unsafe { std::slice::from_raw_parts(compressed, len as usize) };
+  let decompressed = q_compress::auto_decompress::<T>(slice).expect("decompression error!"); // TODO surface error string in CVec instead of panicking
   FfiVec::from_vec(decompressed)
 }
 
 #[no_mangle]
-pub extern "C" fn auto_compress_i32(
-  nums: *const i32,
-  len: c_uint,
-  level: c_uint,
-) -> FfiVec<u8> {
+pub extern "C" fn auto_compress_i32(nums: *const i32, len: c_uint, level: c_uint) -> FfiVec<u8> {
   auto_compress(nums, len, level)
 }
 
 #[no_mangle]
-pub extern "C" fn free_compressed(
-  ffi_vec: FfiVec<u8>,
-) {
+pub extern "C" fn free_compressed(ffi_vec: FfiVec<u8>) {
   ffi_vec.free()
 }
 
 #[no_mangle]
-pub extern "C" fn auto_decompress_i32(
-  compressed: *mut u8,
-  len: c_uint,
-) -> FfiVec<i32> {
+pub extern "C" fn auto_decompress_i32(compressed: *mut u8, len: c_uint) -> FfiVec<i32> {
   auto_decompress::<i32>(compressed, len)
 }
 
 #[no_mangle]
-pub extern "C" fn free_i32(
-  ffi_vec: FfiVec<i32>,
-) {
+pub extern "C" fn free_i32(ffi_vec: FfiVec<i32>) {
   ffi_vec.free()
 }

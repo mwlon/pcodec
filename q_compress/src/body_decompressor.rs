@@ -1,11 +1,11 @@
 use std::cmp::min;
 
 use crate::bit_reader::BitReader;
-use crate::{delta_encoding, PrefixMetadata};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
 use crate::num_decompressor::NumDecompressor;
+use crate::{delta_encoding, PrefixMetadata};
 
 #[derive(Debug)]
 pub struct Numbers<T: NumberLike> {
@@ -37,18 +37,14 @@ impl<T: NumberLike> BodyDecompressor<T> {
   ) -> QCompressResult<Self> {
     Ok(match prefix_metadata {
       PrefixMetadata::Simple { prefixes } => Self::Simple {
-        num_decompressor: NumDecompressor::new(
-          n,
-          compressed_body_size,
-          prefixes.clone()
-        )?
+        num_decompressor: NumDecompressor::new(n, compressed_body_size, prefixes.clone())?,
       },
       PrefixMetadata::Delta { prefixes } => Self::Delta {
         n,
         num_decompressor: NumDecompressor::new(
           n.saturating_sub(delta_moments.order()),
           compressed_body_size,
-          prefixes.clone()
+          prefixes.clone(),
         )?,
         delta_moments: delta_moments.clone(),
         nums_processed: 0,
@@ -63,17 +59,15 @@ impl<T: NumberLike> BodyDecompressor<T> {
     error_on_insufficient_data: bool,
   ) -> QCompressResult<Numbers<T>> {
     match self {
-      Self::Simple { num_decompressor } => num_decompressor.decompress_unsigneds_limited(
-        reader,
-        limit,
-        error_on_insufficient_data,
-      ).map(|u| {
-        let nums = u.unsigneds.into_iter().map(T::from_unsigned).collect();
-        Numbers {
-          nums,
-          finished_body: u.finished_body,
-        }
-      }),
+      Self::Simple { num_decompressor } => num_decompressor
+        .decompress_unsigneds_limited(reader, limit, error_on_insufficient_data)
+        .map(|u| {
+          let nums = u.unsigneds.into_iter().map(T::from_unsigned).collect();
+          Numbers {
+            nums,
+            finished_body: u.finished_body,
+          }
+        }),
       Self::Delta {
         n,
         num_decompressor,
@@ -107,7 +101,9 @@ impl<T: NumberLike> BodyDecompressor<T> {
   pub fn bits_remaining(&self) -> usize {
     match self {
       Self::Simple { num_decompressor } => num_decompressor.bits_remaining(),
-      Self::Delta { num_decompressor, .. } => num_decompressor.bits_remaining(),
+      Self::Delta {
+        num_decompressor, ..
+      } => num_decompressor.bits_remaining(),
     }
   }
 }
@@ -136,20 +132,21 @@ mod tests {
     let metadata_missing_prefix = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
-      prefix_metadata: PrefixMetadata::Simple { prefixes: vec![
-        prefix_w_code(vec![false]),
-        prefix_w_code(vec![true, false]),
-      ]},
+      prefix_metadata: PrefixMetadata::Simple {
+        prefixes: vec![prefix_w_code(vec![false]), prefix_w_code(vec![true, false])],
+      },
       delta_moments: DeltaMoments::default(),
     };
     let metadata_duplicating_prefix = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
-      prefix_metadata: PrefixMetadata::Simple { prefixes: vec![
-        prefix_w_code(vec![false]),
-        prefix_w_code(vec![false]),
-        prefix_w_code(vec![true]),
-      ]},
+      prefix_metadata: PrefixMetadata::Simple {
+        prefixes: vec![
+          prefix_w_code(vec![false]),
+          prefix_w_code(vec![false]),
+          prefix_w_code(vec![true]),
+        ],
+      },
       delta_moments: DeltaMoments::default(),
     };
 
@@ -161,9 +158,15 @@ mod tests {
         &DeltaMoments::default(),
       );
       match result {
-        Ok(_) => panic!("expected an error for bad metadata: {:?}", bad_metadata),
+        Ok(_) => panic!(
+          "expected an error for bad metadata: {:?}",
+          bad_metadata
+        ),
         Err(e) if matches!(e.kind, ErrorKind::Corruption) => (),
-        Err(e) => panic!("expected a different error than {:?} for bad metadata {:?}", e, bad_metadata),
+        Err(e) => panic!(
+          "expected a different error than {:?} for bad metadata {:?}",
+          e, bad_metadata
+        ),
       }
     }
   }

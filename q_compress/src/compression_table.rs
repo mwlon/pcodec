@@ -1,6 +1,6 @@
 use crate::data_types::{NumberLike, UnsignedLike};
+use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::PrefixCompressionInfo;
-use crate::errors::{QCompressResult, QCompressError};
 use crate::Prefix;
 
 const TARGET_BRANCHING_FACTOR: usize = 16; // chosen for performance
@@ -8,7 +8,7 @@ const TARGET_BRANCHING_FACTOR: usize = 16; // chosen for performance
 #[derive(Debug, Clone)]
 pub struct CompressionTableItem<U: UnsignedLike> {
   pub upper: U,
-  pub table: CompressionTable<U>
+  pub table: CompressionTable<U>,
 }
 
 #[derive(Debug, Clone)]
@@ -19,7 +19,8 @@ pub enum CompressionTable<U: UnsignedLike> {
 
 impl<T: NumberLike> From<&[Prefix<T>]> for CompressionTable<T::Unsigned> {
   fn from(prefixes: &[Prefix<T>]) -> Self {
-    let mut infos = prefixes.iter()
+    let mut infos = prefixes
+      .iter()
       .map(PrefixCompressionInfo::from)
       .collect::<Vec<_>>();
     infos.sort_unstable_by_key(|p| p.upper);
@@ -35,9 +36,7 @@ impl<U: UnsignedLike> CompressionTable<U> {
       return CompressionTable::Leaf(prefixes[0]);
     }
 
-    let total_count: usize = prefixes.iter()
-      .map(|p| p.count)
-      .sum();
+    let total_count: usize = prefixes.iter().map(|p| p.count).sum();
 
     let mut last_idx = 0;
     let mut idx = 0;
@@ -96,10 +95,8 @@ impl<U: UnsignedLike> CompressionTable<U> {
               unsigned,
             )));
           }
-        },
+        }
       }
     }
   }
 }
-
-

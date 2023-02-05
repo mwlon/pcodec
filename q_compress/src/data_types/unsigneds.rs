@@ -27,7 +27,7 @@ macro_rules! impl_unsigned {
         (self as usize) << shift
       }
     }
-  }
+  };
 }
 
 impl_unsigned!(u8);
@@ -68,10 +68,12 @@ macro_rules! impl_unsigned_number {
       }
 
       fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self::from_be_bytes(bytes.try_into().unwrap()))
+        Ok(Self::from_be_bytes(
+          bytes.try_into().unwrap(),
+        ))
       }
     }
-  }
+  };
 }
 
 impl_unsigned_number!(u16, i16, 12);

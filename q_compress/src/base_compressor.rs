@@ -1,7 +1,6 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-use crate::{Flags, gcd_utils, huffman_encoding};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
 use crate::chunk_spec::ChunkSpec;
@@ -14,6 +13,7 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
 use crate::prefix_optimization;
+use crate::{gcd_utils, huffman_encoding, Flags};
 
 struct JumpstartConfiguration {
   weight: usize,
@@ -142,13 +142,13 @@ fn cumulative_sum(sizes: &[usize]) -> Vec<usize> {
   res
 }
 
-fn choose_run_len_jumpstart(
-  count: usize,
-  n: usize,
-) -> JumpstartConfiguration {
+fn choose_run_len_jumpstart(count: usize, n: usize) -> JumpstartConfiguration {
   let freq = (count as f64) / (n as f64);
   let non_freq = 1.0 - freq;
-  let jumpstart = min((-non_freq.log2()).ceil() as usize, MAX_JUMPSTART);
+  let jumpstart = min(
+    (-non_freq.log2()).ceil() as usize,
+    MAX_JUMPSTART,
+  );
   let expected_n_runs = (freq * non_freq * n as f64).ceil() as usize;
   JumpstartConfiguration {
     weight: expected_n_runs,
@@ -171,12 +171,7 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
     self.target_j = ((self.prefix_idx + 1) * self.n_unsigneds) / self.max_n_pref
   }
 
-  fn new(
-    max_n_pref: usize,
-    n_unsigneds: usize,
-    sorted: &'a [T::Unsigned],
-    use_gcd: bool,
-  ) -> Self {
+  fn new(max_n_pref: usize, n_unsigneds: usize, sorted: &'a [T::Unsigned], use_gcd: bool) -> Self {
     let mut res = Self {
       seq: Vec::with_capacity(max_n_pref),
       prefix_idx: 0,
@@ -184,23 +179,22 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
       n_unsigneds,
       sorted,
       use_gcd,
-      target_j: 0
+      target_j: 0,
     };
     res.calc_target_j();
     res
   }
 
-  fn push_pref(
-    &mut self,
-    i: usize,
-    j: usize,
-  ) {
+  fn push_pref(&mut self, i: usize, j: usize) {
     let sorted = self.sorted;
     let n_unsigneds = self.n_unsigneds;
 
     let count = j - i;
     let frequency = count as f64 / self.n_unsigneds as f64;
-    let new_prefix_idx = max(self.prefix_idx + 1, (j * self.max_n_pref) / n_unsigneds);
+    let new_prefix_idx = max(
+      self.prefix_idx + 1,
+      (j * self.max_n_pref) / n_unsigneds,
+    );
     let lower = T::from_unsigned(sorted[i]);
     let upper = T::from_unsigned(sorted[j - 1]);
     let gcd = if self.use_gcd {
@@ -208,17 +202,13 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
     } else {
       T::Unsigned::ONE
     };
-    let wp = if n_unsigneds < MIN_N_TO_USE_RUN_LEN || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN || count == n_unsigneds {
+    let wp = if n_unsigneds < MIN_N_TO_USE_RUN_LEN
+      || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN
+      || count == n_unsigneds
+    {
       // The usual case - a prefix for a range that represents either 100% or
       // <=80% of the data.
-      WeightedPrefix::new(
-        count,
-        count,
-        lower,
-        upper,
-        None,
-        gcd,
-      )
+      WeightedPrefix::new(count, count, lower, upper, None, gcd)
     } else {
       // The weird case - a range that represents almost all (but not all) the data.
       // We create extra prefixes that can describe `reps` copies of the range at once.
@@ -255,17 +245,15 @@ fn choose_unoptimized_prefixes<T: NumberLike>(
   flags: &Flags,
 ) -> Vec<WeightedPrefix<T>> {
   let n_unsigneds = sorted.len();
-  let max_n_pref = choose_max_n_prefixes(internal_config.compression_level, n_unsigneds);
+  let max_n_pref = choose_max_n_prefixes(
+    internal_config.compression_level,
+    n_unsigneds,
+  );
 
   let use_gcd = flags.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut prefix_buffer = PrefixBuffer::<T>::new(
-    max_n_pref,
-    n_unsigneds,
-    sorted,
-    use_gcd,
-  );
+  let mut prefix_buffer = PrefixBuffer::<T>::new(max_n_pref, n_unsigneds, sorted, use_gcd);
 
   for j in 1..n_unsigneds {
     let target_j = prefix_buffer.target_j;
@@ -301,39 +289,27 @@ fn train_prefixes<T: NumberLike>(
   if comp_level > MAX_COMPRESSION_LEVEL {
     return Err(QCompressError::invalid_argument(format!(
       "compression level may not exceed {} (was {})",
-      MAX_COMPRESSION_LEVEL,
-      comp_level,
+      MAX_COMPRESSION_LEVEL, comp_level,
     )));
   }
   if n > MAX_ENTRIES {
     return Err(QCompressError::invalid_argument(format!(
       "count may not exceed {} per chunk (was {})",
-      MAX_ENTRIES,
-      n,
+      MAX_ENTRIES, n,
     )));
   }
 
   let unoptimized_prefs = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
-    choose_unoptimized_prefixes(
-      &sorted,
-      internal_config,
-      flags
-    )
+    choose_unoptimized_prefixes(&sorted, internal_config, flags)
   };
 
-  let mut optimized_prefs = prefix_optimization::optimize_prefixes(
-    unoptimized_prefs,
-    flags,
-    n,
-  );
+  let mut optimized_prefs = prefix_optimization::optimize_prefixes(unoptimized_prefs, flags, n);
 
   huffman_encoding::make_huffman_code(&mut optimized_prefs);
 
-  let prefixes = optimized_prefs.iter()
-    .map(|wp| wp.prefix.clone())
-    .collect();
+  let prefixes = optimized_prefs.iter().map(|wp| wp.prefix.clone()).collect();
   Ok(prefixes)
 }
 
@@ -454,21 +430,20 @@ impl<T: NumberLike> State<T> {
     };
     QCompressError::invalid_argument(format!(
       "attempted to write {} when compressor {}",
-      description,
-      step_str,
+      description, step_str,
     ))
   }
 }
 
 #[derive(Clone, Debug)]
-pub struct BaseCompressor<T> where T: NumberLike {
+pub struct BaseCompressor<T: NumberLike> {
   internal_config: InternalCompressorConfig,
   pub flags: Flags,
   pub writer: BitWriter,
   pub state: State<T>,
 }
 
-impl<T> BaseCompressor<T> where T: NumberLike {
+impl<T: NumberLike> BaseCompressor<T> {
   pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> Self {
     Self {
       internal_config: InternalCompressorConfig::from(&config),
@@ -501,7 +476,7 @@ impl<T> BaseCompressor<T> where T: NumberLike {
 
     if nums.is_empty() {
       return Err(QCompressError::invalid_argument(
-        "cannot compress empty chunk"
+        "cannot compress empty chunk",
       ));
     }
 
@@ -514,15 +489,8 @@ impl<T> BaseCompressor<T> where T: NumberLike {
     }
 
     let order = self.flags.delta_encoding_order;
-    let (
-      unsigneds,
-      prefix_meta,
-      table,
-      delta_momentss,
-    ) = if order == 0 {
-      let unsigneds = nums.iter()
-        .map(|x| x.to_unsigned())
-        .collect::<Vec<_>>();
+    let (unsigneds, prefix_meta, table, delta_momentss) = if order == 0 {
+      let unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
       let prefixes = train_prefixes(
         unsigneds.clone(),
         &self.internal_config,
@@ -530,20 +498,17 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         n,
       )?;
       let table = CompressionTable::from(prefixes.as_slice());
-      let prefix_metadata = PrefixMetadata::Simple {
-        prefixes,
-      };
-      (unsigneds, prefix_metadata, table, vec![DeltaMoments::default(); n_pages])
+      let prefix_metadata = PrefixMetadata::Simple { prefixes };
+      (
+        unsigneds,
+        prefix_metadata,
+        table,
+        vec![DeltaMoments::default(); n_pages],
+      )
     } else {
       let page_idxs = cumulative_sum(&page_sizes);
-      let (deltas, momentss) = delta_encoding::nth_order_deltas(
-        nums,
-        order,
-        &page_idxs,
-      );
-      let unsigneds = deltas.iter()
-        .map(|x| x.to_unsigned())
-        .collect::<Vec<_>>();
+      let (deltas, momentss) = delta_encoding::nth_order_deltas(nums, order, &page_idxs);
+      let unsigneds = deltas.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
       let prefixes = train_prefixes(
         unsigneds.clone(),
         &self.internal_config,
@@ -551,9 +516,7 @@ impl<T> BaseCompressor<T> where T: NumberLike {
         n,
       )?;
       let table = CompressionTable::from(prefixes.as_slice());
-      let prefix_metadata = PrefixMetadata::Delta {
-        prefixes,
-      };
+      let prefix_metadata = PrefixMetadata::Delta { prefixes };
       (unsigneds, prefix_metadata, table, momentss)
     };
 
@@ -588,7 +551,11 @@ impl<T> BaseCompressor<T> where T: NumberLike {
       if self.flags.use_wrapped_mode {
         info.data_page_moments().write_to(&mut self.writer);
       }
-      let slice = if end > start { &info.unsigneds[start..end] } else { &[] };
+      let slice = if end > start {
+        &info.unsigneds[start..end]
+      } else {
+        &[]
+      };
       trained_compress_body(
         &info.table,
         info.use_gcd,
@@ -608,7 +575,6 @@ impl<T> BaseCompressor<T> where T: NumberLike {
 
     Ok(())
   }
-
 }
 
 #[cfg(test)]
@@ -622,9 +588,15 @@ mod tests {
     assert_eq!(choose_max_n_prefixes(12, 1 << 10), 1 << 10);
     assert_eq!(choose_max_n_prefixes(8, 1 << 10), 1 << 6);
     assert_eq!(choose_max_n_prefixes(1, 1 << 10), 1);
-    assert_eq!(choose_max_n_prefixes(12, (1 << 12) - 1), 1 << 10);
+    assert_eq!(
+      choose_max_n_prefixes(12, (1 << 12) - 1),
+      1 << 10
+    );
     assert_eq!(choose_max_n_prefixes(12, 1 << 12), 1 << 11);
-    assert_eq!(choose_max_n_prefixes(12, (1 << 14) - 1), 1 << 11);
+    assert_eq!(
+      choose_max_n_prefixes(12, (1 << 14) - 1),
+      1 << 11
+    );
     assert_eq!(choose_max_n_prefixes(12, 1 << 14), 1 << 12);
     assert_eq!(choose_max_n_prefixes(12, 1 << 20), 1 << 12);
   }

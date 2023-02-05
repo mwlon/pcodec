@@ -1,6 +1,6 @@
-use std::io::Write;
-use crate::{Compressor, Decompressor};
 use crate::errors::ErrorKind;
+use crate::{Compressor, Decompressor};
+use std::io::Write;
 
 #[test]
 fn test_errors_do_not_mutate_decompressor() {
@@ -38,8 +38,8 @@ fn test_errors_do_not_mutate_decompressor() {
     match decompressor.chunk_body() {
       Ok(x) => {
         rec_nums.extend(x);
-        break
-      },
+        break;
+      }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
       Err(e) => panic!("{}", e),
     };

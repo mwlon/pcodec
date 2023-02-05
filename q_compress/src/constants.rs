@@ -43,7 +43,10 @@ mod tests {
 
   #[test]
   fn test_bits_to_encode_delta_encoding_order() {
-    assert_can_encode(BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER);
+    assert_can_encode(
+      BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
+      MAX_DELTA_ENCODING_ORDER,
+    );
   }
 
   #[test]

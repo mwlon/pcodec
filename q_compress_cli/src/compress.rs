@@ -7,10 +7,10 @@ use arrow::csv;
 use arrow::datatypes::{Field, Schema};
 use parquet::file::reader::{FileReader, SerializedFileReader};
 
-use crate::utils;
 use crate::dtype::DType;
 use crate::handlers;
 use crate::opt::CompressOpt;
+use crate::utils;
 
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 
@@ -31,13 +31,17 @@ fn infer_csv_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
       match (&opt.col_name, &opt.col_idx) {
         (Some(name), None) if name == field.name() => {
           fields.push(Field::new(name, arrow_dtype.clone(), false));
-        },
+        }
         (None, Some(idx)) if *idx == col_idx => {
-          fields.push(Field::new(field.name(), arrow_dtype.clone(), false));
-        },
+          fields.push(Field::new(
+            field.name(),
+            arrow_dtype.clone(),
+            false,
+          ));
+        }
         _ => {
           fields.push(field.clone());
-        },
+        }
       }
     }
     Ok(Schema::new(fields))
@@ -86,12 +90,14 @@ pub fn compress(opt: CompressOpt) -> Result<()> {
       opt.dtype,
       opt.csv_path,
       opt.parquet_path,
-    ))
+    )),
   }?;
   let arrow_dtype = match (&opt.col_idx, &opt.col_name) {
     (Some(col_idx), None) => Ok(schema.fields()[*col_idx].data_type()),
     (None, Some(col_name)) => Ok(schema.field_with_name(col_name)?.data_type()),
-    _ => Err(anyhow!("incomplete or incompatible col name and col idx")),
+    _ => Err(anyhow!(
+      "incomplete or incompatible col name and col idx"
+    )),
   }?;
   let dtype = DType::from_arrow(arrow_dtype)?;
   let handler = handlers::from_dtype(dtype);

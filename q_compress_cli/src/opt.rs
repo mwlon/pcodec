@@ -45,7 +45,10 @@ pub struct CompressOpt {
   pub overwrite: bool,
   #[structopt(long = "csv-has-header")]
   pub has_csv_header: bool,
-  #[structopt(long = "csv-timestamp-format", default_value = "%Y-%m-%dT%H:%M:%S%.f%z")]
+  #[structopt(
+    long = "csv-timestamp-format",
+    default_value = "%Y-%m-%dT%H:%M:%S%.f%z"
+  )]
   pub timestamp_format: String,
   #[structopt(long = "csv-delimiter", default_value = ",")]
   pub delimiter: char,
@@ -58,7 +61,9 @@ impl CompressOpt {
     let res = match (&self.col_name, &self.col_idx) {
       (Some(_), None) => Ok(true),
       (None, Some(_)) => Ok(self.has_csv_header),
-      _ => Err(anyhow!("conflicting or incomplete CSV column information")),
+      _ => Err(anyhow!(
+        "conflicting or incomplete CSV column information"
+      )),
     }?;
 
     Ok(res)

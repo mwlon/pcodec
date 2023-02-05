@@ -1,10 +1,10 @@
 use std::fs;
 
-use crate::{auto_decompress, DecompressorConfig};
 use crate::data_types::NumberLike;
 #[cfg(feature = "timestamps_96")]
 use crate::data_types::TimestampMicros96;
 use crate::tests::utils;
+use crate::{auto_decompress, DecompressorConfig};
 
 #[derive(Clone, Copy, Debug)]
 enum Mode {
@@ -12,10 +12,7 @@ enum Mode {
   Wrapped,
 }
 
-fn assert_compatible<T: NumberLike>(
-  filename: &str,
-  mode: Mode,
-) {
+fn assert_compatible<T: NumberLike>(filename: &str, mode: Mode) {
   let raw_bytes = fs::read(format!("assets/{}.bin", filename)).expect("read bin");
   let expected = raw_bytes
     .chunks(T::PHYSICAL_BITS / 8)
@@ -26,7 +23,8 @@ fn assert_compatible<T: NumberLike>(
   let decompressed = match mode {
     Mode::Standalone => auto_decompress::<T>(&compressed),
     Mode::Wrapped => utils::wrapped_decompress(compressed, DecompressorConfig::default()),
-  }.expect("decompress");
+  }
+  .expect("decompress");
 
   assert_eq!(decompressed, expected)
 }

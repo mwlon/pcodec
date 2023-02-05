@@ -1,14 +1,16 @@
 use arrow::datatypes as arrow_dtypes;
 use arrow::datatypes::ArrowPrimitiveType;
 
-use q_compress::data_types::{NumberLike, TimestampMicros, TimestampMicros96, TimestampNanos, TimestampNanos96};
+use q_compress::data_types::{
+  NumberLike, TimestampMicros, TimestampMicros96, TimestampNanos, TimestampNanos96,
+};
 
 pub trait ArrowNumberLike: NumberLike {
   const IS_ARROW: bool;
   type ArrowPrimitive: ArrowPrimitiveType;
 
   fn from_arrow(native: <Self::ArrowPrimitive as ArrowPrimitiveType>::Native) -> Self;
-  
+
   fn to_arrow(self) -> <Self::ArrowPrimitive as ArrowPrimitiveType>::Native;
 }
 
@@ -21,12 +23,12 @@ macro_rules! trivial_arrow {
       fn from_arrow(native: Self) -> Self {
         native
       }
-      
+
       fn to_arrow(self) -> Self {
         self
       }
     }
-  }
+  };
 }
 
 macro_rules! no_arrow {
@@ -38,12 +40,12 @@ macro_rules! no_arrow {
       fn from_arrow(_: f32) -> Self {
         unreachable!()
       }
-      
+
       fn to_arrow(self) -> f32 {
         unreachable!()
       }
     }
-  }
+  };
 }
 
 no_arrow!(bool);

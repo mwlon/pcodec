@@ -16,7 +16,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 /// available, and then the exact offset within the range for the number.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct Prefix<T> where T: NumberLike {
+pub struct Prefix<T: NumberLike> {
   /// The count of numbers in the chunk that fall into this Prefix's range.
   /// Not available in wrapped mode.
   pub count: usize,
@@ -125,15 +125,12 @@ impl<T: NumberLike> WeightedPrefix<T> {
       run_len_jumpstart,
       gcd,
     };
-    WeightedPrefix {
-      prefix,
-      weight,
-    }
+    WeightedPrefix { prefix, weight }
   }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PrefixCompressionInfo<U> where U: UnsignedLike {
+pub struct PrefixCompressionInfo<U: UnsignedLike> {
   pub count: usize,
   pub code: usize,
   pub code_len: usize,
@@ -148,7 +145,11 @@ pub struct PrefixCompressionInfo<U> where U: UnsignedLike {
 
 impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
   fn from(prefix: &Prefix<T>) -> Self {
-    let KInfo { k, only_k_bits_upper, only_k_bits_lower } = prefix.k_info();
+    let KInfo {
+      k,
+      only_k_bits_upper,
+      only_k_bits_lower,
+    } = prefix.k_info();
     let code = bits::bits_to_usize(&prefix.code);
 
     PrefixCompressionInfo {
@@ -190,7 +191,7 @@ impl<U: UnsignedLike> Default for PrefixCompressionInfo<U> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PrefixDecompressionInfo<U> where U: UnsignedLike {
+pub struct PrefixDecompressionInfo<U: UnsignedLike> {
   pub lower_unsigned: U,
   pub min_unambiguous_k_bit_offset: U,
   pub k: usize,
@@ -214,7 +215,7 @@ impl<U: UnsignedLike> Default for PrefixDecompressionInfo<U> {
   }
 }
 
-impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: NumberLike {
+impl<T: NumberLike> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> {
   fn from(p: &Prefix<T>) -> Self {
     let lower_unsigned = p.lower.to_unsigned();
     let upper_unsigned = p.upper.to_unsigned();
@@ -226,7 +227,7 @@ impl<T> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> where T: Numbe
       let gcd_diff = (upper_unsigned - lower_unsigned) / p.gcd;
       (
         most_significant,
-        (gcd_diff + T::Unsigned::ONE) - most_significant
+        (gcd_diff + T::Unsigned::ONE) - most_significant,
       )
     };
     PrefixDecompressionInfo {

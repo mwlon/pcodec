@@ -2,9 +2,9 @@ use std::fs;
 
 use anyhow::Result;
 
+use crate::handlers;
 use crate::opt::InspectOpt;
 use crate::utils;
-use crate::handlers;
 
 pub fn inspect(opt: InspectOpt) -> Result<()> {
   let bytes = fs::read(&opt.path)?;

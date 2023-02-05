@@ -1,8 +1,8 @@
 use crate::bits;
 use crate::bits::BASE_BIT_MASK;
-use crate::errors::{QCompressError, QCompressResult};
-use crate::data_types::UnsignedLike;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WORD_SIZE};
+use crate::data_types::UnsignedLike;
+use crate::errors::{QCompressError, QCompressResult};
 
 /// Builds compressed data, enabling a [`Compressor`][crate::Compressor] to
 /// write bit-level information and ultimately output a `Vec<u8>`.
@@ -96,7 +96,9 @@ impl BitWriter {
     }
 
     let remaining = n_plus_j - WORD_SIZE;
-    self.words.push(self.word | ((x >> remaining) & (usize::MAX >> self.j)));
+    self
+      .words
+      .push(self.word | ((x >> remaining) & (usize::MAX >> self.j)));
 
     // now remaining bits <= WORD_SIZE
     let lshift = WORD_SIZE - remaining;
@@ -120,7 +122,9 @@ impl BitWriter {
     }
 
     let mut remaining = n_plus_j - WORD_SIZE;
-    self.words.push(self.word | (x.rshift_word(remaining) & (usize::MAX >> self.j)));
+    self
+      .words
+      .push(self.word | (x.rshift_word(remaining) & (usize::MAX >> self.j)));
 
     for _ in 0..(U::BITS - 1) / WORD_SIZE {
       if remaining <= WORD_SIZE {
@@ -207,10 +211,7 @@ mod tests {
     writer.write(&[true, true, true, true]);
     writer.write_usize(187, 4);
     let bytes = writer.drain_bytes();
-    assert_eq!(
-      bytes,
-      vec![251],
-    )
+    assert_eq!(bytes, vec![251],)
   }
 
   #[test]
@@ -245,10 +246,7 @@ mod tests {
     writer.write_usize(5, 4);
 
     let bytes = writer.drain_bytes();
-    assert_eq!(
-      bytes,
-      vec![136, 64, 123, 149, 229, 80],
-    );
+    assert_eq!(bytes, vec![136, 64, 123, 149, 229, 80],);
   }
 
   #[test]
@@ -257,9 +255,6 @@ mod tests {
     writer.write_usize(0, 24);
     writer.overwrite_usize(9, 129, 9);
     let bytes = writer.drain_bytes();
-    assert_eq!(
-      bytes,
-      vec![0, 32, 64],
-    );
+    assert_eq!(bytes, vec![0, 32, 64],);
   }
 }

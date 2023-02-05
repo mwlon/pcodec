@@ -47,10 +47,12 @@ macro_rules! impl_signed {
       }
 
       fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self::from_be_bytes(bytes.try_into().unwrap()))
+        Ok(Self::from_be_bytes(
+          bytes.try_into().unwrap(),
+        ))
       }
     }
-  }
+  };
 }
 
 impl_signed!(i16, u16, 13);

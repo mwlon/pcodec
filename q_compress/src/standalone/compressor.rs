@@ -1,9 +1,9 @@
-use crate::{bits, ChunkMetadata, CompressorConfig, Flags};
 use crate::base_compressor::{BaseCompressor, State};
 use crate::chunk_spec::ChunkSpec;
 use crate::constants::MAGIC_TERMINATION_BYTE;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
+use crate::{bits, ChunkMetadata, CompressorConfig, Flags};
 
 /// Converts vectors of numbers into compressed bytes in
 /// .qco format.
@@ -48,7 +48,9 @@ impl<T: NumberLike> Compressor<T> {
   /// configuration that doesn't show up in the output file.
   /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
   pub fn from_config(config: CompressorConfig) -> Self {
-    Self(BaseCompressor::<T>::from_config(config, false))
+    Self(BaseCompressor::<T>::from_config(
+      config, false,
+    ))
   }
   /// Returns a reference to the compressor's flags.
   pub fn flags(&self) -> &Flags {
@@ -75,7 +77,9 @@ impl<T: NumberLike> Compressor<T> {
   /// The chunk body encodes the numbers passed in here.
   pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
     let pre_meta_bit_idx = self.0.writer.bit_size();
-    let mut meta = self.0.chunk_metadata_internal(nums, &ChunkSpec::default())?;
+    let mut meta = self
+      .0
+      .chunk_metadata_internal(nums, &ChunkSpec::default())?;
     let post_meta_byte_idx = self.0.writer.byte_size();
 
     self.0.data_page_internal()?;
@@ -112,10 +116,9 @@ impl<T: NumberLike> Compressor<T> {
     if !nums.is_empty() {
       let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
       let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
-      nums.chunks(n_per_chunk)
-        .for_each(|chunk| {
-          self.chunk(chunk).unwrap();
-        });
+      nums.chunks(n_per_chunk).for_each(|chunk| {
+        self.chunk(chunk).unwrap();
+      });
     }
 
     self.footer().unwrap();

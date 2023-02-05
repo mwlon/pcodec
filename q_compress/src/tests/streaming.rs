@@ -3,9 +3,9 @@ use std::io::Write;
 use futures::{StreamExt, TryStreamExt};
 use rand::Rng;
 
-use crate::{DecompressedItem, Decompressor, DEFAULT_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
+use crate::{DecompressedItem, Decompressor, DEFAULT_COMPRESSION_LEVEL};
 
 #[derive(Default)]
 struct State<T: NumberLike> {
@@ -17,7 +17,10 @@ async fn streaming_collect<T: NumberLike>(
   state: State<T>,
   compressed_blob: &[u8],
 ) -> QCompressResult<State<T>> {
-  let State { mut decompressor, mut nums } = state;
+  let State {
+    mut decompressor,
+    mut nums,
+  } = state;
   decompressor.write_all(compressed_blob).unwrap();
   for maybe_item in &mut decompressor {
     let item = maybe_item?;
@@ -61,12 +64,9 @@ async fn check_streaming_recovery<T: NumberLike>(
   let compressed_blobs = compressed_bytes.chunks(blob_size);
 
   let input_stream = futures::stream::iter(compressed_blobs);
-  let State {nums, ..} = input_stream
+  let State { nums, .. } = input_stream
     .map(Ok)
-    .try_fold(
-      State::<T>::default(),
-      streaming_collect,
-    )
+    .try_fold(State::<T>::default(), streaming_collect)
     .await?;
   assert_eq!(nums, true_nums);
   Ok(())

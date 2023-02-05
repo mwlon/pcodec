@@ -14,9 +14,9 @@ pub use base_decompressor::DecompressorConfig;
 pub use chunk_metadata::{ChunkMetadata, PrefixMetadata};
 pub use constants::DEFAULT_COMPRESSION_LEVEL;
 // TODO in 1.0 remove these standalone things from top level
-pub use standalone::{Compressor, DecompressedItem, Decompressor};
 pub use flags::Flags;
 pub use prefix::Prefix;
+pub use standalone::{Compressor, DecompressedItem, Decompressor};
 
 pub mod data_types;
 pub mod errors;
@@ -24,6 +24,8 @@ pub mod standalone;
 pub mod wrapped;
 
 mod auto;
+mod base_compressor;
+mod base_decompressor;
 mod bit_reader;
 mod bit_words;
 mod bit_writer;
@@ -31,10 +33,8 @@ mod bits;
 mod body_decompressor;
 mod chunk_metadata;
 mod chunk_spec;
-mod constants;
 mod compression_table;
-mod base_compressor;
-mod base_decompressor;
+mod constants;
 mod delta_encoding;
 mod flags;
 mod gcd_utils;

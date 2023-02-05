@@ -1,16 +1,12 @@
-use std::io::Write;
-use crate::{Compressor, CompressorConfig, DecompressedItem, Decompressor};
-use crate::data_types::NumberLike;
 use crate::base_decompressor::DecompressorConfig;
+use crate::data_types::NumberLike;
 use crate::errors::ErrorKind;
+use crate::{Compressor, CompressorConfig, DecompressedItem, Decompressor};
+use std::io::Write;
 
 #[test]
 fn test_low_level_short() {
-  let nums = vec![
-    vec![0],
-    vec![10, 11],
-    vec![20, 21, 22],
-  ];
+  let nums = vec![vec![0], vec![10, 11], vec![20, 21, 22]];
   assert_lowest_level_behavior(nums);
 }
 
@@ -32,7 +28,7 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
     let debug_info = format!("delta order={}", delta_encoding_order);
     let mut compressor = Compressor::<T>::from_config(
-      CompressorConfig::default().with_delta_encoding_order(delta_encoding_order)
+      CompressorConfig::default().with_delta_encoding_order(delta_encoding_order),
     );
     compressor.header().unwrap();
     let mut metadatas = Vec::new();
@@ -43,9 +39,8 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
 
     let bytes = compressor.drain_bytes();
 
-    let mut decompressor = Decompressor::<T>::from_config(
-      DecompressorConfig::default().with_numbers_limit_per_item(2)
-    );
+    let mut decompressor =
+      Decompressor::<T>::from_config(DecompressorConfig::default().with_numbers_limit_per_item(2));
     decompressor.write_all(&bytes).unwrap();
     let flags = decompressor.header().unwrap();
     assert_eq!(&flags, compressor.flags(), "{}", debug_info);
@@ -64,7 +59,7 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
             chunk_nums = Vec::new();
           }
           chunk_idx += 1;
-        },
+        }
         DecompressedItem::Numbers(nums) => {
           assert!(!terminated);
           chunk_nums.extend(&nums);
@@ -75,10 +70,22 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
         }
       }
     }
-    assert_eq!(&chunk_nums, numss.last().unwrap(), "{}", debug_info);
+    assert_eq!(
+      &chunk_nums,
+      numss.last().unwrap(),
+      "{}",
+      debug_info
+    );
 
     let terminated_err = decompressor.chunk_metadata().unwrap_err();
-    assert!(matches!(terminated_err.kind, ErrorKind::InvalidArgument), "{}", debug_info);
+    assert!(
+      matches!(
+        terminated_err.kind,
+        ErrorKind::InvalidArgument
+      ),
+      "{}",
+      debug_info
+    );
     assert!(terminated, "{}", debug_info);
   }
 }

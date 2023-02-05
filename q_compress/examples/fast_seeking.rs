@@ -1,6 +1,6 @@
-use std::io::Write;
 use q_compress::{Compressor, Decompressor};
 use rand::Rng;
+use std::io::Write;
 use std::time::Instant;
 
 fn main() {
@@ -30,8 +30,10 @@ fn main() {
     decompressor.skip_chunk_body().expect("skipping");
   }
 
-  let n: usize = metadatas.iter()
-    .map(|meta| meta.n)
-    .sum();
-  println!("seeked through {} entries in {:?}", n, Instant::now() - start_t);
+  let n: usize = metadatas.iter().map(|meta| meta.n).sum();
+  println!(
+    "seeked through {} entries in {:?}",
+    n,
+    Instant::now() - start_t
+  );
 }

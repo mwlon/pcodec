@@ -2,8 +2,8 @@ use crate::bit_reader::BitReader;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::gcd_utils::GcdOperator;
 use crate::num_decompressor::NumDecompressor;
-use crate::Prefix;
 use crate::prefix::PrefixDecompressionInfo;
+use crate::Prefix;
 
 pub fn use_run_len<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
   prefixes.iter().any(|p| p.run_len_jumpstart.is_some())
@@ -47,7 +47,8 @@ impl RunLenOperator for GeneralRunLenOp {
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = num_decompressor.unchecked_limit_reps(p, full_reps, batch_size - unsigneds.len());
+        let reps =
+          num_decompressor.unchecked_limit_reps(p, full_reps, batch_size - unsigneds.len());
         if p.k == 0 {
           for _ in 0..reps {
             unsigneds.push(p.lower_unsigned);
@@ -57,7 +58,7 @@ impl RunLenOperator for GeneralRunLenOp {
             unchecked_decompress_offset::<U, GcdOp>(reader, unsigneds, p);
           }
         }
-      },
+      }
     };
   }
 }

@@ -1,11 +1,11 @@
 use std::io::Write;
 
-use crate::{ChunkMetadata, DecompressorConfig, Flags};
 use crate::base_decompressor::{BaseDecompressor, State, Step};
 use crate::bit_reader::BitReader;
 use crate::body_decompressor::{BodyDecompressor, Numbers};
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
+use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
 /// Converts .qco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
@@ -84,7 +84,10 @@ impl<T: NumberLike> Decompressor<T> {
   /// runs out of data,
   /// or finds any corruptions.
   pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
-    self.0.state.check_step(Step::StartOfChunk, "read chunk metadata")?;
+    self
+      .0
+      .state
+      .check_step(Step::StartOfChunk, "read chunk metadata")?;
 
     self.0.with_reader(|reader, state, _| {
       let maybe_meta = state.chunk_meta_option_dirty(reader)?;
@@ -100,7 +103,10 @@ impl<T: NumberLike> Decompressor<T> {
   /// Will return an error if the decompressor is not in a chunk body,
   /// or runs out of data.
   pub fn skip_chunk_body(&mut self) -> QCompressResult<()> {
-    self.0.state.check_step_among(&[Step::StartOfDataPage, Step::MidDataPage], "skip chunk body")?;
+    self.0.state.check_step_among(
+      &[Step::StartOfDataPage, Step::MidDataPage],
+      "skip chunk body",
+    )?;
 
     let bits_remaining = match &self.0.state.body_decompressor {
       Some(bd) => bd.bits_remaining(),
@@ -119,8 +125,7 @@ impl<T: NumberLike> Decompressor<T> {
     } else {
       Err(QCompressError::insufficient_data(format!(
         "unable to skip chunk body to bit index {} when only {} bits available",
-        skipped_bit_idx,
-        self.0.words.total_bits,
+        skipped_bit_idx, self.0.words.total_bits,
       )))
     }
   }
@@ -130,8 +135,15 @@ impl<T: NumberLike> Decompressor<T> {
   /// runs out of data,
   /// or finds any corruptions.
   pub fn chunk_body(&mut self) -> QCompressResult<Vec<T>> {
-    self.0.state.check_step(Step::StartOfDataPage, "read chunk body")?;
-    let &ChunkMetadata { n, compressed_body_size, ..} = self.0.state.chunk_meta.as_ref().unwrap();
+    self
+      .0
+      .state
+      .check_step(Step::StartOfDataPage, "read chunk body")?;
+    let &ChunkMetadata {
+      n,
+      compressed_body_size,
+      ..
+    } = self.0.state.chunk_meta.as_ref().unwrap();
     let res = self.0.data_page_internal(n, compressed_body_size)?;
     self.0.state.chunk_meta = None;
     Ok(res)
@@ -156,9 +168,7 @@ impl<T: NumberLike> Decompressor<T> {
           existing.extend(nums);
           Some(existing)
         }
-        None => {
-          Some(nums)
-        }
+        None => Some(nums),
       };
     }
     Ok(res.unwrap_or_default())
@@ -208,49 +218,43 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
 
   fn next(&mut self) -> Option<Self::Item> {
     let res: QCompressResult<Option<DecompressedItem<T>>> = match self.0.state.step() {
-      Step::PreHeader => {
-        match self.header() {
-          Ok(flags) => {
-            Ok(Some(DecompressedItem::Flags(flags)))
-          },
-          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
-          Err(e) => Err(e),
-        }
+      Step::PreHeader => match self.header() {
+        Ok(flags) => Ok(Some(DecompressedItem::Flags(flags))),
+        Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
+        Err(e) => Err(e),
       },
-      Step::StartOfChunk => {
-        match self.chunk_metadata() {
-          Ok(Some(meta)) => {
-            Ok(Some(DecompressedItem::ChunkMetadata(meta)))
-          },
-          Ok(None) => {
-            Ok(Some(DecompressedItem::Footer))
-          },
-          Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
-          Err(e) => Err(e),
-        }
+      Step::StartOfChunk => match self.chunk_metadata() {
+        Ok(Some(meta)) => Ok(Some(DecompressedItem::ChunkMetadata(meta))),
+        Ok(None) => Ok(Some(DecompressedItem::Footer)),
+        Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
+        Err(e) => Err(e),
       },
-      Step::StartOfDataPage => {
-        self.0.with_reader(|reader, state, config| {
-          let &ChunkMetadata { n, compressed_body_size, .. } = state.chunk_meta.as_ref().unwrap();
-          let mut bd = state.new_body_decompressor(reader, n, compressed_body_size)?;
-          let numbers = next_nums_dirty(reader, &mut bd, config)?;
-          state.body_decompressor = Some(bd);
-          Ok(apply_nums(state, numbers))
-        })
-      },
-      Step::MidDataPage => {
-        self.0.with_reader(|reader, state, config| {
-          let numbers = next_nums_dirty(reader, state.body_decompressor.as_mut().unwrap(), config)?;
-          Ok(apply_nums(state, numbers))
-        })
-      },
+      Step::StartOfDataPage => self.0.with_reader(|reader, state, config| {
+        let &ChunkMetadata {
+          n,
+          compressed_body_size,
+          ..
+        } = state.chunk_meta.as_ref().unwrap();
+        let mut bd = state.new_body_decompressor(reader, n, compressed_body_size)?;
+        let numbers = next_nums_dirty(reader, &mut bd, config)?;
+        state.body_decompressor = Some(bd);
+        Ok(apply_nums(state, numbers))
+      }),
+      Step::MidDataPage => self.0.with_reader(|reader, state, config| {
+        let numbers = next_nums_dirty(
+          reader,
+          state.body_decompressor.as_mut().unwrap(),
+          config,
+        )?;
+        Ok(apply_nums(state, numbers))
+      }),
       Step::Terminated => Ok(None),
     };
 
     match res {
       Ok(Some(x)) => Some(Ok(x)),
       Ok(None) => None,
-      Err(e) => Some(Err(e))
+      Err(e) => Some(Err(e)),
     }
   }
 }

@@ -1,15 +1,15 @@
 use std::fmt::Debug;
 use std::io::Write;
 
-use crate::Flags;
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::body_decompressor::BodyDecompressor;
-use crate::chunk_metadata::{ChunkMetadata};
+use crate::chunk_metadata::ChunkMetadata;
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, WORD_SIZE};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::Flags;
 
 /// All configurations available for a Decompressor.
 #[derive(Clone, Debug)]
@@ -54,8 +54,7 @@ fn header_dirty<T: NumberLike>(
   if bytes != MAGIC_HEADER {
     return Err(QCompressError::corruption(format!(
       "magic header does not match {:?}; instead found {:?}",
-      MAGIC_HEADER,
-      bytes,
+      MAGIC_HEADER, bytes,
     )));
   }
   let bytes = reader.read_aligned_bytes(1)?;
@@ -87,7 +86,10 @@ impl<T: NumberLike> State<T> {
     }
   }
 
-  pub fn chunk_meta_option_dirty(&self, reader: &mut BitReader) -> QCompressResult<Option<ChunkMetadata<T>>> {
+  pub fn chunk_meta_option_dirty(
+    &self,
+    reader: &mut BitReader,
+  ) -> QCompressResult<Option<ChunkMetadata<T>>> {
     let magic_byte = reader.read_aligned_bytes(1)?[0];
     if magic_byte == MAGIC_TERMINATION_BYTE {
       return Ok(None);
@@ -98,8 +100,7 @@ impl<T: NumberLike> State<T> {
       )));
     }
 
-    ChunkMetadata::<T>::parse_from(reader, self.flags.as_ref().unwrap())
-      .map(Some)
+    ChunkMetadata::<T>::parse_from(reader, self.flags.as_ref().unwrap()).map(Some)
   }
 
   pub fn new_body_decompressor(
@@ -116,13 +117,19 @@ impl<T: NumberLike> State<T> {
       let start_byte_idx = reader.aligned_byte_idx()?;
       let moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
       let end_byte_idx = reader.aligned_byte_idx()?;
-      let cbs = compressed_page_size.checked_sub(end_byte_idx - start_byte_idx)
-        .ok_or_else(|| QCompressError::invalid_argument(
-          "compressed page size {} is less than data page metadata size"
-        ))?;
+      let cbs = compressed_page_size
+        .checked_sub(end_byte_idx - start_byte_idx)
+        .ok_or_else(|| {
+          QCompressError::invalid_argument(
+            "compressed page size {} is less than data page metadata size",
+          )
+        })?;
       (moments, cbs)
     } else {
-      (chunk_meta.delta_moments.clone(), compressed_page_size)
+      (
+        chunk_meta.delta_moments.clone(),
+        compressed_page_size,
+      )
     };
 
     BodyDecompressor::new(
@@ -168,8 +175,7 @@ impl Step {
     };
     QCompressError::invalid_argument(format!(
       "attempted to {} when compressor {}",
-      description,
-      step_str,
+      description, step_str,
     ))
   }
 }
@@ -208,7 +214,9 @@ impl<T: NumberLike> BaseDecompressor<T> {
   // so we have to be careful to only modify state after everything else
   // succeeds, or manually handle rolling it back
   pub fn with_reader<X, F>(&mut self, f: F) -> QCompressResult<X>
-  where F: FnOnce(&mut BitReader, &mut State<T>, &DecompressorConfig) -> QCompressResult<X> {
+  where
+    F: FnOnce(&mut BitReader, &mut State<T>, &DecompressorConfig) -> QCompressResult<X>,
+  {
     let mut reader = BitReader::from(&self.words);
     reader.seek_to(self.state.bit_idx);
     let res = f(&mut reader, &mut self.state, &self.config);
@@ -221,29 +229,26 @@ impl<T: NumberLike> BaseDecompressor<T> {
   pub fn header(&mut self, use_wrapped_mode: bool) -> QCompressResult<Flags> {
     self.state.check_step(Step::PreHeader, "read header")?;
 
-    self.with_reader(|reader, state, _ | {
+    self.with_reader(|reader, state, _| {
       let flags = header_dirty::<T>(reader, use_wrapped_mode)?;
       state.flags = Some(flags.clone());
       Ok(flags)
     })
   }
 
-  pub fn data_page_internal(&mut self, n: usize, compressed_page_size: usize) -> QCompressResult<Vec<T>> {
+  pub fn data_page_internal(
+    &mut self,
+    n: usize,
+    compressed_page_size: usize,
+  ) -> QCompressResult<Vec<T>> {
     let old_bd = self.state.body_decompressor.clone();
     self.with_reader(|reader, state, _| {
-      let mut bd = state.new_body_decompressor(
-        reader,
-        n,
-        compressed_page_size,
-      )?;
-      let res = bd.decompress_next_batch(reader, usize::MAX, true)
+      let mut bd = state.new_body_decompressor(reader, n, compressed_page_size)?;
+      let res = bd
+        .decompress_next_batch(reader, usize::MAX, true)
         .map(|numbers| numbers.nums);
       // we need to roll back the body decompressor if this failed
-      state.body_decompressor = if res.is_ok() {
-        None
-      } else {
-        old_bd
-      };
+      state.body_decompressor = if res.is_ok() { None } else { old_bd };
       res
     })
   }
@@ -256,4 +261,3 @@ impl<T: NumberLike> BaseDecompressor<T> {
     }
   }
 }
-

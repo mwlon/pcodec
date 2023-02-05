@@ -1,8 +1,8 @@
-use crate::{ChunkMetadata, CompressorConfig, Flags};
 use crate::base_compressor::BaseCompressor;
 use crate::chunk_spec::ChunkSpec;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
+use crate::{ChunkMetadata, CompressorConfig, Flags};
 
 /// Converts vectors of numbers into compressed bytes for use in a wrapping
 /// columnar data format.
@@ -27,7 +27,9 @@ impl<T: NumberLike> Compressor<T> {
   /// configuration that doesn't show up in the output file.
   /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
   pub fn from_config(config: CompressorConfig) -> Self {
-    Self(BaseCompressor::<T>::from_config(config, true))
+    Self(BaseCompressor::<T>::from_config(
+      config, true,
+    ))
   }
 
   /// Returns a reference to the compressor's flags.

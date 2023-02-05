@@ -1,6 +1,6 @@
-use crate::{CompressorConfig, DecompressorConfig};
 use crate::errors::QCompressResult;
 use crate::tests::utils;
+use crate::{CompressorConfig, DecompressorConfig};
 
 #[test]
 fn test_dummy_wrapped_format_recovery() -> QCompressResult<()> {
