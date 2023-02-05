@@ -1,7 +1,8 @@
 # `q_compress` Changelog
 
-## 0.11.5 (not yet released)
+## 0.11.5
 * Increased compression speed 4% in most cases by making `BitWriter` implementation cleverer.
+* Improved auto compression heuristics for higher compression ratio in some cases.
 
 ## 0.11.4
 
