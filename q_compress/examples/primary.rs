@@ -12,13 +12,7 @@ use q_compress::data_types::{NumberLike, TimestampMicros};
 
 const BASE_DIR: &str = "q_compress/examples/data";
 // if this delta order is specified, use a dataset-specific order
-const MAGIC_DELTA_ORDER: usize = 8;
-const SPECIAL_DELTA_ORDERS: [(&str, usize); 4] = [
-  ("f64_slow_cosine", 7),
-  ("i64_slow_cosine", 2),
-  ("micros_near_linear", 1),
-  ("interl", 1),
-];
+const AUTO_DELTA: usize = usize::MAX;
 
 #[derive(StructOpt)]
 struct Opt {
@@ -99,7 +93,7 @@ impl Opt {
           let delta_encoding_order = if parts.len() > 2 {
             parts[2].parse().unwrap()
           } else {
-            MAGIC_DELTA_ORDER
+            AUTO_DELTA
           };
           let use_gcds = !(parts.len() > 3 && &parts[3].to_lowercase()[0..3] == "off");
           let config = CompressorConfig::default()
@@ -120,7 +114,7 @@ impl Opt {
 
 struct BenchStat {
   pub dataset: String,
-  pub config: MultiCompressorConfig,
+  pub codec: String,
   pub compress_dt: Duration,
   pub decompress_dt: Duration,
   pub compressed_size: usize,
@@ -150,19 +144,11 @@ fn basename_no_ext(path: &Path) -> String {
   }
 }
 
-fn delta_order_for_dataset(dataset: &str) -> usize {
-  for (name, order) in &SPECIAL_DELTA_ORDERS {
-    if dataset.contains(name) {
-      return *order;
-    }
-  }
-  0
-}
-
 struct Precomputed<T: NumberLike> {
   raw_bytes: Vec<u8>,
   nums: Vec<T>,
   compressed: Vec<u8>,
+  codec: String,
 }
 
 fn cast_to_nums<T: NumberLike>(bytes: Vec<u8>) -> Vec<T> {
@@ -188,18 +174,22 @@ fn decompress_qco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
 }
 
 fn compress<T: NumberLike>(
-  dataset: &str,
   raw_bytes: &[u8],
   nums: &[T],
   config: &MultiCompressorConfig,
-) -> (Duration, Vec<u8>) {
+) -> (Duration, MultiCompressorConfig, Vec<u8>) {
   let t = Instant::now();
-  let compressed = match &config {
+  let mut qualified_config = config.clone();
+  let compressed = match &mut qualified_config {
     MultiCompressorConfig::QCompress(qco_conf) => {
       let mut conf = qco_conf.clone();
-      if conf.delta_encoding_order == MAGIC_DELTA_ORDER {
-        conf.delta_encoding_order = delta_order_for_dataset(&dataset);
+      if conf.delta_encoding_order == AUTO_DELTA {
+        conf.delta_encoding_order = q_compress::auto_compressor_config(
+          nums,
+          conf.compression_level,
+        ).delta_encoding_order;
       }
+      *qco_conf = conf.clone();
       let compressed = compress_qco(&nums, conf);
       compressed
     }
@@ -208,7 +198,7 @@ fn compress<T: NumberLike>(
       zstd::encode_all(raw_bytes, level).unwrap()
     }
   };
-  (Instant::now() - t, compressed)
+  (Instant::now() - t, qualified_config, compressed)
 }
 
 fn decompress<T: NumberLike>(
@@ -235,20 +225,19 @@ fn warmup_iter<T: NumberLike>(
   dataset: &str,
   config: &MultiCompressorConfig,
 ) -> Precomputed<T> {
-  println!("\ndataset warmup: {} config: {:?}", dataset, config);
-
   // read in data
   let raw_bytes = fs::read(path).expect("could not read");
   let nums = cast_to_nums(raw_bytes.clone());
 
   // compress
-  let (_, compressed) = compress(dataset, &raw_bytes, &nums, config);
+  let (_, qualified_config, compressed) = compress(&raw_bytes, &nums, config);
+  println!("\ndataset warmup: {} config: {:?}", dataset, qualified_config);
   println!("\tcompressed to {} bytes", compressed.len());
 
   // write to disk
   let mut fname = dataset.to_string();
   fname.push('_');
-  fname.push_str(&config.details());
+  fname.push_str(&qualified_config.details());
   let output_dir = format!("{}/{}", BASE_DIR, config.codec());
   let output_path = format!("{}/{}.qco", output_dir, fname);
 
@@ -288,18 +277,19 @@ fn warmup_iter<T: NumberLike>(
     raw_bytes,
     nums,
     compressed,
+    codec: qualified_config.to_string(),
   }
 }
 
 fn stats_iter<T: NumberLike>(
-  dataset: &str,
-  config: MultiCompressorConfig,
+  dataset: String,
+  config: &MultiCompressorConfig,
   precomputed: &Precomputed<T>,
   opt: &Opt,
 ) -> BenchStat {
   // compress
   let compress_dt = if !opt.no_compress {
-    let (dt, _) = compress(dataset, &precomputed.raw_bytes, &precomputed.nums, &config);
+    let (dt, _, _) = compress(&precomputed.raw_bytes, &precomputed.nums, config);
     println!("\tcompressed in {:?}", dt);
     dt
   } else {
@@ -308,7 +298,7 @@ fn stats_iter<T: NumberLike>(
 
   // decompress
   let decompress_dt = if !opt.no_decompress {
-    let (dt, _) = decompress::<T>(&precomputed.compressed, &config);
+    let (dt, _) = decompress::<T>(&precomputed.compressed, config);
     println!("\tdecompressed in {:?}", dt);
     dt
   } else {
@@ -317,7 +307,7 @@ fn stats_iter<T: NumberLike>(
 
   BenchStat {
     dataset: dataset.to_string(),
-    config,
+    codec: precomputed.codec.clone(),
     compressed_size: precomputed.compressed.len(),
     compress_dt,
     decompress_dt,
@@ -334,8 +324,12 @@ fn handle<T: NumberLike>(
   let precomputed = warmup_iter(path, &dataset, &config);
   let mut full_stat = None;
   for _ in 0..opt.iters {
-    let config = config.clone();
-    let iter_stat = stats_iter::<T>(&dataset, config.clone(), &precomputed, opt);
+    let iter_stat = stats_iter::<T>(
+      dataset.clone(),
+      &config,
+      &precomputed,
+      opt,
+    );
 
     if let Some(stat) = &mut full_stat {
       *stat += iter_stat;
@@ -358,11 +352,11 @@ fn right_pad(s: &str, size: usize) -> String {
   res
 }
 
-fn print_table_line(dataset: &str, compressor: &str, size: &str, compress_dt: &str, decompress_dt: &str) {
+fn print_table_line(dataset: &str, codec: &str, size: &str, compress_dt: &str, decompress_dt: &str) {
   println!(
     "|{}|{}|{}|{}|{}|",
     right_pad(dataset, 20),
-    right_pad(compressor, 14),
+    right_pad(codec, 14),
     left_pad(size, 10),
     left_pad(compress_dt, 13),
     left_pad(decompress_dt, 13),
@@ -376,7 +370,7 @@ fn print_stats(stats: &[BenchStat]) {
   for stat in stats {
     print_table_line(
       &stat.dataset,
-      &stat.config.to_string(),
+      &stat.codec,
       &format!("{}", stat.compressed_size),
       &format!("{:?}", stat.compress_dt / stat.iters as u32),
       &format!("{:?}", stat.decompress_dt / stat.iters as u32),
@@ -411,6 +405,8 @@ fn main() {
         handle::<i64>(&path, config, &opt)
       } else if path_str.contains("f64") {
         handle::<f64>(&path, config, &opt)
+      } else if path_str.contains("f32") {
+        handle::<f32>(&path, config, &opt)
       } else if path_str.contains("bool") {
         handle::<bool>(&path, config, &opt)
       } else if path_str.contains("micros") {
