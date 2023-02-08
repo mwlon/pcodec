@@ -78,7 +78,7 @@ fn test_insufficient_data_long_offsets() {
   match metadata.prefix_metadata {
     PrefixMetadata::Simple { prefixes } => {
       assert_eq!(prefixes.len(), 1);
-      assert_eq!(prefixes[0].k_info().k, 63);
+      assert_eq!(prefixes[0].k_info(), 64);
     }
     _ => panic!("expected simple prefix info"),
   }

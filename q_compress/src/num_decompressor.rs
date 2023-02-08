@@ -57,13 +57,7 @@ fn max_bits_read<T: NumberLike>(p: &Prefix<T>) -> usize {
     None => (1, 0),
     Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
   };
-  let k_info = p.k_info();
-  let max_bits_per_offset = if k_info.only_k_bits_lower == T::Unsigned::ZERO {
-    k_info.k
-  } else {
-    k_info.k + 1
-  };
-
+  let max_bits_per_offset = p.k_info();
   prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
 }
 
@@ -76,7 +70,7 @@ fn max_bits_overshot<T: NumberLike>(p: &Prefix<T>) -> usize {
   if p.code.is_empty() {
     0
   } else {
-    (MAX_PREFIX_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info().k)
+    (MAX_PREFIX_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info())
   }
 }
 
@@ -115,10 +109,7 @@ fn decompress_offset_dirty<U: UnsignedLike>(
   unsigneds: &mut Vec<U>,
   p: PrefixDecompressionInfo<U>,
 ) -> QCompressResult<()> {
-  let mut offset = reader.read_uint::<U>(p.k)?;
-  if offset < p.min_unambiguous_k_bit_offset && reader.read_one()? {
-    offset |= p.most_significant;
-  }
+  let offset = reader.read_uint::<U>(p.k)?;
   let unsigned = p.lower_unsigned + offset * p.gcd;
   unsigneds.push(unsigned);
   Ok(())
