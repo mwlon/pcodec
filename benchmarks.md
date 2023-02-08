@@ -1,12 +1,12 @@
 All figured reported here are calculated using a single thread on a
-2.8GHz i5 CPU, operating on in-memory data, using Rust 1.61.
+2.8GHz i5 CPU, operating on in-memory data, using Rust 1.66.
 Benchmarks were done by averaging 100 runs on a dataset of 1M numbers
 with `compression_level` 8.
 
 Speeds are reported in count of numbers compressed or decompressed
 per second with 2 significant figures.
 Compression ratio is reported with 3 significant figures.
-For the `i64` heavy-tail integers, a lomax distribution with alpha parameter 0.5 and median 1000 was used.
+For the `i64` heavy-tail integers, a Lomax distribution with alpha parameter 0.5 and median 1000 was used.
 
 | dataset                        | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
 |--------------------------------|---------------------------------|-----------------------------------|-------------------|
