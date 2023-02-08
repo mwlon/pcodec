@@ -86,6 +86,7 @@ impl<T: NumberLike> Compressor<T> {
 
     meta.compressed_body_size = self.0.writer.byte_size() - post_meta_byte_idx;
     meta.update_write_compressed_body_size(&mut self.0.writer, pre_meta_bit_idx);
+    println!("{:?}", meta);
     Ok(meta)
   }
 

@@ -377,10 +377,6 @@ fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
 ) {
   let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
   writer.write_diff(off, p.k);
-  if off < p.only_k_bits_lower || off > p.only_k_bits_upper {
-    // most significant bit, if necessary, comes last
-    writer.write_one((off & (U::ONE << p.k)) > U::ZERO);
-  }
 }
 
 #[derive(Clone, Debug)]
