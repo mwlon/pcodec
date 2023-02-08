@@ -1,5 +1,8 @@
 # `q_compress` Changelog
 
+## 0.11.6 (not yet released)
+* Improved decompression speed ~3% for non-sparse distributions.
+
 ## 0.11.5
 * Increased compression speed 4% in most cases by making `BitWriter` implementation cleverer.
 * Improved auto compression heuristics for higher compression ratio in some cases.
