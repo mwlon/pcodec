@@ -3,14 +3,26 @@ use std::io::Write;
 use futures::{StreamExt, TryStreamExt};
 use rand::Rng;
 
+use crate::{DecompressedItem, Decompressor, DecompressorConfig, DEFAULT_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::{DecompressedItem, Decompressor, DEFAULT_COMPRESSION_LEVEL};
 
-#[derive(Default)]
 struct State<T: NumberLike> {
   decompressor: Decompressor<T>,
   nums: Vec<T>,
+}
+
+// decompress in small batches
+impl<T: NumberLike> Default for State<T> {
+  fn default() -> Self {
+    Self {
+      decompressor: Decompressor::from_config(DecompressorConfig {
+        numbers_limit_per_item: 100,
+        ..Default::default()
+      }),
+      nums: Vec::new(),
+    }
+  }
 }
 
 async fn streaming_collect<T: NumberLike>(
@@ -42,25 +54,28 @@ async fn test_streaming_decompress_dense() -> QCompressResult<()> {
   for _ in 0..n {
     nums.push(rng.gen_range(0..1000));
   }
-  check_streaming_recovery(nums, 10000).await
+  check_streaming_recovery(&nums, 10000).await
 }
 
 #[tokio::test]
 async fn test_streaming_decompress_sparse() -> QCompressResult<()> {
   let mut rng = rand::thread_rng();
   let mut nums = Vec::<bool>::new();
-  let n: usize = 100000;
-  for _ in 0..n {
-    nums.push(rng.gen_bool(0.15));
+  for _ in 0..10000 {
+    nums.push(false);
   }
-  check_streaming_recovery(nums, 10).await
+  for _ in 0..1500 {
+    nums.push(rng.gen_bool(0.5));
+  }
+  check_streaming_recovery(&nums, 10).await?;
+  check_streaming_recovery(&nums, 1000).await
 }
 
 async fn check_streaming_recovery<T: NumberLike>(
-  true_nums: Vec<T>,
+  true_nums: &[T],
   blob_size: usize,
 ) -> QCompressResult<()> {
-  let compressed_bytes = crate::auto_compress(&true_nums, DEFAULT_COMPRESSION_LEVEL);
+  let compressed_bytes = crate::auto_compress(true_nums, DEFAULT_COMPRESSION_LEVEL);
   let compressed_blobs = compressed_bytes.chunks(blob_size);
 
   let input_stream = futures::stream::iter(compressed_blobs);

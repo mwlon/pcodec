@@ -30,6 +30,8 @@ pub trait RunLenOperator {
     p: PrefixDecompressionInfo<U>,
     batch_size: usize,
   );
+
+  fn batch_ongoing(len: usize, batch_size: usize) -> bool;
 }
 
 pub struct GeneralRunLenOp;
@@ -61,6 +63,11 @@ impl RunLenOperator for GeneralRunLenOp {
       }
     };
   }
+
+  #[inline]
+  fn batch_ongoing(len: usize, batch_size: usize) -> bool {
+    len < batch_size
+  }
 }
 
 pub struct TrivialRunLenOp;
@@ -74,5 +81,10 @@ impl RunLenOperator for TrivialRunLenOp {
     _batch_size: usize,
   ) {
     unchecked_decompress_offset::<U, GcdOp>(reader, unsigneds, p)
+  }
+
+  #[inline]
+  fn batch_ongoing(_len: usize, _batch_size: usize) -> bool {
+    true
   }
 }
