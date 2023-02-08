@@ -64,7 +64,6 @@ pub fn nth_order_deltas<T: NumberLike>(
   (res, moments)
 }
 
-// TODO stop wasting compute when n < u_deltas.len()
 pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &mut DeltaMoments<T::Signed>,
   u_deltas: &[T::Unsigned],

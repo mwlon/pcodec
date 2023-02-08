@@ -234,8 +234,12 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
 // n_unsigneds is small
 fn choose_max_n_prefixes(comp_level: usize, n_unsigneds: usize) -> usize {
   let log_n = (n_unsigneds as f64).log2().floor() as usize;
-  let max_comp_level_for_n = min(MAX_COMPRESSION_LEVEL, log_n / 2 + 5);
-  let real_comp_level = comp_level.saturating_sub(MAX_COMPRESSION_LEVEL - max_comp_level_for_n);
+  let fast_comp_level = log_n.saturating_sub(4);
+  let real_comp_level = if comp_level <= fast_comp_level {
+    comp_level
+  } else {
+    fast_comp_level + comp_level.saturating_sub(fast_comp_level) / 2
+  };
   min(1_usize << real_comp_level, n_unsigneds)
 }
 
@@ -584,20 +588,20 @@ mod tests {
   #[test]
   fn test_choose_max_n_prefixes() {
     assert_eq!(choose_max_n_prefixes(0, 100), 1);
-    assert_eq!(choose_max_n_prefixes(12, 100), 100);
-    assert_eq!(choose_max_n_prefixes(12, 1 << 10), 1 << 10);
-    assert_eq!(choose_max_n_prefixes(8, 1 << 10), 1 << 6);
-    assert_eq!(choose_max_n_prefixes(1, 1 << 10), 1);
+    assert_eq!(choose_max_n_prefixes(12, 200), 1 << 7);
+    assert_eq!(choose_max_n_prefixes(12, 1 << 10), 1 << 9);
+    assert_eq!(choose_max_n_prefixes(8, 1 << 10), 1 << 7);
+    assert_eq!(choose_max_n_prefixes(1, 1 << 10), 2);
     assert_eq!(
       choose_max_n_prefixes(12, (1 << 12) - 1),
-      1 << 10
+      1 << 9
     );
-    assert_eq!(choose_max_n_prefixes(12, 1 << 12), 1 << 11);
+    assert_eq!(choose_max_n_prefixes(12, 1 << 12), 1 << 10);
     assert_eq!(
-      choose_max_n_prefixes(12, (1 << 14) - 1),
+      choose_max_n_prefixes(12, (1 << 16) - 1),
       1 << 11
     );
-    assert_eq!(choose_max_n_prefixes(12, 1 << 14), 1 << 12);
+    assert_eq!(choose_max_n_prefixes(12, 1 << 16), 1 << 12);
     assert_eq!(choose_max_n_prefixes(12, 1 << 20), 1 << 12);
   }
 }

@@ -187,13 +187,12 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     &mut self,
     reader: &mut BitReader,
     unsigneds: &mut Vec<U>,
-    guaranteed_safe_num_blocks: usize,
+    mut guaranteed_safe_num_blocks: usize,
     batch_size: usize,
   ) {
-    let mut block_idx = 0;
-    while block_idx < guaranteed_safe_num_blocks && unsigneds.len() < self.n {
+    while guaranteed_safe_num_blocks > 0 && RunLenOp::batch_ongoing(unsigneds.len(), batch_size) {
       self.unchecked_decompress_num_block::<GcdOp, RunLenOp>(reader, unsigneds, batch_size);
-      block_idx += 1;
+      guaranteed_safe_num_blocks -= 1;
     }
   }
 
