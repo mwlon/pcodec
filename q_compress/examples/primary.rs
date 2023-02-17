@@ -26,6 +26,8 @@ struct Opt {
   pub no_compress: bool,
   #[structopt(long)]
   pub no_decompress: bool,
+  #[structopt(long)]
+  pub no_assertions: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -211,6 +213,7 @@ fn warmup_iter<T: NumberLike>(
   path: &Path,
   dataset: &str,
   config: &MultiCompressorConfig,
+  opt: &Opt,
 ) -> Precomputed<T> {
   // read in data
   let raw_bytes = fs::read(path).expect("could not read");
@@ -243,19 +246,21 @@ fn warmup_iter<T: NumberLike>(
   // decompress
   let (_, rec_nums) = decompress::<T>(&compressed, config);
 
-  // make sure everything came back correct
-  if rec_nums.len() != nums.len() {
-    println!(
-      "original len: {} recovered len: {}",
-      nums.len(),
-      rec_nums.len()
-    );
-    panic!("got back the wrong number of numbers!");
-  }
-  for i in 0..rec_nums.len() {
-    if !rec_nums[i].num_eq(&nums[i]) {
-      println!("{} num {} -> {}", i, nums[i], rec_nums[i]);
-      panic!("failed to recover nums by compressing and decompressing!");
+  if !opt.no_assertions {
+    // make sure everything came back correct
+    if rec_nums.len() != nums.len() {
+      println!(
+        "original len: {} recovered len: {}",
+        nums.len(),
+        rec_nums.len()
+      );
+      panic!("got back the wrong number of numbers!");
+    }
+    for i in 0..rec_nums.len() {
+      if !rec_nums[i].num_eq(&nums[i]) {
+        println!("{} num {} -> {}", i, nums[i], rec_nums[i]);
+        panic!("failed to recover nums by compressing and decompressing!");
+      }
     }
   }
 
@@ -307,7 +312,7 @@ fn stats_iter<T: NumberLike>(
 
 fn handle<T: NumberLike>(path: &Path, config: &MultiCompressorConfig, opt: &Opt) -> BenchStat {
   let dataset = basename_no_ext(path);
-  let precomputed = warmup_iter(path, &dataset, &config);
+  let precomputed = warmup_iter(path, &dataset, &config, opt);
   let mut full_stat = None;
   for _ in 0..opt.iters {
     let iter_stat = stats_iter::<T>(dataset.clone(), &config, &precomputed, opt);
