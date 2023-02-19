@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use crate::data_types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 
@@ -44,7 +42,8 @@ impl NumberLike for bool {
     vec![self as u8]
   }
 
+  // TODO should this return a corruption if not 0/1?
   fn from_bytes(bytes: &[u8]) -> QCompressResult<bool> {
-    Ok(u8::from_be_bytes(bytes.try_into().unwrap()) != 0)
+    Ok(bytes[0] != 0)
   }
 }

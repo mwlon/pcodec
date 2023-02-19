@@ -23,28 +23,31 @@ fn extend<B: AsRef<[u8]>>(words: &mut Vec<usize>, initial_bits: usize, bytes_wra
   words.reserve(n_words - words.len());
 
   let initial_bytes = initial_bits / 8;
-  let alignment = (BYTES_PER_WORD - initial_bytes % BYTES_PER_WORD) % BYTES_PER_WORD;
-  let first_word_end = min(alignment, bytes.len());
-  let last_aligned_byte =
-    alignment + (bytes.len() - first_word_end) / BYTES_PER_WORD * BYTES_PER_WORD;
-  for i in 0..first_word_end {
-    let lshift = 8 * (alignment - i - 1);
-    *words.last_mut().unwrap() |= (bytes[i] as usize) << lshift;
+  let alignment = initial_bytes % BYTES_PER_WORD;
+  let mut bytes_in_first_word = 0;
+  if alignment != 0 {
+    bytes_in_first_word = min(BYTES_PER_WORD - alignment, bytes.len());
+    for i in 0..bytes_in_first_word {
+      *words.last_mut().unwrap() |= (bytes[i] as usize) << (i + alignment);
+    }
   }
+  let last_aligned_byte =
+    bytes_in_first_word + (bytes.len() - bytes_in_first_word) / BYTES_PER_WORD * BYTES_PER_WORD;
 
-  if first_word_end < bytes.len() {
+  if bytes_in_first_word < bytes.len() {
     words.extend(
-      bytes[first_word_end..last_aligned_byte]
+      bytes[bytes_in_first_word..last_aligned_byte]
         .chunks_exact(BYTES_PER_WORD)
-        .map(|word_bytes| usize::from_be_bytes(word_bytes.try_into().unwrap())),
+        .map(|word_bytes| usize::from_le_bytes(word_bytes.try_into().unwrap())),
     );
   }
+
   if words.len() < n_words {
     let mut last_bytes = bytes[last_aligned_byte..].to_vec();
     while last_bytes.len() < BYTES_PER_WORD {
       last_bytes.push(0);
     }
-    words.push(usize::from_be_bytes(
+    words.push(usize::from_le_bytes(
       last_bytes.try_into().unwrap(),
     ));
   }

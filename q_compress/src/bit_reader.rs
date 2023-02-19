@@ -84,8 +84,7 @@ impl<'a> From<&'a BitWords> for BitReader<'a> {
 
 impl<'a> BitReader<'a> {
   /// Returns the reader's current byte index. Will return an error if the
-  /// reader is at
-  /// a misaligned position.
+  /// reader is at a misaligned position.
   pub fn aligned_byte_idx(&self) -> QCompressResult<usize> {
     if self.j % 8 == 0 {
       Ok(self.i * BYTES_PER_WORD + self.j / 8)
@@ -216,26 +215,22 @@ impl<'a> BitReader<'a> {
     self.refresh_if_needed();
 
     let n_plus_j = table_size_log + self.j;
+    let bits_read = min(table_size_log, self.total_bits - bit_idx);
+    let mut res = self.word >> self.j;
     if n_plus_j <= WORD_SIZE {
-      let rshift = WORD_SIZE - n_plus_j;
-      let res = (self.word & (usize::MAX >> self.j)) >> rshift;
-      let bits_read = min(table_size_log, self.total_bits - bit_idx);
-      self.j += bits_read;
-      Ok((bits_read, res))
+      res &= usize::MAX >> (WORD_SIZE - table_size_log);
+      self.j = n_plus_j;
     } else {
-      let remaining = n_plus_j - WORD_SIZE;
-      let mut res = (self.word & (usize::MAX >> self.j)) << remaining;
       if self.i + 1 < self.words.len() {
         self.increment_i();
-        let shift = WORD_SIZE - remaining;
-        res |= self.word >> shift;
-        self.j = remaining;
-        Ok((table_size_log, res))
+        let processed = WORD_SIZE - self.j;
+        res |= (self.word << processed) & (usize::MAX >> (WORD_SIZE - table_size_log));
+        self.j = self.j + bits_read - WORD_SIZE;
       } else {
         self.j = WORD_SIZE;
-        Ok((table_size_log - remaining, res))
       }
     }
+    Ok((bits_read, res))
   }
 
   pub fn read_varint(&mut self, jumpstart: usize) -> QCompressResult<usize> {
@@ -270,31 +265,29 @@ impl<'a> BitReader<'a> {
     self.refresh_if_needed();
 
     let n_plus_j = n + self.j;
-    let first_masked_word = self.word & (usize::MAX >> self.j);
+    let first_shifted_word = self.word >> self.j;
     if n_plus_j <= WORD_SIZE {
       // it's all in the current word
-      let shift = WORD_SIZE - n_plus_j;
       self.j = n_plus_j;
-      U::from_word(first_masked_word >> shift)
+      U::from_word(first_shifted_word & (usize::MAX >> (WORD_SIZE - n)))
     } else {
-      let mut remaining = n_plus_j - WORD_SIZE;
-      let mut res = U::from_word(first_masked_word << remaining);
+      let mut processed = WORD_SIZE - self.j;
+      let mut res = U::from_word(first_shifted_word);
       self.increment_i();
       // This for loop looks redundant/slow, as if it could just be a while
       // loop, but its bounds get evaluated at compile time and it actually
       // speeds this up.
       for _ in 0..(U::BITS - 1) / WORD_SIZE {
-        if remaining <= WORD_SIZE {
+        if n <= processed + WORD_SIZE {
           break;
         }
-        remaining -= WORD_SIZE;
-        res |= U::from_word(self.word) << remaining;
+        res |= U::from_word(self.word) << processed;
+        processed += WORD_SIZE;
         self.increment_i();
       }
 
-      self.j = remaining;
-      let shift = WORD_SIZE - remaining;
-      res | U::from_word(self.word >> shift)
+      self.j = n - processed;
+      res | (U::from_word(self.word) << processed) & (U::MAX >> (U::BITS - n))
     }
   }
 
@@ -323,7 +316,7 @@ impl<'a> BitReader<'a> {
   pub fn drain_empty_byte(&mut self, message: &str) -> QCompressResult<()> {
     if self.j % 8 != 0 {
       let end_j = 8 * bits::ceil_div(self.j, 8);
-      if self.word & (usize::MAX >> self.j) & (usize::MAX << (WORD_SIZE - end_j)) > 0 {
+      if self.word & (usize::MAX << self.j) & (usize::MAX >> (WORD_SIZE - end_j)) > 0 {
         return Err(QCompressError::corruption(message));
       }
       self.j = end_j;
@@ -364,12 +357,14 @@ impl<'a> BitReader<'a> {
 mod tests {
   use super::BitReader;
   use crate::bit_words::BitWords;
+  use crate::bit_writer::BitWriter;
+  use crate::constants::WORD_SIZE;
   use crate::errors::QCompressResult;
 
   #[test]
   fn test_bit_reader() -> QCompressResult<()> {
-    // bits: 1001 1010  0110 1011  0010 1101
-    let bytes = vec![0x9a, 0x6b, 0x2d];
+    // bits: 1001 1010  1101 0110  1011 0100
+    let bytes = vec![0x9a, 0xd6, 0xb4];
     let words = BitWords::from(&bytes);
     let mut bit_reader = BitReader::from(&words);
     assert_eq!(bit_reader.read_aligned_bytes(1)?, vec![0x9a],);
@@ -378,14 +373,61 @@ mod tests {
     assert_eq!(bit_reader.read(3)?, vec![true, false, true],);
     assert_eq!(
       bit_reader.unchecked_read_uint::<u64>(2),
-      1_u64
+      2_u64
     );
     assert_eq!(
       bit_reader.unchecked_read_uint::<u32>(3),
-      4_u32
+      1_u32
     );
-    assert_eq!(bit_reader.unchecked_read_varint(2), 6);
+    assert_eq!(bit_reader.unchecked_read_varint(2), 5);
     //leaves 1 bit left over
+    Ok(())
+  }
+
+  #[test]
+  fn test_writer_reader() {
+    let mut writer = BitWriter::default();
+    for i in 1..WORD_SIZE + 1 {
+      writer.write_usize(i, i);
+    }
+    let bytes = writer.drain_bytes();
+    let words = BitWords::from(&bytes);
+    let mut usize_reader = BitReader::from(&words);
+    let mut u64_reader = BitReader::from(&words);
+    for i in 1..WORD_SIZE + 1 {
+      assert_eq!(
+        usize_reader.unchecked_read_usize(i),
+        i
+      );
+      assert_eq!(
+        u64_reader.unchecked_read_uint::<u64>(i),
+        i as u64
+      );
+    }
+  }
+
+  #[test]
+  fn test_read_prefix_table_idx() -> QCompressResult<()> {
+    let bytes = (0..17).collect::<Vec<_>>();
+    let words = BitWords::from(bytes);
+    let mut reader = BitReader::from(&words);
+    reader.seek(56);
+    // bytes 7 and 8, all data available
+    assert_eq!(
+      reader.read_prefix_table_idx(16)?,
+      (16, 7 + (8 << 8))
+    );
+    // byte 9 and part of 10
+    assert_eq!(
+      reader.read_prefix_table_idx(11)?,
+      (11, 9 + (2 << 8))
+    );
+    reader.seek_to(120);
+    // 2 bytes left, but we'll ask for 3
+    assert_eq!(
+      reader.read_prefix_table_idx(24)?,
+      (16, 15 + (16 << 8))
+    );
     Ok(())
   }
 

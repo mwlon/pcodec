@@ -177,8 +177,7 @@ fn compress<T: NumberLike>(
           q_compress::auto_compressor_config(nums, conf.compression_level).delta_encoding_order;
       }
       *qco_conf = conf.clone();
-      let compressed = compress_qco(&nums, conf);
-      compressed
+      compress_qco(nums, conf)
     }
     MultiCompressorConfig::ZStd(level) => {
       let level = *level as i32;
