@@ -16,10 +16,8 @@ Add<Output = Self>
 + Copy
 + Debug
 + Display
-+ RemAssign
 + Shl<usize, Output = Self>
 + Shr<usize, Output = Self>
-+ Sub<Output = Self>
 {
   const ZERO: Self;
   const MAX: Self;
