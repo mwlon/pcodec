@@ -8,7 +8,7 @@ use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 
-pub(crate) trait ReadableNum:
+pub(crate) trait ReadableUint:
 Add<Output = Self>
 + BitAnd<Output = Self>
 + BitOr<Output = Self>
@@ -26,7 +26,7 @@ Add<Output = Self>
   fn from_word(word: usize) -> Self;
 }
 
-impl ReadableNum for usize {
+impl ReadableUint for usize {
   const ZERO: Self = 0;
   const MAX: Self = 0;
   const BITS: usize = WORD_SIZE;
@@ -36,7 +36,7 @@ impl ReadableNum for usize {
   }
 }
 
-impl<U: UnsignedLike> ReadableNum for U {
+impl<U: UnsignedLike> ReadableUint for U {
   const ZERO: Self = <Self as UnsignedLike>::ZERO;
   const MAX: Self = <Self as UnsignedLike>::MAX;
   const BITS: usize = <Self as UnsignedLike>::BITS;
@@ -188,7 +188,7 @@ impl<'a> BitReader<'a> {
     Ok(res)
   }
 
-  pub(crate) fn read_uint<U: ReadableNum>(&mut self, n: usize) -> QCompressResult<U> {
+  pub(crate) fn read_uint<U: ReadableUint>(&mut self, n: usize) -> QCompressResult<U> {
     self.insufficient_data_check("read_uint", n)?;
 
     Ok(self.unchecked_read_uint::<U>(n))
@@ -262,7 +262,7 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  pub(crate) fn unchecked_read_uint<U: ReadableNum>(&mut self, n: usize) -> U {
+  pub(crate) fn unchecked_read_uint<U: ReadableUint>(&mut self, n: usize) -> U {
     if n == 0 {
       return U::ZERO;
     }
