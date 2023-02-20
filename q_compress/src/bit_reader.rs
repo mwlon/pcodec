@@ -188,14 +188,14 @@ impl<'a> BitReader<'a> {
     Ok(res)
   }
 
-  pub(crate) fn read_diff<U: ReadableNum>(&mut self, n: usize) -> QCompressResult<U> {
-    self.insufficient_data_check("read_diff", n)?;
+  pub(crate) fn read_uint<U: ReadableNum>(&mut self, n: usize) -> QCompressResult<U> {
+    self.insufficient_data_check("read_uint", n)?;
 
-    Ok(self.unchecked_read_diff::<U>(n))
+    Ok(self.unchecked_read_uint::<U>(n))
   }
 
   pub fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
-    self.read_diff::<usize>(n)
+    self.read_uint::<usize>(n)
   }
 
   // returns (bits read, idx)
@@ -262,7 +262,7 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  pub(crate) fn unchecked_read_diff<U: ReadableNum>(&mut self, n: usize) -> U {
+  pub(crate) fn unchecked_read_uint<U: ReadableNum>(&mut self, n: usize) -> U {
     if n == 0 {
       return U::ZERO;
     }
@@ -300,7 +300,7 @@ impl<'a> BitReader<'a> {
 
   #[inline]
   pub fn unchecked_read_usize(&mut self, n: usize) -> usize {
-    self.unchecked_read_diff::<usize>(n)
+    self.unchecked_read_uint::<usize>(n)
   }
 
   pub fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
@@ -377,11 +377,11 @@ mod tests {
     assert!(bit_reader.read_one()?);
     assert_eq!(bit_reader.read(3)?, vec![true, false, true],);
     assert_eq!(
-      bit_reader.unchecked_read_diff::<u64>(2),
+      bit_reader.unchecked_read_uint::<u64>(2),
       1_u64
     );
     assert_eq!(
-      bit_reader.unchecked_read_diff::<u32>(3),
+      bit_reader.unchecked_read_uint::<u32>(3),
       4_u32
     );
     assert_eq!(bit_reader.unchecked_read_varint(2), 6);

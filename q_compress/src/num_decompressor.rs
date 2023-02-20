@@ -115,7 +115,7 @@ fn decompress_offset_dirty<U: UnsignedLike>(
   unsigneds: &mut Vec<U>,
   p: PrefixDecompressionInfo<U>,
 ) -> QCompressResult<()> {
-  let mut offset = reader.read_diff::<U>(p.k)?;
+  let mut offset = reader.read_uint::<U>(p.k)?;
   if offset < p.min_unambiguous_k_bit_offset && reader.read_one()? {
     offset |= p.most_significant;
   }
