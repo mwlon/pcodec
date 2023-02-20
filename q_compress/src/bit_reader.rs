@@ -197,9 +197,7 @@ impl<'a> BitReader<'a> {
   }
 
   pub fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
-    self.insufficient_data_check("read_usize", n)?;
-
-    Ok(self.unchecked_read_usize(n))
+    self.read_diff::<usize>(n)
   }
 
   // returns (bits read, idx)
@@ -302,25 +300,9 @@ impl<'a> BitReader<'a> {
     }
   }
 
-  // assumes n > 0
-  // this is pretty redundant with unchecked_read_diff
-  // maybe one day we should unify them (without increasing binary size much)
+  #[inline]
   pub fn unchecked_read_usize(&mut self, n: usize) -> usize {
-    self.refresh_if_needed();
-
-    let n_plus_j = n + self.j;
-    let first_word = self.word & (usize::MAX >> self.j);
-    if n_plus_j <= WORD_SIZE {
-      let shift = WORD_SIZE - n_plus_j;
-      self.j = n_plus_j;
-      first_word >> shift
-    } else {
-      let remaining = n_plus_j - WORD_SIZE;
-      let shift = WORD_SIZE - remaining;
-      self.increment_i();
-      self.j = remaining;
-      (first_word << remaining) | (self.word >> shift)
-    }
+    self.unchecked_read_diff::<usize>(n)
   }
 
   pub fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
