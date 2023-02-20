@@ -86,7 +86,7 @@ mod tests {
 
     let mut reader = BitReader::from(&words);
     for i in 0_u32..17 {
-      assert_eq!(reader.unchecked_read_diff::<u32>(8), i);
+      assert_eq!(reader.unchecked_read_uint::<u32>(8), i);
     }
     assert!(reader.read_one().is_err());
   }

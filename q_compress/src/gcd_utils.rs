@@ -110,7 +110,7 @@ pub fn write_gcd<U: UnsignedLike>(range: U, gcd: U, writer: &mut BitWriter) {
 
 pub fn read_gcd<U: UnsignedLike>(range: U, reader: &mut BitReader) -> QCompressResult<U> {
   if reader.read_one()? {
-    let gcd_minus_one = reader.read_diff::<U>(gcd_bits_required(range))?;
+    let gcd_minus_one = reader.read_uint::<U>(gcd_bits_required(range))?;
     if gcd_minus_one >= range {
       Err(QCompressError::corruption(format!(
         "stored GCD was {} + 1, greater than range {}",

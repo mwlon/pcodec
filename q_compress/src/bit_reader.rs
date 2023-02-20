@@ -1,10 +1,50 @@
 use std::cmp::min;
+use std::fmt::{Debug, Display};
+use std::ops::*;
 
 use crate::bit_words::BitWords;
 use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
+
+pub(crate) trait ReadableUint:
+Add<Output = Self>
++ BitAnd<Output = Self>
++ BitOr<Output = Self>
++ BitOrAssign
++ Copy
++ Debug
++ Display
++ Shl<usize, Output = Self>
++ Shr<usize, Output = Self>
+{
+  const ZERO: Self;
+  const MAX: Self;
+  const BITS: usize;
+
+  fn from_word(word: usize) -> Self;
+}
+
+impl ReadableUint for usize {
+  const ZERO: Self = 0;
+  const MAX: Self = 0;
+  const BITS: usize = WORD_SIZE;
+
+  fn from_word(word: usize) -> Self {
+    word
+  }
+}
+
+impl<U: UnsignedLike> ReadableUint for U {
+  const ZERO: Self = <Self as UnsignedLike>::ZERO;
+  const MAX: Self = <Self as UnsignedLike>::MAX;
+  const BITS: usize = <Self as UnsignedLike>::BITS;
+
+  fn from_word(word: usize) -> Self {
+    <Self as UnsignedLike>::from_word(word)
+  }
+}
 
 /// Wrapper around compressed data, enabling a
 /// [`Decompressor`][crate::Decompressor] to read
@@ -143,26 +183,19 @@ impl<'a> BitReader<'a> {
 
     // implementation not well optimized because this is only used in reading header
     for _ in 0..n {
-      if self.j == WORD_SIZE {
-        self.increment_i();
-        self.j = 0;
-      }
-      res.push(bits::bit_from_word(self.word, self.j));
-      self.j += 1;
+      res.push(self.unchecked_read_one());
     }
     Ok(res)
   }
 
-  pub fn read_diff<U: UnsignedLike>(&mut self, n: usize) -> QCompressResult<U> {
-    self.insufficient_data_check("read_diff", n)?;
+  pub(crate) fn read_uint<U: ReadableUint>(&mut self, n: usize) -> QCompressResult<U> {
+    self.insufficient_data_check("read_uint", n)?;
 
-    Ok(self.unchecked_read_diff::<U>(n))
+    Ok(self.unchecked_read_uint::<U>(n))
   }
 
   pub fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
-    self.insufficient_data_check("read_usize", n)?;
-
-    Ok(self.unchecked_read_usize(n))
+    self.read_uint::<usize>(n)
   }
 
   // returns (bits read, idx)
@@ -229,7 +262,7 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  pub fn unchecked_read_diff<U: UnsignedLike>(&mut self, n: usize) -> U {
+  pub(crate) fn unchecked_read_uint<U: ReadableUint>(&mut self, n: usize) -> U {
     if n == 0 {
       return U::ZERO;
     }
@@ -265,25 +298,9 @@ impl<'a> BitReader<'a> {
     }
   }
 
-  // assumes n > 0
-  // this is pretty redundant with unchecked_read_diff
-  // maybe one day we should unify them (without increasing binary size much)
+  #[inline]
   pub fn unchecked_read_usize(&mut self, n: usize) -> usize {
-    self.refresh_if_needed();
-
-    let n_plus_j = n + self.j;
-    let first_word = self.word & (usize::MAX >> self.j);
-    if n_plus_j <= WORD_SIZE {
-      let shift = WORD_SIZE - n_plus_j;
-      self.j = n_plus_j;
-      first_word >> shift
-    } else {
-      let remaining = n_plus_j - WORD_SIZE;
-      let shift = WORD_SIZE - remaining;
-      self.increment_i();
-      self.j = remaining;
-      (first_word << remaining) | (self.word >> shift)
-    }
+    self.unchecked_read_uint::<usize>(n)
   }
 
   pub fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
@@ -360,11 +377,11 @@ mod tests {
     assert!(bit_reader.read_one()?);
     assert_eq!(bit_reader.read(3)?, vec![true, false, true],);
     assert_eq!(
-      bit_reader.unchecked_read_diff::<u64>(2),
+      bit_reader.unchecked_read_uint::<u64>(2),
       1_u64
     );
     assert_eq!(
-      bit_reader.unchecked_read_diff::<u32>(3),
+      bit_reader.unchecked_read_uint::<u32>(3),
       4_u32
     );
     assert_eq!(bit_reader.unchecked_read_varint(2), 6);
