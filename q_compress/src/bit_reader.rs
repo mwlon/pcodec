@@ -1,10 +1,52 @@
 use std::cmp::min;
+use std::fmt::{Debug, Display};
+use std::ops::*;
 
 use crate::bit_words::BitWords;
 use crate::bits;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
+
+pub(crate) trait ReadableNum:
+Add<Output = Self>
++ BitAnd<Output = Self>
++ BitOr<Output = Self>
++ BitOrAssign
++ Copy
++ Debug
++ Display
++ RemAssign
++ Shl<usize, Output = Self>
++ Shr<usize, Output = Self>
++ Sub<Output = Self>
+{
+  const ZERO: Self;
+  const MAX: Self;
+  const BITS: usize;
+
+  fn from_word(word: usize) -> Self;
+}
+
+impl ReadableNum for usize {
+  const ZERO: Self = 0;
+  const MAX: Self = 0;
+  const BITS: usize = WORD_SIZE;
+
+  fn from_word(word: usize) -> Self {
+    word
+  }
+}
+
+impl<U: UnsignedLike> ReadableNum for U {
+  const ZERO: Self = <Self as UnsignedLike>::ZERO;
+  const MAX: Self = <Self as UnsignedLike>::MAX;
+  const BITS: usize = <Self as UnsignedLike>::BITS;
+
+  fn from_word(word: usize) -> Self {
+    <Self as UnsignedLike>::from_word(word)
+  }
+}
 
 /// Wrapper around compressed data, enabling a
 /// [`Decompressor`][crate::Decompressor] to read
@@ -143,17 +185,12 @@ impl<'a> BitReader<'a> {
 
     // implementation not well optimized because this is only used in reading header
     for _ in 0..n {
-      if self.j == WORD_SIZE {
-        self.increment_i();
-        self.j = 0;
-      }
-      res.push(bits::bit_from_word(self.word, self.j));
-      self.j += 1;
+      res.push(self.unchecked_read_one());
     }
     Ok(res)
   }
 
-  pub fn read_diff<U: UnsignedLike>(&mut self, n: usize) -> QCompressResult<U> {
+  pub(crate) fn read_diff<U: ReadableNum>(&mut self, n: usize) -> QCompressResult<U> {
     self.insufficient_data_check("read_diff", n)?;
 
     Ok(self.unchecked_read_diff::<U>(n))
@@ -229,7 +266,7 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  pub fn unchecked_read_diff<U: UnsignedLike>(&mut self, n: usize) -> U {
+  pub(crate) fn unchecked_read_diff<U: ReadableNum>(&mut self, n: usize) -> U {
     if n == 0 {
       return U::ZERO;
     }
