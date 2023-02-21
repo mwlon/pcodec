@@ -28,7 +28,7 @@ Add<Output = Self>
 
 impl ReadableUint for usize {
   const ZERO: Self = 0;
-  const MAX: Self = 0;
+  const MAX: Self = usize::MAX;
   const BITS: usize = WORD_SIZE;
 
   fn from_word(word: usize) -> Self {
