@@ -28,7 +28,7 @@ fn extend<B: AsRef<[u8]>>(words: &mut Vec<usize>, initial_bits: usize, bytes_wra
   if alignment != 0 {
     bytes_in_first_word = min(BYTES_PER_WORD - alignment, bytes.len());
     for i in 0..bytes_in_first_word {
-      *words.last_mut().unwrap() |= (bytes[i] as usize) << (i + alignment);
+      *words.last_mut().unwrap() |= (bytes[i] as usize) << ((i + alignment) * 8);
     }
   }
   let last_aligned_byte =
@@ -47,9 +47,10 @@ fn extend<B: AsRef<[u8]>>(words: &mut Vec<usize>, initial_bits: usize, bytes_wra
     while last_bytes.len() < BYTES_PER_WORD {
       last_bytes.push(0);
     }
-    words.push(usize::from_le_bytes(
-      last_bytes.try_into().unwrap(),
-    ));
+    let word = usize::from_le_bytes(
+      last_bytes.clone().try_into().unwrap(),
+    );
+    words.push(word);
   }
   total_bits
 }

@@ -78,6 +78,8 @@ pub trait UnsignedLike:
 
   fn to_f64(self) -> f64;
 
+  fn leading_zeros(self) -> usize;
+
   /// Shifts the unsigned integer right and returns its lowest bits as a
   /// `usize`.
   /// For example,

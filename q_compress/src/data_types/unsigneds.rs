@@ -15,6 +15,10 @@ macro_rules! impl_unsigned {
         word as Self
       }
 
+      fn leading_zeros(self) -> usize {
+        self.leading_zeros() as usize
+      }
+
       fn to_f64(self) -> f64 {
         self as f64
       }

@@ -74,7 +74,7 @@ impl<T: NumberLike> Prefix<T> {
       0
     } else {
       // TODO is there a floating point error here?
-      diff.to_f64().log2().floor() as usize + 1
+      T::Unsigned::BITS - diff.leading_zeros()
     }
   }
 }
