@@ -125,7 +125,8 @@ impl<T: NumberLike> Decompressor<T> {
     } else {
       Err(QCompressError::insufficient_data(format!(
         "unable to skip chunk body to bit index {} when only {} bits available",
-        skipped_bit_idx, self.0.words.total_bits(),
+        skipped_bit_idx,
+        self.0.words.total_bits(),
       )))
     }
   }

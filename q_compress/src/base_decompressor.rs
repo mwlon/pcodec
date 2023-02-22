@@ -5,7 +5,7 @@ use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::body_decompressor::BodyDecompressor;
 use crate::chunk_metadata::ChunkMetadata;
-use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, WORD_SIZE};
+use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};

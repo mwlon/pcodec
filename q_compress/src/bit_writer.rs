@@ -120,9 +120,7 @@ impl BitWriter {
     }
 
     let mut processed = WORD_SIZE - self.j;
-    self
-      .words
-      .push(self.word);
+    self.words.push(self.word);
 
     for _ in 0..(U::BITS - 1) / WORD_SIZE {
       if n <= processed + WORD_SIZE {

@@ -1,7 +1,6 @@
 use std::cmp::min;
 use std::fmt::{Debug, Display};
 use std::ops::*;
-use std::convert::TryInto;
 
 use crate::bit_words::BitWords;
 use crate::bits;
@@ -10,16 +9,16 @@ use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 
 pub(crate) trait ReadableUint:
-Add<Output = Self>
-+ BitAnd<Output = Self>
-+ BitOr<Output = Self>
-+ BitAndAssign
-+ BitOrAssign
-+ Copy
-+ Debug
-+ Display
-+ Shl<usize, Output = Self>
-+ Shr<usize, Output = Self>
+  Add<Output = Self>
+  + BitAnd<Output = Self>
+  + BitOr<Output = Self>
+  + BitAndAssign
+  + BitOrAssign
+  + Copy
+  + Debug
+  + Display
+  + Shl<usize, Output = Self>
+  + Shr<usize, Output = Self>
 {
   const ZERO: Self;
   const MAX: Self;
