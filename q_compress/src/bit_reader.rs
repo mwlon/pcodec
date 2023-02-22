@@ -24,7 +24,7 @@ Add<Output = Self>
   const ZERO: Self;
   const MAX: Self;
   const BITS: usize;
-  const MAX_N_WORDS: usize = (Self::BITS + WORD_SIZE + 6) / WORD_SIZE;
+  const MAX_EXTRA_WORDS: usize = (Self::BITS + 6) / WORD_SIZE;
 
   fn from_word(word: usize) -> Self;
 }
@@ -66,6 +66,7 @@ pub struct BitReader<'a> {
   // * whenever i changes, we need to update word as well
   // * if we've reached the end of words, word will be 0, so be sure we're not exceeding bounds
   bytes: &'a [u8],
+  ptr: *const u8,
   bit_idx: usize,
   total_bits: usize,
 }
@@ -74,6 +75,7 @@ impl<'a> From<&'a BitWords> for BitReader<'a> {
   fn from(bit_words: &'a BitWords) -> Self {
     BitReader {
       bytes: &bit_words.bytes,
+      ptr: bit_words.bytes.as_ptr(),
       bit_idx: 0,
       total_bits: bit_words.total_bits(),
     }
@@ -212,7 +214,8 @@ impl<'a> BitReader<'a> {
   }
 
   fn unchecked_word(&self, i: usize) -> usize {
-    usize::from_le_bytes(self.bytes[i..i + BYTES_PER_WORD].try_into().unwrap())
+    unsafe { *(self.ptr.add(i) as *const usize) }
+    // usize::from_le_bytes(self.bytes[i..i + BYTES_PER_WORD].try_into().unwrap())
   }
 
   /// Returns the next bit. Will panic if we have reached the end of the
@@ -224,10 +227,8 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  // max_n_words should always be a compile-time constant
-  #[inline]
-  fn unchecked_read_uint_internal<U: ReadableUint>(&mut self, n: usize, max_n_words: usize, can_be_zero: bool) -> U {
-    if can_be_zero && n == 0 {
+  pub(crate) fn unchecked_read_uint<U: ReadableUint>(&mut self, n: usize) -> U {
+    if n == 0 {
       return U::ZERO;
     }
 
@@ -238,7 +239,7 @@ impl<'a> BitReader<'a> {
     // This for loop looks redundant/slow, as if it could just be a while
     // loop, but its bounds get evaluated at compile time and it actually
     // speeds this up.
-    for _ in 0..max_n_words - 1 {
+    for _ in 0..U::MAX_EXTRA_WORDS {
       if processed >= n {
         break;
       }
@@ -251,16 +252,12 @@ impl<'a> BitReader<'a> {
     res & (U::MAX >> (U::BITS - n))
   }
 
-  pub(crate) fn unchecked_read_uint<U: ReadableUint>(&mut self, n: usize) -> U {
-    // important that our bound on the number of words is a constant
-    self.unchecked_read_uint_internal(n, U::MAX_N_WORDS, true)
-  }
-
   pub fn unchecked_read_prefix_table_idx(&mut self, table_size_log: usize) -> usize {
-    self.unchecked_read_uint_internal(table_size_log, 1, false)
+    let (i, j) = self.idxs();
+    self.bit_idx += table_size_log;
+    (self.unchecked_word(i) >> j) & (usize::MAX >> (WORD_SIZE - table_size_log))
   }
 
-  #[inline]
   pub fn unchecked_read_usize(&mut self, n: usize) -> usize {
     self.unchecked_read_uint::<usize>(n)
   }
