@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -54,6 +54,7 @@ pub trait UnsignedLike:
   Add<Output = Self>
   + BitAnd<Output = Self>
   + BitOr<Output = Self>
+  + BitAndAssign
   + BitOrAssign
   + Copy
   + Debug

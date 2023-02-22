@@ -117,7 +117,7 @@ impl<T: NumberLike> Decompressor<T> {
     };
 
     let skipped_bit_idx = self.0.state.bit_idx + bits_remaining;
-    if skipped_bit_idx <= self.0.words.total_bits {
+    if skipped_bit_idx <= self.0.words.total_bits() {
       self.0.state.bit_idx = skipped_bit_idx;
       self.0.state.chunk_meta = None;
       self.0.state.body_decompressor = None;
@@ -125,7 +125,7 @@ impl<T: NumberLike> Decompressor<T> {
     } else {
       Err(QCompressError::insufficient_data(format!(
         "unable to skip chunk body to bit index {} when only {} bits available",
-        skipped_bit_idx, self.0.words.total_bits,
+        skipped_bit_idx, self.0.words.total_bits(),
       )))
     }
   }

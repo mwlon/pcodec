@@ -1,9 +1,5 @@
 use crate::data_types::UnsignedLike;
 
-pub fn bit_from_word(word: usize, j: usize) -> bool {
-  (word & (1 << j)) > 0
-}
-
 pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
   let mut res = Vec::new();
   let mut i = 0;
