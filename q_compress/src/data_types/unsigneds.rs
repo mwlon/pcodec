@@ -11,6 +11,7 @@ macro_rules! impl_unsigned {
       const MAX: Self = Self::MAX;
       const BITS: usize = Self::BITS as usize;
 
+      #[inline]
       fn from_word(word: usize) -> Self {
         word as Self
       }

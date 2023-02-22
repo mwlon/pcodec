@@ -214,6 +214,7 @@ impl<'a> BitReader<'a> {
     Ok(res)
   }
 
+  #[inline]
   fn unchecked_word(&self, i: usize) -> usize {
     unsafe { *(self.ptr.add(i) as *const usize) }
     // usize::from_le_bytes(self.bytes[i..i + BYTES_PER_WORD].try_into().unwrap())
@@ -259,12 +260,8 @@ impl<'a> BitReader<'a> {
     (self.unchecked_word(i) >> j) & (usize::MAX >> (WORD_SIZE - table_size_log))
   }
 
-  pub fn unchecked_read_usize(&mut self, n: usize) -> usize {
-    self.unchecked_read_uint::<usize>(n)
-  }
-
   pub fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
-    let mut res = self.unchecked_read_usize(jumpstart);
+    let mut res = self.unchecked_read_uint::<usize>(jumpstart);
     for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
       if self.unchecked_read_one() {
         if self.unchecked_read_one() {
@@ -276,7 +273,6 @@ impl<'a> BitReader<'a> {
     }
     res
   }
-
 
   // Seek to the end of the byte.
   // Used to skip to the next metadata or body section of the file, since they
@@ -357,7 +353,7 @@ mod tests {
     let mut u64_reader = BitReader::from(&words);
     for i in 1..WORD_SIZE + 1 {
       assert_eq!(
-        usize_reader.unchecked_read_usize(i),
+        usize_reader.unchecked_read_uint::<usize>(i),
         i
       );
       assert_eq!(
