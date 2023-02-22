@@ -87,8 +87,9 @@ impl<'a> BitReader<'a> {
   /// reader is at
   /// a misaligned position.
   pub fn aligned_byte_idx(&self) -> QCompressResult<usize> {
-    if self.bit_idx % 8 == 0 {
-      Ok(self.bit_idx / 8)
+    let (i, j) = self.idxs();
+    if j == 0 {
+      Ok(i)
     } else {
       Err(QCompressError::invalid_argument(format!(
         "cannot get aligned byte index on misaligned bit reader at bit {}",

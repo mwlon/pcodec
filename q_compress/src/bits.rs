@@ -1,20 +1,9 @@
 use crate::data_types::UnsignedLike;
 
 pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
-  let mut res = Vec::new();
-  let mut i = 0;
-  while i < bits.len() {
-    let mut byte = 0_u8;
-    for _ in 0..8 {
-      byte <<= 1;
-      if i < bits.len() {
-        if bits[i] {
-          byte |= 1;
-        }
-        i += 1;
-      }
-    }
-    res.push(byte);
+  let mut res = vec![0; ceil_div(bits.len(), 8)];
+  for i in 0..bits.len() {
+    res[i / 8] |= (bits[i] as u8) << (i % 8);
   }
   res
 }
@@ -23,7 +12,7 @@ pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
   let mut res = Vec::with_capacity(bytes.len() * 8);
   for b in bytes {
     for i in 0_usize..8 {
-      res.push(b & (1 << (7 - i)) > 0);
+      res.push((b >> i) & 1 > 0);
     }
   }
   res
