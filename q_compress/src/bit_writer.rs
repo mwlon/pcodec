@@ -84,7 +84,7 @@ impl BitWriter {
       return;
     }
     // mask out any more significant digits of x
-    x = x & (usize::MAX >> (WORD_SIZE - n));
+    x &= usize::MAX >> (WORD_SIZE - n);
 
     self.refresh_if_needed();
 
@@ -108,7 +108,7 @@ impl BitWriter {
     }
 
     // mask out any more significant digits of x
-    x = x & (U::MAX >> (U::BITS - n));
+    x &= U::MAX >> (U::BITS - n);
 
     self.refresh_if_needed();
 
