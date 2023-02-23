@@ -95,7 +95,7 @@ pub fn use_gcd_arithmetic<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
 }
 
 pub fn gcd_bits_required<U: UnsignedLike>(range: U) -> usize {
-  range.to_f64().log2().ceil() as usize
+  U::BITS - (range.leading_zeros())
 }
 
 // to store gcd, we write and read gcd - 1 in the minimum number of bits

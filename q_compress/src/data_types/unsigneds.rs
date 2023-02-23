@@ -20,10 +20,6 @@ macro_rules! impl_unsigned {
         self.leading_zeros() as usize
       }
 
-      fn to_f64(self) -> f64 {
-        self as f64
-      }
-
       fn rshift_word(self, shift: usize) -> usize {
         (self >> shift) as usize
       }

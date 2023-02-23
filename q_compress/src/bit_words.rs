@@ -30,7 +30,7 @@ impl BitWords {
   }
 
   pub fn extend_bytes<B: AsRef<[u8]>>(&mut self, bytes: B) {
-    self.bytes.truncate(self.bytes.len() - BYTES_PER_WORD);
+    self.bytes.truncate(self.bytes.len().saturating_sub(BYTES_PER_WORD));
     self.bytes.reserve((bytes.as_ref().len() + BYTES_PER_WORD).saturating_sub(self.bytes.len()));
     self.bytes.extend(bytes.as_ref());
     self.bytes.extend(&vec![0; BYTES_PER_WORD]);
