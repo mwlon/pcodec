@@ -32,6 +32,12 @@ impl<S: SignedLike> DeltaMoments<S> {
   }
 }
 
+#[inline(never)]
+fn nums_to_signeds<T: NumberLike>(nums: &[T]) -> Vec<T::Signed> {
+  nums.iter().map(|x| x.to_signed()).collect::<Vec<_>>()
+}
+
+#[inline(never)]
 fn first_order_deltas_in_place<S: SignedLike>(nums: &mut Vec<S>) {
   if nums.is_empty() {
     return;
@@ -50,7 +56,7 @@ pub fn nth_order_deltas<T: NumberLike>(
   data_page_idxs: &[usize],
 ) -> (Vec<T::Signed>, Vec<DeltaMoments<T::Signed>>) {
   let mut data_page_moments = vec![Vec::with_capacity(order); data_page_idxs.len()];
-  let mut res = nums.iter().map(|x| x.to_signed()).collect::<Vec<_>>();
+  let mut res = nums_to_signeds(nums);
   for _ in 0..order {
     for (page_idx, &i) in data_page_idxs.iter().enumerate() {
       data_page_moments[page_idx].push(res.get(i).copied().unwrap_or(T::Signed::ZERO));
