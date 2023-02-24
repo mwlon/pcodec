@@ -72,7 +72,7 @@ pub fn nth_order_deltas<T: NumberLike>(
 
 pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &mut DeltaMoments<T::Signed>,
-  u_deltas: &[T::Unsigned],
+  u_deltas: Vec<T::Unsigned>,
   n: usize,
 ) -> Vec<T> {
   let order = delta_moments.order();
@@ -121,15 +121,15 @@ mod tests {
 
     // full
     let mut new_moments = moments.clone();
-    let nums = reconstruct_nums::<i16>(&mut new_moments, &u_deltas, 5);
+    let nums = reconstruct_nums::<i16>(&mut new_moments, u_deltas.clone(), 5);
     assert_eq!(nums, vec![77, 78, 80, 84, 85]);
 
     //partial
-    let nums = reconstruct_nums::<i16>(&mut moments, &u_deltas, 3);
+    let nums = reconstruct_nums::<i16>(&mut moments, u_deltas.clone(), 3);
     assert_eq!(nums, vec![77, 78, 80]);
     assert_eq!(moments, DeltaMoments::new(vec![84, 1]));
 
-    let nums = reconstruct_nums::<i16>(&mut moments, &u_deltas[3..], 2);
+    let nums = reconstruct_nums::<i16>(&mut moments, u_deltas[3..].to_vec(), 2);
     assert_eq!(nums, vec![84, 85]);
   }
 }

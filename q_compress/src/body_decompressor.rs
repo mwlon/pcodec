@@ -84,11 +84,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
         } else {
           u_deltas.unsigneds.len()
         };
-        let nums = delta_encoding::reconstruct_nums(
-          delta_moments,
-          &u_deltas.unsigneds,
-          batch_size,
-        );
+        let nums = delta_encoding::reconstruct_nums(delta_moments, u_deltas.unsigneds, batch_size);
         *nums_processed += batch_size;
         Ok(Numbers {
           nums,

@@ -26,10 +26,12 @@ macro_rules! impl_signed {
       type Signed = Self;
       type Unsigned = $unsigned;
 
+      #[inline]
       fn to_signed(self) -> Self::Signed {
         self
       }
 
+      #[inline]
       fn from_signed(signed: Self::Signed) -> Self {
         signed
       }
