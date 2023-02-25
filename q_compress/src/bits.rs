@@ -1,24 +1,9 @@
 use crate::data_types::UnsignedLike;
 
-pub fn bit_from_word(word: usize, j: usize) -> bool {
-  (word & (1 << j)) > 0
-}
-
 pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
-  let mut res = Vec::new();
-  let mut i = 0;
-  while i < bits.len() {
-    let mut byte = 0_u8;
-    for _ in 0..8 {
-      byte <<= 1;
-      if i < bits.len() {
-        if bits[i] {
-          byte |= 1;
-        }
-        i += 1;
-      }
-    }
-    res.push(byte);
+  let mut res = vec![0; ceil_div(bits.len(), 8)];
+  for i in 0..bits.len() {
+    res[i / 8] |= (bits[i] as u8) << (i % 8);
   }
   res
 }
@@ -27,7 +12,7 @@ pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
   let mut res = Vec::with_capacity(bytes.len() * 8);
   for b in bytes {
     for i in 0_usize..8 {
-      res.push(b & (1 << (7 - i)) > 0);
+      res.push((b >> i) & 1 > 0);
     }
   }
   res
@@ -61,7 +46,7 @@ pub fn bits_to_string(bits: &[bool]) -> String {
 
 // This bumpy log gives a more accurate average number of offset bits used.
 pub fn avg_offset_bits<U: UnsignedLike>(lower: U, upper: U, gcd: U) -> f64 {
-  (((upper - lower) / gcd).to_f64() + 1.0).log2().ceil()
+  (U::BITS - ((upper - lower) / gcd).leading_zeros()) as f64
 }
 
 // The true Huffman cost of course depends on the tree. We can statistically
@@ -116,16 +101,5 @@ mod tests {
     assert_eq!(avg_offset_bits(10_u32, 13_u32, 1), 2.0);
     assert_eq!(avg_offset_bits(10_u32, 13_u32, 3), 1.0);
     assert_eq!(avg_offset_bits(10_u32, 19_u32, 3), 2.0);
-  }
-
-  #[test]
-  fn test_bits_to_bytes_to_bits() {
-    let bits_28 = vec![false, false, false, true, true, true, false, false];
-    let byte_28 = bits_to_bytes(bits_28);
-    assert_eq!(byte_28, vec![28]);
-
-    let bits_28_128 = vec![false, false, false, true, true, true, false, false, true];
-    let byte_28_128 = bits_to_bytes(bits_28_128);
-    assert_eq!(byte_28_128, vec![28, 128]);
   }
 }

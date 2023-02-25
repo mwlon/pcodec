@@ -75,7 +75,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
           table_size_log,
           children,
         } => {
-          let idx = reader.unchecked_read_usize(*table_size_log);
+          let idx = reader.unchecked_read_prefix_table_idx(*table_size_log);
           node = &children[idx];
           read_depth += table_size_log;
         }

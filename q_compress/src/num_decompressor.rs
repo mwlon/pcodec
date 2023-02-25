@@ -28,7 +28,12 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
     let base_idx = bits::bits_to_usize(&p.code);
     let step = 1_usize << p.code.len();
     let n_leafs = 1_usize << (max_depth - p.code.len());
-    for is_specified in is_specifieds.iter_mut().skip(base_idx).step_by(step).take(n_leafs) {
+    for is_specified in is_specifieds
+      .iter_mut()
+      .skip(base_idx)
+      .step_by(step)
+      .take(n_leafs)
+    {
       if *is_specified {
         return Err(QCompressError::corruption(format!(
           "multiple prefixes for {} found in chunk metadata",

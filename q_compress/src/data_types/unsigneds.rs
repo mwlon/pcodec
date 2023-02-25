@@ -11,16 +11,13 @@ macro_rules! impl_unsigned {
       const MAX: Self = Self::MAX;
       const BITS: usize = Self::BITS as usize;
 
+      #[inline]
       fn from_word(word: usize) -> Self {
         word as Self
       }
 
       fn leading_zeros(self) -> usize {
         self.leading_zeros() as usize
-      }
-
-      fn to_f64(self) -> f64 {
-        self as f64
       }
 
       fn rshift_word(self, shift: usize) -> usize {

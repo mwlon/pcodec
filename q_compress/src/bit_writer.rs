@@ -84,7 +84,7 @@ impl BitWriter {
       return;
     }
     // mask out any more significant digits of x
-    x = x & (usize::MAX >> (WORD_SIZE - n));
+    x &= usize::MAX >> (WORD_SIZE - n);
 
     self.refresh_if_needed();
 
@@ -108,7 +108,7 @@ impl BitWriter {
     }
 
     // mask out any more significant digits of x
-    x = x & (U::MAX >> (U::BITS - n));
+    x &= U::MAX >> (U::BITS - n);
 
     self.refresh_if_needed();
 
@@ -120,9 +120,7 @@ impl BitWriter {
     }
 
     let mut processed = WORD_SIZE - self.j;
-    self
-      .words
-      .push(self.word);
+    self.words.push(self.word);
 
     for _ in 0..(U::BITS - 1) / WORD_SIZE {
       if n <= processed + WORD_SIZE {

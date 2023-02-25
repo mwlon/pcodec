@@ -5,7 +5,7 @@ use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::body_decompressor::BodyDecompressor;
 use crate::chunk_metadata::ChunkMetadata;
-use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, WORD_SIZE};
+use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
@@ -254,10 +254,10 @@ impl<T: NumberLike> BaseDecompressor<T> {
   }
 
   pub fn free_compressed_memory(&mut self) {
-    let words_to_free = self.state.bit_idx / WORD_SIZE;
-    if words_to_free > 0 {
-      self.words.truncate_left(words_to_free);
-      self.state.bit_idx -= words_to_free * WORD_SIZE;
+    let bytes_to_free = self.state.bit_idx / 8;
+    if bytes_to_free > 0 {
+      self.words.truncate_left(bytes_to_free);
+      self.state.bit_idx -= bytes_to_free * 8;
     }
   }
 }
