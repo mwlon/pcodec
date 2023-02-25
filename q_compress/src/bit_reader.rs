@@ -65,7 +65,7 @@ pub struct BitReader<'a> {
   // * whenever i changes, we need to update word as well
   // * if we've reached the end of words, word will be 0, so be sure we're not exceeding bounds
   bytes: &'a [u8],
-  ptr: *const u8,
+  // ptr: *const u8,
   bit_idx: usize,
   total_bits: usize,
 }
@@ -74,7 +74,7 @@ impl<'a> From<&'a BitWords> for BitReader<'a> {
   fn from(bit_words: &'a BitWords) -> Self {
     BitReader {
       bytes: &bit_words.bytes,
-      ptr: bit_words.bytes.as_ptr(),
+      // ptr: bit_words.bytes.as_ptr(),
       bit_idx: 0,
       total_bits: bit_words.total_bits(),
     }
@@ -215,8 +215,9 @@ impl<'a> BitReader<'a> {
 
   #[inline]
   fn unchecked_word(&self, i: usize) -> usize {
-    unsafe { *(self.ptr.add(i) as *const usize) }
-    // usize::from_le_bytes(self.bytes[i..i + BYTES_PER_WORD].try_into().unwrap())
+    // we can do this because BitWords made sure to pad self.bytes
+    let raw_bytes = unsafe { *(self.bytes.as_ptr().add(i) as *const [u8; BYTES_PER_WORD]) };
+    usize::from_le_bytes(raw_bytes)
   }
 
   /// Returns the next bit. Will panic if we have reached the end of the
