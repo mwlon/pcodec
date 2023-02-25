@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 
 use crate::bit_reader::BitReader;
-use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_ENTRIES, MAX_PREFIX_TABLE_SIZE_LOG};
+use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, MAX_PREFIX_TABLE_SIZE_LOG};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
@@ -340,7 +340,8 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     // we'll modify this result as we decode numbers and if we encounter an insufficient data error
     let finished_body = limit >= self.n - self.state.n_processed;
     let mut res = Unsigneds {
-      unsigneds: Vec::with_capacity(batch_size + 10),
+      // to make things faster downstream, we pad the unsigneds length slightly
+      unsigneds: Vec::with_capacity(batch_size + MAX_DELTA_ENCODING_ORDER),
       finished_body,
     };
     let unsigneds = &mut res.unsigneds;
