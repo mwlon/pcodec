@@ -1,6 +1,6 @@
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::{NumberLike, SignedLike};
+use crate::data_types::{NumberLike, SignedLike, UnsignedLike};
 use crate::errors::QCompressResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -72,22 +72,22 @@ pub fn nth_order_deltas<T: NumberLike>(
 
 pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &mut DeltaMoments<T::Signed>,
-  u_deltas: Vec<T::Unsigned>,
+  mut u_deltas: Vec<T::Unsigned>,
   n: usize,
 ) -> Vec<T> {
   let order = delta_moments.order();
   let mut res = Vec::with_capacity(n);
+  for _ in 0..order {
+    u_deltas.push(T::Unsigned::ZERO);
+  }
 
   let moments = &mut delta_moments.moments;
   for i in 0..n {
+    let delta = T::Signed::from_unsigned(u_deltas[i]);
     res.push(T::from_signed(moments[0]));
     for o in 0..order - 1 {
       moments[o] = moments[o].wrapping_add(moments[o + 1]);
     }
-    let delta = u_deltas
-      .get(i)
-      .map(|&u| T::Signed::from_unsigned(u))
-      .unwrap_or(T::Signed::ZERO);
     moments[order - 1] = moments[order - 1].wrapping_add(delta);
   }
   res

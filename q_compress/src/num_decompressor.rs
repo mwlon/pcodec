@@ -340,7 +340,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     // we'll modify this result as we decode numbers and if we encounter an insufficient data error
     let finished_body = limit >= self.n - self.state.n_processed;
     let mut res = Unsigneds {
-      unsigneds: Vec::with_capacity(batch_size),
+      unsigneds: Vec::with_capacity(batch_size + 10),
       finished_body,
     };
     let unsigneds = &mut res.unsigneds;
