@@ -17,14 +17,17 @@ macro_rules! impl_float_number {
       type Unsigned = $unsigned;
 
       // miraculously, this should preserve ordering
+      #[inline]
       fn to_signed(self) -> Self::Signed {
         self.to_bits() as Self::Signed
       }
 
+      #[inline]
       fn from_signed(signed: Self::Signed) -> Self {
         Self::from_bits(signed as Self::Unsigned)
       }
 
+      #[inline]
       fn to_unsigned(self) -> Self::Unsigned {
         let mem_layout = self.to_bits();
         if mem_layout & $sign_bit_mask > 0 {
@@ -36,6 +39,7 @@ macro_rules! impl_float_number {
         }
       }
 
+      #[inline]
       fn from_unsigned(off: Self::Unsigned) -> Self {
         if off & $sign_bit_mask > 0 {
           // positive float

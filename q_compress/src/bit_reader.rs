@@ -9,15 +9,15 @@ use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 
 pub(crate) trait ReadableUint:
-Add<Output = Self>
-+ BitAnd<Output = Self>
-+ BitOr<Output = Self>
-+ BitOrAssign
-+ Copy
-+ Debug
-+ Display
-+ Shl<usize, Output = Self>
-+ Shr<usize, Output = Self>
+  Add<Output = Self>
+  + BitAnd<Output = Self>
+  + BitOr<Output = Self>
+  + BitOrAssign
+  + Copy
+  + Debug
+  + Display
+  + Shl<usize, Output = Self>
+  + Shr<usize, Output = Self>
 {
   const ZERO: Self;
   const MAX: Self;

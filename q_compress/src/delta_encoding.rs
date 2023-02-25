@@ -1,6 +1,6 @@
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::{NumberLike, SignedLike};
+use crate::data_types::{NumberLike, SignedLike, UnsignedLike};
 use crate::errors::QCompressResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -32,6 +32,12 @@ impl<S: SignedLike> DeltaMoments<S> {
   }
 }
 
+#[inline(never)]
+fn nums_to_signeds<T: NumberLike>(nums: &[T]) -> Vec<T::Signed> {
+  nums.iter().map(|x| x.to_signed()).collect::<Vec<_>>()
+}
+
+#[inline(never)]
 fn first_order_deltas_in_place<S: SignedLike>(nums: &mut Vec<S>) {
   if nums.is_empty() {
     return;
@@ -50,7 +56,7 @@ pub fn nth_order_deltas<T: NumberLike>(
   data_page_idxs: &[usize],
 ) -> (Vec<T::Signed>, Vec<DeltaMoments<T::Signed>>) {
   let mut data_page_moments = vec![Vec::with_capacity(order); data_page_idxs.len()];
-  let mut res = nums.iter().map(|x| x.to_signed()).collect::<Vec<_>>();
+  let mut res = nums_to_signeds(nums);
   for _ in 0..order {
     for (page_idx, &i) in data_page_idxs.iter().enumerate() {
       data_page_moments[page_idx].push(res.get(i).copied().unwrap_or(T::Signed::ZERO));
@@ -64,27 +70,44 @@ pub fn nth_order_deltas<T: NumberLike>(
   (res, moments)
 }
 
-pub fn reconstruct_nums<T: NumberLike>(
+fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
   delta_moments: &mut DeltaMoments<T::Signed>,
-  u_deltas: &[T::Unsigned],
+  mut u_deltas: Vec<T::Unsigned>,
   n: usize,
 ) -> Vec<T> {
-  let order = delta_moments.order();
   let mut res = Vec::with_capacity(n);
+  for _ in 0..ORDER {
+    u_deltas.push(T::Unsigned::ZERO);
+  }
 
   let moments = &mut delta_moments.moments;
   for i in 0..n {
+    let delta = T::Signed::from_unsigned(u_deltas[i]);
     res.push(T::from_signed(moments[0]));
-    for o in 0..order - 1 {
+
+    for o in 0..ORDER - 1 {
       moments[o] = moments[o].wrapping_add(moments[o + 1]);
     }
-    let delta = u_deltas
-      .get(i)
-      .map(|&u| T::Signed::from_unsigned(u))
-      .unwrap_or(T::Signed::ZERO);
-    moments[order - 1] = moments[order - 1].wrapping_add(delta);
+    moments[ORDER - 1] = moments[ORDER - 1].wrapping_add(delta);
   }
   res
+}
+
+pub fn reconstruct_nums<T: NumberLike>(
+  delta_moments: &mut DeltaMoments<T::Signed>,
+  u_deltas: Vec<T::Unsigned>,
+  n: usize,
+) -> Vec<T> {
+  match delta_moments.order() {
+    1 => reconstruct_nums_w_order::<T, 1>(delta_moments, u_deltas, n),
+    2 => reconstruct_nums_w_order::<T, 2>(delta_moments, u_deltas, n),
+    3 => reconstruct_nums_w_order::<T, 3>(delta_moments, u_deltas, n),
+    4 => reconstruct_nums_w_order::<T, 4>(delta_moments, u_deltas, n),
+    5 => reconstruct_nums_w_order::<T, 5>(delta_moments, u_deltas, n),
+    6 => reconstruct_nums_w_order::<T, 6>(delta_moments, u_deltas, n),
+    7 => reconstruct_nums_w_order::<T, 7>(delta_moments, u_deltas, n),
+    _ => panic!("this order should be unreachable"),
+  }
 }
 
 #[cfg(test)]
@@ -115,15 +138,15 @@ mod tests {
 
     // full
     let mut new_moments = moments.clone();
-    let nums = reconstruct_nums::<i16>(&mut new_moments, &u_deltas, 5);
+    let nums = reconstruct_nums::<i16>(&mut new_moments, u_deltas.clone(), 5);
     assert_eq!(nums, vec![77, 78, 80, 84, 85]);
 
     //partial
-    let nums = reconstruct_nums::<i16>(&mut moments, &u_deltas, 3);
+    let nums = reconstruct_nums::<i16>(&mut moments, u_deltas.clone(), 3);
     assert_eq!(nums, vec![77, 78, 80]);
     assert_eq!(moments, DeltaMoments::new(vec![84, 1]));
 
-    let nums = reconstruct_nums::<i16>(&mut moments, &u_deltas[3..], 2);
+    let nums = reconstruct_nums::<i16>(&mut moments, u_deltas[3..].to_vec(), 2);
     assert_eq!(nums, vec![84, 85]);
   }
 }

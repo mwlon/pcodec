@@ -10,10 +10,10 @@ const BILLION_I64: i64 = 1_000_000_000;
 macro_rules! impl_timestamp {
   ($t: ident, $parts_per_sec: expr, $header_byte: expr, $precision: expr) => {
     #[doc = concat!(
-          "A ",
-          $precision,
-          "-precise, timezone-naive, 64-bit timestamp."
-        )]
+      "A ",
+      $precision,
+      "-precise, timezone-naive, 64-bit timestamp."
+    )]
     ///
     /// All `q_compress` 64-bit timestamps use a single signed 64 bit integer
     /// for the number of units since 1970.
@@ -122,18 +122,22 @@ macro_rules! impl_timestamp {
       type Signed = i64;
       type Unsigned = u64;
 
+      #[inline]
       fn to_unsigned(self) -> u64 {
         self.0.wrapping_sub(i64::MIN) as u64
       }
 
+      #[inline]
       fn from_unsigned(off: u64) -> Self {
         Self(i64::MIN.wrapping_add(off as i64))
       }
 
+      #[inline]
       fn to_signed(self) -> i64 {
         self.0
       }
 
+      #[inline]
       fn from_signed(signed: i64) -> Self {
         Self(signed)
       }

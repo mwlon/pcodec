@@ -8,10 +8,12 @@ macro_rules! impl_signed {
     impl SignedLike for $t {
       const ZERO: Self = 0;
 
+      #[inline]
       fn wrapping_add(self, other: Self) -> Self {
         self.wrapping_add(other)
       }
 
+      #[inline]
       fn wrapping_sub(self, other: Self) -> Self {
         self.wrapping_sub(other)
       }
@@ -24,10 +26,12 @@ macro_rules! impl_signed {
       type Signed = Self;
       type Unsigned = $unsigned;
 
+      #[inline]
       fn to_signed(self) -> Self::Signed {
         self
       }
 
+      #[inline]
       fn from_signed(signed: Self::Signed) -> Self {
         signed
       }
