@@ -70,34 +70,13 @@ pub fn nth_order_deltas<T: NumberLike>(
   (res, moments)
 }
 
-trait CompileTimeOrder {
-  const ORDER: usize;
-}
-
-macro_rules! impl_order {
-  ($name: ident, $order: expr) => {
-    struct $name;
-    impl CompileTimeOrder for $name {
-      const ORDER: usize = $order;
-    }
-  }
-}
-
-impl_order!(Order1, 1);
-impl_order!(Order2, 2);
-impl_order!(Order3, 3);
-impl_order!(Order4, 4);
-impl_order!(Order5, 5);
-impl_order!(Order6, 6);
-impl_order!(Order7, 7);
-
-fn reconstruct_nums_w_order<T: NumberLike, O: CompileTimeOrder>(
+fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
   delta_moments: &mut DeltaMoments<T::Signed>,
   mut u_deltas: Vec<T::Unsigned>,
   n: usize,
 ) -> Vec<T> {
   let mut res = Vec::with_capacity(n);
-  for _ in 0..O::ORDER {
+  for _ in 0..ORDER {
     u_deltas.push(T::Unsigned::ZERO);
   }
 
@@ -106,10 +85,10 @@ fn reconstruct_nums_w_order<T: NumberLike, O: CompileTimeOrder>(
     let delta = T::Signed::from_unsigned(u_deltas[i]);
     res.push(T::from_signed(moments[0]));
 
-    for o in 0..O::ORDER - 1 {
+    for o in 0..ORDER - 1 {
       moments[o] = moments[o].wrapping_add(moments[o + 1]);
     }
-    moments[O::ORDER - 1] = moments[O::ORDER - 1].wrapping_add(delta);
+    moments[ORDER - 1] = moments[ORDER - 1].wrapping_add(delta);
   }
   res
 }
@@ -120,14 +99,14 @@ pub fn reconstruct_nums<T: NumberLike>(
   n: usize,
 ) -> Vec<T> {
   match delta_moments.order() {
-    1 => reconstruct_nums_w_order::<T, Order1>(delta_moments, u_deltas, n),
-    2 => reconstruct_nums_w_order::<T, Order2>(delta_moments, u_deltas, n),
-    3 => reconstruct_nums_w_order::<T, Order3>(delta_moments, u_deltas, n),
-    4 => reconstruct_nums_w_order::<T, Order4>(delta_moments, u_deltas, n),
-    5 => reconstruct_nums_w_order::<T, Order5>(delta_moments, u_deltas, n),
-    6 => reconstruct_nums_w_order::<T, Order6>(delta_moments, u_deltas, n),
-    7 => reconstruct_nums_w_order::<T, Order7>(delta_moments, u_deltas, n),
-    _ => panic!("this order should be unreachable")
+    1 => reconstruct_nums_w_order::<T, 1>(delta_moments, u_deltas, n),
+    2 => reconstruct_nums_w_order::<T, 2>(delta_moments, u_deltas, n),
+    3 => reconstruct_nums_w_order::<T, 3>(delta_moments, u_deltas, n),
+    4 => reconstruct_nums_w_order::<T, 4>(delta_moments, u_deltas, n),
+    5 => reconstruct_nums_w_order::<T, 5>(delta_moments, u_deltas, n),
+    6 => reconstruct_nums_w_order::<T, 6>(delta_moments, u_deltas, n),
+    7 => reconstruct_nums_w_order::<T, 7>(delta_moments, u_deltas, n),
+    _ => panic!("this order should be unreachable"),
   }
 }
 
