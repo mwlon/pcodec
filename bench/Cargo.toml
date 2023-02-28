@@ -1,0 +1,15 @@
+[package]
+name = "bench"
+version = "0.0.0"
+edition = "2018"
+publish = false
+
+[[bin]]
+name = "bench"
+path = "src/main.rs"
+
+[dependencies]
+durendal = {path = "../durendal"}
+q_compress = {path = "../q_compress"}
+structopt = "0.3.26"
+zstd = "0.10"

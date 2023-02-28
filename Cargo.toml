@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-  "benchmarks",
+  "bench",
   "durendal",
   "ffi",
   "q_compress",

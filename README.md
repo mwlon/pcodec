@@ -50,7 +50,7 @@ and optionally `i128`, `u128`, `TimestampMicros96`, `TimestampNanos96`
 
 ## Performance
 
-See [benchmarks.md](./benchmarks.md).
+See [benchmarks.md](./bench/benchmarks.md).
 
 Here are two examples of the compressed file size vs. compression time tradeoff
 as compression level increases for a given dataset.
