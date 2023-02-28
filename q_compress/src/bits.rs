@@ -102,4 +102,15 @@ mod tests {
     assert_eq!(avg_offset_bits(10_u32, 13_u32, 3), 1.0);
     assert_eq!(avg_offset_bits(10_u32, 19_u32, 3), 2.0);
   }
+
+  #[test]
+  fn test_bits_to_bytes_to_bits() {
+    let bits_56 = vec![false, false, false, true, true, true, false, false];
+    let byte_56 = bits_to_bytes(bits_56);
+    assert_eq!(byte_56, vec![56]);
+
+    let bits_56_1 = vec![false, false, false, true, true, true, false, false, true];
+    let byte_56_1 = bits_to_bytes(bits_56_1);
+    assert_eq!(byte_56_1, vec![56, 1]);
+  }
 }

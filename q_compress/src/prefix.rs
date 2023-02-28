@@ -73,7 +73,6 @@ impl<T: NumberLike> Prefix<T> {
     if diff == T::Unsigned::ZERO {
       0
     } else {
-      // TODO is there a floating point error here?
       T::Unsigned::BITS - diff.leading_zeros()
     }
   }
