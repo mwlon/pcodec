@@ -155,7 +155,7 @@ fn cast_to_nums<T: NumberLike>(bytes: Vec<u8>) -> Vec<T> {
 }
 
 fn compress_qco<T: NumberLike>(nums: &[T], config: CompressorConfig) -> Vec<u8> {
-  Compressor::<T>::from_config(config).simple_compress(&nums)
+  Compressor::<T>::from_config(config).simple_compress(nums)
 }
 
 fn decompress_qco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
@@ -240,7 +240,7 @@ fn warmup_iter<T: NumberLike>(
       _ => panic!("{}", e),
     },
   }
-  fs::write(&output_path, &compressed).expect("couldn't write");
+  fs::write(output_path, &compressed).expect("couldn't write");
 
   // decompress
   let (_, rec_nums) = decompress::<T>(&compressed, config);
@@ -300,7 +300,7 @@ fn stats_iter<T: NumberLike>(
   };
 
   BenchStat {
-    dataset: dataset.to_string(),
+    dataset,
     codec: precomputed.codec.clone(),
     compressed_size: precomputed.compressed.len(),
     compress_dt,
@@ -311,10 +311,10 @@ fn stats_iter<T: NumberLike>(
 
 fn handle<T: NumberLike>(path: &Path, config: &MultiCompressorConfig, opt: &Opt) -> BenchStat {
   let dataset = basename_no_ext(path);
-  let precomputed = warmup_iter(path, &dataset, &config, opt);
+  let precomputed = warmup_iter(path, &dataset, config, opt);
   let mut full_stat = None;
   for _ in 0..opt.iters {
-    let iter_stat = stats_iter::<T>(dataset.clone(), &config, &precomputed, opt);
+    let iter_stat = stats_iter::<T>(dataset.clone(), config, &precomputed, opt);
 
     if let Some(stat) = &mut full_stat {
       *stat += iter_stat;

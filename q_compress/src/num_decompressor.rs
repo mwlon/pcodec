@@ -1,7 +1,9 @@
 use std::cmp::{max, min};
 
 use crate::bit_reader::BitReader;
-use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, MAX_PREFIX_TABLE_SIZE_LOG};
+use crate::constants::{
+  BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, MAX_PREFIX_TABLE_SIZE_LOG,
+};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};

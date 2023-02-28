@@ -18,7 +18,9 @@ impl Default for BitWords {
 
 impl<B: AsRef<[u8]>> From<B> for BitWords {
   fn from(bytes_wrapper: B) -> Self {
-    let mut res = BitWords { bytes: Vec::with_capacity(bytes_wrapper.as_ref().len() + BYTES_PER_WORD) };
+    let mut res = BitWords {
+      bytes: Vec::with_capacity(bytes_wrapper.as_ref().len() + BYTES_PER_WORD),
+    };
     res.extend_bytes(bytes_wrapper);
     res
   }
@@ -30,8 +32,12 @@ impl BitWords {
   }
 
   pub fn extend_bytes<B: AsRef<[u8]>>(&mut self, bytes: B) {
-    self.bytes.truncate(self.bytes.len().saturating_sub(BYTES_PER_WORD));
-    self.bytes.reserve((bytes.as_ref().len() + BYTES_PER_WORD).saturating_sub(self.bytes.len()));
+    self
+      .bytes
+      .truncate(self.bytes.len().saturating_sub(BYTES_PER_WORD));
+    self
+      .bytes
+      .reserve((bytes.as_ref().len() + BYTES_PER_WORD).saturating_sub(self.bytes.len()));
     self.bytes.extend(bytes.as_ref());
     self.bytes.extend(&vec![0; BYTES_PER_WORD]);
   }
