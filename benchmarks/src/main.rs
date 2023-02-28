@@ -10,7 +10,7 @@ use structopt::StructOpt;
 use q_compress::data_types::{NumberLike, TimestampMicros};
 use q_compress::{auto_decompress, Compressor, CompressorConfig, DEFAULT_COMPRESSION_LEVEL};
 
-const BASE_DIR: &str = "q_compress/examples/data";
+const BASE_DIR: &str = "benchmarks/data";
 // if this delta order is specified, use a dataset-specific order
 const AUTO_DELTA: usize = usize::MAX;
 

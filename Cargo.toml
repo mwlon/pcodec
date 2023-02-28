@@ -1,6 +1,8 @@
 [workspace]
 
 members = [
+  "benchmarks",
+  "durendal",
   "ffi",
   "q_compress",
   "q_compress_cli",
