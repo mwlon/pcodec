@@ -14,7 +14,7 @@ pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: usize = 32;
 // MAX_PREFIX_TABLE_SIZE_LOG is a performance tuning parameter
 // Too high, and we use excessive memory and in some cases hurt performance.
 // Too low, and performance drops.
-pub const MAX_PREFIX_TABLE_SIZE_LOG: usize = 6;
+pub const MAX_PREFIX_TABLE_SIZE_LOG: usize = 8;
 
 pub const WORD_SIZE: usize = usize::BITS as usize;
 pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;

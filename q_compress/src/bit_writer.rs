@@ -1,5 +1,4 @@
 use crate::bits;
-use crate::bits::BASE_BIT_MASK;
 use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
@@ -40,7 +39,7 @@ impl BitWriter {
     if self.j % 8 == 0 {
       for &byte in bytes {
         self.refresh_if_needed();
-        self.word |= (byte as usize) << (WORD_SIZE - 8 - self.j);
+        self.word |= (byte as usize) << self.j;
         self.j += 8;
       }
       Ok(())
@@ -67,7 +66,7 @@ impl BitWriter {
     self.refresh_if_needed();
 
     if b {
-      self.word |= BASE_BIT_MASK >> self.j;
+      self.word |= 1 << self.j;
     }
 
     self.j += 1;
@@ -80,66 +79,61 @@ impl BitWriter {
     }
   }
 
-  pub fn write_usize(&mut self, x: usize, n: usize) {
+  pub fn write_usize(&mut self, mut x: usize, n: usize) {
     if n == 0 {
       return;
     }
+    // mask out any more significant digits of x
+    x &= usize::MAX >> (WORD_SIZE - n);
 
     self.refresh_if_needed();
 
+    self.word |= x << self.j;
     let n_plus_j = n + self.j;
+
     if n_plus_j <= WORD_SIZE {
-      let lshift = WORD_SIZE - n_plus_j;
-      self.word |= (x << lshift) & (usize::MAX >> self.j);
       self.j = n_plus_j;
       return;
     }
 
-    let remaining = n_plus_j - WORD_SIZE;
-    self
-      .words
-      .push(self.word | ((x >> remaining) & (usize::MAX >> self.j)));
-
-    // now remaining bits <= WORD_SIZE
-    let lshift = WORD_SIZE - remaining;
-    self.word = x << lshift;
-    self.j = remaining;
+    self.words.push(self.word);
+    let shift = WORD_SIZE - self.j;
+    self.word = x >> shift;
+    self.j = n_plus_j - WORD_SIZE;
   }
 
-  pub fn write_diff<U: UnsignedLike>(&mut self, x: U, n: usize) {
+  pub fn write_diff<U: UnsignedLike>(&mut self, mut x: U, n: usize) {
     if n == 0 {
       return;
     }
 
+    // mask out any more significant digits of x
+    x &= U::MAX >> (U::BITS - n);
+
     self.refresh_if_needed();
 
+    self.word |= x.lshift_word(self.j);
     let n_plus_j = n + self.j;
     if n_plus_j <= WORD_SIZE {
-      let lshift = WORD_SIZE - n_plus_j;
-      self.word |= x.lshift_word(lshift) & (usize::MAX >> self.j);
       self.j = n_plus_j;
       return;
     }
 
-    let mut remaining = n_plus_j - WORD_SIZE;
-    self
-      .words
-      .push(self.word | (x.rshift_word(remaining) & (usize::MAX >> self.j)));
+    let mut processed = WORD_SIZE - self.j;
+    self.words.push(self.word);
 
     for _ in 0..(U::BITS - 1) / WORD_SIZE {
-      if remaining <= WORD_SIZE {
+      if n <= processed + WORD_SIZE {
         break;
       }
 
-      let rshift = remaining - WORD_SIZE;
-      self.words.push(x.rshift_word(rshift));
-      remaining -= WORD_SIZE;
+      self.words.push(x.rshift_word(processed));
+      processed += WORD_SIZE;
     }
 
     // now remaining bits <= WORD_SIZE
-    let lshift = WORD_SIZE - remaining;
-    self.word = x.lshift_word(lshift);
-    self.j = remaining;
+    self.word = x.rshift_word(processed);
+    self.j = n - processed;
   }
 
   pub fn write_varint(&mut self, mut x: usize, jumpstart: usize) {
@@ -171,14 +165,13 @@ impl BitWriter {
     // not the most efficient implementation but it's ok because we
     // only rarely use this now
     for k in 0..n {
-      let b = (x >> (n - k - 1)) & 1 > 0;
+      let b = (x >> k) & 1 > 0;
       if j == WORD_SIZE {
         i += 1;
         j = 0;
       }
-      let shift = WORD_SIZE - 1 - j;
-      let mask = 1_usize << shift;
-      let shifted_bit = (b as usize) << shift;
+      let mask = 1_usize << j;
+      let shifted_bit = (b as usize) << j;
       let word = self.words.get_mut(i).unwrap_or(&mut self.word);
       if *word & mask != shifted_bit {
         *word ^= shifted_bit;
@@ -205,48 +198,67 @@ impl BitWriter {
 mod tests {
   use super::BitWriter;
 
+  // I find little endian confusing, hence all the comments.
+  // All the bytes are written backwards, e.g. 00000001 = 2^7
+
   #[test]
   fn test_write_bigger_num() {
     let mut writer = BitWriter::default();
     writer.write(&[true, true, true, true]);
-    writer.write_usize(187, 4);
+    // 1111
+    writer.write_usize(27, 4);
+    // 11111101
     let bytes = writer.drain_bytes();
-    assert_eq!(bytes, vec![251],)
+    assert_eq!(bytes, vec![191]);
   }
 
   #[test]
   fn test_long_diff_writes() {
     let mut writer = BitWriter::default();
-    // 10000000 11000000 00001000 01000000 00000000 01000000 00000010
-    // 10000000 10000000 00000000
     writer.write_usize((1 << 9) + (1 << 8) + 1, 9);
+    // 10000000 1
     writer.write_usize((1 << 16) + (1 << 5) + 1, 17);
+    // 10000000 11000010 00000000 01
     writer.write_usize(1 << 1, 17);
+    // 10000000 11000010 00000000 01010000 00000000
+    // 000
     writer.write_usize(1 << 1, 13);
+    // 10000000 11000010 00000000 01010000 00000000
+    // 00001000 00000000
     writer.write_usize((1 << 23) + (1 << 15), 24);
+    // 10000000 11000010 00000000 01010000 00000000
+    // 00001000 00000000 00000000 00000001 00000001
 
     let bytes = writer.drain_bytes();
     assert_eq!(
       bytes,
-      vec![128, 192, 8, 64, 0, 64, 2, 128, 128, 0],
+      // vec![128, 192, 8, 64, 0, 64, 2, 128, 128, 0],
+      vec![1, 67, 0, 10, 0, 16, 0, 0, 128, 128],
     )
   }
 
   #[test]
   fn test_various_writes() {
     let mut writer = BitWriter::default();
-    // 10001000 01000000 01111011 10010101 11100101 0101
     writer.write_one(true);
     writer.write_one(false);
+    // 10
     writer.write_usize(33, 8);
+    // 10100001 00
     writer.finish_byte();
+    // 10100001 00000000
     writer.write_aligned_byte(123).expect("misaligned");
+    // 10100001 00000000 11011110
     writer.write_varint(100, 3);
+    // 10100001 00000000 11011110 00110101 1110
     writer.write_usize(5, 4);
+    // 10100001 00000000 11011110 00110101 11101010
     writer.write_usize(5, 4);
+    // 10100001 00000000 11011110 00110101 11101010
+    // 10100000
 
     let bytes = writer.drain_bytes();
-    assert_eq!(bytes, vec![136, 64, 123, 149, 229, 80],);
+    assert_eq!(bytes, vec![133, 0, 123, 172, 87, 5],);
   }
 
   #[test]
@@ -255,6 +267,6 @@ mod tests {
     writer.write_usize(0, 24);
     writer.overwrite_usize(9, 129, 9);
     let bytes = writer.drain_bytes();
-    assert_eq!(bytes, vec![0, 32, 64],);
+    assert_eq!(bytes, vec![0, 2, 1],);
   }
 }

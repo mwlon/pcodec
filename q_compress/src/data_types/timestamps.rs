@@ -143,11 +143,11 @@ macro_rules! impl_timestamp {
       }
 
       fn to_bytes(self) -> Vec<u8> {
-        self.0.to_be_bytes().to_vec()
+        self.0.to_le_bytes().to_vec()
       }
 
       fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self(i64::from_be_bytes(
+        Ok(Self(i64::from_le_bytes(
           bytes.try_into().unwrap(),
         )))
       }

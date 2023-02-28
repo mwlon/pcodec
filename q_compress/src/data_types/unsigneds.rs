@@ -11,12 +11,13 @@ macro_rules! impl_unsigned {
       const MAX: Self = Self::MAX;
       const BITS: usize = Self::BITS as usize;
 
+      #[inline]
       fn from_word(word: usize) -> Self {
         word as Self
       }
 
-      fn to_f64(self) -> f64 {
-        self as f64
+      fn leading_zeros(self) -> usize {
+        self.leading_zeros() as usize
       }
 
       fn rshift_word(self, shift: usize) -> usize {
@@ -66,11 +67,11 @@ macro_rules! impl_unsigned_number {
       }
 
       fn to_bytes(self) -> Vec<u8> {
-        self.to_be_bytes().to_vec()
+        self.to_le_bytes().to_vec()
       }
 
       fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self::from_be_bytes(
+        Ok(Self::from_le_bytes(
           bytes.try_into().unwrap(),
         ))
       }

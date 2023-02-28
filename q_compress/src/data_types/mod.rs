@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -54,6 +54,7 @@ pub trait UnsignedLike:
   Add<Output = Self>
   + BitAnd<Output = Self>
   + BitOr<Output = Self>
+  + BitAndAssign
   + BitOrAssign
   + Copy
   + Debug
@@ -76,7 +77,7 @@ pub trait UnsignedLike:
   /// impossible.
   fn from_word(word: usize) -> Self;
 
-  fn to_f64(self) -> f64;
+  fn leading_zeros(self) -> usize;
 
   /// Shifts the unsigned integer right and returns its lowest bits as a
   /// `usize`.
