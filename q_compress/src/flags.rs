@@ -121,7 +121,7 @@ impl TryInto<Vec<bool>> for &Flags {
         MAX_DELTA_ENCODING_ORDER, self.delta_encoding_order,
       )));
     }
-    let delta_bits = bits::usize_to_bits(
+    let delta_bits = bits::usize_truncated_to_bits(
       self.delta_encoding_order,
       BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
     );

@@ -219,10 +219,9 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
       for i in 0..decompressed.len() {
         assert!(
           decompressed[i].num_eq(&nums[i]),
-          "{} != {} at {}; {}",
+          "{} != {}; {}",
           decompressed[i],
           nums[i],
-          i,
           debug_info,
         );
       }

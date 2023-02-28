@@ -65,15 +65,33 @@ impl<T: NumberLike> Display for Prefix<T> {
   }
 }
 
-// k is used internally to describe the number of bits
-// required to describe an offset; k = ceil(log_2(upper - lower)).
+// k is used internally to describe the minimum number of bits
+// required to describe an offset; k = floor(log_2(upper - lower)).
+// Each offset is encoded as k bit if it is between
+// only_k_bits_lower and only_k_bits_upper, or
+// or k + 1 bits otherwise.
+#[derive(Debug)]
+pub(crate) struct KInfo<T: NumberLike> {
+  pub k: usize,
+  pub only_k_bits_lower: T::Unsigned,
+  pub only_k_bits_upper: T::Unsigned,
+}
+
 impl<T: NumberLike> Prefix<T> {
-  pub(crate) fn k_info(&self) -> usize {
+  pub(crate) fn k_info(&self) -> KInfo<T> {
     let diff = (self.upper.to_unsigned() - self.lower.to_unsigned()) / self.gcd;
-    if diff == T::Unsigned::ZERO {
-      0
+    let k = (diff.to_f64() + 1.0).log2().floor() as usize;
+    let only_k_bits_upper = if k == T::Unsigned::BITS {
+      T::Unsigned::MAX
     } else {
-      T::Unsigned::BITS - diff.leading_zeros()
+      (T::Unsigned::ONE << k) - T::Unsigned::ONE
+    };
+    let only_k_bits_lower = diff - only_k_bits_upper;
+
+    KInfo {
+      k,
+      only_k_bits_lower,
+      only_k_bits_upper,
     }
   }
 }
@@ -119,13 +137,19 @@ pub struct PrefixCompressionInfo<U: UnsignedLike> {
   pub lower: U,
   pub upper: U,
   pub k: usize,
+  pub only_k_bits_lower: U,
+  pub only_k_bits_upper: U,
   pub run_len_jumpstart: Option<usize>,
   pub gcd: U,
 }
 
 impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
   fn from(prefix: &Prefix<T>) -> Self {
-    let k = prefix.k_info();
+    let KInfo {
+      k,
+      only_k_bits_upper,
+      only_k_bits_lower,
+    } = prefix.k_info();
     let code = bits::bits_to_usize(&prefix.code);
 
     PrefixCompressionInfo {
@@ -135,6 +159,8 @@ impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
       lower: prefix.lower.to_unsigned(),
       upper: prefix.upper.to_unsigned(),
       k,
+      only_k_bits_lower,
+      only_k_bits_upper,
       run_len_jumpstart: prefix.run_len_jumpstart,
       gcd: prefix.gcd,
     }
@@ -156,6 +182,8 @@ impl<U: UnsignedLike> Default for PrefixCompressionInfo<U> {
       lower: U::ZERO,
       upper: U::MAX,
       k: U::BITS,
+      only_k_bits_lower: U::ZERO,
+      only_k_bits_upper: U::MAX,
       run_len_jumpstart: None,
       gcd: U::ONE,
     }
@@ -165,9 +193,11 @@ impl<U: UnsignedLike> Default for PrefixCompressionInfo<U> {
 #[derive(Clone, Copy, Debug)]
 pub struct PrefixDecompressionInfo<U: UnsignedLike> {
   pub lower_unsigned: U,
+  pub min_unambiguous_k_bit_offset: U,
   pub k: usize,
   pub depth: usize,
   pub run_len_jumpstart: Option<usize>,
+  pub most_significant: U,
   pub gcd: U,
 }
 
@@ -175,9 +205,11 @@ impl<U: UnsignedLike> Default for PrefixDecompressionInfo<U> {
   fn default() -> Self {
     PrefixDecompressionInfo {
       lower_unsigned: U::ZERO,
+      min_unambiguous_k_bit_offset: U::MAX,
       k: U::BITS,
       depth: 0,
       run_len_jumpstart: None,
+      most_significant: U::ZERO,
       gcd: U::ONE,
     }
   }
@@ -186,12 +218,25 @@ impl<U: UnsignedLike> Default for PrefixDecompressionInfo<U> {
 impl<T: NumberLike> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> {
   fn from(p: &Prefix<T>) -> Self {
     let lower_unsigned = p.lower.to_unsigned();
-    let k = p.k_info();
+    let upper_unsigned = p.upper.to_unsigned();
+    let KInfo { k, .. } = p.k_info();
+    let (most_significant, min_unambiguous_k_bit_offset) = if k == T::PHYSICAL_BITS {
+      (T::Unsigned::ZERO, T::Unsigned::ZERO)
+    } else {
+      let most_significant = T::Unsigned::ONE << k;
+      let gcd_diff = (upper_unsigned - lower_unsigned) / p.gcd;
+      (
+        most_significant,
+        (gcd_diff + T::Unsigned::ONE) - most_significant,
+      )
+    };
     PrefixDecompressionInfo {
       lower_unsigned,
+      min_unambiguous_k_bit_offset,
       k,
       run_len_jumpstart: p.run_len_jumpstart,
       depth: p.code.len(),
+      most_significant,
       gcd: p.gcd,
     }
   }

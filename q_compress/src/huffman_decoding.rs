@@ -75,8 +75,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
           table_size_log,
           children,
         } => {
-          let idx = reader.unchecked_read_prefix_table_idx(*table_size_log);
-          node = &children[idx];
+          node = &children[reader.unchecked_read_usize(*table_size_log)];
           read_depth += table_size_log;
         }
       }
@@ -110,7 +109,7 @@ fn build_from_prefixes_recursive<T: NumberLike>(
     for idx in 0..table_size {
       let mut sub_bits = Vec::new();
       for depth_incr in 0..table_size_log {
-        sub_bits.push((idx >> depth_incr) & 1 > 0);
+        sub_bits.push((idx >> (table_size_log - 1 - depth_incr)) & 1 > 0);
       }
       let possible_prefixes = prefixes
         .iter()

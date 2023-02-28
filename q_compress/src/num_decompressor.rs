@@ -1,9 +1,7 @@
 use std::cmp::{max, min};
 
 use crate::bit_reader::BitReader;
-use crate::constants::{
-  BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, MAX_PREFIX_TABLE_SIZE_LOG,
-};
+use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, MAX_PREFIX_TABLE_SIZE_LOG};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
@@ -27,15 +25,9 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
   let max_n_leafs = 1_usize << max_depth;
   let mut is_specifieds = vec![false; max_n_leafs];
   for p in prefixes {
-    let base_idx = bits::bits_to_usize(&p.code);
-    let step = 1_usize << p.code.len();
+    let base_idx = bits::bits_to_usize_truncated(&p.code, max_depth);
     let n_leafs = 1_usize << (max_depth - p.code.len());
-    for is_specified in is_specifieds
-      .iter_mut()
-      .skip(base_idx)
-      .step_by(step)
-      .take(n_leafs)
-    {
+    for is_specified in is_specifieds.iter_mut().skip(base_idx).take(n_leafs) {
       if *is_specified {
         return Err(QCompressError::corruption(format!(
           "multiple prefixes for {} found in chunk metadata",
@@ -47,7 +39,7 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
   }
   for (idx, is_specified) in is_specifieds.iter().enumerate() {
     if !is_specified {
-      let code = bits::usize_to_bits(idx, max_depth);
+      let code = bits::usize_truncated_to_bits(idx, max_depth);
       return Err(QCompressError::corruption(format!(
         "no prefixes for {} found in chunk metadata",
         bits::bits_to_string(&code),
@@ -65,7 +57,13 @@ fn max_bits_read<T: NumberLike>(p: &Prefix<T>) -> usize {
     None => (1, 0),
     Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
   };
-  let max_bits_per_offset = p.k_info();
+  let k_info = p.k_info();
+  let max_bits_per_offset = if k_info.only_k_bits_lower == T::Unsigned::ZERO {
+    k_info.k
+  } else {
+    k_info.k + 1
+  };
+
   prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
 }
 
@@ -78,7 +76,7 @@ fn max_bits_overshot<T: NumberLike>(p: &Prefix<T>) -> usize {
   if p.code.is_empty() {
     0
   } else {
-    (MAX_PREFIX_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info())
+    (MAX_PREFIX_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info().k)
   }
 }
 
@@ -117,7 +115,10 @@ fn decompress_offset_dirty<U: UnsignedLike>(
   unsigneds: &mut Vec<U>,
   p: PrefixDecompressionInfo<U>,
 ) -> QCompressResult<()> {
-  let offset = reader.read_uint::<U>(p.k)?;
+  let mut offset = reader.read_uint::<U>(p.k)?;
+  if offset < p.min_unambiguous_k_bit_offset && reader.read_one()? {
+    offset |= p.most_significant;
+  }
   let unsigned = p.lower_unsigned + offset * p.gcd;
   unsigneds.push(unsigned);
   Ok(())

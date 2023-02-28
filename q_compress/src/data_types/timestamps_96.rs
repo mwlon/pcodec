@@ -177,13 +177,13 @@ macro_rules! impl_timestamp_96 {
       }
 
       fn to_bytes(self) -> Vec<u8> {
-        ((self.0 - Self::MIN) as u128).to_le_bytes()[..12].to_vec()
+        ((self.0 - Self::MIN) as u128).to_be_bytes()[4..].to_vec()
       }
 
       fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        let mut full_bytes = bytes.to_vec();
-        full_bytes.extend([0, 0, 0, 0]);
-        let parts = (u128::from_le_bytes(full_bytes.try_into().unwrap()) as i128) + Self::MIN;
+        let mut full_bytes = vec![0; 4];
+        full_bytes.extend(bytes);
+        let parts = (u128::from_be_bytes(full_bytes.try_into().unwrap()) as i128) + Self::MIN;
         Self::new(parts)
       }
     }

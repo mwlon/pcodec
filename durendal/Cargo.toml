@@ -1,0 +1,23 @@
+[package]
+name = "durendal"
+version = "0.0.0"
+edition = "2018"
+
+authors = ["mwlon <m.w.loncaric@gmail.com>"]
+categories = ["compression", "encoding"]
+description = "Good compression for numerical sequences and time series"
+include = ["src/**/*.rs", "Cargo.toml", "README.md"]
+keywords = ["compression", "numerical", "quantile", "delta"]
+license = "Apache-2.0"
+repository = "https://github.com/mwlon/quantile-compression"
+
+[features]
+
+[dependencies]
+
+[dev-dependencies]
+futures = "0.3.21"
+rand = "0.8.4"
+structopt = "0.3.26"
+tokio = {version = "1.19.2", features = ["full"]}
+zstd = "0.10"

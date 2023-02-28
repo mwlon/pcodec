@@ -14,7 +14,10 @@ fn unchecked_decompress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   unsigneds: &mut Vec<U>,
   p: PrefixDecompressionInfo<U>,
 ) {
-  let offset = reader.unchecked_read_uint(p.k);
+  let mut offset = reader.unchecked_read_uint(p.k);
+  if offset < p.min_unambiguous_k_bit_offset && reader.unchecked_read_one() {
+    offset |= p.most_significant;
+  }
   let unsigned = p.lower_unsigned + GcdOp::get_diff(offset, p.gcd);
   unsigneds.push(unsigned);
 }
