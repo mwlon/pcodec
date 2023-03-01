@@ -131,7 +131,6 @@ mod tests {
       prefix_metadata: PrefixMetadata::Simple {
         prefixes: vec![prefix_w_code(vec![false]), prefix_w_code(vec![true, false])],
       },
-      delta_moments: DeltaMoments::default(),
     };
     let metadata_duplicating_prefix = ChunkMetadata::<i64> {
       n: 2,
@@ -143,7 +142,6 @@ mod tests {
           prefix_w_code(vec![true]),
         ],
       },
-      delta_moments: DeltaMoments::default(),
     };
 
     for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {

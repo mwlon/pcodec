@@ -499,9 +499,8 @@ impl<T: NumberLike> BaseCompressor<T> {
       (unsigneds, prefix_metadata, table, momentss)
     };
 
-    let chunk_meta_moments = delta_momentss[0].clone();
     let use_gcd = prefix_meta.use_gcd();
-    let meta = ChunkMetadata::new(n, prefix_meta, chunk_meta_moments);
+    let meta = ChunkMetadata::new(n, prefix_meta);
     meta.write_to(&mut self.writer, &self.flags);
 
     self.state = State::MidChunk(MidChunkInfo {
@@ -527,9 +526,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       let start = info.idx;
       let data_page_n = info.data_page_n();
       let end = start + data_page_n.saturating_sub(self.flags.delta_encoding_order);
-      if self.flags.use_wrapped_mode {
-        info.data_page_moments().write_to(&mut self.writer);
-      }
+      info.data_page_moments().write_to(&mut self.writer);
       let slice = if end > start {
         &info.unsigneds[start..end]
       } else {

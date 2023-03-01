@@ -102,26 +102,17 @@ impl<T: NumberLike> State<T> {
   ) -> QCompressResult<BodyDecompressor<T>> {
     let flags = self.flags.as_ref().unwrap();
     let chunk_meta = self.chunk_meta.as_ref().unwrap();
-    let use_wrapped_mode = flags.use_wrapped_mode;
 
-    let (delta_moments, compressed_body_size) = if use_wrapped_mode {
-      let start_byte_idx = reader.aligned_byte_idx()?;
-      let moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
-      let end_byte_idx = reader.aligned_byte_idx()?;
-      let cbs = compressed_page_size
-        .checked_sub(end_byte_idx - start_byte_idx)
-        .ok_or_else(|| {
-          QCompressError::invalid_argument(
-            "compressed page size {} is less than data page metadata size",
-          )
-        })?;
-      (moments, cbs)
-    } else {
-      (
-        chunk_meta.delta_moments.clone(),
-        compressed_page_size,
-      )
-    };
+    let start_byte_idx = reader.aligned_byte_idx()?;
+    let delta_moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
+    let end_byte_idx = reader.aligned_byte_idx()?;
+    let compressed_body_size = compressed_page_size
+      .checked_sub(end_byte_idx - start_byte_idx)
+      .ok_or_else(|| {
+        QCompressError::corruption(
+          "compressed page size {} is less than data page metadata size",
+        )
+      })?;
 
     BodyDecompressor::new(
       &chunk_meta.prefix_metadata,

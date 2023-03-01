@@ -2,7 +2,6 @@ use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::Prefix;
 use crate::{gcd_utils, Flags};
@@ -60,8 +59,6 @@ pub struct ChunkMetadata<T: NumberLike> {
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
   pub prefix_metadata: PrefixMetadata<T>,
-  // not available in wrapped mode
-  pub(crate) delta_moments: DeltaMoments<T::Signed>,
 }
 
 fn parse_prefixes<T: NumberLike>(
@@ -169,24 +166,21 @@ impl<T: NumberLike> ChunkMetadata<T> {
   pub(crate) fn new(
     n: usize,
     prefix_metadata: PrefixMetadata<T>,
-    delta_moments: DeltaMoments<T::Signed>,
   ) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
       prefix_metadata,
-      delta_moments,
     }
   }
 
   pub(crate) fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
-    let (n, compressed_body_size, delta_moments) = if flags.use_wrapped_mode {
-      (0, 0, DeltaMoments::default())
+    let (n, compressed_body_size ) = if flags.use_wrapped_mode {
+      (0, 0)
     } else {
       (
         reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)?,
         reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?,
-        DeltaMoments::<T::Signed>::parse_from(reader, flags.delta_encoding_order)?,
       )
     };
 
@@ -204,7 +198,6 @@ impl<T: NumberLike> ChunkMetadata<T> {
       n,
       compressed_body_size,
       prefix_metadata,
-      delta_moments,
     })
   }
 
@@ -215,7 +208,6 @@ impl<T: NumberLike> ChunkMetadata<T> {
         self.compressed_body_size,
         BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
       );
-      self.delta_moments.write_to(writer);
     }
     match &self.prefix_metadata {
       PrefixMetadata::Simple { prefixes } => {
