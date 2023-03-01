@@ -11,13 +11,9 @@ keywords = ["compression", "numerical", "quantile", "delta"]
 license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
 
-[features]
-
 [dependencies]
 
 [dev-dependencies]
 futures = "0.3.21"
 rand = "0.8.4"
-structopt = "0.3.26"
 tokio = {version = "1.19.2", features = ["full"]}
-zstd = "0.10"

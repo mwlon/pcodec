@@ -116,37 +116,37 @@ mod tests {
 
   #[test]
   fn test_nth_order_deltas() {
-    let nums: Vec<u16> = vec![2, 2, 1, u16::MAX, 0, 1];
+    let nums: Vec<u32> = vec![2, 2, 1, u32::MAX, 0, 1];
     let (deltas, moments) = nth_order_deltas(&nums, 2, &vec![0, 3]);
     assert_eq!(deltas, vec![-1, -1, 3, 0]);
     assert_eq!(
       moments,
       vec![
-        DeltaMoments::new(vec![i16::MIN + 2, 0]),
-        DeltaMoments::new(vec![i16::MAX, 1]),
+        DeltaMoments::new(vec![i32::MIN + 2, 0]),
+        DeltaMoments::new(vec![i32::MAX, 1]),
       ]
     );
   }
 
   #[test]
   fn test_reconstruct_nums_full() {
-    let u_deltas = vec![1_i16, 2, -3]
+    let u_deltas = vec![1_i32, 2, -3]
       .into_iter()
-      .map(u16::from_signed)
-      .collect::<Vec<u16>>();
-    let mut moments: DeltaMoments<i16> = DeltaMoments::new(vec![77, 1]);
+      .map(u32::from_signed)
+      .collect::<Vec<u32>>();
+    let mut moments: DeltaMoments<i32> = DeltaMoments::new(vec![77, 1]);
 
     // full
     let mut new_moments = moments.clone();
-    let nums = reconstruct_nums::<i16>(&mut new_moments, u_deltas.clone(), 5);
+    let nums = reconstruct_nums::<i32>(&mut new_moments, u_deltas.clone(), 5);
     assert_eq!(nums, vec![77, 78, 80, 84, 85]);
 
     //partial
-    let nums = reconstruct_nums::<i16>(&mut moments, u_deltas.clone(), 3);
+    let nums = reconstruct_nums::<i32>(&mut moments, u_deltas.clone(), 3);
     assert_eq!(nums, vec![77, 78, 80]);
     assert_eq!(moments, DeltaMoments::new(vec![84, 1]));
 
-    let nums = reconstruct_nums::<i16>(&mut moments, u_deltas[3..].to_vec(), 2);
+    let nums = reconstruct_nums::<i32>(&mut moments, u_deltas[3..].to_vec(), 2);
     assert_eq!(nums, vec![84, 85]);
   }
 }

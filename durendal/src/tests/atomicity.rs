@@ -1,12 +1,13 @@
-use crate::errors::ErrorKind;
-use crate::{Compressor, Decompressor};
 use std::io::Write;
+
+use crate::CompressorConfig;
+use crate::errors::ErrorKind;
+use crate::standalone::{Decompressor, simple_compress};
 
 #[test]
 fn test_errors_do_not_mutate_decompressor() {
   let nums = vec![1, 2, 3, 4, 5];
-  let mut compressor = Compressor::default();
-  let compressed = compressor.simple_compress(&nums);
+  let compressed = simple_compress(CompressorConfig::default(), &nums);
   let mut decompressor = Decompressor::<i32>::default();
 
   // header shouldn't leave us in a dirty state

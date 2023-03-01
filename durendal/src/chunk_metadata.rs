@@ -7,12 +7,12 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::prefix::Prefix;
 use crate::{gcd_utils, Flags};
 
-// TODO in 1.0 make this more non_exhaustive
 /// A wrapper for prefixes in the two cases cases: delta encoded or not.
 ///
 /// This is the part of chunk metadata that describes *how* the data was
 /// compressed - the Huffman codes used and what ranges they specify.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum PrefixMetadata<T: NumberLike> {
   /// `Simple` prefix metadata corresponds to the case when delta encoding is
   /// off (`delta_encoding_order` of 0).
@@ -71,7 +71,6 @@ fn parse_prefixes<T: NumberLike>(
 ) -> QCompressResult<Vec<Prefix<T>>> {
   let n_pref = reader.read_usize(BITS_TO_ENCODE_N_PREFIXES)?;
   let mut prefixes = Vec::with_capacity(n_pref);
-  let bits_to_encode_code_len = flags.bits_to_encode_code_len();
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let maybe_common_gcd = if flags.use_gcds {
     if reader.read_one()? {
@@ -99,7 +98,7 @@ fn parse_prefixes<T: NumberLike>(
       )));
     }
 
-    let code_len = reader.read_usize(bits_to_encode_code_len)?;
+    let code_len = reader.read_usize(BITS_TO_ENCODE_PREFIX_LEN)?;
     let code = reader.read(code_len)?;
     let run_len_jumpstart = if reader.read_one()? {
       Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART)?)
@@ -130,7 +129,6 @@ fn write_prefixes<T: NumberLike>(
   n: usize,
 ) {
   writer.write_usize(prefixes.len(), BITS_TO_ENCODE_N_PREFIXES);
-  let bits_to_encode_prefix_len = flags.bits_to_encode_code_len();
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let maybe_commond_gcd = if flags.use_gcds {
     let maybe_common_gcd = gcd_utils::common_gcd_for_chunk_meta(prefixes);
@@ -146,7 +144,7 @@ fn write_prefixes<T: NumberLike>(
     writer.write_usize(pref.count, bits_to_encode_count);
     pref.lower.write_to(writer);
     pref.upper.write_to(writer);
-    writer.write_usize(pref.code.len(), bits_to_encode_prefix_len);
+    writer.write_usize(pref.code.len(), BITS_TO_ENCODE_PREFIX_LEN);
     writer.write(&pref.code);
     match pref.run_len_jumpstart {
       None => {
@@ -181,8 +179,7 @@ impl<T: NumberLike> ChunkMetadata<T> {
     }
   }
 
-  // TODO in 1.0 make this private
-  pub fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
+  pub(crate) fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
     let (n, compressed_body_size, delta_moments) = if flags.use_wrapped_mode {
       (0, 0, DeltaMoments::default())
     } else {
@@ -211,8 +208,7 @@ impl<T: NumberLike> ChunkMetadata<T> {
     })
   }
 
-  // TODO in 1.0 make this private
-  pub fn write_to(&self, writer: &mut BitWriter, flags: &Flags) {
+  pub(crate) fn write_to(&self, writer: &mut BitWriter, flags: &Flags) {
     if !flags.use_wrapped_mode {
       writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
       writer.write_usize(

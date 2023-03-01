@@ -1,13 +1,9 @@
-use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
-use crate::errors::QCompressResult;
-use crate::{Compressor, CompressorConfig, Decompressor};
-use std::io::Write;
+use crate::CompressorConfig;
+use crate::data_types::NumberLike;
+use crate::standalone::{auto_decompress, Compressor, simple_compress};
 
 #[test]
 fn test_edge_cases() {
-  assert_recovers(vec![true, true, false, true], 0, "bools 0");
-  assert_recovers(vec![false, false, false], 0, "falses 0");
-  assert_recovers(vec![false], 0, "false 0");
   assert_recovers(vec![u64::MIN, u64::MAX], 0, "int extremes 0");
   assert_recovers(
     vec![f64::MIN, f64::MAX],
@@ -31,23 +27,14 @@ fn test_moderate_data() {
 }
 
 #[test]
-fn test_boolean_codec() {
-  assert_recovers(
-    vec![true, true, false, true, false],
-    1,
-    "bools",
-  );
-}
-
-#[test]
 fn test_sparse() {
   let mut v = Vec::new();
   for _ in 0..10000 {
-    v.push(true);
+    v.push(1);
   }
-  v.push(false);
-  v.push(false);
-  v.push(true);
+  v.push(0);
+  v.push(0);
+  v.push(1);
   assert_recovers(v, 1, "sparse");
 }
 
@@ -114,40 +101,6 @@ fn test_f64_codec() {
 }
 
 #[test]
-fn test_timestamp_ns_codec() -> QCompressResult<()> {
-  assert_recovers(
-    vec![
-      TimestampNanos::new(i64::MIN),
-      TimestampNanos::new(i64::MAX),
-      TimestampNanos::from_secs_and_nanos(i64::MAX / 1_000_000_000, 0)?,
-      TimestampNanos::from_secs_and_nanos(i64::MIN / 1_000_000_000, 999_999_999)?,
-      TimestampNanos::from_secs_and_nanos(0, 123_456_789)?,
-      TimestampNanos::from_secs_and_nanos(-1, 123_456_789)?,
-    ],
-    1,
-    "TimestampNanos",
-  );
-  Ok(())
-}
-
-#[test]
-fn test_timestamp_micros_codec() -> QCompressResult<()> {
-  assert_recovers(
-    vec![
-      TimestampMicros::new(i64::MIN),
-      TimestampMicros::new(i64::MAX),
-      TimestampMicros::from_secs_and_nanos(i64::MAX / 1_000_000, 0)?,
-      TimestampMicros::from_secs_and_nanos(i64::MIN / 1_000_000, 999_999_000)?,
-      TimestampMicros::from_secs_and_nanos(0, 123_456_789)?,
-      TimestampMicros::from_secs_and_nanos(-1, 123_456_789)?,
-    ],
-    1,
-    "TimestampMicros",
-  );
-  Ok(())
-}
-
-#[test]
 fn test_multi_chunk() {
   let mut compressor = Compressor::<i64>::default();
   compressor.header().unwrap();
@@ -156,9 +109,7 @@ fn test_multi_chunk() {
   compressor.footer().unwrap();
   let bytes = compressor.drain_bytes();
 
-  let mut decompressor = Decompressor::<i64>::default();
-  decompressor.write_all(&bytes).unwrap();
-  let res = decompressor.simple_decompress().unwrap();
+  let res = auto_decompress::<i64>(&bytes).unwrap();
   assert_eq!(res, vec![1, 2, 3, 11, 12, 13], "multi chunk",);
 }
 
@@ -196,18 +147,15 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         "name={} delta_encoding_order={}, use_gcds={}",
         name, delta_encoding_order, use_gcds,
       );
-      let mut compressor = Compressor::<T>::from_config(
-        CompressorConfig::default()
-          .with_compression_level(compression_level)
-          .with_delta_encoding_order(delta_encoding_order)
-          .with_use_gcds(use_gcds),
-      );
-      let compressed = compressor.simple_compress(&nums);
-      let mut decompressor = Decompressor::<T>::default();
-      decompressor.write_all(&compressed).unwrap();
-      let decompressed = decompressor
-        .simple_decompress()
-        .expect("decompression error");
+      let config =
+        CompressorConfig {
+          compression_level,
+          delta_encoding_order,
+          use_gcds,
+          ..Default::default()
+        };
+      let compressed = simple_compress(config, &nums);
+      let decompressed = auto_decompress::<T>(&compressed).unwrap();
       // We can't do assert_eq on the whole vector because even bitwise identical
       // floats sometimes aren't equal by ==.
       assert_eq!(
@@ -217,8 +165,9 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         debug_info
       );
       for i in 0..decompressed.len() {
+        // directly comparing numbers might not work for floats
         assert!(
-          decompressed[i].num_eq(&nums[i]),
+          decompressed[i].to_unsigned() == nums[i].to_unsigned(),
           "{} != {} at {}; {}",
           decompressed[i],
           nums[i],

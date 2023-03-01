@@ -2,9 +2,9 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-// TODO in 1.0 make this #[non_exhaustive]
 /// The different kinds of errors for `q_compress`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ErrorKind {
   /// `Compatibility` errors occur during decompression, indicating the library
   /// version is not up-to-date enough for the provided data.

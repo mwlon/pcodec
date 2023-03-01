@@ -13,18 +13,13 @@ use crate::{ChunkMetadata, DecompressorConfig, Flags};
 /// Most `Decompressor` methods leave its state unchanged if they return an
 /// error.
 ///
-/// You can use the standalone decompressor at a file, chunk, or stream level.
+/// You can use the standalone decompressor at a chunk, or stream level.
 /// ```
 /// use std::io::Write;
 /// use durendal::standalone::{DecompressedItem, Decompressor};
 /// use durendal::DecompressorConfig;
 ///
 /// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46];
-///
-/// // DECOMPRESS WHOLE FILE
-/// let mut decompressor = Decompressor::<i32>::default();
-/// decompressor.write_all(&my_bytes).unwrap();
-/// let nums: Vec<i32> = decompressor.simple_decompress().expect("decompression");
 ///
 /// // DECOMPRESS BY CHUNK
 /// let mut decompressor = Decompressor::<i32>::default();
@@ -148,31 +143,6 @@ impl<T: NumberLike> Decompressor<T> {
     let res = self.0.data_page_internal(n, compressed_body_size)?;
     self.0.state.chunk_meta = None;
     Ok(res)
-  }
-
-  // TODO in 1.0 just make this a function
-  /// Takes in compressed bytes and returns a vector of numbers.
-  /// Will return an error if there are any compatibility, corruption,
-  /// or insufficient data issues.
-  ///
-  /// Unlike most methods, this does not guarantee atomicity of the
-  /// compressor's state.
-  pub fn simple_decompress(&mut self) -> QCompressResult<Vec<T>> {
-    // cloning/extending by a single chunk's numbers can slow down by 2%
-    // so we just take ownership of the first chunk's numbers instead
-    let mut res: Option<Vec<T>> = None;
-    self.header()?;
-    while self.chunk_metadata()?.is_some() {
-      let nums = self.chunk_body()?;
-      res = match res {
-        Some(mut existing) => {
-          existing.extend(nums);
-          Some(existing)
-        }
-        None => Some(nums),
-      };
-    }
-    Ok(res.unwrap_or_default())
   }
 
   /// Frees memory used for storing compressed bytes the decompressor has

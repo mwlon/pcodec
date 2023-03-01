@@ -10,6 +10,7 @@ pub const BITS_TO_ENCODE_N_PREFIXES: usize = 15;
 pub const MAX_JUMPSTART: usize = BITS_TO_ENCODE_N_ENTRIES;
 pub const BITS_TO_ENCODE_JUMPSTART: usize = 5;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: usize = 32;
+pub const BITS_TO_ENCODE_PREFIX_LEN: usize = 5;
 
 // MAX_PREFIX_TABLE_SIZE_LOG is a performance tuning parameter
 // Too high, and we use excessive memory and in some cases hurt performance.

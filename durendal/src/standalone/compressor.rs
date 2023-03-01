@@ -3,7 +3,7 @@ use crate::chunk_spec::ChunkSpec;
 use crate::constants::MAGIC_TERMINATION_BYTE;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::{bits, ChunkMetadata, CompressorConfig, Flags};
+use crate::{ChunkMetadata, CompressorConfig, Flags};
 
 /// Converts vectors of numbers into compressed bytes in
 /// .qco format.
@@ -12,17 +12,12 @@ use crate::{bits, ChunkMetadata, CompressorConfig, Flags};
 /// You can configure behavior like compression level by instantiating with
 /// [`.from_config()`][Compressor::from_config]
 ///
-/// You can use the standalone compressor at a file or chunk level.
+/// You can use the standalone compressor at a chunk level.
 /// ```
 /// use durendal::standalone::Compressor;
 ///
 /// let my_nums = vec![1, 2, 3];
 ///
-/// // FILE LEVEL
-/// let mut compressor = Compressor::<i32>::default();
-/// let bytes = compressor.simple_compress(&my_nums);
-///
-/// // CHUNK LEVEL
 /// let mut compressor = Compressor::<i32>::default();
 /// compressor.header().expect("header");
 /// compressor.chunk(&my_nums).expect("chunk");
@@ -39,8 +34,6 @@ impl<T: NumberLike> Default for Compressor<T> {
     Self::from_config(CompressorConfig::default())
   }
 }
-
-const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
 impl<T: NumberLike> Compressor<T> {
   /// Creates a new compressor, given a [`CompressorConfig`].
@@ -100,29 +93,6 @@ impl<T: NumberLike> Compressor<T> {
     self.0.writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)?;
     self.0.state = State::Terminated;
     Ok(())
-  }
-
-  // TODO in 1.0 just make this a function
-  /// Takes in a slice of numbers and returns compressed bytes.
-  ///
-  /// Unlike most methods, this does not guarantee atomicity of the
-  /// compressor's state.
-  pub fn simple_compress(&mut self, nums: &[T]) -> Vec<u8> {
-    // The following unwraps are safe because the writer will be byte-aligned
-    // after each step and ensure each chunk has appropriate size.
-
-    self.header().unwrap();
-
-    if !nums.is_empty() {
-      let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
-      let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
-      nums.chunks(n_per_chunk).for_each(|chunk| {
-        self.chunk(chunk).unwrap();
-      });
-    }
-
-    self.footer().unwrap();
-    self.drain_bytes()
   }
 
   /// Returns all bytes produced by the compressor so far that have not yet

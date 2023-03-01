@@ -88,27 +88,6 @@ impl Default for CompressorConfig {
   }
 }
 
-// TODO in 1.0: we need these?
-impl CompressorConfig {
-  /// Sets [`compression_level`][CompressorConfig::compression_level].
-  pub fn with_compression_level(mut self, level: usize) -> Self {
-    self.compression_level = level;
-    self
-  }
-
-  /// Sets [`delta_encoding_order`][CompressorConfig::delta_encoding_order].
-  pub fn with_delta_encoding_order(mut self, order: usize) -> Self {
-    self.delta_encoding_order = order;
-    self
-  }
-
-  /// Sets [`use_gcds`][CompressorConfig::use_gcds].
-  pub fn with_use_gcds(mut self, use_gcds: bool) -> Self {
-    self.use_gcds = use_gcds;
-    self
-  }
-}
-
 // InternalCompressorConfig captures all settings that don't belong in flags
 // i.e. these don't get written to the resulting bytes and aren't needed for
 // decoding

@@ -2,6 +2,7 @@ use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::prefix::WeightedPrefix;
 use crate::{gcd_utils, Flags, Prefix};
+use crate::constants::BITS_TO_ENCODE_PREFIX_LEN;
 
 fn prefix_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
@@ -62,7 +63,7 @@ pub fn optimize_prefixes<T: NumberLike>(
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let base_meta_cost = bits_to_encode_count as f64 +
     2.0 * T::PHYSICAL_BITS as f64 + // lower and upper bounds
-    flags.bits_to_encode_code_len() as f64 +
+    BITS_TO_ENCODE_PREFIX_LEN as f64 +
     if flags.use_gcds { 1.0 } else { 0.0 } + // bit to say whether there is GCD or not
     1.0; // bit to say there is no run len jumpstart
          // determine whether we can skip GCD folding to improve performance in some cases
@@ -154,8 +155,6 @@ mod tests {
   fn basic_flags() -> Flags {
     Flags {
       use_gcds: true,
-      use_min_count_encoding: true,
-      use_5_bit_code_len: true,
       delta_encoding_order: 0,
       use_wrapped_mode: false,
     }

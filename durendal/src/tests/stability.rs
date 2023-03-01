@@ -1,17 +1,21 @@
 use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
 use crate::data_types::NumberLike;
 use crate::errors::ErrorKind;
-use crate::{Compressor, CompressorConfig};
+use crate::standalone::{Compressor, auto_decompress};
+use crate::CompressorConfig;
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
-  let mut compressor = Compressor::from_config(CompressorConfig::default().with_use_gcds(false));
+  let mut compressor = Compressor::from_config(CompressorConfig {
+    use_gcds: false,
+    ..Default::default()
+  });
   compressor.header().expect("header");
   let metadata = compressor.chunk(&nums).expect("chunk");
   compressor.footer().expect("footer");
   let compressed = compressor.drain_bytes();
 
   for i in 0..compressed.len() - 1 {
-    match crate::auto_decompress::<T>(&compressed[0..i]) {
+    match auto_decompress::<T>(&compressed[0..i]) {
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (), // good
       Ok(_) => panic!("expected decompressor to notice insufficient data (got Ok)"),
       Err(e) => panic!(
@@ -48,9 +52,9 @@ fn test_insufficient_data_short_prefixes() {
 
 #[test]
 fn test_insufficient_data_many_reps() {
-  let mut nums = vec![false];
+  let mut nums = vec![0];
   for _ in 0..(1 << 16) + 1 {
-    nums.push(true);
+    nums.push(1);
   }
 
   let metadata = assert_panic_safe(nums);

@@ -6,18 +6,9 @@ use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::errors::QCompressResult;
 
-pub use timestamps::{TimestampMicros, TimestampNanos};
-
-mod boolean;
 mod floats;
 mod signeds;
-mod timestamps;
 mod unsigneds;
-
-#[cfg(feature = "timestamps_96")]
-mod timestamps_96;
-#[cfg(feature = "timestamps_96")]
-pub use timestamps_96::{TimestampMicros96, TimestampNanos96};
 
 /// Trait for data types that behave like signed integers.
 ///
@@ -26,7 +17,6 @@ pub use timestamps_96::{TimestampMicros96, TimestampNanos96};
 /// For example,
 /// * The deltas between consecutive `u64`s are `i64`.
 /// * The deltas between consecutive `i64`s are `i64`.
-/// * The deltas between consecutive timestamps are `i128`.
 /// * The deltas between consecutive `bool`s are `bool`s (basically 1 bit
 /// signed integers under XOR).
 ///
@@ -84,8 +74,7 @@ pub trait UnsignedLike:
   /// For example,
   /// ```
   /// use durendal::data_types::UnsignedLike;
-  /// assert_eq!(6_u8.rshift_word(1), 3_usize);
-  /// assert_eq!(((1_u128 << 100) + (1_u128 << 4)).rshift_word(1), 8_usize);
+  /// assert_eq!(6_u32.rshift_word(1), 3_usize);
   /// ```
   ///
   /// Used for some bit arithmetic operations during compression.
@@ -96,8 +85,7 @@ pub trait UnsignedLike:
   /// For example,
   /// ```
   /// use durendal::data_types::UnsignedLike;
-  /// assert_eq!(6_u8.lshift_word(1), 12_usize);
-  /// assert_eq!(((1_u128 << 100) + (1_u128 << 4)).lshift_word(1), 32_usize);
+  /// assert_eq!(6_u32.lshift_word(1), 12_usize);
   /// ```
   ///
   /// Used for some bit arithmetic operations during compression.
@@ -139,8 +127,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// The number of bits in the number's uncompressed representation.
   /// This must match the number of bytes in the `to_bytes` and `from_bytes`
   /// implementations.
-  /// Note that booleans have 8 physical bits (not 1)
-  /// and timestamps have 96 (not 128).
+  /// Note that booleans have 8 physical bits (not 1).
   const PHYSICAL_BITS: usize;
 
   /// The signed integer this type can convert between to do wrapped
@@ -152,12 +139,6 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// The unsigned integer this type can convert between to do
   /// bitwise logic and such.
   type Unsigned: UnsignedLike;
-
-  // TODO in 1.0 remove this
-  /// This is no longer important and will go away in a future release.
-  fn num_eq(&self, other: &Self) -> bool {
-    self.to_unsigned() == other.to_unsigned()
-  }
 
   /// Used during compression to convert to an unsigned integer.
   fn to_unsigned(self) -> Self::Unsigned;

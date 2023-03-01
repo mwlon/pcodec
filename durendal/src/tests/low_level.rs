@@ -1,7 +1,8 @@
 use crate::base_decompressor::DecompressorConfig;
 use crate::data_types::NumberLike;
 use crate::errors::ErrorKind;
-use crate::{Compressor, CompressorConfig, DecompressedItem, Decompressor};
+use crate::standalone::{Compressor, DecompressedItem, Decompressor};
+use crate::CompressorConfig;
 use std::io::Write;
 
 #[test]
@@ -18,9 +19,9 @@ fn test_low_level_long() {
 
 #[test]
 fn test_low_level_sparse() {
-  let mut nums = vec![false; 1000];
-  nums.push(true);
-  nums.resize(2000, false);
+  let mut nums = vec![0; 1000];
+  nums.push(1);
+  nums.resize(2000, 0);
   assert_lowest_level_behavior(vec![nums]);
 }
 
@@ -28,7 +29,10 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
     let debug_info = format!("delta order={}", delta_encoding_order);
     let mut compressor = Compressor::<T>::from_config(
-      CompressorConfig::default().with_delta_encoding_order(delta_encoding_order),
+      CompressorConfig {
+        delta_encoding_order,
+        ..Default::default()
+      },
     );
     compressor.header().unwrap();
     let mut metadatas = Vec::new();
@@ -40,7 +44,10 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
     let bytes = compressor.drain_bytes();
 
     let mut decompressor =
-      Decompressor::<T>::from_config(DecompressorConfig::default().with_numbers_limit_per_item(2));
+      Decompressor::<T>::from_config(DecompressorConfig {
+        numbers_limit_per_item: 2,
+        ..Default::default()
+      });
     decompressor.write_all(&bytes).unwrap();
     let flags = decompressor.header().unwrap();
     assert_eq!(&flags, compressor.flags(), "{}", debug_info);

@@ -8,7 +8,8 @@
 ## Usage as a Standalone Format
 
 ```rust
-use durendal::{auto_compress, auto_decompress, DEFAULT_COMPRESSION_LEVEL};
+use durendal::DEFAULT_COMPRESSION_LEVEL;
+use durendal::standalone::{auto_compress, auto_decompress};
 
 fn main() {
   // your data

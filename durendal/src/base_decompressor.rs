@@ -28,15 +28,6 @@ impl Default for DecompressorConfig {
   }
 }
 
-// TODO in 1.0: we need these?
-impl DecompressorConfig {
-  /// Sets [`numbers_limit_per_item`][DecompressorConfig::numbers_limit_per_item].
-  pub fn with_numbers_limit_per_item(mut self, limit: usize) -> Self {
-    self.numbers_limit_per_item = limit;
-    self
-  }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct State<T: NumberLike> {
   pub bit_idx: usize,

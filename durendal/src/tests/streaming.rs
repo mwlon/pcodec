@@ -5,7 +5,8 @@ use rand::Rng;
 
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::{DecompressedItem, Decompressor, DecompressorConfig, DEFAULT_COMPRESSION_LEVEL};
+use crate::standalone::{DecompressedItem, Decompressor};
+use crate::{DecompressorConfig, DEFAULT_COMPRESSION_LEVEL};
 
 struct State<T: NumberLike> {
   decompressor: Decompressor<T>,
@@ -60,12 +61,12 @@ async fn test_streaming_decompress_dense() -> QCompressResult<()> {
 #[tokio::test]
 async fn test_streaming_decompress_sparse() -> QCompressResult<()> {
   let mut rng = rand::thread_rng();
-  let mut nums = Vec::<bool>::new();
+  let mut nums = Vec::new();
   for _ in 0..10000 {
-    nums.push(false);
+    nums.push(0);
   }
   for _ in 0..1500 {
-    nums.push(rng.gen_bool(0.5));
+    nums.push(rng.gen_range(0..2));
   }
   check_streaming_recovery(&nums, 10).await?;
   check_streaming_recovery(&nums, 1000).await
@@ -75,7 +76,7 @@ async fn check_streaming_recovery<T: NumberLike>(
   true_nums: &[T],
   blob_size: usize,
 ) -> QCompressResult<()> {
-  let compressed_bytes = crate::auto_compress(true_nums, DEFAULT_COMPRESSION_LEVEL);
+  let compressed_bytes = crate::standalone::auto_compress(true_nums, DEFAULT_COMPRESSION_LEVEL);
   let compressed_blobs = compressed_bytes.chunks(blob_size);
 
   let input_stream = futures::stream::iter(compressed_blobs);
