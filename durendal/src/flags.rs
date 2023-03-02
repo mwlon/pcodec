@@ -55,7 +55,6 @@ impl TryFrom<Vec<bool>> for Flags {
   type Error = QCompressError;
 
   fn try_from(bools: Vec<bool>) -> QCompressResult<Self> {
-    println!("trying from {:?}", bools);
     let mut flags = Flags {
       delta_encoding_order: 0,
       use_gcds: false,
@@ -116,7 +115,6 @@ impl TryInto<Vec<bool>> for &Flags {
       .map(|idx| idx + 1)
       .unwrap_or(0);
     res.truncate(necessary_len);
-    println!("writing {:?}", res);
 
     Ok(res)
   }

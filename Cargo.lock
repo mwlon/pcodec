@@ -76,6 +76,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 name = "bench"
 version = "0.0.0"
 dependencies = [
+ "durendal",
  "q_compress",
  "structopt",
  "zstd",
