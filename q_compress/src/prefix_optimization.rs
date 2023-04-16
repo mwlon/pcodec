@@ -23,7 +23,7 @@ fn prefix_bit_cost<U: UnsignedLike>(
   base_meta_cost +
     gcd_cost + // extra meta cost of storing GCD
     huffman_cost + // extra meta cost of storing Huffman code
-    (huffman_cost + jumpstart_cost) * (weight as f64 + 1.0) +
+    (huffman_cost + jumpstart_cost) * (weight as f64) +
     offset_cost * count as f64
 }
 

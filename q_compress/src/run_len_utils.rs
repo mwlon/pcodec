@@ -26,6 +26,7 @@ pub fn run_len_jumpstart(count: usize, n: usize) -> Option<usize> {
   }
 }
 
+#[inline]
 pub fn weight_and_jumpstart_cost(count: usize, n: usize) -> (usize, f64) {
   let freq = (count as f64) / (n as f64);
   if prefix_needs_run_len(count, n, freq) {
