@@ -1,7 +1,7 @@
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::{gcd_utils, Flags, Prefix};
 use crate::run_len_utils;
+use crate::{gcd_utils, Flags, Prefix};
 
 fn prefix_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
@@ -61,7 +61,7 @@ pub fn optimize_prefixes<T: NumberLike>(
     flags.bits_to_encode_code_len() as f64 +
     if flags.use_gcds { 1.0 } else { 0.0 } + // bit to say whether there is GCD or not
     1.0; // bit to say there is no run len jumpstart
-  // determine whether we can skip GCD folding to improve performance in some cases
+         // determine whether we can skip GCD folding to improve performance in some cases
   let fold_gcd = gcd_utils::use_gcd_prefix_optimize(&prefixes, flags);
 
   for i in 0..prefixes.len() {
@@ -83,12 +83,12 @@ pub fn optimize_prefixes<T: NumberLike>(
       }
       let cost = best_costs[j]
         + prefix_bit_cost::<T::Unsigned>(
-        base_meta_cost,
-        lower,
-        upper,
-        cum_count_i - cum_count[j],
-        n,
-        gcd_acc.unwrap_or(T::Unsigned::ONE),
+          base_meta_cost,
+          lower,
+          upper,
+          cum_count_i - cum_count[j],
+          n,
+          gcd_acc.unwrap_or(T::Unsigned::ONE),
         );
       if cost < best_cost {
         best_cost = cost;
@@ -162,46 +162,46 @@ mod tests {
 
   #[test]
   fn test_optimize_trivial_ranges_gcd() {
-    let wps = vec![
+    let prefs = vec![
       make_prefix(1, 1000, 1000, 1),
       make_prefix(1, 2000, 2000, 1),
       make_prefix(1, 3000, 3000, 1),
       make_prefix(1, 4000, 4000, 1),
     ];
-    let res = optimize_prefixes(wps, &basic_flags(), 4);
+    let res = optimize_prefixes(prefs, &basic_flags(), 4);
     let expected = vec![make_prefix(4, 1000, 4000, 1000)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_single_nontrivial_range_gcd() {
-    let wps = vec![
+    let prefs = vec![
       make_prefix(100, 1000, 2000, 10),
       make_prefix(1, 2100, 2100, 1),
     ];
-    let res = optimize_prefixes(wps, &basic_flags(), 101);
+    let res = optimize_prefixes(prefs, &basic_flags(), 101);
     let expected = vec![make_prefix(101, 1000, 2100, 10)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_nontrivial_ranges_gcd() {
-    let wps = vec![
+    let prefs = vec![
       make_prefix(5, 1000, 1100, 10),
       make_prefix(5, 1105, 1135, 15),
     ];
-    let res = optimize_prefixes(wps, &basic_flags(), 10);
+    let res = optimize_prefixes(prefs, &basic_flags(), 10);
     let expected = vec![make_prefix(10, 1000, 1135, 5)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_nontrivial_misaligned_ranges_gcd() {
-    let wps = vec![
+    let prefs = vec![
       make_prefix(100, 1000, 1100, 10),
       make_prefix(100, 1101, 1201, 10),
     ];
-    let res = optimize_prefixes(wps, &basic_flags(), 200);
+    let res = optimize_prefixes(prefs, &basic_flags(), 200);
     let expected = vec![
       make_prefix(100, 1000, 1100, 10),
       make_prefix(100, 1101, 1201, 10),

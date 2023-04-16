@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use crate::data_types::NumberLike;
-use crate::{Prefix, run_len_utils};
+use crate::{run_len_utils, Prefix};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
@@ -109,7 +109,7 @@ pub fn make_huffman_code<T: NumberLike>(prefixes: &mut [Prefix<T>], n: usize) {
 #[cfg(test)]
 mod tests {
   use crate::huffman_encoding::make_huffman_code;
-  use crate::prefix::{Prefix};
+  use crate::prefix::Prefix;
 
   fn coded_prefix(weight: usize, code: Vec<bool>) -> Prefix<i32> {
     Prefix {

@@ -1,8 +1,8 @@
 use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 use crate::errors::QCompressResult;
 use crate::{Compressor, CompressorConfig, Decompressor};
-use std::io::Write;
 use rand::Rng;
+use std::io::Write;
 
 #[test]
 fn test_edge_cases() {

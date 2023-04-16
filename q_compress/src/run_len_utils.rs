@@ -1,4 +1,3 @@
-use std::cmp::min;
 use crate::bit_reader::BitReader;
 use crate::constants::{MAX_JUMPSTART, MIN_FREQUENCY_TO_USE_RUN_LEN, MIN_N_TO_USE_RUN_LEN};
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -6,11 +5,10 @@ use crate::gcd_utils::GcdOperator;
 use crate::num_decompressor::NumDecompressor;
 use crate::prefix::PrefixDecompressionInfo;
 use crate::Prefix;
+use std::cmp::min;
 
 fn prefix_needs_run_len(count: usize, n: usize, freq: f64) -> bool {
-  n >= MIN_N_TO_USE_RUN_LEN
-    && freq >= MIN_FREQUENCY_TO_USE_RUN_LEN
-    && count < n
+  n >= MIN_N_TO_USE_RUN_LEN && freq >= MIN_FREQUENCY_TO_USE_RUN_LEN && count < n
 }
 
 pub fn run_len_jumpstart(count: usize, n: usize) -> Option<usize> {

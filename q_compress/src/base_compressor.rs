@@ -183,7 +183,14 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
       T::Unsigned::ONE
     };
     // code and run_len_jumpstart get filled in later
-    let p = Prefix { count, lower, upper, gcd, code: Vec::new(), run_len_jumpstart: None };
+    let p = Prefix {
+      count,
+      lower,
+      upper,
+      gcd,
+      code: Vec::new(),
+      run_len_jumpstart: None,
+    };
     self.seq.push(p);
     self.prefix_idx = new_prefix_idx;
     self.calc_target_j();
@@ -274,10 +281,10 @@ fn train_prefixes<T: NumberLike>(
   // combine adjacent prefixes when advantageous and fill in run_len_jumpstart
   let mut optimized_prefs = prefix_optimization::optimize_prefixes(unoptimized_prefs, flags, n);
 
+  // fill in Huffman codes for the now optimized prefixes
   huffman_encoding::make_huffman_code(&mut optimized_prefs, n);
 
-  let prefixes = optimized_prefs.into_iter().map(Prefix::from).collect();
-  Ok(prefixes)
+  Ok(optimized_prefs)
 }
 
 fn trained_compress_body<U: UnsignedLike>(
