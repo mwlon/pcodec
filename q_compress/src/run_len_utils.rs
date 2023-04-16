@@ -1,9 +1,40 @@
+use std::cmp::min;
 use crate::bit_reader::BitReader;
+use crate::constants::{MAX_JUMPSTART, MIN_FREQUENCY_TO_USE_RUN_LEN, MIN_N_TO_USE_RUN_LEN};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::gcd_utils::GcdOperator;
 use crate::num_decompressor::NumDecompressor;
 use crate::prefix::PrefixDecompressionInfo;
 use crate::Prefix;
+
+fn prefix_needs_run_len(count: usize, n: usize, freq: f64) -> bool {
+  n >= MIN_N_TO_USE_RUN_LEN
+    && freq >= MIN_FREQUENCY_TO_USE_RUN_LEN
+    && count < n
+}
+
+pub fn run_len_jumpstart(count: usize, n: usize) -> Option<usize> {
+  let freq = (count as f64) / (n as f64);
+  if prefix_needs_run_len(count, n, freq) {
+    let non_freq = 1.0 - freq;
+    Some(min(
+      (-non_freq.log2()).ceil() as usize,
+      MAX_JUMPSTART,
+    ))
+  } else {
+    None
+  }
+}
+
+pub fn run_len_weight(count: usize, n: usize) -> usize {
+  let freq = (count as f64) / (n as f64);
+  if prefix_needs_run_len(count, n, freq) {
+    let non_freq = 1.0 - freq;
+    (freq * non_freq * n as f64).ceil() as usize
+  } else {
+    count
+  }
+}
 
 pub fn use_run_len<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
   prefixes.iter().any(|p| p.run_len_jumpstart.is_some())
