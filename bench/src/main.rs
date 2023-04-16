@@ -479,21 +479,18 @@ fn main() {
   let opt: Opt = Opt::from_args();
 
   let files = fs::read_dir(format!("{}/binary", BASE_DIR)).expect("couldn't read");
+  let mut paths = files.into_iter()
+    .map(|f| f.unwrap().path())
+    .collect::<Vec<_>>();
+  paths.sort();
   let configs = opt.get_compressors();
   let datasets = opt.get_datasets();
 
   let mut stats = Vec::new();
-  for file in files {
-    let path = file.unwrap().path();
+  for path in paths {
     let path_str = path.to_str().unwrap();
-    let mut skip = true;
-    for dataset in &datasets {
-      if dataset == "all" || path_str.contains(dataset) {
-        skip = false;
-        break;
-      }
-    }
-    if skip {
+    let keep = datasets.iter().any(|dataset| path_str.contains(dataset) || dataset == "all");
+    if !keep {
       continue;
     }
 
