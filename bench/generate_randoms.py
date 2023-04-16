@@ -110,8 +110,6 @@ write_f64(slow_cosine, 'slow_cosine')
 
 np.random.seed(0)
 write_f64(np.random.normal(size=n), 'normal_at_0')
-np.random.seed(0)
-write_f64(np.random.normal(loc=1E6, size=n), 'normal_at_1M')
 
 # timestamps increasing 1s at a time on average from 2022-01-01T00:00:00 with
 # 1s random jitter
@@ -147,10 +145,10 @@ idxs = np.random.rand(*interleaved.shape).argsort(axis=1)
 interleaved_scrambled = np.take_along_axis(interleaved, idxs, axis=1)
 write_i64(interleaved_scrambled.reshape(-1), 'interl_scrambl')
 
-# randomly one of 3 distinct values
+# randomly one of 4 distinct values
 np.random.seed(0)
-values = [77, 777, 7777]
-bad_huffman = np.random.choice(values, size=n, p=[0.5, 0.49, 0.01])
+values = [77, 777, 7777, 77777]
+bad_huffman = np.random.choice(values, size=n, p=[0.33, 0.33, 0.33, 0.01])
 write_i64(bad_huffman, 'bad_huffman')
 
 # a sequence whose variance gradually increases
