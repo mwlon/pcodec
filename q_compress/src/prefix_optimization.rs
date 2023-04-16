@@ -12,7 +12,7 @@ fn prefix_bit_cost<U: UnsignedLike>(
   gcd: U,
 ) -> f64 {
   let offset_cost = avg_offset_bits(lower, upper, gcd);
-  let weight = run_len_utils::run_len_weight(count, n);
+  let (weight, jumpstart_cost) = run_len_utils::weight_and_jumpstart_cost(count, n);
   let total_weight = n + weight - count;
   let huffman_cost = avg_depth_bits(weight, total_weight);
   let gcd_cost = if gcd > U::ONE {
@@ -23,7 +23,7 @@ fn prefix_bit_cost<U: UnsignedLike>(
   base_meta_cost +
     gcd_cost + // extra meta cost of storing GCD
     huffman_cost + // extra meta cost of storing Huffman code
-    huffman_cost * (weight as f64 + 1.0) +
+    (huffman_cost + jumpstart_cost) * (weight as f64 + 1.0) +
     offset_cost * count as f64
 }
 

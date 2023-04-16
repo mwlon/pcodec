@@ -26,13 +26,15 @@ pub fn run_len_jumpstart(count: usize, n: usize) -> Option<usize> {
   }
 }
 
-pub fn run_len_weight(count: usize, n: usize) -> usize {
+pub fn weight_and_jumpstart_cost(count: usize, n: usize) -> (usize, f64) {
   let freq = (count as f64) / (n as f64);
   if prefix_needs_run_len(count, n, freq) {
     let non_freq = 1.0 - freq;
-    (freq * non_freq * n as f64).ceil() as usize
+    let weight = (freq * non_freq * n as f64).ceil() as usize;
+    let jumpstart_cost = (-non_freq.log2()).ceil() + 1.0;
+    (weight, jumpstart_cost)
   } else {
-    count
+    (count, 0.0)
   }
 }
 

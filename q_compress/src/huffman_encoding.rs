@@ -86,7 +86,7 @@ pub fn make_huffman_code<T: NumberLike>(prefixes: &mut [Prefix<T>], n: usize) {
   let mut heap = BinaryHeap::with_capacity(n_pref); // for figuring out huffman tree
   let mut items = Vec::with_capacity(n_pref); // for modifying item codes
   for (i, prefix) in prefixes.iter().enumerate() {
-    let weight = run_len_utils::run_len_weight(prefix.count, n);
+    let (weight, _) = run_len_utils::weight_and_jumpstart_cost(prefix.count, n);
     let item = HuffmanItem::new(weight, i);
     heap.push(item.clone());
     items.push(item);
