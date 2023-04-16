@@ -171,7 +171,6 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
     let n_unsigneds = self.n_unsigneds;
 
     let count = j - i;
-    // let frequency = count as f64 / self.n_unsigneds as f64;
     let new_prefix_idx = max(
       self.prefix_idx + 1,
       (j * self.max_n_pref) / n_unsigneds,
@@ -185,19 +184,6 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
     };
     // code and run_len_jumpstart get filled in later
     let p = Prefix { count, lower, upper, gcd, code: Vec::new(), run_len_jumpstart: None };
-    // } else {
-    //   // The weird case - a range that represents almost all (but not all) the data.
-    //   // We create extra prefixes that can describe `reps` copies of the range at once.
-    //   let config = choose_run_len_jumpstart(count, n_unsigneds);
-    //   WeightedPrefix::new(
-    //     count,
-    //     config.weight,
-    //     lower,
-    //     upper,
-    //     Some(config.jumpstart),
-    //     gcd,
-    //   )
-    // };
     self.seq.push(p);
     self.prefix_idx = new_prefix_idx;
     self.calc_target_j();
