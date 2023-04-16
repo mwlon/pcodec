@@ -153,19 +153,10 @@ values = [77, 777, 7777]
 bad_huffman = np.random.choice(values, size=n, p=[0.5, 0.49, 0.01])
 write_i64(bad_huffman, 'bad_huffman')
 
-# a sequence whose variance gradually changes
-# stddev is a weiner process with log-normal behavior
+# a sequence whose variance gradually increases
 np.random.seed(0)
-x = 0.0
-frequency = 1E-4
-add_scale = np.sqrt(np.exp(2 * frequency) - 1)
-mult = np.exp(-frequency)
-log_range = []
-for _ in range(n):
-  log_range.append(x)
-  x += np.random.normal() * add_scale
-  x *= mult
-dist_shift = 100 * np.random.normal(scale=np.exp(3 * np.array(log_range)), size=n)
+log_std = np.linspace(-1.5, 25, n)
+dist_shift = 0.5 + np.exp(log_std) * np.random.normal(size=n)
 write_i64(dist_shift, 'dist_shift')
 
 # a diabolically hard sequence
@@ -179,6 +170,9 @@ n_subseqs = 77
 subseq_vals = np.random.randint(1E4, 1E5, size=n_subseqs)
 diablo = []
 log_delta_scale = 0.0
+frequency = 1E-4
+add_scale = np.sqrt(np.exp(2 * frequency) - 1)
+mult = np.exp(-frequency)
 while len(diablo) < n:
   diablo.extend(subseq_vals[np.random.uniform(size=n_subseqs) > 0.9])
   log_delta_scale += np.random.normal() * add_scale
