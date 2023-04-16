@@ -96,39 +96,6 @@ impl<T: NumberLike> Prefix<T> {
   }
 }
 
-// used during compression to determine Huffman codes
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WeightedPrefix<T: NumberLike> {
-  pub prefix: Prefix<T>,
-  // How to weight this prefix during huffman coding,
-  // in contrast to prefix.count, which is the actual number of training
-  // entries belonging to it.
-  // Usually these are the same, but a prefix with repetitions will have lower
-  // weight than count.
-  pub weight: usize,
-}
-
-impl<T: NumberLike> WeightedPrefix<T> {
-  pub fn new(
-    count: usize,
-    weight: usize,
-    lower: T,
-    upper: T,
-    run_len_jumpstart: Option<usize>,
-    gcd: T::Unsigned,
-  ) -> WeightedPrefix<T> {
-    let prefix = Prefix {
-      count,
-      lower,
-      upper,
-      code: Vec::new(),
-      run_len_jumpstart,
-      gcd,
-    };
-    WeightedPrefix { prefix, weight }
-  }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct PrefixCompressionInfo<U: UnsignedLike> {
   pub count: usize,

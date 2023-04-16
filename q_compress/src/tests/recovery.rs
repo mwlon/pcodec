@@ -1,6 +1,7 @@
 use crate::data_types::{NumberLike, TimestampMicros, TimestampNanos};
 use crate::errors::QCompressResult;
 use crate::{Compressor, CompressorConfig, Decompressor};
+use rand::Rng;
 use std::io::Write;
 
 #[test]
@@ -187,6 +188,20 @@ fn test_with_gcds() {
     sparse_with_gcd.push(7);
   }
   assert_recovers(sparse_with_gcd, 4, "sparse with gcd");
+}
+
+#[test]
+fn test_sparse_islands() {
+  let mut rng = rand::thread_rng();
+  let mut nums = Vec::new();
+  // sparse - one common island of [0, 8) and one rare of [1000, 1008)
+  for _ in 0..20 {
+    for _ in 0..99 {
+      nums.push(rng.gen_range(0..8))
+    }
+    nums.push(rng.gen_range(1000..1008))
+  }
+  assert_recovers(nums, 4, "sparse islands");
 }
 
 fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: &str) {

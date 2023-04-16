@@ -1,6 +1,6 @@
 # `q_compress` Changelog
 
-## 0.11.6 (not yet released)
+## 0.11.6
 * Improved decompression speed ~3% for non-sparse distributions.
 * Improved delta decoding speed (part of decompression) by ~200%.
 

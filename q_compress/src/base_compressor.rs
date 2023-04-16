@@ -11,14 +11,9 @@ use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
-use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
+use crate::prefix::{Prefix, PrefixCompressionInfo};
 use crate::prefix_optimization;
 use crate::{gcd_utils, huffman_encoding, Flags};
-
-struct JumpstartConfiguration {
-  weight: usize,
-  jumpstart: usize,
-}
 
 /// All configurations available for a compressor.
 ///
@@ -141,22 +136,8 @@ fn cumulative_sum(sizes: &[usize]) -> Vec<usize> {
   res
 }
 
-fn choose_run_len_jumpstart(count: usize, n: usize) -> JumpstartConfiguration {
-  let freq = (count as f64) / (n as f64);
-  let non_freq = 1.0 - freq;
-  let jumpstart = min(
-    (-non_freq.log2()).ceil() as usize,
-    MAX_JUMPSTART,
-  );
-  let expected_n_runs = (freq * non_freq * n as f64).ceil() as usize;
-  JumpstartConfiguration {
-    weight: expected_n_runs,
-    jumpstart,
-  }
-}
-
 struct PrefixBuffer<'a, T: NumberLike> {
-  pub seq: Vec<WeightedPrefix<T>>,
+  pub seq: Vec<Prefix<T>>,
   prefix_idx: usize,
   max_n_pref: usize,
   n_unsigneds: usize,
@@ -189,7 +170,6 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
     let n_unsigneds = self.n_unsigneds;
 
     let count = j - i;
-    let frequency = count as f64 / self.n_unsigneds as f64;
     let new_prefix_idx = max(
       self.prefix_idx + 1,
       (j * self.max_n_pref) / n_unsigneds,
@@ -201,27 +181,16 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
     } else {
       T::Unsigned::ONE
     };
-    let wp = if n_unsigneds < MIN_N_TO_USE_RUN_LEN
-      || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN
-      || count == n_unsigneds
-    {
-      // The usual case - a prefix for a range that represents either 100% or
-      // <=80% of the data.
-      WeightedPrefix::new(count, count, lower, upper, None, gcd)
-    } else {
-      // The weird case - a range that represents almost all (but not all) the data.
-      // We create extra prefixes that can describe `reps` copies of the range at once.
-      let config = choose_run_len_jumpstart(count, n_unsigneds);
-      WeightedPrefix::new(
-        count,
-        config.weight,
-        lower,
-        upper,
-        Some(config.jumpstart),
-        gcd,
-      )
+    // code and run_len_jumpstart get filled in later
+    let p = Prefix {
+      count,
+      lower,
+      upper,
+      gcd,
+      code: Vec::new(),
+      run_len_jumpstart: None,
     };
-    self.seq.push(wp);
+    self.seq.push(p);
     self.prefix_idx = new_prefix_idx;
     self.calc_target_j();
   }
@@ -246,7 +215,7 @@ fn choose_unoptimized_prefixes<T: NumberLike>(
   sorted: &[T::Unsigned],
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
-) -> Vec<WeightedPrefix<T>> {
+) -> Vec<Prefix<T>> {
   let n_unsigneds = sorted.len();
   let max_n_pref = choose_max_n_prefixes(
     internal_config.compression_level,
@@ -308,12 +277,13 @@ fn train_prefixes<T: NumberLike>(
     choose_unoptimized_prefixes(&sorted, internal_config, flags)
   };
 
+  // combine adjacent prefixes when advantageous and fill in run_len_jumpstart
   let mut optimized_prefs = prefix_optimization::optimize_prefixes(unoptimized_prefs, flags, n);
 
-  huffman_encoding::make_huffman_code(&mut optimized_prefs);
+  // fill in Huffman codes for the now optimized prefixes
+  huffman_encoding::make_huffman_code(&mut optimized_prefs, n);
 
-  let prefixes = optimized_prefs.iter().map(|wp| wp.prefix.clone()).collect();
-  Ok(prefixes)
+  Ok(optimized_prefs)
 }
 
 fn trained_compress_body<U: UnsignedLike>(
