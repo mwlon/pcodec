@@ -9,38 +9,38 @@ use crate::data_types::{NumberLike, UnsignedLike};
 /// into ranges and associating a Huffman code (a short sequence of bits)
 /// with each range.
 /// The combination of these pieces of information, plus a couple others,
-/// is called a `Prefix`.
-/// When compressing a number, the compressor finds the prefix containing
+/// is called a `Bin`.
+/// When compressing a number, the compressor finds the bin containing
 /// it, then writes out its Huffman code, optionally the number of
 /// consecutive repetitions of that number if `run_length_jumpstart` is
 /// available, and then the exact offset within the range for the number.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct Prefix<T: NumberLike> {
-  /// The count of numbers in the chunk that fall into this Prefix's range.
+pub struct Bin<T: NumberLike> {
+  /// The count of numbers in the chunk that fall into this bin's range.
   /// Not available in wrapped mode.
   pub count: usize,
-  /// The Huffman code for this prefix. Collectively, all the prefixes for a
+  /// The Huffman code for this bin. Collectively, all the bins for a
   /// chunk form a binary search tree (BST) over these Huffman codes.
   /// The BST over Huffman codes is different from the BST over numerical
   /// ranges.
   pub code: Vec<bool>,
-  /// The lower bound for this prefix's numerical range.
+  /// The lower bound for this bin's numerical range.
   pub lower: T,
-  /// The upper bound (inclusive) for this prefix's numerical range.
+  /// The upper bound (inclusive) for this bin's numerical range.
   pub upper: T,
-  /// A parameter used for the most common prefix in a sparse distribution.
+  /// A parameter used for the most common bin in a sparse distribution.
   /// For instance, if 90% of a chunk's numbers are exactly 7, then the
-  /// prefix for the range `[7, 7]` will have a `run_len_jumpstart`.
+  /// bin for the range `[7, 7]` will have a `run_len_jumpstart`.
   /// The jumpstart value tunes the varint encoding of the number of
-  /// consecutive repetitions of the prefix.
+  /// consecutive repetitions of the bin.
   pub run_len_jumpstart: Option<usize>,
-  /// The greatest common divisor of all numbers belonging to this prefix
+  /// The greatest common divisor of all numbers belonging to this bin
   /// (in the data type's corresponding unsigned integer).
   pub gcd: T::Unsigned,
 }
 
-impl<T: NumberLike> Display for Prefix<T> {
+impl<T: NumberLike> Display for Bin<T> {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     let jumpstart_str = if let Some(jumpstart) = self.run_len_jumpstart {
       format!(" (jumpstart: {})", jumpstart)
@@ -67,7 +67,7 @@ impl<T: NumberLike> Display for Prefix<T> {
 
 // k is used internally to describe the number of bits
 // required to describe an offset; k = ceil(log_2(upper - lower)).
-impl<T: NumberLike> Prefix<T> {
+impl<T: NumberLike> Bin<T> {
   pub(crate) fn k_info(&self) -> usize {
     let diff = (self.upper.to_unsigned() - self.lower.to_unsigned()) / self.gcd;
     if diff == T::Unsigned::ZERO {
@@ -81,11 +81,11 @@ impl<T: NumberLike> Prefix<T> {
 // used during compression to determine Huffman codes
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WeightedPrefix<T: NumberLike> {
-  pub prefix: Prefix<T>,
-  // How to weight this prefix during huffman coding,
-  // in contrast to prefix.count, which is the actual number of training
+  pub bin: Bin<T>,
+  // How to weight this bin during huffman coding,
+  // in contrast to bin.count, which is the actual number of training
   // entries belonging to it.
-  // Usually these are the same, but a prefix with repetitions will have lower
+  // Usually these are the same, but a bin with repetitions will have lower
   // weight than count.
   pub weight: usize,
 }
@@ -99,7 +99,7 @@ impl<T: NumberLike> WeightedPrefix<T> {
     run_len_jumpstart: Option<usize>,
     gcd: T::Unsigned,
   ) -> WeightedPrefix<T> {
-    let prefix = Prefix {
+    let bin = Bin {
       count,
       lower,
       upper,
@@ -107,12 +107,12 @@ impl<T: NumberLike> WeightedPrefix<T> {
       run_len_jumpstart,
       gcd,
     };
-    WeightedPrefix { prefix, weight }
+    WeightedPrefix { bin, weight }
   }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PrefixCompressionInfo<U: UnsignedLike> {
+pub struct BinCompressionInfo<U: UnsignedLike> {
   pub count: usize,
   pub code: usize,
   pub code_len: usize,
@@ -123,33 +123,33 @@ pub struct PrefixCompressionInfo<U: UnsignedLike> {
   pub gcd: U,
 }
 
-impl<T: NumberLike> From<&Prefix<T>> for PrefixCompressionInfo<T::Unsigned> {
-  fn from(prefix: &Prefix<T>) -> Self {
-    let k = prefix.k_info();
-    let code = bits::bits_to_usize(&prefix.code);
+impl<T: NumberLike> From<&Bin<T>> for BinCompressionInfo<T::Unsigned> {
+  fn from(bin: &Bin<T>) -> Self {
+    let k = bin.k_info();
+    let code = bits::bits_to_usize(&bin.code);
 
-    PrefixCompressionInfo {
-      count: prefix.count,
+    BinCompressionInfo {
+      count: bin.count,
       code,
-      code_len: prefix.code.len(),
-      lower: prefix.lower.to_unsigned(),
-      upper: prefix.upper.to_unsigned(),
+      code_len: bin.code.len(),
+      lower: bin.lower.to_unsigned(),
+      upper: bin.upper.to_unsigned(),
       k,
-      run_len_jumpstart: prefix.run_len_jumpstart,
-      gcd: prefix.gcd,
+      run_len_jumpstart: bin.run_len_jumpstart,
+      gcd: bin.gcd,
     }
   }
 }
 
-impl<U: UnsignedLike> PrefixCompressionInfo<U> {
+impl<U: UnsignedLike> BinCompressionInfo<U> {
   pub fn contains(&self, unsigned: U) -> bool {
     self.lower <= unsigned && self.upper >= unsigned
   }
 }
 
-impl<U: UnsignedLike> Default for PrefixCompressionInfo<U> {
+impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
   fn default() -> Self {
-    PrefixCompressionInfo {
+    BinCompressionInfo {
       count: 0,
       code: 0,
       code_len: 0,
@@ -163,7 +163,7 @@ impl<U: UnsignedLike> Default for PrefixCompressionInfo<U> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PrefixDecompressionInfo<U: UnsignedLike> {
+pub struct BinDecompressionInfo<U: UnsignedLike> {
   pub lower_unsigned: U,
   pub k: usize,
   pub depth: usize,
@@ -171,9 +171,9 @@ pub struct PrefixDecompressionInfo<U: UnsignedLike> {
   pub gcd: U,
 }
 
-impl<U: UnsignedLike> Default for PrefixDecompressionInfo<U> {
+impl<U: UnsignedLike> Default for BinDecompressionInfo<U> {
   fn default() -> Self {
-    PrefixDecompressionInfo {
+    BinDecompressionInfo {
       lower_unsigned: U::ZERO,
       k: U::BITS,
       depth: 0,
@@ -183,11 +183,11 @@ impl<U: UnsignedLike> Default for PrefixDecompressionInfo<U> {
   }
 }
 
-impl<T: NumberLike> From<&Prefix<T>> for PrefixDecompressionInfo<T::Unsigned> {
-  fn from(p: &Prefix<T>) -> Self {
+impl<T: NumberLike> From<&Bin<T>> for BinDecompressionInfo<T::Unsigned> {
+  fn from(p: &Bin<T>) -> Self {
     let lower_unsigned = p.lower.to_unsigned();
     let k = p.k_info();
-    PrefixDecompressionInfo {
+    BinDecompressionInfo {
       lower_unsigned,
       k,
       run_len_jumpstart: p.run_len_jumpstart,

@@ -1,7 +1,7 @@
-use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
+use crate::chunk_metadata::{BinMetadata, ChunkMetadata};
 use crate::data_types::NumberLike;
 use crate::errors::ErrorKind;
-use crate::standalone::{Compressor, auto_decompress};
+use crate::standalone::{auto_decompress, Compressor};
 use crate::CompressorConfig;
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
@@ -29,7 +29,7 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T> {
 }
 
 #[test]
-fn test_insufficient_data_short_prefixes() {
+fn test_insufficient_data_short_bins() {
   let mut nums = Vec::new();
   for _ in 0..50 {
     nums.push(0);
@@ -39,14 +39,14 @@ fn test_insufficient_data_short_prefixes() {
   }
 
   let metadata = assert_panic_safe(nums);
-  match metadata.prefix_metadata {
-    PrefixMetadata::Simple { prefixes } => {
-      assert_eq!(prefixes.len(), 2);
-      for p in &prefixes {
+  match metadata.bin_metadata {
+    BinMetadata::Simple { bins } => {
+      assert_eq!(bins.len(), 2);
+      for p in &bins {
         assert_eq!(p.code.len(), 1);
       }
     }
-    _ => panic!("expected simple prefix info"),
+    _ => panic!("expected simple bin info"),
   }
 }
 
@@ -58,15 +58,15 @@ fn test_insufficient_data_many_reps() {
   }
 
   let metadata = assert_panic_safe(nums);
-  match metadata.prefix_metadata {
-    PrefixMetadata::Simple { prefixes } => {
-      assert_eq!(prefixes.len(), 2);
-      let has_reps = prefixes.iter().any(|p| p.run_len_jumpstart.is_some());
+  match metadata.bin_metadata {
+    BinMetadata::Simple { bins } => {
+      assert_eq!(bins.len(), 2);
+      let has_reps = bins.iter().any(|p| p.run_len_jumpstart.is_some());
       if !has_reps {
-        panic!("expected a prefix to have reps");
+        panic!("expected a bin to have reps");
       }
     }
-    _ => panic!("expected simple prefix info"),
+    _ => panic!("expected simple bin info"),
   }
 }
 
@@ -79,11 +79,11 @@ fn test_insufficient_data_long_offsets() {
   }
 
   let metadata = assert_panic_safe(nums);
-  match metadata.prefix_metadata {
-    PrefixMetadata::Simple { prefixes } => {
-      assert_eq!(prefixes.len(), 1);
-      assert_eq!(prefixes[0].k_info(), 64);
+  match metadata.bin_metadata {
+    BinMetadata::Simple { bins } => {
+      assert_eq!(bins.len(), 1);
+      assert_eq!(bins[0].k_info(), 64);
     }
-    _ => panic!("expected simple prefix info"),
+    _ => panic!("expected simple bin info"),
   }
 }

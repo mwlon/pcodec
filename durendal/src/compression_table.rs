@@ -1,7 +1,7 @@
+use crate::bin::BinCompressionInfo;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::prefix::PrefixCompressionInfo;
-use crate::Prefix;
+use crate::Bin;
 
 const TARGET_BRANCHING_FACTOR: usize = 16; // chosen for performance
 
@@ -13,15 +13,15 @@ pub struct CompressionTableItem<U: UnsignedLike> {
 
 #[derive(Debug, Clone)]
 pub enum CompressionTable<U: UnsignedLike> {
-  Leaf(PrefixCompressionInfo<U>),
+  Leaf(BinCompressionInfo<U>),
   NonLeaf(Vec<CompressionTableItem<U>>),
 }
 
-impl<T: NumberLike> From<&[Prefix<T>]> for CompressionTable<T::Unsigned> {
-  fn from(prefixes: &[Prefix<T>]) -> Self {
-    let mut infos = prefixes
+impl<T: NumberLike> From<&[Bin<T>]> for CompressionTable<T::Unsigned> {
+  fn from(bins: &[Bin<T>]) -> Self {
+    let mut infos = bins
       .iter()
-      .map(PrefixCompressionInfo::from)
+      .map(BinCompressionInfo::from)
       .collect::<Vec<_>>();
     infos.sort_unstable_by_key(|p| p.upper);
     CompressionTable::from_sorted(&infos)
@@ -29,14 +29,14 @@ impl<T: NumberLike> From<&[Prefix<T>]> for CompressionTable<T::Unsigned> {
 }
 
 impl<U: UnsignedLike> CompressionTable<U> {
-  fn from_sorted(prefixes: &[PrefixCompressionInfo<U>]) -> Self {
-    if prefixes.is_empty() {
-      return CompressionTable::Leaf(PrefixCompressionInfo::default());
-    } else if prefixes.len() == 1 {
-      return CompressionTable::Leaf(prefixes[0]);
+  fn from_sorted(bins: &[BinCompressionInfo<U>]) -> Self {
+    if bins.is_empty() {
+      return CompressionTable::Leaf(BinCompressionInfo::default());
+    } else if bins.len() == 1 {
+      return CompressionTable::Leaf(bins[0]);
     }
 
-    let total_count: usize = prefixes.iter().map(|p| p.count).sum();
+    let total_count: usize = bins.iter().map(|p| p.count).sum();
 
     let mut last_idx = 0;
     let mut idx = 0;
@@ -45,9 +45,9 @@ impl<U: UnsignedLike> CompressionTable<U> {
     for i in 0..TARGET_BRANCHING_FACTOR {
       let target = (total_count * (i + 1)) / TARGET_BRANCHING_FACTOR;
       while cumulative < target {
-        let incr = prefixes[idx].count;
+        let incr = bins[idx].count;
         if incr < 2 * target - cumulative {
-          cumulative += prefixes[idx].count;
+          cumulative += bins[idx].count;
           idx += 1;
         } else {
           break;
@@ -56,8 +56,8 @@ impl<U: UnsignedLike> CompressionTable<U> {
 
       if idx > last_idx {
         children.push(CompressionTableItem {
-          table: CompressionTable::from_sorted(&prefixes[last_idx..idx]),
-          upper: prefixes[idx - 1].upper,
+          table: CompressionTable::from_sorted(&bins[last_idx..idx]),
+          upper: bins[idx - 1].upper,
         });
         last_idx = idx;
       }
@@ -65,7 +65,7 @@ impl<U: UnsignedLike> CompressionTable<U> {
     CompressionTable::NonLeaf(children)
   }
 
-  pub fn search(&self, unsigned: U) -> QCompressResult<&PrefixCompressionInfo<U>> {
+  pub fn search(&self, unsigned: U) -> QCompressResult<&BinCompressionInfo<U>> {
     let mut node = self;
     loop {
       match node {

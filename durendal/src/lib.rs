@@ -10,10 +10,10 @@ struct ReadmeDoctest;
 
 pub use base_compressor::CompressorConfig;
 pub use base_decompressor::DecompressorConfig;
-pub use chunk_metadata::{ChunkMetadata, PrefixMetadata};
+pub use bin::Bin;
+pub use chunk_metadata::{BinMetadata, ChunkMetadata};
 pub use constants::DEFAULT_COMPRESSION_LEVEL;
 pub use flags::Flags;
-pub use prefix::Prefix;
 
 pub mod data_types;
 pub mod errors;
@@ -22,6 +22,8 @@ pub mod wrapped;
 
 mod base_compressor;
 mod base_decompressor;
+mod bin;
+mod bin_optimization;
 mod bit_reader;
 mod bit_words;
 mod bit_writer;
@@ -37,8 +39,6 @@ mod gcd_utils;
 mod huffman_decoding;
 mod huffman_encoding;
 mod num_decompressor;
-mod prefix;
-mod prefix_optimization;
 mod run_len_utils;
 
 #[cfg(test)]

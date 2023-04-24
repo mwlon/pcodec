@@ -1,8 +1,10 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
+use crate::bin::{Bin, BinCompressionInfo, WeightedPrefix};
+use crate::bin_optimization;
 use crate::bit_writer::BitWriter;
-use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
+use crate::chunk_metadata::{BinMetadata, ChunkMetadata};
 use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -11,8 +13,6 @@ use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
-use crate::prefix::{Prefix, PrefixCompressionInfo, WeightedPrefix};
-use crate::prefix_optimization;
 use crate::{gcd_utils, huffman_encoding, Flags};
 
 struct JumpstartConfiguration {
@@ -30,16 +30,16 @@ struct JumpstartConfiguration {
 pub struct CompressorConfig {
   /// `compression_level` ranges from 0 to 12 inclusive (default 8).
   ///
-  /// The compressor uses up to 2^`compression_level` prefixes.
+  /// The compressor uses up to 2^`compression_level` bins.
   ///
   /// For example,
-  /// * Level 0 achieves a modest amount of compression with 1 prefix and can
+  /// * Level 0 achieves a modest amount of compression with 1 bin and can
   /// be twice as fast as level 8.
-  /// * Level 8 achieves nearly the best compression with 256 prefixes and still
+  /// * Level 8 achieves nearly the best compression with 256 bins and still
   /// runs in reasonable time. In some cases, its compression ratio is 3-4x as
   /// high as level level 0's.
   /// * Level 12 can achieve a few % better compression than 8 with 4096
-  /// prefixes but runs ~5x slower in many cases.
+  /// bins but runs ~5x slower in many cases.
   pub compression_level: usize,
   /// `delta_encoding_order` ranges from 0 to 7 inclusive (default 0).
   ///
@@ -107,7 +107,6 @@ impl CompressorConfig {
   }
 }
 
-
 // InternalCompressorConfig captures all settings that don't belong in flags
 // i.e. these don't get written to the resulting bytes and aren't needed for
 // decoding
@@ -155,26 +154,26 @@ fn choose_run_len_jumpstart(count: usize, n: usize) -> JumpstartConfiguration {
   }
 }
 
-struct PrefixBuffer<'a, T: NumberLike> {
+struct BinBuffer<'a, T: NumberLike> {
   pub seq: Vec<WeightedPrefix<T>>,
-  prefix_idx: usize,
-  max_n_pref: usize,
+  bin_idx: usize,
+  max_n_bin: usize,
   n_unsigneds: usize,
   sorted: &'a [T::Unsigned],
   use_gcd: bool,
   pub target_j: usize,
 }
 
-impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
+impl<'a, T: NumberLike> BinBuffer<'a, T> {
   fn calc_target_j(&mut self) {
-    self.target_j = ((self.prefix_idx + 1) * self.n_unsigneds) / self.max_n_pref
+    self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(max_n_pref: usize, n_unsigneds: usize, sorted: &'a [T::Unsigned], use_gcd: bool) -> Self {
+  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [T::Unsigned], use_gcd: bool) -> Self {
     let mut res = Self {
-      seq: Vec::with_capacity(max_n_pref),
-      prefix_idx: 0,
-      max_n_pref,
+      seq: Vec::with_capacity(max_n_bin),
+      bin_idx: 0,
+      max_n_bin,
       n_unsigneds,
       sorted,
       use_gcd,
@@ -184,15 +183,15 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
     res
   }
 
-  fn push_pref(&mut self, i: usize, j: usize) {
+  fn push_bin(&mut self, i: usize, j: usize) {
     let sorted = self.sorted;
     let n_unsigneds = self.n_unsigneds;
 
     let count = j - i;
     let frequency = count as f64 / self.n_unsigneds as f64;
-    let new_prefix_idx = max(
-      self.prefix_idx + 1,
-      (j * self.max_n_pref) / n_unsigneds,
+    let new_bin_idx = max(
+      self.bin_idx + 1,
+      (j * self.max_n_bin) / n_unsigneds,
     );
     let lower = T::from_unsigned(sorted[i]);
     let upper = T::from_unsigned(sorted[j - 1]);
@@ -205,12 +204,12 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
       || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN
       || count == n_unsigneds
     {
-      // The usual case - a prefix for a range that represents either 100% or
+      // The usual case - a bin for a range that represents either 100% or
       // <=80% of the data.
       WeightedPrefix::new(count, count, lower, upper, None, gcd)
     } else {
       // The weird case - a range that represents almost all (but not all) the data.
-      // We create extra prefixes that can describe `reps` copies of the range at once.
+      // We create extra bins that can describe `reps` copies of the range at once.
       let config = choose_run_len_jumpstart(count, n_unsigneds);
       WeightedPrefix::new(
         count,
@@ -222,16 +221,16 @@ impl<'a, T: NumberLike> PrefixBuffer<'a, T> {
       )
     };
     self.seq.push(wp);
-    self.prefix_idx = new_prefix_idx;
+    self.bin_idx = new_bin_idx;
     self.calc_target_j();
   }
 }
 
 // 2 ^ comp level, with 2 caveats:
-// * Enforce n_prefixes <= n_unsigneds
-// * Due to prefix optimization compute cost ~ O(4 ^ comp level), limit max comp level when
+// * Enforce n_bins <= n_unsigneds
+// * Due to bin optimization compute cost ~ O(4 ^ comp level), limit max comp level when
 // n_unsigneds is small
-fn choose_max_n_prefixes(comp_level: usize, n_unsigneds: usize) -> usize {
+fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
   let log_n = (n_unsigneds as f64).log2().floor() as usize;
   let fast_comp_level = log_n.saturating_sub(4);
   let real_comp_level = if comp_level <= fast_comp_level {
@@ -242,13 +241,13 @@ fn choose_max_n_prefixes(comp_level: usize, n_unsigneds: usize) -> usize {
   min(1_usize << real_comp_level, n_unsigneds)
 }
 
-fn choose_unoptimized_prefixes<T: NumberLike>(
+fn choose_unoptimized_bins<T: NumberLike>(
   sorted: &[T::Unsigned],
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
 ) -> Vec<WeightedPrefix<T>> {
   let n_unsigneds = sorted.len();
-  let max_n_pref = choose_max_n_prefixes(
+  let max_n_bin = choose_max_n_bins(
     internal_config.compression_level,
     n_unsigneds,
   );
@@ -256,34 +255,34 @@ fn choose_unoptimized_prefixes<T: NumberLike>(
   let use_gcd = flags.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut prefix_buffer = PrefixBuffer::<T>::new(max_n_pref, n_unsigneds, sorted, use_gcd);
+  let mut bin_buffer = BinBuffer::<T>::new(max_n_bin, n_unsigneds, sorted, use_gcd);
 
   for j in 1..n_unsigneds {
-    let target_j = prefix_buffer.target_j;
+    let target_j = bin_buffer.target_j;
     if sorted[j] == sorted[j - 1] {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        prefix_buffer.push_pref(i, backup_j);
+        bin_buffer.push_bin(i, backup_j);
         i = backup_j;
       }
     } else {
       backup_j = j;
       if j >= target_j {
-        prefix_buffer.push_pref(i, j);
+        bin_buffer.push_bin(i, j);
         i = j;
       }
     }
   }
-  prefix_buffer.push_pref(i, n_unsigneds);
+  bin_buffer.push_bin(i, n_unsigneds);
 
-  prefix_buffer.seq
+  bin_buffer.seq
 }
 
-fn train_prefixes<T: NumberLike>(
+fn train_bins<T: NumberLike>(
   unsigneds: Vec<T::Unsigned>,
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
-) -> QCompressResult<Vec<Prefix<T>>> {
+) -> QCompressResult<Vec<Bin<T>>> {
   if unsigneds.is_empty() {
     return Ok(Vec::new());
   }
@@ -302,18 +301,18 @@ fn train_prefixes<T: NumberLike>(
     )));
   }
 
-  let unoptimized_prefs = {
+  let unoptimized_bins = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
-    choose_unoptimized_prefixes(&sorted, internal_config, flags)
+    choose_unoptimized_bins(&sorted, internal_config, flags)
   };
 
-  let mut optimized_prefs = prefix_optimization::optimize_prefixes(unoptimized_prefs, flags, n);
+  let mut optimized_bins = bin_optimization::optimize_bins(unoptimized_bins, flags, n);
 
-  huffman_encoding::make_huffman_code(&mut optimized_prefs);
+  huffman_encoding::make_huffman_code(&mut optimized_bins);
 
-  let prefixes = optimized_prefs.iter().map(|wp| wp.prefix.clone()).collect();
-  Ok(prefixes)
+  let bins = optimized_bins.iter().map(|wp| wp.bin.clone()).collect();
+  Ok(bins)
 }
 
 fn trained_compress_body<U: UnsignedLike>(
@@ -337,17 +336,17 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   let mut i = 0;
   while i < unsigneds.len() {
     let unsigned = unsigneds[i];
-    let p = table.search(unsigned)?;
-    writer.write_usize(p.code, p.code_len);
-    match p.run_len_jumpstart {
+    let bin = table.search(unsigned)?;
+    writer.write_usize(bin.code, bin.code_len);
+    match bin.run_len_jumpstart {
       None => {
-        compress_offset::<U, GcdOp>(unsigned, p, writer);
+        compress_offset::<U, GcdOp>(unsigned, bin, writer);
         i += 1;
       }
       Some(jumpstart) => {
         let mut reps = 1;
         for &other in unsigneds.iter().skip(i + 1) {
-          if p.contains(other) {
+          if bin.contains(other) {
             reps += 1;
           } else {
             break;
@@ -355,11 +354,11 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
         }
 
         // we store 1 less than the number of occurrences
-        // because the prefix already implies there is at least 1 occurrence
+        // because the bin already implies there is at least 1 occurrence
         writer.write_varint(reps - 1, jumpstart);
 
         for &unsigned in unsigneds.iter().skip(i).take(reps) {
-          compress_offset::<U, GcdOp>(unsigned, p, writer);
+          compress_offset::<U, GcdOp>(unsigned, bin, writer);
         }
         i += reps;
       }
@@ -371,7 +370,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
 
 fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   unsigned: U,
-  p: &PrefixCompressionInfo<U>,
+  p: &BinCompressionInfo<U>,
   writer: &mut BitWriter,
 ) {
   let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
@@ -488,19 +487,19 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
 
     let order = self.flags.delta_encoding_order;
-    let (unsigneds, prefix_meta, table, delta_momentss) = if order == 0 {
+    let (unsigneds, bin_meta, table, delta_momentss) = if order == 0 {
       let unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
-      let prefixes = train_prefixes(
+      let bins = train_bins(
         unsigneds.clone(),
         &self.internal_config,
         &self.flags,
         n,
       )?;
-      let table = CompressionTable::from(prefixes.as_slice());
-      let prefix_metadata = PrefixMetadata::Simple { prefixes };
+      let table = CompressionTable::from(bins.as_slice());
+      let bin_metadata = BinMetadata::Simple { bins };
       (
         unsigneds,
-        prefix_metadata,
+        bin_metadata,
         table,
         vec![DeltaMoments::default(); n_pages],
       )
@@ -508,19 +507,19 @@ impl<T: NumberLike> BaseCompressor<T> {
       let page_idxs = cumulative_sum(&page_sizes);
       let (deltas, momentss) = delta_encoding::nth_order_deltas(nums, order, &page_idxs);
       let unsigneds = deltas.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
-      let prefixes = train_prefixes(
+      let bins = train_bins(
         unsigneds.clone(),
         &self.internal_config,
         &self.flags,
         n,
       )?;
-      let table = CompressionTable::from(prefixes.as_slice());
-      let prefix_metadata = PrefixMetadata::Delta { prefixes };
-      (unsigneds, prefix_metadata, table, momentss)
+      let table = CompressionTable::from(bins.as_slice());
+      let bin_metadata = BinMetadata::Delta { bins };
+      (unsigneds, bin_metadata, table, momentss)
     };
 
-    let use_gcd = prefix_meta.use_gcd();
-    let meta = ChunkMetadata::new(n, prefix_meta);
+    let use_gcd = bin_meta.use_gcd();
+    let meta = ChunkMetadata::new(n, bin_meta);
     meta.write_to(&mut self.writer, &self.flags);
 
     self.state = State::MidChunk(MidChunkInfo {
@@ -575,25 +574,19 @@ impl<T: NumberLike> BaseCompressor<T> {
 
 #[cfg(test)]
 mod tests {
-  use super::choose_max_n_prefixes;
+  use super::choose_max_n_bins;
 
   #[test]
-  fn test_choose_max_n_prefixes() {
-    assert_eq!(choose_max_n_prefixes(0, 100), 1);
-    assert_eq!(choose_max_n_prefixes(12, 200), 1 << 7);
-    assert_eq!(choose_max_n_prefixes(12, 1 << 10), 1 << 9);
-    assert_eq!(choose_max_n_prefixes(8, 1 << 10), 1 << 7);
-    assert_eq!(choose_max_n_prefixes(1, 1 << 10), 2);
-    assert_eq!(
-      choose_max_n_prefixes(12, (1 << 12) - 1),
-      1 << 9
-    );
-    assert_eq!(choose_max_n_prefixes(12, 1 << 12), 1 << 10);
-    assert_eq!(
-      choose_max_n_prefixes(12, (1 << 16) - 1),
-      1 << 11
-    );
-    assert_eq!(choose_max_n_prefixes(12, 1 << 16), 1 << 12);
-    assert_eq!(choose_max_n_prefixes(12, 1 << 20), 1 << 12);
+  fn test_choose_max_n_bins() {
+    assert_eq!(choose_max_n_bins(0, 100), 1);
+    assert_eq!(choose_max_n_bins(12, 200), 1 << 7);
+    assert_eq!(choose_max_n_bins(12, 1 << 10), 1 << 9);
+    assert_eq!(choose_max_n_bins(8, 1 << 10), 1 << 7);
+    assert_eq!(choose_max_n_bins(1, 1 << 10), 2);
+    assert_eq!(choose_max_n_bins(12, (1 << 12) - 1), 1 << 9);
+    assert_eq!(choose_max_n_bins(12, 1 << 12), 1 << 10);
+    assert_eq!(choose_max_n_bins(12, (1 << 16) - 1), 1 << 11);
+    assert_eq!(choose_max_n_bins(12, 1 << 16), 1 << 12);
+    assert_eq!(choose_max_n_bins(12, 1 << 20), 1 << 12);
   }
 }

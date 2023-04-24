@@ -1,8 +1,8 @@
-use std::io::Write;
 use crate::data_types::NumberLike;
-use crate::{bits, CompressorConfig, DecompressorConfig};
 use crate::errors::QCompressResult;
 use crate::standalone::{Compressor, Decompressor};
+use crate::{bits, CompressorConfig, DecompressorConfig};
+use std::io::Write;
 
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
@@ -35,7 +35,10 @@ pub fn simple_compress<T: NumberLike>(config: CompressorConfig, nums: &[T]) -> V
 ///
 /// Unlike most methods, this does not guarantee atomicity of the
 /// compressor's state.
-pub fn simple_decompress<T: NumberLike>(config: DecompressorConfig, bytes: &[u8]) -> QCompressResult<Vec<T>> {
+pub fn simple_decompress<T: NumberLike>(
+  config: DecompressorConfig,
+  bytes: &[u8],
+) -> QCompressResult<Vec<T>> {
   // cloning/extending by a single chunk's numbers can slow down by 2%
   // so we just take ownership of the first chunk's numbers instead
   let mut decompressor = Decompressor::<T>::from_config(config);
@@ -54,4 +57,3 @@ pub fn simple_decompress<T: NumberLike>(config: DecompressorConfig, bytes: &[u8]
   }
   Ok(res.unwrap_or_default())
 }
-

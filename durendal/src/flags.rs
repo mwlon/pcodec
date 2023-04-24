@@ -8,9 +8,7 @@ use std::convert::{TryFrom, TryInto};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::bits;
-use crate::constants::{
-  BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER,
-};
+use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
 use crate::CompressorConfig;
 
@@ -35,9 +33,9 @@ pub struct Flags {
   /// Introduced in 0.0.0.
   pub delta_encoding_order: usize,
   /// Whether to enable greatest common divisor multipliers for each
-  /// prefix.
-  /// This adds an optional multiplier to each prefix metadata, so that each
-  /// unsigned number is decoded as `x = prefix_lower + offset * gcd`.
+  /// bin.
+  /// This adds an optional multiplier to each bin metadata, so that each
+  /// unsigned number is decoded as `x = bin_lower + offset * gcd`.
   /// This can improve compression ratio in some cases, e.g. when the
   /// numbers are all integer multiples of 100 or all integer-valued floats.
   ///
@@ -159,8 +157,8 @@ impl Flags {
   }
 
   pub(crate) fn bits_to_encode_count(&self, n: usize) -> usize {
-    // If we use wrapped mode, we don't encode the prefix counts at all (even
-    // though they are nonzero). This propagates nicely through prefix
+    // If we use wrapped mode, we don't encode the bin counts at all (even
+    // though they are nonzero). This propagates nicely through bin
     // optimization.
     if self.use_wrapped_mode {
       0

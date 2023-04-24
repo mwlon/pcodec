@@ -1,18 +1,18 @@
+use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::gcd_utils::GcdOperator;
 use crate::num_decompressor::NumDecompressor;
-use crate::prefix::PrefixDecompressionInfo;
-use crate::Prefix;
+use crate::Bin;
 
-pub fn use_run_len<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
-  prefixes.iter().any(|p| p.run_len_jumpstart.is_some())
+pub fn use_run_len<T: NumberLike>(bins: &[Bin<T>]) -> bool {
+  bins.iter().any(|p| p.run_len_jumpstart.is_some())
 }
 
 fn unchecked_decompress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   reader: &mut BitReader,
   unsigneds: &mut Vec<U>,
-  p: PrefixDecompressionInfo<U>,
+  p: BinDecompressionInfo<U>,
 ) {
   let offset = reader.unchecked_read_uint(p.k);
   let unsigned = p.lower_unsigned + GcdOp::get_diff(offset, p.gcd);
@@ -24,7 +24,7 @@ pub trait RunLenOperator {
     num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     unsigneds: &mut Vec<U>,
-    p: PrefixDecompressionInfo<U>,
+    p: BinDecompressionInfo<U>,
     batch_size: usize,
   );
 
@@ -38,7 +38,7 @@ impl RunLenOperator for GeneralRunLenOp {
     num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     unsigneds: &mut Vec<U>,
-    p: PrefixDecompressionInfo<U>,
+    p: BinDecompressionInfo<U>,
     batch_size: usize,
   ) {
     match p.run_len_jumpstart {
@@ -74,7 +74,7 @@ impl RunLenOperator for TrivialRunLenOp {
     _num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     unsigneds: &mut Vec<U>,
-    p: PrefixDecompressionInfo<U>,
+    p: BinDecompressionInfo<U>,
     _batch_size: usize,
   ) {
     unchecked_decompress_offset::<U, GcdOp>(reader, unsigneds, p)
