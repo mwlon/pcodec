@@ -1,6 +1,6 @@
-use crate::CompressorConfig;
 use crate::data_types::NumberLike;
-use crate::standalone::{auto_decompress, Compressor, simple_compress};
+use crate::standalone::{auto_decompress, simple_compress, Compressor};
+use crate::CompressorConfig;
 
 #[test]
 fn test_edge_cases() {
@@ -147,13 +147,12 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         "name={} delta_encoding_order={}, use_gcds={}",
         name, delta_encoding_order, use_gcds,
       );
-      let config =
-        CompressorConfig {
-          compression_level,
-          delta_encoding_order,
-          use_gcds,
-          ..Default::default()
-        };
+      let config = CompressorConfig {
+        compression_level,
+        delta_encoding_order,
+        use_gcds,
+        ..Default::default()
+      };
       let compressed = simple_compress(config, &nums);
       let decompressed = auto_decompress::<T>(&compressed).unwrap();
       // We can't do assert_eq on the whole vector because even bitwise identical

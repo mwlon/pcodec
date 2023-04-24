@@ -1,40 +1,40 @@
+use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::prefix::Prefix;
 use crate::{gcd_utils, Flags};
 
-/// A wrapper for prefixes in the two cases cases: delta encoded or not.
+/// A wrapper for bins in the two cases cases: delta encoded or not.
 ///
 /// This is the part of chunk metadata that describes *how* the data was
 /// compressed - the Huffman codes used and what ranges they specify.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
-pub enum PrefixMetadata<T: NumberLike> {
-  /// `Simple` prefix metadata corresponds to the case when delta encoding is
+pub enum BinMetadata<T: NumberLike> {
+  /// `Simple` bin metadata corresponds to the case when delta encoding is
   /// off (`delta_encoding_order` of 0).
   ///
-  /// It simply contains prefixes of the same data type being compressed.
-  Simple { prefixes: Vec<Prefix<T>> },
-  /// `Delta` prefix metadata corresponds to the case when delta encoding is
+  /// It simply contains bins of the same data type being compressed.
+  Simple { bins: Vec<Bin<T>> },
+  /// `Delta` bin metadata corresponds to the case when delta encoding is
   /// on.
   ///
-  /// It contains prefixes of the associated `SignedLike` type (what the
+  /// It contains bins of the associated `SignedLike` type (what the
   /// deltas are expressed as). For instance, a chunk of delta-encoded `f64`s
   /// with `delta_encoding_order: 1`
-  /// will have prefixes of type `i64`, where a delta of n indicates a change
+  /// will have bins of type `i64`, where a delta of n indicates a change
   /// of n * machine epsilon from the last float.
   #[non_exhaustive]
-  Delta { prefixes: Vec<Prefix<T::Signed>> },
+  Delta { bins: Vec<Bin<T::Signed>> },
 }
 
-impl<T: NumberLike> PrefixMetadata<T> {
+impl<T: NumberLike> BinMetadata<T> {
   pub(crate) fn use_gcd(&self) -> bool {
     match self {
-      PrefixMetadata::Simple { prefixes } => gcd_utils::use_gcd_arithmetic(prefixes),
-      PrefixMetadata::Delta { prefixes } => gcd_utils::use_gcd_arithmetic(prefixes),
+      BinMetadata::Simple { bins } => gcd_utils::use_gcd_arithmetic(bins),
+      BinMetadata::Delta { bins } => gcd_utils::use_gcd_arithmetic(bins),
     }
   }
 }
@@ -58,16 +58,16 @@ pub struct ChunkMetadata<T: NumberLike> {
   /// Not available in wrapped mode.
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
-  pub prefix_metadata: PrefixMetadata<T>,
+  pub bin_metadata: BinMetadata<T>,
 }
 
-fn parse_prefixes<T: NumberLike>(
+fn parse_bins<T: NumberLike>(
   reader: &mut BitReader,
   flags: &Flags,
   n: usize,
-) -> QCompressResult<Vec<Prefix<T>>> {
-  let n_pref = reader.read_usize(BITS_TO_ENCODE_N_PREFIXES)?;
-  let mut prefixes = Vec::with_capacity(n_pref);
+) -> QCompressResult<Vec<Bin<T>>> {
+  let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
+  let mut bins = Vec::with_capacity(n_bins);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let maybe_common_gcd = if flags.use_gcds {
     if reader.read_one()? {
@@ -81,7 +81,7 @@ fn parse_prefixes<T: NumberLike>(
   } else {
     Some(T::Unsigned::ONE)
   };
-  for _ in 0..n_pref {
+  for _ in 0..n_bins {
     let count = reader.read_usize(bits_to_encode_count)?;
     let lower = T::read_from(reader)?;
     let upper = T::read_from(reader)?;
@@ -90,12 +90,12 @@ fn parse_prefixes<T: NumberLike>(
     let upper_u = upper.to_unsigned();
     if lower_u > upper_u {
       return Err(QCompressError::corruption(format!(
-        "prefix lower bound {} may not be greater than upper bound {}",
+        "bin lower bound {} may not be greater than upper bound {}",
         lower, upper,
       )));
     }
 
-    let code_len = reader.read_usize(BITS_TO_ENCODE_PREFIX_LEN)?;
+    let code_len = reader.read_usize(BITS_TO_ENCODE_CODE_LEN)?;
     let code = reader.read(code_len)?;
     let run_len_jumpstart = if reader.read_one()? {
       Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART)?)
@@ -107,7 +107,7 @@ fn parse_prefixes<T: NumberLike>(
     } else {
       gcd_utils::read_gcd(upper_u - lower_u, reader)?
     };
-    prefixes.push(Prefix {
+    bins.push(Bin {
       count,
       code,
       lower,
@@ -116,19 +116,14 @@ fn parse_prefixes<T: NumberLike>(
       gcd,
     });
   }
-  Ok(prefixes)
+  Ok(bins)
 }
 
-fn write_prefixes<T: NumberLike>(
-  prefixes: &[Prefix<T>],
-  writer: &mut BitWriter,
-  flags: &Flags,
-  n: usize,
-) {
-  writer.write_usize(prefixes.len(), BITS_TO_ENCODE_N_PREFIXES);
+fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Flags, n: usize) {
+  writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let maybe_commond_gcd = if flags.use_gcds {
-    let maybe_common_gcd = gcd_utils::common_gcd_for_chunk_meta(prefixes);
+    let maybe_common_gcd = gcd_utils::common_gcd_for_chunk_meta(bins);
     writer.write_one(maybe_common_gcd.is_some());
     if let Some(common_gcd) = maybe_common_gcd {
       gcd_utils::write_gcd(T::Unsigned::MAX, common_gcd, writer);
@@ -137,13 +132,13 @@ fn write_prefixes<T: NumberLike>(
   } else {
     Some(T::Unsigned::ONE)
   };
-  for pref in prefixes {
-    writer.write_usize(pref.count, bits_to_encode_count);
-    pref.lower.write_to(writer);
-    pref.upper.write_to(writer);
-    writer.write_usize(pref.code.len(), BITS_TO_ENCODE_PREFIX_LEN);
-    writer.write(&pref.code);
-    match pref.run_len_jumpstart {
+  for bin in bins {
+    writer.write_usize(bin.count, bits_to_encode_count);
+    bin.lower.write_to(writer);
+    bin.upper.write_to(writer);
+    writer.write_usize(bin.code.len(), BITS_TO_ENCODE_CODE_LEN);
+    writer.write(&bin.code);
+    match bin.run_len_jumpstart {
       None => {
         writer.write_one(false);
       }
@@ -154,8 +149,8 @@ fn write_prefixes<T: NumberLike>(
     }
     if maybe_commond_gcd.is_none() {
       gcd_utils::write_gcd(
-        pref.upper.to_unsigned() - pref.lower.to_unsigned(),
-        pref.gcd,
+        bin.upper.to_unsigned() - bin.lower.to_unsigned(),
+        bin.gcd,
         writer,
       );
     }
@@ -163,19 +158,16 @@ fn write_prefixes<T: NumberLike>(
 }
 
 impl<T: NumberLike> ChunkMetadata<T> {
-  pub(crate) fn new(
-    n: usize,
-    prefix_metadata: PrefixMetadata<T>,
-  ) -> Self {
+  pub(crate) fn new(n: usize, bin_metadata: BinMetadata<T>) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
-      prefix_metadata,
+      bin_metadata,
     }
   }
 
   pub(crate) fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
-    let (n, compressed_body_size ) = if flags.use_wrapped_mode {
+    let (n, compressed_body_size) = if flags.use_wrapped_mode {
       (0, 0)
     } else {
       (
@@ -184,12 +176,12 @@ impl<T: NumberLike> ChunkMetadata<T> {
       )
     };
 
-    let prefix_metadata = if flags.delta_encoding_order == 0 {
-      let prefixes = parse_prefixes::<T>(reader, flags, n)?;
-      PrefixMetadata::Simple { prefixes }
+    let bin_metadata = if flags.delta_encoding_order == 0 {
+      let bins = parse_bins::<T>(reader, flags, n)?;
+      BinMetadata::Simple { bins }
     } else {
-      let prefixes = parse_prefixes::<T::Signed>(reader, flags, n)?;
-      PrefixMetadata::Delta { prefixes }
+      let bins = parse_bins::<T::Signed>(reader, flags, n)?;
+      BinMetadata::Delta { bins }
     };
 
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;
@@ -197,7 +189,7 @@ impl<T: NumberLike> ChunkMetadata<T> {
     Ok(Self {
       n,
       compressed_body_size,
-      prefix_metadata,
+      bin_metadata,
     })
   }
 
@@ -209,12 +201,12 @@ impl<T: NumberLike> ChunkMetadata<T> {
         BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
       );
     }
-    match &self.prefix_metadata {
-      PrefixMetadata::Simple { prefixes } => {
-        write_prefixes(prefixes, writer, flags, self.n);
+    match &self.bin_metadata {
+      BinMetadata::Simple { bins } => {
+        write_bins(bins, writer, flags, self.n);
       }
-      PrefixMetadata::Delta { prefixes } => {
-        write_prefixes(prefixes, writer, flags, self.n);
+      BinMetadata::Delta { bins } => {
+        write_bins(bins, writer, flags, self.n);
       }
     }
     writer.finish_byte();

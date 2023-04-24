@@ -28,12 +28,10 @@ fn test_low_level_sparse() {
 fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
     let debug_info = format!("delta order={}", delta_encoding_order);
-    let mut compressor = Compressor::<T>::from_config(
-      CompressorConfig {
-        delta_encoding_order,
-        ..Default::default()
-      },
-    );
+    let mut compressor = Compressor::<T>::from_config(CompressorConfig {
+      delta_encoding_order,
+      ..Default::default()
+    });
     compressor.header().unwrap();
     let mut metadatas = Vec::new();
     for nums in &numss {
@@ -43,11 +41,10 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
 
     let bytes = compressor.drain_bytes();
 
-    let mut decompressor =
-      Decompressor::<T>::from_config(DecompressorConfig {
-        numbers_limit_per_item: 2,
-        ..Default::default()
-      });
+    let mut decompressor = Decompressor::<T>::from_config(DecompressorConfig {
+      numbers_limit_per_item: 2,
+      ..Default::default()
+    });
     decompressor.write_all(&bytes).unwrap();
     let flags = decompressor.header().unwrap();
     assert_eq!(&flags, compressor.flags(), "{}", debug_info);

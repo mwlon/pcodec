@@ -132,18 +132,24 @@ write_f64(np.random.randint(0, 2 ** 30, size=n), 'integers')
 np.random.seed(0)
 write_f64(np.random.randint(1000, 10000, size=n) / 100, 'decimal')
 
+# 10 interleaved 0th order sequences with different scales
+np.random.seed(0)
+bases = 10 ** np.arange(10)
+interleaved = bases[None, :] + np.random.normal(scale=22, size=[n // 10, 10])
+write_i64(interleaved.reshape(-1), 'interl0')
+
 # 10 interleaved 1st order sequences with different scales
 np.random.seed(0)
 deltas = np.random.randint(-10, 10, size=[n // 10, 10])
 bases = 10 ** np.arange(10)
 interleaved = bases[None, :] + np.cumsum(deltas, axis=0)
-write_i64(interleaved.reshape(-1), 'interl')
+write_i64(interleaved.reshape(-1), 'interl1')
 
 # the same as interleaved, but shuffled within each group of 10
 np.random.seed(0)
 idxs = np.random.rand(*interleaved.shape).argsort(axis=1)
 interleaved_scrambled = np.take_along_axis(interleaved, idxs, axis=1)
-write_i64(interleaved_scrambled.reshape(-1), 'interl_scrambl')
+write_i64(interleaved_scrambled.reshape(-1), 'interl_scrambl1')
 
 # randomly one of 4 distinct values
 np.random.seed(0)

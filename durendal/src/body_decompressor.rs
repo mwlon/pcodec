@@ -5,7 +5,7 @@ use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
 use crate::num_decompressor::NumDecompressor;
-use crate::{delta_encoding, PrefixMetadata};
+use crate::{delta_encoding, BinMetadata};
 
 #[derive(Debug)]
 pub struct Numbers<T: NumberLike> {
@@ -30,21 +30,21 @@ pub enum BodyDecompressor<T: NumberLike> {
 
 impl<T: NumberLike> BodyDecompressor<T> {
   pub(crate) fn new(
-    prefix_metadata: &PrefixMetadata<T>,
+    bin_metadata: &BinMetadata<T>,
     n: usize,
     compressed_body_size: usize,
     delta_moments: &DeltaMoments<T::Signed>,
   ) -> QCompressResult<Self> {
-    Ok(match prefix_metadata {
-      PrefixMetadata::Simple { prefixes } => Self::Simple {
-        num_decompressor: NumDecompressor::new(n, compressed_body_size, prefixes.clone())?,
+    Ok(match bin_metadata {
+      BinMetadata::Simple { bins } => Self::Simple {
+        num_decompressor: NumDecompressor::new(n, compressed_body_size, bins.clone())?,
       },
-      PrefixMetadata::Delta { prefixes } => Self::Delta {
+      BinMetadata::Delta { bins } => Self::Delta {
         n,
         num_decompressor: NumDecompressor::new(
           n.saturating_sub(delta_moments.order()),
           compressed_body_size,
-          prefixes.clone(),
+          bins.clone(),
         )?,
         delta_moments: delta_moments.clone(),
         nums_processed: 0,
@@ -107,13 +107,13 @@ impl<T: NumberLike> BodyDecompressor<T> {
 #[cfg(test)]
 mod tests {
   use super::BodyDecompressor;
-  use crate::chunk_metadata::{ChunkMetadata, PrefixMetadata};
+  use crate::bin::Bin;
+  use crate::chunk_metadata::{BinMetadata, ChunkMetadata};
   use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
-  use crate::prefix::Prefix;
 
-  fn prefix_w_code(code: Vec<bool>) -> Prefix<i64> {
-    Prefix {
+  fn bin_w_code(code: Vec<bool>) -> Bin<i64> {
+    Bin {
       count: 1,
       code,
       lower: 100,
@@ -124,29 +124,29 @@ mod tests {
   }
 
   #[test]
-  fn test_corrupt_prefixes_error_not_panic() {
-    let metadata_missing_prefix = ChunkMetadata::<i64> {
+  fn test_corrupt_bins_error_not_panic() {
+    let metadata_missing_bin = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
-      prefix_metadata: PrefixMetadata::Simple {
-        prefixes: vec![prefix_w_code(vec![false]), prefix_w_code(vec![true, false])],
+      bin_metadata: BinMetadata::Simple {
+        bins: vec![bin_w_code(vec![false]), bin_w_code(vec![true, false])],
       },
     };
-    let metadata_duplicating_prefix = ChunkMetadata::<i64> {
+    let metadata_duplicating_bin = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
-      prefix_metadata: PrefixMetadata::Simple {
-        prefixes: vec![
-          prefix_w_code(vec![false]),
-          prefix_w_code(vec![false]),
-          prefix_w_code(vec![true]),
+      bin_metadata: BinMetadata::Simple {
+        bins: vec![
+          bin_w_code(vec![false]),
+          bin_w_code(vec![false]),
+          bin_w_code(vec![true]),
         ],
       },
     };
 
-    for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
+    for bad_metadata in vec![metadata_missing_bin, metadata_duplicating_bin] {
       let result = BodyDecompressor::new(
-        &bad_metadata.prefix_metadata,
+        &bad_metadata.bin_metadata,
         bad_metadata.n,
         bad_metadata.compressed_body_size,
         &DeltaMoments::default(),

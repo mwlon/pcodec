@@ -109,13 +109,11 @@ impl<T: NumberLike> State<T> {
     let compressed_body_size = compressed_page_size
       .checked_sub(end_byte_idx - start_byte_idx)
       .ok_or_else(|| {
-        QCompressError::corruption(
-          "compressed page size {} is less than data page metadata size",
-        )
+        QCompressError::corruption("compressed page size {} is less than data page metadata size")
       })?;
 
     BodyDecompressor::new(
-      &chunk_meta.prefix_metadata,
+      &chunk_meta.bin_metadata,
       n,
       compressed_body_size,
       &delta_moments,

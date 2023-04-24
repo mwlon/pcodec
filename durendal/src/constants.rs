@@ -6,16 +6,16 @@ pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
 pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: usize = 3;
 pub const MAX_ENTRIES: usize = (1 << 24) - 1;
 pub const BITS_TO_ENCODE_N_ENTRIES: usize = 24;
-pub const BITS_TO_ENCODE_N_PREFIXES: usize = 15;
+pub const BITS_TO_ENCODE_N_BINS: usize = 15;
 pub const MAX_JUMPSTART: usize = BITS_TO_ENCODE_N_ENTRIES;
 pub const BITS_TO_ENCODE_JUMPSTART: usize = 5;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: usize = 32;
-pub const BITS_TO_ENCODE_PREFIX_LEN: usize = 5;
+pub const BITS_TO_ENCODE_CODE_LEN: usize = 5;
 
-// MAX_PREFIX_TABLE_SIZE_LOG is a performance tuning parameter
+// MAX_BIN_TABLE_SIZE_LOG is a performance tuning parameter
 // Too high, and we use excessive memory and in some cases hurt performance.
 // Too low, and performance drops.
-pub const MAX_PREFIX_TABLE_SIZE_LOG: usize = 8;
+pub const MAX_BIN_TABLE_SIZE_LOG: usize = 8;
 
 pub const WORD_SIZE: usize = usize::BITS as usize;
 pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
@@ -61,9 +61,9 @@ mod tests {
   }
 
   #[test]
-  fn test_prefix_table_size_fits_in_word() {
-    assert!(MAX_PREFIX_TABLE_SIZE_LOG > 0);
-    assert!(MAX_PREFIX_TABLE_SIZE_LOG <= WORD_SIZE);
+  fn test_bin_table_size_fits_in_word() {
+    assert!(MAX_BIN_TABLE_SIZE_LOG > 0);
+    assert!(MAX_BIN_TABLE_SIZE_LOG <= WORD_SIZE);
   }
 
   #[test]

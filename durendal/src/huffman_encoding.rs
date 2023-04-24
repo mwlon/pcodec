@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
+use crate::bin::WeightedPrefix;
 use crate::data_types::NumberLike;
-use crate::prefix::WeightedPrefix;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
@@ -53,7 +53,7 @@ impl HuffmanItem {
   ) {
     item_idx[self.id].bits = bits.clone();
     if self.leaf_id.is_some() {
-      leaf_idx[self.leaf_id.unwrap()].prefix.code = bits;
+      leaf_idx[self.leaf_id.unwrap()].bin.code = bits;
     } else {
       let mut left_bits = bits.clone();
       left_bits.push(false);
@@ -81,18 +81,18 @@ impl PartialOrd for HuffmanItem {
   }
 }
 
-pub fn make_huffman_code<T: NumberLike>(prefix_sequence: &mut [WeightedPrefix<T>]) {
-  let n = prefix_sequence.len();
+pub fn make_huffman_code<T: NumberLike>(bin_sequence: &mut [WeightedPrefix<T>]) {
+  let n = bin_sequence.len();
   let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
   let mut items = Vec::with_capacity(n); // for modifying item codes
-  for (i, prefix) in prefix_sequence.iter().enumerate() {
-    let item = HuffmanItem::new(prefix.weight, i);
+  for (i, bin) in bin_sequence.iter().enumerate() {
+    let item = HuffmanItem::new(bin.weight, i);
     heap.push(item.clone());
     items.push(item);
   }
 
-  let mut id = prefix_sequence.len();
-  for _ in 0..(prefix_sequence.len() - 1) {
+  let mut id = bin_sequence.len();
+  for _ in 0..(bin_sequence.len() - 1) {
     let small0 = heap.pop().unwrap();
     let small1 = heap.pop().unwrap();
     let new_item = HuffmanItem::new_parent_of(&small0, &small1, id);
@@ -102,18 +102,18 @@ pub fn make_huffman_code<T: NumberLike>(prefix_sequence: &mut [WeightedPrefix<T>
   }
 
   let head_node = heap.pop().unwrap();
-  head_node.create_bits(&mut items, prefix_sequence);
+  head_node.create_bits(&mut items, bin_sequence);
 }
 
 #[cfg(test)]
 mod tests {
+  use crate::bin::{Bin, WeightedPrefix};
   use crate::huffman_encoding::make_huffman_code;
-  use crate::prefix::{Prefix, WeightedPrefix};
 
-  fn coded_prefix(weight: usize, code: Vec<bool>) -> WeightedPrefix<i32> {
+  fn coded_bin(weight: usize, code: Vec<bool>) -> WeightedPrefix<i32> {
     WeightedPrefix {
       weight,
-      prefix: Prefix {
+      bin: Bin {
         count: 0,
         code,
         lower: 0,
@@ -124,35 +124,35 @@ mod tests {
     }
   }
 
-  fn uncoded_prefix(weight: usize) -> WeightedPrefix<i32> {
-    coded_prefix(weight, Vec::new())
+  fn uncoded_bin(weight: usize) -> WeightedPrefix<i32> {
+    coded_bin(weight, Vec::new())
   }
 
   #[test]
   fn test_make_huffman_code_single() {
-    let mut prefix_seq = vec![uncoded_prefix(100)];
-    make_huffman_code(&mut prefix_seq);
-    assert_eq!(prefix_seq, vec![coded_prefix(100, vec![]),]);
+    let mut bin_seq = vec![uncoded_bin(100)];
+    make_huffman_code(&mut bin_seq);
+    assert_eq!(bin_seq, vec![coded_bin(100, vec![]),]);
   }
 
   #[test]
   fn test_make_huffman_code() {
-    let mut prefix_seq = vec![
-      uncoded_prefix(1),
-      uncoded_prefix(6),
-      uncoded_prefix(2),
-      uncoded_prefix(4),
-      uncoded_prefix(5),
+    let mut bin_seq = vec![
+      uncoded_bin(1),
+      uncoded_bin(6),
+      uncoded_bin(2),
+      uncoded_bin(4),
+      uncoded_bin(5),
     ];
-    make_huffman_code(&mut prefix_seq);
+    make_huffman_code(&mut bin_seq);
     assert_eq!(
-      prefix_seq,
+      bin_seq,
       vec![
-        coded_prefix(1, vec![false, false, false]),
-        coded_prefix(6, vec![true, true]),
-        coded_prefix(2, vec![false, false, true]),
-        coded_prefix(4, vec![false, true]),
-        coded_prefix(5, vec![true, false]),
+        coded_bin(1, vec![false, false, false]),
+        coded_bin(6, vec![true, true]),
+        coded_bin(2, vec![false, false, true]),
+        coded_bin(4, vec![false, true]),
+        coded_bin(5, vec![true, false]),
       ]
     );
   }

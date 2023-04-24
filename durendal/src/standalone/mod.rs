@@ -1,6 +1,6 @@
+mod auto;
 mod compressor;
 mod decompressor;
-mod auto;
 mod simple;
 
 pub use auto::{auto_compress, auto_compressor_config, auto_decompress};

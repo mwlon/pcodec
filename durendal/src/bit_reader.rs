@@ -180,14 +180,11 @@ impl<'a> BitReader<'a> {
   }
 
   // returns (bits read, idx)
-  pub fn read_prefix_table_idx(
-    &mut self,
-    table_size_log: usize,
-  ) -> QCompressResult<(usize, usize)> {
+  pub fn read_bin_table_idx(&mut self, table_size_log: usize) -> QCompressResult<(usize, usize)> {
     let bit_idx = self.bit_idx();
     if bit_idx >= self.total_bits {
       return Err(QCompressError::insufficient_data_recipe(
-        "read_prefix_table_idx",
+        "read_bin_table_idx",
         1,
         bit_idx,
         self.total_bits,
@@ -254,7 +251,7 @@ impl<'a> BitReader<'a> {
     res & (U::MAX >> (U::BITS - n))
   }
 
-  pub fn unchecked_read_prefix_table_idx(&mut self, table_size_log: usize) -> usize {
+  pub fn unchecked_read_bin_table_idx(&mut self, table_size_log: usize) -> usize {
     let (i, j) = self.idxs();
     self.bit_idx += table_size_log;
     (self.unchecked_word(i) >> j) & (usize::MAX >> (WORD_SIZE - table_size_log))
@@ -305,7 +302,7 @@ impl<'a> BitReader<'a> {
 
   /// Skips backward `n` bits where n <= 32.
   /// Will panic if the resulting position is out of bounds.
-  pub fn rewind_prefix_overshoot(&mut self, n: usize) {
+  pub fn rewind_bin_overshoot(&mut self, n: usize) {
     self.bit_idx -= n;
   }
 }
@@ -364,25 +361,25 @@ mod tests {
   }
 
   #[test]
-  fn test_read_prefix_table_idx() -> QCompressResult<()> {
+  fn test_read_bin_table_idx() -> QCompressResult<()> {
     let bytes = (0..17).collect::<Vec<_>>();
     let words = BitWords::from(bytes);
     let mut reader = BitReader::from(&words);
     reader.seek(56);
     // bytes 7 and 8, all data available
     assert_eq!(
-      reader.read_prefix_table_idx(16)?,
+      reader.read_bin_table_idx(16)?,
       (16, 7 + (8 << 8))
     );
     // byte 9 and part of 10
     assert_eq!(
-      reader.read_prefix_table_idx(11)?,
+      reader.read_bin_table_idx(11)?,
       (11, 9 + (2 << 8))
     );
     reader.seek_to(120);
     // 2 bytes left, but we'll ask for 3
     assert_eq!(
-      reader.read_prefix_table_idx(24)?,
+      reader.read_bin_table_idx(24)?,
       (16, 15 + (16 << 8))
     );
     Ok(())
@@ -395,15 +392,15 @@ mod tests {
     let mut reader = BitReader::from(&words);
     reader.seek(43);
 
-    reader.rewind_prefix_overshoot(2);
+    reader.rewind_bin_overshoot(2);
     assert_eq!(reader.bit_idx(), 41);
-    reader.rewind_prefix_overshoot(2);
+    reader.rewind_bin_overshoot(2);
     assert_eq!(reader.bit_idx(), 39);
-    reader.rewind_prefix_overshoot(7);
+    reader.rewind_bin_overshoot(7);
     assert_eq!(reader.bit_idx(), 32);
-    reader.rewind_prefix_overshoot(8);
+    reader.rewind_bin_overshoot(8);
     assert_eq!(reader.bit_idx(), 24);
-    reader.rewind_prefix_overshoot(17);
+    reader.rewind_bin_overshoot(17);
     assert_eq!(reader.bit_idx(), 7);
   }
 }

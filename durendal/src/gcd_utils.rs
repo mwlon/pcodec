@@ -2,7 +2,7 @@ use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::{Flags, Prefix};
+use crate::{Bin, Flags};
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {
@@ -34,17 +34,17 @@ pub fn gcd<U: UnsignedLike>(sorted: &[U]) -> U {
   res
 }
 
-// Returns Some(gcd) if it is more concise to use the same GCD for all prefixes
-// Returns None if it is more concise to describe each prefix's GCD separately
+// Returns Some(gcd) if it is more concise to use the same GCD for all bins
+// Returns None if it is more concise to describe each bin's GCD separately
 // 4 cases:
-// * no prefixes: we don't even need to bother writing a common GCD, return None
-// * all prefixes have range 0, i.e. [x, x]: GCD doesn't affect num blocks, return Some(1)
-// * all prefixes with range >0 have same GCD: return Some(that GCD)
-// * two prefixes with range >0 have different GCD: return None
-pub fn common_gcd_for_chunk_meta<T: NumberLike>(prefixes: &[Prefix<T>]) -> Option<T::Unsigned> {
+// * no bins: we don't even need to bother writing a common GCD, return None
+// * all bins have range 0, i.e. [x, x]: GCD doesn't affect num blocks, return Some(1)
+// * all bins with range >0 have same GCD: return Some(that GCD)
+// * two bins with range >0 have different GCD: return None
+pub fn common_gcd_for_chunk_meta<T: NumberLike>(bins: &[Bin<T>]) -> Option<T::Unsigned> {
   let mut nontrivial_ranges_share_gcd: bool = true;
   let mut gcd = None;
-  for p in prefixes {
+  for p in bins {
     if p.upper != p.lower {
       if gcd.is_none() {
         gcd = Some(p.gcd);
@@ -54,11 +54,7 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(prefixes: &[Prefix<T>]) -> Optio
     }
   }
 
-  match (
-    prefixes.len(),
-    nontrivial_ranges_share_gcd,
-    gcd,
-  ) {
+  match (bins.len(), nontrivial_ranges_share_gcd, gcd) {
     (0, _, _) => None,
     (_, false, _) => None,
     (_, true, Some(gcd)) => Some(gcd),
@@ -66,18 +62,18 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(prefixes: &[Prefix<T>]) -> Optio
   }
 }
 
-pub fn use_gcd_prefix_optimize<T: NumberLike>(prefixes: &[Prefix<T>], flags: &Flags) -> bool {
+pub fn use_gcd_bin_optimize<T: NumberLike>(bins: &[Bin<T>], flags: &Flags) -> bool {
   if !flags.use_gcds {
     return false;
   }
 
-  for p in prefixes {
+  for p in bins {
     if p.gcd > T::Unsigned::ONE {
       return true;
     }
   }
-  for (i, pi) in prefixes.iter().enumerate().skip(1) {
-    let pj = &prefixes[i - 1];
+  for (i, pi) in bins.iter().enumerate().skip(1) {
+    let pj = &bins[i - 1];
     if pi.lower == pi.upper
       && pj.lower == pj.upper
       && pj.upper.to_unsigned() + T::Unsigned::ONE < pi.lower.to_unsigned()
@@ -88,8 +84,8 @@ pub fn use_gcd_prefix_optimize<T: NumberLike>(prefixes: &[Prefix<T>], flags: &Fl
   false
 }
 
-pub fn use_gcd_arithmetic<T: NumberLike>(prefixes: &[Prefix<T>]) -> bool {
-  prefixes
+pub fn use_gcd_arithmetic<T: NumberLike>(bins: &[Bin<T>]) -> bool {
+  bins
     .iter()
     .any(|p| p.gcd > T::Unsigned::ONE && p.upper != p.lower)
 }
@@ -124,7 +120,7 @@ pub fn read_gcd<U: UnsignedLike>(range: U, reader: &mut BitReader) -> QCompressR
   }
 }
 
-pub fn fold_prefix_gcds_left<U: UnsignedLike>(
+pub fn fold_bin_gcds_left<U: UnsignedLike>(
   left_lower: U,
   left_upper: U,
   left_gcd: U,
@@ -132,7 +128,7 @@ pub fn fold_prefix_gcds_left<U: UnsignedLike>(
   acc: &mut Option<U>,
 ) {
   // folding GCD's involves GCD'ing with their modulo offset and (if the new
-  // range is nontrivial) with the new prefix's GCD
+  // range is nontrivial) with the new bin's GCD
   if left_upper != right_upper {
     *acc = Some(match *acc {
       Some(gcd) => pair_gcd(right_upper - left_upper, gcd),
@@ -156,7 +152,7 @@ pub struct TrivialGcdOp;
 
 pub struct GeneralGcdOp;
 
-// When all prefix GCD's are 1
+// When all bin GCD's are 1
 impl<U: UnsignedLike> GcdOperator<U> for TrivialGcdOp {
   fn get_offset(diff: U, _: U) -> U {
     diff

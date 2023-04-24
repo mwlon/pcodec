@@ -1,11 +1,11 @@
 use std::cmp::min;
 
-use crate::{CompressorConfig, DecompressorConfig};
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::standalone::{Compressor, simple_compress};
 use crate::standalone::simple::simple_decompress;
+use crate::standalone::{simple_compress, Compressor};
+use crate::{CompressorConfig, DecompressorConfig};
 
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,
@@ -18,10 +18,7 @@ use crate::standalone::simple::simple_decompress;
 /// the compute cost.
 /// See [`CompressorConfig`] for information about compression levels.
 pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
-  let config = auto_compressor_config(
-    nums,
-    compression_level,
-  );
+  let config = auto_compressor_config(nums, compression_level);
   simple_compress(config, nums)
 }
 
@@ -80,9 +77,11 @@ fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize
     // determine the best delta order.
     let config = CompressorConfig {
       delta_encoding_order,
-      compression_level: min(compression_level, MAX_AUTO_DELTA_COMPRESSION_LEVEL),
+      compression_level: min(
+        compression_level,
+        MAX_AUTO_DELTA_COMPRESSION_LEVEL,
+      ),
       use_gcds: false,
-      ..Default::default()
     };
     let mut compressor = Compressor::<T>::from_config(config);
     compressor.header().unwrap();

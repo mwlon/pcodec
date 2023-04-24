@@ -1,32 +1,32 @@
 use std::cmp::{max, min};
 
+use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{
-  BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, MAX_PREFIX_TABLE_SIZE_LOG,
+  BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, MAX_BIN_TABLE_SIZE_LOG,
 };
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::huffman_decoding::HuffmanTable;
-use crate::prefix::PrefixDecompressionInfo;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
-use crate::{bits, gcd_utils, run_len_utils, Prefix};
+use crate::{bits, gcd_utils, run_len_utils, Bin};
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
-fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResult<()> {
-  if prefixes.is_empty() {
+fn validate_bin_tree<T: NumberLike>(bins: &[Bin<T>]) -> QCompressResult<()> {
+  if bins.is_empty() {
     return Ok(());
   }
 
   let mut max_depth = 0;
-  for p in prefixes {
+  for p in bins {
     max_depth = max(max_depth, p.code.len());
   }
 
   let max_n_leafs = 1_usize << max_depth;
   let mut is_specifieds = vec![false; max_n_leafs];
-  for p in prefixes {
+  for p in bins {
     let base_idx = bits::bits_to_usize(&p.code);
     let step = 1_usize << p.code.len();
     let n_leafs = 1_usize << (max_depth - p.code.len());
@@ -38,7 +38,7 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
     {
       if *is_specified {
         return Err(QCompressError::corruption(format!(
-          "multiple prefixes for {} found in chunk metadata",
+          "multiple bins for {} found in chunk metadata",
           bits::bits_to_string(&p.code),
         )));
       }
@@ -49,7 +49,7 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
     if !is_specified {
       let code = bits::usize_to_bits(idx, max_depth);
       return Err(QCompressError::corruption(format!(
-        "no prefixes for {} found in chunk metadata",
+        "no bins for {} found in chunk metadata",
         bits::bits_to_string(&code),
       )));
     }
@@ -57,28 +57,28 @@ fn validate_prefix_tree<T: NumberLike>(prefixes: &[Prefix<T>]) -> QCompressResul
   Ok(())
 }
 
-// For the prefix, the maximum number of bits we might need to read.
+// For the bin, the maximum number of bits we might need to read.
 // Helps decide whether to do checked or unchecked reads.
-fn max_bits_read<T: NumberLike>(p: &Prefix<T>) -> usize {
-  let prefix_bits = p.code.len();
+fn max_bits_read<T: NumberLike>(p: &Bin<T>) -> usize {
+  let bin_bits = p.code.len();
   let (max_reps, max_jumpstart_bits) = match p.run_len_jumpstart {
     None => (1, 0),
     Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
   };
   let max_bits_per_offset = p.k_info();
-  prefix_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
+  bin_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
 }
 
-// For the prefix, the maximum number of bits we might overshoot by during an
+// For the bin, the maximum number of bits we might overshoot by during an
 // unchecked read.
 // Helps decide whether to do checked or unchecked reads.
 // We could make a slightly tighter bound with more logic, but I don't think there
 // are any cases where it would help much.
-fn max_bits_overshot<T: NumberLike>(p: &Prefix<T>) -> usize {
+fn max_bits_overshot<T: NumberLike>(p: &Bin<T>) -> usize {
   if p.code.is_empty() {
     0
   } else {
-    (MAX_PREFIX_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info())
+    (MAX_BIN_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info())
   }
 }
 
@@ -91,7 +91,7 @@ pub struct Unsigneds<U: UnsignedLike> {
 struct State<U: UnsignedLike> {
   n_processed: usize,
   bits_processed: usize,
-  incomplete_prefix: PrefixDecompressionInfo<U>,
+  incomplete_bin: BinDecompressionInfo<U>,
   incomplete_reps: usize,
 }
 
@@ -115,7 +115,7 @@ pub struct NumDecompressor<U: UnsignedLike> {
 fn decompress_offset_dirty<U: UnsignedLike>(
   reader: &mut BitReader,
   unsigneds: &mut Vec<U>,
-  p: PrefixDecompressionInfo<U>,
+  p: BinDecompressionInfo<U>,
 ) -> QCompressResult<()> {
   let offset = reader.read_uint::<U>(p.k)?;
   let unsigned = p.lower_unsigned + offset * p.gcd;
@@ -127,31 +127,27 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   pub(crate) fn new<T: NumberLike<Unsigned = U>>(
     n: usize,
     compressed_body_size: usize,
-    prefixes: Vec<Prefix<T>>,
+    bins: Vec<Bin<T>>,
   ) -> QCompressResult<Self> {
-    if prefixes.is_empty() && n > 0 {
+    if bins.is_empty() && n > 0 {
       return Err(QCompressError::corruption(format!(
-        "unable to decompress chunk with no prefixes and {} numbers",
+        "unable to decompress chunk with no bins and {} numbers",
         n,
       )));
     }
-    validate_prefix_tree(&prefixes)?;
+    validate_bin_tree(&bins)?;
 
-    let max_bits_per_num_block = prefixes
-      .iter()
-      .map(max_bits_read)
-      .max()
-      .unwrap_or(usize::MAX);
-    let max_overshoot_per_num_block = prefixes
+    let max_bits_per_num_block = bins.iter().map(max_bits_read).max().unwrap_or(usize::MAX);
+    let max_overshoot_per_num_block = bins
       .iter()
       .map(max_bits_overshot)
       .max()
       .unwrap_or(usize::MAX);
-    let use_gcd = gcd_utils::use_gcd_arithmetic(&prefixes);
-    let use_run_len = run_len_utils::use_run_len(&prefixes);
+    let use_gcd = gcd_utils::use_gcd_arithmetic(&bins);
+    let use_run_len = run_len_utils::use_run_len(&bins);
 
     Ok(NumDecompressor {
-      huffman_table: HuffmanTable::from(&prefixes),
+      huffman_table: HuffmanTable::from(&bins),
       n,
       compressed_body_size,
       max_bits_per_num_block,
@@ -161,7 +157,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       state: State {
         n_processed: 0,
         bits_processed: 0,
-        incomplete_prefix: PrefixDecompressionInfo::default(),
+        incomplete_bin: BinDecompressionInfo::default(),
         incomplete_reps: 0,
       },
     })
@@ -178,8 +174,8 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     unsigneds: &mut Vec<U>,
     batch_size: usize,
   ) {
-    let p = self.huffman_table.unchecked_search_with_reader(reader);
-    RunLenOp::unchecked_decompress_offsets::<U, GcdOp>(self, reader, unsigneds, p, batch_size);
+    let bin = self.huffman_table.unchecked_search_with_reader(reader);
+    RunLenOp::unchecked_decompress_offsets::<U, GcdOp>(self, reader, unsigneds, bin, batch_size);
   }
 
   fn unchecked_decompress_num_blocks<GcdOp: GcdOperator<U>, RunLenOp: RunLenOperator>(
@@ -197,12 +193,12 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
   pub fn unchecked_limit_reps(
     &mut self,
-    prefix: PrefixDecompressionInfo<U>,
+    bin: BinDecompressionInfo<U>,
     full_reps: usize,
     limit: usize,
   ) -> usize {
     if full_reps > limit {
-      self.state.incomplete_prefix = prefix;
+      self.state.incomplete_bin = bin;
       self.state.incomplete_reps = full_reps - limit;
       limit
     } else {
@@ -212,11 +208,11 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
   pub fn limit_reps(
     &mut self,
-    prefix: PrefixDecompressionInfo<U>,
+    bin: BinDecompressionInfo<U>,
     full_reps: usize,
     limit: usize,
   ) -> usize {
-    self.state.incomplete_prefix = prefix;
+    self.state.incomplete_bin = bin;
     self.state.incomplete_reps = full_reps;
     min(full_reps, limit)
   }
@@ -228,15 +224,15 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     batch_size: usize,
   ) -> QCompressResult<()> {
     let start_bit_idx = reader.bit_idx();
-    let pref_res = self.huffman_table.search_with_reader(reader);
-    if pref_res.is_err() {
+    let bin_res = self.huffman_table.search_with_reader(reader);
+    if bin_res.is_err() {
       reader.seek_to(start_bit_idx);
     }
-    let prefix = pref_res?;
+    let bin = bin_res?;
 
-    match prefix.run_len_jumpstart {
+    match bin.run_len_jumpstart {
       None => {
-        let res = decompress_offset_dirty(reader, unsigneds, prefix);
+        let res = decompress_offset_dirty(reader, unsigneds, bin);
         if res.is_err() {
           reader.seek_to(start_bit_idx);
         }
@@ -249,13 +245,9 @@ impl<U: UnsignedLike> NumDecompressor<U> {
           reader.seek_to(start_bit_idx);
         }
         let full_reps = full_reps_minus_one_res? + 1;
-        let reps = self.limit_reps(
-          prefix,
-          full_reps,
-          batch_size - unsigneds.len(),
-        );
+        let reps = self.limit_reps(bin, full_reps, batch_size - unsigneds.len());
         let start_count = unsigneds.len();
-        let res = self.decompress_offsets(reader, unsigneds, prefix, reps);
+        let res = self.decompress_offsets(reader, unsigneds, bin, reps);
         let n_processed = unsigneds.len() - start_count;
         self.state.incomplete_reps -= n_processed;
         res
@@ -269,7 +261,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     &self,
     reader: &mut BitReader,
     unsigneds: &mut Vec<U>,
-    p: PrefixDecompressionInfo<U>,
+    p: BinDecompressionInfo<U>,
     reps: usize,
   ) -> QCompressResult<()> {
     for _ in 0..reps {
@@ -327,7 +319,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   // to inline fixed the performance issue.
   // https://stackoverflow.com/questions/70911460/why-does-an-unrelated-heap-allocation-in-the-same-rust-scope-hurt-performance
   //
-  // state managed here: incomplete_prefix
+  // state managed here: incomplete_bin
   #[inline(never)]
   fn decompress_unsigneds_limited_dirty(
     &mut self,
@@ -374,7 +366,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       let incomplete_res = self.decompress_offsets(
         reader,
         unsigneds,
-        self.state.incomplete_prefix,
+        self.state.incomplete_bin,
         reps,
       );
       self.state.incomplete_reps -= unsigneds.len();
