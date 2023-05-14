@@ -1,7 +1,6 @@
-use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::{QCompressError, QCompressResult};
+
+use crate::bin::BinCompressionInfo;
 use crate::{Bin, Flags};
 
 // fast if b is small, requires b > 0
@@ -45,10 +44,10 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(bins: &[Bin<T>]) -> Option<T::Un
   let mut nontrivial_ranges_share_gcd: bool = true;
   let mut gcd = None;
   for p in bins {
-    if p.upper != p.lower {
+    if p.offset_bits > 0 {
       if gcd.is_none() {
         gcd = Some(p.gcd);
-      } else {
+      } else if gcd != Some(p.gcd) {
         nontrivial_ranges_share_gcd = false;
       }
     }
@@ -62,22 +61,22 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(bins: &[Bin<T>]) -> Option<T::Un
   }
 }
 
-pub fn use_gcd_bin_optimize<T: NumberLike>(bins: &[Bin<T>], flags: &Flags) -> bool {
+pub fn use_gcd_bin_optimize<U: UnsignedLike>(
+  bins: &[BinCompressionInfo<U>],
+  flags: &Flags,
+) -> bool {
   if !flags.use_gcds {
     return false;
   }
 
   for p in bins {
-    if p.gcd > T::Unsigned::ONE {
+    if p.gcd > U::ONE {
       return true;
     }
   }
   for (i, pi) in bins.iter().enumerate().skip(1) {
     let pj = &bins[i - 1];
-    if pi.lower == pi.upper
-      && pj.lower == pj.upper
-      && pj.upper.to_unsigned() + T::Unsigned::ONE < pi.lower.to_unsigned()
-    {
+    if pi.offset_bits == 0 && pj.offset_bits == 0 && pj.lower + U::ONE < pi.lower {
       return true;
     }
   }
@@ -87,37 +86,7 @@ pub fn use_gcd_bin_optimize<T: NumberLike>(bins: &[Bin<T>], flags: &Flags) -> bo
 pub fn use_gcd_arithmetic<T: NumberLike>(bins: &[Bin<T>]) -> bool {
   bins
     .iter()
-    .any(|p| p.gcd > T::Unsigned::ONE && p.upper != p.lower)
-}
-
-pub fn gcd_bits_required<U: UnsignedLike>(range: U) -> usize {
-  U::BITS - (range.leading_zeros())
-}
-
-// to store gcd, we write and read gcd - 1 in the minimum number of bits
-// since we know gcd <= upper - lower
-pub fn write_gcd<U: UnsignedLike>(range: U, gcd: U, writer: &mut BitWriter) {
-  let nontrivial = gcd != U::ONE;
-  writer.write_one(nontrivial);
-  if nontrivial {
-    writer.write_diff(gcd - U::ONE, gcd_bits_required(range));
-  }
-}
-
-pub fn read_gcd<U: UnsignedLike>(range: U, reader: &mut BitReader) -> QCompressResult<U> {
-  if reader.read_one()? {
-    let gcd_minus_one = reader.read_uint::<U>(gcd_bits_required(range))?;
-    if gcd_minus_one >= range {
-      Err(QCompressError::corruption(format!(
-        "stored GCD was {} + 1, greater than range {}",
-        gcd_minus_one, range,
-      )))
-    } else {
-      Ok(gcd_minus_one + U::ONE)
-    }
-  } else {
-    Ok(U::ONE)
-  }
+    .any(|p| p.gcd > T::Unsigned::ONE && p.offset_bits > 0)
 }
 
 pub fn fold_bin_gcds_left<U: UnsignedLike>(

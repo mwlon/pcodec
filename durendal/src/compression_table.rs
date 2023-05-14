@@ -1,7 +1,6 @@
 use crate::bin::BinCompressionInfo;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::Bin;
 
 const TARGET_BRANCHING_FACTOR: usize = 16; // chosen for performance
 
@@ -17,13 +16,9 @@ pub enum CompressionTable<U: UnsignedLike> {
   NonLeaf(Vec<CompressionTableItem<U>>),
 }
 
-impl<T: NumberLike> From<&[Bin<T>]> for CompressionTable<T::Unsigned> {
-  fn from(bins: &[Bin<T>]) -> Self {
-    let mut infos = bins
-      .iter()
-      .map(BinCompressionInfo::from)
-      .collect::<Vec<_>>();
-    infos.sort_unstable_by_key(|p| p.upper);
+impl<U: UnsignedLike> From<Vec<BinCompressionInfo<U>>> for CompressionTable<U> {
+  fn from(mut infos: Vec<BinCompressionInfo<U>>) -> Self {
+    infos.sort_unstable_by_key(|info| info.upper);
     CompressionTable::from_sorted(&infos)
   }
 }

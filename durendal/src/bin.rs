@@ -24,11 +24,12 @@ pub struct Bin<T: NumberLike> {
   /// chunk form a binary search tree (BST) over these Huffman codes.
   /// The BST over Huffman codes is different from the BST over numerical
   /// ranges.
-  pub code: Vec<bool>,
+  pub code: usize,
+  pub code_len: usize,
   /// The lower bound for this bin's numerical range.
   pub lower: T,
-  /// The upper bound (inclusive) for this bin's numerical range.
-  pub upper: T,
+  /// The log of the size of this bin's (inclusive) numerical range.
+  pub offset_bits: usize,
   /// A parameter used for the most common bin in a sparse distribution.
   /// For instance, if 90% of a chunk's numbers are exactly 7, then the
   /// bin for the range `[7, 7]` will have a `run_len_jumpstart`.
@@ -52,36 +53,22 @@ impl<T: NumberLike> Display for Bin<T> {
     } else {
       "".to_string()
     };
+    let code_str = bits::bits_to_string(&bits::usize_to_bits(
+      self.code,
+      self.code_len,
+    ));
     write!(
       f,
-      "count: {} code: {} lower: {} upper: {}{}{}",
-      self.count,
-      bits::bits_to_string(&self.code),
-      self.lower,
-      self.upper,
-      jumpstart_str,
-      gcd_str,
+      "count: {} code: {} lower: {} offset bits: {}{}{}",
+      self.count, code_str, self.lower, self.offset_bits, jumpstart_str, gcd_str,
     )
-  }
-}
-
-// k is used internally to describe the number of bits
-// required to describe an offset; k = ceil(log_2(upper - lower)).
-impl<T: NumberLike> Bin<T> {
-  pub(crate) fn k_info(&self) -> usize {
-    let diff = (self.upper.to_unsigned() - self.lower.to_unsigned()) / self.gcd;
-    if diff == T::Unsigned::ZERO {
-      0
-    } else {
-      T::Unsigned::BITS - diff.leading_zeros()
-    }
   }
 }
 
 // used during compression to determine Huffman codes
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WeightedPrefix<T: NumberLike> {
-  pub bin: Bin<T>,
+pub struct WeightedPrefix<U: UnsignedLike> {
+  pub bin: BinCompressionInfo<U>,
   // How to weight this bin during huffman coding,
   // in contrast to bin.count, which is the actual number of training
   // entries belonging to it.
@@ -90,53 +77,57 @@ pub struct WeightedPrefix<T: NumberLike> {
   pub weight: usize,
 }
 
-impl<T: NumberLike> WeightedPrefix<T> {
+impl<U: UnsignedLike> WeightedPrefix<U> {
   pub fn new(
     count: usize,
     weight: usize,
-    lower: T,
-    upper: T,
+    lower: U,
+    upper: U,
     run_len_jumpstart: Option<usize>,
-    gcd: T::Unsigned,
-  ) -> WeightedPrefix<T> {
-    let bin = Bin {
+    gcd: U,
+  ) -> WeightedPrefix<U> {
+    let diff = (upper - lower) / gcd;
+    let offset_bits = if diff == U::ZERO {
+      0
+    } else {
+      U::BITS - diff.leading_zeros()
+    };
+    let bin = BinCompressionInfo {
       count,
       lower,
       upper,
-      code: Vec::new(),
+      offset_bits,
       run_len_jumpstart,
       gcd,
+      code: 0,
+      code_len: 0,
     };
     WeightedPrefix { bin, weight }
   }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BinCompressionInfo<U: UnsignedLike> {
   pub count: usize,
   pub code: usize,
   pub code_len: usize,
   pub lower: U,
   pub upper: U,
-  pub k: usize,
+  pub offset_bits: usize,
   pub run_len_jumpstart: Option<usize>,
   pub gcd: U,
 }
 
-impl<T: NumberLike> From<&Bin<T>> for BinCompressionInfo<T::Unsigned> {
-  fn from(bin: &Bin<T>) -> Self {
-    let k = bin.k_info();
-    let code = bits::bits_to_usize(&bin.code);
-
-    BinCompressionInfo {
-      count: bin.count,
-      code,
-      code_len: bin.code.len(),
-      lower: bin.lower.to_unsigned(),
-      upper: bin.upper.to_unsigned(),
-      k,
-      run_len_jumpstart: bin.run_len_jumpstart,
-      gcd: bin.gcd,
+impl<T: NumberLike> From<&BinCompressionInfo<T::Unsigned>> for Bin<T> {
+  fn from(info: &BinCompressionInfo<T::Unsigned>) -> Self {
+    Bin {
+      count: info.count,
+      code: info.code,
+      code_len: info.code_len,
+      lower: T::from_unsigned(info.lower),
+      offset_bits: info.offset_bits,
+      run_len_jumpstart: info.run_len_jumpstart,
+      gcd: info.gcd,
     }
   }
 }
@@ -155,7 +146,7 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
       code_len: 0,
       lower: U::ZERO,
       upper: U::MAX,
-      k: U::BITS,
+      offset_bits: U::BITS,
       run_len_jumpstart: None,
       gcd: U::ONE,
     }
@@ -165,7 +156,7 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
 #[derive(Clone, Copy, Debug)]
 pub struct BinDecompressionInfo<U: UnsignedLike> {
   pub lower_unsigned: U,
-  pub k: usize,
+  pub offset_bits: usize,
   pub depth: usize,
   pub run_len_jumpstart: Option<usize>,
   pub gcd: U,
@@ -175,7 +166,7 @@ impl<U: UnsignedLike> Default for BinDecompressionInfo<U> {
   fn default() -> Self {
     BinDecompressionInfo {
       lower_unsigned: U::ZERO,
-      k: U::BITS,
+      offset_bits: U::BITS,
       depth: 0,
       run_len_jumpstart: None,
       gcd: U::ONE,
@@ -184,15 +175,14 @@ impl<U: UnsignedLike> Default for BinDecompressionInfo<U> {
 }
 
 impl<T: NumberLike> From<&Bin<T>> for BinDecompressionInfo<T::Unsigned> {
-  fn from(p: &Bin<T>) -> Self {
-    let lower_unsigned = p.lower.to_unsigned();
-    let k = p.k_info();
+  fn from(bin: &Bin<T>) -> Self {
+    let lower_unsigned = bin.lower.to_unsigned();
     BinDecompressionInfo {
       lower_unsigned,
-      k,
-      run_len_jumpstart: p.run_len_jumpstart,
-      depth: p.code.len(),
-      gcd: p.gcd,
+      offset_bits: bin.offset_bits,
+      run_len_jumpstart: bin.run_len_jumpstart,
+      depth: bin.code_len,
+      gcd: bin.gcd,
     }
   }
 }

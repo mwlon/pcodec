@@ -39,9 +39,8 @@ pub fn usize_to_bits(x: usize, n: usize) -> Vec<bool> {
 pub fn bits_to_string(bits: &[bool]) -> String {
   return bits
     .iter()
-    .map(|b| if *b { "1" } else { "0" })
-    .collect::<Vec<&str>>()
-    .join("");
+    .map(|b| if *b { '1' } else { '0' })
+    .collect::<String>();
 }
 
 // This bumpy log gives a more accurate average number of offset bits used.
@@ -71,6 +70,10 @@ pub fn words_to_bytes(words: &[usize]) -> Vec<u8> {
 
 pub fn bits_to_encode(max_number: usize) -> usize {
   ((max_number + 1) as f64).log2().ceil() as usize
+}
+
+pub const fn bits_to_encode_offset_bits<U: UnsignedLike>() -> usize {
+  (usize::BITS - U::BITS.leading_zeros()) as usize
 }
 
 #[cfg(test)]
@@ -112,5 +115,11 @@ mod tests {
     let bits_56_1 = vec![false, false, false, true, true, true, false, false, true];
     let byte_56_1 = bits_to_bytes(bits_56_1);
     assert_eq!(byte_56_1, vec![56, 1]);
+  }
+
+  #[test]
+  fn test_bits_to_encode_offset_bits() {
+    assert_eq!(bits_to_encode_offset_bits::<u32>(), 6);
+    assert_eq!(bits_to_encode_offset_bits::<u64>(), 7);
   }
 }

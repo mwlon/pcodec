@@ -1,8 +1,8 @@
 use crate::bin::WeightedPrefix;
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
-use crate::data_types::{NumberLike, UnsignedLike};
-use crate::{gcd_utils, Bin, Flags};
+use crate::data_types::UnsignedLike;
+use crate::{bits, gcd_utils, Flags};
 
 fn bin_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
@@ -14,11 +14,9 @@ fn bin_bit_cost<U: UnsignedLike>(
 ) -> f64 {
   let offset_cost = avg_offset_bits(lower, upper, gcd);
   let huffman_cost = avg_depth_bits(weight, total_weight);
-  let gcd_cost = if gcd > U::ONE {
-    gcd_utils::gcd_bits_required(upper - lower) as f64
-  } else {
-    0.0
-  };
+  // best approximation of GCD metadata bit cost we can do without knowing
+  // what's going on in the other bins
+  let gcd_cost = if gcd > U::ONE { U::BITS as f64 } else { 0.0 };
   base_meta_cost +
     gcd_cost + // extra meta cost of storing GCD
     huffman_cost + // extra meta cost of storing Huffman code
@@ -26,11 +24,11 @@ fn bin_bit_cost<U: UnsignedLike>(
 }
 
 // this is an exact optimal strategy
-pub fn optimize_bins<T: NumberLike>(
-  wbins: Vec<WeightedPrefix<T>>,
+pub fn optimize_bins<U: UnsignedLike>(
+  wbins: Vec<WeightedPrefix<U>>,
   flags: &Flags,
   n: usize,
-) -> Vec<WeightedPrefix<T>> {
+) -> Vec<WeightedPrefix<U>> {
   let mut c = 0;
   let mut cum_weight = Vec::with_capacity(wbins.len() + 1);
   cum_weight.push(0);
@@ -38,17 +36,11 @@ pub fn optimize_bins<T: NumberLike>(
     c += wp.weight;
     cum_weight.push(c);
   }
-  let bins = wbins.iter().map(|wp| wp.bin.clone()).collect::<Vec<_>>();
+  let bins = wbins.iter().map(|wp| wp.bin).collect::<Vec<_>>();
   let gcds = bins.iter().map(|p| p.gcd).collect::<Vec<_>>();
   let total_weight = c;
-  let lower_unsigneds = bins
-    .iter()
-    .map(|p| p.lower.to_unsigned())
-    .collect::<Vec<_>>();
-  let upper_unsigneds = bins
-    .iter()
-    .map(|p| p.upper.to_unsigned())
-    .collect::<Vec<_>>();
+  let lower_unsigneds = bins.iter().map(|p| p.lower).collect::<Vec<_>>();
+  let upper_unsigneds = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
 
   let maybe_rep_idx = bins.iter().position(|p| p.run_len_jumpstart.is_some());
 
@@ -59,11 +51,12 @@ pub fn optimize_bins<T: NumberLike>(
 
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let base_meta_cost = bits_to_encode_count as f64 +
-    2.0 * T::PHYSICAL_BITS as f64 + // lower and upper bounds
+    U::BITS as f64 + // lower and upper bounds
+    bits::bits_to_encode_offset_bits::<U>() as f64 +
     BITS_TO_ENCODE_CODE_LEN as f64 +
-    if flags.use_gcds { 1.0 } else { 0.0 } + // bit to say whether there is GCD or not
     1.0; // bit to say there is no run len jumpstart
-         // determine whether we can skip GCD folding to improve performance in some cases
+
+  // determine whether we can skip GCD folding to improve performance in some cases
   let fold_gcd = gcd_utils::use_gcd_bin_optimize(&bins, flags);
 
   for i in 0..wbins.len() {
@@ -89,13 +82,13 @@ pub fn optimize_bins<T: NumberLike>(
         );
       }
       let cost = best_costs[j]
-        + bin_bit_cost::<T::Unsigned>(
+        + bin_bit_cost::<U>(
           base_meta_cost,
           lower,
           upper,
           cum_weight_i - cum_weight[j],
           total_weight,
-          gcd_acc.unwrap_or(T::Unsigned::ONE),
+          gcd_acc.unwrap_or(U::ONE),
         );
       if cost < best_cost {
         best_cost = cost;
@@ -127,18 +120,14 @@ pub fn optimize_bins<T: NumberLike>(
         );
       }
     }
-    let bin = Bin {
+    res.push(WeightedPrefix::new(
       count,
-      code: Vec::new(),
-      lower: bins[j].lower,
-      upper: bins[i].upper,
-      run_len_jumpstart: bins[i].run_len_jumpstart,
-      gcd: gcd_acc.unwrap_or(T::Unsigned::ONE),
-    };
-    res.push(WeightedPrefix {
-      weight: cum_weight[i + 1] - cum_weight[j],
-      bin,
-    })
+      cum_weight[i + 1] - cum_weight[j],
+      bins[j].lower,
+      bins[i].upper,
+      bins[i].run_len_jumpstart,
+      gcd_acc.unwrap_or(U::ONE),
+    ));
   }
   res
 }
@@ -160,45 +149,45 @@ mod tests {
   #[test]
   fn test_optimize_trivial_ranges_gcd() {
     let wps = vec![
-      WeightedPrefix::new(1, 1, 1000_i32, 1000, None, 1_u32),
-      WeightedPrefix::new(1, 1, 2000_i32, 2000, None, 1_u32),
+      WeightedPrefix::new(1, 1, 1000_u32, 1000, None, 1_u32),
+      WeightedPrefix::new(1, 1, 2000_u32, 2000, None, 1_u32),
     ];
     let res = optimize_bins(wps, &basic_flags(), 100);
-    let expected = vec![WeightedPrefix::new(2, 2, 1000_i32, 2000, None, 1000_u32)];
+    let expected = vec![WeightedPrefix::new(2, 2, 1000_u32, 2000, None, 1000_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_single_nontrivial_range_gcd() {
     let wps = vec![
-      WeightedPrefix::new(100, 100, 1000_i32, 2000, None, 10_u32),
-      WeightedPrefix::new(1, 1, 2100_i32, 2100, None, 1_u32),
+      WeightedPrefix::new(100, 100, 1000_u32, 2000, None, 10_u32),
+      WeightedPrefix::new(1, 1, 2100_u32, 2100, None, 1_u32),
     ];
     let res = optimize_bins(wps, &basic_flags(), 100);
-    let expected = vec![WeightedPrefix::new(101, 101, 1000_i32, 2100, None, 10_u32)];
+    let expected = vec![WeightedPrefix::new(101, 101, 1000_u32, 2100, None, 10_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_nontrivial_ranges_gcd() {
     let wps = vec![
-      WeightedPrefix::new(5, 5, 1000_i32, 1100, None, 10_u32),
+      WeightedPrefix::new(5, 5, 1000_u32, 1100, None, 10_u32),
       WeightedPrefix::new(5, 5, 1105, 1135, None, 15_u32),
     ];
     let res = optimize_bins(wps, &basic_flags(), 100);
-    let expected = vec![WeightedPrefix::new(10, 10, 1000_i32, 1135, None, 5_u32)];
+    let expected = vec![WeightedPrefix::new(10, 10, 1000_u32, 1135, None, 5_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_nontrivial_misaligned_ranges_gcd() {
     let wps = vec![
-      WeightedPrefix::new(100, 100, 1000_i32, 1100, None, 10_u32),
+      WeightedPrefix::new(100, 100, 1000_u32, 1100, None, 10_u32),
       WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
     ];
     let res = optimize_bins(wps, &basic_flags(), 100);
     let expected = vec![
-      WeightedPrefix::new(100, 100, 1000_i32, 1100, None, 10_u32),
+      WeightedPrefix::new(100, 100, 1000_u32, 1100, None, 10_u32),
       WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
     ];
     assert_eq!(res, expected);

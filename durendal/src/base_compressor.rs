@@ -154,22 +154,22 @@ fn choose_run_len_jumpstart(count: usize, n: usize) -> JumpstartConfiguration {
   }
 }
 
-struct BinBuffer<'a, T: NumberLike> {
-  pub seq: Vec<WeightedPrefix<T>>,
+struct BinBuffer<'a, U: UnsignedLike> {
+  pub seq: Vec<WeightedPrefix<U>>,
   bin_idx: usize,
   max_n_bin: usize,
   n_unsigneds: usize,
-  sorted: &'a [T::Unsigned],
+  sorted: &'a [U],
   use_gcd: bool,
   pub target_j: usize,
 }
 
-impl<'a, T: NumberLike> BinBuffer<'a, T> {
+impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
   fn calc_target_j(&mut self) {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [T::Unsigned], use_gcd: bool) -> Self {
+  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], use_gcd: bool) -> Self {
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
@@ -193,12 +193,12 @@ impl<'a, T: NumberLike> BinBuffer<'a, T> {
       self.bin_idx + 1,
       (j * self.max_n_bin) / n_unsigneds,
     );
-    let lower = T::from_unsigned(sorted[i]);
-    let upper = T::from_unsigned(sorted[j - 1]);
+    let lower = sorted[i];
+    let upper = sorted[j - 1];
     let gcd = if self.use_gcd {
       gcd_utils::gcd(&sorted[i..j])
     } else {
-      T::Unsigned::ONE
+      U::ONE
     };
     let wp = if n_unsigneds < MIN_N_TO_USE_RUN_LEN
       || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN
@@ -241,11 +241,11 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
   min(1_usize << real_comp_level, n_unsigneds)
 }
 
-fn choose_unoptimized_bins<T: NumberLike>(
-  sorted: &[T::Unsigned],
+fn choose_unoptimized_bins<U: UnsignedLike>(
+  sorted: &[U],
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
-) -> Vec<WeightedPrefix<T>> {
+) -> Vec<WeightedPrefix<U>> {
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(
     internal_config.compression_level,
@@ -255,7 +255,7 @@ fn choose_unoptimized_bins<T: NumberLike>(
   let use_gcd = flags.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<T>::new(max_n_bin, n_unsigneds, sorted, use_gcd);
+  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, use_gcd);
 
   for j in 1..n_unsigneds {
     let target_j = bin_buffer.target_j;
@@ -277,12 +277,12 @@ fn choose_unoptimized_bins<T: NumberLike>(
   bin_buffer.seq
 }
 
-fn train_bins<T: NumberLike>(
-  unsigneds: Vec<T::Unsigned>,
+fn train_bins<U: UnsignedLike>(
+  unsigneds: Vec<U>,
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
-) -> QCompressResult<Vec<Bin<T>>> {
+) -> QCompressResult<Vec<BinCompressionInfo<U>>> {
   if unsigneds.is_empty() {
     return Ok(Vec::new());
   }
@@ -311,7 +311,7 @@ fn train_bins<T: NumberLike>(
 
   huffman_encoding::make_huffman_code(&mut optimized_bins);
 
-  let bins = optimized_bins.iter().map(|wp| wp.bin.clone()).collect();
+  let bins = optimized_bins.iter().map(|wp| wp.bin).collect();
   Ok(bins)
 }
 
@@ -374,7 +374,7 @@ fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   writer: &mut BitWriter,
 ) {
   let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
-  writer.write_diff(off, p.k);
+  writer.write_diff(off, p.offset_bits);
 }
 
 #[derive(Clone, Debug)]
@@ -441,6 +441,12 @@ pub struct BaseCompressor<T: NumberLike> {
   pub state: State<T>,
 }
 
+fn bins_from_compression_infos<T: NumberLike>(
+  infos: &[BinCompressionInfo<T::Unsigned>],
+) -> Vec<Bin<T>> {
+  infos.iter().map(Bin::from).collect()
+}
+
 impl<T: NumberLike> BaseCompressor<T> {
   pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> Self {
     Self {
@@ -489,13 +495,14 @@ impl<T: NumberLike> BaseCompressor<T> {
     let order = self.flags.delta_encoding_order;
     let (unsigneds, bin_meta, table, delta_momentss) = if order == 0 {
       let unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
-      let bins = train_bins(
+      let infos = train_bins(
         unsigneds.clone(),
         &self.internal_config,
         &self.flags,
         n,
       )?;
-      let table = CompressionTable::from(bins.as_slice());
+      let bins = bins_from_compression_infos(&infos);
+      let table = CompressionTable::from(infos);
       let bin_metadata = BinMetadata::Simple { bins };
       (
         unsigneds,
@@ -507,13 +514,14 @@ impl<T: NumberLike> BaseCompressor<T> {
       let page_idxs = cumulative_sum(&page_sizes);
       let (deltas, momentss) = delta_encoding::nth_order_deltas(nums, order, &page_idxs);
       let unsigneds = deltas.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
-      let bins = train_bins(
+      let infos = train_bins(
         unsigneds.clone(),
         &self.internal_config,
         &self.flags,
         n,
       )?;
-      let table = CompressionTable::from(bins.as_slice());
+      let bins = bins_from_compression_infos(&infos);
+      let table = CompressionTable::from(infos);
       let bin_metadata = BinMetadata::Delta { bins };
       (unsigneds, bin_metadata, table, momentss)
     };
