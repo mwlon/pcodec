@@ -2,7 +2,6 @@
 // of the compressed data.
 // New flags may be added in over time in a backward-compatible way.
 
-use std::cmp::min;
 use std::convert::{TryFrom, TryInto};
 
 use crate::bit_reader::BitReader;
@@ -120,29 +119,26 @@ impl TryInto<Vec<bool>> for &Flags {
 
 impl Flags {
   pub(crate) fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    reader.aligned_byte_idx()?; // assert it's byte-aligned
-    let mut bools = Vec::new();
-    loop {
-      bools.extend(reader.read(7)?);
-      if !reader.read_one()? {
-        break;
-      }
-    }
+    // assert it's byte-aligned
+    let n_bytes = reader.read_aligned_bytes(1)?[0];
+    let flag_bytes = reader.read_aligned_bytes(n_bytes as usize)?;
+    let bools = bits::bytes_to_bits(flag_bytes);
     Self::try_from(bools)
   }
 
   pub(crate) fn write(&self, writer: &mut BitWriter) -> QCompressResult<()> {
     let bools: Vec<bool> = self.try_into()?;
-
-    // reserve 1 bit at the end of every byte for whether there is a following
-    // byte
-    for i in 0_usize..(bools.len() / 7) + 1 {
-      let start = i * 7;
-      let end = min(start + 7, bools.len());
-      writer.write(&bools[start..end]);
-      writer.write_one(end < bools.len());
+    let bytes = bits::bits_to_bytes(bools);
+    let len = bytes.len();
+    if len > u8::MAX as usize {
+      return Err(QCompressError::invalid_argument(
+        "cannot write flags of more than 255 bytes"
+      ))
     }
+    writer.write_aligned_byte(len as u8)?;
+    writer.write_aligned_bytes(&bytes)?;
     writer.finish_byte();
+
     Ok(())
   }
 
