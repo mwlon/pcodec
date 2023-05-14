@@ -1,7 +1,7 @@
 use crate::data_types::{NumberLike, UnsignedLike};
 
 use crate::bin::BinCompressionInfo;
-use crate::{Bin, Flags};
+use crate::{Bin};
 use crate::base_compressor::InternalCompressorConfig;
 
 // fast if b is small, requires b > 0
