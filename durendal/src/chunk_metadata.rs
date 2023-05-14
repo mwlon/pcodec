@@ -4,7 +4,7 @@ use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::{gcd_utils, Flags};
+use crate::{gcd_utils, Flags, bits};
 
 /// A wrapper for bins in the two cases cases: delta encoded or not.
 ///
@@ -71,32 +71,22 @@ fn parse_bins<T: NumberLike>(
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let maybe_common_gcd = if flags.use_gcds {
     if reader.read_one()? {
-      Some(gcd_utils::read_gcd(
-        T::Unsigned::MAX,
-        reader,
-      )?)
+      Some(reader.read_uint::<T::Unsigned>(T::Unsigned::BITS)?)
     } else {
       None
     }
   } else {
     Some(T::Unsigned::ONE)
   };
+  let offset_bits_bits = bits::bits_to_encode_offset_bits::<T::Unsigned>();
   for _ in 0..n_bins {
     let count = reader.read_usize(bits_to_encode_count)?;
     let lower = T::read_from(reader)?;
-    let upper = T::read_from(reader)?;
 
-    let lower_u = lower.to_unsigned();
-    let upper_u = upper.to_unsigned();
-    if lower_u > upper_u {
-      return Err(QCompressError::corruption(format!(
-        "bin lower bound {} may not be greater than upper bound {}",
-        lower, upper,
-      )));
-    }
+    let offset_bits = reader.read_usize(offset_bits_bits)?;
 
     let code_len = reader.read_usize(BITS_TO_ENCODE_CODE_LEN)?;
-    let code = reader.read(code_len)?;
+    let code = reader.read_usize(code_len)?;
     let run_len_jumpstart = if reader.read_one()? {
       Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART)?)
     } else {
@@ -105,13 +95,14 @@ fn parse_bins<T: NumberLike>(
     let gcd = if let Some(common_gcd) = maybe_common_gcd {
       common_gcd
     } else {
-      gcd_utils::read_gcd(upper_u - lower_u, reader)?
+      reader.read_uint(T::Unsigned::BITS)?
     };
     bins.push(Bin {
       count,
       code,
+      code_len,
       lower,
-      upper,
+      offset_bits,
       run_len_jumpstart,
       gcd,
     });
@@ -126,18 +117,19 @@ fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Fl
     let maybe_common_gcd = gcd_utils::common_gcd_for_chunk_meta(bins);
     writer.write_one(maybe_common_gcd.is_some());
     if let Some(common_gcd) = maybe_common_gcd {
-      gcd_utils::write_gcd(T::Unsigned::MAX, common_gcd, writer);
+      writer.write_diff(common_gcd, T::Unsigned::BITS);
     }
     maybe_common_gcd
   } else {
     Some(T::Unsigned::ONE)
   };
+  let offset_bits_bits = bits::bits_to_encode_offset_bits::<T::Unsigned>();
   for bin in bins {
     writer.write_usize(bin.count, bits_to_encode_count);
     bin.lower.write_to(writer);
-    bin.upper.write_to(writer);
-    writer.write_usize(bin.code.len(), BITS_TO_ENCODE_CODE_LEN);
-    writer.write(&bin.code);
+    writer.write_usize(bin.offset_bits, offset_bits_bits);
+    writer.write_usize(bin.code_len, BITS_TO_ENCODE_CODE_LEN);
+    writer.write_usize(bin.code, bin.code_len);
     match bin.run_len_jumpstart {
       None => {
         writer.write_one(false);
@@ -148,11 +140,7 @@ fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Fl
       }
     }
     if maybe_commond_gcd.is_none() {
-      gcd_utils::write_gcd(
-        bin.upper.to_unsigned() - bin.lower.to_unsigned(),
-        bin.gcd,
-        writer,
-      );
+      writer.write_diff(bin.gcd, T::Unsigned::BITS);
     }
   }
 }

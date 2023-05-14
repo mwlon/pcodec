@@ -2,7 +2,8 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use crate::bin::WeightedPrefix;
-use crate::data_types::NumberLike;
+use crate::bits;
+use crate::data_types::{NumberLike, UnsignedLike};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
@@ -37,23 +38,25 @@ impl HuffmanItem {
     }
   }
 
-  pub fn create_bits<T: NumberLike>(
+  pub fn create_bits<U: UnsignedLike>(
     &self,
     item_idx: &mut [HuffmanItem],
-    leaf_idx: &mut [WeightedPrefix<T>],
+    leaf_idx: &mut [WeightedPrefix<U>],
   ) {
     self.create_bits_from(Vec::new(), item_idx, leaf_idx);
   }
 
-  fn create_bits_from<T: NumberLike>(
+  fn create_bits_from<U: UnsignedLike>(
     &self,
     bits: Vec<bool>,
     item_idx: &mut [HuffmanItem],
-    leaf_idx: &mut [WeightedPrefix<T>],
+    leaf_idx: &mut [WeightedPrefix<U>],
   ) {
     item_idx[self.id].bits = bits.clone();
     if self.leaf_id.is_some() {
-      leaf_idx[self.leaf_id.unwrap()].bin.code = bits;
+      let leaf_bin = &mut leaf_idx[self.leaf_id.unwrap()].bin;
+      leaf_bin.code = bits::bits_to_usize(&bits);
+      leaf_bin.code_len = bits.len();
     } else {
       let mut left_bits = bits.clone();
       left_bits.push(false);
@@ -81,7 +84,7 @@ impl PartialOrd for HuffmanItem {
   }
 }
 
-pub fn make_huffman_code<T: NumberLike>(bin_sequence: &mut [WeightedPrefix<T>]) {
+pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [WeightedPrefix<U>]) {
   let n = bin_sequence.len();
   let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
   let mut items = Vec::with_capacity(n); // for modifying item codes
@@ -107,24 +110,27 @@ pub fn make_huffman_code<T: NumberLike>(bin_sequence: &mut [WeightedPrefix<T>]) 
 
 #[cfg(test)]
 mod tests {
-  use crate::bin::{Bin, WeightedPrefix};
+  use crate::bin::{Bin, BinCompressionInfo, WeightedPrefix};
+  use crate::bits;
   use crate::huffman_encoding::make_huffman_code;
 
-  fn coded_bin(weight: usize, code: Vec<bool>) -> WeightedPrefix<i32> {
+  fn coded_bin(weight: usize, code: Vec<bool>) -> WeightedPrefix<u32> {
     WeightedPrefix {
       weight,
-      bin: Bin {
+      bin: BinCompressionInfo {
         count: 0,
-        code,
+        code: bits::bits_to_usize(&code),
+        code_len: code.len(),
         lower: 0,
         upper: 0,
+        offset_bits: 0,
         run_len_jumpstart: None,
         gcd: 1,
       },
     }
   }
 
-  fn uncoded_bin(weight: usize) -> WeightedPrefix<i32> {
+  fn uncoded_bin(weight: usize) -> WeightedPrefix<u32> {
     coded_bin(weight, Vec::new())
   }
 

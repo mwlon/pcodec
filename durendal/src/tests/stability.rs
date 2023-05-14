@@ -43,7 +43,7 @@ fn test_insufficient_data_short_bins() {
     BinMetadata::Simple { bins } => {
       assert_eq!(bins.len(), 2);
       for p in &bins {
-        assert_eq!(p.code.len(), 1);
+        assert_eq!(p.code_len, 1);
       }
     }
     _ => panic!("expected simple bin info"),
@@ -82,7 +82,7 @@ fn test_insufficient_data_long_offsets() {
   match metadata.bin_metadata {
     BinMetadata::Simple { bins } => {
       assert_eq!(bins.len(), 1);
-      assert_eq!(bins[0].k_info(), 64);
+      assert_eq!(bins[0].offset_bits, 64);
     }
     _ => panic!("expected simple bin info"),
   }

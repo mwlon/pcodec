@@ -108,6 +108,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
 mod tests {
   use super::BodyDecompressor;
   use crate::bin::Bin;
+  use crate::bits;
   use crate::chunk_metadata::{BinMetadata, ChunkMetadata};
   use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
@@ -115,9 +116,10 @@ mod tests {
   fn bin_w_code(code: Vec<bool>) -> Bin<i64> {
     Bin {
       count: 1,
-      code,
+      code: bits::bits_to_usize(&code),
+      code_len: code.len(),
       lower: 100,
-      upper: 200,
+      offset_bits: 6,
       run_len_jumpstart: None,
       gcd: 1,
     }

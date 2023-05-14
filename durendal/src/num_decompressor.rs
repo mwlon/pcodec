@@ -20,16 +20,16 @@ fn validate_bin_tree<T: NumberLike>(bins: &[Bin<T>]) -> QCompressResult<()> {
   }
 
   let mut max_depth = 0;
-  for p in bins {
-    max_depth = max(max_depth, p.code.len());
+  for bin in bins {
+    max_depth = max(max_depth, bin.code_len);
   }
 
   let max_n_leafs = 1_usize << max_depth;
   let mut is_specifieds = vec![false; max_n_leafs];
-  for p in bins {
-    let base_idx = bits::bits_to_usize(&p.code);
-    let step = 1_usize << p.code.len();
-    let n_leafs = 1_usize << (max_depth - p.code.len());
+  for bin in bins {
+    let base_idx = bin.code;
+    let step = 1_usize << bin.code_len;
+    let n_leafs = 1_usize << (max_depth - bin.code_len);
     for is_specified in is_specifieds
       .iter_mut()
       .skip(base_idx)
@@ -39,7 +39,7 @@ fn validate_bin_tree<T: NumberLike>(bins: &[Bin<T>]) -> QCompressResult<()> {
       if *is_specified {
         return Err(QCompressError::corruption(format!(
           "multiple bins for {} found in chunk metadata",
-          bits::bits_to_string(&p.code),
+          bits::bits_to_string(&bits::usize_to_bits(bin.code, bin.code_len)),
         )));
       }
       *is_specified = true;
@@ -59,13 +59,13 @@ fn validate_bin_tree<T: NumberLike>(bins: &[Bin<T>]) -> QCompressResult<()> {
 
 // For the bin, the maximum number of bits we might need to read.
 // Helps decide whether to do checked or unchecked reads.
-fn max_bits_read<T: NumberLike>(p: &Bin<T>) -> usize {
-  let bin_bits = p.code.len();
-  let (max_reps, max_jumpstart_bits) = match p.run_len_jumpstart {
+fn max_bits_read<T: NumberLike>(bin: &Bin<T>) -> usize {
+  let bin_bits = bin.code_len;
+  let (max_reps, max_jumpstart_bits) = match bin.run_len_jumpstart {
     None => (1, 0),
     Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
   };
-  let max_bits_per_offset = p.k_info();
+  let max_bits_per_offset = bin.offset_bits;
   bin_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
 }
 
@@ -74,11 +74,11 @@ fn max_bits_read<T: NumberLike>(p: &Bin<T>) -> usize {
 // Helps decide whether to do checked or unchecked reads.
 // We could make a slightly tighter bound with more logic, but I don't think there
 // are any cases where it would help much.
-fn max_bits_overshot<T: NumberLike>(p: &Bin<T>) -> usize {
-  if p.code.is_empty() {
+fn max_bits_overshot<T: NumberLike>(bin: &Bin<T>) -> usize {
+  if bin.code_len == 0 {
     0
   } else {
-    (MAX_BIN_TABLE_SIZE_LOG - 1).saturating_sub(p.k_info())
+    (MAX_BIN_TABLE_SIZE_LOG - 1).saturating_sub(bin.offset_bits)
   }
 }
 
@@ -117,7 +117,7 @@ fn decompress_offset_dirty<U: UnsignedLike>(
   unsigneds: &mut Vec<U>,
   p: BinDecompressionInfo<U>,
 ) -> QCompressResult<()> {
-  let offset = reader.read_uint::<U>(p.k)?;
+  let offset = reader.read_uint::<U>(p.offset_bits)?;
   let unsigned = p.lower_unsigned + offset * p.gcd;
   unsigneds.push(unsigned);
   Ok(())

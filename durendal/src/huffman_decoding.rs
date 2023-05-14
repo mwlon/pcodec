@@ -94,6 +94,10 @@ impl<T: NumberLike> From<&Vec<Bin<T>>> for HuffmanTable<T::Unsigned> {
   }
 }
 
+fn mask_to_n_bits(x: usize, n: usize) -> usize {
+  x & (usize::MAX >> (usize::BITS as usize - n))
+}
+
 fn build_from_bins_recursive<T: NumberLike>(
   bins: &[Bin<T>],
   depth: usize,
@@ -102,27 +106,22 @@ fn build_from_bins_recursive<T: NumberLike>(
     let bin = &bins[0];
     HuffmanTable::Leaf(BinDecompressionInfo::from(bin))
   } else {
-    let max_depth = bins.iter().map(|p| p.code.len()).max().unwrap();
+    let max_depth = bins.iter().map(|bin| bin.code_len).max().unwrap();
     let table_size_log: usize = min(MAX_BIN_TABLE_SIZE_LOG, max_depth - depth);
     let table_size = 1 << table_size_log;
 
     let mut children = Vec::new();
     for idx in 0..table_size {
-      let mut sub_bits = Vec::new();
-      for depth_incr in 0..table_size_log {
-        sub_bits.push((idx >> depth_incr) & 1 > 0);
-      }
+      // We put each bin into the table, possibly in multiple consecutive locations.
+      // e.g. if the table size log is 7 and we have a 4-bit code, we'll put the bin in
+      // 2^3=8 table indexes. We do this by iterating over all indices and finding the
+      // bins that belong.
       let possible_bins = bins
         .iter()
-        .filter(|&p| {
-          for (depth_incr, bit) in sub_bits.iter().enumerate() {
-            let total_depth = depth + depth_incr;
-            if p.code.len() > total_depth && p.code[total_depth] != *bit {
-              return false;
-            }
-          }
-          true
-        })
+        .filter(|&bin| {
+          mask_to_n_bits(idx, bin.code_len - depth) == mask_to_n_bits(bin.code >> depth, table_size_log)
+        }
+        )
         .cloned()
         .collect::<Vec<Bin<T>>>();
       let child = build_from_bins_recursive(&possible_bins, depth + table_size_log);

@@ -14,7 +14,7 @@ fn unchecked_decompress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   unsigneds: &mut Vec<U>,
   p: BinDecompressionInfo<U>,
 ) {
-  let offset = reader.unchecked_read_uint(p.k);
+  let offset = reader.unchecked_read_uint(p.offset_bits);
   let unsigned = p.lower_unsigned + GcdOp::get_diff(offset, p.gcd);
   unsigneds.push(unsigned);
 }
@@ -48,7 +48,7 @@ impl RunLenOperator for GeneralRunLenOp {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
         let reps =
           num_decompressor.unchecked_limit_reps(p, full_reps, batch_size - unsigneds.len());
-        if p.k == 0 {
+        if p.offset_bits == 0 {
           for _ in 0..reps {
             unsigneds.push(p.lower_unsigned);
           }
