@@ -1,7 +1,7 @@
-use std::convert::TryInto;
+
 
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
+
 
 // Note that in all conversions between float and unsigned int, we are using
 // the unsigned int to indicate an offset.

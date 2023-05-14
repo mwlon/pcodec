@@ -3,7 +3,7 @@ use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssig
 
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::bits;
+
 use crate::errors::QCompressResult;
 
 mod floats;

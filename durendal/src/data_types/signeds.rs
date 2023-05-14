@@ -1,7 +1,7 @@
-use std::convert::TryInto;
+
 
 use crate::data_types::{NumberLike, SignedLike};
-use crate::errors::QCompressResult;
+
 
 macro_rules! impl_signed {
   ($t: ty, $unsigned: ty, $header_byte: expr) => {
