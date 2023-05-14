@@ -1,8 +1,8 @@
-use crate::bin::{WeightedPrefix};
+use crate::bin::WeightedPrefix;
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
-use crate::data_types::{UnsignedLike};
-use crate::{gcd_utils, Flags, bits};
+use crate::data_types::UnsignedLike;
+use crate::{bits, gcd_utils, Flags};
 
 fn bin_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
@@ -14,11 +14,9 @@ fn bin_bit_cost<U: UnsignedLike>(
 ) -> f64 {
   let offset_cost = avg_offset_bits(lower, upper, gcd);
   let huffman_cost = avg_depth_bits(weight, total_weight);
-  let gcd_cost = if gcd > U::ONE {
-    U::BITS as f64
-  } else {
-    0.0
-  };
+  // best approximation of GCD metadata bit cost we can do without knowing
+  // what's going on in the other bins
+  let gcd_cost = if gcd > U::ONE { U::BITS as f64 } else { 0.0 };
   base_meta_cost +
     gcd_cost + // extra meta cost of storing GCD
     huffman_cost + // extra meta cost of storing Huffman code
@@ -38,17 +36,11 @@ pub fn optimize_bins<U: UnsignedLike>(
     c += wp.weight;
     cum_weight.push(c);
   }
-  let bins = wbins.iter().map(|wp| wp.bin.clone()).collect::<Vec<_>>();
+  let bins = wbins.iter().map(|wp| wp.bin).collect::<Vec<_>>();
   let gcds = bins.iter().map(|p| p.gcd).collect::<Vec<_>>();
   let total_weight = c;
-  let lower_unsigneds = bins
-    .iter()
-    .map(|p| p.lower)
-    .collect::<Vec<_>>();
-  let upper_unsigneds = bins
-    .iter()
-    .map(|bin| bin.upper)
-    .collect::<Vec<_>>();
+  let lower_unsigneds = bins.iter().map(|p| p.lower).collect::<Vec<_>>();
+  let upper_unsigneds = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
 
   let maybe_rep_idx = bins.iter().position(|p| p.run_len_jumpstart.is_some());
 
@@ -62,9 +54,9 @@ pub fn optimize_bins<U: UnsignedLike>(
     U::BITS as f64 + // lower and upper bounds
     bits::bits_to_encode_offset_bits::<U>() as f64 +
     BITS_TO_ENCODE_CODE_LEN as f64 +
-    if flags.use_gcds { 1.0 } else { 0.0 } + // bit to say whether there is GCD or not
     1.0; // bit to say there is no run len jumpstart
-         // determine whether we can skip GCD folding to improve performance in some cases
+
+  // determine whether we can skip GCD folding to improve performance in some cases
   let fold_gcd = gcd_utils::use_gcd_bin_optimize(&bins, flags);
 
   for i in 0..wbins.len() {

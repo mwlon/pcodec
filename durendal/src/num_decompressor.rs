@@ -3,7 +3,7 @@ use std::cmp::{max, min};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{
-  BITS_TO_ENCODE_N_ENTRIES, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, MAX_BIN_TABLE_SIZE_LOG,
+  BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES,
 };
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};

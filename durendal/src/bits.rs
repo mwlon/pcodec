@@ -40,7 +40,7 @@ pub fn bits_to_string(bits: &[bool]) -> String {
   return bits
     .iter()
     .map(|b| if *b { '1' } else { '0' })
-    .collect::<String>()
+    .collect::<String>();
 }
 
 // This bumpy log gives a more accurate average number of offset bits used.
@@ -73,7 +73,7 @@ pub fn bits_to_encode(max_number: usize) -> usize {
 }
 
 pub const fn bits_to_encode_offset_bits<U: UnsignedLike>() -> usize {
-  U::BITS - U::BITS.leading_zeros() as usize
+  (usize::BITS - U::BITS.leading_zeros()) as usize
 }
 
 #[cfg(test)]

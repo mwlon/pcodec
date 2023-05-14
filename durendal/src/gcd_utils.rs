@@ -1,7 +1,7 @@
 use crate::data_types::{NumberLike, UnsignedLike};
 
-use crate::{Bin, Flags};
 use crate::bin::BinCompressionInfo;
+use crate::{Bin, Flags};
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {
@@ -47,7 +47,7 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(bins: &[Bin<T>]) -> Option<T::Un
     if p.offset_bits > 0 {
       if gcd.is_none() {
         gcd = Some(p.gcd);
-      } else {
+      } else if gcd != Some(p.gcd) {
         nontrivial_ranges_share_gcd = false;
       }
     }
@@ -61,7 +61,10 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(bins: &[Bin<T>]) -> Option<T::Un
   }
 }
 
-pub fn use_gcd_bin_optimize<U: UnsignedLike>(bins: &[BinCompressionInfo<U>], flags: &Flags) -> bool {
+pub fn use_gcd_bin_optimize<U: UnsignedLike>(
+  bins: &[BinCompressionInfo<U>],
+  flags: &Flags,
+) -> bool {
   if !flags.use_gcds {
     return false;
   }
@@ -73,10 +76,7 @@ pub fn use_gcd_bin_optimize<U: UnsignedLike>(bins: &[BinCompressionInfo<U>], fla
   }
   for (i, pi) in bins.iter().enumerate().skip(1) {
     let pj = &bins[i - 1];
-    if pi.offset_bits == 0
-      && pj.offset_bits == 0
-      && pj.lower + U::ONE < pi.lower
-    {
+    if pi.offset_bits == 0 && pj.offset_bits == 0 && pj.lower + U::ONE < pi.lower {
       return true;
     }
   }

@@ -119,9 +119,9 @@ fn build_from_bins_recursive<T: NumberLike>(
       let possible_bins = bins
         .iter()
         .filter(|&bin| {
-          mask_to_n_bits(idx, bin.code_len - depth) == mask_to_n_bits(bin.code >> depth, table_size_log)
-        }
-        )
+          mask_to_n_bits(idx, bin.code_len - depth)
+            == mask_to_n_bits(bin.code >> depth, table_size_log)
+        })
         .cloned()
         .collect::<Vec<Bin<T>>>();
       let child = build_from_bins_recursive(&possible_bins, depth + table_size_log);

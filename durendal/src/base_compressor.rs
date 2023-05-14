@@ -311,7 +311,7 @@ fn train_bins<U: UnsignedLike>(
 
   huffman_encoding::make_huffman_code(&mut optimized_bins);
 
-  let bins = optimized_bins.iter().map(|wp| wp.bin.clone()).collect();
+  let bins = optimized_bins.iter().map(|wp| wp.bin).collect();
   Ok(bins)
 }
 
@@ -441,7 +441,9 @@ pub struct BaseCompressor<T: NumberLike> {
   pub state: State<T>,
 }
 
-fn bins_from_compression_infos<T: NumberLike>(infos: &[BinCompressionInfo<T::Unsigned>]) -> Vec<Bin<T>> {
+fn bins_from_compression_infos<T: NumberLike>(
+  infos: &[BinCompressionInfo<T::Unsigned>],
+) -> Vec<Bin<T>> {
   infos.iter().map(Bin::from).collect()
 }
 

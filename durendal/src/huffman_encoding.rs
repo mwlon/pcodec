@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 
 use crate::bin::WeightedPrefix;
 use crate::bits;
-use crate::data_types::{UnsignedLike};
+use crate::data_types::UnsignedLike;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
