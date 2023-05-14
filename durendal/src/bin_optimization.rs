@@ -3,6 +3,7 @@ use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
 use crate::data_types::UnsignedLike;
 use crate::{bits, gcd_utils, Flags};
+use crate::base_compressor::InternalCompressorConfig;
 
 fn bin_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
@@ -26,6 +27,7 @@ fn bin_bit_cost<U: UnsignedLike>(
 // this is an exact optimal strategy
 pub fn optimize_bins<U: UnsignedLike>(
   wbins: Vec<WeightedPrefix<U>>,
+  internal_config: &InternalCompressorConfig,
   flags: &Flags,
   n: usize,
 ) -> Vec<WeightedPrefix<U>> {
@@ -57,7 +59,7 @@ pub fn optimize_bins<U: UnsignedLike>(
     1.0; // bit to say there is no run len jumpstart
 
   // determine whether we can skip GCD folding to improve performance in some cases
-  let fold_gcd = gcd_utils::use_gcd_bin_optimize(&bins, flags);
+  let fold_gcd = gcd_utils::use_gcd_bin_optimize(&bins, internal_config);
 
   for i in 0..wbins.len() {
     let mut best_cost = f64::MAX;
@@ -134,16 +136,21 @@ pub fn optimize_bins<U: UnsignedLike>(
 
 #[cfg(test)]
 mod tests {
+  use crate::base_compressor::InternalCompressorConfig;
   use crate::bin::WeightedPrefix;
   use crate::bin_optimization::optimize_bins;
   use crate::Flags;
 
-  fn basic_flags() -> Flags {
-    Flags {
-      use_gcds: true,
+  fn basic_optimize(wps: Vec<WeightedPrefix<u32>>) -> Vec<WeightedPrefix<u32>> {
+    let flags = Flags {
       delta_encoding_order: 0,
       use_wrapped_mode: false,
-    }
+    };
+    let internal_config = InternalCompressorConfig {
+      compression_level: 6,
+      use_gcds: true,
+    };
+    optimize_bins(wps, &internal_config, &flags, 100)
   }
 
   #[test]
@@ -152,7 +159,7 @@ mod tests {
       WeightedPrefix::new(1, 1, 1000_u32, 1000, None, 1_u32),
       WeightedPrefix::new(1, 1, 2000_u32, 2000, None, 1_u32),
     ];
-    let res = optimize_bins(wps, &basic_flags(), 100);
+    let res = basic_optimize(wps);
     let expected = vec![WeightedPrefix::new(2, 2, 1000_u32, 2000, None, 1000_u32)];
     assert_eq!(res, expected);
   }
@@ -163,7 +170,7 @@ mod tests {
       WeightedPrefix::new(100, 100, 1000_u32, 2000, None, 10_u32),
       WeightedPrefix::new(1, 1, 2100_u32, 2100, None, 1_u32),
     ];
-    let res = optimize_bins(wps, &basic_flags(), 100);
+    let res = basic_optimize(wps);
     let expected = vec![WeightedPrefix::new(101, 101, 1000_u32, 2100, None, 10_u32)];
     assert_eq!(res, expected);
   }
@@ -174,7 +181,7 @@ mod tests {
       WeightedPrefix::new(5, 5, 1000_u32, 1100, None, 10_u32),
       WeightedPrefix::new(5, 5, 1105, 1135, None, 15_u32),
     ];
-    let res = optimize_bins(wps, &basic_flags(), 100);
+    let res = basic_optimize(wps);
     let expected = vec![WeightedPrefix::new(10, 10, 1000_u32, 1135, None, 5_u32)];
     assert_eq!(res, expected);
   }
@@ -185,7 +192,7 @@ mod tests {
       WeightedPrefix::new(100, 100, 1000_u32, 1100, None, 10_u32),
       WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
     ];
-    let res = optimize_bins(wps, &basic_flags(), 100);
+    let res = basic_optimize(wps);
     let expected = vec![
       WeightedPrefix::new(100, 100, 1000_u32, 1100, None, 10_u32),
       WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
