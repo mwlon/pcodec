@@ -8,8 +8,7 @@ use crate::num_decompressor::NumDecompressor;
 use crate::{delta_encoding, BinMetadata};
 
 #[derive(Debug)]
-pub struct Numbers<T: NumberLike> {
-  pub nums: Vec<T>,
+pub struct BatchResult {
   pub finished_body: bool,
 }
 
@@ -57,14 +56,14 @@ impl<T: NumberLike> BodyDecompressor<T> {
     reader: &mut BitReader,
     limit: usize,
     error_on_insufficient_data: bool,
-  ) -> QCompressResult<Numbers<T>> {
+    dest: &mut Vec<T>,
+  ) -> QCompressResult<BatchResult> {
     match self {
       Self::Simple { num_decompressor } => num_decompressor
         .decompress_unsigneds_limited(reader, limit, error_on_insufficient_data)
         .map(|u| {
-          let nums = u.unsigneds.into_iter().map(T::from_unsigned).collect();
-          Numbers {
-            nums,
+          dest.extend(u.unsigneds.into_iter().map(T::from_unsigned));
+          BatchResult {
             finished_body: u.finished_body,
           }
         }),
@@ -84,10 +83,9 @@ impl<T: NumberLike> BodyDecompressor<T> {
         } else {
           u_deltas.unsigneds.len()
         };
-        let nums = delta_encoding::reconstruct_nums(delta_moments, u_deltas.unsigneds, batch_size);
+        delta_encoding::reconstruct_nums(delta_moments, u_deltas.unsigneds, batch_size, dest);
         *nums_processed += batch_size;
-        Ok(Numbers {
-          nums,
+        Ok(BatchResult {
           finished_body: nums_processed == n,
         })
       }

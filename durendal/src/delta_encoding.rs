@@ -74,8 +74,8 @@ fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
   delta_moments: &mut DeltaMoments<T::Signed>,
   mut u_deltas: Vec<T::Unsigned>,
   n: usize,
-) -> Vec<T> {
-  let mut res = Vec::with_capacity(n);
+  dest: &mut Vec<T>,
+) {
   for _ in 0..ORDER {
     u_deltas.push(T::Unsigned::ZERO);
   }
@@ -83,29 +83,29 @@ fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
   let moments = &mut delta_moments.moments;
   for i in 0..n {
     let delta = T::Signed::from_unsigned(u_deltas[i]);
-    res.push(T::from_signed(moments[0]));
+    dest.push(T::from_signed(moments[0]));
 
     for o in 0..ORDER - 1 {
       moments[o] = moments[o].wrapping_add(moments[o + 1]);
     }
     moments[ORDER - 1] = moments[ORDER - 1].wrapping_add(delta);
   }
-  res
 }
 
 pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &mut DeltaMoments<T::Signed>,
   u_deltas: Vec<T::Unsigned>,
   n: usize,
-) -> Vec<T> {
+  dest: &mut Vec<T>,
+) {
   match delta_moments.order() {
-    1 => reconstruct_nums_w_order::<T, 1>(delta_moments, u_deltas, n),
-    2 => reconstruct_nums_w_order::<T, 2>(delta_moments, u_deltas, n),
-    3 => reconstruct_nums_w_order::<T, 3>(delta_moments, u_deltas, n),
-    4 => reconstruct_nums_w_order::<T, 4>(delta_moments, u_deltas, n),
-    5 => reconstruct_nums_w_order::<T, 5>(delta_moments, u_deltas, n),
-    6 => reconstruct_nums_w_order::<T, 6>(delta_moments, u_deltas, n),
-    7 => reconstruct_nums_w_order::<T, 7>(delta_moments, u_deltas, n),
+    1 => reconstruct_nums_w_order::<T, 1>(delta_moments, u_deltas, n, dest),
+    2 => reconstruct_nums_w_order::<T, 2>(delta_moments, u_deltas, n, dest),
+    3 => reconstruct_nums_w_order::<T, 3>(delta_moments, u_deltas, n, dest),
+    4 => reconstruct_nums_w_order::<T, 4>(delta_moments, u_deltas, n, dest),
+    5 => reconstruct_nums_w_order::<T, 5>(delta_moments, u_deltas, n, dest),
+    6 => reconstruct_nums_w_order::<T, 6>(delta_moments, u_deltas, n, dest),
+    7 => reconstruct_nums_w_order::<T, 7>(delta_moments, u_deltas, n, dest),
     _ => panic!("this order should be unreachable"),
   }
 }
@@ -128,6 +128,16 @@ mod tests {
     );
   }
 
+  fn simple_reconstruct_nums(
+    delta_moments: &mut DeltaMoments<i32>,
+    u_deltas: Vec<u32>,
+    n: usize,
+  ) -> Vec<i32> {
+    let mut res = Vec::new();
+    reconstruct_nums(delta_moments, u_deltas, n, &mut res);
+    res
+  }
+
   #[test]
   fn test_reconstruct_nums_full() {
     let u_deltas = vec![1_i32, 2, -3]
@@ -138,15 +148,15 @@ mod tests {
 
     // full
     let mut new_moments = moments.clone();
-    let nums = reconstruct_nums::<i32>(&mut new_moments, u_deltas.clone(), 5);
+    let nums = simple_reconstruct_nums(&mut new_moments, u_deltas.clone(), 5);
     assert_eq!(nums, vec![77, 78, 80, 84, 85]);
 
     //partial
-    let nums = reconstruct_nums::<i32>(&mut moments, u_deltas.clone(), 3);
+    let nums = simple_reconstruct_nums(&mut moments, u_deltas.clone(), 3);
     assert_eq!(nums, vec![77, 78, 80]);
     assert_eq!(moments, DeltaMoments::new(vec![84, 1]));
 
-    let nums = reconstruct_nums::<i32>(&mut moments, u_deltas[3..].to_vec(), 2);
+    let nums = simple_reconstruct_nums(&mut moments, u_deltas[3..].to_vec(), 2);
     assert_eq!(nums, vec![84, 85]);
   }
 }

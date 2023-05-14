@@ -85,7 +85,7 @@ pub fn wrapped_decompress<T: NumberLike>(
       let (size, newbuf) = decode_usize(buf);
       buf = newbuf;
       decompressor.write_all(&buf[..page_len]).unwrap();
-      res.extend(decompressor.data_page(size, page_len)?);
+      decompressor.data_page(size, page_len, &mut res)?;
       decompressor.free_compressed_memory();
       buf = &mut buf[page_len..];
     }

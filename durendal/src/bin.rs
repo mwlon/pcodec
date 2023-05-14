@@ -14,7 +14,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 /// it, then writes out its Huffman code, optionally the number of
 /// consecutive repetitions of that number if `run_length_jumpstart` is
 /// available, and then the exact offset within the range for the number.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Bin<T: NumberLike> {
   /// The count of numbers in the chunk that fall into this bin's range.

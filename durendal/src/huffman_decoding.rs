@@ -94,12 +94,8 @@ impl<T: NumberLike> From<&Vec<Bin<T>>> for HuffmanTable<T::Unsigned> {
   }
 }
 
-fn mask_to_n_bits(x: usize, n: usize) -> usize {
-  x & (usize::MAX >> (usize::BITS as usize - n))
-}
-
 fn build_from_bins_recursive<T: NumberLike>(
-  bins: &[Bin<T>],
+  bins: &Vec<Bin<T>>,
   depth: usize,
 ) -> HuffmanTable<T::Unsigned> {
   if bins.len() == 1 {
@@ -108,25 +104,27 @@ fn build_from_bins_recursive<T: NumberLike>(
   } else {
     let max_depth = bins.iter().map(|bin| bin.code_len).max().unwrap();
     let table_size_log: usize = min(MAX_BIN_TABLE_SIZE_LOG, max_depth - depth);
+    let final_depth = depth + table_size_log;
     let table_size = 1 << table_size_log;
 
-    let mut children = Vec::new();
-    for idx in 0..table_size {
-      // We put each bin into the table, possibly in multiple consecutive locations.
-      // e.g. if the table size log is 7 and we have a 4-bit code, we'll put the bin in
-      // 2^3=8 table indexes. We do this by iterating over all indices and finding the
-      // bins that belong.
-      let possible_bins = bins
-        .iter()
-        .filter(|&bin| {
-          mask_to_n_bits(idx, bin.code_len - depth)
-            == mask_to_n_bits(bin.code >> depth, table_size_log)
-        })
-        .cloned()
-        .collect::<Vec<Bin<T>>>();
-      let child = build_from_bins_recursive(&possible_bins, depth + table_size_log);
-      children.push(child);
+    // We put each bin into the table, possibly in multiple consecutive locations.
+    // e.g. if the table size log is 7 and we have a 4-bit code, we'll put the bin in
+    // 2^3=8 table indexes.
+    let mut child_infos = vec![Vec::new(); table_size];
+    for bin in bins {
+      let base_idx = (bin.code >> depth) % table_size;
+      let n_idxs = 1 << final_depth.saturating_sub(bin.code_len);
+      let idx_stride = 1 << bin.code_len.saturating_sub(depth);
+      for i in 0..n_idxs {
+        let idx = base_idx + i * idx_stride;
+        child_infos[idx].push(*bin);
+      }
     }
+    let children = child_infos
+      .into_iter()
+      .map(|bins| build_from_bins_recursive(&bins, final_depth))
+      .collect();
+
     HuffmanTable::NonLeaf {
       table_size_log,
       children,

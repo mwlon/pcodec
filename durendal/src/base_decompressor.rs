@@ -220,16 +220,16 @@ impl<T: NumberLike> BaseDecompressor<T> {
     &mut self,
     n: usize,
     compressed_page_size: usize,
-  ) -> QCompressResult<Vec<T>> {
+    dest: &mut Vec<T>,
+  ) -> QCompressResult<()> {
     let old_bd = self.state.body_decompressor.clone();
     self.with_reader(|reader, state, _| {
       let mut bd = state.new_body_decompressor(reader, n, compressed_page_size)?;
-      let res = bd
-        .decompress_next_batch(reader, usize::MAX, true)
-        .map(|numbers| numbers.nums);
+      let res = bd.decompress_next_batch(reader, usize::MAX, true, dest);
       // we need to roll back the body decompressor if this failed
       state.body_decompressor = if res.is_ok() { None } else { old_bd };
-      res
+      res?;
+      Ok(())
     })
   }
 

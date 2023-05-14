@@ -43,17 +43,11 @@ pub fn simple_decompress<T: NumberLike>(
   // so we just take ownership of the first chunk's numbers instead
   let mut decompressor = Decompressor::<T>::from_config(config);
   decompressor.write_all(bytes).unwrap();
-  let mut res: Option<Vec<T>> = None;
+  let mut res = Vec::new();
   decompressor.header()?;
-  while decompressor.chunk_metadata()?.is_some() {
-    let nums = decompressor.chunk_body()?;
-    res = match res {
-      Some(mut existing) => {
-        existing.extend(nums);
-        Some(existing)
-      }
-      None => Some(nums),
-    };
+  while let Some(meta) = decompressor.chunk_metadata()? {
+    res.reserve(meta.n);
+    decompressor.chunk_body(&mut res)?;
   }
-  Ok(res.unwrap_or_default())
+  Ok(res)
 }
