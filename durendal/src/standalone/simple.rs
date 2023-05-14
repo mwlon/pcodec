@@ -4,7 +4,7 @@ use crate::standalone::{Compressor, Decompressor};
 use crate::{bits, CompressorConfig, DecompressorConfig};
 use std::io::Write;
 
-const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
+const DEFAULT_CHUNK_SIZE: usize = 5_000;
 
 /// Takes in a slice of numbers and returns compressed bytes.
 ///

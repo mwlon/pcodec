@@ -45,16 +45,6 @@ macro_rules! impl_signed {
       fn from_unsigned(off: Self::Unsigned) -> Self {
         Self::MIN.wrapping_add(off as $t)
       }
-
-      fn to_bytes(self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
-      }
-
-      fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self::from_le_bytes(
-          bytes.try_into().unwrap(),
-        ))
-      }
     }
   };
 }

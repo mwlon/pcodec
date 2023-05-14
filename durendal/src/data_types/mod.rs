@@ -152,22 +152,11 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// Used during delta decoding to convert back from a signed integer.
   fn from_signed(signed: Self::Signed) -> Self;
 
-  /// Returns an uncompressed representation for the number.
-  fn to_bytes(self) -> Vec<u8>;
-
-  /// Creates a number from an uncompressed representation.
-  fn from_bytes(bytes: &[u8]) -> QCompressResult<Self>;
-
-  /// Parses an uncompressed representation of the number from the
-  /// `BitReader`.
-  fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    let bools = reader.read(Self::PHYSICAL_BITS)?;
-    Self::from_bytes(&bits::bits_to_bytes(bools))
+  fn write_to(self, writer: &mut BitWriter) {
+    writer.write_diff(self.to_unsigned(), Self::Unsigned::BITS)
   }
 
-  /// Appends an uncompressed representation of the number to the
-  /// `BitWriter`.
-  fn write_to(self, writer: &mut BitWriter) {
-    writer.write(&bits::bytes_to_bits(self.to_bytes()));
+  fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
+    Ok(Self::from_unsigned(reader.read_uint(Self::Unsigned::BITS)?))
   }
 }
