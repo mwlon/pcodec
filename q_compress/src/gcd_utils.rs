@@ -48,7 +48,7 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(prefixes: &[Prefix<T>]) -> Optio
     if p.upper != p.lower {
       if gcd.is_none() {
         gcd = Some(p.gcd);
-      } else {
+      } else if gcd != Some(p.gcd) {
         nontrivial_ranges_share_gcd = false;
       }
     }
