@@ -118,8 +118,8 @@ impl Flags {
     let len = bytes.len();
     if len > u8::MAX as usize {
       return Err(QCompressError::invalid_argument(
-        "cannot write flags of more than 255 bytes"
-      ))
+        "cannot write flags of more than 255 bytes",
+      ));
     }
     writer.write_aligned_byte(len as u8)?;
     writer.write_aligned_bytes(&bytes)?;

@@ -1,8 +1,8 @@
 use crate::data_types::{NumberLike, UnsignedLike};
 
-use crate::bin::BinCompressionInfo;
-use crate::{Bin};
 use crate::base_compressor::InternalCompressorConfig;
+use crate::bin::BinCompressionInfo;
+use crate::Bin;
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {

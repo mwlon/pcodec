@@ -308,12 +308,8 @@ fn train_bins<U: UnsignedLike>(
     choose_unoptimized_bins(&sorted, internal_config)
   };
 
-  let mut optimized_bins = bin_optimization::optimize_bins(
-    unoptimized_bins,
-    internal_config,
-    flags,
-    n,
-  );
+  let mut optimized_bins =
+    bin_optimization::optimize_bins(unoptimized_bins, internal_config, flags, n);
 
   huffman_encoding::make_huffman_code(&mut optimized_bins);
 
