@@ -3,7 +3,7 @@ use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{QCompressResult};
 use crate::{gcd_utils, Flags, bits};
 
 /// A wrapper for bins in the two cases cases: delta encoded or not.

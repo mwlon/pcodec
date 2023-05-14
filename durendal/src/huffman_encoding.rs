@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 
 use crate::bin::WeightedPrefix;
 use crate::bits;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{UnsignedLike};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
@@ -110,7 +110,7 @@ pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [WeightedPrefix<U>]
 
 #[cfg(test)]
 mod tests {
-  use crate::bin::{Bin, BinCompressionInfo, WeightedPrefix};
+  use crate::bin::{BinCompressionInfo, WeightedPrefix};
   use crate::bits;
   use crate::huffman_encoding::make_huffman_code;
 

@@ -1,7 +1,7 @@
 use crate::bin::BinCompressionInfo;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::Bin;
+
 
 const TARGET_BRANCHING_FACTOR: usize = 16; // chosen for performance
 

@@ -1,5 +1,5 @@
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::{QCompressError, QCompressResult};
+
 use crate::{Bin, Flags};
 use crate::bin::BinCompressionInfo;
 
