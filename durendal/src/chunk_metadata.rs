@@ -3,7 +3,7 @@ use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::QCompressResult;
+use crate::errors::{QCompressError, QCompressResult};
 use crate::{bits, gcd_utils, Flags};
 
 /// A wrapper for bins in the two cases cases: delta encoded or not.
@@ -84,6 +84,13 @@ fn parse_bins<T: NumberLike>(
     let lower = T::read_from(reader)?;
 
     let offset_bits = reader.read_usize(offset_bits_bits)?;
+    if offset_bits > T::Unsigned::BITS {
+      return Err(QCompressError::corruption(format!(
+        "offset bits of {} exceeds data type of {} bits",
+        offset_bits,
+        T::Unsigned::BITS,
+      )));
+    }
 
     let code_len = reader.read_usize(BITS_TO_ENCODE_CODE_LEN)?;
     let code = reader.read_usize(code_len)?;
@@ -92,7 +99,9 @@ fn parse_bins<T: NumberLike>(
     } else {
       None
     };
-    let gcd = if let Some(common_gcd) = maybe_common_gcd {
+    let gcd = if offset_bits == 0 {
+      T::Unsigned::ONE
+    } else if let Some(common_gcd) = maybe_common_gcd {
       common_gcd
     } else {
       reader.read_uint(T::Unsigned::BITS)?
@@ -139,7 +148,7 @@ fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Fl
         writer.write_usize(jumpstart, BITS_TO_ENCODE_JUMPSTART);
       }
     }
-    if maybe_commond_gcd.is_none() {
+    if bin.offset_bits > 0 && maybe_commond_gcd.is_none() {
       writer.write_diff(bin.gcd, T::Unsigned::BITS);
     }
   }
