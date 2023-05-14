@@ -111,14 +111,16 @@ impl CompressorConfig {
 // i.e. these don't get written to the resulting bytes and aren't needed for
 // decoding
 #[derive(Clone, Debug)]
-struct InternalCompressorConfig {
+pub struct InternalCompressorConfig {
   pub compression_level: usize,
+  pub use_gcds: bool,
 }
 
 impl From<&CompressorConfig> for InternalCompressorConfig {
   fn from(config: &CompressorConfig) -> Self {
     InternalCompressorConfig {
       compression_level: config.compression_level,
+      use_gcds: config.use_gcds,
     }
   }
 }
@@ -244,7 +246,6 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
 fn choose_unoptimized_bins<U: UnsignedLike>(
   sorted: &[U],
   internal_config: &InternalCompressorConfig,
-  flags: &Flags,
 ) -> Vec<WeightedPrefix<U>> {
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(
@@ -252,7 +253,7 @@ fn choose_unoptimized_bins<U: UnsignedLike>(
     n_unsigneds,
   );
 
-  let use_gcd = flags.use_gcds;
+  let use_gcd = internal_config.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
   let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, use_gcd);
@@ -304,10 +305,11 @@ fn train_bins<U: UnsignedLike>(
   let unoptimized_bins = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
-    choose_unoptimized_bins(&sorted, internal_config, flags)
+    choose_unoptimized_bins(&sorted, internal_config)
   };
 
-  let mut optimized_bins = bin_optimization::optimize_bins(unoptimized_bins, flags, n);
+  let mut optimized_bins =
+    bin_optimization::optimize_bins(unoptimized_bins, internal_config, flags, n);
 
   huffman_encoding::make_huffman_code(&mut optimized_bins);
 

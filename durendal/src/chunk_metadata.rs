@@ -69,14 +69,10 @@ fn parse_bins<T: NumberLike>(
   let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
   let mut bins = Vec::with_capacity(n_bins);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
-  let maybe_common_gcd = if flags.use_gcds {
-    if reader.read_one()? {
-      Some(reader.read_uint::<T::Unsigned>(T::Unsigned::BITS)?)
-    } else {
-      None
-    }
+  let maybe_common_gcd = if reader.read_one()? {
+    Some(reader.read_uint::<T::Unsigned>(T::Unsigned::BITS)?)
   } else {
-    Some(T::Unsigned::ONE)
+    None
   };
   let offset_bits_bits = bits::bits_to_encode_offset_bits::<T::Unsigned>();
   for _ in 0..n_bins {
@@ -122,16 +118,11 @@ fn parse_bins<T: NumberLike>(
 fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Flags, n: usize) {
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
-  let maybe_commond_gcd = if flags.use_gcds {
-    let maybe_common_gcd = gcd_utils::common_gcd_for_chunk_meta(bins);
-    writer.write_one(maybe_common_gcd.is_some());
-    if let Some(common_gcd) = maybe_common_gcd {
-      writer.write_diff(common_gcd, T::Unsigned::BITS);
-    }
-    maybe_common_gcd
-  } else {
-    Some(T::Unsigned::ONE)
-  };
+  let maybe_common_gcd = gcd_utils::common_gcd_for_chunk_meta(bins);
+  writer.write_one(maybe_common_gcd.is_some());
+  if let Some(common_gcd) = maybe_common_gcd {
+    writer.write_diff(common_gcd, T::Unsigned::BITS);
+  }
   let offset_bits_bits = bits::bits_to_encode_offset_bits::<T::Unsigned>();
   for bin in bins {
     writer.write_usize(bin.count, bits_to_encode_count);
@@ -148,7 +139,7 @@ fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Fl
         writer.write_usize(jumpstart, BITS_TO_ENCODE_JUMPSTART);
       }
     }
-    if bin.offset_bits > 0 && maybe_commond_gcd.is_none() {
+    if bin.offset_bits > 0 && maybe_common_gcd.is_none() {
       writer.write_diff(bin.gcd, T::Unsigned::BITS);
     }
   }

@@ -31,15 +31,6 @@ pub struct Flags {
   ///
   /// Introduced in 0.0.0.
   pub delta_encoding_order: usize,
-  /// Whether to enable greatest common divisor multipliers for each
-  /// bin.
-  /// This adds an optional multiplier to each bin metadata, so that each
-  /// unsigned number is decoded as `x = bin_lower + offset * gcd`.
-  /// This can improve compression ratio in some cases, e.g. when the
-  /// numbers are all integer multiples of 100 or all integer-valued floats.
-  ///
-  /// Introduced in 0.0.0.
-  pub use_gcds: bool,
   /// Whether to release control to a wrapping columnar format.
   /// This causes q_compress to omit count and compressed size metadata
   /// and also break each chuk into finer data pages.
@@ -54,7 +45,6 @@ impl TryFrom<Vec<bool>> for Flags {
   fn try_from(bools: Vec<bool>) -> QCompressResult<Self> {
     let mut flags = Flags {
       delta_encoding_order: 0,
-      use_gcds: false,
       use_wrapped_mode: false,
     };
 
@@ -65,8 +55,6 @@ impl TryFrom<Vec<bool>> for Flags {
       delta_encoding_bits.push(bit_iter.next().cloned().unwrap_or(false));
     }
     flags.delta_encoding_order = bits::bits_to_usize(&delta_encoding_bits);
-
-    flags.use_gcds = bit_iter.next() == Some(&true);
 
     flags.use_wrapped_mode = bit_iter.next() == Some(&true);
 
@@ -102,8 +90,6 @@ impl TryInto<Vec<bool>> for &Flags {
     );
     res.extend(delta_bits);
 
-    res.push(self.use_gcds);
-
     res.push(self.use_wrapped_mode);
 
     let necessary_len = res
@@ -132,8 +118,8 @@ impl Flags {
     let len = bytes.len();
     if len > u8::MAX as usize {
       return Err(QCompressError::invalid_argument(
-        "cannot write flags of more than 255 bytes"
-      ))
+        "cannot write flags of more than 255 bytes",
+      ));
     }
     writer.write_aligned_byte(len as u8)?;
     writer.write_aligned_bytes(&bytes)?;
@@ -166,7 +152,6 @@ impl Flags {
   pub(crate) fn from_config(config: &CompressorConfig, use_wrapped_mode: bool) -> Self {
     Flags {
       delta_encoding_order: config.delta_encoding_order,
-      use_gcds: config.use_gcds,
       use_wrapped_mode,
     }
   }
