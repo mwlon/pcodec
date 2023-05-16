@@ -74,7 +74,7 @@ fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
   delta_moments: &mut DeltaMoments<T::Signed>,
   mut u_deltas: Vec<T::Unsigned>,
   n: usize,
-  dest: &mut Vec<T>,
+  dest: &mut [T],
 ) {
   for _ in 0..ORDER {
     u_deltas.push(T::Unsigned::ZERO);
@@ -83,7 +83,7 @@ fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
   let moments = &mut delta_moments.moments;
   for i in 0..n {
     let delta = T::Signed::from_unsigned(u_deltas[i]);
-    dest.push(T::from_signed(moments[0]));
+    dest[i] = T::from_signed(moments[0]);
 
     for o in 0..ORDER - 1 {
       moments[o] = moments[o].wrapping_add(moments[o + 1]);
@@ -96,7 +96,7 @@ pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &mut DeltaMoments<T::Signed>,
   u_deltas: Vec<T::Unsigned>,
   n: usize,
-  dest: &mut Vec<T>,
+  dest: &mut [T],
 ) {
   match delta_moments.order() {
     1 => reconstruct_nums_w_order::<T, 1>(delta_moments, u_deltas, n, dest),

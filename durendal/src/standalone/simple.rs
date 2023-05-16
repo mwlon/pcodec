@@ -4,7 +4,7 @@ use crate::standalone::{Compressor, Decompressor};
 use crate::{bits, CompressorConfig, DecompressorConfig};
 use std::io::Write;
 
-const DEFAULT_CHUNK_SIZE: usize = 5_000;
+const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
 /// Takes in a slice of numbers and returns compressed bytes.
 ///
@@ -44,10 +44,13 @@ pub fn simple_decompress<T: NumberLike>(
   let mut decompressor = Decompressor::<T>::from_config(config);
   decompressor.write_all(bytes).unwrap();
   let mut res = Vec::new();
+  let mut n = 0;
   decompressor.header()?;
   while let Some(meta) = decompressor.chunk_metadata()? {
     res.reserve(meta.n);
-    decompressor.chunk_body(&mut res)?;
+    unsafe { res.set_len(n + meta.n); }
+    decompressor.chunk_body(&mut res[n..])?;
+    n += meta.n;
   }
   Ok(res)
 }

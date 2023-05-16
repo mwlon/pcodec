@@ -78,7 +78,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// Reads up to `limit` numbers from the current data page.
   /// Will return an error if the decompressor is not in a data page,
   /// it runs out of data, or any corruptions are found.
-  pub fn next_batch(&mut self, limit: usize, dest: &mut Vec<T>) -> QCompressResult<()> {
+  pub fn next_batch(&mut self, limit: usize, dest: &mut [T]) -> QCompressResult<()> {
     self
       .0
       .state
@@ -99,7 +99,7 @@ impl<T: NumberLike> Decompressor<T> {
   ///
   /// This is similar to calling [`.begin_data_page`][Self::begin_data_page] and then
   /// [`.next_batch(usize::MAX)`][Self::next_batch].
-  pub fn data_page(&mut self, n: usize, compressed_page_size: usize, dest: &mut Vec<T>) -> QCompressResult<()> {
+  pub fn data_page(&mut self, n: usize, compressed_page_size: usize, dest: &mut [T]) -> QCompressResult<()> {
     self.0.state.check_step_among(
       &[Step::StartOfDataPage, Step::MidDataPage],
       "data page",

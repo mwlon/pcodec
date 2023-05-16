@@ -131,7 +131,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// Will return an error if the decompressor is not in a chunk body,
   /// runs out of data,
   /// or finds any corruptions.
-  pub fn chunk_body(&mut self, dest: &mut Vec<T>) -> QCompressResult<()> {
+  pub fn chunk_body(&mut self, dest: &mut [T]) -> QCompressResult<()> {
     self
       .0
       .state
@@ -165,7 +165,7 @@ fn next_nums_dirty<T: NumberLike>(
   reader: &mut BitReader,
   bd: &mut BodyDecompressor<T>,
   config: &DecompressorConfig,
-  dest: &mut Vec<T>,
+  dest: &mut [T],
 ) -> QCompressResult<BatchResult> {
   bd.decompress_next_batch(reader, config.numbers_limit_per_item, false, dest)
 }

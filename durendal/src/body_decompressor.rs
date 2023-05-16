@@ -4,7 +4,7 @@ use crate::bit_reader::BitReader;
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
-use crate::num_decompressor::NumDecompressor;
+use crate::num_decompressor::{NumDecompressor, Unsigneds};
 use crate::{delta_encoding, BinMetadata};
 
 #[derive(Debug)]
@@ -25,6 +25,12 @@ pub enum BodyDecompressor<T: NumberLike> {
     delta_moments: DeltaMoments<T::Signed>,
     nums_processed: usize,
   },
+}
+
+fn unsigneds_to_nums<T: NumberLike>(unsigneds: &[T::Unsigned], dest: &mut [T]) {
+  for (i, &u) in unsigneds.into_iter().enumerate() {
+    dest[i] = T::from_unsigned(u);
+  }
 }
 
 impl<T: NumberLike> BodyDecompressor<T> {
@@ -56,13 +62,14 @@ impl<T: NumberLike> BodyDecompressor<T> {
     reader: &mut BitReader,
     limit: usize,
     error_on_insufficient_data: bool,
-    dest: &mut Vec<T>,
+    dest: &mut [T],
   ) -> QCompressResult<BatchResult> {
     match self {
       Self::Simple { num_decompressor } => num_decompressor
         .decompress_unsigneds_limited(reader, limit, error_on_insufficient_data)
         .map(|u| {
-          dest.extend(u.unsigneds.into_iter().map(T::from_unsigned));
+          // is there a better way to write this?
+          unsigneds_to_nums(&u.unsigneds, dest);
           BatchResult {
             finished_body: u.finished_body,
           }

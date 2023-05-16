@@ -220,7 +220,7 @@ impl<T: NumberLike> BaseDecompressor<T> {
     &mut self,
     n: usize,
     compressed_page_size: usize,
-    dest: &mut Vec<T>,
+    dest: &mut [T],
   ) -> QCompressResult<()> {
     let old_bd = self.state.body_decompressor.clone();
     self.with_reader(|reader, state, _| {
