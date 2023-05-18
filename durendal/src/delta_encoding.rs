@@ -1,6 +1,6 @@
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::{NumberLike, SignedLike, UnsignedLike};
+use crate::data_types::{NumberLike, SignedLike};
 use crate::errors::QCompressResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
