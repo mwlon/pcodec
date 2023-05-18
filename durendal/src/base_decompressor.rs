@@ -225,7 +225,7 @@ impl<T: NumberLike> BaseDecompressor<T> {
     let old_bd = self.state.body_decompressor.clone();
     self.with_reader(|reader, state, _| {
       let mut bd = state.new_body_decompressor(reader, n, compressed_page_size)?;
-      let res = bd.decompress_next_batch(reader, usize::MAX, true, dest);
+      let res = bd.decompress_next_batch(reader, true, dest);
       // we need to roll back the body decompressor if this failed
       state.body_decompressor = if res.is_ok() { None } else { old_bd };
       res?;

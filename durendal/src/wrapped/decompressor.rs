@@ -78,14 +78,14 @@ impl<T: NumberLike> Decompressor<T> {
   /// Reads up to `limit` numbers from the current data page.
   /// Will return an error if the decompressor is not in a data page,
   /// it runs out of data, or any corruptions are found.
-  pub fn next_batch(&mut self, limit: usize, dest: &mut [T]) -> QCompressResult<()> {
+  pub fn next_batch(&mut self, dest: &mut [T]) -> QCompressResult<()> {
     self
       .0
       .state
       .check_step(Step::MidDataPage, "read next batch")?;
     self.0.with_reader(|reader, state, _| {
       let bd = state.body_decompressor.as_mut().unwrap();
-      let batch_res = bd.decompress_next_batch(reader, limit, true, dest)?;
+      let batch_res = bd.decompress_next_batch(reader, true, dest)?;
       if batch_res.finished_body {
         state.body_decompressor = None;
       }

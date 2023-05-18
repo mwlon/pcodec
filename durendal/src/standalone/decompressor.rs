@@ -2,10 +2,11 @@ use std::io::Write;
 
 use crate::base_decompressor::{BaseDecompressor, State, Step};
 use crate::bit_reader::BitReader;
-use crate::body_decompressor::{BodyDecompressor, BatchResult};
+use crate::body_decompressor::{BodyDecompressor};
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
+use crate::progress::Progress;
 
 /// Converts .qco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
@@ -164,25 +165,24 @@ impl<T: NumberLike> Decompressor<T> {
 fn next_nums_dirty<T: NumberLike>(
   reader: &mut BitReader,
   bd: &mut BodyDecompressor<T>,
-  config: &DecompressorConfig,
   dest: &mut [T],
-) -> QCompressResult<BatchResult> {
-  bd.decompress_next_batch(reader, config.numbers_limit_per_item, false, dest)
+) -> QCompressResult<Progress> {
+  bd.decompress_next_batch(reader, false, dest)
 }
 
 fn apply_nums<T: NumberLike>(
   state: &mut State<T>,
   dest: Vec<T>,
-  numbers: BatchResult,
+  progress: Progress,
 ) -> Option<DecompressedItem<T>> {
-  if dest.is_empty() {
+  if progress.n_processed == 0 {
     None
   } else {
-    if numbers.finished_body {
+    if progress.finished_body {
       state.chunk_meta = None;
       state.body_decompressor = None;
     }
-    Some(DecompressedItem::Numbers(dest))
+    Some(DecompressedItem::Numbers(dest[..progress.n_processed].to_vec()))
   }
 }
 
@@ -211,20 +211,19 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
           ..
         } = state.chunk_meta.as_ref().unwrap();
         let mut bd = state.new_body_decompressor(reader, n, compressed_body_size)?;
-        let mut dest = Vec::new();
-        let numbers = next_nums_dirty(reader, &mut bd, config, &mut dest)?;
+        let mut dest = vec![T::default(); config.numbers_limit_per_item];
+        let progress = next_nums_dirty(reader, &mut bd, &mut dest)?;
         state.body_decompressor = Some(bd);
-        Ok(apply_nums(state, dest, numbers))
+        Ok(apply_nums(state, dest, progress))
       }),
       Step::MidDataPage => self.0.with_reader(|reader, state, config| {
-        let mut dest = Vec::new();
-        let numbers = next_nums_dirty(
+        let mut dest = vec![T::default(); config.numbers_limit_per_item];
+        let progress = next_nums_dirty(
           reader,
           state.body_decompressor.as_mut().unwrap(),
-          config,
           &mut dest,
         )?;
-        Ok(apply_nums(state, dest, numbers))
+        Ok(apply_nums(state, dest, progress))
       }),
       Step::Terminated => Ok(None),
     };

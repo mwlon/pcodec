@@ -39,6 +39,7 @@ mod gcd_utils;
 mod huffman_decoding;
 mod huffman_encoding;
 mod num_decompressor;
+mod progress;
 mod run_len_utils;
 
 #[cfg(test)]

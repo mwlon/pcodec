@@ -11,22 +11,21 @@ pub fn use_run_len<T: NumberLike>(bins: &[Bin<T>]) -> bool {
 
 fn unchecked_decompress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   reader: &mut BitReader,
-  unsigneds: &mut Vec<U>,
   p: BinDecompressionInfo<U>,
-) {
+) -> U {
   let offset = reader.unchecked_read_uint(p.offset_bits);
-  let unsigned = p.lower_unsigned + GcdOp::get_diff(offset, p.gcd);
-  unsigneds.push(unsigned);
+  p.lower_unsigned + GcdOp::get_diff(offset, p.gcd)
 }
 
 pub trait RunLenOperator {
+  // returns count of numbers processed
   fn unchecked_decompress_offsets<U: UnsignedLike, GcdOp: GcdOperator<U>>(
     num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
-    unsigneds: &mut Vec<U>,
     p: BinDecompressionInfo<U>,
     batch_size: usize,
-  );
+    dest: &mut [U],
+  ) -> usize;
 
   fn batch_ongoing(len: usize, batch_size: usize) -> bool;
 }
@@ -37,28 +36,31 @@ impl RunLenOperator for GeneralRunLenOp {
   fn unchecked_decompress_offsets<U: UnsignedLike, GcdOp: GcdOperator<U>>(
     num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
-    unsigneds: &mut Vec<U>,
     p: BinDecompressionInfo<U>,
-    batch_size: usize,
-  ) {
+    limit: usize,
+    dest: &mut [U],
+  ) -> usize {
     match p.run_len_jumpstart {
-      None => unchecked_decompress_offset::<U, GcdOp>(reader, unsigneds, p),
+      None => {
+        dest[0] = unchecked_decompress_offset::<U, GcdOp>(reader, p);
+        1
+      },
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps =
-          num_decompressor.unchecked_limit_reps(p, full_reps, batch_size - unsigneds.len());
+        let reps = num_decompressor.unchecked_limit_reps(p, full_reps, limit);
         if p.offset_bits == 0 {
-          for _ in 0..reps {
-            unsigneds.push(p.lower_unsigned);
+          for i in 0..reps {
+            dest[i] = p.lower_unsigned;
           }
         } else {
-          for _ in 0..reps {
-            unchecked_decompress_offset::<U, GcdOp>(reader, unsigneds, p);
+          for i in 0..reps {
+            dest[i] = unchecked_decompress_offset::<U, GcdOp>(reader, p);
           }
         }
+        reps
       }
-    };
+    }
   }
 
   #[inline]
@@ -73,11 +75,12 @@ impl RunLenOperator for TrivialRunLenOp {
   fn unchecked_decompress_offsets<U: UnsignedLike, GcdOp: GcdOperator<U>>(
     _num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
-    unsigneds: &mut Vec<U>,
     p: BinDecompressionInfo<U>,
     _batch_size: usize,
-  ) {
-    unchecked_decompress_offset::<U, GcdOp>(reader, unsigneds, p)
+    dest: &mut [U],
+  ) -> usize {
+    dest[0] = unchecked_decompress_offset::<U, GcdOp>(reader, p);
+    1
   }
 
   #[inline]

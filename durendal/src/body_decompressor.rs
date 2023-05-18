@@ -1,16 +1,13 @@
 use std::cmp::min;
 
 use crate::bit_reader::BitReader;
-use crate::data_types::NumberLike;
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
-use crate::num_decompressor::{NumDecompressor, Unsigneds};
+use crate::num_decompressor::{NumDecompressor};
 use crate::{delta_encoding, BinMetadata};
-
-#[derive(Debug)]
-pub struct BatchResult {
-  pub finished_body: bool,
-}
+use crate::constants::UNSIGNED_BATCH_SIZE;
+use crate::progress::Progress;
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
@@ -18,16 +15,19 @@ pub struct BatchResult {
 pub enum BodyDecompressor<T: NumberLike> {
   Simple {
     num_decompressor: NumDecompressor<T::Unsigned>,
+    scratch: [T::Unsigned; UNSIGNED_BATCH_SIZE],
   },
   Delta {
     n: usize,
     num_decompressor: NumDecompressor<T::Unsigned>,
+    scratch: [T::Unsigned; UNSIGNED_BATCH_SIZE],
     delta_moments: DeltaMoments<T::Signed>,
-    nums_processed: usize,
+    n_processed: usize,
   },
 }
 
 fn unsigneds_to_nums<T: NumberLike>(unsigneds: &[T::Unsigned], dest: &mut [T]) {
+  // is there a better way to write this?
   for (i, &u) in unsigneds.into_iter().enumerate() {
     dest[i] = T::from_unsigned(u);
   }
@@ -40,9 +40,11 @@ impl<T: NumberLike> BodyDecompressor<T> {
     compressed_body_size: usize,
     delta_moments: &DeltaMoments<T::Signed>,
   ) -> QCompressResult<Self> {
+    let scratch = [T::Unsigned::ZERO; UNSIGNED_BATCH_SIZE];
     Ok(match bin_metadata {
       BinMetadata::Simple { bins } => Self::Simple {
         num_decompressor: NumDecompressor::new(n, compressed_body_size, bins.clone())?,
+        scratch,
       },
       BinMetadata::Delta { bins } => Self::Delta {
         n,
@@ -51,8 +53,9 @@ impl<T: NumberLike> BodyDecompressor<T> {
           compressed_body_size,
           bins.clone(),
         )?,
+        scratch,
         delta_moments: delta_moments.clone(),
-        nums_processed: 0,
+        n_processed: 0,
       },
     })
   }
@@ -60,48 +63,50 @@ impl<T: NumberLike> BodyDecompressor<T> {
   pub fn decompress_next_batch(
     &mut self,
     reader: &mut BitReader,
-    limit: usize,
     error_on_insufficient_data: bool,
     dest: &mut [T],
-  ) -> QCompressResult<BatchResult> {
-    match self {
-      Self::Simple { num_decompressor } => num_decompressor
-        .decompress_unsigneds_limited(reader, limit, error_on_insufficient_data)
-        .map(|u| {
-          // is there a better way to write this?
-          unsigneds_to_nums(&u.unsigneds, dest);
-          BatchResult {
-            finished_body: u.finished_body,
+  ) -> QCompressResult<Progress> {
+    let mut progress = Progress::default();
+    while progress.n_processed < dest.len() && !progress.finished_body && !progress.insufficient_data {
+      let limit = min(UNSIGNED_BATCH_SIZE, dest.len() - progress.n_processed);
+      match self {
+        Self::Simple { num_decompressor, scratch } => {
+          let u_progress = num_decompressor
+            .decompress_unsigneds(reader, error_on_insufficient_data, &mut scratch[..limit])?;
+          unsigneds_to_nums(&scratch[..u_progress.n_processed], &mut dest[progress.n_processed..]);
+          progress += u_progress;
+        },
+        Self::Delta {
+          n,
+          num_decompressor,
+          scratch,
+          delta_moments,
+          n_processed,
+        } => {
+          let u_progress = num_decompressor.decompress_unsigneds(
+            reader,
+            error_on_insufficient_data,
+            &mut scratch[..limit],
+          )?;
+          let batch_size = min(*n - *n_processed, limit);
+          if u_progress.finished_body {
+            let end_fill_idx = min(batch_size, UNSIGNED_BATCH_SIZE);
+            scratch[u_progress.n_processed..end_fill_idx].fill(T::Unsigned::ZERO);
           }
-        }),
-      Self::Delta {
-        n,
-        num_decompressor,
-        delta_moments,
-        nums_processed,
-      } => {
-        let u_deltas = num_decompressor.decompress_unsigneds_limited(
-          reader,
-          limit,
-          error_on_insufficient_data,
-        )?;
-        let batch_size = if u_deltas.finished_body {
-          min(limit, *n - *nums_processed)
-        } else {
-          u_deltas.unsigneds.len()
-        };
-        delta_encoding::reconstruct_nums(delta_moments, u_deltas.unsigneds, batch_size, dest);
-        *nums_processed += batch_size;
-        Ok(BatchResult {
-          finished_body: nums_processed == n,
-        })
+          delta_encoding::reconstruct_nums(delta_moments, scratch, batch_size, &mut dest[progress.n_processed..]);
+          *n_processed += batch_size;
+          progress.n_processed += batch_size;
+          progress.finished_body = n_processed == n;
+          progress.insufficient_data = u_progress.insufficient_data
+        }
       }
     }
+    Ok(progress)
   }
 
   pub fn bits_remaining(&self) -> usize {
     match self {
-      Self::Simple { num_decompressor } => num_decompressor.bits_remaining(),
+      Self::Simple { num_decompressor, .. } => num_decompressor.bits_remaining(),
       Self::Delta {
         num_decompressor, ..
       } => num_decompressor.bits_remaining(),

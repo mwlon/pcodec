@@ -72,14 +72,10 @@ pub fn nth_order_deltas<T: NumberLike>(
 
 fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
   delta_moments: &mut DeltaMoments<T::Signed>,
-  mut u_deltas: Vec<T::Unsigned>,
+  u_deltas: &mut [T::Unsigned],
   n: usize,
   dest: &mut [T],
 ) {
-  for _ in 0..ORDER {
-    u_deltas.push(T::Unsigned::ZERO);
-  }
-
   let moments = &mut delta_moments.moments;
   for i in 0..n {
     let delta = T::Signed::from_unsigned(u_deltas[i]);
@@ -94,7 +90,7 @@ fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
 
 pub fn reconstruct_nums<T: NumberLike>(
   delta_moments: &mut DeltaMoments<T::Signed>,
-  u_deltas: Vec<T::Unsigned>,
+  u_deltas: &mut [T::Unsigned],
   n: usize,
   dest: &mut [T],
 ) {
@@ -130,10 +126,10 @@ mod tests {
 
   fn simple_reconstruct_nums(
     delta_moments: &mut DeltaMoments<i32>,
-    u_deltas: Vec<u32>,
+    u_deltas: &mut [u32],
     n: usize,
   ) -> Vec<i32> {
-    let mut res = Vec::new();
+    let mut res = vec![i32::MAX; n];
     reconstruct_nums(delta_moments, u_deltas, n, &mut res);
     res
   }
@@ -146,17 +142,13 @@ mod tests {
       .collect::<Vec<u32>>();
     let mut moments: DeltaMoments<i32> = DeltaMoments::new(vec![77, 1]);
 
-    // full
-    let mut new_moments = moments.clone();
-    let nums = simple_reconstruct_nums(&mut new_moments, u_deltas.clone(), 5);
-    assert_eq!(nums, vec![77, 78, 80, 84, 85]);
-
-    //partial
-    let nums = simple_reconstruct_nums(&mut moments, u_deltas.clone(), 3);
+    //full
+    let nums = simple_reconstruct_nums(&mut moments, &mut u_deltas.clone(), 3);
     assert_eq!(nums, vec![77, 78, 80]);
     assert_eq!(moments, DeltaMoments::new(vec![84, 1]));
 
-    let nums = simple_reconstruct_nums(&mut moments, u_deltas[3..].to_vec(), 2);
+    //trailing numbers
+    let nums = simple_reconstruct_nums(&mut moments, &mut [0, 0, u32::MAX], 2);
     assert_eq!(nums, vec![84, 85]);
   }
 }
