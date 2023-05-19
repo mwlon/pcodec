@@ -23,7 +23,6 @@ pub trait RunLenOperator {
     num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     p: BinDecompressionInfo<U>,
-    batch_size: usize,
     dest: &mut [U],
   ) -> usize;
 
@@ -37,7 +36,6 @@ impl RunLenOperator for GeneralRunLenOp {
     num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     p: BinDecompressionInfo<U>,
-    limit: usize,
     dest: &mut [U],
   ) -> usize {
     match p.run_len_jumpstart {
@@ -48,7 +46,7 @@ impl RunLenOperator for GeneralRunLenOp {
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = num_decompressor.unchecked_limit_reps(p, full_reps, limit);
+        let reps = num_decompressor.unchecked_limit_reps(p, full_reps, dest.len());
         if p.offset_bits == 0 {
           for i in 0..reps {
             dest[i] = p.lower_unsigned;
@@ -76,7 +74,6 @@ impl RunLenOperator for TrivialRunLenOp {
     _num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     p: BinDecompressionInfo<U>,
-    _batch_size: usize,
     dest: &mut [U],
   ) -> usize {
     dest[0] = unchecked_decompress_offset::<U, GcdOp>(reader, p);

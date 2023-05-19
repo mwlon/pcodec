@@ -164,11 +164,10 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   fn unchecked_decompress_num_block<GcdOp: GcdOperator<U>, RunLenOp: RunLenOperator>(
     &mut self,
     reader: &mut BitReader,
-    limit: usize,
     dest: &mut [U],
   ) -> usize {
     let bin = self.huffman_table.unchecked_search_with_reader(reader);
-    RunLenOp::unchecked_decompress_offsets::<U, GcdOp>(self, reader, bin, limit, dest)
+    RunLenOp::unchecked_decompress_offsets::<U, GcdOp>(self, reader, bin, dest)
   }
 
   // returns count of numbers processed
@@ -181,7 +180,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     dest: &mut [U],
   ) {
     while guaranteed_safe_num_blocks > 0 && RunLenOp::batch_ongoing(*n_processed, batch_size) {
-      *n_processed += self.unchecked_decompress_num_block::<GcdOp, RunLenOp>(reader, batch_size - *n_processed, &mut dest[*n_processed..]);
+      *n_processed += self.unchecked_decompress_num_block::<GcdOp, RunLenOp>(reader, &mut dest[*n_processed..batch_size]);
       guaranteed_safe_num_blocks -= 1;
     }
   }
