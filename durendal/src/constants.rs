@@ -63,7 +63,10 @@ mod tests {
 
   #[test]
   fn test_bits_to_encode_jumpstart() {
-    assert_can_encode(BITS_TO_ENCODE_JUMPSTART, MAX_JUMPSTART as usize);
+    assert_can_encode(
+      BITS_TO_ENCODE_JUMPSTART,
+      MAX_JUMPSTART as usize,
+    );
   }
 
   #[test]

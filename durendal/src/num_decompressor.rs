@@ -7,9 +7,9 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
 use crate::huffman_decoding::HuffmanTable;
+use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
 use crate::{bits, gcd_utils, run_len_utils, Bin};
-use crate::progress::Progress;
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
@@ -38,7 +38,7 @@ fn validate_bin_tree<T: NumberLike>(bins: &[Bin<T>]) -> QCompressResult<()> {
       if *is_specified {
         return Err(QCompressError::corruption(format!(
           "multiple bins for {} found in chunk metadata",
-          bits::bits_to_string(&bits::usize_to_bits(bin.code, bin.code_len)),
+          bits::code_to_string(bin.code, bin.code_len),
         )));
       }
       *is_specified = true;
@@ -46,10 +46,9 @@ fn validate_bin_tree<T: NumberLike>(bins: &[Bin<T>]) -> QCompressResult<()> {
   }
   for (idx, is_specified) in is_specifieds.iter().enumerate() {
     if !is_specified {
-      let code = bits::usize_to_bits(idx, max_depth);
       return Err(QCompressError::corruption(format!(
         "no bins for {} found in chunk metadata",
-        bits::bits_to_string(&code),
+        bits::code_to_string(idx, max_depth),
       )));
     }
   }
@@ -180,7 +179,10 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     dest: &mut [U],
   ) {
     while guaranteed_safe_num_blocks > 0 && RunLenOp::batch_ongoing(*n_processed, batch_size) {
-      *n_processed += self.unchecked_decompress_num_block::<GcdOp, RunLenOp>(reader, &mut dest[*n_processed..batch_size]);
+      *n_processed += self.unchecked_decompress_num_block::<GcdOp, RunLenOp>(
+        reader,
+        &mut dest[*n_processed..batch_size],
+      );
       guaranteed_safe_num_blocks -= 1;
     }
   }
@@ -266,7 +268,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
-    dest: &mut [U]
+    dest: &mut [U],
   ) -> QCompressResult<Progress> {
     let initial_reader = reader.clone();
     let initial_state = self.state.clone();
@@ -346,12 +348,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     let incomplete_reps = self.state.incomplete_reps;
     if incomplete_reps > 0 {
       let reps = min(incomplete_reps, batch_size);
-      let incomplete_res = self.decompress_offsets(
-        reader,
-        self.state.incomplete_bin,
-        reps,
-        dest,
-      );
+      let incomplete_res = self.decompress_offsets(reader, self.state.incomplete_bin, reps, dest);
       self.state.incomplete_reps -= reps;
       res.n_processed += reps;
       match incomplete_res {
@@ -414,7 +411,11 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
     // do checked operations for the rest
     while res.n_processed < batch_size {
-      res.n_processed += match self.decompress_num_block(reader, batch_size - res.n_processed, &mut dest[res.n_processed..]) {
+      res.n_processed += match self.decompress_num_block(
+        reader,
+        batch_size - res.n_processed,
+        &mut dest[res.n_processed..],
+      ) {
         Ok(n_processed) => n_processed,
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => {
           return mark_insufficient(res, e)

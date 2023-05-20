@@ -1,24 +1,6 @@
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 
-pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
-  let mut res = vec![0; ceil_div(bits.len(), 8)];
-  for i in 0..bits.len() {
-    res[i / 8] |= (bits[i] as u8) << (i % 8);
-  }
-  res
-}
-
-pub fn bytes_to_bits(bytes: Vec<u8>) -> Vec<bool> {
-  let mut res = Vec::with_capacity(bytes.len() * 8);
-  for b in bytes {
-    for i in 0_usize..8 {
-      res.push((b >> i) & 1 > 0);
-    }
-  }
-  res
-}
-
 pub fn bits_to_usize(bits: &[bool]) -> usize {
   let mut res = 0;
   for (i, &b) in bits.iter().enumerate() {
@@ -29,19 +11,13 @@ pub fn bits_to_usize(bits: &[bool]) -> usize {
   res
 }
 
-pub fn usize_to_bits(x: usize, n: Bitlen) -> Vec<bool> {
-  let mut res = Vec::with_capacity(n as usize);
+pub fn code_to_string(x: usize, n: Bitlen) -> String {
+  let mut res = String::new();
   for i in 0..n {
-    res.push((x >> i) & 1 > 0);
+    let char = if (x >> i) & 1 > 0 { '1' } else {'0'};
+    res.push(char);
   }
   res
-}
-
-pub fn bits_to_string(bits: &[bool]) -> String {
-  return bits
-    .iter()
-    .map(|b| if *b { '1' } else { '0' })
-    .collect::<String>();
 }
 
 // This bumpy log gives a more accurate average number of offset bits used.
@@ -82,10 +58,10 @@ mod tests {
   use super::*;
 
   #[test]
-  fn test_bits_to_string() {
-    assert_eq!(bits_to_string(&[]), "".to_string());
+  fn test_code_to_string() {
+    assert_eq!(code_to_string(0, 0), "".to_string());
     assert_eq!(
-      bits_to_string(&[true, false, false]),
+      code_to_string(1, 3),
       "100".to_string()
     );
   }
@@ -105,17 +81,6 @@ mod tests {
     assert_eq!(avg_offset_bits(10_u32, 13_u32, 1), 2.0);
     assert_eq!(avg_offset_bits(10_u32, 13_u32, 3), 1.0);
     assert_eq!(avg_offset_bits(10_u32, 19_u32, 3), 2.0);
-  }
-
-  #[test]
-  fn test_bits_to_bytes_to_bits() {
-    let bits_56 = vec![false, false, false, true, true, true, false, false];
-    let byte_56 = bits_to_bytes(bits_56);
-    assert_eq!(byte_56, vec![56]);
-
-    let bits_56_1 = vec![false, false, false, true, true, true, false, false, true];
-    let byte_56_1 = bits_to_bytes(bits_56_1);
-    assert_eq!(byte_56_1, vec![56, 1]);
   }
 
   #[test]

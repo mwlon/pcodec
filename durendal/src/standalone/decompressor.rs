@@ -2,11 +2,11 @@ use std::io::Write;
 
 use crate::base_decompressor::{BaseDecompressor, State, Step};
 use crate::bit_reader::BitReader;
-use crate::body_decompressor::{BodyDecompressor};
+use crate::body_decompressor::BodyDecompressor;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
-use crate::{ChunkMetadata, DecompressorConfig, Flags};
 use crate::progress::Progress;
+use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
 /// Converts .qco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
@@ -182,7 +182,9 @@ fn apply_nums<T: NumberLike>(
       state.chunk_meta = None;
       state.body_decompressor = None;
     }
-    Some(DecompressedItem::Numbers(dest[..progress.n_processed].to_vec()))
+    Some(DecompressedItem::Numbers(
+      dest[..progress.n_processed].to_vec(),
+    ))
   }
 }
 

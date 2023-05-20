@@ -166,7 +166,10 @@ impl<'a> BitReader<'a> {
   }
 
   fn idxs(&self) -> (usize, Bitlen) {
-    (self.bit_idx >> 3, (self.bit_idx & 7) as Bitlen)
+    (
+      self.bit_idx >> 3,
+      (self.bit_idx & 7) as Bitlen,
+    )
   }
 
   // returns (bits read, idx)
@@ -181,7 +184,10 @@ impl<'a> BitReader<'a> {
       ));
     }
 
-    let bits_read = min(self.total_bits - bit_idx, table_size_log as usize) as Bitlen;
+    let bits_read = min(
+      self.total_bits - bit_idx,
+      table_size_log as usize,
+    ) as Bitlen;
     let res = self.read_usize(bits_read)?;
     Ok((bits_read, res))
   }
@@ -302,7 +308,7 @@ mod tests {
   use super::BitReader;
   use crate::bit_words::BitWords;
   use crate::bit_writer::BitWriter;
-  use crate::constants::{WORD_BITLEN};
+  use crate::constants::WORD_BITLEN;
   use crate::errors::QCompressResult;
 
   #[test]

@@ -42,7 +42,7 @@ impl RunLenOperator for GeneralRunLenOp {
       None => {
         dest[0] = unchecked_decompress_offset::<U, GcdOp>(reader, p);
         1
-      },
+      }
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;

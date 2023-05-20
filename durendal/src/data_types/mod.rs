@@ -158,6 +158,8 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   }
 
   fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    Ok(Self::from_unsigned(reader.read_uint(Self::Unsigned::BITS)?))
+    Ok(Self::from_unsigned(
+      reader.read_uint(Self::Unsigned::BITS)?,
+    ))
   }
 }

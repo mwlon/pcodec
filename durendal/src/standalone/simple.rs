@@ -48,7 +48,9 @@ pub fn simple_decompress<T: NumberLike>(
   decompressor.header()?;
   while let Some(meta) = decompressor.chunk_metadata()? {
     res.reserve(meta.n);
-    unsafe { res.set_len(n + meta.n); }
+    unsafe {
+      res.set_len(n + meta.n);
+    }
     decompressor.chunk_body(&mut res[n..])?;
     n += meta.n;
   }

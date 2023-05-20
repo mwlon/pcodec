@@ -54,10 +54,10 @@ impl<T: NumberLike> Display for Bin<T> {
     } else {
       "".to_string()
     };
-    let code_str = bits::bits_to_string(&bits::usize_to_bits(
+    let code_str = bits::code_to_string(
       self.code,
       self.code_len,
-    ));
+    );
     write!(
       f,
       "count: {} code: {} lower: {} offset bits: {}{}{}",
@@ -91,7 +91,7 @@ impl<U: UnsignedLike> WeightedPrefix<U> {
     let offset_bits = if diff == U::ZERO {
       0
     } else {
-      U::BITS - diff.leading_zeros() as Bitlen
+      U::BITS - diff.leading_zeros()
     };
     let bin = BinCompressionInfo {
       count,

@@ -1,13 +1,13 @@
 use std::cmp::min;
 
 use crate::bit_reader::BitReader;
+use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
-use crate::num_decompressor::{NumDecompressor};
-use crate::{delta_encoding, BinMetadata};
-use crate::constants::UNSIGNED_BATCH_SIZE;
+use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
+use crate::{delta_encoding, BinMetadata};
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
@@ -67,15 +67,30 @@ impl<T: NumberLike> BodyDecompressor<T> {
     dest: &mut [T],
   ) -> QCompressResult<Progress> {
     let mut progress = Progress::default();
-    while progress.n_processed < dest.len() && !progress.finished_body && !progress.insufficient_data {
-      let limit = min(UNSIGNED_BATCH_SIZE, dest.len() - progress.n_processed);
+    while progress.n_processed < dest.len()
+      && !progress.finished_body
+      && !progress.insufficient_data
+    {
+      let limit = min(
+        UNSIGNED_BATCH_SIZE,
+        dest.len() - progress.n_processed,
+      );
       match self {
-        Self::Simple { num_decompressor, scratch } => {
-          let u_progress = num_decompressor
-            .decompress_unsigneds(reader, error_on_insufficient_data, &mut scratch[..limit])?;
-          unsigneds_to_nums(&scratch[..u_progress.n_processed], &mut dest[progress.n_processed..]);
+        Self::Simple {
+          num_decompressor,
+          scratch,
+        } => {
+          let u_progress = num_decompressor.decompress_unsigneds(
+            reader,
+            error_on_insufficient_data,
+            &mut scratch[..limit],
+          )?;
+          unsigneds_to_nums(
+            &scratch[..u_progress.n_processed],
+            &mut dest[progress.n_processed..],
+          );
           progress += u_progress;
-        },
+        }
         Self::Delta {
           n,
           num_decompressor,
@@ -93,7 +108,12 @@ impl<T: NumberLike> BodyDecompressor<T> {
             let end_fill_idx = min(batch_size, UNSIGNED_BATCH_SIZE);
             scratch[u_progress.n_processed..end_fill_idx].fill(T::Unsigned::ZERO);
           }
-          delta_encoding::reconstruct_nums(delta_moments, scratch, batch_size, &mut dest[progress.n_processed..]);
+          delta_encoding::reconstruct_nums(
+            delta_moments,
+            scratch,
+            batch_size,
+            &mut dest[progress.n_processed..],
+          );
           *n_processed += batch_size;
           progress.n_processed += batch_size;
           progress.finished_body = n_processed == n;
@@ -106,7 +126,9 @@ impl<T: NumberLike> BodyDecompressor<T> {
 
   pub fn bits_remaining(&self) -> usize {
     match self {
-      Self::Simple { num_decompressor, .. } => num_decompressor.bits_remaining(),
+      Self::Simple {
+        num_decompressor, ..
+      } => num_decompressor.bits_remaining(),
       Self::Delta {
         num_decompressor, ..
       } => num_decompressor.bits_remaining(),

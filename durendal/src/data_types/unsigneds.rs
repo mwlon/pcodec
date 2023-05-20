@@ -1,6 +1,5 @@
-use crate::data_types::{NumberLike, UnsignedLike};
 use crate::constants::Bitlen;
-
+use crate::data_types::{NumberLike, UnsignedLike};
 
 macro_rules! impl_unsigned {
   ($t: ty) => {

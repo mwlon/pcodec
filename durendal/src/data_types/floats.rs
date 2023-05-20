@@ -1,7 +1,4 @@
-
-
 use crate::data_types::NumberLike;
-
 
 // Note that in all conversions between float and unsigned int, we are using
 // the unsigned int to indicate an offset.

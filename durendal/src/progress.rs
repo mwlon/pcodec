@@ -1,4 +1,4 @@
-use std::ops::{AddAssign};
+use std::ops::AddAssign;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Progress {

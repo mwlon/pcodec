@@ -464,7 +464,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     self.writer.write_aligned_bytes(&MAGIC_HEADER)?;
     self.writer.write_aligned_byte(T::HEADER_BYTE)?;
-    self.flags.write(&mut self.writer)?;
+    self.flags.write_to(&mut self.writer)?;
     self.state = State::StartOfChunk;
     Ok(())
   }
