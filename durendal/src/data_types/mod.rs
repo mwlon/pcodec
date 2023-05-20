@@ -3,7 +3,8 @@ use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssig
 
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::bits;
+use crate::constants::Bitlen;
+
 use crate::errors::QCompressResult;
 
 mod floats;
@@ -54,20 +55,20 @@ pub trait UnsignedLike:
   + Ord
   + PartialOrd
   + RemAssign
-  + Shl<usize, Output = Self>
-  + Shr<usize, Output = Self>
+  + Shl<Bitlen, Output = Self>
+  + Shr<Bitlen, Output = Self>
   + Sub<Output = Self>
 {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
-  const BITS: usize;
+  const BITS: Bitlen;
 
   /// Converts a `usize` into this type. Panics if the conversion is
   /// impossible.
   fn from_word(word: usize) -> Self;
 
-  fn leading_zeros(self) -> usize;
+  fn leading_zeros(self) -> Bitlen;
 
   /// Shifts the unsigned integer right and returns its lowest bits as a
   /// `usize`.
@@ -78,7 +79,7 @@ pub trait UnsignedLike:
   /// ```
   ///
   /// Used for some bit arithmetic operations during compression.
-  fn rshift_word(self, shift: usize) -> usize;
+  fn rshift_word(self, shift: Bitlen) -> usize;
 
   /// Shifts the unsigned integer left and returns its lowest bits as a
   /// `usize`.
@@ -89,7 +90,7 @@ pub trait UnsignedLike:
   /// ```
   ///
   /// Used for some bit arithmetic operations during compression.
-  fn lshift_word(self, shift: usize) -> usize;
+  fn lshift_word(self, shift: Bitlen) -> usize;
 }
 
 /// Trait for data types supported for compression/decompression.
@@ -152,22 +153,13 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// Used during delta decoding to convert back from a signed integer.
   fn from_signed(signed: Self::Signed) -> Self;
 
-  /// Returns an uncompressed representation for the number.
-  fn to_bytes(self) -> Vec<u8>;
-
-  /// Creates a number from an uncompressed representation.
-  fn from_bytes(bytes: &[u8]) -> QCompressResult<Self>;
-
-  /// Parses an uncompressed representation of the number from the
-  /// `BitReader`.
-  fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    let bools = reader.read(Self::PHYSICAL_BITS)?;
-    Self::from_bytes(&bits::bits_to_bytes(bools))
+  fn write_to(self, writer: &mut BitWriter) {
+    writer.write_diff(self.to_unsigned(), Self::Unsigned::BITS)
   }
 
-  /// Appends an uncompressed representation of the number to the
-  /// `BitWriter`.
-  fn write_to(self, writer: &mut BitWriter) {
-    writer.write(&bits::bytes_to_bits(self.to_bytes()));
+  fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
+    Ok(Self::from_unsigned(
+      reader.read_uint(Self::Unsigned::BITS)?,
+    ))
   }
 }

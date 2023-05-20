@@ -25,7 +25,7 @@ fn test_low_level_sparse() {
   assert_lowest_level_behavior(vec![nums]);
 }
 
-fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
+fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) {
   for delta_encoding_order in [0, 7] {
     let debug_info = format!("delta order={}", delta_encoding_order);
     let mut compressor = Compressor::<T>::from_config(CompressorConfig {
@@ -34,7 +34,7 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
     });
     compressor.header().unwrap();
     let mut metadatas = Vec::new();
-    for nums in &numss {
+    for nums in &chunks {
       metadatas.push(compressor.chunk(nums).unwrap());
     }
     compressor.footer().unwrap();
@@ -59,7 +59,7 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
           assert!(!terminated);
           assert_eq!(&meta, &metadatas[chunk_idx]);
           if chunk_idx > 0 {
-            assert_eq!(&chunk_nums, &numss[chunk_idx - 1]);
+            assert_eq!(&chunk_nums, &chunks[chunk_idx - 1]);
             chunk_nums = Vec::new();
           }
           chunk_idx += 1;
@@ -76,7 +76,7 @@ fn assert_lowest_level_behavior<T: NumberLike>(numss: Vec<Vec<T>>) {
     }
     assert_eq!(
       &chunk_nums,
-      numss.last().unwrap(),
+      chunks.last().unwrap(),
       "{}",
       debug_info
     );

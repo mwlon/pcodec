@@ -61,6 +61,7 @@ pub fn wrapped_decompress<T: NumberLike>(
   config: DecompressorConfig,
 ) -> QCompressResult<Vec<T>> {
   let mut res = Vec::new();
+  let mut i = 0;
   let mut decompressor = Decompressor::<T>::from_config(config);
 
   let buf = &mut compressed;
@@ -84,8 +85,11 @@ pub fn wrapped_decompress<T: NumberLike>(
       buf = newbuf;
       let (size, newbuf) = decode_usize(buf);
       buf = newbuf;
+      res.reserve(size);
+      unsafe { res.set_len(res.len() + size) };
       decompressor.write_all(&buf[..page_len]).unwrap();
-      res.extend(decompressor.data_page(size, page_len)?);
+      decompressor.data_page(size, page_len, &mut res[i..])?;
+      i += size;
       decompressor.free_compressed_memory();
       buf = &mut buf[page_len..];
     }

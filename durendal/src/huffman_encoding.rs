@@ -3,6 +3,7 @@ use std::collections::BinaryHeap;
 
 use crate::bin::WeightedPrefix;
 use crate::bits;
+use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -56,7 +57,7 @@ impl HuffmanItem {
     if self.leaf_id.is_some() {
       let leaf_bin = &mut leaf_idx[self.leaf_id.unwrap()].bin;
       leaf_bin.code = bits::bits_to_usize(&bits);
-      leaf_bin.code_len = bits.len();
+      leaf_bin.code_len = bits.len() as Bitlen;
     } else {
       let mut left_bits = bits.clone();
       left_bits.push(false);
@@ -112,6 +113,7 @@ pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [WeightedPrefix<U>]
 mod tests {
   use crate::bin::{BinCompressionInfo, WeightedPrefix};
   use crate::bits;
+  use crate::constants::Bitlen;
   use crate::huffman_encoding::make_huffman_code;
 
   fn coded_bin(weight: usize, code: Vec<bool>) -> WeightedPrefix<u32> {
@@ -120,7 +122,7 @@ mod tests {
       bin: BinCompressionInfo {
         count: 0,
         code: bits::bits_to_usize(&code),
-        code_len: code.len(),
+        code_len: code.len() as Bitlen,
         lower: 0,
         upper: 0,
         offset_bits: 0,

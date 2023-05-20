@@ -1,7 +1,5 @@
-use std::convert::TryInto;
-
+use crate::constants::Bitlen;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::QCompressResult;
 
 macro_rules! impl_unsigned {
   ($t: ty) => {
@@ -9,22 +7,22 @@ macro_rules! impl_unsigned {
       const ZERO: Self = 0;
       const ONE: Self = 1;
       const MAX: Self = Self::MAX;
-      const BITS: usize = Self::BITS as usize;
+      const BITS: Bitlen = Self::BITS as Bitlen;
 
       #[inline]
       fn from_word(word: usize) -> Self {
         word as Self
       }
 
-      fn leading_zeros(self) -> usize {
-        self.leading_zeros() as usize
+      fn leading_zeros(self) -> Bitlen {
+        self.leading_zeros() as Bitlen
       }
 
-      fn rshift_word(self, shift: usize) -> usize {
+      fn rshift_word(self, shift: Bitlen) -> usize {
         (self >> shift) as usize
       }
 
-      fn lshift_word(self, shift: usize) -> usize {
+      fn lshift_word(self, shift: Bitlen) -> usize {
         (self as usize) << shift
       }
     }
@@ -61,16 +59,6 @@ macro_rules! impl_unsigned_number {
       #[inline]
       fn from_unsigned(off: Self::Unsigned) -> Self {
         off
-      }
-
-      fn to_bytes(self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
-      }
-
-      fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self::from_le_bytes(
-          bytes.try_into().unwrap(),
-        ))
       }
     }
   };

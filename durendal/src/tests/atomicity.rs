@@ -34,11 +34,10 @@ fn test_errors_do_not_mutate_decompressor() {
   }
 
   // reading the chunk shouldn't leave us in a dirty state
-  let mut rec_nums = Vec::new();
+  let mut rec_nums = vec![0; nums.len()];
   while i < compressed.len() + 1 {
-    match decompressor.chunk_body() {
-      Ok(x) => {
-        rec_nums.extend(x);
+    match decompressor.chunk_body(&mut rec_nums) {
+      Ok(_) => {
         break;
       }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),

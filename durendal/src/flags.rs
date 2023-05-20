@@ -2,13 +2,12 @@
 // of the compressed data.
 // New flags may be added in over time in a backward-compatible way.
 
-use std::convert::{TryFrom, TryInto};
-
 use crate::bit_reader::BitReader;
+use crate::bit_words::BitWords;
 use crate::bit_writer::BitWriter;
 use crate::bits;
-use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
-use crate::errors::{QCompressError, QCompressResult};
+use crate::constants::{Bitlen, BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
+use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::CompressorConfig;
 
 /// The configuration stored in a Quantile-compressed header.
@@ -39,91 +38,73 @@ pub struct Flags {
   pub use_wrapped_mode: bool,
 }
 
-impl TryFrom<Vec<bool>> for Flags {
-  type Error = QCompressError;
+impl Flags {
+  fn core_parse_from(flags: &mut Flags, reader: &mut BitReader) -> QCompressResult<()> {
+    flags.delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)?;
+    flags.use_wrapped_mode = reader.read_one()?;
 
-  fn try_from(bools: Vec<bool>) -> QCompressResult<Self> {
+    let compat_err = QCompressError::compatibility(
+      "cannot parse flags; likely written by newer version of q_compress",
+    );
+    reader
+      .drain_empty_byte("")
+      .map_err(|_| compat_err.clone())?;
+
+    let remaining_bytes = reader.read_aligned_bytes(reader.bits_remaining() / 8)?;
+    if remaining_bytes.iter().all(|&byte| byte == 0) {
+      Ok(())
+    } else {
+      Err(compat_err)
+    }
+  }
+
+  pub(crate) fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
+    let n_bytes = reader.read_aligned_bytes(1)?[0] as usize;
+    let bytes = reader.read_aligned_bytes(n_bytes)?;
+    let sub_bit_words = BitWords::from(bytes);
+    let mut sub_reader = BitReader::from(&sub_bit_words);
+
     let mut flags = Flags {
       delta_encoding_order: 0,
       use_wrapped_mode: false,
     };
-
-    let mut bit_iter = bools.iter();
-
-    let mut delta_encoding_bits = Vec::new();
-    while delta_encoding_bits.len() < BITS_TO_ENCODE_DELTA_ENCODING_ORDER {
-      delta_encoding_bits.push(bit_iter.next().cloned().unwrap_or(false));
+    let parse_res = Self::core_parse_from(&mut flags, &mut sub_reader);
+    match parse_res {
+      Ok(()) => Ok(flags),
+      Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(flags),
+      Err(e) => Err(e),
     }
-    flags.delta_encoding_order = bits::bits_to_usize(&delta_encoding_bits);
-
-    flags.use_wrapped_mode = bit_iter.next() == Some(&true);
-
-    // if we ever add another bit flag, it will increase file size by 1 byte when on
-
-    for &bit in bit_iter {
-      if bit {
-        return Err(QCompressError::compatibility(
-          "cannot parse flags; likely written by newer version of q_compress",
-        ));
-      }
-    }
-
-    Ok(flags)
   }
-}
 
-impl TryInto<Vec<bool>> for &Flags {
-  type Error = QCompressError;
-
-  fn try_into(self) -> QCompressResult<Vec<bool>> {
-    let mut res = Vec::new();
-
+  pub(crate) fn write_to(&self, writer: &mut BitWriter) -> QCompressResult<()> {
     if self.delta_encoding_order > MAX_DELTA_ENCODING_ORDER {
       return Err(QCompressError::invalid_argument(format!(
         "delta encoding order may not exceed {} (was {})",
         MAX_DELTA_ENCODING_ORDER, self.delta_encoding_order,
       )));
     }
-    let delta_bits = bits::usize_to_bits(
+
+    let start_bit_idx = writer.bit_size();
+    writer.write_aligned_byte(0)?; // to later be filled with # subsequent bytes
+
+    let pre_byte_size = writer.byte_size();
+
+    writer.write_usize(
       self.delta_encoding_order,
       BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
     );
-    res.extend(delta_bits);
+    writer.write_one(self.use_wrapped_mode);
 
-    res.push(self.use_wrapped_mode);
+    writer.finish_byte();
+    let byte_len = writer.byte_size() - pre_byte_size;
 
-    let necessary_len = res
-      .iter()
-      .rposition(|&bit| bit)
-      .map(|idx| idx + 1)
-      .unwrap_or(0);
-    res.truncate(necessary_len);
-
-    Ok(res)
-  }
-}
-
-impl Flags {
-  pub(crate) fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    // assert it's byte-aligned
-    let n_bytes = reader.read_aligned_bytes(1)?[0];
-    let flag_bytes = reader.read_aligned_bytes(n_bytes as usize)?;
-    let bools = bits::bytes_to_bits(flag_bytes);
-    Self::try_from(bools)
-  }
-
-  pub(crate) fn write(&self, writer: &mut BitWriter) -> QCompressResult<()> {
-    let bools: Vec<bool> = self.try_into()?;
-    let bytes = bits::bits_to_bytes(bools);
-    let len = bytes.len();
-    if len > u8::MAX as usize {
+    if byte_len > u8::MAX as usize {
       return Err(QCompressError::invalid_argument(
         "cannot write flags of more than 255 bytes",
       ));
     }
-    writer.write_aligned_byte(len as u8)?;
-    writer.write_aligned_bytes(&bytes)?;
-    writer.finish_byte();
+
+    writer.overwrite_usize(start_bit_idx, byte_len, 8);
 
     Ok(())
   }
@@ -138,7 +119,7 @@ impl Flags {
     }
   }
 
-  pub(crate) fn bits_to_encode_count(&self, n: usize) -> usize {
+  pub(crate) fn bits_to_encode_count(&self, n: usize) -> Bitlen {
     // If we use wrapped mode, we don't encode the bin counts at all (even
     // though they are nonzero). This propagates nicely through bin
     // optimization.

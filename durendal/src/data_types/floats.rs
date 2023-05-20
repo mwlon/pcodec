@@ -1,7 +1,4 @@
-use std::convert::TryInto;
-
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
 
 // Note that in all conversions between float and unsigned int, we are using
 // the unsigned int to indicate an offset.
@@ -48,16 +45,6 @@ macro_rules! impl_float_number {
           // negative float
           Self::from_bits(!off)
         }
-      }
-
-      fn to_bytes(self) -> Vec<u8> {
-        self.to_le_bytes().to_vec()
-      }
-
-      fn from_bytes(bytes: &[u8]) -> QCompressResult<Self> {
-        Ok(Self::from_le_bytes(
-          bytes.try_into().unwrap(),
-        ))
       }
     }
   };

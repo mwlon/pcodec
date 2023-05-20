@@ -17,7 +17,7 @@ use crate::{gcd_utils, huffman_encoding, Flags};
 
 struct JumpstartConfiguration {
   weight: usize,
-  jumpstart: usize,
+  jumpstart: Bitlen,
 }
 
 /// All configurations available for a compressor.
@@ -146,7 +146,7 @@ fn choose_run_len_jumpstart(count: usize, n: usize) -> JumpstartConfiguration {
   let freq = (count as f64) / (n as f64);
   let non_freq = 1.0 - freq;
   let jumpstart = min(
-    (-non_freq.log2()).ceil() as usize,
+    (-non_freq.log2()).ceil() as Bitlen,
     MAX_JUMPSTART,
   );
   let expected_n_runs = (freq * non_freq * n as f64).ceil() as usize;
@@ -466,7 +466,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     self.writer.write_aligned_bytes(&MAGIC_HEADER)?;
     self.writer.write_aligned_byte(T::HEADER_BYTE)?;
-    self.flags.write(&mut self.writer)?;
+    self.flags.write_to(&mut self.writer)?;
     self.state = State::StartOfChunk;
     Ok(())
   }

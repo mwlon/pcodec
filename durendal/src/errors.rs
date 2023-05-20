@@ -1,3 +1,4 @@
+use crate::constants::Bitlen;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -51,7 +52,7 @@ impl QCompressError {
 
   pub(crate) fn insufficient_data_recipe(
     name: &str,
-    bits_to_read: usize,
+    bits_to_read: Bitlen,
     bit_idx: usize,
     total_bits: usize,
   ) -> Self {
