@@ -205,7 +205,6 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   fn decompress_num_block(
     &mut self,
     reader: &mut BitReader,
-    limit: usize,
     dest: &mut [U],
   ) -> QCompressResult<usize> {
     let start_bit_idx = reader.bit_idx();
@@ -233,7 +232,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
         let full_reps = full_reps_minus_one_res? + 1;
         self.state.incomplete_bin = bin;
         self.state.incomplete_reps = full_reps;
-        let reps = min(full_reps, limit);
+        let reps = min(full_reps, dest.len());
         self.decompress_offsets(reader, bin, reps, dest)?;
         self.state.incomplete_reps -= reps;
         Ok(reps)
@@ -413,7 +412,6 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     while res.n_processed < batch_size {
       res.n_processed += match self.decompress_num_block(
         reader,
-        batch_size - res.n_processed,
         &mut dest[res.n_processed..],
       ) {
         Ok(n_processed) => n_processed,
