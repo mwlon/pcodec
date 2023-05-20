@@ -302,7 +302,7 @@ mod tests {
   use super::BitReader;
   use crate::bit_words::BitWords;
   use crate::bit_writer::BitWriter;
-  use crate::constants::{WORD_SIZE, WORD_BITLEN};
+  use crate::constants::{WORD_BITLEN};
   use crate::errors::QCompressResult;
 
   #[test]

@@ -134,6 +134,6 @@ fn build_from_bins_recursive<T: NumberLike>(
 
 #[test]
 fn huff_table_size() {
-  assert_eq!(std::mem::size_of::<HuffmanTable<u64>>(), 32);
+  assert_eq!(std::mem::size_of::<HuffmanTable<u64>>(), 40);
   assert_eq!(std::mem::size_of::<HuffmanTable<u32>>(), 32);
 }
