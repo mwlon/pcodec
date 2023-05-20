@@ -54,9 +54,10 @@ impl Flags {
     flags.use_wrapped_mode = reader.read_one()?;
 
     let compat_err = QCompressError::compatibility(
-        "cannot parse flags; likely written by newer version of q_compress",
-      );
-    reader.drain_empty_byte("")
+      "cannot parse flags; likely written by newer version of q_compress",
+    );
+    reader
+      .drain_empty_byte("")
       .map_err(|_| compat_err.clone())?;
 
     let remaining_bytes = reader.read_aligned_bytes(reader.bits_remaining() / 8)?;
@@ -99,7 +100,10 @@ impl Flags {
 
     let pre_byte_size = writer.byte_size();
 
-    writer.write_usize(self.delta_encoding_order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
+    writer.write_usize(
+      self.delta_encoding_order,
+      BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
+    );
     writer.write_one(self.use_gcds);
     writer.write_one(self.use_wrapped_mode);
 

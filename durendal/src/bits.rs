@@ -14,7 +14,7 @@ pub fn bits_to_usize(bits: &[bool]) -> usize {
 pub fn code_to_string(x: usize, n: Bitlen) -> String {
   let mut res = String::new();
   for i in 0..n {
-    let char = if (x >> i) & 1 > 0 { '1' } else {'0'};
+    let char = if (x >> i) & 1 > 0 { '1' } else { '0' };
     res.push(char);
   }
   res
@@ -60,10 +60,7 @@ mod tests {
   #[test]
   fn test_code_to_string() {
     assert_eq!(code_to_string(0, 0), "".to_string());
-    assert_eq!(
-      code_to_string(1, 3),
-      "100".to_string()
-    );
+    assert_eq!(code_to_string(1, 3), "100".to_string());
   }
 
   #[test]

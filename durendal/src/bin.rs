@@ -54,10 +54,7 @@ impl<T: NumberLike> Display for Bin<T> {
     } else {
       "".to_string()
     };
-    let code_str = bits::code_to_string(
-      self.code,
-      self.code_len,
-    );
+    let code_str = bits::code_to_string(self.code, self.code_len);
     write!(
       f,
       "count: {} code: {} lower: {} offset bits: {}{}{}",
