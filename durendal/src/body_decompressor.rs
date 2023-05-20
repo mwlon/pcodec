@@ -26,7 +26,9 @@ pub enum BodyDecompressor<T: NumberLike> {
   },
 }
 
-#[inline(never)]
+// TODO right now we write from one slice into another, but it would be more
+// efficient to use the same slice for writing unsigneds and then modify them
+// into nums in place.
 fn unsigneds_to_nums<T: NumberLike>(unsigneds: &[T::Unsigned], dest: &mut [T]) {
   // is there a better way to write this?
   for (i, &u) in unsigneds.iter().enumerate() {
