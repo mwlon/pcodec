@@ -1,7 +1,8 @@
 use crate::data_types::{NumberLike, UnsignedLike};
 
+use crate::base_compressor::InternalCompressorConfig;
 use crate::bin::BinCompressionInfo;
-use crate::{Bin, Flags};
+use crate::Bin;
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {
@@ -63,9 +64,9 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(bins: &[Bin<T>]) -> Option<T::Un
 
 pub fn use_gcd_bin_optimize<U: UnsignedLike>(
   bins: &[BinCompressionInfo<U>],
-  flags: &Flags,
+  internal_config: &InternalCompressorConfig,
 ) -> bool {
-  if !flags.use_gcds {
+  if !internal_config.use_gcds {
     return false;
   }
 

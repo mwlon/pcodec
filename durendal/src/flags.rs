@@ -30,15 +30,6 @@ pub struct Flags {
   ///
   /// Introduced in 0.0.0.
   pub delta_encoding_order: usize,
-  /// Whether to enable greatest common divisor multipliers for each
-  /// bin.
-  /// This adds an optional multiplier to each bin metadata, so that each
-  /// unsigned number is decoded as `x = bin_lower + offset * gcd`.
-  /// This can improve compression ratio in some cases, e.g. when the
-  /// numbers are all integer multiples of 100 or all integer-valued floats.
-  ///
-  /// Introduced in 0.0.0.
-  pub use_gcds: bool,
   /// Whether to release control to a wrapping columnar format.
   /// This causes q_compress to omit count and compressed size metadata
   /// and also break each chuk into finer data pages.
@@ -50,7 +41,6 @@ pub struct Flags {
 impl Flags {
   fn core_parse_from(flags: &mut Flags, reader: &mut BitReader) -> QCompressResult<()> {
     flags.delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)?;
-    flags.use_gcds = reader.read_one()?;
     flags.use_wrapped_mode = reader.read_one()?;
 
     let compat_err = QCompressError::compatibility(
@@ -76,7 +66,6 @@ impl Flags {
 
     let mut flags = Flags {
       delta_encoding_order: 0,
-      use_gcds: false,
       use_wrapped_mode: false,
     };
     let parse_res = Self::core_parse_from(&mut flags, &mut sub_reader);
@@ -104,7 +93,6 @@ impl Flags {
       self.delta_encoding_order,
       BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
     );
-    writer.write_one(self.use_gcds);
     writer.write_one(self.use_wrapped_mode);
 
     writer.finish_byte();
@@ -145,7 +133,6 @@ impl Flags {
   pub(crate) fn from_config(config: &CompressorConfig, use_wrapped_mode: bool) -> Self {
     Flags {
       delta_encoding_order: config.delta_encoding_order,
-      use_gcds: config.use_gcds,
       use_wrapped_mode,
     }
   }
