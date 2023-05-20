@@ -2,7 +2,7 @@ use std::cmp::min;
 
 use crate::bin::{Bin, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-use crate::constants::MAX_BIN_TABLE_SIZE_LOG;
+use crate::constants::{Bitlen, MAX_BIN_TABLE_SIZE_LOG};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
 
@@ -10,7 +10,7 @@ use crate::errors::{QCompressError, QCompressResult};
 pub enum HuffmanTable<U: UnsignedLike> {
   Leaf(BinDecompressionInfo<U>),
   NonLeaf {
-    table_size_log: usize,
+    table_size_log: Bitlen,
     children: Vec<HuffmanTable<U>>,
   },
 }
@@ -96,14 +96,14 @@ impl<T: NumberLike> From<&Vec<Bin<T>>> for HuffmanTable<T::Unsigned> {
 
 fn build_from_bins_recursive<T: NumberLike>(
   bins: &Vec<Bin<T>>,
-  depth: usize,
+  depth: Bitlen,
 ) -> HuffmanTable<T::Unsigned> {
   if bins.len() == 1 {
     let bin = &bins[0];
     HuffmanTable::Leaf(BinDecompressionInfo::from(bin))
   } else {
     let max_depth = bins.iter().map(|bin| bin.code_len).max().unwrap();
-    let table_size_log: usize = min(MAX_BIN_TABLE_SIZE_LOG, max_depth - depth);
+    let table_size_log = min(MAX_BIN_TABLE_SIZE_LOG, max_depth - depth);
     let final_depth = depth + table_size_log;
     let table_size = 1 << table_size_log;
 
@@ -130,4 +130,10 @@ fn build_from_bins_recursive<T: NumberLike>(
       children,
     }
   }
+}
+
+#[test]
+fn huff_table_size() {
+  assert_eq!(std::mem::size_of::<HuffmanTable<u64>>(), 32);
+  assert_eq!(std::mem::size_of::<HuffmanTable<u32>>(), 32);
 }

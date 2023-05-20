@@ -1,3 +1,4 @@
+use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 
 pub fn bits_to_bytes(bits: Vec<bool>) -> Vec<u8> {
@@ -28,8 +29,8 @@ pub fn bits_to_usize(bits: &[bool]) -> usize {
   res
 }
 
-pub fn usize_to_bits(x: usize, n: usize) -> Vec<bool> {
-  let mut res = Vec::with_capacity(n);
+pub fn usize_to_bits(x: usize, n: Bitlen) -> Vec<bool> {
+  let mut res = Vec::with_capacity(n as usize);
   for i in 0..n {
     res.push((x >> i) & 1 > 0);
   }
@@ -68,12 +69,12 @@ pub fn words_to_bytes(words: &[usize]) -> Vec<u8> {
     .collect::<Vec<_>>()
 }
 
-pub fn bits_to_encode(max_number: usize) -> usize {
-  ((max_number + 1) as f64).log2().ceil() as usize
+pub fn bits_to_encode(max_number: usize) -> Bitlen {
+  ((max_number + 1) as f64).log2().ceil() as Bitlen
 }
 
-pub const fn bits_to_encode_offset_bits<U: UnsignedLike>() -> usize {
-  (usize::BITS - U::BITS.leading_zeros()) as usize
+pub const fn bits_to_encode_offset_bits<U: UnsignedLike>() -> Bitlen {
+  (Bitlen::BITS - U::BITS.leading_zeros()) as Bitlen
 }
 
 #[cfg(test)]

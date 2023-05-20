@@ -120,6 +120,7 @@ mod tests {
   use crate::bin::Bin;
   use crate::bits;
   use crate::chunk_metadata::{BinMetadata, ChunkMetadata};
+  use crate::constants::Bitlen;
   use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
 
@@ -127,7 +128,7 @@ mod tests {
     Bin {
       count: 1,
       code: bits::bits_to_usize(&code),
-      code_len: code.len(),
+      code_len: code.len() as Bitlen,
       lower: 100,
       offset_bits: 6,
       run_len_jumpstart: None,

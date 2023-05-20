@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use crate::constants::Bitlen;
 
 /// The different kinds of errors for `q_compress`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,7 +52,7 @@ impl QCompressError {
 
   pub(crate) fn insufficient_data_recipe(
     name: &str,
-    bits_to_read: usize,
+    bits_to_read: Bitlen,
     bit_idx: usize,
     total_bits: usize,
   ) -> Self {

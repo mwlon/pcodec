@@ -3,6 +3,7 @@ use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssig
 
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
+use crate::constants::Bitlen;
 
 use crate::errors::QCompressResult;
 
@@ -54,20 +55,20 @@ pub trait UnsignedLike:
   + Ord
   + PartialOrd
   + RemAssign
-  + Shl<usize, Output = Self>
-  + Shr<usize, Output = Self>
+  + Shl<Bitlen, Output = Self>
+  + Shr<Bitlen, Output = Self>
   + Sub<Output = Self>
 {
   const ZERO: Self;
   const ONE: Self;
   const MAX: Self;
-  const BITS: usize;
+  const BITS: Bitlen;
 
   /// Converts a `usize` into this type. Panics if the conversion is
   /// impossible.
   fn from_word(word: usize) -> Self;
 
-  fn leading_zeros(self) -> usize;
+  fn leading_zeros(self) -> Bitlen;
 
   /// Shifts the unsigned integer right and returns its lowest bits as a
   /// `usize`.
@@ -78,7 +79,7 @@ pub trait UnsignedLike:
   /// ```
   ///
   /// Used for some bit arithmetic operations during compression.
-  fn rshift_word(self, shift: usize) -> usize;
+  fn rshift_word(self, shift: Bitlen) -> usize;
 
   /// Shifts the unsigned integer left and returns its lowest bits as a
   /// `usize`.
@@ -89,7 +90,7 @@ pub trait UnsignedLike:
   /// ```
   ///
   /// Used for some bit arithmetic operations during compression.
-  fn lshift_word(self, shift: usize) -> usize;
+  fn lshift_word(self, shift: Bitlen) -> usize;
 }
 
 /// Trait for data types supported for compression/decompression.

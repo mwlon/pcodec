@@ -1,24 +1,29 @@
+// Doing bit reads/writes/shifts with u32 is more performant than u64.
+// This type could also be u8 or u16.
+pub type Bitlen = u32;
+
 pub const MAGIC_HEADER: [u8; 4] = [113, 99, 111, 33]; // ascii for qco!
 pub const MAGIC_CHUNK_BYTE: u8 = 44; // ,
 pub const MAGIC_TERMINATION_BYTE: u8 = 46; // .
 
+pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: Bitlen = 3;
+pub const BITS_TO_ENCODE_N_ENTRIES: Bitlen = 24;
+pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
+pub const BITS_TO_ENCODE_JUMPSTART: Bitlen = 5;
+pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
+pub const BITS_TO_ENCODE_CODE_LEN: Bitlen = 5;
 pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
-pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: usize = 3;
 pub const MAX_ENTRIES: usize = (1 << 24) - 1;
-pub const BITS_TO_ENCODE_N_ENTRIES: usize = 24;
-pub const BITS_TO_ENCODE_N_BINS: usize = 15;
-pub const MAX_JUMPSTART: usize = BITS_TO_ENCODE_N_ENTRIES;
-pub const BITS_TO_ENCODE_JUMPSTART: usize = 5;
-pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: usize = 32;
-pub const BITS_TO_ENCODE_CODE_LEN: usize = 5;
+pub const MAX_JUMPSTART: Bitlen = BITS_TO_ENCODE_N_ENTRIES;
 
 // MAX_BIN_TABLE_SIZE_LOG is a performance tuning parameter
 // Too high, and we use excessive memory and in some cases hurt performance.
 // Too low, and performance drops.
-pub const MAX_BIN_TABLE_SIZE_LOG: usize = 8;
+pub const MAX_BIN_TABLE_SIZE_LOG: Bitlen = 8;
 pub const UNSIGNED_BATCH_SIZE: usize = 512;
 
 pub const WORD_SIZE: usize = usize::BITS as usize;
+pub const WORD_BITLEN: Bitlen = usize::BITS as Bitlen;
 pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
 
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
@@ -34,7 +39,7 @@ mod tests {
   use crate::bits::bits_to_encode;
   use crate::constants::*;
 
-  fn assert_can_encode(n_bits: usize, max_number: usize) {
+  fn assert_can_encode(n_bits: Bitlen, max_number: usize) {
     assert!(n_bits >= bits_to_encode(max_number));
   }
 
@@ -58,13 +63,13 @@ mod tests {
 
   #[test]
   fn test_bits_to_encode_jumpstart() {
-    assert_can_encode(BITS_TO_ENCODE_JUMPSTART, MAX_JUMPSTART);
+    assert_can_encode(BITS_TO_ENCODE_JUMPSTART, MAX_JUMPSTART as usize);
   }
 
   #[test]
   fn test_bin_table_size_fits_in_word() {
     assert!(MAX_BIN_TABLE_SIZE_LOG > 0);
-    assert!(MAX_BIN_TABLE_SIZE_LOG <= WORD_SIZE);
+    assert!(MAX_BIN_TABLE_SIZE_LOG <= WORD_BITLEN);
   }
 
   #[test]

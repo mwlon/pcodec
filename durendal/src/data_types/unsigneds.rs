@@ -1,6 +1,5 @@
-
-
 use crate::data_types::{NumberLike, UnsignedLike};
+use crate::constants::Bitlen;
 
 
 macro_rules! impl_unsigned {
@@ -9,22 +8,22 @@ macro_rules! impl_unsigned {
       const ZERO: Self = 0;
       const ONE: Self = 1;
       const MAX: Self = Self::MAX;
-      const BITS: usize = Self::BITS as usize;
+      const BITS: Bitlen = Self::BITS as Bitlen;
 
       #[inline]
       fn from_word(word: usize) -> Self {
         word as Self
       }
 
-      fn leading_zeros(self) -> usize {
-        self.leading_zeros() as usize
+      fn leading_zeros(self) -> Bitlen {
+        self.leading_zeros() as Bitlen
       }
 
-      fn rshift_word(self, shift: usize) -> usize {
+      fn rshift_word(self, shift: Bitlen) -> usize {
         (self >> shift) as usize
       }
 
-      fn lshift_word(self, shift: usize) -> usize {
+      fn lshift_word(self, shift: Bitlen) -> usize {
         (self as usize) << shift
       }
     }

@@ -84,6 +84,7 @@ async fn check_streaming_recovery<T: NumberLike>(
     .map(Ok)
     .try_fold(State::<T>::default(), streaming_collect)
     .await?;
+  assert_eq!(nums.len(), true_nums.len());
   assert_eq!(nums, true_nums);
   Ok(())
 }

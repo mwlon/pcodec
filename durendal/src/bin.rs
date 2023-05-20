@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 use crate::bits;
+use crate::constants::Bitlen;
 use crate::data_types::{NumberLike, UnsignedLike};
 
 /// A pairing of a Huffman code with a numerical range.
@@ -25,17 +26,17 @@ pub struct Bin<T: NumberLike> {
   /// The BST over Huffman codes is different from the BST over numerical
   /// ranges.
   pub code: usize,
-  pub code_len: usize,
+  pub code_len: Bitlen,
   /// The lower bound for this bin's numerical range.
   pub lower: T,
   /// The log of the size of this bin's (inclusive) numerical range.
-  pub offset_bits: usize,
+  pub offset_bits: Bitlen,
   /// A parameter used for the most common bin in a sparse distribution.
   /// For instance, if 90% of a chunk's numbers are exactly 7, then the
   /// bin for the range `[7, 7]` will have a `run_len_jumpstart`.
   /// The jumpstart value tunes the varint encoding of the number of
   /// consecutive repetitions of the bin.
-  pub run_len_jumpstart: Option<usize>,
+  pub run_len_jumpstart: Option<Bitlen>,
   /// The greatest common divisor of all numbers belonging to this bin
   /// (in the data type's corresponding unsigned integer).
   pub gcd: T::Unsigned,
@@ -83,14 +84,14 @@ impl<U: UnsignedLike> WeightedPrefix<U> {
     weight: usize,
     lower: U,
     upper: U,
-    run_len_jumpstart: Option<usize>,
+    run_len_jumpstart: Option<Bitlen>,
     gcd: U,
   ) -> WeightedPrefix<U> {
     let diff = (upper - lower) / gcd;
     let offset_bits = if diff == U::ZERO {
       0
     } else {
-      U::BITS - diff.leading_zeros()
+      U::BITS - diff.leading_zeros() as Bitlen
     };
     let bin = BinCompressionInfo {
       count,
@@ -110,11 +111,11 @@ impl<U: UnsignedLike> WeightedPrefix<U> {
 pub struct BinCompressionInfo<U: UnsignedLike> {
   pub count: usize,
   pub code: usize,
-  pub code_len: usize,
+  pub code_len: Bitlen,
   pub lower: U,
   pub upper: U,
-  pub offset_bits: usize,
-  pub run_len_jumpstart: Option<usize>,
+  pub offset_bits: Bitlen,
+  pub run_len_jumpstart: Option<Bitlen>,
   pub gcd: U,
 }
 
@@ -156,9 +157,9 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
 #[derive(Clone, Copy, Debug)]
 pub struct BinDecompressionInfo<U: UnsignedLike> {
   pub lower_unsigned: U,
-  pub offset_bits: usize,
-  pub depth: usize,
-  pub run_len_jumpstart: Option<usize>,
+  pub offset_bits: Bitlen,
+  pub depth: Bitlen,
+  pub run_len_jumpstart: Option<Bitlen>,
   pub gcd: U,
 }
 

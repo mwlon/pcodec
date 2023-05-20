@@ -83,7 +83,7 @@ fn parse_bins<T: NumberLike>(
     let count = reader.read_usize(bits_to_encode_count)?;
     let lower = T::read_from(reader)?;
 
-    let offset_bits = reader.read_usize(offset_bits_bits)?;
+    let offset_bits = reader.read_bitlen(offset_bits_bits)?;
     if offset_bits > T::Unsigned::BITS {
       return Err(QCompressError::corruption(format!(
         "offset bits of {} exceeds data type of {} bits",
@@ -92,10 +92,10 @@ fn parse_bins<T: NumberLike>(
       )));
     }
 
-    let code_len = reader.read_usize(BITS_TO_ENCODE_CODE_LEN)?;
+    let code_len = reader.read_bitlen(BITS_TO_ENCODE_CODE_LEN)?;
     let code = reader.read_usize(code_len)?;
     let run_len_jumpstart = if reader.read_one()? {
-      Some(reader.read_usize(BITS_TO_ENCODE_JUMPSTART)?)
+      Some(reader.read_bitlen(BITS_TO_ENCODE_JUMPSTART)?)
     } else {
       None
     };
@@ -136,8 +136,8 @@ fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Fl
   for bin in bins {
     writer.write_usize(bin.count, bits_to_encode_count);
     bin.lower.write_to(writer);
-    writer.write_usize(bin.offset_bits, offset_bits_bits);
-    writer.write_usize(bin.code_len, BITS_TO_ENCODE_CODE_LEN);
+    writer.write_bitlen(bin.offset_bits, offset_bits_bits);
+    writer.write_bitlen(bin.code_len, BITS_TO_ENCODE_CODE_LEN);
     writer.write_usize(bin.code, bin.code_len);
     match bin.run_len_jumpstart {
       None => {
@@ -145,7 +145,7 @@ fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Fl
       }
       Some(jumpstart) => {
         writer.write_one(true);
-        writer.write_usize(jumpstart, BITS_TO_ENCODE_JUMPSTART);
+        writer.write_bitlen(jumpstart, BITS_TO_ENCODE_JUMPSTART);
       }
     }
     if bin.offset_bits > 0 && maybe_commond_gcd.is_none() {
@@ -211,7 +211,7 @@ impl<T: NumberLike> ChunkMetadata<T> {
 
   pub(crate) fn update_write_compressed_body_size(&self, writer: &mut BitWriter, bit_idx: usize) {
     writer.overwrite_usize(
-      bit_idx + BITS_TO_ENCODE_N_ENTRIES + 8,
+      bit_idx + BITS_TO_ENCODE_N_ENTRIES as usize + 8,
       self.compressed_body_size,
       BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
     );

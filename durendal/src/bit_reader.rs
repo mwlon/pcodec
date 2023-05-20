@@ -4,7 +4,7 @@ use std::ops::*;
 
 use crate::bit_words::BitWords;
 use crate::bits;
-use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_SIZE};
+use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 
@@ -17,13 +17,13 @@ pub(crate) trait ReadableUint:
   + Copy
   + Debug
   + Display
-  + Shl<usize, Output = Self>
-  + Shr<usize, Output = Self>
+  + Shl<Bitlen, Output = Self>
+  + Shr<Bitlen, Output = Self>
 {
   const ZERO: Self;
   const MAX: Self;
-  const BITS: usize;
-  const MAX_EXTRA_WORDS: usize = (Self::BITS + 6) / WORD_SIZE;
+  const BITS: Bitlen;
+  const MAX_EXTRA_WORDS: Bitlen = (Self::BITS + 6) / WORD_BITLEN;
 
   fn from_word(word: usize) -> Self;
 }
@@ -31,7 +31,7 @@ pub(crate) trait ReadableUint:
 impl ReadableUint for usize {
   const ZERO: Self = 0;
   const MAX: Self = usize::MAX;
-  const BITS: usize = WORD_SIZE;
+  const BITS: Bitlen = WORD_BITLEN;
 
   fn from_word(word: usize) -> Self {
     word
@@ -41,7 +41,7 @@ impl ReadableUint for usize {
 impl<U: UnsignedLike> ReadableUint for U {
   const ZERO: Self = <Self as UnsignedLike>::ZERO;
   const MAX: Self = <Self as UnsignedLike>::MAX;
-  const BITS: usize = <Self as UnsignedLike>::BITS;
+  const BITS: Bitlen = <Self as UnsignedLike>::BITS;
 
   fn from_word(word: usize) -> Self {
     <Self as UnsignedLike>::from_word(word)
@@ -112,9 +112,9 @@ impl<'a> BitReader<'a> {
     bits::ceil_div(self.total_bits, 8)
   }
 
-  fn insufficient_data_check(&self, name: &str, n: usize) -> QCompressResult<()> {
+  fn insufficient_data_check(&self, name: &str, n: Bitlen) -> QCompressResult<()> {
     let bit_idx = self.bit_idx();
-    if bit_idx + n > self.total_bits {
+    if bit_idx + n as usize > self.total_bits {
       Err(QCompressError::insufficient_data_recipe(
         name,
         n,
@@ -151,36 +151,26 @@ impl<'a> BitReader<'a> {
     Ok(self.unchecked_read_one())
   }
 
-  /// Returns the next `n` bits. Will return an error if there are not
-  /// enough bits remaining.
-  pub fn read(&mut self, n: usize) -> QCompressResult<Vec<bool>> {
-    self.insufficient_data_check("read", n)?;
-
-    let mut res = Vec::with_capacity(n);
-
-    // implementation not well optimized because this is only used in reading header
-    for _ in 0..n {
-      res.push(self.unchecked_read_one());
-    }
-    Ok(res)
-  }
-
-  pub(crate) fn read_uint<U: ReadableUint>(&mut self, n: usize) -> QCompressResult<U> {
+  pub(crate) fn read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> QCompressResult<U> {
     self.insufficient_data_check("read_uint", n)?;
 
     Ok(self.unchecked_read_uint::<U>(n))
   }
 
-  pub fn read_usize(&mut self, n: usize) -> QCompressResult<usize> {
+  pub fn read_usize(&mut self, n: Bitlen) -> QCompressResult<usize> {
     self.read_uint::<usize>(n)
   }
 
-  fn idxs(&self) -> (usize, usize) {
-    (self.bit_idx >> 3, self.bit_idx & 7)
+  pub fn read_bitlen(&mut self, n: Bitlen) -> QCompressResult<Bitlen> {
+    self.read_uint::<Bitlen>(n)
+  }
+
+  fn idxs(&self) -> (usize, Bitlen) {
+    (self.bit_idx >> 3, (self.bit_idx & 7) as Bitlen)
   }
 
   // returns (bits read, idx)
-  pub fn read_bin_table_idx(&mut self, table_size_log: usize) -> QCompressResult<(usize, usize)> {
+  pub fn read_bin_table_idx(&mut self, table_size_log: Bitlen) -> QCompressResult<(Bitlen, usize)> {
     let bit_idx = self.bit_idx();
     if bit_idx >= self.total_bits {
       return Err(QCompressError::insufficient_data_recipe(
@@ -191,12 +181,12 @@ impl<'a> BitReader<'a> {
       ));
     }
 
-    let bits_read = min(self.total_bits - bit_idx, table_size_log);
+    let bits_read = min(self.total_bits - bit_idx, table_size_log as usize) as Bitlen;
     let res = self.read_usize(bits_read)?;
     Ok((bits_read, res))
   }
 
-  pub fn read_varint(&mut self, jumpstart: usize) -> QCompressResult<usize> {
+  pub fn read_varint(&mut self, jumpstart: Bitlen) -> QCompressResult<usize> {
     let mut res = self.read_usize(jumpstart)?;
     for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
       if self.read_one()? {
@@ -226,14 +216,14 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  pub(crate) fn unchecked_read_uint<U: ReadableUint>(&mut self, n: usize) -> U {
+  pub(crate) fn unchecked_read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> U {
     if n == 0 {
       return U::ZERO;
     }
 
     let (mut i, j) = self.idxs();
     let mut res = U::from_word(self.unchecked_word(i) >> j);
-    let mut processed = WORD_SIZE - j;
+    let mut processed = WORD_BITLEN - j;
 
     // This for loop looks redundant/slow, as if it could just be a while
     // loop, but its bounds get evaluated at compile time and it actually
@@ -244,20 +234,20 @@ impl<'a> BitReader<'a> {
       }
       i += BYTES_PER_WORD;
       res |= U::from_word(self.unchecked_word(i)) << processed;
-      processed += WORD_SIZE;
+      processed += WORD_BITLEN;
     }
 
-    self.bit_idx += n;
+    self.bit_idx += n as usize;
     res & (U::MAX >> (U::BITS - n))
   }
 
-  pub fn unchecked_read_bin_table_idx(&mut self, table_size_log: usize) -> usize {
+  pub fn unchecked_read_bin_table_idx(&mut self, table_size_log: Bitlen) -> usize {
     let (i, j) = self.idxs();
-    self.bit_idx += table_size_log;
-    (self.unchecked_word(i) >> j) & (usize::MAX >> (WORD_SIZE - table_size_log))
+    self.bit_idx += table_size_log as usize;
+    (self.unchecked_word(i) >> j) & (usize::MAX >> (WORD_BITLEN - table_size_log))
   }
 
-  pub fn unchecked_read_varint(&mut self, jumpstart: usize) -> usize {
+  pub fn unchecked_read_varint(&mut self, jumpstart: Bitlen) -> usize {
     let mut res = self.unchecked_read_uint::<usize>(jumpstart);
     for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
       if self.unchecked_read_one() {
@@ -302,8 +292,8 @@ impl<'a> BitReader<'a> {
 
   /// Skips backward `n` bits where n <= 32.
   /// Will panic if the resulting position is out of bounds.
-  pub fn rewind_bin_overshoot(&mut self, n: usize) {
-    self.bit_idx -= n;
+  pub fn rewind_bin_overshoot(&mut self, n: Bitlen) {
+    self.bit_idx -= n as usize;
   }
 }
 
@@ -312,7 +302,7 @@ mod tests {
   use super::BitReader;
   use crate::bit_words::BitWords;
   use crate::bit_writer::BitWriter;
-  use crate::constants::WORD_SIZE;
+  use crate::constants::{WORD_SIZE, WORD_BITLEN};
   use crate::errors::QCompressResult;
 
   #[test]
@@ -324,7 +314,7 @@ mod tests {
     assert_eq!(bit_reader.read_aligned_bytes(1)?, vec![0x9a],);
     assert!(!bit_reader.unchecked_read_one());
     assert!(bit_reader.read_one()?);
-    assert_eq!(bit_reader.read(3)?, vec![true, false, true],);
+    bit_reader.seek(3);
     assert_eq!(
       bit_reader.unchecked_read_uint::<u64>(2),
       2_u64
@@ -341,21 +331,16 @@ mod tests {
   #[test]
   fn test_writer_reader() {
     let mut writer = BitWriter::default();
-    for i in 1..WORD_SIZE + 1 {
-      writer.write_usize(i, i);
+    for i in 1..WORD_BITLEN + 1 {
+      writer.write_usize(i as usize, i);
     }
     let bytes = writer.drain_bytes();
     let words = BitWords::from(&bytes);
     let mut usize_reader = BitReader::from(&words);
-    let mut u64_reader = BitReader::from(&words);
-    for i in 1..WORD_SIZE + 1 {
+    for i in 1..WORD_BITLEN + 1 {
       assert_eq!(
         usize_reader.unchecked_read_uint::<usize>(i),
-        i
-      );
-      assert_eq!(
-        u64_reader.unchecked_read_uint::<u64>(i),
-        i as u64
+        i as usize
       );
     }
   }

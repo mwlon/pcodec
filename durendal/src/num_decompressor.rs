@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::constants::{BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
+use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
@@ -65,7 +65,7 @@ fn max_bits_read<T: NumberLike>(bin: &Bin<T>) -> usize {
     Some(_) => (MAX_ENTRIES, 2 * BITS_TO_ENCODE_N_ENTRIES),
   };
   let max_bits_per_offset = bin.offset_bits;
-  bin_bits + max_jumpstart_bits + max_reps * max_bits_per_offset
+  bin_bits as usize + max_jumpstart_bits as usize + max_reps * max_bits_per_offset as usize
 }
 
 // For the bin, the maximum number of bits we might overshoot by during an
@@ -73,7 +73,7 @@ fn max_bits_read<T: NumberLike>(bin: &Bin<T>) -> usize {
 // Helps decide whether to do checked or unchecked reads.
 // We could make a slightly tighter bound with more logic, but I don't think there
 // are any cases where it would help much.
-fn max_bits_overshot<T: NumberLike>(bin: &Bin<T>) -> usize {
+fn max_bits_overshot<T: NumberLike>(bin: &Bin<T>) -> Bitlen {
   if bin.code_len == 0 {
     0
   } else {
@@ -97,7 +97,7 @@ pub struct NumDecompressor<U: UnsignedLike> {
   n: usize,
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
-  max_overshoot_per_num_block: usize,
+  max_overshoot_per_num_block: Bitlen,
   use_gcd: bool,
   use_run_len: bool,
 
@@ -135,7 +135,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       .iter()
       .map(max_bits_overshot)
       .max()
-      .unwrap_or(usize::MAX);
+      .unwrap_or(Bitlen::MAX);
     let use_gcd = gcd_utils::use_gcd_arithmetic(&bins);
     let use_run_len = run_len_utils::use_run_len(&bins);
 
@@ -370,7 +370,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
         remaining_unsigneds,
         reader
           .bits_remaining()
-          .saturating_sub(self.max_overshoot_per_num_block)
+          .saturating_sub(self.max_overshoot_per_num_block as usize)
           / self.max_bits_per_num_block,
       );
 

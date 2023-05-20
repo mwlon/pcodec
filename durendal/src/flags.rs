@@ -7,7 +7,7 @@ use std::convert::{TryFrom, TryInto};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::bits;
-use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
+use crate::constants::{Bitlen, BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{QCompressError, QCompressResult};
 use crate::CompressorConfig;
 
@@ -61,7 +61,7 @@ impl TryFrom<Vec<bool>> for Flags {
     let mut bit_iter = bools.iter();
 
     let mut delta_encoding_bits = Vec::new();
-    while delta_encoding_bits.len() < BITS_TO_ENCODE_DELTA_ENCODING_ORDER {
+    while delta_encoding_bits.len() < BITS_TO_ENCODE_DELTA_ENCODING_ORDER as usize {
       delta_encoding_bits.push(bit_iter.next().cloned().unwrap_or(false));
     }
     flags.delta_encoding_order = bits::bits_to_usize(&delta_encoding_bits);
@@ -152,7 +152,7 @@ impl Flags {
     }
   }
 
-  pub(crate) fn bits_to_encode_count(&self, n: usize) -> usize {
+  pub(crate) fn bits_to_encode_count(&self, n: usize) -> Bitlen {
     // If we use wrapped mode, we don't encode the bin counts at all (even
     // though they are nonzero). This propagates nicely through bin
     // optimization.
