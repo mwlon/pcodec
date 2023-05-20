@@ -105,6 +105,7 @@ pub struct NumDecompressor<U: UnsignedLike> {
 }
 
 // errors on insufficient data
+#[inline]
 fn decompress_offset_dirty<U: UnsignedLike>(
   reader: &mut BitReader,
   p: BinDecompressionInfo<U>,
@@ -170,6 +171,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   }
 
   // returns count of numbers processed
+  #[inline(never)]
   fn unchecked_decompress_num_blocks<GcdOp: GcdOperator<U>, RunLenOp: RunLenOperator>(
     &mut self,
     reader: &mut BitReader,

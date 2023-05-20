@@ -26,6 +26,7 @@ pub enum BodyDecompressor<T: NumberLike> {
   },
 }
 
+#[inline(never)]
 fn unsigneds_to_nums<T: NumberLike>(unsigneds: &[T::Unsigned], dest: &mut [T]) {
   // is there a better way to write this?
   for (i, &u) in unsigneds.iter().enumerate() {

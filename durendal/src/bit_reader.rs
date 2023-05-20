@@ -165,6 +165,7 @@ impl<'a> BitReader<'a> {
     self.read_uint::<Bitlen>(n)
   }
 
+  #[inline]
   fn idxs(&self) -> (usize, Bitlen) {
     (
       self.bit_idx >> 3,
@@ -298,6 +299,7 @@ impl<'a> BitReader<'a> {
 
   /// Skips backward `n` bits where n <= 32.
   /// Will panic if the resulting position is out of bounds.
+  #[inline]
   pub fn rewind_bin_overshoot(&mut self, n: Bitlen) {
     self.bit_idx -= n as usize;
   }

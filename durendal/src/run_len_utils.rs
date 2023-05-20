@@ -32,6 +32,7 @@ pub trait RunLenOperator {
 pub struct GeneralRunLenOp;
 
 impl RunLenOperator for GeneralRunLenOp {
+  #[inline]
   fn unchecked_decompress_offsets<U: UnsignedLike, GcdOp: GcdOperator<U>>(
     num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
@@ -70,6 +71,7 @@ impl RunLenOperator for GeneralRunLenOp {
 pub struct TrivialRunLenOp;
 
 impl RunLenOperator for TrivialRunLenOp {
+  #[inline]
   fn unchecked_decompress_offsets<U: UnsignedLike, GcdOp: GcdOperator<U>>(
     _num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
