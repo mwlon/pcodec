@@ -6,6 +6,7 @@ macro_rules! impl_unsigned {
     impl UnsignedLike for $t {
       const ZERO: Self = 0;
       const ONE: Self = 1;
+      const MID: Self = 1 << (Self::BITS - 1);
       const MAX: Self = Self::MAX;
       const BITS: Bitlen = Self::BITS as Bitlen;
 
@@ -25,6 +26,16 @@ macro_rules! impl_unsigned {
       fn lshift_word(self, shift: Bitlen) -> usize {
         (self as usize) << shift
       }
+
+      #[inline]
+      fn wrapping_add(self, other: Self) -> Self {
+        self.wrapping_add(other)
+      }
+
+      #[inline]
+      fn wrapping_sub(self, other: Self) -> Self {
+        self.wrapping_sub(other)
+      }
     }
   };
 }
@@ -38,18 +49,7 @@ macro_rules! impl_unsigned_number {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = Self::BITS as usize;
 
-      type Signed = $signed;
       type Unsigned = Self;
-
-      #[inline]
-      fn to_signed(self) -> Self::Signed {
-        (self as $signed).wrapping_add(<$signed>::MIN)
-      }
-
-      #[inline]
-      fn from_signed(signed: Self::Signed) -> Self {
-        signed.wrapping_sub(<$signed>::MIN) as Self
-      }
 
       #[inline]
       fn to_unsigned(self) -> Self::Unsigned {
@@ -59,6 +59,16 @@ macro_rules! impl_unsigned_number {
       #[inline]
       fn from_unsigned(off: Self::Unsigned) -> Self {
         off
+      }
+
+      #[inline]
+      fn transmute_to_unsigned_slice(slice: &mut [Self]) -> &mut [Self::Unsigned] {
+        slice
+      }
+
+      #[inline]
+      fn transmute_to_unsigned(self) -> Self::Unsigned {
+        self
       }
     }
   };

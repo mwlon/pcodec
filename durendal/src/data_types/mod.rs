@@ -11,27 +11,6 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-/// Trait for data types that behave like signed integers.
-///
-/// This is used for delta encoding/decoding; i.e. the difference
-/// between consecutive numbers must be a `SignedLike`.
-/// For example,
-/// * The deltas between consecutive `u64`s are `i64`.
-/// * The deltas between consecutive `i64`s are `i64`.
-/// * The deltas between consecutive `bool`s are `bool`s (basically 1 bit
-/// signed integers under XOR).
-///
-/// This is important because deltas like +1 and -1 are numerically close to
-/// each other and easily compressible, which would not be the case with
-/// unsigned integers.
-/// Note: API stability of `SignedLike` is not guaranteed.
-pub trait SignedLike: NumberLike<Signed = Self> {
-  const ZERO: Self;
-
-  fn wrapping_add(self, other: Self) -> Self;
-  fn wrapping_sub(self, other: Self) -> Self;
-}
-
 /// Trait for data types that behave like unsigned integers.
 ///
 /// This is used extensively in `q_compress` to guarantee that bitwise
@@ -52,6 +31,7 @@ pub trait UnsignedLike:
   + Display
   + Div<Output = Self>
   + Mul<Output = Self>
+  + NumberLike<Unsigned = Self>
   + Ord
   + PartialOrd
   + RemAssign
@@ -61,6 +41,7 @@ pub trait UnsignedLike:
 {
   const ZERO: Self;
   const ONE: Self;
+  const MID: Self;
   const MAX: Self;
   const BITS: Bitlen;
 
@@ -91,6 +72,10 @@ pub trait UnsignedLike:
   ///
   /// Used for some bit arithmetic operations during compression.
   fn lshift_word(self, shift: Bitlen) -> usize;
+
+  fn wrapping_add(self, other: Self) -> Self;
+
+  fn wrapping_sub(self, other: Self) -> Self;
 }
 
 /// Trait for data types supported for compression/decompression.
@@ -131,27 +116,17 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// Note that booleans have 8 physical bits (not 1).
   const PHYSICAL_BITS: usize;
 
-  /// The signed integer this type can convert between to do wrapped
-  /// subtraction and addition for delta encoding/decoding.
-  /// Must be another `NumberLike` with the same `Signed` and `Unsigned` as
-  /// this type; in this way, if we take 7th order deltas, they are ensured to
-  /// have the same type as 1st order deltas.
-  type Signed: SignedLike + NumberLike<Signed = Self::Signed, Unsigned = Self::Unsigned>;
   /// The unsigned integer this type can convert between to do
   /// bitwise logic and such.
   type Unsigned: UnsignedLike;
 
-  /// Used during compression to convert to an unsigned integer.
+  /// Used during compression to convert to an unsigned integer in a way that
+  /// preserves ordering.
   fn to_unsigned(self) -> Self::Unsigned;
 
-  /// Used during decompression to convert back from an unsigned integer.
+  /// Used during decompression to convert back from an unsigned integer in a
+  /// way that preserves ordering.
   fn from_unsigned(off: Self::Unsigned) -> Self;
-
-  /// Used during delta encoding to convert to a signed integer.
-  fn to_signed(self) -> Self::Signed;
-
-  /// Used during delta decoding to convert back from a signed integer.
-  fn from_signed(signed: Self::Signed) -> Self;
 
   fn write_to(self, writer: &mut BitWriter) {
     writer.write_diff(self.to_unsigned(), Self::Unsigned::BITS)
@@ -162,4 +137,11 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
       reader.read_uint(Self::Unsigned::BITS)?,
     ))
   }
+
+  // These transmute functions do not preserve ordering.
+  // Their purpose is to allow certain operations in-place, relying on the fact
+  // that each NumberLike should have the same size as its UnsignedLike.
+  fn transmute_to_unsigned_slice(slice: &mut [Self]) -> &mut [Self::Unsigned];
+
+  fn transmute_to_unsigned(self) -> Self::Unsigned;
 }

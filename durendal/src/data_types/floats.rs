@@ -10,19 +10,7 @@ macro_rules! impl_float_number {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = $bits;
 
-      type Signed = $signed;
       type Unsigned = $unsigned;
-
-      // miraculously, this should preserve ordering
-      #[inline]
-      fn to_signed(self) -> Self::Signed {
-        self.to_bits() as Self::Signed
-      }
-
-      #[inline]
-      fn from_signed(signed: Self::Signed) -> Self {
-        Self::from_bits(signed as Self::Unsigned)
-      }
 
       #[inline]
       fn to_unsigned(self) -> Self::Unsigned {
@@ -45,6 +33,16 @@ macro_rules! impl_float_number {
           // negative float
           Self::from_bits(!off)
         }
+      }
+
+      #[inline]
+      fn transmute_to_unsigned_slice(slice: &mut [Self]) -> &mut [Self::Unsigned] {
+        unsafe { std::mem::transmute(slice) }
+      }
+
+      #[inline]
+      fn transmute_to_unsigned(self) -> Self::Unsigned {
+        self.to_bits()
       }
     }
   };

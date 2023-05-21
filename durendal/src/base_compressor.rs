@@ -380,24 +380,24 @@ fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
 }
 
 #[derive(Clone, Debug)]
-pub struct MidChunkInfo<T: NumberLike> {
+pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
-  unsigneds: Vec<T::Unsigned>,
+  unsigneds: Vec<U>,
   use_gcd: bool,
-  table: CompressionTable<T::Unsigned>,
-  delta_momentss: Vec<DeltaMoments<T::Signed>>,
+  table: CompressionTable<U>,
+  delta_momentss: Vec<DeltaMoments<U>>,
   page_sizes: Vec<usize>,
   // mutable:
   idx: usize,
   page_idx: usize,
 }
 
-impl<T: NumberLike> MidChunkInfo<T> {
+impl<U: UnsignedLike> MidChunkInfo<U> {
   fn data_page_n(&self) -> usize {
     self.page_sizes[self.page_idx]
   }
 
-  fn data_page_moments(&self) -> &DeltaMoments<T::Signed> {
+  fn data_page_moments(&self) -> &DeltaMoments<U> {
     &self.delta_momentss[self.page_idx]
   }
 
@@ -406,21 +406,16 @@ impl<T: NumberLike> MidChunkInfo<T> {
   }
 }
 
-#[derive(Clone, Debug)]
-pub enum State<T: NumberLike> {
+#[derive(Clone, Debug, Default)]
+pub enum State<U: UnsignedLike> {
+  #[default]
   PreHeader,
   StartOfChunk,
-  MidChunk(MidChunkInfo<T>),
+  MidChunk(MidChunkInfo<U>),
   Terminated,
 }
 
-impl<T: NumberLike> Default for State<T> {
-  fn default() -> Self {
-    State::PreHeader
-  }
-}
-
-impl<T: NumberLike> State<T> {
+impl<U: UnsignedLike> State<U> {
   pub fn wrong_step_err(&self, description: &str) -> QCompressError {
     let step_str = match self {
       State::PreHeader => "has not yet written header",
@@ -440,7 +435,7 @@ pub struct BaseCompressor<T: NumberLike> {
   internal_config: InternalCompressorConfig,
   pub flags: Flags,
   pub writer: BitWriter,
-  pub state: State<T>,
+  pub state: State<T::Unsigned>,
 }
 
 fn bins_from_compression_infos<T: NumberLike>(
@@ -495,10 +490,10 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
 
     let order = self.flags.delta_encoding_order;
+    let raw_unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
     let (unsigneds, bin_meta, table, delta_momentss) = if order == 0 {
-      let unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
       let infos = train_bins(
-        unsigneds.clone(),
+        raw_unsigneds.clone(),
         &self.internal_config,
         &self.flags,
         n,
@@ -507,15 +502,15 @@ impl<T: NumberLike> BaseCompressor<T> {
       let table = CompressionTable::from(infos);
       let bin_metadata = BinMetadata::Simple { bins };
       (
-        unsigneds,
+        raw_unsigneds,
         bin_metadata,
         table,
         vec![DeltaMoments::default(); n_pages],
       )
     } else {
       let page_idxs = cumulative_sum(&page_sizes);
-      let (deltas, momentss) = delta_encoding::nth_order_deltas(nums, order, &page_idxs);
-      let unsigneds = deltas.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
+      let (unsigneds, momentss) =
+        delta_encoding::nth_order_deltas(raw_unsigneds, order, &page_idxs);
       let infos = train_bins(
         unsigneds.clone(),
         &self.internal_config,
