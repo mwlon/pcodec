@@ -1,6 +1,6 @@
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{UnsignedLike};
 use crate::errors::QCompressResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -74,36 +74,24 @@ pub fn nth_order_deltas<U: UnsignedLike>(
   (unsigneds, moments)
 }
 
-fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
-  delta_moments: &mut DeltaMoments<T::Unsigned>,
-  dest: &mut [T::Unsigned],
+fn first_order_reconstruct_in_place<U: UnsignedLike>(
+  moment: &mut U,
+  dest: &mut [U],
 ) {
-  toggle_center_deltas_in_place(dest);
-  let moments = &mut delta_moments.moments;
   for i in 0..dest.len() {
-    let delta = dest[i];
-    dest[i] = T::transmute_to_unsigned(T::from_unsigned(moments[0]));
-
-    for o in 0..ORDER - 1 {
-      moments[o] = moments[o].wrapping_add(moments[o + 1]);
-    }
-    moments[ORDER - 1] = moments[ORDER - 1].wrapping_add(delta);
+    let tmp = dest[i];
+    dest[i] = *moment;
+    *moment = moment.wrapping_add(tmp);
   }
 }
 
-pub fn reconstruct_nums_in_place<T: NumberLike>(
-  delta_moments: &mut DeltaMoments<T::Unsigned>,
-  dest: &mut [T::Unsigned],
+pub fn reconstruct_in_place<U: UnsignedLike>(
+  delta_moments: &mut DeltaMoments<U>,
+  dest: &mut [U],
 ) {
-  match delta_moments.order() {
-    1 => reconstruct_nums_w_order::<T, 1>(delta_moments, dest),
-    2 => reconstruct_nums_w_order::<T, 2>(delta_moments, dest),
-    3 => reconstruct_nums_w_order::<T, 3>(delta_moments, dest),
-    4 => reconstruct_nums_w_order::<T, 4>(delta_moments, dest),
-    5 => reconstruct_nums_w_order::<T, 5>(delta_moments, dest),
-    6 => reconstruct_nums_w_order::<T, 6>(delta_moments, dest),
-    7 => reconstruct_nums_w_order::<T, 7>(delta_moments, dest),
-    _ => panic!("this order should be unreachable"),
+  toggle_center_deltas_in_place(dest);
+  for moment in delta_moments.moments.iter_mut().rev() {
+    first_order_reconstruct_in_place(moment, dest);
   }
 }
 
@@ -124,11 +112,11 @@ mod tests {
       deltas.push(zero_delta);
     }
 
-    reconstruct_nums_in_place::<u32>(&mut momentss[0], &mut deltas[..3]);
+    reconstruct_in_place::<u32>(&mut momentss[0], &mut deltas[..3]);
     assert_eq!(&deltas[..3], &nums[..3]);
     assert_eq!(momentss[0], momentss[1]);
 
-    reconstruct_nums_in_place::<u32>(&mut momentss[1], &mut deltas[3..]);
+    reconstruct_in_place::<u32>(&mut momentss[1], &mut deltas[3..]);
     assert_eq!(&deltas[3..], &nums[3..]);
   }
 }

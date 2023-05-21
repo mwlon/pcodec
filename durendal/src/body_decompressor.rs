@@ -99,7 +99,8 @@ impl<T: NumberLike> BodyDecompressor<T> {
           } else {
             u_progress.n_processed
           };
-          delta_encoding::reconstruct_nums_in_place::<T>(delta_moments, u_dest);
+          delta_encoding::reconstruct_in_place(delta_moments, u_dest);
+          unsigneds_to_nums_in_place::<T>(u_dest);
           *n_processed += batch_size;
           progress.n_processed += batch_size;
           progress.finished_body = n_processed == n;
