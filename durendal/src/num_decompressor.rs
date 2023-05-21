@@ -82,7 +82,6 @@ fn max_bits_overshot<T: NumberLike>(bin: &Bin<T>) -> Bitlen {
 
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
-  // scratch: [U; UNSIGNED_BATCH_SIZE],
   n_processed: usize,
   bits_processed: usize,
   incomplete_bin: BinDecompressionInfo<U>,
@@ -149,7 +148,6 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       use_gcd,
       use_run_len,
       state: State {
-        // scratch: [U::ZERO; UNSIGNED_BATCH_SIZE],
         n_processed: 0,
         bits_processed: 0,
         incomplete_bin: BinDecompressionInfo::default(),
