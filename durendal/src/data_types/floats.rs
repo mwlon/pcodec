@@ -42,7 +42,7 @@ macro_rules! impl_float_number {
 
       #[inline]
       fn transmute_to_unsigned(self) -> Self::Unsigned {
-        unsafe { std::mem::transmute(self) }
+        self.to_bits()
       }
     }
   };

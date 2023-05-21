@@ -1,4 +1,4 @@
-use crate::data_types::{NumberLike};
+use crate::data_types::NumberLike;
 
 macro_rules! impl_signed {
   ($t: ty, $unsigned: ty, $header_byte: expr) => {

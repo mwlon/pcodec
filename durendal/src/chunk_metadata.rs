@@ -209,15 +209,10 @@ impl<T: NumberLike> ChunkMetadata<T> {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub enum DataPagingSpec {
+  #[default]
   SinglePage,
   ExactPageSizes(Vec<usize>),
-}
-
-impl Default for DataPagingSpec {
-  fn default() -> Self {
-    DataPagingSpec::SinglePage
-  }
 }

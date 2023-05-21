@@ -406,18 +406,13 @@ impl<U: UnsignedLike> MidChunkInfo<U> {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum State<U: UnsignedLike> {
+  #[default]
   PreHeader,
   StartOfChunk,
   MidChunk(MidChunkInfo<U>),
   Terminated,
-}
-
-impl<U: UnsignedLike> Default for State<U> {
-  fn default() -> Self {
-    State::PreHeader
-  }
 }
 
 impl<U: UnsignedLike> State<U> {
@@ -514,7 +509,8 @@ impl<T: NumberLike> BaseCompressor<T> {
       )
     } else {
       let page_idxs = cumulative_sum(&page_sizes);
-      let (unsigneds, momentss) = delta_encoding::nth_order_deltas(raw_unsigneds, order, &page_idxs);
+      let (unsigneds, momentss) =
+        delta_encoding::nth_order_deltas(raw_unsigneds, order, &page_idxs);
       let infos = train_bins(
         unsigneds.clone(),
         &self.internal_config,

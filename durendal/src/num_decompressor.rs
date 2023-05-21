@@ -414,10 +414,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
     // do checked operations for the rest
     while res.n_processed < batch_size {
-      res.n_processed += match self.decompress_num_block(
-        reader,
-        &mut dest[res.n_processed..],
-      ) {
+      res.n_processed += match self.decompress_num_block(reader, &mut dest[res.n_processed..]) {
         Ok(n_processed) => n_processed,
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => {
           return mark_insufficient(res, e)

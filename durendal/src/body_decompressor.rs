@@ -66,19 +66,15 @@ impl<T: NumberLike> BodyDecompressor<T> {
       && !progress.finished_body
       && !progress.insufficient_data
     {
-      let batch_end = min(progress.n_processed + UNSIGNED_BATCH_SIZE, dest.len());
-      let u_dest = T::transmute_to_unsigned_slice(
-        &mut dest[progress.n_processed..batch_end]
+      let batch_end = min(
+        progress.n_processed + UNSIGNED_BATCH_SIZE,
+        dest.len(),
       );
+      let u_dest = T::transmute_to_unsigned_slice(&mut dest[progress.n_processed..batch_end]);
       match self {
-        Self::Simple {
-          num_decompressor,
-        } => {
-          let u_progress = num_decompressor.decompress_unsigneds(
-            reader,
-            error_on_insufficient_data,
-            u_dest,
-          )?;
+        Self::Simple { num_decompressor } => {
+          let u_progress =
+            num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dest)?;
           unsigneds_to_nums_in_place::<T>(u_dest);
           progress += u_progress;
         }
@@ -88,25 +84,22 @@ impl<T: NumberLike> BodyDecompressor<T> {
           delta_moments,
           n_processed,
         } => {
-          let u_progress = num_decompressor.decompress_unsigneds(
-            reader,
-            error_on_insufficient_data,
-            u_dest,
-          )?;
+          let u_progress =
+            num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dest)?;
           let batch_size = if u_progress.finished_body {
             let batch_size = min(
-              min(u_dest.len(), u_progress.n_processed + delta_moments.order()),
-              *n - *n_processed
+              min(
+                u_dest.len(),
+                u_progress.n_processed + delta_moments.order(),
+              ),
+              *n - *n_processed,
             );
             u_dest[u_progress.n_processed..batch_size].fill(T::Unsigned::ZERO);
             batch_size
           } else {
             u_progress.n_processed
           };
-          delta_encoding::reconstruct_nums_in_place::<T>(
-            delta_moments,
-            u_dest,
-          );
+          delta_encoding::reconstruct_nums_in_place::<T>(delta_moments, u_dest);
           *n_processed += batch_size;
           progress.n_processed += batch_size;
           progress.finished_body = n_processed == n;
