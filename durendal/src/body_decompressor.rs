@@ -75,7 +75,6 @@ impl<T: NumberLike> BodyDecompressor<T> {
         Self::Simple { num_decompressor } => {
           let u_progress =
             num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dest)?;
-          unsigneds_to_nums_in_place::<T>(u_dest);
           progress += u_progress;
         }
         Self::Delta {
@@ -100,13 +99,14 @@ impl<T: NumberLike> BodyDecompressor<T> {
             u_progress.n_processed
           };
           delta_encoding::reconstruct_in_place(delta_moments, u_dest);
-          unsigneds_to_nums_in_place::<T>(u_dest);
           *n_processed += batch_size;
           progress.n_processed += batch_size;
           progress.finished_body = n_processed == n;
           progress.insufficient_data = u_progress.insufficient_data
         }
-      }
+      };
+
+      unsigneds_to_nums_in_place::<T>(u_dest);
     }
     Ok(progress)
   }
