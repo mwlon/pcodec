@@ -380,24 +380,24 @@ fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
 }
 
 #[derive(Clone, Debug)]
-pub struct MidChunkInfo<T: NumberLike> {
+pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
-  unsigneds: Vec<T::Unsigned>,
+  unsigneds: Vec<U>,
   use_gcd: bool,
-  table: CompressionTable<T::Unsigned>,
-  delta_momentss: Vec<DeltaMoments<T::Signed>>,
+  table: CompressionTable<U>,
+  delta_momentss: Vec<DeltaMoments<U>>,
   page_sizes: Vec<usize>,
   // mutable:
   idx: usize,
   page_idx: usize,
 }
 
-impl<T: NumberLike> MidChunkInfo<T> {
+impl<U: UnsignedLike> MidChunkInfo<U> {
   fn data_page_n(&self) -> usize {
     self.page_sizes[self.page_idx]
   }
 
-  fn data_page_moments(&self) -> &DeltaMoments<T::Signed> {
+  fn data_page_moments(&self) -> &DeltaMoments<U> {
     &self.delta_momentss[self.page_idx]
   }
 
@@ -407,20 +407,20 @@ impl<T: NumberLike> MidChunkInfo<T> {
 }
 
 #[derive(Clone, Debug)]
-pub enum State<T: NumberLike> {
+pub enum State<U: UnsignedLike> {
   PreHeader,
   StartOfChunk,
-  MidChunk(MidChunkInfo<T>),
+  MidChunk(MidChunkInfo<U>),
   Terminated,
 }
 
-impl<T: NumberLike> Default for State<T> {
+impl<U: UnsignedLike> Default for State<U> {
   fn default() -> Self {
     State::PreHeader
   }
 }
 
-impl<T: NumberLike> State<T> {
+impl<U: UnsignedLike> State<U> {
   pub fn wrong_step_err(&self, description: &str) -> QCompressError {
     let step_str = match self {
       State::PreHeader => "has not yet written header",
@@ -440,7 +440,7 @@ pub struct BaseCompressor<T: NumberLike> {
   internal_config: InternalCompressorConfig,
   pub flags: Flags,
   pub writer: BitWriter,
-  pub state: State<T>,
+  pub state: State<T::Unsigned>,
 }
 
 fn bins_from_compression_infos<T: NumberLike>(

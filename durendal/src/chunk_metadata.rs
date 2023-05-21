@@ -27,7 +27,7 @@ pub enum BinMetadata<T: NumberLike> {
   /// will have bins of type `i64`, where a delta of n indicates a change
   /// of n * machine epsilon from the last float.
   #[non_exhaustive]
-  Delta { bins: Vec<Bin<T::Signed>> },
+  Delta { bins: Vec<Bin<T::Unsigned>> },
 }
 
 impl<T: NumberLike> BinMetadata<T> {
@@ -168,7 +168,7 @@ impl<T: NumberLike> ChunkMetadata<T> {
       let bins = parse_bins::<T>(reader, flags, n)?;
       BinMetadata::Simple { bins }
     } else {
-      let bins = parse_bins::<T::Signed>(reader, flags, n)?;
+      let bins = parse_bins::<T::Unsigned>(reader, flags, n)?;
       BinMetadata::Delta { bins }
     };
 
