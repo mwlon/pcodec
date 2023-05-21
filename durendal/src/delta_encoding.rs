@@ -32,12 +32,6 @@ impl<U: UnsignedLike> DeltaMoments<U> {
   }
 }
 
-// TODO kill this
-#[inline(never)]
-fn nums_to_unsigneds<T: NumberLike>(nums: &[T]) -> Vec<T::Unsigned> {
-  nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>()
-}
-
 // Without this, deltas in (say) [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].
 #[inline(never)]
@@ -60,25 +54,24 @@ fn first_order_deltas_in_place<U: UnsignedLike>(dest: &mut Vec<U>) {
 }
 
 // only valid for order >= 1
-pub fn nth_order_deltas<T: NumberLike>(
-  nums: &[T],
+pub fn nth_order_deltas<U: UnsignedLike>(
+  mut unsigneds: Vec<U>,
   order: usize,
   data_page_idxs: &[usize],
-) -> (Vec<T::Unsigned>, Vec<DeltaMoments<T::Unsigned>>) {
+) -> (Vec<U>, Vec<DeltaMoments<U>>) {
   let mut data_page_moments = vec![Vec::with_capacity(order); data_page_idxs.len()];
-  let mut res = nums_to_unsigneds(nums);
   for _ in 0..order {
     for (page_idx, &i) in data_page_idxs.iter().enumerate() {
-      data_page_moments[page_idx].push(res.get(i).copied().unwrap_or(T::Unsigned::ZERO));
+      data_page_moments[page_idx].push(unsigneds.get(i).copied().unwrap_or(U::ZERO));
     }
-    first_order_deltas_in_place(&mut res);
+    first_order_deltas_in_place(&mut unsigneds);
   }
   let moments = data_page_moments
     .into_iter()
     .map(DeltaMoments::new)
     .collect::<Vec<_>>();
-  toggle_center_deltas_in_place(&mut res);
-  (res, moments)
+  toggle_center_deltas_in_place(&mut unsigneds);
+  (unsigneds, moments)
 }
 
 fn reconstruct_nums_w_order<T: NumberLike, const ORDER: usize>(
@@ -123,7 +116,7 @@ mod tests {
     let nums: Vec<u32> = vec![2, 2, 1, u32::MAX, 0];
     let order = 2;
     let zero_delta = u32::MID;
-    let (mut deltas, mut momentss) = nth_order_deltas(&nums, order, &vec![0, 3]);
+    let (mut deltas, mut momentss) = nth_order_deltas(nums.clone(), order, &vec![0, 3]);
 
     // add back some padding we lose during compression
     assert_eq!(deltas.len(), nums.len() - order);
@@ -131,11 +124,11 @@ mod tests {
       deltas.push(zero_delta);
     }
 
-    reconstruct_nums_in_place::<u32>(&mut momentss[0], &mut deltas[0..3]);
-    assert_eq!(&deltas[0..3], &[2, 2, 1]);
+    reconstruct_nums_in_place::<u32>(&mut momentss[0], &mut deltas[..3]);
+    assert_eq!(&deltas[..3], &nums[..3]);
     assert_eq!(momentss[0], momentss[1]);
 
     reconstruct_nums_in_place::<u32>(&mut momentss[1], &mut deltas[3..]);
-    assert_eq!(&deltas[3..], &[u32::MAX, 0]);
+    assert_eq!(&deltas[3..], &nums[3..]);
   }
 }

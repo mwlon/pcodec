@@ -495,10 +495,10 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
 
     let order = self.flags.delta_encoding_order;
+    let raw_unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
     let (unsigneds, bin_meta, table, delta_momentss) = if order == 0 {
-      let unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
       let infos = train_bins(
-        unsigneds.clone(),
+        raw_unsigneds.clone(),
         &self.internal_config,
         &self.flags,
         n,
@@ -507,15 +507,14 @@ impl<T: NumberLike> BaseCompressor<T> {
       let table = CompressionTable::from(infos);
       let bin_metadata = BinMetadata::Simple { bins };
       (
-        unsigneds,
+        raw_unsigneds,
         bin_metadata,
         table,
         vec![DeltaMoments::default(); n_pages],
       )
     } else {
       let page_idxs = cumulative_sum(&page_sizes);
-      let (deltas, momentss) = delta_encoding::nth_order_deltas(nums, order, &page_idxs);
-      let unsigneds = deltas.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
+      let (unsigneds, momentss) = delta_encoding::nth_order_deltas(raw_unsigneds, order, &page_idxs);
       let infos = train_bins(
         unsigneds.clone(),
         &self.internal_config,
