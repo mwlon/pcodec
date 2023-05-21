@@ -1,6 +1,6 @@
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::{UnsignedLike};
+use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -74,10 +74,7 @@ pub fn nth_order_deltas<U: UnsignedLike>(
   (unsigneds, moments)
 }
 
-fn first_order_reconstruct_in_place<U: UnsignedLike>(
-  moment: &mut U,
-  dest: &mut [U],
-) {
+fn first_order_reconstruct_in_place<U: UnsignedLike>(moment: &mut U, dest: &mut [U]) {
   for i in 0..dest.len() {
     let tmp = dest[i];
     dest[i] = *moment;
@@ -85,10 +82,7 @@ fn first_order_reconstruct_in_place<U: UnsignedLike>(
   }
 }
 
-pub fn reconstruct_in_place<U: UnsignedLike>(
-  delta_moments: &mut DeltaMoments<U>,
-  dest: &mut [U],
-) {
+pub fn reconstruct_in_place<U: UnsignedLike>(delta_moments: &mut DeltaMoments<U>, dest: &mut [U]) {
   toggle_center_deltas_in_place(dest);
   for moment in delta_moments.moments.iter_mut().rev() {
     first_order_reconstruct_in_place(moment, dest);
