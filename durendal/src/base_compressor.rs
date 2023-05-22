@@ -492,7 +492,6 @@ impl<T: NumberLike> BaseCompressor<T> {
     let mut unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
     let page_idxs = cumulative_sum(&page_sizes);
     let delta_momentss = delta_encoding::nth_order_deltas(&mut unsigneds, order, &page_idxs);
-    println!("MOMENTS {:?}", delta_momentss);
     let infos = train_bins(
       unsigneds.clone(),
       &self.internal_config,
