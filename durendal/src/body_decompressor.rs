@@ -7,21 +7,16 @@ use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
 use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
-use crate::{delta_encoding, BinMetadata};
+use crate::{delta_encoding, Bin};
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
 #[derive(Clone, Debug)]
-pub enum BodyDecompressor<T: NumberLike> {
-  Simple {
-    num_decompressor: NumDecompressor<T::Unsigned>,
-  },
-  Delta {
-    n: usize,
-    num_decompressor: NumDecompressor<T::Unsigned>,
-    delta_moments: DeltaMoments<T::Unsigned>,
-    n_processed: usize,
-  },
+pub struct BodyDecompressor<T: NumberLike> {
+  num_decompressor: NumDecompressor<T::Unsigned>,
+  n: usize,
+  delta_moments: DeltaMoments<T::Unsigned>,
+  n_processed: usize,
 }
 
 #[inline(never)]
@@ -33,25 +28,21 @@ fn unsigneds_to_nums_in_place<T: NumberLike>(dest: &mut [T::Unsigned]) {
 
 impl<T: NumberLike> BodyDecompressor<T> {
   pub(crate) fn new(
-    bin_metadata: &BinMetadata<T>,
+    bins: &[Bin<T>],
     n: usize,
     compressed_body_size: usize,
     delta_moments: &DeltaMoments<T::Unsigned>,
   ) -> QCompressResult<Self> {
-    Ok(match bin_metadata {
-      BinMetadata::Simple { bins } => Self::Simple {
-        num_decompressor: NumDecompressor::new(n, compressed_body_size, bins.clone())?,
-      },
-      BinMetadata::Delta { bins } => Self::Delta {
-        n,
-        num_decompressor: NumDecompressor::new(
-          n.saturating_sub(delta_moments.order()),
-          compressed_body_size,
-          bins.clone(),
-        )?,
-        delta_moments: delta_moments.clone(),
-        n_processed: 0,
-      },
+    let num_decompressor = NumDecompressor::new(
+      n.saturating_sub(delta_moments.order()),
+      compressed_body_size,
+      bins,
+    )?;
+    Ok(Self {
+      num_decompressor,
+      n,
+      delta_moments: delta_moments.clone(),
+      n_processed: 0,
     })
   }
 
@@ -71,40 +62,32 @@ impl<T: NumberLike> BodyDecompressor<T> {
         dest.len(),
       );
       let u_dest = T::transmute_to_unsigned_slice(&mut dest[progress.n_processed..batch_end]);
-      match self {
-        Self::Simple { num_decompressor } => {
-          let u_progress =
-            num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dest)?;
-          progress += u_progress;
-        }
-        Self::Delta {
-          n,
-          num_decompressor,
-          delta_moments,
-          n_processed,
-        } => {
-          let u_progress =
-            num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dest)?;
-          let batch_size = if u_progress.finished_body {
-            let batch_size = min(
-              min(
-                u_dest.len(),
-                u_progress.n_processed + delta_moments.order(),
-              ),
-              *n - *n_processed,
-            );
-            u_dest[u_progress.n_processed..batch_size].fill(T::Unsigned::ZERO);
-            batch_size
-          } else {
-            u_progress.n_processed
-          };
-          delta_encoding::reconstruct_in_place(delta_moments, u_dest);
-          *n_processed += batch_size;
-          progress.n_processed += batch_size;
-          progress.finished_body = n_processed == n;
-          progress.insufficient_data = u_progress.insufficient_data
-        }
+      let Self {
+        num_decompressor,
+        n,
+        delta_moments,
+        n_processed,
+      } = self;
+      let u_progress =
+        num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dest)?;
+      let batch_size = if u_progress.finished_body {
+        let batch_size = min(
+          min(
+            u_dest.len(),
+            u_progress.n_processed + delta_moments.order(),
+          ),
+          *n - *n_processed,
+        );
+        u_dest[u_progress.n_processed..batch_size].fill(T::Unsigned::ZERO);
+        batch_size
+      } else {
+        u_progress.n_processed
       };
+      delta_encoding::reconstruct_in_place(delta_moments, u_dest);
+      *n_processed += batch_size;
+      progress.n_processed += batch_size;
+      progress.finished_body = n_processed == n;
+      progress.insufficient_data = u_progress.insufficient_data;
 
       unsigneds_to_nums_in_place::<T>(u_dest);
     }
@@ -112,14 +95,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
   }
 
   pub fn bits_remaining(&self) -> usize {
-    match self {
-      Self::Simple {
-        num_decompressor, ..
-      } => num_decompressor.bits_remaining(),
-      Self::Delta {
-        num_decompressor, ..
-      } => num_decompressor.bits_remaining(),
-    }
+    self.num_decompressor.bits_remaining()
   }
 }
 
@@ -128,7 +104,7 @@ mod tests {
   use super::BodyDecompressor;
   use crate::bin::Bin;
   use crate::bits;
-  use crate::chunk_metadata::{BinMetadata, ChunkMetadata};
+  use crate::chunk_metadata::ChunkMetadata;
   use crate::constants::Bitlen;
   use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
@@ -150,25 +126,21 @@ mod tests {
     let metadata_missing_bin = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
-      bin_metadata: BinMetadata::Simple {
-        bins: vec![bin_w_code(vec![false]), bin_w_code(vec![true, false])],
-      },
+      bins: vec![bin_w_code(vec![false]), bin_w_code(vec![true, false])],
     };
     let metadata_duplicating_bin = ChunkMetadata::<i64> {
       n: 2,
       compressed_body_size: 1,
-      bin_metadata: BinMetadata::Simple {
-        bins: vec![
-          bin_w_code(vec![false]),
-          bin_w_code(vec![false]),
-          bin_w_code(vec![true]),
-        ],
-      },
+      bins: vec![
+        bin_w_code(vec![false]),
+        bin_w_code(vec![false]),
+        bin_w_code(vec![true]),
+      ],
     };
 
     for bad_metadata in vec![metadata_missing_bin, metadata_duplicating_bin] {
       let result = BodyDecompressor::new(
-        &bad_metadata.bin_metadata,
+        &bad_metadata.bins,
         bad_metadata.n,
         bad_metadata.compressed_body_size,
         &DeltaMoments::default(),

@@ -113,7 +113,7 @@ impl<T: NumberLike> State<T> {
       })?;
 
     BodyDecompressor::new(
-      &chunk_meta.bin_metadata,
+      &chunk_meta.bins,
       n,
       compressed_body_size,
       &delta_moments,
