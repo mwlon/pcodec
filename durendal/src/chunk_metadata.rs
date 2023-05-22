@@ -6,39 +6,6 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
 use crate::{bits, gcd_utils, Flags};
 
-/// A wrapper for bins in the two cases cases: delta encoded or not.
-///
-/// This is the part of chunk metadata that describes *how* the data was
-/// compressed - the Huffman codes used and what ranges they specify.
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum BinMetadata<T: NumberLike> {
-  /// `Simple` bin metadata corresponds to the case when delta encoding is
-  /// off (`delta_encoding_order` of 0).
-  ///
-  /// It simply contains bins of the same data type being compressed.
-  Simple { bins: Vec<Bin<T>> },
-  /// `Delta` bin metadata corresponds to the case when delta encoding is
-  /// on.
-  ///
-  /// It contains bins of the associated `SignedLike` type (what the
-  /// deltas are expressed as). For instance, a chunk of delta-encoded `f64`s
-  /// with `delta_encoding_order: 1`
-  /// will have bins of type `i64`, where a delta of n indicates a change
-  /// of n * machine epsilon from the last float.
-  #[non_exhaustive]
-  Delta { bins: Vec<Bin<T::Unsigned>> },
-}
-
-impl<T: NumberLike> BinMetadata<T> {
-  pub(crate) fn use_gcd(&self) -> bool {
-    match self {
-      BinMetadata::Simple { bins } => gcd_utils::use_gcd_arithmetic(bins),
-      BinMetadata::Delta { bins } => gcd_utils::use_gcd_arithmetic(bins),
-    }
-  }
-}
-
 /// The metadata of a Quantile-compressed chunk.
 ///
 /// One can also create a rough histogram (or a histogram of deltas, if
@@ -58,7 +25,7 @@ pub struct ChunkMetadata<T: NumberLike> {
   /// Not available in wrapped mode.
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
-  pub bin_metadata: BinMetadata<T>,
+  pub bins: Vec<Bin<T>>,
 }
 
 fn parse_bins<T: NumberLike>(
@@ -146,11 +113,11 @@ fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Fl
 }
 
 impl<T: NumberLike> ChunkMetadata<T> {
-  pub(crate) fn new(n: usize, bin_metadata: BinMetadata<T>) -> Self {
+  pub(crate) fn new(n: usize, bins: Vec<Bin<T>>) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
-      bin_metadata,
+      bins,
     }
   }
 
@@ -164,20 +131,14 @@ impl<T: NumberLike> ChunkMetadata<T> {
       )
     };
 
-    let bin_metadata = if flags.delta_encoding_order == 0 {
-      let bins = parse_bins::<T>(reader, flags, n)?;
-      BinMetadata::Simple { bins }
-    } else {
-      let bins = parse_bins::<T::Unsigned>(reader, flags, n)?;
-      BinMetadata::Delta { bins }
-    };
+    let bins = parse_bins::<T>(reader, flags, n)?;
 
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;
 
     Ok(Self {
       n,
       compressed_body_size,
-      bin_metadata,
+      bins,
     })
   }
 
@@ -189,14 +150,7 @@ impl<T: NumberLike> ChunkMetadata<T> {
         BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
       );
     }
-    match &self.bin_metadata {
-      BinMetadata::Simple { bins } => {
-        write_bins(bins, writer, flags, self.n);
-      }
-      BinMetadata::Delta { bins } => {
-        write_bins(bins, writer, flags, self.n);
-      }
-    }
+    write_bins(&self.bins, writer, flags, self.n);
     writer.finish_byte();
   }
 
