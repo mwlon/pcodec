@@ -3,7 +3,8 @@ use crate::bin::WeightedPrefix;
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
 use crate::data_types::UnsignedLike;
-use crate::{bits, gcd_utils, Flags};
+use crate::{bits, Flags};
+use crate::modes::gcd;
 
 fn bin_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
@@ -59,7 +60,7 @@ pub fn optimize_bins<U: UnsignedLike>(
     1.0; // bit to say there is no run len jumpstart
 
   // determine whether we can skip GCD folding to improve performance in some cases
-  let fold_gcd = gcd_utils::use_gcd_bin_optimize(&bins, internal_config);
+  let fold_gcd = gcd::use_gcd_bin_optimize(&bins, internal_config);
 
   for i in 0..wbins.len() {
     let mut best_cost = f64::MAX;
@@ -75,7 +76,7 @@ pub fn optimize_bins<U: UnsignedLike>(
     for j in (start_j..i + 1).rev() {
       let lower = lower_unsigneds[j];
       if fold_gcd {
-        gcd_utils::fold_bin_gcds_left(
+        gcd::fold_bin_gcds_left(
           lower,
           upper_unsigneds[j],
           gcds[j],
@@ -113,7 +114,7 @@ pub fn optimize_bins<U: UnsignedLike>(
     for (k, p) in bins.iter().enumerate().take(i + 1).skip(j).rev() {
       count += p.count;
       if fold_gcd {
-        gcd_utils::fold_bin_gcds_left(
+        gcd::fold_bin_gcds_left(
           lower_unsigneds[k],
           upper_unsigneds[k],
           p.gcd,

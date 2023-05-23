@@ -5,11 +5,14 @@ use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
-use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
+use crate::modes::gcd::{GcdMode};
 use crate::huffman_decoding::HuffmanTable;
 use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
-use crate::{bits, gcd_utils, run_len_utils, Bin};
+use crate::{Bin, bits, run_len_utils};
+use crate::modes::classic::ClassicMode;
+use crate::modes::gcd;
+use crate::modes::mode::Mode;
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
@@ -136,7 +139,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       .map(max_bits_overshot)
       .max()
       .unwrap_or(Bitlen::MAX);
-    let use_gcd = gcd_utils::use_gcd_arithmetic(&bins);
+    let use_gcd = gcd::use_gcd_arithmetic(&bins);
     let use_run_len = run_len_utils::use_run_len(&bins);
 
     Ok(NumDecompressor {
@@ -161,7 +164,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   }
 
   #[inline]
-  fn unchecked_decompress_num_block<GcdOp: GcdOperator<U>, RunLenOp: RunLenOperator>(
+  fn unchecked_decompress_num_block<GcdOp: Mode<U>, RunLenOp: RunLenOperator>(
     &mut self,
     reader: &mut BitReader,
     dest: &mut [U],
@@ -172,7 +175,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
   // returns count of numbers processed
   #[inline(never)]
-  fn unchecked_decompress_num_blocks<GcdOp: GcdOperator<U>, RunLenOp: RunLenOperator>(
+  fn unchecked_decompress_num_blocks<GcdOp: Mode<U>, RunLenOp: RunLenOperator>(
     &mut self,
     reader: &mut BitReader,
     mut guaranteed_safe_num_blocks: usize,
@@ -376,28 +379,28 @@ impl<U: UnsignedLike> NumDecompressor<U> {
         // don't slow down the tight loops with runtime checks - do these upfront to choose
         // the best compiled tight loop
         match (self.use_gcd, self.use_run_len) {
-          (false, false) => self.unchecked_decompress_num_blocks::<TrivialGcdOp, TrivialRunLenOp>(
+          (false, false) => self.unchecked_decompress_num_blocks::<ClassicMode, TrivialRunLenOp>(
             reader,
             guaranteed_safe_num_blocks,
             batch_size,
             &mut res.n_processed,
             dest,
           ),
-          (false, true) => self.unchecked_decompress_num_blocks::<TrivialGcdOp, GeneralRunLenOp>(
+          (false, true) => self.unchecked_decompress_num_blocks::<ClassicMode, GeneralRunLenOp>(
             reader,
             guaranteed_safe_num_blocks,
             batch_size,
             &mut res.n_processed,
             dest,
           ),
-          (true, false) => self.unchecked_decompress_num_blocks::<GeneralGcdOp, TrivialRunLenOp>(
+          (true, false) => self.unchecked_decompress_num_blocks::<GcdMode, TrivialRunLenOp>(
             reader,
             guaranteed_safe_num_blocks,
             batch_size,
             &mut res.n_processed,
             dest,
           ),
-          (true, true) => self.unchecked_decompress_num_blocks::<GeneralGcdOp, GeneralRunLenOp>(
+          (true, true) => self.unchecked_decompress_num_blocks::<GcdMode, GeneralRunLenOp>(
             reader,
             guaranteed_safe_num_blocks,
             batch_size,

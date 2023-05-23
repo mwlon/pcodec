@@ -3,6 +3,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::base_compressor::InternalCompressorConfig;
 use crate::bin::BinCompressionInfo;
 use crate::Bin;
+use crate::modes::mode::Mode;
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {
@@ -113,27 +114,10 @@ pub fn fold_bin_gcds_left<U: UnsignedLike>(
   }
 }
 
-pub trait GcdOperator<U: UnsignedLike> {
-  fn get_offset(diff: U, gcd: U) -> U;
-  fn get_diff(offset: U, gcd: U) -> U;
-}
-
-pub struct TrivialGcdOp;
-
-pub struct GeneralGcdOp;
-
-// When all bin GCD's are 1
-impl<U: UnsignedLike> GcdOperator<U> for TrivialGcdOp {
-  fn get_offset(diff: U, _: U) -> U {
-    diff
-  }
-  fn get_diff(offset: U, _: U) -> U {
-    offset
-  }
-}
+pub struct GcdMode;
 
 // General case when GCD might not be 1
-impl<U: UnsignedLike> GcdOperator<U> for GeneralGcdOp {
+impl<U: UnsignedLike> Mode<U> for GcdMode {
   fn get_offset(diff: U, gcd: U) -> U {
     diff / gcd
   }
@@ -141,10 +125,9 @@ impl<U: UnsignedLike> GcdOperator<U> for GeneralGcdOp {
     offset * gcd
   }
 }
-
 #[cfg(test)]
 mod tests {
-  use crate::gcd_utils::*;
+  use crate::modes::gcd::*;
 
   #[test]
   fn test_pair_gcd() {

@@ -12,8 +12,11 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
-use crate::{gcd_utils, huffman_encoding, Flags};
+use crate::modes::gcd::{GcdMode};
+use crate::{Flags, huffman_encoding};
+use crate::modes::classic::ClassicMode;
+use crate::modes::gcd;
+use crate::modes::mode::Mode;
 
 struct JumpstartConfiguration {
   weight: usize,
@@ -198,7 +201,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     let lower = sorted[i];
     let upper = sorted[j - 1];
     let gcd = if self.use_gcd {
-      gcd_utils::gcd(&sorted[i..j])
+      gcd::gcd(&sorted[i..j])
     } else {
       U::ONE
     };
@@ -324,13 +327,13 @@ fn trained_compress_body<U: UnsignedLike>(
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   if use_gcd {
-    compress_data_page::<U, GeneralGcdOp>(table, unsigneds, writer)
+    compress_data_page::<U, GcdMode>(table, unsigneds, writer)
   } else {
-    compress_data_page::<U, TrivialGcdOp>(table, unsigneds, writer)
+    compress_data_page::<U, ClassicMode>(table, unsigneds, writer)
   }
 }
 
-fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
+fn compress_data_page<U: UnsignedLike, GcdOp: Mode<U>>(
   table: &CompressionTable<U>,
   unsigneds: &[U],
   writer: &mut BitWriter,
@@ -370,7 +373,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   Ok(())
 }
 
-fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
+fn compress_offset<U: UnsignedLike, GcdOp: Mode<U>>(
   unsigned: U,
   p: &BinCompressionInfo<U>,
   writer: &mut BitWriter,
