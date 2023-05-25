@@ -84,11 +84,28 @@ fn max_bits_overshot<T: NumberLike>(bin: &Bin<T>) -> Bitlen {
 }
 
 #[derive(Clone, Debug)]
-struct State<U: UnsignedLike> {
+pub struct State<U: UnsignedLike> {
   n_processed: usize,
   bits_processed: usize,
   incomplete_bin: BinDecompressionInfo<U>,
   incomplete_reps: usize,
+}
+
+impl<U: UnsignedLike> State<U> {
+  pub fn unchecked_limit_reps(
+    &mut self,
+    bin: BinDecompressionInfo<U>,
+    full_reps: usize,
+    limit: usize,
+  ) -> usize {
+    if full_reps > limit {
+      self.incomplete_bin = bin;
+      self.incomplete_reps = full_reps - limit;
+      limit
+    } else {
+      full_reps
+    }
+  }
 }
 
 // NumDecompressor does the main work of decoding bytes into NumberLikes
@@ -163,7 +180,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     dest: &mut [U],
   ) -> usize {
     let bin = self.huffman_table.unchecked_search_with_reader(reader);
-    RunLenOp::unchecked_decompress_for_bin::<U, M>(self, reader, bin, mode, dest)
+    RunLenOp::unchecked_decompress_for_bin::<U, M>(&mut self.state, reader, bin, mode, dest)
   }
 
   // returns count of numbers processed
@@ -184,21 +201,6 @@ impl<U: UnsignedLike> NumDecompressor<U> {
         &mut dest[*n_processed..batch_size],
       );
       guaranteed_safe_num_blocks -= 1;
-    }
-  }
-
-  pub fn unchecked_limit_reps(
-    &mut self,
-    bin: BinDecompressionInfo<U>,
-    full_reps: usize,
-    limit: usize,
-  ) -> usize {
-    if full_reps > limit {
-      self.state.incomplete_bin = bin;
-      self.state.incomplete_reps = full_reps - limit;
-      limit
-    } else {
-      full_reps
     }
   }
 

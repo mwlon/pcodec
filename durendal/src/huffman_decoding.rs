@@ -62,14 +62,14 @@ impl<U: UnsignedLike> HuffmanTable<U> {
     }
   }
 
-  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> BinDecompressionInfo<U> {
+  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> &BinDecompressionInfo<U> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
       match node {
         HuffmanTable::Leaf(decompression_info) => {
           reader.rewind_bin_overshoot(read_depth - decompression_info.depth);
-          return *decompression_info;
+          return decompression_info;
         }
         HuffmanTable::NonLeaf {
           table_size_log,
