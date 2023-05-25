@@ -60,13 +60,13 @@ impl<U: UnsignedLike> CompressionTable<U> {
     CompressionTable::NonLeaf(children)
   }
 
-  pub fn search(&self, unsigned: U) -> QCompressResult<&BinCompressionInfo<U>> {
+  pub fn search(&self, unsigned: U) -> QCompressResult<BinCompressionInfo<U>> {
     let mut node = self;
     loop {
       match node {
         CompressionTable::Leaf(p) => {
           return if p.contains(unsigned) {
-            Ok(p)
+            Ok(*p)
           } else {
             Err(QCompressError::invalid_argument(format!(
               "chunk compressor was not trained to include number with unsigned value {}",

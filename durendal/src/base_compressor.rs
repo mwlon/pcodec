@@ -16,7 +16,7 @@ use crate::modes::gcd::{GcdMode};
 use crate::{Flags, huffman_encoding};
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd;
-use crate::modes::mode::Mode;
+use crate::modes::Mode;
 
 struct JumpstartConfiguration {
   weight: usize,
@@ -327,15 +327,16 @@ fn trained_compress_body<U: UnsignedLike>(
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   if use_gcd {
-    compress_data_page::<U, GcdMode>(table, unsigneds, writer)
+    compress_data_page::<U, GcdMode>(table, unsigneds, GcdMode, writer)
   } else {
-    compress_data_page::<U, ClassicMode>(table, unsigneds, writer)
+    compress_data_page::<U, ClassicMode>(table, unsigneds, ClassicMode, writer)
   }
 }
 
-fn compress_data_page<U: UnsignedLike, GcdOp: Mode<U>>(
+fn compress_data_page<U: UnsignedLike, M: Mode<U>>(
   table: &CompressionTable<U>,
   unsigneds: &[U],
+  mode: M,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   let mut i = 0;
@@ -345,7 +346,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: Mode<U>>(
     writer.write_usize(bin.code, bin.code_len);
     match bin.run_len_jumpstart {
       None => {
-        compress_offset::<U, GcdOp>(unsigned, bin, writer);
+        mode.compress_offset(unsigned, bin, writer);
         i += 1;
       }
       Some(jumpstart) => {
@@ -363,7 +364,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: Mode<U>>(
         writer.write_varint(reps - 1, jumpstart);
 
         for &unsigned in unsigneds.iter().skip(i).take(reps) {
-          compress_offset::<U, GcdOp>(unsigned, bin, writer);
+          mode.compress_offset(unsigned, bin, writer);
         }
         i += reps;
       }
@@ -371,15 +372,6 @@ fn compress_data_page<U: UnsignedLike, GcdOp: Mode<U>>(
   }
   writer.finish_byte();
   Ok(())
-}
-
-fn compress_offset<U: UnsignedLike, GcdOp: Mode<U>>(
-  unsigned: U,
-  p: &BinCompressionInfo<U>,
-  writer: &mut BitWriter,
-) {
-  let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
-  writer.write_diff(off, p.offset_bits);
 }
 
 #[derive(Clone, Debug)]

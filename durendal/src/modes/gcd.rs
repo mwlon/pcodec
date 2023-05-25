@@ -1,9 +1,33 @@
 use crate::data_types::{NumberLike, UnsignedLike};
 
 use crate::base_compressor::InternalCompressorConfig;
-use crate::bin::BinCompressionInfo;
+use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::Bin;
-use crate::modes::mode::Mode;
+use crate::bit_reader::BitReader;
+use crate::bit_writer::BitWriter;
+use crate::errors::QCompressResult;
+use crate::modes::Mode;
+
+// formula: bin lower + offset * bin gcd
+#[derive(Clone, Copy, Debug)]
+pub struct GcdMode;
+
+impl<U: UnsignedLike> Mode<U> for GcdMode {
+  #[inline]
+  fn compress_offset(&self, u: U, bin: BinCompressionInfo<U>, writer: &mut BitWriter) {
+    writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
+  }
+
+  #[inline]
+  fn unchecked_decompress_unsigned(&self, bin: BinDecompressionInfo<U>, reader: &mut BitReader) -> U {
+    bin.lower_unsigned + reader.unchecked_read_uint(bin.offset_bits) * bin.gcd
+  }
+
+  #[inline]
+  fn decompress_unsigned(&self, bin: BinDecompressionInfo<U>, reader: &mut BitReader) -> QCompressResult<U> {
+    bin.lower_unsigned + reader.read_uint(bin.offset_bits)? * bin.gcd
+  }
+}
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {
@@ -114,17 +138,6 @@ pub fn fold_bin_gcds_left<U: UnsignedLike>(
   }
 }
 
-pub struct GcdMode;
-
-// General case when GCD might not be 1
-impl<U: UnsignedLike> Mode<U> for GcdMode {
-  fn get_offset(diff: U, gcd: U) -> U {
-    diff / gcd
-  }
-  fn get_diff(offset: U, gcd: U) -> U {
-    offset * gcd
-  }
-}
 #[cfg(test)]
 mod tests {
   use crate::modes::gcd::*;

@@ -116,8 +116,8 @@ pub struct BinCompressionInfo<U: UnsignedLike> {
   pub gcd: U,
 }
 
-impl<T: NumberLike> From<&BinCompressionInfo<T::Unsigned>> for Bin<T> {
-  fn from(info: &BinCompressionInfo<T::Unsigned>) -> Self {
+impl<T: NumberLike> From<BinCompressionInfo<T::Unsigned>> for Bin<T> {
+  fn from(info: BinCompressionInfo<T::Unsigned>) -> Self {
     Bin {
       count: info.count,
       code: info.code,
