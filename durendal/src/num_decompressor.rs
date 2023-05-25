@@ -1,5 +1,4 @@
 use std::cmp::{max, min};
-use std::marker::PhantomData;
 
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
@@ -12,7 +11,7 @@ use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
 use crate::{Bin, bits, run_len_utils};
 use crate::modes::classic::ClassicMode;
-use crate::modes::gcd;
+use crate::modes::{DynMode, gcd};
 use crate::modes::Mode;
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
@@ -102,24 +101,13 @@ pub struct NumDecompressor<U: UnsignedLike> {
   max_bits_per_num_block: usize,
   max_overshoot_per_num_block: Bitlen,
   use_run_len: bool,
+  dyn_mode: DynMode,
 
   // mutable state
   state: State<U>,
 }
 
-// errors on insufficient data
-#[inline]
-fn decompress_offset_dirty<U: UnsignedLike>(
-  reader: &mut BitReader,
-  p: BinDecompressionInfo<U>,
-  dest: &mut U,
-) -> QCompressResult<()> {
-  let offset = reader.read_uint::<U>(p.offset_bits)?;
-  *dest = p.lower_unsigned + offset * p.gcd;
-  Ok(())
-}
-
-impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> {
+impl<U: UnsignedLike> NumDecompressor<U> {
   pub(crate) fn new<T: NumberLike<Unsigned = U>>(
     n: usize,
     compressed_body_size: usize,
@@ -140,6 +128,11 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> {
       .max()
       .unwrap_or(Bitlen::MAX);
     let use_run_len = run_len_utils::use_run_len(&bins);
+    let dyn_mode = if gcd::use_gcd_arithmetic(bins) {
+      DynMode::Gcd
+    } else {
+      DynMode::Classic
+    };
 
     Ok(NumDecompressor {
       huffman_table: HuffmanTable::from(bins),
@@ -148,6 +141,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> {
       max_bits_per_num_block,
       max_overshoot_per_num_block,
       use_run_len,
+      dyn_mode,
       state: State {
         n_processed: 0,
         bits_processed: 0,
@@ -271,7 +265,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> {
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
   // State managed here: n_processed, bits_processed
-  pub fn decompress_unsigneds<M: Mode<U>>(
+  fn decompress_unsigneds_with_mode<M: Mode<U>>(
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
@@ -419,5 +413,17 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> {
     }
 
     Ok(res)
+  }
+
+  pub fn decompress_unsigneds(
+    &mut self,
+    reader: &mut BitReader,
+    error_on_insufficient_data: bool,
+    dest: &mut [U],
+  ) -> QCompressResult<Progress> {
+    match self.dyn_mode {
+      DynMode::Gcd => self.decompress_unsigneds_with_mode(reader, error_on_insufficient_data, GcdMode, dest),
+      DynMode::Classic => self.decompress_unsigneds_with_mode(reader, error_on_insufficient_data, ClassicMode, dest),
+    }
   }
 }

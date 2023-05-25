@@ -436,7 +436,7 @@ pub struct BaseCompressor<T: NumberLike> {
 fn bins_from_compression_infos<T: NumberLike>(
   infos: &[BinCompressionInfo<T::Unsigned>],
 ) -> Vec<Bin<T>> {
-  infos.iter().map(Bin::from).collect()
+  infos.iter().cloned().map(Bin::from).collect()
 }
 
 impl<T: NumberLike> BaseCompressor<T> {
@@ -496,7 +496,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     let bins = bins_from_compression_infos(&infos);
     let table = CompressionTable::from(infos);
 
-    let use_gcd = gcd_utils::use_gcd_arithmetic(&bins);
+    let use_gcd = gcd::use_gcd_arithmetic(&bins);
     let meta = ChunkMetadata::new(n, bins);
     meta.write_to(&mut self.writer, &self.flags);
 

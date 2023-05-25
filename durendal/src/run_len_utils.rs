@@ -9,18 +9,10 @@ pub fn use_run_len<T: NumberLike>(bins: &[Bin<T>]) -> bool {
   bins.iter().any(|p| p.run_len_jumpstart.is_some())
 }
 
-fn unchecked_decompress_offset<U: UnsignedLike, GcdOp: Mode<U>>(
-  reader: &mut BitReader,
-  p: BinDecompressionInfo<U>,
-) -> U {
-  let offset = reader.unchecked_read_uint(p.offset_bits);
-  p.lower_unsigned + GcdOp::get_diff(offset, p.gcd)
-}
-
 pub trait RunLenOperator {
   // returns count of numbers processed
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    num_decompressor: &mut NumDecompressor<U, M>,
+    num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     bin: BinDecompressionInfo<U>,
     mode: M,
@@ -35,7 +27,7 @@ pub struct GeneralRunLenOp;
 impl RunLenOperator for GeneralRunLenOp {
   #[inline]
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    num_decompressor: &mut NumDecompressor<U, M>,
+    num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     bin: BinDecompressionInfo<U>,
     mode: M,
@@ -75,7 +67,7 @@ pub struct TrivialRunLenOp;
 impl RunLenOperator for TrivialRunLenOp {
   #[inline]
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    _num_decompressor: &mut NumDecompressor<U, M>,
+    _num_decompressor: &mut NumDecompressor<U>,
     reader: &mut BitReader,
     bin: BinDecompressionInfo<U>,
     mode: M,
