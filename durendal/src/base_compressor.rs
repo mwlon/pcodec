@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use crate::bin::{Bin, BinCompressionInfo, WeightedPrefix};
 use crate::bin_optimization;
 use crate::bit_writer::BitWriter;
-use crate::chunk_metadata::{BinMetadata, ChunkMetadata};
+use crate::chunk_metadata::ChunkMetadata;
 use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -478,48 +478,26 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     let n = nums.len();
     let page_sizes = spec.page_sizes(nums.len())?;
-    let n_pages = page_sizes.len();
 
     if !self.flags.use_wrapped_mode {
       self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
     }
 
     let order = self.flags.delta_encoding_order;
-    let raw_unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
-    let (unsigneds, bin_meta, table, delta_momentss) = if order == 0 {
-      let infos = train_bins(
-        raw_unsigneds.clone(),
-        &self.internal_config,
-        &self.flags,
-        n,
-      )?;
-      let bins = bins_from_compression_infos(&infos);
-      let table = CompressionTable::from(infos);
-      let bin_metadata = BinMetadata::Simple { bins };
-      (
-        raw_unsigneds,
-        bin_metadata,
-        table,
-        vec![DeltaMoments::default(); n_pages],
-      )
-    } else {
-      let page_idxs = cumulative_sum(&page_sizes);
-      let (unsigneds, momentss) =
-        delta_encoding::nth_order_deltas(raw_unsigneds, order, &page_idxs);
-      let infos = train_bins(
-        unsigneds.clone(),
-        &self.internal_config,
-        &self.flags,
-        n,
-      )?;
-      let bins = bins_from_compression_infos(&infos);
-      let table = CompressionTable::from(infos);
-      let bin_metadata = BinMetadata::Delta { bins };
-      (unsigneds, bin_metadata, table, momentss)
-    };
+    let mut unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
+    let page_idxs = cumulative_sum(&page_sizes);
+    let delta_momentss = delta_encoding::nth_order_deltas(&mut unsigneds, order, &page_idxs);
+    let infos = train_bins(
+      unsigneds.clone(),
+      &self.internal_config,
+      &self.flags,
+      n,
+    )?;
+    let bins = bins_from_compression_infos(&infos);
+    let table = CompressionTable::from(infos);
 
-    let use_gcd = bin_meta.use_gcd();
-    let meta = ChunkMetadata::new(n, bin_meta);
+    let use_gcd = gcd_utils::use_gcd_arithmetic(&bins);
+    let meta = ChunkMetadata::new(n, bins);
     meta.write_to(&mut self.writer, &self.flags);
 
     self.state = State::MidChunk(MidChunkInfo {

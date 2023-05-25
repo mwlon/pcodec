@@ -84,8 +84,8 @@ impl<U: UnsignedLike> HuffmanTable<U> {
   }
 }
 
-impl<T: NumberLike> From<&Vec<Bin<T>>> for HuffmanTable<T::Unsigned> {
-  fn from(bins: &Vec<Bin<T>>) -> Self {
+impl<T: NumberLike> From<&[Bin<T>]> for HuffmanTable<T::Unsigned> {
+  fn from(bins: &[Bin<T>]) -> Self {
     if bins.is_empty() {
       HuffmanTable::default()
     } else {
@@ -95,7 +95,7 @@ impl<T: NumberLike> From<&Vec<Bin<T>>> for HuffmanTable<T::Unsigned> {
 }
 
 fn build_from_bins_recursive<T: NumberLike>(
-  bins: &Vec<Bin<T>>,
+  bins: &[Bin<T>],
   depth: Bitlen,
 ) -> HuffmanTable<T::Unsigned> {
   if bins.len() == 1 {

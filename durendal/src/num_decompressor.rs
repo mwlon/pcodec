@@ -101,7 +101,6 @@ pub struct NumDecompressor<U: UnsignedLike> {
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
   max_overshoot_per_num_block: Bitlen,
-  use_gcd: bool,
   use_run_len: bool,
 
   // mutable state
@@ -124,7 +123,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> {
   pub(crate) fn new<T: NumberLike<Unsigned = U>>(
     n: usize,
     compressed_body_size: usize,
-    bins: Vec<Bin<T>>,
+    bins: &[Bin<T>],
   ) -> QCompressResult<Self> {
     if bins.is_empty() && n > 0 {
       return Err(QCompressError::corruption(format!(
@@ -132,7 +131,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> {
         n,
       )));
     }
-    validate_bin_tree(&bins)?;
+    validate_bin_tree(bins)?;
 
     let max_bits_per_num_block = bins.iter().map(max_bits_read).max().unwrap_or(usize::MAX);
     let max_overshoot_per_num_block = bins
@@ -140,16 +139,14 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> {
       .map(max_bits_overshot)
       .max()
       .unwrap_or(Bitlen::MAX);
-    let use_gcd = gcd::use_gcd_arithmetic(&bins);
     let use_run_len = run_len_utils::use_run_len(&bins);
 
     Ok(NumDecompressor {
-      huffman_table: HuffmanTable::from(&bins),
+      huffman_table: HuffmanTable::from(bins),
       n,
       compressed_body_size,
       max_bits_per_num_block,
       max_overshoot_per_num_block,
-      use_gcd,
       use_run_len,
       state: State {
         n_processed: 0,

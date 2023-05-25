@@ -1,4 +1,4 @@
-use crate::chunk_metadata::{BinMetadata, ChunkMetadata};
+use crate::chunk_metadata::ChunkMetadata;
 use crate::data_types::NumberLike;
 use crate::errors::ErrorKind;
 use crate::standalone::{auto_decompress, Compressor};
@@ -39,14 +39,9 @@ fn test_insufficient_data_short_bins() {
   }
 
   let metadata = assert_panic_safe(nums);
-  match metadata.bin_metadata {
-    BinMetadata::Simple { bins } => {
-      assert_eq!(bins.len(), 2);
-      for p in &bins {
-        assert_eq!(p.code_len, 1);
-      }
-    }
-    _ => panic!("expected simple bin info"),
+  assert_eq!(metadata.bins.len(), 2);
+  for p in &metadata.bins {
+    assert_eq!(p.code_len, 1);
   }
 }
 
@@ -58,15 +53,10 @@ fn test_insufficient_data_many_reps() {
   }
 
   let metadata = assert_panic_safe(nums);
-  match metadata.bin_metadata {
-    BinMetadata::Simple { bins } => {
-      assert_eq!(bins.len(), 2);
-      let has_reps = bins.iter().any(|p| p.run_len_jumpstart.is_some());
-      if !has_reps {
-        panic!("expected a bin to have reps");
-      }
-    }
-    _ => panic!("expected simple bin info"),
+  assert_eq!(metadata.bins.len(), 2);
+  let has_reps = metadata.bins.iter().any(|p| p.run_len_jumpstart.is_some());
+  if !has_reps {
+    panic!("expected a bin to have reps");
   }
 }
 
@@ -79,11 +69,6 @@ fn test_insufficient_data_long_offsets() {
   }
 
   let metadata = assert_panic_safe(nums);
-  match metadata.bin_metadata {
-    BinMetadata::Simple { bins } => {
-      assert_eq!(bins.len(), 1);
-      assert_eq!(bins[0].offset_bits, 64);
-    }
-    _ => panic!("expected simple bin info"),
-  }
+  assert_eq!(metadata.bins.len(), 1);
+  assert_eq!(metadata.bins[0].offset_bits, 64);
 }
