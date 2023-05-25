@@ -14,7 +14,7 @@ pub struct GcdMode;
 
 impl<U: UnsignedLike> Mode<U> for GcdMode {
   #[inline]
-  fn compress_offset(&self, u: U, bin: BinCompressionInfo<U>, writer: &mut BitWriter) {
+  fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
     writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
   }
 

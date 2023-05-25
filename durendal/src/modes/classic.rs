@@ -11,7 +11,7 @@ pub struct ClassicMode;
 
 impl<U: UnsignedLike> Mode<U> for ClassicMode {
   #[inline]
-  fn compress_offset(&self, u: U, bin: BinCompressionInfo<U>, writer: &mut BitWriter) {
+  fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
     writer.write_diff(u - bin.lower, bin.offset_bits);
   }
 

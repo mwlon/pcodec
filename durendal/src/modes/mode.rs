@@ -6,12 +6,14 @@ use crate::errors::QCompressResult;
 use std::fmt::Debug;
 
 pub trait Mode<U: UnsignedLike>: Copy + Debug {
-  fn compress_offset(&self, u: U, bin: BinCompressionInfo<U>, writer: &mut BitWriter);
+  fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter);
+
   fn unchecked_decompress_unsigned(
     &self,
     bin: BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> U;
+
   fn decompress_unsigned(
     &self,
     bin: BinDecompressionInfo<U>,
