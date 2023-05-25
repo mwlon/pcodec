@@ -2,8 +2,7 @@ use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::modes::Mode;
-use crate::num_decompressor::NumDecompressor;
-use crate::Bin;
+use crate::{Bin, num_decompressor};
 
 pub fn use_run_len<T: NumberLike>(bins: &[Bin<T>]) -> bool {
   bins.iter().any(|p| p.run_len_jumpstart.is_some())
@@ -12,9 +11,9 @@ pub fn use_run_len<T: NumberLike>(bins: &[Bin<T>]) -> bool {
 pub trait RunLenOperator {
   // returns count of numbers processed
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    num_decompressor: &mut NumDecompressor<U>,
+    state: &mut num_decompressor::State<U>,
     reader: &mut BitReader,
-    bin: BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<U>,
     mode: M,
     dest: &mut [U],
   ) -> usize;
@@ -27,9 +26,9 @@ pub struct GeneralRunLenOp;
 impl RunLenOperator for GeneralRunLenOp {
   #[inline]
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    num_decompressor: &mut NumDecompressor<U>,
+    state: &mut num_decompressor::State<U>,
     reader: &mut BitReader,
-    bin: BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<U>,
     mode: M,
     dest: &mut [U],
   ) -> usize {
@@ -41,7 +40,7 @@ impl RunLenOperator for GeneralRunLenOp {
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = num_decompressor.unchecked_limit_reps(bin, full_reps, dest.len());
+        let reps = state.unchecked_limit_reps(*bin, full_reps, dest.len());
         if bin.offset_bits == 0 {
           for i in 0..reps {
             dest[i] = bin.lower_unsigned;
@@ -67,9 +66,9 @@ pub struct TrivialRunLenOp;
 impl RunLenOperator for TrivialRunLenOp {
   #[inline]
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    _num_decompressor: &mut NumDecompressor<U>,
+    _state: &mut num_decompressor::State<U>,
     reader: &mut BitReader,
-    bin: BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<U>,
     mode: M,
     dest: &mut [U],
   ) -> usize {

@@ -21,7 +21,7 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
   #[inline]
   fn unchecked_decompress_unsigned(
     &self,
-    bin: BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> U {
     bin.lower_unsigned + reader.unchecked_read_uint::<U>(bin.offset_bits) * bin.gcd

@@ -10,7 +10,7 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug {
 
   fn unchecked_decompress_unsigned(
     &self,
-    bin: BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> U;
 
