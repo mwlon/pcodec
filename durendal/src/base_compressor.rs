@@ -12,8 +12,11 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::gcd_utils::{GcdOperator, GeneralGcdOp, TrivialGcdOp};
-use crate::{gcd_utils, huffman_encoding, Flags};
+use crate::modes::classic::ClassicMode;
+use crate::modes::gcd::GcdMode;
+use crate::modes::Mode;
+use crate::modes::{gcd, DynMode};
+use crate::{huffman_encoding, Flags};
 
 struct JumpstartConfiguration {
   weight: usize,
@@ -198,7 +201,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     let lower = sorted[i];
     let upper = sorted[j - 1];
     let gcd = if self.use_gcd {
-      gcd_utils::gcd(&sorted[i..j])
+      gcd::gcd(&sorted[i..j])
     } else {
       U::ONE
     };
@@ -319,20 +322,20 @@ fn train_bins<U: UnsignedLike>(
 
 fn trained_compress_body<U: UnsignedLike>(
   table: &CompressionTable<U>,
-  use_gcd: bool,
+  dyn_mode: DynMode,
   unsigneds: &[U],
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
-  if use_gcd {
-    compress_data_page::<U, GeneralGcdOp>(table, unsigneds, writer)
-  } else {
-    compress_data_page::<U, TrivialGcdOp>(table, unsigneds, writer)
+  match dyn_mode {
+    DynMode::Classic => compress_data_page::<U, ClassicMode>(table, unsigneds, ClassicMode, writer),
+    DynMode::Gcd => compress_data_page::<U, GcdMode>(table, unsigneds, GcdMode, writer),
   }
 }
 
-fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
+fn compress_data_page<U: UnsignedLike, M: Mode<U>>(
   table: &CompressionTable<U>,
   unsigneds: &[U],
+  mode: M,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   let mut i = 0;
@@ -342,7 +345,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
     writer.write_usize(bin.code, bin.code_len);
     match bin.run_len_jumpstart {
       None => {
-        compress_offset::<U, GcdOp>(unsigned, bin, writer);
+        mode.compress_offset(unsigned, bin, writer);
         i += 1;
       }
       Some(jumpstart) => {
@@ -360,7 +363,7 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
         writer.write_varint(reps - 1, jumpstart);
 
         for &unsigned in unsigneds.iter().skip(i).take(reps) {
-          compress_offset::<U, GcdOp>(unsigned, bin, writer);
+          mode.compress_offset(unsigned, bin, writer);
         }
         i += reps;
       }
@@ -370,20 +373,11 @@ fn compress_data_page<U: UnsignedLike, GcdOp: GcdOperator<U>>(
   Ok(())
 }
 
-fn compress_offset<U: UnsignedLike, GcdOp: GcdOperator<U>>(
-  unsigned: U,
-  p: &BinCompressionInfo<U>,
-  writer: &mut BitWriter,
-) {
-  let off = GcdOp::get_offset(unsigned - p.lower, p.gcd);
-  writer.write_diff(off, p.offset_bits);
-}
-
 #[derive(Clone, Debug)]
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
   unsigneds: Vec<U>,
-  use_gcd: bool,
+  dyn_mode: DynMode,
   table: CompressionTable<U>,
   delta_momentss: Vec<DeltaMoments<U>>,
   page_sizes: Vec<usize>,
@@ -441,7 +435,7 @@ pub struct BaseCompressor<T: NumberLike> {
 fn bins_from_compression_infos<T: NumberLike>(
   infos: &[BinCompressionInfo<T::Unsigned>],
 ) -> Vec<Bin<T>> {
-  infos.iter().map(Bin::from).collect()
+  infos.iter().cloned().map(Bin::from).collect()
 }
 
 impl<T: NumberLike> BaseCompressor<T> {
@@ -501,13 +495,17 @@ impl<T: NumberLike> BaseCompressor<T> {
     let bins = bins_from_compression_infos(&infos);
     let table = CompressionTable::from(infos);
 
-    let use_gcd = gcd_utils::use_gcd_arithmetic(&bins);
+    let dyn_mode = if gcd::use_gcd_arithmetic(&bins) {
+      DynMode::Gcd
+    } else {
+      DynMode::Classic
+    };
     let meta = ChunkMetadata::new(n, bins);
     meta.write_to(&mut self.writer, &self.flags);
 
     self.state = State::MidChunk(MidChunkInfo {
       unsigneds,
-      use_gcd,
+      dyn_mode,
       table,
       delta_momentss,
       page_sizes,
@@ -536,7 +534,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       };
       trained_compress_body(
         &info.table,
-        info.use_gcd,
+        info.dyn_mode,
         slice,
         &mut self.writer,
       )?;

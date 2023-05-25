@@ -1,8 +1,41 @@
 use crate::data_types::{NumberLike, UnsignedLike};
 
 use crate::base_compressor::InternalCompressorConfig;
-use crate::bin::BinCompressionInfo;
+use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
+use crate::bit_reader::BitReader;
+use crate::bit_writer::BitWriter;
+use crate::errors::QCompressResult;
+use crate::modes::Mode;
 use crate::Bin;
+
+// formula: bin lower + offset * bin gcd
+#[derive(Clone, Copy, Debug)]
+pub struct GcdMode;
+
+impl<U: UnsignedLike> Mode<U> for GcdMode {
+  #[inline]
+  fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
+    writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
+  }
+
+  #[inline]
+  fn unchecked_decompress_unsigned(
+    &self,
+    bin: BinDecompressionInfo<U>,
+    reader: &mut BitReader,
+  ) -> U {
+    bin.lower_unsigned + reader.unchecked_read_uint::<U>(bin.offset_bits) * bin.gcd
+  }
+
+  #[inline]
+  fn decompress_unsigned(
+    &self,
+    bin: BinDecompressionInfo<U>,
+    reader: &mut BitReader,
+  ) -> QCompressResult<U> {
+    Ok(bin.lower_unsigned + reader.read_uint::<U>(bin.offset_bits)? * bin.gcd)
+  }
+}
 
 // fast if b is small, requires b > 0
 pub fn pair_gcd<U: UnsignedLike>(mut a: U, mut b: U) -> U {
@@ -113,38 +146,9 @@ pub fn fold_bin_gcds_left<U: UnsignedLike>(
   }
 }
 
-pub trait GcdOperator<U: UnsignedLike> {
-  fn get_offset(diff: U, gcd: U) -> U;
-  fn get_diff(offset: U, gcd: U) -> U;
-}
-
-pub struct TrivialGcdOp;
-
-pub struct GeneralGcdOp;
-
-// When all bin GCD's are 1
-impl<U: UnsignedLike> GcdOperator<U> for TrivialGcdOp {
-  fn get_offset(diff: U, _: U) -> U {
-    diff
-  }
-  fn get_diff(offset: U, _: U) -> U {
-    offset
-  }
-}
-
-// General case when GCD might not be 1
-impl<U: UnsignedLike> GcdOperator<U> for GeneralGcdOp {
-  fn get_offset(diff: U, gcd: U) -> U {
-    diff / gcd
-  }
-  fn get_diff(offset: U, gcd: U) -> U {
-    offset * gcd
-  }
-}
-
 #[cfg(test)]
 mod tests {
-  use crate::gcd_utils::*;
+  use crate::modes::gcd::*;
 
   #[test]
   fn test_pair_gcd() {

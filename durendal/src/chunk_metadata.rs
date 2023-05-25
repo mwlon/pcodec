@@ -4,7 +4,8 @@ use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::{bits, gcd_utils, Flags};
+use crate::modes::gcd;
+use crate::{bits, Flags};
 
 /// The metadata of a Quantile-compressed chunk.
 ///
@@ -85,7 +86,7 @@ fn parse_bins<T: NumberLike>(
 fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Flags, n: usize) {
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
-  let maybe_common_gcd = gcd_utils::common_gcd_for_chunk_meta(bins);
+  let maybe_common_gcd = gcd::common_gcd_for_chunk_meta(bins);
   writer.write_one(maybe_common_gcd.is_some());
   if let Some(common_gcd) = maybe_common_gcd {
     writer.write_diff(common_gcd, T::Unsigned::BITS);

@@ -64,9 +64,9 @@ impl<U: UnsignedLike> CompressionTable<U> {
     let mut node = self;
     loop {
       match node {
-        CompressionTable::Leaf(p) => {
-          return if p.contains(unsigned) {
-            Ok(p)
+        CompressionTable::Leaf(info) => {
+          return if info.contains(unsigned) {
+            Ok(info)
           } else {
             Err(QCompressError::invalid_argument(format!(
               "chunk compressor was not trained to include number with unsigned value {}",
