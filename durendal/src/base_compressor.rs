@@ -13,9 +13,9 @@ use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::classic::ClassicMode;
-use crate::modes::gcd;
 use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
+use crate::modes::{gcd, DynMode};
 use crate::{huffman_encoding, Flags};
 
 struct JumpstartConfiguration {
@@ -322,14 +322,13 @@ fn train_bins<U: UnsignedLike>(
 
 fn trained_compress_body<U: UnsignedLike>(
   table: &CompressionTable<U>,
-  use_gcd: bool,
+  dyn_mode: DynMode,
   unsigneds: &[U],
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
-  if use_gcd {
-    compress_data_page::<U, GcdMode>(table, unsigneds, GcdMode, writer)
-  } else {
-    compress_data_page::<U, ClassicMode>(table, unsigneds, ClassicMode, writer)
+  match dyn_mode {
+    DynMode::Classic => compress_data_page::<U, ClassicMode>(table, unsigneds, ClassicMode, writer),
+    DynMode::Gcd => compress_data_page::<U, GcdMode>(table, unsigneds, GcdMode, writer),
   }
 }
 
@@ -378,7 +377,7 @@ fn compress_data_page<U: UnsignedLike, M: Mode<U>>(
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
   unsigneds: Vec<U>,
-  use_gcd: bool,
+  dyn_mode: DynMode,
   table: CompressionTable<U>,
   delta_momentss: Vec<DeltaMoments<U>>,
   page_sizes: Vec<usize>,
@@ -496,13 +495,17 @@ impl<T: NumberLike> BaseCompressor<T> {
     let bins = bins_from_compression_infos(&infos);
     let table = CompressionTable::from(infos);
 
-    let use_gcd = gcd::use_gcd_arithmetic(&bins);
+    let dyn_mode = if gcd::use_gcd_arithmetic(&bins) {
+      DynMode::Gcd
+    } else {
+      DynMode::Classic
+    };
     let meta = ChunkMetadata::new(n, bins);
     meta.write_to(&mut self.writer, &self.flags);
 
     self.state = State::MidChunk(MidChunkInfo {
       unsigneds,
-      use_gcd,
+      dyn_mode,
       table,
       delta_momentss,
       page_sizes,
@@ -531,7 +534,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       };
       trained_compress_body(
         &info.table,
-        info.use_gcd,
+        info.dyn_mode,
         slice,
         &mut self.writer,
       )?;
