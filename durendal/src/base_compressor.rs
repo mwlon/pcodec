@@ -12,11 +12,11 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::modes::gcd::{GcdMode};
-use crate::{Flags, huffman_encoding};
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd;
+use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
+use crate::{huffman_encoding, Flags};
 
 struct JumpstartConfiguration {
   weight: usize,

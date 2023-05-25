@@ -1,9 +1,9 @@
-use crate::Bin;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::modes::Mode;
 use crate::num_decompressor::NumDecompressor;
+use crate::Bin;
 
 pub fn use_run_len<T: NumberLike>(bins: &[Bin<T>]) -> bool {
   bins.iter().any(|p| p.run_len_jumpstart.is_some())

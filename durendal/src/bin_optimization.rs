@@ -3,8 +3,8 @@ use crate::bin::WeightedPrefix;
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
 use crate::data_types::UnsignedLike;
-use crate::{bits, Flags};
 use crate::modes::gcd;
+use crate::{bits, Flags};
 
 fn bin_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,

@@ -16,12 +16,20 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
   }
 
   #[inline]
-  fn unchecked_decompress_unsigned(&self, bin: BinDecompressionInfo<U>, reader: &mut BitReader) -> U {
+  fn unchecked_decompress_unsigned(
+    &self,
+    bin: BinDecompressionInfo<U>,
+    reader: &mut BitReader,
+  ) -> U {
     bin.lower_unsigned + reader.unchecked_read_uint::<U>(bin.offset_bits)
   }
 
   #[inline]
-  fn decompress_unsigned(&self, bin: BinDecompressionInfo<U>, reader: &mut BitReader) -> QCompressResult<U> {
+  fn decompress_unsigned(
+    &self,
+    bin: BinDecompressionInfo<U>,
+    reader: &mut BitReader,
+  ) -> QCompressResult<U> {
     Ok(bin.lower_unsigned + reader.read_uint::<U>(bin.offset_bits)?)
   }
 }

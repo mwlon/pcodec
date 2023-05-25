@@ -5,14 +5,14 @@ use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
-use crate::modes::gcd::{GcdMode};
 use crate::huffman_decoding::HuffmanTable;
+use crate::modes::classic::ClassicMode;
+use crate::modes::gcd::GcdMode;
+use crate::modes::Mode;
+use crate::modes::{gcd, DynMode};
 use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
-use crate::{Bin, bits, run_len_utils};
-use crate::modes::classic::ClassicMode;
-use crate::modes::{DynMode, gcd};
-use crate::modes::Mode;
+use crate::{bits, run_len_utils, Bin};
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
@@ -127,7 +127,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       .map(max_bits_overshot)
       .max()
       .unwrap_or(Bitlen::MAX);
-    let use_run_len = run_len_utils::use_run_len(&bins);
+    let use_run_len = run_len_utils::use_run_len(bins);
     let dyn_mode = if gcd::use_gcd_arithmetic(bins) {
       DynMode::Gcd
     } else {
@@ -274,7 +274,12 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   ) -> QCompressResult<Progress> {
     let initial_reader = reader.clone();
     let initial_state = self.state.clone();
-    let res = self.decompress_unsigneds_dirty(reader, error_on_insufficient_data, mode, dest);
+    let res = self.decompress_unsigneds_dirty(
+      reader,
+      error_on_insufficient_data,
+      mode,
+      dest,
+    );
     match &res {
       Ok(progress) => {
         self.state.n_processed += progress.n_processed;
@@ -351,7 +356,13 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     let incomplete_reps = self.state.incomplete_reps;
     if incomplete_reps > 0 {
       let reps = min(incomplete_reps, batch_size);
-      let incomplete_res = self.decompress_offsets(reader, self.state.incomplete_bin, mode, reps, dest);
+      let incomplete_res = self.decompress_offsets(
+        reader,
+        self.state.incomplete_bin,
+        mode,
+        reps,
+        dest,
+      );
       self.state.incomplete_reps -= reps;
       res.n_processed += reps;
       match incomplete_res {
@@ -403,7 +414,8 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
     // do checked operations for the rest
     while res.n_processed < batch_size {
-      res.n_processed += match self.decompress_num_block(reader, mode, &mut dest[res.n_processed..]) {
+      res.n_processed += match self.decompress_num_block(reader, mode, &mut dest[res.n_processed..])
+      {
         Ok(n_processed) => n_processed,
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => {
           return mark_insufficient(res, e)
@@ -422,8 +434,18 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     dest: &mut [U],
   ) -> QCompressResult<Progress> {
     match self.dyn_mode {
-      DynMode::Gcd => self.decompress_unsigneds_with_mode(reader, error_on_insufficient_data, GcdMode, dest),
-      DynMode::Classic => self.decompress_unsigneds_with_mode(reader, error_on_insufficient_data, ClassicMode, dest),
+      DynMode::Gcd => self.decompress_unsigneds_with_mode(
+        reader,
+        error_on_insufficient_data,
+        GcdMode,
+        dest,
+      ),
+      DynMode::Classic => self.decompress_unsigneds_with_mode(
+        reader,
+        error_on_insufficient_data,
+        ClassicMode,
+        dest,
+      ),
     }
   }
 }

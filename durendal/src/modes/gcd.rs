@@ -2,11 +2,11 @@ use crate::data_types::{NumberLike, UnsignedLike};
 
 use crate::base_compressor::InternalCompressorConfig;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
-use crate::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
+use crate::Bin;
 
 // formula: bin lower + offset * bin gcd
 #[derive(Clone, Copy, Debug)]
@@ -19,12 +19,20 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
   }
 
   #[inline]
-  fn unchecked_decompress_unsigned(&self, bin: BinDecompressionInfo<U>, reader: &mut BitReader) -> U {
+  fn unchecked_decompress_unsigned(
+    &self,
+    bin: BinDecompressionInfo<U>,
+    reader: &mut BitReader,
+  ) -> U {
     bin.lower_unsigned + reader.unchecked_read_uint::<U>(bin.offset_bits) * bin.gcd
   }
 
   #[inline]
-  fn decompress_unsigned(&self, bin: BinDecompressionInfo<U>, reader: &mut BitReader) -> QCompressResult<U> {
+  fn decompress_unsigned(
+    &self,
+    bin: BinDecompressionInfo<U>,
+    reader: &mut BitReader,
+  ) -> QCompressResult<U> {
     Ok(bin.lower_unsigned + reader.read_uint::<U>(bin.offset_bits)? * bin.gcd)
   }
 }

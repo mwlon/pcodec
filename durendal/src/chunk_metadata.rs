@@ -4,8 +4,8 @@ use crate::bit_writer::BitWriter;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::{bits, Flags};
 use crate::modes::gcd;
+use crate::{bits, Flags};
 
 /// The metadata of a Quantile-compressed chunk.
 ///
