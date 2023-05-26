@@ -2,7 +2,7 @@ use crate::Bin;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{UnsignedLike};
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
 

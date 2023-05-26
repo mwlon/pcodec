@@ -1,6 +1,6 @@
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{UnsignedLike};
 use crate::modes::Mode;
 use crate::{Bin, num_decompressor};
 

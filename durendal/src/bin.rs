@@ -2,8 +2,8 @@ use std::fmt::{Display, Formatter};
 
 use crate::bits;
 use crate::constants::Bitlen;
-use crate::data_types::{NumberLike, UnsignedLike};
-use crate::modes::{Mode};
+use crate::data_types::{UnsignedLike};
+
 
 /// A pairing of a Huffman code with a numerical range.
 ///

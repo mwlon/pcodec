@@ -74,13 +74,6 @@ impl BitWriter {
     self.j += 1;
   }
 
-  /// Appends the bits to the writer.
-  pub fn write(&mut self, bs: &[bool]) {
-    for &b in bs {
-      self.write_one(b);
-    }
-  }
-
   pub fn write_usize(&mut self, mut x: usize, n: Bitlen) {
     if n == 0 {
       return;

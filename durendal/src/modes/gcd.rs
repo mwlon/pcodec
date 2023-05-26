@@ -7,7 +7,7 @@ use crate::bit_writer::BitWriter;
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
 use crate::Bin;
-use crate::constants::Bitlen;
+
 
 // formula: bin lower + offset * bin gcd
 #[derive(Clone, Copy, Debug)]
