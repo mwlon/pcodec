@@ -1,4 +1,4 @@
-use crate::data_types::{UnsignedLike};
+use crate::data_types::UnsignedLike;
 
 use crate::base_compressor::InternalCompressorConfig;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
@@ -7,7 +7,6 @@ use crate::bit_writer::BitWriter;
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
 use crate::Bin;
-
 
 // formula: bin lower + offset * bin gcd
 #[derive(Clone, Copy, Debug)]
@@ -19,7 +18,7 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
     writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
   }
 
-    fn make_decompression_info(bin: &Bin<U>) -> BinDecompressionInfo<U> {
+  fn make_decompression_info(bin: &Bin<U>) -> BinDecompressionInfo<U> {
     BinDecompressionInfo {
       depth: bin.code_len,
       run_len_jumpstart: bin.run_len_jumpstart,
@@ -130,9 +129,7 @@ pub fn use_gcd_bin_optimize<U: UnsignedLike>(
 }
 
 pub fn use_gcd_arithmetic<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
-  bins
-    .iter()
-    .any(|p| p.gcd > U::ONE && p.offset_bits > 0)
+  bins.iter().any(|p| p.gcd > U::ONE && p.offset_bits > 0)
 }
 
 pub fn fold_bin_gcds_left<U: UnsignedLike>(

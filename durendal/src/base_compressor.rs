@@ -13,11 +13,11 @@ use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::classic::ClassicMode;
+use crate::modes::float_mult::FloatMultMode;
 use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
 use crate::modes::{gcd, DynMode};
 use crate::{huffman_encoding, Flags};
-use crate::modes::float_mult::FloatMultMode;
 
 struct JumpstartConfiguration {
   weight: usize,
@@ -330,7 +330,12 @@ fn trained_compress_body<U: UnsignedLike>(
   match dyn_mode {
     DynMode::Classic => compress_data_page::<U, ClassicMode>(table, unsigneds, ClassicMode, writer),
     DynMode::Gcd => compress_data_page::<U, GcdMode>(table, unsigneds, GcdMode, writer),
-    DynMode::FloatMult(ratio) => compress_data_page::<U, _>(table, unsigneds, FloatMultMode::new(ratio), writer),
+    DynMode::FloatMult(ratio) => compress_data_page::<U, _>(
+      table,
+      unsigneds,
+      FloatMultMode::new(ratio),
+      writer,
+    ),
   }
 }
 
@@ -434,9 +439,7 @@ pub struct BaseCompressor<T: NumberLike> {
   pub state: State<T::Unsigned>,
 }
 
-fn bins_from_compression_infos<U: UnsignedLike>(
-  infos: &[BinCompressionInfo<U>],
-) -> Vec<Bin<U>> {
+fn bins_from_compression_infos<U: UnsignedLike>(infos: &[BinCompressionInfo<U>]) -> Vec<Bin<U>> {
   infos.iter().cloned().map(Bin::from).collect()
 }
 

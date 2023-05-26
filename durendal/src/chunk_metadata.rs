@@ -2,7 +2,7 @@ use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::*;
-use crate::data_types::{UnsignedLike};
+use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::gcd;
 use crate::{bits, Flags};
@@ -80,7 +80,7 @@ fn parse_bins<U: UnsignedLike>(
       gcd,
       float_mult_base: U::ZERO,
       adj_bits: 0,
-      adj_base: U::ZERO
+      adj_base: U::ZERO,
     });
   }
   Ok(bins)

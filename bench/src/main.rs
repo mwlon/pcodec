@@ -30,7 +30,7 @@ struct Opt {
   pub no_assertions: bool,
 }
 
-trait NumberLike: QNumberLike{
+trait NumberLike: QNumberLike {
   type Durendal: DNumberLike;
   const SUPPORTS_DUR: bool;
 
@@ -52,7 +52,7 @@ macro_rules! impl_dur_number_like {
         unsafe { std::mem::transmute(v) }
       }
     }
-  }
+  };
 }
 
 macro_rules! impl_non_dur_number_like {
@@ -69,7 +69,7 @@ macro_rules! impl_non_dur_number_like {
         panic!()
       }
     }
-  }
+  };
 }
 
 impl_dur_number_like!(i64, i64);
@@ -228,7 +228,8 @@ fn compress_dur<T: DNumberLike>(nums: &[T], config: durendal::CompressorConfig) 
 }
 
 fn decompress_dur<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
-  let v = durendal::standalone::auto_decompress::<T::Durendal>(bytes).expect("could not decompress");
+  let v =
+    durendal::standalone::auto_decompress::<T::Durendal>(bytes).expect("could not decompress");
   T::vec_from_durendal(v)
 }
 
@@ -253,7 +254,8 @@ fn compress<T: NumberLike>(
       let dur_nums = T::slice_to_durendal(nums);
       if conf.delta_encoding_order == AUTO_DELTA {
         conf.delta_encoding_order =
-          durendal::standalone::auto_compressor_config(dur_nums, conf.compression_level).delta_encoding_order;
+          durendal::standalone::auto_compressor_config(dur_nums, conf.compression_level)
+            .delta_encoding_order;
       }
       *dur_conf = conf.clone();
       compress_dur(dur_nums, conf)
@@ -398,14 +400,21 @@ fn stats_iter<T: NumberLike>(
   }
 }
 
-fn handle<T: NumberLike>(path: &Path, config: &MultiCompressorConfig, opt: &Opt) -> Option<BenchStat> {
+fn handle<T: NumberLike>(
+  path: &Path,
+  config: &MultiCompressorConfig,
+  opt: &Opt,
+) -> Option<BenchStat> {
   let dataset = basename_no_ext(path);
   match config {
     MultiCompressorConfig::Durendal(_) if !T::SUPPORTS_DUR => {
-      println!("Skipping {} for Durendal; unsupported dtype", dataset);
+      println!(
+        "Skipping {} for Durendal; unsupported dtype",
+        dataset
+      );
       return None;
     }
-    _ => ()
+    _ => (),
   };
 
   let precomputed = warmup_iter::<T>(path, &dataset, config, opt);
@@ -479,7 +488,8 @@ fn main() {
   let opt: Opt = Opt::from_args();
 
   let files = fs::read_dir(format!("{}/binary", BASE_DIR)).expect("couldn't read");
-  let mut paths = files.into_iter()
+  let mut paths = files
+    .into_iter()
     .map(|f| f.unwrap().path())
     .collect::<Vec<_>>();
   paths.sort();
@@ -489,7 +499,9 @@ fn main() {
   let mut stats = Vec::new();
   for path in paths {
     let path_str = path.to_str().unwrap();
-    let keep = datasets.iter().any(|dataset| path_str.contains(dataset) || dataset == "all");
+    let keep = datasets
+      .iter()
+      .any(|dataset| path_str.contains(dataset) || dataset == "all");
     if !keep {
       continue;
     }

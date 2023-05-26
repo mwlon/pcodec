@@ -1,6 +1,6 @@
 pub mod classic;
-pub mod gcd;
 pub mod float_mult;
+pub mod gcd;
 
 mod mode;
 pub use mode::*;

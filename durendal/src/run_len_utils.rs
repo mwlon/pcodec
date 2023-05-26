@@ -1,8 +1,8 @@
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::data_types::{UnsignedLike};
+use crate::data_types::UnsignedLike;
 use crate::modes::Mode;
-use crate::{Bin, num_decompressor};
+use crate::{num_decompressor, Bin};
 
 pub fn use_run_len<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
   bins.iter().any(|p| p.run_len_jumpstart.is_some())

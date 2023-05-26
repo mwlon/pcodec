@@ -1,11 +1,7 @@
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
-
-
 use crate::constants::Bitlen;
-
-
 
 mod floats;
 mod signeds;
@@ -50,7 +46,7 @@ pub trait UnsignedLike:
   const MAX: Self;
   const BITS: Bitlen;
 
-  type Float: FloatLike + NumberLike<Unsigned=Self>;
+  type Float: FloatLike + NumberLike<Unsigned = Self>;
 
   /// Converts a `usize` into this type. Panics if the conversion is
   /// impossible.

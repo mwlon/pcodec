@@ -1,10 +1,10 @@
-use crate::Bin;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::{UnsignedLike};
+use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
+use crate::Bin;
 
 // formula: bin lower + offset
 #[derive(Clone, Copy, Debug)]
@@ -16,7 +16,7 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
     writer.write_diff(u - bin.lower, bin.offset_bits);
   }
 
-    fn make_decompression_info(bin: &Bin<U>) -> BinDecompressionInfo<U> {
+  fn make_decompression_info(bin: &Bin<U>) -> BinDecompressionInfo<U> {
     BinDecompressionInfo {
       depth: bin.code_len,
       run_len_jumpstart: bin.run_len_jumpstart,

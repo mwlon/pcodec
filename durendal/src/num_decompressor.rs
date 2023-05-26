@@ -3,17 +3,17 @@ use std::cmp::{max, min};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
-use crate::data_types::{UnsignedLike};
+use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
 use crate::modes::classic::ClassicMode;
+use crate::modes::float_mult::FloatMultMode;
 use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
 use crate::modes::{gcd, DynMode};
 use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
 use crate::{bits, run_len_utils, Bin};
-use crate::modes::float_mult::FloatMultMode;
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
@@ -147,9 +147,15 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       .unwrap_or(Bitlen::MAX);
     let use_run_len = run_len_utils::use_run_len(bins);
     let (dyn_mode, huffman_table) = if gcd::use_gcd_arithmetic(bins) {
-      (DynMode::Gcd,HuffmanTable::from_bins::<GcdMode>(bins))
+      (
+        DynMode::Gcd,
+        HuffmanTable::from_bins::<GcdMode>(bins),
+      )
     } else {
-      (DynMode::Classic,HuffmanTable::from_bins::<ClassicMode>(bins))
+      (
+        DynMode::Classic,
+        HuffmanTable::from_bins::<ClassicMode>(bins),
+      )
     };
 
     Ok(NumDecompressor {
@@ -333,9 +339,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
     // treating this case (constant data) as special improves its performance
     if self.max_bits_per_num_block == 0 {
-      let constant_bin = self
-        .huffman_table
-        .unchecked_search_with_reader(reader);
+      let constant_bin = self.huffman_table.unchecked_search_with_reader(reader);
       let constant = mode.decompress_unsigned(constant_bin, reader)?;
       dest[0..batch_size].fill(constant);
       res.n_processed = batch_size;
@@ -454,7 +458,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
         error_on_insufficient_data,
         FloatMultMode::new(ratio),
         dest,
-      )
+      ),
     }
   }
 }
