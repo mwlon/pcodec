@@ -2,13 +2,15 @@ use crate::constants::Bitlen;
 use crate::data_types::{NumberLike, UnsignedLike};
 
 macro_rules! impl_unsigned {
-  ($t: ty) => {
+  ($t: ty, $float: ty) => {
     impl UnsignedLike for $t {
       const ZERO: Self = 0;
       const ONE: Self = 1;
       const MID: Self = 1 << (Self::BITS - 1);
       const MAX: Self = Self::MAX;
       const BITS: Bitlen = Self::BITS as Bitlen;
+
+      type Float = $float;
 
       #[inline]
       fn from_word(word: usize) -> Self {
@@ -36,15 +38,25 @@ macro_rules! impl_unsigned {
       fn wrapping_sub(self, other: Self) -> Self {
         self.wrapping_sub(other)
       }
+
+      #[inline]
+      fn to_float(self) -> Self::Float {
+        self as Self::Float
+      }
+
+      #[inline]
+      fn from_float_bits(float: Self::Float) -> Self {
+        float.to_bits()
+      }
     }
   };
 }
 
-impl_unsigned!(u32);
-impl_unsigned!(u64);
+impl_unsigned!(u32, f32);
+impl_unsigned!(u64, f64);
 
 macro_rules! impl_unsigned_number {
-  ($t: ty, $signed: ty, $header_byte: expr) => {
+  ($t: ty, $signed: ty, $float: ty, $header_byte: expr) => {
     impl NumberLike for $t {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = Self::BITS as usize;
@@ -74,5 +86,5 @@ macro_rules! impl_unsigned_number {
   };
 }
 
-impl_unsigned_number!(u32, i32, 4);
-impl_unsigned_number!(u64, i64, 2);
+impl_unsigned_number!(u32, i32, f32, 4);
+impl_unsigned_number!(u64, i64, f64, 2);

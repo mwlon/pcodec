@@ -11,6 +11,11 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
+pub trait FloatLike: Copy + Debug + Mul<Output = Self> {
+  fn inv(self) -> Self;
+  fn round(self) -> Self;
+}
+
 /// Trait for data types that behave like unsigned integers.
 ///
 /// This is used extensively in `q_compress` to guarantee that bitwise
@@ -45,6 +50,8 @@ pub trait UnsignedLike:
   const MAX: Self;
   const BITS: Bitlen;
 
+  type Float: FloatLike + NumberLike<Unsigned=Self>;
+
   /// Converts a `usize` into this type. Panics if the conversion is
   /// impossible.
   fn from_word(word: usize) -> Self;
@@ -76,6 +83,10 @@ pub trait UnsignedLike:
   fn wrapping_add(self, other: Self) -> Self;
 
   fn wrapping_sub(self, other: Self) -> Self;
+
+  fn to_float(self) -> Self::Float;
+
+  fn from_float_bits(float: Self::Float) -> Self;
 }
 
 /// Trait for data types supported for compression/decompression.
@@ -127,16 +138,6 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// Used during decompression to convert back from an unsigned integer in a
   /// way that preserves ordering.
   fn from_unsigned(off: Self::Unsigned) -> Self;
-
-  fn write_to(self, writer: &mut BitWriter) {
-    writer.write_diff(self.to_unsigned(), Self::Unsigned::BITS)
-  }
-
-  fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    Ok(Self::from_unsigned(
-      reader.read_uint(Self::Unsigned::BITS)?,
-    ))
-  }
 
   // These transmute functions do not preserve ordering.
   // Their purpose is to allow certain operations in-place, relying on the fact

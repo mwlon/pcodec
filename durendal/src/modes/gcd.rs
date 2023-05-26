@@ -1,4 +1,4 @@
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{UnsignedLike};
 
 use crate::base_compressor::InternalCompressorConfig;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
@@ -7,6 +7,7 @@ use crate::bit_writer::BitWriter;
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
 use crate::Bin;
+use crate::constants::Bitlen;
 
 // formula: bin lower + offset * bin gcd
 #[derive(Clone, Copy, Debug)]
@@ -18,22 +19,33 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
     writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
   }
 
+    fn make_decompression_info(bin: &Bin<U>) -> BinDecompressionInfo<U> {
+    BinDecompressionInfo {
+      depth: bin.code_len,
+      run_len_jumpstart: bin.run_len_jumpstart,
+      unsigned0: bin.lower,
+      unsigned1: bin.gcd,
+      bitlen0: bin.offset_bits,
+      bitlen1: 0,
+    }
+  }
+
   #[inline]
   fn unchecked_decompress_unsigned(
     &self,
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> U {
-    bin.lower_unsigned + reader.unchecked_read_uint::<U>(bin.offset_bits) * bin.gcd
+    bin.unsigned0 + reader.unchecked_read_uint::<U>(bin.bitlen0) * bin.unsigned1
   }
 
   #[inline]
   fn decompress_unsigned(
     &self,
-    bin: BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> QCompressResult<U> {
-    Ok(bin.lower_unsigned + reader.read_uint::<U>(bin.offset_bits)? * bin.gcd)
+    Ok(bin.unsigned0 + reader.read_uint::<U>(bin.bitlen0)? * bin.unsigned1)
   }
 }
 
@@ -74,14 +86,14 @@ pub fn gcd<U: UnsignedLike>(sorted: &[U]) -> U {
 // * all bins have range 0, i.e. [x, x]: GCD doesn't affect num blocks, return Some(1)
 // * all bins with range >0 have same GCD: return Some(that GCD)
 // * two bins with range >0 have different GCD: return None
-pub fn common_gcd_for_chunk_meta<T: NumberLike>(bins: &[Bin<T>]) -> Option<T::Unsigned> {
+pub fn common_gcd_for_chunk_meta<U: UnsignedLike>(bins: &[Bin<U>]) -> Option<U> {
   let mut nontrivial_ranges_share_gcd: bool = true;
   let mut gcd = None;
-  for p in bins {
-    if p.offset_bits > 0 {
+  for bin in bins {
+    if bin.offset_bits > 0 {
       if gcd.is_none() {
-        gcd = Some(p.gcd);
-      } else if gcd != Some(p.gcd) {
+        gcd = Some(bin.gcd);
+      } else if gcd != Some(bin.gcd) {
         nontrivial_ranges_share_gcd = false;
       }
     }
@@ -91,7 +103,7 @@ pub fn common_gcd_for_chunk_meta<T: NumberLike>(bins: &[Bin<T>]) -> Option<T::Un
     (0, _, _) => None,
     (_, false, _) => None,
     (_, true, Some(gcd)) => Some(gcd),
-    (_, _, None) => Some(T::Unsigned::ONE),
+    (_, _, None) => Some(U::ONE),
   }
 }
 
@@ -117,10 +129,10 @@ pub fn use_gcd_bin_optimize<U: UnsignedLike>(
   false
 }
 
-pub fn use_gcd_arithmetic<T: NumberLike>(bins: &[Bin<T>]) -> bool {
+pub fn use_gcd_arithmetic<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
   bins
     .iter()
-    .any(|p| p.gcd > T::Unsigned::ONE && p.offset_bits > 0)
+    .any(|p| p.gcd > U::ONE && p.offset_bits > 0)
 }
 
 pub fn fold_bin_gcds_left<U: UnsignedLike>(

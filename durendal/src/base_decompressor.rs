@@ -32,7 +32,7 @@ impl Default for DecompressorConfig {
 pub struct State<T: NumberLike> {
   pub bit_idx: usize,
   pub flags: Option<Flags>,
-  pub chunk_meta: Option<ChunkMetadata<T>>,
+  pub chunk_meta: Option<ChunkMetadata<T::Unsigned>>,
   pub body_decompressor: Option<BodyDecompressor<T>>,
   pub terminated: bool,
 }
@@ -80,7 +80,7 @@ impl<T: NumberLike> State<T> {
   pub fn chunk_meta_option_dirty(
     &self,
     reader: &mut BitReader,
-  ) -> QCompressResult<Option<ChunkMetadata<T>>> {
+  ) -> QCompressResult<Option<ChunkMetadata<T::Unsigned>>> {
     let magic_byte = reader.read_aligned_bytes(1)?[0];
     if magic_byte == MAGIC_TERMINATION_BYTE {
       return Ok(None);
@@ -91,7 +91,7 @@ impl<T: NumberLike> State<T> {
       )));
     }
 
-    ChunkMetadata::<T>::parse_from(reader, self.flags.as_ref().unwrap()).map(Some)
+    ChunkMetadata::<T::Unsigned>::parse_from(reader, self.flags.as_ref().unwrap()).map(Some)
   }
 
   pub fn new_body_decompressor(

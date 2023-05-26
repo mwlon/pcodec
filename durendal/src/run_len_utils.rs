@@ -4,7 +4,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::modes::Mode;
 use crate::{Bin, num_decompressor};
 
-pub fn use_run_len<T: NumberLike>(bins: &[Bin<T>]) -> bool {
+pub fn use_run_len<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
   bins.iter().any(|p| p.run_len_jumpstart.is_some())
 }
 
@@ -41,14 +41,8 @@ impl RunLenOperator for GeneralRunLenOp {
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
         let reps = state.unchecked_limit_reps(*bin, full_reps, dest.len());
-        if bin.offset_bits == 0 {
-          for i in 0..reps {
-            dest[i] = bin.lower_unsigned;
-          }
-        } else {
-          for i in 0..reps {
-            dest[i] = mode.unchecked_decompress_unsigned(bin, reader);
-          }
+        for i in 0..reps {
+          dest[i] = mode.unchecked_decompress_unsigned(bin, reader);
         }
         reps
       }

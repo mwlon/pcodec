@@ -13,10 +13,11 @@ use crate::modes::{gcd, DynMode};
 use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
 use crate::{bits, run_len_utils, Bin};
+use crate::modes::float_mult::FloatMultMode;
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
-fn validate_bin_tree<T: NumberLike>(bins: &[Bin<T>]) -> QCompressResult<()> {
+fn validate_bin_tree<U: UnsignedLike>(bins: &[Bin<U>]) -> QCompressResult<()> {
   if bins.is_empty() {
     return Ok(());
   }
@@ -60,7 +61,7 @@ fn validate_bin_tree<T: NumberLike>(bins: &[Bin<T>]) -> QCompressResult<()> {
 
 // For the bin, the maximum number of bits we might need to read.
 // Helps decide whether to do checked or unchecked reads.
-fn max_bits_read<T: NumberLike>(bin: &Bin<T>) -> usize {
+fn max_bits_read<U: UnsignedLike>(bin: &Bin<U>) -> usize {
   let bin_bits = bin.code_len;
   let (max_reps, max_jumpstart_bits) = match bin.run_len_jumpstart {
     None => (1, 0),
@@ -75,7 +76,7 @@ fn max_bits_read<T: NumberLike>(bin: &Bin<T>) -> usize {
 // Helps decide whether to do checked or unchecked reads.
 // We could make a slightly tighter bound with more logic, but I don't think there
 // are any cases where it would help much.
-fn max_bits_overshot<T: NumberLike>(bin: &Bin<T>) -> Bitlen {
+fn max_bits_overshot<U: UnsignedLike>(bin: &Bin<U>) -> Bitlen {
   if bin.code_len == 0 {
     0
   } else {
@@ -118,17 +119,17 @@ pub struct NumDecompressor<U: UnsignedLike> {
   max_bits_per_num_block: usize,
   max_overshoot_per_num_block: Bitlen,
   use_run_len: bool,
-  dyn_mode: DynMode,
+  dyn_mode: DynMode<U>,
 
   // mutable state
   state: State<U>,
 }
 
 impl<U: UnsignedLike> NumDecompressor<U> {
-  pub(crate) fn new<T: NumberLike<Unsigned = U>>(
+  pub(crate) fn new(
     n: usize,
     compressed_body_size: usize,
-    bins: &[Bin<T>],
+    bins: &[Bin<U>],
   ) -> QCompressResult<Self> {
     if bins.is_empty() && n > 0 {
       return Err(QCompressError::corruption(format!(
@@ -145,14 +146,14 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       .max()
       .unwrap_or(Bitlen::MAX);
     let use_run_len = run_len_utils::use_run_len(bins);
-    let dyn_mode = if gcd::use_gcd_arithmetic(bins) {
-      DynMode::Gcd
+    let (dyn_mode, huffman_table) = if gcd::use_gcd_arithmetic(bins) {
+      (DynMode::Gcd,HuffmanTable::from_bins::<GcdMode>(bins))
     } else {
-      DynMode::Classic
+      (DynMode::Classic,HuffmanTable::from_bins::<ClassicMode>(bins))
     };
 
     Ok(NumDecompressor {
-      huffman_table: HuffmanTable::from(bins),
+      huffman_table,
       n,
       compressed_body_size,
       max_bits_per_num_block,
@@ -233,7 +234,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
           reader.seek_to(start_bit_idx);
         }
         let full_reps = full_reps_minus_one_res? + 1;
-        self.state.incomplete_bin = bin;
+        self.state.incomplete_bin = *bin;
         self.state.incomplete_reps = full_reps;
         let reps = min(full_reps, dest.len());
         self.decompress_offsets(reader, bin, mode, reps, dest)?;
@@ -248,7 +249,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   fn decompress_offsets<M: Mode<U>>(
     &self,
     reader: &mut BitReader,
-    bin: BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<U>,
     mode: M,
     reps: usize,
     dest: &mut [U],
@@ -332,11 +333,11 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
     // treating this case (constant data) as special improves its performance
     if self.max_bits_per_num_block == 0 {
-      let constant_num = self
+      let constant_bin = self
         .huffman_table
-        .unchecked_search_with_reader(reader)
-        .lower_unsigned;
-      dest[0..batch_size].fill(constant_num);
+        .unchecked_search_with_reader(reader);
+      let constant = mode.decompress_unsigned(constant_bin, reader)?;
+      dest[0..batch_size].fill(constant);
       res.n_processed = batch_size;
       return Ok(res);
     }
@@ -360,7 +361,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       let reps = min(incomplete_reps, batch_size);
       let incomplete_res = self.decompress_offsets(
         reader,
-        self.state.incomplete_bin,
+        &self.state.incomplete_bin,
         mode,
         reps,
         dest,
@@ -448,6 +449,12 @@ impl<U: UnsignedLike> NumDecompressor<U> {
         ClassicMode,
         dest,
       ),
+      DynMode::FloatMult(ratio) => self.decompress_unsigneds_with_mode(
+        reader,
+        error_on_insufficient_data,
+        FloatMultMode::new(ratio),
+        dest,
+      )
     }
   }
 }

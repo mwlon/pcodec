@@ -68,7 +68,7 @@ impl<T: NumberLike> Compressor<T> {
   ///
   /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
   /// The chunk body encodes the numbers passed in here.
-  pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T>> {
+  pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
     let pre_meta_bit_idx = self.0.writer.bit_size();
     let mut meta = self
       .0

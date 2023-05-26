@@ -17,6 +17,7 @@ use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
 use crate::modes::{gcd, DynMode};
 use crate::{huffman_encoding, Flags};
+use crate::modes::float_mult::FloatMultMode;
 
 struct JumpstartConfiguration {
   weight: usize,
@@ -322,13 +323,14 @@ fn train_bins<U: UnsignedLike>(
 
 fn trained_compress_body<U: UnsignedLike>(
   table: &CompressionTable<U>,
-  dyn_mode: DynMode,
+  dyn_mode: DynMode<U>,
   unsigneds: &[U],
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   match dyn_mode {
     DynMode::Classic => compress_data_page::<U, ClassicMode>(table, unsigneds, ClassicMode, writer),
     DynMode::Gcd => compress_data_page::<U, GcdMode>(table, unsigneds, GcdMode, writer),
+    DynMode::FloatMult(ratio) => compress_data_page::<U, _>(table, unsigneds, FloatMultMode::new(ratio), writer),
   }
 }
 
@@ -377,7 +379,7 @@ fn compress_data_page<U: UnsignedLike, M: Mode<U>>(
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
   unsigneds: Vec<U>,
-  dyn_mode: DynMode,
+  dyn_mode: DynMode<U>,
   table: CompressionTable<U>,
   delta_momentss: Vec<DeltaMoments<U>>,
   page_sizes: Vec<usize>,
@@ -432,9 +434,9 @@ pub struct BaseCompressor<T: NumberLike> {
   pub state: State<T::Unsigned>,
 }
 
-fn bins_from_compression_infos<T: NumberLike>(
-  infos: &[BinCompressionInfo<T::Unsigned>],
-) -> Vec<Bin<T>> {
+fn bins_from_compression_infos<U: UnsignedLike>(
+  infos: &[BinCompressionInfo<U>],
+) -> Vec<Bin<U>> {
   infos.iter().cloned().map(Bin::from).collect()
 }
 
@@ -464,7 +466,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     &mut self,
     nums: &[T],
     spec: &ChunkSpec,
-  ) -> QCompressResult<ChunkMetadata<T>> {
+  ) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
     if !matches!(self.state, State::StartOfChunk) {
       return Err(self.state.wrong_step_err("chunk metadata"));
     }

@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
 use crate::constants::UNSIGNED_BATCH_SIZE;
@@ -17,6 +18,7 @@ pub struct BodyDecompressor<T: NumberLike> {
   n: usize,
   delta_moments: DeltaMoments<T::Unsigned>,
   n_processed: usize,
+  phantom: PhantomData<T>,
 }
 
 #[inline(never)]
@@ -28,7 +30,7 @@ fn unsigneds_to_nums_in_place<T: NumberLike>(dest: &mut [T::Unsigned]) {
 
 impl<T: NumberLike> BodyDecompressor<T> {
   pub(crate) fn new(
-    bins: &[Bin<T>],
+    bins: &[Bin<T::Unsigned>],
     n: usize,
     compressed_body_size: usize,
     delta_moments: &DeltaMoments<T::Unsigned>,
@@ -43,6 +45,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
       n,
       delta_moments: delta_moments.clone(),
       n_processed: 0,
+      phantom: PhantomData,
     })
   }
 
@@ -67,6 +70,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
         n,
         delta_moments,
         n_processed,
+        ..
       } = self;
       let u_progress =
         num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dest)?;
@@ -109,7 +113,7 @@ mod tests {
   use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
 
-  fn bin_w_code(code: Vec<bool>) -> Bin<i64> {
+  fn bin_w_code(code: Vec<bool>) -> Bin<u64> {
     Bin {
       count: 1,
       code: bits::bits_to_usize(&code),
@@ -118,17 +122,20 @@ mod tests {
       offset_bits: 6,
       run_len_jumpstart: None,
       gcd: 1,
+      float_mult_base: 0,
+      adj_base: 0,
+      adj_bits: 0,
     }
   }
 
   #[test]
   fn test_corrupt_bins_error_not_panic() {
-    let metadata_missing_bin = ChunkMetadata::<i64> {
+    let metadata_missing_bin = ChunkMetadata::<u64> {
       n: 2,
       compressed_body_size: 1,
       bins: vec![bin_w_code(vec![false]), bin_w_code(vec![true, false])],
     };
-    let metadata_duplicating_bin = ChunkMetadata::<i64> {
+    let metadata_duplicating_bin = ChunkMetadata::<u64> {
       n: 2,
       compressed_body_size: 1,
       bins: vec![
@@ -139,7 +146,7 @@ mod tests {
     };
 
     for bad_metadata in vec![metadata_missing_bin, metadata_duplicating_bin] {
-      let result = BodyDecompressor::new(
+      let result = BodyDecompressor::<i64>::new(
         &bad_metadata.bins,
         bad_metadata.n,
         bad_metadata.compressed_body_size,

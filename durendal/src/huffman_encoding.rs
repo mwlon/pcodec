@@ -128,6 +128,9 @@ mod tests {
         offset_bits: 0,
         run_len_jumpstart: None,
         gcd: 1,
+        float_mult_base: 0,
+        adj_bits: 0,
+        adj_base: 0,
       },
     }
   }

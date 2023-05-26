@@ -2,7 +2,7 @@ use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::*;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::gcd;
 use crate::{bits, Flags};
@@ -18,7 +18,7 @@ use crate::{bits, Flags};
 /// `n` and `compressed_body_size` are not stored.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
-pub struct ChunkMetadata<T: NumberLike> {
+pub struct ChunkMetadata<U: UnsignedLike> {
   /// The count of numbers in the chunk.
   /// Not available in wrapped mode.
   pub n: usize,
@@ -26,33 +26,33 @@ pub struct ChunkMetadata<T: NumberLike> {
   /// Not available in wrapped mode.
   pub compressed_body_size: usize,
   /// *How* the chunk body was compressed.
-  pub bins: Vec<Bin<T>>,
+  pub bins: Vec<Bin<U>>,
 }
 
-fn parse_bins<T: NumberLike>(
+fn parse_bins<U: UnsignedLike>(
   reader: &mut BitReader,
   flags: &Flags,
   n: usize,
-) -> QCompressResult<Vec<Bin<T>>> {
+) -> QCompressResult<Vec<Bin<U>>> {
   let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
   let mut bins = Vec::with_capacity(n_bins);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let maybe_common_gcd = if reader.read_one()? {
-    Some(reader.read_uint::<T::Unsigned>(T::Unsigned::BITS)?)
+    Some(reader.read_uint::<U>(U::BITS)?)
   } else {
     None
   };
-  let offset_bits_bits = bits::bits_to_encode_offset_bits::<T::Unsigned>();
+  let offset_bits_bits = bits::bits_to_encode_offset_bits::<U>();
   for _ in 0..n_bins {
     let count = reader.read_usize(bits_to_encode_count)?;
-    let lower = T::read_from(reader)?;
+    let lower = reader.read_uint::<U>(U::BITS)?;
 
     let offset_bits = reader.read_bitlen(offset_bits_bits)?;
-    if offset_bits > T::Unsigned::BITS {
+    if offset_bits > U::BITS {
       return Err(QCompressError::corruption(format!(
         "offset bits of {} exceeds data type of {} bits",
         offset_bits,
-        T::Unsigned::BITS,
+        U::BITS,
       )));
     }
 
@@ -64,11 +64,11 @@ fn parse_bins<T: NumberLike>(
       None
     };
     let gcd = if offset_bits == 0 {
-      T::Unsigned::ONE
+      U::ONE
     } else if let Some(common_gcd) = maybe_common_gcd {
       common_gcd
     } else {
-      reader.read_uint(T::Unsigned::BITS)?
+      reader.read_uint(U::BITS)?
     };
     bins.push(Bin {
       count,
@@ -78,23 +78,26 @@ fn parse_bins<T: NumberLike>(
       offset_bits,
       run_len_jumpstart,
       gcd,
+      float_mult_base: U::ZERO,
+      adj_bits: 0,
+      adj_base: U::ZERO
     });
   }
   Ok(bins)
 }
 
-fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Flags, n: usize) {
+fn write_bins<U: UnsignedLike>(bins: &[Bin<U>], writer: &mut BitWriter, flags: &Flags, n: usize) {
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
   let maybe_common_gcd = gcd::common_gcd_for_chunk_meta(bins);
   writer.write_one(maybe_common_gcd.is_some());
   if let Some(common_gcd) = maybe_common_gcd {
-    writer.write_diff(common_gcd, T::Unsigned::BITS);
+    writer.write_diff(common_gcd, U::BITS);
   }
-  let offset_bits_bits = bits::bits_to_encode_offset_bits::<T::Unsigned>();
+  let offset_bits_bits = bits::bits_to_encode_offset_bits::<U>();
   for bin in bins {
     writer.write_usize(bin.count, bits_to_encode_count);
-    bin.lower.write_to(writer);
+    writer.write_diff(bin.lower, U::BITS);
     writer.write_bitlen(bin.offset_bits, offset_bits_bits);
     writer.write_bitlen(bin.code_len, BITS_TO_ENCODE_CODE_LEN);
     writer.write_usize(bin.code, bin.code_len);
@@ -108,13 +111,13 @@ fn write_bins<T: NumberLike>(bins: &[Bin<T>], writer: &mut BitWriter, flags: &Fl
       }
     }
     if bin.offset_bits > 0 && maybe_common_gcd.is_none() {
-      writer.write_diff(bin.gcd, T::Unsigned::BITS);
+      writer.write_diff(bin.gcd, U::BITS);
     }
   }
 }
 
-impl<T: NumberLike> ChunkMetadata<T> {
-  pub(crate) fn new(n: usize, bins: Vec<Bin<T>>) -> Self {
+impl<U: UnsignedLike> ChunkMetadata<U> {
+  pub(crate) fn new(n: usize, bins: Vec<Bin<U>>) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
@@ -132,7 +135,7 @@ impl<T: NumberLike> ChunkMetadata<T> {
       )
     };
 
-    let bins = parse_bins::<T>(reader, flags, n)?;
+    let bins = parse_bins::<U>(reader, flags, n)?;
 
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;
 

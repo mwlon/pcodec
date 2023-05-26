@@ -1,4 +1,4 @@
-use crate::data_types::NumberLike;
+use crate::data_types::{NumberLike, FloatLike};
 
 // Note that in all conversions between float and unsigned int, we are using
 // the unsigned int to indicate an offset.
@@ -6,6 +6,16 @@ use crate::data_types::NumberLike;
 // 1.0 + (3.0 * 2.0 ^ -23).
 macro_rules! impl_float_number {
   ($t: ty, $signed: ty, $unsigned: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr) => {
+    impl FloatLike for $t {
+      fn inv(self) -> Self {
+        1.0 / self
+      }
+
+      fn round(self) -> Self {
+        self.round()
+      }
+    }
+
     impl NumberLike for $t {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = $bits;

@@ -41,14 +41,14 @@ impl<T: NumberLike> Decompressor<T> {
   ///
   /// This can be used regardless of whether the decompressor has finished
   /// reading all data pages from the preceding chunk.
-  pub fn chunk_metadata(&mut self) -> QCompressResult<ChunkMetadata<T>> {
+  pub fn chunk_metadata(&mut self) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
     self.0.state.check_step_among(
       &[Step::StartOfChunk, Step::StartOfDataPage, Step::MidDataPage],
       "read chunk metadata",
     )?;
 
     self.0.with_reader(|reader, state, _| {
-      let meta = ChunkMetadata::<T>::parse_from(reader, state.flags.as_ref().unwrap())?;
+      let meta = ChunkMetadata::<T::Unsigned>::parse_from(reader, state.flags.as_ref().unwrap())?;
 
       state.chunk_meta = Some(meta.clone());
       state.body_decompressor = None;

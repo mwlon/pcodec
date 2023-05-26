@@ -50,7 +50,7 @@ pub struct Decompressor<T: NumberLike>(BaseDecompressor<T>);
 #[derive(Clone, Debug)]
 pub enum DecompressedItem<T: NumberLike> {
   Flags(Flags),
-  ChunkMetadata(ChunkMetadata<T>),
+  ChunkMetadata(ChunkMetadata<T::Unsigned>),
   Numbers(Vec<T>),
   Footer,
 }
@@ -80,7 +80,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// is not byte-aligned,
   /// runs out of data,
   /// or finds any corruptions.
-  pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
+  pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T::Unsigned>>> {
     self
       .0
       .state
