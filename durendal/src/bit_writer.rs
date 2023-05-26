@@ -203,7 +203,7 @@ mod tests {
   #[test]
   fn test_write_bigger_num() {
     let mut writer = BitWriter::default();
-    writer.write(&[true, true, true, true]);
+    writer.write_diff(31_u32, 4);
     // 1111
     writer.write_usize(27, 4);
     // 11111101
