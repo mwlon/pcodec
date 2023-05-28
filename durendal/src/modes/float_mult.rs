@@ -1,4 +1,4 @@
-use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
+use crate::bin::{BinCompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::Bin;

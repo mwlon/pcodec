@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 
 use crate::{Bin, bits, run_len_utils};
-use crate::bin::BinDecompressionInfo;
+
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
 use crate::data_types::UnsignedLike;
@@ -11,7 +11,7 @@ use crate::huffman_decoding::HuffmanTable;
 use crate::modes::{Mode, ModeBin};
 use crate::modes::gcd;
 use crate::modes::classic::ClassicMode;
-use crate::modes::float_mult::FloatMultMode;
+
 use crate::modes::gcd::GcdMode;
 use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};

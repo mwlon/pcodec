@@ -6,8 +6,8 @@ use crate::bit_writer::BitWriter;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::Bin;
-use crate::modes::float_mult::FloatMultBin;
-use crate::modes::gcd::GcdBin;
+
+
 
 pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   type Bin: ModeBin;

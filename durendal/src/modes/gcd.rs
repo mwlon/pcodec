@@ -1,7 +1,7 @@
 use crate::data_types::UnsignedLike;
 
 use crate::base_compressor::InternalCompressorConfig;
-use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
+use crate::bin::{BinCompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::errors::QCompressResult;
