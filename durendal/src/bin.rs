@@ -103,7 +103,8 @@ impl<U: UnsignedLike> WeightedPrefix<U> {
       gcd,
       code: 0,
       code_len: 0,
-      float_mult_base: U::Float::default(),
+      float_mult_lower: U::Float::default(),
+      adj_lower: U::ZERO,
       adj_bits: 0,
     };
     WeightedPrefix { bin, weight }
@@ -120,7 +121,8 @@ pub struct BinCompressionInfo<U: UnsignedLike> {
   pub offset_bits: Bitlen,
   pub run_len_jumpstart: Option<Bitlen>,
   pub gcd: U,
-  pub float_mult_base: U::Float,
+  pub float_mult_lower: U::Float,
+  pub adj_lower: U,
   pub adj_bits: Bitlen,
 }
 
@@ -134,7 +136,7 @@ impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
       offset_bits: info.offset_bits,
       run_len_jumpstart: info.run_len_jumpstart,
       gcd: info.gcd,
-      float_mult_base: info.float_mult_base,
+      float_mult_base: info.float_mult_lower,
       adj_bits: info.adj_bits,
     }
   }
@@ -157,7 +159,8 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
       offset_bits: U::BITS,
       run_len_jumpstart: None,
       gcd: U::ONE,
-      float_mult_base: U::Float::default(),
+      float_mult_lower: U::Float::default(),
+      adj_lower: U::ZERO,
       adj_bits: 0,
     }
   }

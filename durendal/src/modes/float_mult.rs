@@ -8,10 +8,19 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
 use crate::modes::{Mode, ModeBin};
 
+fn calc_adj_lower<U: UnsignedLike>(adj_offset_bits: Bitlen) -> U {
+  if adj_offset_bits == 0 {
+    U::ZERO
+  } else {
+    U::ZERO.wrapping_sub(U::ONE << (adj_offset_bits - 1))
+  }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FloatMultBin<U: UnsignedLike> {
   mult_lower: U::Float,
   mult_offset_bits: Bitlen,
+  adj_lower: U,
   adj_offset_bits: Bitlen,
 }
 
@@ -38,20 +47,23 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
   #[inline]
   fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
     let float = U::Float::from_unsigned(u);
-    let mult = (float * self.inv_base).round();
+    let mult_offset = (float * self.inv_base - bin.float_mult_lower).round();
     writer.write_diff(
-      U::from_float_numerical(mult - bin.float_mult_base),
+      U::from_float_numerical(mult_offset),
       bin.offset_bits,
     );
+    let mult = mult_offset + bin.float_mult_lower;
     let approx = mult * self.base;
     let adj = u.wrapping_sub(approx.to_unsigned());
-    writer.write_diff(adj, bin.adj_bits);
+    println!("C mult_base {} mult {} approx {} adj {}", bin.float_mult_lower, mult, approx, adj);
+    writer.write_diff(adj.wrapping_sub(bin.adj_lower), bin.adj_bits);
   }
 
   fn make_mode_bin(bin: &Bin<U>) -> FloatMultBin<U> {
     FloatMultBin {
       mult_lower: bin.float_mult_base,
       mult_offset_bits: bin.offset_bits,
+      adj_lower: calc_adj_lower(bin.adj_bits),
       adj_offset_bits: bin.adj_bits,
     }
   }
@@ -61,9 +73,9 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let offset = reader.unchecked_read_uint::<U>(bin.mult_offset_bits);
     let mult = bin.mult_lower + U::to_float_numerical(offset);
     let approx = mult * self.base;
-    let adj = reader.unchecked_read_uint(bin.adj_offset_bits);
-    // println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.unsigned0, mult, approx, adj);
-    U::to_float_bits(U::from_float_bits(approx).wrapping_add(adj)).to_unsigned()
+    let adj = bin.adj_lower.wrapping_add(reader.unchecked_read_uint(bin.adj_offset_bits));
+    println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
+    approx.to_unsigned().wrapping_add(adj)
   }
 
   #[inline]
@@ -75,9 +87,9 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let offset = reader.read_uint::<U>(bin.mult_offset_bits)?;
     let mult = bin.mult_lower + U::to_float_numerical(offset);
     let approx = mult * self.base;
-    let adj = reader.read_uint(bin.adj_offset_bits)?;
-    // println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.unsigned0, mult, approx, adj);
-    Ok(U::to_float_bits(U::from_float_bits(approx).wrapping_add(adj)).to_unsigned())
+    let adj = bin.adj_lower.wrapping_add(reader.read_uint(bin.adj_offset_bits)?);
+    println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
+    Ok(approx.to_unsigned().wrapping_add(adj))
   }
 }
 
@@ -89,8 +101,8 @@ mod test {
   use crate::data_types::NumberLike;
 
   fn make_bin(
+    float_mult_lower: f64,
     offset_bits: Bitlen,
-    float_mult_base: f64,
     adj_bits: Bitlen,
   ) -> BinCompressionInfo<u64> {
     BinCompressionInfo {
@@ -102,9 +114,16 @@ mod test {
       upper: 0,
       gcd: 1,
       offset_bits,
-      float_mult_base,
+      float_mult_lower,
+      adj_lower: calc_adj_lower(adj_bits),
       adj_bits,
     }
+  }
+
+  fn add_machine_eps(x: f64, n: i64) -> f64 {
+    let u = f64::to_unsigned(x);
+    let added = (u as i64 + n) as u64;
+    f64::from_unsigned(added)
   }
 
   fn check(
@@ -137,15 +156,15 @@ mod test {
   #[test]
   fn test_float_mult_lossless() -> QCompressResult<()> {
     let mode = FloatMultMode::<u64>::new(0.1);
-    let empty_bin_exact = make_bin(0, 5.0, 0);
+    let empty_bin_exact = make_bin(5.0, 0, 0);
     check(mode, empty_bin_exact, 0.5, "empty bin exact")?;
 
-    // 0.1 * 3 overshoots by exactly 1 machine epsilon
-    let empty_bin_inexact = make_bin(0, 3.0, 1);
+    // 0.1 * 3.0 overshoots by exactly 1 machine epsilon
+    let empty_bin_inexact = make_bin(3.0, 0, 1);
     check(mode, empty_bin_inexact, 0.3, "inexact bin")?;
 
     // ~[-1.0, 2.1]
-    let regular_bin = make_bin(5, -10.0, 2);
+    let regular_bin = make_bin(-10.0, 5, 3);
     check(mode, regular_bin, -1.0, "regular -1.0")?;
     check(mode, regular_bin, -1.0 + 0.1, "regular -0.9")?;
     check(mode, regular_bin, -0.0, "regular -0")?;

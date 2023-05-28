@@ -120,16 +120,9 @@ mod tests {
     WeightedPrefix {
       weight,
       bin: BinCompressionInfo {
-        count: 0,
         code: bits::bits_to_usize(&code),
         code_len: code.len() as Bitlen,
-        lower: 0,
-        upper: 0,
-        offset_bits: 0,
-        run_len_jumpstart: None,
-        gcd: 1,
-        float_mult_base: 0.0,
-        adj_bits: 0,
+        ..Default::default()
       },
     }
   }
