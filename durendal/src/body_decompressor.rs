@@ -7,7 +7,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
 use crate::num_decompressor;
-use crate::num_decompressor::{NumDecompressor};
+use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
 use crate::{delta_encoding, Bin};
 

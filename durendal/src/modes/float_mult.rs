@@ -1,8 +1,8 @@
-use crate::bin::{BinCompressionInfo};
+use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::Bin;
 use crate::constants::Bitlen;
+use crate::Bin;
 
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
@@ -57,11 +57,7 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
   }
 
   #[inline]
-  fn unchecked_decompress_unsigned(
-    &self,
-    bin: &FloatMultBin<U>,
-    reader: &mut BitReader,
-  ) -> U {
+  fn unchecked_decompress_unsigned(&self, bin: &FloatMultBin<U>, reader: &mut BitReader) -> U {
     let offset = reader.unchecked_read_uint::<U>(bin.mult_offset_bits);
     let mult = bin.mult_lower + U::to_float_numerical(offset);
     let approx = mult * self.base;
@@ -87,12 +83,16 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
 
 #[cfg(test)]
 mod test {
+  use super::*;
   use crate::bit_words::BitWords;
   use crate::constants::Bitlen;
   use crate::data_types::NumberLike;
-  use super::*;
 
-  fn make_bin(offset_bits: Bitlen, float_mult_base: f64, adj_bits: Bitlen) -> BinCompressionInfo<u64> {
+  fn make_bin(
+    offset_bits: Bitlen,
+    float_mult_base: f64,
+    adj_bits: Bitlen,
+  ) -> BinCompressionInfo<u64> {
     BinCompressionInfo {
       count: 0,
       code: 0,
@@ -107,7 +107,12 @@ mod test {
     }
   }
 
-  fn check(mode: FloatMultMode<u64>, c_info: BinCompressionInfo<u64>, x: f64, desc: &str) -> QCompressResult<()> {
+  fn check(
+    mode: FloatMultMode<u64>,
+    c_info: BinCompressionInfo<u64>,
+    x: f64,
+    desc: &str,
+  ) -> QCompressResult<()> {
     let bin = Bin::from(c_info);
     let d_info = FloatMultMode::<u64>::make_mode_bin(&bin);
     let u = x.to_unsigned();
@@ -117,7 +122,12 @@ mod test {
     let mut reader0 = BitReader::from(&words);
     let mut reader1 = BitReader::from(&words);
     let recovered = mode.unchecked_decompress_unsigned(&d_info, &mut reader0);
-    assert_eq!(f64::from_unsigned(recovered), x, "{} unchecked float", desc);
+    assert_eq!(
+      f64::from_unsigned(recovered),
+      x,
+      "{} unchecked float",
+      desc
+    );
     assert_eq!(recovered, u, "{} unchecked", desc);
     let recovered = mode.decompress_unsigned(&d_info, &mut reader1)?;
     assert_eq!(recovered, u, "{} checked", desc);

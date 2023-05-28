@@ -7,7 +7,9 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-pub trait FloatLike: Add<Output = Self> + Copy + Debug + Mul<Output = Self> + Sub<Output = Self> {
+pub trait FloatLike:
+  Add<Output = Self> + Copy + Debug + Mul<Output = Self> + Sub<Output = Self>
+{
   fn inv(self) -> Self;
   fn round(self) -> Self;
 }

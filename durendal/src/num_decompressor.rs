@@ -1,16 +1,16 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-use crate::{Bin, bits, run_len_utils};
+use crate::{bits, run_len_utils, Bin};
 
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
-use crate::modes::{Mode, ModeBin};
-use crate::modes::gcd;
 use crate::modes::classic::ClassicMode;
+use crate::modes::gcd;
+use crate::modes::{Mode, ModeBin};
 
 use crate::modes::gcd::GcdMode;
 use crate::progress::Progress;
@@ -94,12 +94,7 @@ pub struct State<B: ModeBin> {
 }
 
 impl<B: ModeBin> State<B> {
-  pub fn unchecked_limit_reps(
-    &mut self,
-    bin: B,
-    full_reps: usize,
-    limit: usize,
-  ) -> usize {
+  pub fn unchecked_limit_reps(&mut self, bin: B, full_reps: usize, limit: usize) -> usize {
     if full_reps > limit {
       self.incomplete_bin = Some(bin);
       self.incomplete_reps = full_reps - limit;
@@ -201,11 +196,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> for NumDecompressorImpl<U, 
   ) -> QCompressResult<Progress> {
     let initial_reader = reader.clone();
     let initial_state = self.state.clone();
-    let res = self.decompress_unsigneds_dirty(
-      reader,
-      error_on_insufficient_data,
-      dest,
-    );
+    let res = self.decompress_unsigneds_dirty(reader, error_on_insufficient_data, dest);
     match &res {
       Ok(progress) => {
         self.state.n_processed += progress.n_processed;
@@ -259,10 +250,8 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     dest: &mut [U],
   ) {
     while guaranteed_safe_num_blocks > 0 && RunLenOp::batch_ongoing(*n_processed, batch_size) {
-      *n_processed += self.unchecked_decompress_num_block::<RunLenOp>(
-        reader,
-        &mut dest[*n_processed..batch_size],
-      );
+      *n_processed += self
+        .unchecked_decompress_num_block::<RunLenOp>(reader, &mut dest[*n_processed..batch_size]);
       guaranteed_safe_num_blocks -= 1;
     }
   }
@@ -350,7 +339,9 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     // treating this case (constant data) as special improves its performance
     if self.max_bits_per_num_block == 0 {
       let constant_bin = self.huffman_table.unchecked_search_with_reader(reader);
-      let constant = self.mode.decompress_unsigned(&constant_bin.mode_bin, reader)?;
+      let constant = self
+        .mode
+        .decompress_unsigned(&constant_bin.mode_bin, reader)?;
       dest[0..batch_size].fill(constant);
       res.n_processed = batch_size;
       return Ok(res);
@@ -428,8 +419,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
 
     // do checked operations for the rest
     while res.n_processed < batch_size {
-      res.n_processed += match self.decompress_num_block(reader, &mut dest[res.n_processed..])
-      {
+      res.n_processed += match self.decompress_num_block(reader, &mut dest[res.n_processed..]) {
         Ok(n_processed) => n_processed,
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => {
           return mark_insufficient(res, e)

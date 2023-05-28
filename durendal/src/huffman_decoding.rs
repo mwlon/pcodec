@@ -6,8 +6,6 @@ use crate::constants::{Bitlen, MAX_BIN_TABLE_SIZE_LOG};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::{Mode, ModeBin};
-use crate::modes::gcd::GcdBin;
-
 
 #[derive(Clone, Debug)]
 pub enum HuffmanTable<B: ModeBin> {
@@ -86,7 +84,7 @@ impl<B: ModeBin> HuffmanTable<B> {
     }
   }
 
-  pub fn from_bins<U: UnsignedLike, M: Mode<U, Bin=B>>(bins: &[Bin<U>]) -> Self {
+  pub fn from_bins<U: UnsignedLike, M: Mode<U, Bin = B>>(bins: &[Bin<U>]) -> Self {
     if bins.is_empty() {
       HuffmanTable::default()
     } else {
@@ -136,10 +134,16 @@ fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
 #[cfg(test)]
 mod tests {
   use super::*;
-  
+
   #[test]
   fn huff_table_size() {
-    assert_eq!(std::mem::size_of::<HuffmanTable<GcdBin<u64>>>(), 48);
-    assert_eq!(std::mem::size_of::<HuffmanTable<GcdBin<u32>>>(), 32);
+    assert_eq!(
+      std::mem::size_of::<HuffmanTable<GcdBin<u64>>>(),
+      48
+    );
+    assert_eq!(
+      std::mem::size_of::<HuffmanTable<GcdBin<u32>>>(),
+      32
+    );
   }
 }

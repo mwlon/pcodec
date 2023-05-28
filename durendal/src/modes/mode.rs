@@ -7,8 +7,6 @@ use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::Bin;
 
-
-
 pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   type Bin: ModeBin;
 
@@ -23,17 +21,9 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
     }
   }
 
-  fn unchecked_decompress_unsigned(
-    &self,
-    bin: &Self::Bin,
-    reader: &mut BitReader,
-  ) -> U;
+  fn unchecked_decompress_unsigned(&self, bin: &Self::Bin, reader: &mut BitReader) -> U;
 
-  fn decompress_unsigned(
-    &self,
-    bin: &Self::Bin,
-    reader: &mut BitReader,
-  ) -> QCompressResult<U>;
+  fn decompress_unsigned(&self, bin: &Self::Bin, reader: &mut BitReader) -> QCompressResult<U>;
 }
 
 #[derive(Clone, Copy, Debug)]
