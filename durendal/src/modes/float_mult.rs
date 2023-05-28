@@ -120,12 +120,6 @@ mod test {
     }
   }
 
-  fn add_machine_eps(x: f64, n: i64) -> f64 {
-    let u = f64::to_unsigned(x);
-    let added = (u as i64 + n) as u64;
-    f64::from_unsigned(added)
-  }
-
   fn check(
     mode: FloatMultMode<u64>,
     c_info: BinCompressionInfo<u64>,
@@ -156,20 +150,27 @@ mod test {
   #[test]
   fn test_float_mult_lossless() -> QCompressResult<()> {
     let mode = FloatMultMode::<u64>::new(0.1);
-    let empty_bin_exact = make_bin(5.0, 0, 0);
-    check(mode, empty_bin_exact, 0.5, "empty bin exact")?;
+    // bin with exact arithmetic
+    let bin = make_bin(5.0, 0, 0);
+    check(mode, bin, 0.5, "empty bin exact")?;
 
     // 0.1 * 3.0 overshoots by exactly 1 machine epsilon
-    let empty_bin_inexact = make_bin(3.0, 0, 1);
-    check(mode, empty_bin_inexact, 0.3, "inexact bin")?;
+    let bin = make_bin(3.0, 0, 1);
+    check(mode, bin, 0.3, "inexact bin")?;
 
     // ~[-1.0, 2.1]
-    let regular_bin = make_bin(-10.0, 5, 3);
-    check(mode, regular_bin, -1.0, "regular -1.0")?;
-    check(mode, regular_bin, -1.0 + 0.1, "regular -0.9")?;
-    check(mode, regular_bin, -0.0, "regular -0")?;
-    check(mode, regular_bin, 0.0, "regular 0")?;
-    check(mode, regular_bin, 2.1, "regular 2.1")?;
+    let bin = make_bin(-10.0, 5, 3);
+    check(mode, bin, -1.0, "regular -1.0")?;
+    check(mode, bin, -1.0 + 0.1, "regular -0.9")?;
+    check(mode, bin, -0.0, "regular -0")?;
+    check(mode, bin, 0.0, "regular 0")?;
+    check(mode, bin, 2.1, "regular 2.1")?;
+
+    // edge cases
+    let bin = make_bin(f64::NAN, 0, 0);
+    check(mode, bin, f64::NAN, "nan")?;
+    let bin = make_bin(f64::NEG_INFINITY, 0, 0);
+    check(mode, bin, f64::NEG_INFINITY, "nan")?;
     Ok(())
   }
 }
