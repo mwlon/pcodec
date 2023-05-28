@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-use crate::bin::{Bin, BinCompressionInfo, WeightedPrefix};
+use crate::bin::{Bin, BinCompressionInfo};
 use crate::bin_optimization;
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::ChunkMetadata;
@@ -18,11 +18,6 @@ use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
 use crate::modes::{gcd, DynMode};
 use crate::{huffman_encoding, Flags};
-
-struct JumpstartConfiguration {
-  weight: usize,
-  jumpstart: Bitlen,
-}
 
 /// All configurations available for a compressor.
 ///
@@ -146,22 +141,8 @@ fn cumulative_sum(sizes: &[usize]) -> Vec<usize> {
   res
 }
 
-fn choose_run_len_jumpstart(count: usize, n: usize) -> JumpstartConfiguration {
-  let freq = (count as f64) / (n as f64);
-  let non_freq = 1.0 - freq;
-  let jumpstart = min(
-    (-non_freq.log2()).ceil() as Bitlen,
-    MAX_JUMPSTART,
-  );
-  let expected_n_runs = (freq * non_freq * n as f64).ceil() as usize;
-  JumpstartConfiguration {
-    weight: expected_n_runs,
-    jumpstart,
-  }
-}
-
 struct BinBuffer<'a, U: UnsignedLike> {
-  pub seq: Vec<WeightedPrefix<U>>,
+  pub seq: Vec<BinCompressionInfo<U>>,
   bin_idx: usize,
   max_n_bin: usize,
   n_unsigneds: usize,
@@ -194,7 +175,6 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     let n_unsigneds = self.n_unsigneds;
 
     let count = j - i;
-    let frequency = count as f64 / self.n_unsigneds as f64;
     let new_bin_idx = max(
       self.bin_idx + 1,
       (j * self.max_n_bin) / n_unsigneds,
@@ -206,27 +186,8 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     } else {
       U::ONE
     };
-    let wp = if n_unsigneds < MIN_N_TO_USE_RUN_LEN
-      || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN
-      || count == n_unsigneds
-    {
-      // The usual case - a bin for a range that represents either 100% or
-      // <=80% of the data.
-      WeightedPrefix::new(count, count, lower, upper, None, gcd)
-    } else {
-      // The weird case - a range that represents almost all (but not all) the data.
-      // We create extra bins that can describe `reps` copies of the range at once.
-      let config = choose_run_len_jumpstart(count, n_unsigneds);
-      WeightedPrefix::new(
-        count,
-        config.weight,
-        lower,
-        upper,
-        Some(config.jumpstart),
-        gcd,
-      )
-    };
-    self.seq.push(wp);
+    let bin = BinCompressionInfo::new(count, lower, upper, None, gcd);
+    self.seq.push(bin);
     self.bin_idx = new_bin_idx;
     self.calc_target_j();
   }
@@ -250,7 +211,7 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
 fn choose_unoptimized_bins<U: UnsignedLike>(
   sorted: &[U],
   internal_config: &InternalCompressorConfig,
-) -> Vec<WeightedPrefix<U>> {
+) -> Vec<BinCompressionInfo<U>> {
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(
     internal_config.compression_level,
@@ -315,10 +276,9 @@ fn train_bins<U: UnsignedLike>(
   let mut optimized_bins =
     bin_optimization::optimize_bins(unoptimized_bins, internal_config, flags, n);
 
-  huffman_encoding::make_huffman_code(&mut optimized_bins);
+  huffman_encoding::make_huffman_code(&mut optimized_bins, n);
 
-  let bins = optimized_bins.iter().map(|wp| wp.bin).collect();
-  Ok(bins)
+  Ok(optimized_bins)
 }
 
 fn trained_compress_body<U: UnsignedLike>(

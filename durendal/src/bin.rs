@@ -67,47 +67,33 @@ impl<U: UnsignedLike> Display for Bin<U> {
   }
 }
 
-// used during compression to determine Huffman codes
-#[derive(Clone, Debug, PartialEq)]
-pub struct WeightedPrefix<U: UnsignedLike> {
-  pub bin: BinCompressionInfo<U>,
-  // How to weight this bin during huffman coding,
-  // in contrast to bin.count, which is the actual number of training
-  // entries belonging to it.
-  // Usually these are the same, but a bin with repetitions will have lower
-  // weight than count.
-  pub weight: usize,
-}
-
-impl<U: UnsignedLike> WeightedPrefix<U> {
+impl<U: UnsignedLike> BinCompressionInfo<U> {
   pub fn new(
     count: usize,
-    weight: usize,
     lower: U,
     upper: U,
     run_len_jumpstart: Option<Bitlen>,
     gcd: U,
-  ) -> WeightedPrefix<U> {
+  ) -> Self {
     let diff = (upper - lower) / gcd;
     let offset_bits = if diff == U::ZERO {
       0
     } else {
       U::BITS - diff.leading_zeros()
     };
-    let bin = BinCompressionInfo {
+    BinCompressionInfo {
       count,
       lower,
       upper,
       offset_bits,
-      run_len_jumpstart,
       gcd,
+      run_len_jumpstart,
       code: 0,
       code_len: 0,
       float_mult_lower: U::Float::default(),
       adj_lower: U::ZERO,
       adj_bits: 0,
-    };
-    WeightedPrefix { bin, weight }
+    }
   }
 }
 

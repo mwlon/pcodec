@@ -1,8 +1,41 @@
+use std::cmp::min;
+
+use crate::{Bin, num_decompressor};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
+use crate::constants::{Bitlen, MAX_JUMPSTART, MIN_FREQUENCY_TO_USE_RUN_LEN, MIN_N_TO_USE_RUN_LEN};
 use crate::data_types::UnsignedLike;
 use crate::modes::Mode;
-use crate::{num_decompressor, Bin};
+
+fn bin_needs_run_len(count: usize, n: usize, freq: f64) -> bool {
+  n >= MIN_N_TO_USE_RUN_LEN && freq >= MIN_FREQUENCY_TO_USE_RUN_LEN && count < n
+}
+
+pub fn run_len_jumpstart(count: usize, n: usize) -> Option<Bitlen> {
+  let freq = (count as f64) / (n as f64);
+  if bin_needs_run_len(count, n, freq) {
+    let non_freq = 1.0 - freq;
+    Some(min(
+      (-non_freq.log2()).ceil() as Bitlen,
+      MAX_JUMPSTART,
+    ))
+  } else {
+    None
+  }
+}
+
+#[inline]
+pub fn weight_and_jumpstart_cost(count: usize, n: usize) -> (usize, f64) {
+  let freq = (count as f64) / (n as f64);
+  if bin_needs_run_len(count, n, freq) {
+    let non_freq = 1.0 - freq;
+    let weight = (freq * non_freq * n as f64).ceil() as usize;
+    let jumpstart_cost = (-non_freq.log2()).ceil() + 1.0;
+    (weight, jumpstart_cost)
+  } else {
+    (count, 0.0)
+  }
+}
 
 pub fn use_run_len<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
   bins.iter().any(|p| p.run_len_jumpstart.is_some())

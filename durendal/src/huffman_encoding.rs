@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::bin::WeightedPrefix;
-use crate::bits;
+use crate::bin::{BinCompressionInfo};
+use crate::{bits, run_len_utils};
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 
@@ -42,7 +42,7 @@ impl HuffmanItem {
   pub fn create_bits<U: UnsignedLike>(
     &self,
     item_idx: &mut [HuffmanItem],
-    leaf_idx: &mut [WeightedPrefix<U>],
+    leaf_idx: &mut [BinCompressionInfo<U>],
   ) {
     self.create_bits_from(Vec::new(), item_idx, leaf_idx);
   }
@@ -51,11 +51,11 @@ impl HuffmanItem {
     &self,
     bits: Vec<bool>,
     item_idx: &mut [HuffmanItem],
-    leaf_idx: &mut [WeightedPrefix<U>],
+    leaf_idx: &mut [BinCompressionInfo<U>],
   ) {
     item_idx[self.id].bits = bits.clone();
     if self.leaf_id.is_some() {
-      let leaf_bin = &mut leaf_idx[self.leaf_id.unwrap()].bin;
+      let leaf_bin = &mut leaf_idx[self.leaf_id.unwrap()];
       leaf_bin.code = bits::bits_to_usize(&bits);
       leaf_bin.code_len = bits.len() as Bitlen;
     } else {
@@ -85,12 +85,13 @@ impl PartialOrd for HuffmanItem {
   }
 }
 
-pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [WeightedPrefix<U>]) {
-  let n = bin_sequence.len();
-  let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
-  let mut items = Vec::with_capacity(n); // for modifying item codes
+pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [BinCompressionInfo<U>], n: usize) {
+  let n_bins = bin_sequence.len();
+  let mut heap = BinaryHeap::with_capacity(n_bins); // for figuring out huffman tree
+  let mut items = Vec::with_capacity(n_bins); // for modifying item codes
   for (i, bin) in bin_sequence.iter().enumerate() {
-    let item = HuffmanItem::new(bin.weight, i);
+    let (weight, _) = run_len_utils::weight_and_jumpstart_cost(bin.count, n);
+    let item = HuffmanItem::new(weight, i);
     heap.push(item.clone());
     items.push(item);
   }
@@ -111,30 +112,28 @@ pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [WeightedPrefix<U>]
 
 #[cfg(test)]
 mod tests {
-  use crate::bin::{BinCompressionInfo, WeightedPrefix};
+  use crate::bin::{BinCompressionInfo};
   use crate::bits;
   use crate::constants::Bitlen;
   use crate::huffman_encoding::make_huffman_code;
 
-  fn coded_bin(weight: usize, code: Vec<bool>) -> WeightedPrefix<u32> {
-    WeightedPrefix {
-      weight,
-      bin: BinCompressionInfo {
-        code: bits::bits_to_usize(&code),
-        code_len: code.len() as Bitlen,
-        ..Default::default()
-      },
+  fn coded_bin(count: usize, code: Vec<bool>) -> BinCompressionInfo<u32> {
+    BinCompressionInfo {
+      count,
+      code: bits::bits_to_usize(&code),
+      code_len: code.len() as Bitlen,
+      ..Default::default()
     }
   }
 
-  fn uncoded_bin(weight: usize) -> WeightedPrefix<u32> {
+  fn uncoded_bin(weight: usize) -> BinCompressionInfo<u32> {
     coded_bin(weight, Vec::new())
   }
 
   #[test]
   fn test_make_huffman_code_single() {
     let mut bin_seq = vec![uncoded_bin(100)];
-    make_huffman_code(&mut bin_seq);
+    make_huffman_code(&mut bin_seq, 100);
     assert_eq!(bin_seq, vec![coded_bin(100, vec![]),]);
   }
 
@@ -147,7 +146,7 @@ mod tests {
       uncoded_bin(4),
       uncoded_bin(5),
     ];
-    make_huffman_code(&mut bin_seq);
+    make_huffman_code(&mut bin_seq, 18);
     assert_eq!(
       bin_seq,
       vec![
