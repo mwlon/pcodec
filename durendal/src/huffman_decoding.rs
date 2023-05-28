@@ -133,6 +133,7 @@ fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
 
 #[cfg(test)]
 mod tests {
+  use crate::modes::gcd::GcdBin;
   use super::*;
 
   #[test]
