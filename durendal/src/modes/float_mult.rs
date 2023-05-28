@@ -55,7 +55,7 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let mult = mult_offset + bin.float_mult_lower;
     let approx = mult * self.base;
     let adj = u.wrapping_sub(approx.to_unsigned());
-    println!("C mult_base {} mult {} approx {} adj {}", bin.float_mult_lower, mult, approx, adj);
+    // println!("C mult_base {} mult {} approx {} adj {}", bin.float_mult_lower, mult, approx, adj);
     writer.write_diff(adj.wrapping_sub(bin.adj_lower), bin.adj_bits);
   }
 
@@ -74,7 +74,7 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let mult = bin.mult_lower + U::to_float_numerical(offset);
     let approx = mult * self.base;
     let adj = bin.adj_lower.wrapping_add(reader.unchecked_read_uint(bin.adj_offset_bits));
-    println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
+    // println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
     approx.to_unsigned().wrapping_add(adj)
   }
 
@@ -88,7 +88,7 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let mult = bin.mult_lower + U::to_float_numerical(offset);
     let approx = mult * self.base;
     let adj = bin.adj_lower.wrapping_add(reader.read_uint(bin.adj_offset_bits)?);
-    println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
+    // println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
     Ok(approx.to_unsigned().wrapping_add(adj))
   }
 }
@@ -135,15 +135,10 @@ mod test {
     let mut reader0 = BitReader::from(&words);
     let mut reader1 = BitReader::from(&words);
     let recovered = mode.unchecked_decompress_unsigned(&d_info, &mut reader0);
-    assert_eq!(
-      f64::from_unsigned(recovered),
-      x,
-      "{} unchecked float",
-      desc
-    );
-    assert_eq!(recovered, u, "{} unchecked", desc);
+    let recovered_float = f64::from_unsigned(recovered);
+    assert_eq!(recovered, u, "{} unchecked: {} vs {}", desc, recovered_float, x);
     let recovered = mode.decompress_unsigned(&d_info, &mut reader1)?;
-    assert_eq!(recovered, u, "{} checked", desc);
+    assert_eq!(recovered, u, "{} checked: {} vs {}", desc, recovered_float, x);
     Ok(())
   }
 
@@ -171,6 +166,7 @@ mod test {
     check(mode, bin, f64::NAN, "nan")?;
     let bin = make_bin(f64::NEG_INFINITY, 0, 0);
     check(mode, bin, f64::NEG_INFINITY, "nan")?;
+
     Ok(())
   }
 }
