@@ -6,21 +6,32 @@ use crate::bit_writer::BitWriter;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::Bin;
+use crate::modes::float_mult::FloatMultBin;
+use crate::modes::gcd::GcdBin;
 
-pub trait Mode<U: UnsignedLike>: Copy + Debug {
+pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
+  type Bin: ModeBin;
+
   fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter);
 
-  fn make_decompression_info(bin: &Bin<U>) -> BinDecompressionInfo<U>;
+  fn make_mode_bin(bin: &Bin<U>) -> Self::Bin;
+  fn make_decompression_info(bin: &Bin<U>) -> BinDecompressionInfo<Self::Bin> {
+    BinDecompressionInfo {
+      depth: bin.code_len,
+      run_len_jumpstart: bin.run_len_jumpstart,
+      mode_bin: Self::make_mode_bin(bin),
+    }
+  }
 
   fn unchecked_decompress_unsigned(
     &self,
-    bin: &BinDecompressionInfo<U>,
+    bin: &Self::Bin,
     reader: &mut BitReader,
   ) -> U;
 
   fn decompress_unsigned(
     &self,
-    bin: &BinDecompressionInfo<U>,
+    bin: &Self::Bin,
     reader: &mut BitReader,
   ) -> QCompressResult<U>;
 }
@@ -31,3 +42,5 @@ pub enum DynMode<U: UnsignedLike> {
   Gcd,
   FloatMult(U::Float),
 }
+
+pub trait ModeBin: Copy + Debug + Default {}

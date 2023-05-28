@@ -78,9 +78,8 @@ fn parse_bins<U: UnsignedLike>(
       offset_bits,
       run_len_jumpstart,
       gcd,
-      float_mult_base: U::ZERO,
+      float_mult_base: U::Float::default(),
       adj_bits: 0,
-      adj_base: U::ZERO,
     });
   }
   Ok(bins)

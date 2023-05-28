@@ -11,9 +11,9 @@ pub fn use_run_len<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
 pub trait RunLenOperator {
   // returns count of numbers processed
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    state: &mut num_decompressor::State<U>,
+    state: &mut num_decompressor::State<M::Bin>,
     reader: &mut BitReader,
-    bin: &BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<M::Bin>,
     mode: M,
     dest: &mut [U],
   ) -> usize;
@@ -26,23 +26,23 @@ pub struct GeneralRunLenOp;
 impl RunLenOperator for GeneralRunLenOp {
   #[inline]
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    state: &mut num_decompressor::State<U>,
+    state: &mut num_decompressor::State<M::Bin>,
     reader: &mut BitReader,
-    bin: &BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<M::Bin>,
     mode: M,
     dest: &mut [U],
   ) -> usize {
     match bin.run_len_jumpstart {
       None => {
-        dest[0] = mode.unchecked_decompress_unsigned(bin, reader);
+        dest[0] = mode.unchecked_decompress_unsigned(&bin.mode_bin, reader);
         1
       }
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = state.unchecked_limit_reps(*bin, full_reps, dest.len());
+        let reps = state.unchecked_limit_reps(bin.mode_bin, full_reps, dest.len());
         for i in 0..reps {
-          dest[i] = mode.unchecked_decompress_unsigned(bin, reader);
+          dest[i] = mode.unchecked_decompress_unsigned(&bin.mode_bin, reader);
         }
         reps
       }
@@ -60,13 +60,13 @@ pub struct TrivialRunLenOp;
 impl RunLenOperator for TrivialRunLenOp {
   #[inline]
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    _state: &mut num_decompressor::State<U>,
+    _state: &mut num_decompressor::State<M::Bin>,
     reader: &mut BitReader,
-    bin: &BinDecompressionInfo<U>,
+    bin: &BinDecompressionInfo<M::Bin>,
     mode: M,
     dest: &mut [U],
   ) -> usize {
-    dest[0] = mode.unchecked_decompress_unsigned(bin, reader);
+    dest[0] = mode.unchecked_decompress_unsigned(&bin.mode_bin, reader);
     1
   }
 

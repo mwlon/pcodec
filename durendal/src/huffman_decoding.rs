@@ -5,28 +5,29 @@ use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, MAX_BIN_TABLE_SIZE_LOG};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::modes::Mode;
+use crate::modes::{Mode, ModeBin};
+use crate::modes::gcd::GcdBin;
 
 #[derive(Clone, Debug)]
-pub enum HuffmanTable<U: UnsignedLike> {
-  Leaf(BinDecompressionInfo<U>),
+pub enum HuffmanTable<B: ModeBin> {
+  Leaf(BinDecompressionInfo<B>),
   NonLeaf {
     table_size_log: Bitlen,
-    children: Vec<HuffmanTable<U>>,
+    children: Vec<HuffmanTable<B>>,
   },
 }
 
-impl<U: UnsignedLike> Default for HuffmanTable<U> {
+impl<B: ModeBin> Default for HuffmanTable<B> {
   fn default() -> Self {
     HuffmanTable::Leaf(BinDecompressionInfo::default())
   }
 }
 
-impl<U: UnsignedLike> HuffmanTable<U> {
+impl<B: ModeBin> HuffmanTable<B> {
   pub fn search_with_reader(
     &self,
     reader: &mut BitReader,
-  ) -> QCompressResult<&BinDecompressionInfo<U>> {
+  ) -> QCompressResult<&BinDecompressionInfo<B>> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
@@ -63,7 +64,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
     }
   }
 
-  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> &BinDecompressionInfo<U> {
+  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> &BinDecompressionInfo<B> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
@@ -84,7 +85,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
     }
   }
 
-  pub fn from_bins<M: Mode<U>>(bins: &[Bin<U>]) -> Self {
+  pub fn from_bins<U: UnsignedLike, M: Mode<U, Bin=B>>(bins: &[Bin<U>]) -> Self {
     if bins.is_empty() {
       HuffmanTable::default()
     } else {
@@ -96,7 +97,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
 fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
   bins: &[Bin<U>],
   depth: Bitlen,
-) -> HuffmanTable<U> {
+) -> HuffmanTable<M::Bin> {
   if bins.len() == 1 {
     let bin = &bins[0];
     HuffmanTable::Leaf(M::make_decompression_info(bin))
@@ -133,6 +134,6 @@ fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
 
 #[test]
 fn huff_table_size() {
-  assert_eq!(std::mem::size_of::<HuffmanTable<u64>>(), 48);
-  assert_eq!(std::mem::size_of::<HuffmanTable<u32>>(), 32);
+  assert_eq!(std::mem::size_of::<HuffmanTable<GcdBin<u64>>>(), 48);
+  assert_eq!(std::mem::size_of::<HuffmanTable<GcdBin<u32>>>(), 32);
 }

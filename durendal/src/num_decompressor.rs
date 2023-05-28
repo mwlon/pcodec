@@ -1,19 +1,20 @@
 use std::cmp::{max, min};
+use std::fmt::Debug;
 
+use crate::{Bin, bits, run_len_utils};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
+use crate::modes::{Mode, ModeBin};
+use crate::modes::gcd;
 use crate::modes::classic::ClassicMode;
 use crate::modes::float_mult::FloatMultMode;
 use crate::modes::gcd::GcdMode;
-use crate::modes::Mode;
-use crate::modes::{gcd, DynMode};
 use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
-use crate::{bits, run_len_utils, Bin};
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
@@ -84,23 +85,23 @@ fn max_bits_overshot<U: UnsignedLike>(bin: &Bin<U>) -> Bitlen {
   }
 }
 
-#[derive(Clone, Debug)]
-pub struct State<U: UnsignedLike> {
+#[derive(Clone, Debug, Default)]
+pub struct State<B: ModeBin> {
   n_processed: usize,
   bits_processed: usize,
-  incomplete_bin: BinDecompressionInfo<U>,
+  incomplete_bin: Option<B>,
   incomplete_reps: usize,
 }
 
-impl<U: UnsignedLike> State<U> {
+impl<B: ModeBin> State<B> {
   pub fn unchecked_limit_reps(
     &mut self,
-    bin: BinDecompressionInfo<U>,
+    bin: B,
     full_reps: usize,
     limit: usize,
   ) -> usize {
     if full_reps > limit {
-      self.incomplete_bin = bin;
+      self.incomplete_bin = Some(bin);
       self.incomplete_reps = full_reps - limit;
       limit
     } else {
@@ -109,176 +110,93 @@ impl<U: UnsignedLike> State<U> {
   }
 }
 
+pub trait NumDecompressor<U: UnsignedLike>: Debug {
+  fn bits_remaining(&self) -> usize;
+
+  fn decompress_unsigneds(
+    &mut self,
+    reader: &mut BitReader,
+    error_on_insufficient_data: bool,
+    dest: &mut [U],
+  ) -> QCompressResult<Progress>;
+
+  fn clone_inner(&self) -> Box<dyn NumDecompressor<U>>;
+}
+
 // NumDecompressor does the main work of decoding bytes into NumberLikes
 #[derive(Clone, Debug)]
-pub struct NumDecompressor<U: UnsignedLike> {
+struct NumDecompressorImpl<U: UnsignedLike, M: Mode<U>> {
   // known information about the chunk
-  huffman_table: HuffmanTable<U>,
+  mode: M,
+  huffman_table: HuffmanTable<M::Bin>,
   n: usize,
   compressed_body_size: usize,
   max_bits_per_num_block: usize,
   max_overshoot_per_num_block: Bitlen,
   use_run_len: bool,
-  dyn_mode: DynMode<U>,
 
   // mutable state
-  state: State<U>,
+  state: State<M::Bin>,
 }
 
-impl<U: UnsignedLike> NumDecompressor<U> {
-  pub(crate) fn new(
-    n: usize,
-    compressed_body_size: usize,
-    bins: &[Bin<U>],
-  ) -> QCompressResult<Self> {
-    if bins.is_empty() && n > 0 {
-      return Err(QCompressError::corruption(format!(
-        "unable to decompress chunk with no bins and {} numbers",
-        n,
-      )));
-    }
-    validate_bin_tree(bins)?;
+pub fn new<U: UnsignedLike>(
+  n: usize,
+  compressed_body_size: usize,
+  bins: &[Bin<U>],
+) -> QCompressResult<Box<dyn NumDecompressor<U>>> {
+  if bins.is_empty() && n > 0 {
+    return Err(QCompressError::corruption(format!(
+      "unable to decompress chunk with no bins and {} numbers",
+      n,
+    )));
+  }
+  validate_bin_tree(bins)?;
 
-    let max_bits_per_num_block = bins.iter().map(max_bits_read).max().unwrap_or(usize::MAX);
-    let max_overshoot_per_num_block = bins
-      .iter()
-      .map(max_bits_overshot)
-      .max()
-      .unwrap_or(Bitlen::MAX);
-    let use_run_len = run_len_utils::use_run_len(bins);
-    let (dyn_mode, huffman_table) = if gcd::use_gcd_arithmetic(bins) {
-      (
-        DynMode::Gcd,
-        HuffmanTable::from_bins::<GcdMode>(bins),
-      )
-    } else {
-      (
-        DynMode::Classic,
-        HuffmanTable::from_bins::<ClassicMode>(bins),
-      )
-    };
-
-    Ok(NumDecompressor {
-      huffman_table,
+  let max_bits_per_num_block = bins.iter().map(max_bits_read).max().unwrap_or(usize::MAX);
+  let max_overshoot_per_num_block = bins
+    .iter()
+    .map(max_bits_overshot)
+    .max()
+    .unwrap_or(Bitlen::MAX);
+  let use_run_len = run_len_utils::use_run_len(bins);
+  let res: Box<dyn NumDecompressor<U>> = if gcd::use_gcd_arithmetic(bins) {
+    Box::new(NumDecompressorImpl {
+      huffman_table: HuffmanTable::from_bins::<U, GcdMode>(bins),
       n,
       compressed_body_size,
       max_bits_per_num_block,
       max_overshoot_per_num_block,
       use_run_len,
-      dyn_mode,
-      state: State {
-        n_processed: 0,
-        bits_processed: 0,
-        incomplete_bin: BinDecompressionInfo::default(),
-        incomplete_reps: 0,
-      },
+      mode: GcdMode,
+      state: State::default(),
     })
-  }
+  } else {
+    Box::new(NumDecompressorImpl {
+      huffman_table: HuffmanTable::from_bins::<U, ClassicMode>(bins),
+      n,
+      compressed_body_size,
+      max_bits_per_num_block,
+      max_overshoot_per_num_block,
+      use_run_len,
+      mode: ClassicMode,
+      state: State::default(),
+    })
+  };
 
-  pub fn bits_remaining(&self) -> usize {
+  Ok(res)
+}
+
+impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> for NumDecompressorImpl<U, M> {
+  fn bits_remaining(&self) -> usize {
     self.compressed_body_size * 8 - self.state.bits_processed
-  }
-
-  #[inline]
-  fn unchecked_decompress_num_block<M: Mode<U>, RunLenOp: RunLenOperator>(
-    &mut self,
-    reader: &mut BitReader,
-    mode: M,
-    dest: &mut [U],
-  ) -> usize {
-    let bin = self.huffman_table.unchecked_search_with_reader(reader);
-    RunLenOp::unchecked_decompress_for_bin::<U, M>(&mut self.state, reader, bin, mode, dest)
-  }
-
-  // returns count of numbers processed
-  #[inline(never)]
-  fn unchecked_decompress_num_blocks<M: Mode<U>, RunLenOp: RunLenOperator>(
-    &mut self,
-    reader: &mut BitReader,
-    mut guaranteed_safe_num_blocks: usize,
-    mode: M,
-    batch_size: usize,
-    n_processed: &mut usize,
-    dest: &mut [U],
-  ) {
-    while guaranteed_safe_num_blocks > 0 && RunLenOp::batch_ongoing(*n_processed, batch_size) {
-      *n_processed += self.unchecked_decompress_num_block::<M, RunLenOp>(
-        reader,
-        mode,
-        &mut dest[*n_processed..batch_size],
-      );
-      guaranteed_safe_num_blocks -= 1;
-    }
-  }
-
-  fn decompress_num_block<M: Mode<U>>(
-    &mut self,
-    reader: &mut BitReader,
-    mode: M,
-    dest: &mut [U],
-  ) -> QCompressResult<usize> {
-    let start_bit_idx = reader.bit_idx();
-    let bin_res = self.huffman_table.search_with_reader(reader);
-    if bin_res.is_err() {
-      reader.seek_to(start_bit_idx);
-    }
-    let bin = bin_res?;
-
-    match bin.run_len_jumpstart {
-      None => {
-        let res = mode.decompress_unsigned(bin, reader);
-        if res.is_err() {
-          reader.seek_to(start_bit_idx);
-        }
-        dest[0] = res?;
-        Ok(1)
-      }
-      // we stored the number of occurrences minus 1 because we knew it's at least 1
-      Some(jumpstart) => {
-        let full_reps_minus_one_res = reader.read_varint(jumpstart);
-        if full_reps_minus_one_res.is_err() {
-          reader.seek_to(start_bit_idx);
-        }
-        let full_reps = full_reps_minus_one_res? + 1;
-        self.state.incomplete_bin = *bin;
-        self.state.incomplete_reps = full_reps;
-        let reps = min(full_reps, dest.len());
-        self.decompress_offsets(reader, bin, mode, reps, dest)?;
-        self.state.incomplete_reps -= reps;
-        Ok(reps)
-      }
-    }
-  }
-
-  // errors on insufficient data, but updates unsigneds with last complete number
-  // and leaves reader at end end of last complete number
-  fn decompress_offsets<M: Mode<U>>(
-    &self,
-    reader: &mut BitReader,
-    bin: &BinDecompressionInfo<U>,
-    mode: M,
-    reps: usize,
-    dest: &mut [U],
-  ) -> QCompressResult<()> {
-    for i in 0..reps {
-      let start_bit_idx = reader.bit_idx();
-      let u = mode.decompress_unsigned(bin, reader);
-      if u.is_err() {
-        reader.seek_to(start_bit_idx);
-      }
-      dest[i] = u?;
-    }
-
-    Ok(())
   }
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
   // State managed here: n_processed, bits_processed
-  fn decompress_unsigneds_with_mode<M: Mode<U>>(
+  fn decompress_unsigneds(
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
-    mode: M,
     dest: &mut [U],
   ) -> QCompressResult<Progress> {
     let initial_reader = reader.clone();
@@ -286,7 +204,6 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     let res = self.decompress_unsigneds_dirty(
       reader,
       error_on_insufficient_data,
-      mode,
       dest,
     );
     match &res {
@@ -315,6 +232,100 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     res
   }
 
+  fn clone_inner(&self) -> Box<dyn NumDecompressor<U>> {
+    Box::new(self.clone())
+  }
+}
+
+impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
+  #[inline]
+  fn unchecked_decompress_num_block<RunLenOp: RunLenOperator>(
+    &mut self,
+    reader: &mut BitReader,
+    dest: &mut [U],
+  ) -> usize {
+    let bin = self.huffman_table.unchecked_search_with_reader(reader);
+    RunLenOp::unchecked_decompress_for_bin::<U, M>(&mut self.state, reader, bin, self.mode, dest)
+  }
+
+  // returns count of numbers processed
+  #[inline(never)]
+  fn unchecked_decompress_num_blocks<RunLenOp: RunLenOperator>(
+    &mut self,
+    reader: &mut BitReader,
+    mut guaranteed_safe_num_blocks: usize,
+    batch_size: usize,
+    n_processed: &mut usize,
+    dest: &mut [U],
+  ) {
+    while guaranteed_safe_num_blocks > 0 && RunLenOp::batch_ongoing(*n_processed, batch_size) {
+      *n_processed += self.unchecked_decompress_num_block::<RunLenOp>(
+        reader,
+        &mut dest[*n_processed..batch_size],
+      );
+      guaranteed_safe_num_blocks -= 1;
+    }
+  }
+
+  fn decompress_num_block(
+    &mut self,
+    reader: &mut BitReader,
+    dest: &mut [U],
+  ) -> QCompressResult<usize> {
+    let start_bit_idx = reader.bit_idx();
+    let bin_res = self.huffman_table.search_with_reader(reader);
+    if bin_res.is_err() {
+      reader.seek_to(start_bit_idx);
+    }
+    let bin = bin_res?;
+
+    match bin.run_len_jumpstart {
+      None => {
+        let res = self.mode.decompress_unsigned(&bin.mode_bin, reader);
+        if res.is_err() {
+          reader.seek_to(start_bit_idx);
+        }
+        dest[0] = res?;
+        Ok(1)
+      }
+      // we stored the number of occurrences minus 1 because we knew it's at least 1
+      Some(jumpstart) => {
+        let full_reps_minus_one_res = reader.read_varint(jumpstart);
+        if full_reps_minus_one_res.is_err() {
+          reader.seek_to(start_bit_idx);
+        }
+        let full_reps = full_reps_minus_one_res? + 1;
+        self.state.incomplete_bin = Some(bin.mode_bin);
+        self.state.incomplete_reps = full_reps;
+        let reps = min(full_reps, dest.len());
+        self.decompress_offsets(reader, &bin.mode_bin, reps, dest)?;
+        self.state.incomplete_reps -= reps;
+        Ok(reps)
+      }
+    }
+  }
+
+  // errors on insufficient data, but updates unsigneds with last complete number
+  // and leaves reader at end end of last complete number
+  fn decompress_offsets(
+    &self,
+    reader: &mut BitReader,
+    bin: &M::Bin,
+    reps: usize,
+    dest: &mut [U],
+  ) -> QCompressResult<()> {
+    for i in 0..reps {
+      let start_bit_idx = reader.bit_idx();
+      let u = self.mode.decompress_unsigned(bin, reader);
+      if u.is_err() {
+        reader.seek_to(start_bit_idx);
+      }
+      dest[i] = u?;
+    }
+
+    Ok(())
+  }
+
   // After much debugging a performance degradation from error handling changes,
   // it turned out this function's logic ran slower when inlining.
   // I don't understand why, but telling it not
@@ -323,11 +334,10 @@ impl<U: UnsignedLike> NumDecompressor<U> {
   //
   // state managed here: incomplete_bin
   #[inline(never)]
-  fn decompress_unsigneds_dirty<M: Mode<U>>(
+  fn decompress_unsigneds_dirty(
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
-    mode: M,
     dest: &mut [U],
   ) -> QCompressResult<Progress> {
     let batch_size = min(self.n - self.state.n_processed, dest.len());
@@ -340,7 +350,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
     // treating this case (constant data) as special improves its performance
     if self.max_bits_per_num_block == 0 {
       let constant_bin = self.huffman_table.unchecked_search_with_reader(reader);
-      let constant = mode.decompress_unsigned(constant_bin, reader)?;
+      let constant = self.mode.decompress_unsigned(&constant_bin.mode_bin, reader)?;
       dest[0..batch_size].fill(constant);
       res.n_processed = batch_size;
       return Ok(res);
@@ -365,8 +375,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
       let reps = min(incomplete_reps, batch_size);
       let incomplete_res = self.decompress_offsets(
         reader,
-        &self.state.incomplete_bin,
-        mode,
+        self.state.incomplete_bin.as_ref().unwrap(),
         reps,
         dest,
       );
@@ -396,23 +405,21 @@ impl<U: UnsignedLike> NumDecompressor<U> {
         // don't slow down the tight loops with runtime checks - do these upfront to choose
         // the best compiled tight loop
         if self.use_run_len {
-          self.unchecked_decompress_num_blocks::<M, GeneralRunLenOp>(
+          self.unchecked_decompress_num_blocks::<GeneralRunLenOp>(
             reader,
             guaranteed_safe_num_blocks,
-            mode,
             batch_size,
             &mut res.n_processed,
             dest,
-          )
+          );
         } else {
-          self.unchecked_decompress_num_blocks::<M, TrivialRunLenOp>(
+          self.unchecked_decompress_num_blocks::<TrivialRunLenOp>(
             reader,
             guaranteed_safe_num_blocks,
-            mode,
             batch_size,
             &mut res.n_processed,
             dest,
-          )
+          );
         }
       } else {
         break;
@@ -421,7 +428,7 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
     // do checked operations for the rest
     while res.n_processed < batch_size {
-      res.n_processed += match self.decompress_num_block(reader, mode, &mut dest[res.n_processed..])
+      res.n_processed += match self.decompress_num_block(reader, &mut dest[res.n_processed..])
       {
         Ok(n_processed) => n_processed,
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => {
@@ -433,32 +440,10 @@ impl<U: UnsignedLike> NumDecompressor<U> {
 
     Ok(res)
   }
+}
 
-  pub fn decompress_unsigneds(
-    &mut self,
-    reader: &mut BitReader,
-    error_on_insufficient_data: bool,
-    dest: &mut [U],
-  ) -> QCompressResult<Progress> {
-    match self.dyn_mode {
-      DynMode::Gcd => self.decompress_unsigneds_with_mode(
-        reader,
-        error_on_insufficient_data,
-        GcdMode,
-        dest,
-      ),
-      DynMode::Classic => self.decompress_unsigneds_with_mode(
-        reader,
-        error_on_insufficient_data,
-        ClassicMode,
-        dest,
-      ),
-      DynMode::FloatMult(ratio) => self.decompress_unsigneds_with_mode(
-        reader,
-        error_on_insufficient_data,
-        FloatMultMode::new(ratio),
-        dest,
-      ),
-    }
+impl<U: UnsignedLike> Clone for Box<dyn NumDecompressor<U>> {
+  fn clone(&self) -> Self {
+    self.clone_inner()
   }
 }

@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
+use crate::modes::ModeBin;
 
 /// A pairing of a Huffman code with a numerical range.
 ///
@@ -41,8 +42,7 @@ pub struct Bin<U: UnsignedLike> {
   /// (in the data type's corresponding unsigned integer).
   pub gcd: U,
   /// TODO
-  pub float_mult_base: U,
-  pub adj_base: U,
+  pub float_mult_base: U::Float,
   pub adj_bits: Bitlen,
 }
 
@@ -68,7 +68,7 @@ impl<U: UnsignedLike> Display for Bin<U> {
 }
 
 // used during compression to determine Huffman codes
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct WeightedPrefix<U: UnsignedLike> {
   pub bin: BinCompressionInfo<U>,
   // How to weight this bin during huffman coding,
@@ -103,9 +103,8 @@ impl<U: UnsignedLike> WeightedPrefix<U> {
       gcd,
       code: 0,
       code_len: 0,
-      float_mult_base: U::ZERO,
+      float_mult_base: U::Float::default(),
       adj_bits: 0,
-      adj_base: U::ZERO,
     };
     WeightedPrefix { bin, weight }
   }
@@ -121,8 +120,7 @@ pub struct BinCompressionInfo<U: UnsignedLike> {
   pub offset_bits: Bitlen,
   pub run_len_jumpstart: Option<Bitlen>,
   pub gcd: U,
-  pub float_mult_base: U,
-  pub adj_base: U,
+  pub float_mult_base: U::Float,
   pub adj_bits: Bitlen,
 }
 
@@ -137,7 +135,6 @@ impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
       run_len_jumpstart: info.run_len_jumpstart,
       gcd: info.gcd,
       float_mult_base: info.float_mult_base,
-      adj_base: info.adj_base,
       adj_bits: info.adj_bits,
     }
   }
@@ -160,8 +157,7 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
       offset_bits: U::BITS,
       run_len_jumpstart: None,
       gcd: U::ONE,
-      float_mult_base: U::ZERO,
-      adj_base: U::ZERO,
+      float_mult_base: U::Float::default(),
       adj_bits: 0,
     }
   }
@@ -173,11 +169,8 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
 // so we given them lousy names. This is a hack but probably better than adding
 // a bunch more generics and associated types.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct BinDecompressionInfo<U: UnsignedLike> {
+pub struct BinDecompressionInfo<B: ModeBin> {
   pub depth: Bitlen,
   pub run_len_jumpstart: Option<Bitlen>,
-  pub unsigned0: U,
-  pub unsigned1: U,
-  pub bitlen0: Bitlen,
-  pub bitlen1: Bitlen,
+  pub mode_bin: B,
 }

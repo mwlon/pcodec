@@ -40,8 +40,18 @@ macro_rules! impl_unsigned {
       }
 
       #[inline]
-      fn to_float(self) -> Self::Float {
+      fn to_float_numerical(self) -> Self::Float {
         self as Self::Float
+      }
+
+      #[inline]
+      fn from_float_numerical(float: Self::Float) -> Self {
+        float as Self
+      }
+
+      #[inline]
+      fn to_float_bits(self) -> Self::Float {
+        Self::Float::from_bits(self)
       }
 
       #[inline]

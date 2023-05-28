@@ -6,7 +6,8 @@ use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
-use crate::num_decompressor::NumDecompressor;
+use crate::num_decompressor;
+use crate::num_decompressor::{NumDecompressor};
 use crate::progress::Progress;
 use crate::{delta_encoding, Bin};
 
@@ -14,7 +15,7 @@ use crate::{delta_encoding, Bin};
 // delta encoding.
 #[derive(Clone, Debug)]
 pub struct BodyDecompressor<T: NumberLike> {
-  num_decompressor: NumDecompressor<T::Unsigned>,
+  num_decompressor: Box<dyn NumDecompressor<T::Unsigned>>,
   n: usize,
   delta_moments: DeltaMoments<T::Unsigned>,
   n_processed: usize,
@@ -35,7 +36,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
     compressed_body_size: usize,
     delta_moments: &DeltaMoments<T::Unsigned>,
   ) -> QCompressResult<Self> {
-    let num_decompressor = NumDecompressor::new(
+    let num_decompressor = num_decompressor::new(
       n.saturating_sub(delta_moments.order()),
       compressed_body_size,
       bins,
@@ -122,8 +123,7 @@ mod tests {
       offset_bits: 6,
       run_len_jumpstart: None,
       gcd: 1,
-      float_mult_base: 0,
-      adj_base: 0,
+      float_mult_base: 0.0,
       adj_bits: 0,
     }
   }
