@@ -82,6 +82,7 @@ fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize
         MAX_AUTO_DELTA_COMPRESSION_LEVEL,
       ),
       use_gcds: false,
+      use_float_mult: false,
     };
     let mut compressor = Compressor::<T>::from_config(config);
     compressor.header().unwrap();

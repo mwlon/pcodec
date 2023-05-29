@@ -2,37 +2,40 @@
 // This type could also be u8 or u16.
 pub type Bitlen = u32;
 
+// magic identification bytes
 pub const MAGIC_HEADER: [u8; 4] = [113, 99, 111, 33]; // ascii for qco!
 pub const MAGIC_CHUNK_BYTE: u8 = 44; // ,
 pub const MAGIC_TERMINATION_BYTE: u8 = 46; // .
 
+// bit lengths
 pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: Bitlen = 3;
 pub const BITS_TO_ENCODE_N_ENTRIES: Bitlen = 24;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
 pub const BITS_TO_ENCODE_JUMPSTART: Bitlen = 5;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
 pub const BITS_TO_ENCODE_CODE_LEN: Bitlen = 5;
-pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
-pub const MAX_ENTRIES: usize = (1 << 24) - 1;
 pub const MAX_JUMPSTART: Bitlen = BITS_TO_ENCODE_N_ENTRIES;
 
-// MAX_BIN_TABLE_SIZE_LOG is a performance tuning parameter
-// Too high, and we use excessive memory and in some cases hurt performance.
-// Too low, and performance drops.
+// performance tuning parameters
 pub const MAX_BIN_TABLE_SIZE_LOG: Bitlen = 8;
 pub const UNSIGNED_BATCH_SIZE: usize = 512;
 
+// native architecture info
 pub const WORD_SIZE: usize = usize::BITS as usize;
 pub const WORD_BITLEN: Bitlen = usize::BITS as Bitlen;
 pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
 
-pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
-pub const MAX_COMPRESSION_LEVEL: usize = 12;
-pub const MIN_N_TO_USE_RUN_LEN: usize = 1001;
-pub const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
-
+// cutoffs and legal parameter values
 pub const AUTO_DELTA_LIMIT: usize = 1100;
+pub const MAX_COMPRESSION_LEVEL: usize = 12;
+pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
+pub const MAX_ENTRIES: usize = (1 << 24) - 1;
+pub const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
+pub const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
+
+// defaults
+pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 
 #[cfg(test)]
 mod tests {

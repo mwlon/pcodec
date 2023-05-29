@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
@@ -8,10 +9,16 @@ mod signeds;
 mod unsigneds;
 
 pub trait FloatLike:
-  Add<Output = Self> + Copy + Debug + Mul<Output = Self> + Sub<Output = Self>
+  Add<Output = Self> + Copy + Debug + Mul<Output = Self> + PartialOrd + Sub<Output = Self>
 {
+  const PRECISION_BITS: Bitlen;
+  const GREATEST_PRECISE_INT: Self;
+  fn abs(self) -> Self;
   fn inv(self) -> Self;
   fn round(self) -> Self;
+  fn log2_epsilons_between_positives(a: Self, b: Self) -> Bitlen;
+  fn from_u64_numerical(x: u64) -> Self;
+  fn total_cmp(a: &Self, b: &Self) -> Ordering;
 }
 
 /// Trait for data types that behave like unsigned integers.
@@ -123,6 +130,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// implementations.
   /// Note that booleans have 8 physical bits (not 1).
   const PHYSICAL_BITS: usize;
+  const IS_FLOAT: bool = false;
 
   /// The unsigned integer this type can convert between to do
   /// bitwise logic and such.

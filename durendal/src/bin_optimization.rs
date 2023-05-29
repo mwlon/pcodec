@@ -133,18 +133,15 @@ mod tests {
   use crate::base_compressor::InternalCompressorConfig;
   use crate::bin::{BinCompressionInfo};
   use crate::bin_optimization::optimize_bins;
-  use crate::Flags;
+  use crate::{CompressorConfig, Flags};
 
-  fn basic_optimize(wps: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {
+  fn basic_optimize(bins: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {
     let flags = Flags {
       delta_encoding_order: 0,
       use_wrapped_mode: false,
     };
-    let internal_config = InternalCompressorConfig {
-      compression_level: 6,
-      use_gcds: true,
-    };
-    optimize_bins(wps, &internal_config, &flags, 100)
+    let internal_config = InternalCompressorConfig::from_config::<u32>(&CompressorConfig::default());
+    optimize_bins(bins, &internal_config, &flags, 100)
   }
 
   #[test]

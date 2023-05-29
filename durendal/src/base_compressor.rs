@@ -13,7 +13,7 @@ use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::classic::ClassicMode;
-use crate::modes::float_mult::FloatMultMode;
+use crate::modes::float_mult::{FloatMultMode, Strategy};
 use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
 use crate::modes::{gcd, DynMode};
@@ -74,6 +74,8 @@ pub struct CompressorConfig {
   /// When this is helpful and in rare cases when it isn't, compression speed
   /// is slightly reduced.
   pub use_gcds: bool,
+  // TODO
+  pub use_float_mult: bool,
 }
 
 impl Default for CompressorConfig {
@@ -82,6 +84,7 @@ impl Default for CompressorConfig {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
       use_gcds: true,
+      use_float_mult: true,
     }
   }
 }
@@ -113,20 +116,16 @@ impl CompressorConfig {
 pub struct InternalCompressorConfig {
   pub compression_level: usize,
   pub use_gcds: bool,
+  pub use_float_mult: bool,
 }
 
-impl From<&CompressorConfig> for InternalCompressorConfig {
-  fn from(config: &CompressorConfig) -> Self {
+impl InternalCompressorConfig {
+  pub fn from_config<T: NumberLike>(config: &CompressorConfig) -> Self {
     InternalCompressorConfig {
       compression_level: config.compression_level,
       use_gcds: config.use_gcds,
+      use_float_mult: config.use_float_mult && T::IS_FLOAT,
     }
-  }
-}
-
-impl Default for InternalCompressorConfig {
-  fn default() -> Self {
-    Self::from(&CompressorConfig::default())
   }
 }
 
@@ -148,6 +147,7 @@ struct BinBuffer<'a, U: UnsignedLike> {
   n_unsigneds: usize,
   sorted: &'a [U],
   use_gcd: bool,
+  float_mult_base_and_inv: Option<(U::Float, U::Float)>,
   pub target_j: usize,
 }
 
@@ -156,7 +156,12 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], use_gcd: bool) -> Self {
+  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], use_gcd: bool, use_float_mult: bool) -> Self {
+    let float_mult_base_and_inv = if use_float_mult {
+      Strategy::default().choose_base_and_inv(sorted)
+    } else {
+      None
+    };
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
@@ -164,6 +169,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
       n_unsigneds,
       sorted,
       use_gcd,
+      float_mult_base_and_inv,
       target_j: 0,
     };
     res.calc_target_j();
@@ -186,6 +192,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     } else {
       U::ONE
     };
+
     let bin = BinCompressionInfo::new(count, lower, upper, None, gcd);
     self.seq.push(bin);
     self.bin_idx = new_bin_idx;
@@ -218,10 +225,9 @@ fn choose_unoptimized_bins<U: UnsignedLike>(
     n_unsigneds,
   );
 
-  let use_gcd = internal_config.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, use_gcd);
+  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, internal_config.use_gcds, internal_config.use_float_mult);
 
   for j in 1..n_unsigneds {
     let target_j = bin_buffer.target_j;
@@ -406,7 +412,7 @@ fn bins_from_compression_infos<U: UnsignedLike>(infos: &[BinCompressionInfo<U>])
 impl<T: NumberLike> BaseCompressor<T> {
   pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> Self {
     Self {
-      internal_config: InternalCompressorConfig::from(&config),
+      internal_config: InternalCompressorConfig::from_config::<T>(&config),
       flags: Flags::from_config(&config, use_wrapped_mode),
       writer: BitWriter::default(),
       state: State::default(),

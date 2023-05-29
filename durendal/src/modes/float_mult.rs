@@ -1,12 +1,17 @@
+use std::marker::PhantomData;
 use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
 use crate::Bin;
 
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
 use crate::modes::{Mode, ModeBin};
+
+// We'll only consider using FloatMultMode if we can save at least 1/this of the
+// mantissa bits by using it.
+const REQUIRED_INFORMATION_GAIN_DENOM: Bitlen = 6;
 
 fn calc_adj_lower<U: UnsignedLike>(adj_offset_bits: Bitlen) -> U {
   if adj_offset_bits == 0 {
@@ -93,6 +98,192 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
   }
 }
 
+enum StrategyChainResult {
+  CloseToExactMultiple,
+  FarFromExactMultiple,
+  Uninformative, // the base is not much bigger than machine epsilon
+}
+
+struct StrategyChain<U: UnsignedLike> {
+  bases_and_invs: Vec<(U::Float, U::Float)>,
+  candidate_idx: Option<usize>,
+  pub proven_useful: bool,
+  phantom: PhantomData<U>,
+}
+
+impl<U: UnsignedLike> StrategyChain<U> {
+  fn inv_powers_of(inv_base_0: u64, n_powers: u32) -> Self {
+    let mut inv_base = inv_base_0;
+    let mut bases_and_invs = Vec::new();
+    for _ in 0..n_powers {
+      let inv_base_float = U::Float::from_u64_numerical(inv_base);
+      bases_and_invs.push((inv_base_float.inv(), inv_base_float));
+      inv_base *= inv_base_0;
+    }
+
+    Self {
+      bases_and_invs,
+      candidate_idx: Some(0),
+      proven_useful: false,
+      phantom: PhantomData,
+    }
+  }
+
+  fn current_base_and_inv(&self) -> Option<(U::Float, U::Float)> {
+    self.candidate_idx.and_then(|idx| self.bases_and_invs.get(idx).cloned())
+  }
+
+  fn current_inv_base(&self) -> Option<U::Float> {
+    self.current_base_and_inv()
+      .map(|(_, inv_base)| inv_base)
+  }
+
+  fn compatibility_with(&self, sorted_chunk: &[U]) -> StrategyChainResult {
+    match self.current_base_and_inv() {
+      Some((base, inv_base)) => {
+        let abs_floats = sorted_chunk.iter()
+          .map(|&u| U::Float::from_unsigned(u).abs())
+          .collect::<Vec<_>>();
+        let base_bits: Vec<Bitlen> = abs_floats.iter()
+          .map(|&x| {
+            U::Float::log2_epsilons_between_positives(x, x + base)
+          })
+          .collect();
+        let adj_bits: Vec<Bitlen> = abs_floats.iter()
+          .map(|&x| {
+            let mult = (x * inv_base).round();
+            U::Float::log2_epsilons_between_positives(x, mult * base)
+          })
+          .collect();
+
+        let mut res = StrategyChainResult::Uninformative;
+        let required_information_gain = U::Float::PRECISION_BITS / REQUIRED_INFORMATION_GAIN_DENOM;
+        println!();
+        for i in 0..sorted_chunk.len() {
+          println!("{} {} {}", i, adj_bits[i], base_bits[i]);
+          if adj_bits[i] > base_bits[i].saturating_sub(required_information_gain) {
+            println!("FAR!");
+            return StrategyChainResult::FarFromExactMultiple;
+          } else if base_bits[i] >= required_information_gain {
+            println!("INFORMATIVE!");
+            res = StrategyChainResult::CloseToExactMultiple;
+          }
+        }
+        println!("RET!");
+        res
+      }
+      None => StrategyChainResult::Uninformative
+    }
+  }
+
+  // returns None if adjustment is numerically unsafe or impossible
+  // fn abs_adjustment_needed<U: UnsignedLike<Float=F>>(&self, u: U) -> Option<U> {
+  //   match self.bases_and_invs.get(self.candidate_idx) {
+  //     Some((base, inv_base)) => {
+  //       let float = U::Float::from_unsigned(u);
+  //       let mult = (float * inv_base).round();
+  //       // note that doing the contrapositive would be invalid due to NAN
+  //       // comparison
+  //       if mult.abs() <= U::Float::MAX_PRECISE_INTEGER / 2 {
+  //         let approx = mult * base;
+  //         Some(u.wrapping_sub(approx.abs().to_unsigned()))
+  //       } else {
+  //         None
+  //       }
+  //     }
+  //     None => None
+  //   }
+  // }
+  //
+  // pub fn adjustment_bits_needed<U: UnsignedLike<Float=F>>(&self, u: U) -> Option<Bitlen> {
+  //   let adj = self.abs_adjustment_needed(u)?;
+  //   let bits_needed = if adj == U::ZERO {
+  //     0
+  //   } else {
+  //     U::BITS - adj.leading_zeros() + 1
+  //   };
+  //   Some(bits_needed)
+  // }
+
+  fn is_invalid(&self) -> bool {
+    self.current_base_and_inv().is_none()
+  }
+
+  pub fn relax(&mut self) {
+    self.candidate_idx.iter_mut().for_each(|idx| *idx += 1);
+  }
+
+  fn invalidate(&mut self) {
+    self.candidate_idx = None;
+  }
+}
+
+// We'll go through all the nums and check if each one is numerically close to
+// a multiple of the first base in each chain. If not, we'll fall back to the
+// 2nd base here, and so forth, assuming that all numbers divisible by the nth
+// base are also divisible by the n+1st.
+pub struct Strategy<U: UnsignedLike> {
+  chains: Vec<StrategyChain<U>>,
+}
+
+impl<U: UnsignedLike> Strategy<U> {
+  pub fn choose_base_and_inv(&mut self, sorted: &[U]) -> Option<(U::Float, U::Float)> {
+    let smallest = U::Float::from_unsigned(sorted[0]);
+    let biggest = U::Float::from_unsigned(*sorted.last().unwrap());
+    let biggest_float = [smallest, biggest, biggest - smallest].iter()
+      .map(|x| x.abs())
+      .max_by(U::Float::total_cmp)
+      .unwrap();
+
+    let mut invalid_count = 0;
+    for chunk in sorted.chunks(UNSIGNED_BATCH_SIZE) {
+      if invalid_count == self.chains.len() {
+        break;
+      }
+
+      for chain in &mut self.chains {
+        if chain.is_invalid() {
+          continue;
+        }
+
+        // but NANs are ok
+        if biggest_float * chain.current_inv_base().unwrap() >= U::Float::GREATEST_PRECISE_INT {
+          invalid_count += 1;
+          chain.invalidate();
+        }
+
+        loop {
+          let compatibility = chain.compatibility_with(chunk);
+          match compatibility {
+            StrategyChainResult::FarFromExactMultiple => chain.relax(),
+            StrategyChainResult::CloseToExactMultiple => {
+              chain.proven_useful = true;
+              break;
+            },
+            _ => break,
+          }
+        }
+      }
+    }
+
+    self.chains.iter().flat_map(|chain| if chain.proven_useful {
+      chain.current_inv_base()
+    } else {
+      None
+    }).max_by(U::Float::total_cmp)
+      .map(|inv_base| (inv_base.inv(), inv_base))
+  }
+}
+
+impl<U: UnsignedLike> Default for Strategy<U> {
+  fn default() -> Self {
+    // 0.1, 0.01, ... 10^-9
+    Self {
+      chains: vec![StrategyChain::inv_powers_of(10, 9)],
+    }
+  }
+}
+
 #[cfg(test)]
 mod test {
   use super::*;
@@ -168,5 +359,30 @@ mod test {
     check(mode, bin, f64::NEG_INFINITY, "nan")?;
 
     Ok(())
+  }
+
+  #[test]
+  fn test_choose_base() {
+    fn inv_base(floats: Vec<f64>) -> Option<f64> {
+      let mut strategy = Strategy::<u64>::default();
+      let sorted = floats.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
+      strategy.choose_base_and_inv(&sorted)
+        .map(|(_, inv_base)| inv_base)
+    }
+
+    let floats = vec![-0.1, 0.1, 0.100000000001, 0.33, 1.01, 1.1];
+    assert_eq!(inv_base(floats), Some(100.0));
+
+    let floats = vec![-f64::NEG_INFINITY, -f64::NAN, -0.1, 1.0, 1.1, f64::NAN, f64::INFINITY];
+    assert_eq!(inv_base(floats), Some(10.0));
+
+    let floats = vec![-(2.0_f64.powi(53)), -0.1, 1.0, 1.1];
+    assert_eq!(inv_base(floats), None);
+
+    let floats = vec![-0.1, 1.0, 1.1, 2.0_f64.powi(53)];
+    assert_eq!(inv_base(floats), None);
+
+    let floats = vec![1.0 / 7.0, 2.0 / 7.0];
+    assert_eq!(inv_base(floats), None);
   }
 }
