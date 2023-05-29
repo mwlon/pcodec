@@ -1,9 +1,9 @@
-use std::marker::PhantomData;
 use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
 use crate::Bin;
+use std::marker::PhantomData;
 
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
@@ -78,7 +78,9 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let offset = reader.unchecked_read_uint::<U>(bin.mult_offset_bits);
     let mult = bin.mult_lower + U::to_float_numerical(offset);
     let approx = mult * self.base;
-    let adj = bin.adj_lower.wrapping_add(reader.unchecked_read_uint(bin.adj_offset_bits));
+    let adj = bin
+      .adj_lower
+      .wrapping_add(reader.unchecked_read_uint(bin.adj_offset_bits));
     // println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
     approx.to_unsigned().wrapping_add(adj)
   }
@@ -92,7 +94,9 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let offset = reader.read_uint::<U>(bin.mult_offset_bits)?;
     let mult = bin.mult_lower + U::to_float_numerical(offset);
     let approx = mult * self.base;
-    let adj = bin.adj_lower.wrapping_add(reader.read_uint(bin.adj_offset_bits)?);
+    let adj = bin
+      .adj_lower
+      .wrapping_add(reader.read_uint(bin.adj_offset_bits)?);
     // println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
     Ok(approx.to_unsigned().wrapping_add(adj))
   }
@@ -130,26 +134,28 @@ impl<U: UnsignedLike> StrategyChain<U> {
   }
 
   fn current_base_and_inv(&self) -> Option<(U::Float, U::Float)> {
-    self.candidate_idx.and_then(|idx| self.bases_and_invs.get(idx).cloned())
+    self
+      .candidate_idx
+      .and_then(|idx| self.bases_and_invs.get(idx).cloned())
   }
 
   fn current_inv_base(&self) -> Option<U::Float> {
-    self.current_base_and_inv()
-      .map(|(_, inv_base)| inv_base)
+    self.current_base_and_inv().map(|(_, inv_base)| inv_base)
   }
 
   fn compatibility_with(&self, sorted_chunk: &[U]) -> StrategyChainResult {
     match self.current_base_and_inv() {
       Some((base, inv_base)) => {
-        let abs_floats = sorted_chunk.iter()
+        let abs_floats = sorted_chunk
+          .iter()
           .map(|&u| U::Float::from_unsigned(u).abs())
           .collect::<Vec<_>>();
-        let base_bits: Vec<Bitlen> = abs_floats.iter()
-          .map(|&x| {
-            U::Float::log2_epsilons_between_positives(x, x + base)
-          })
+        let base_bits: Vec<Bitlen> = abs_floats
+          .iter()
+          .map(|&x| U::Float::log2_epsilons_between_positives(x, x + base))
           .collect();
-        let adj_bits: Vec<Bitlen> = abs_floats.iter()
+        let adj_bits: Vec<Bitlen> = abs_floats
+          .iter()
           .map(|&x| {
             let mult = (x * inv_base).round();
             U::Float::log2_epsilons_between_positives(x, mult * base)
@@ -172,7 +178,7 @@ impl<U: UnsignedLike> StrategyChain<U> {
         println!("RET!");
         res
       }
-      None => StrategyChainResult::Uninformative
+      None => StrategyChainResult::Uninformative,
     }
   }
 
@@ -230,7 +236,8 @@ impl<U: UnsignedLike> Strategy<U> {
   pub fn choose_base_and_inv(&mut self, sorted: &[U]) -> Option<(U::Float, U::Float)> {
     let smallest = U::Float::from_unsigned(sorted[0]);
     let biggest = U::Float::from_unsigned(*sorted.last().unwrap());
-    let biggest_float = [smallest, biggest, biggest - smallest].iter()
+    let biggest_float = [smallest, biggest, biggest - smallest]
+      .iter()
       .map(|x| x.abs())
       .max_by(U::Float::total_cmp)
       .unwrap();
@@ -259,18 +266,24 @@ impl<U: UnsignedLike> Strategy<U> {
             StrategyChainResult::CloseToExactMultiple => {
               chain.proven_useful = true;
               break;
-            },
+            }
             _ => break,
           }
         }
       }
     }
 
-    self.chains.iter().flat_map(|chain| if chain.proven_useful {
-      chain.current_inv_base()
-    } else {
-      None
-    }).max_by(U::Float::total_cmp)
+    self
+      .chains
+      .iter()
+      .flat_map(|chain| {
+        if chain.proven_useful {
+          chain.current_inv_base()
+        } else {
+          None
+        }
+      })
+      .max_by(U::Float::total_cmp)
       .map(|inv_base| (inv_base.inv(), inv_base))
   }
 }
@@ -327,9 +340,17 @@ mod test {
     let mut reader1 = BitReader::from(&words);
     let recovered = mode.unchecked_decompress_unsigned(&d_info, &mut reader0);
     let recovered_float = f64::from_unsigned(recovered);
-    assert_eq!(recovered, u, "{} unchecked: {} vs {}", desc, recovered_float, x);
+    assert_eq!(
+      recovered, u,
+      "{} unchecked: {} vs {}",
+      desc, recovered_float, x
+    );
     let recovered = mode.decompress_unsigned(&d_info, &mut reader1)?;
-    assert_eq!(recovered, u, "{} checked: {} vs {}", desc, recovered_float, x);
+    assert_eq!(
+      recovered, u,
+      "{} checked: {} vs {}",
+      desc, recovered_float, x
+    );
     Ok(())
   }
 
@@ -366,14 +387,23 @@ mod test {
     fn inv_base(floats: Vec<f64>) -> Option<f64> {
       let mut strategy = Strategy::<u64>::default();
       let sorted = floats.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
-      strategy.choose_base_and_inv(&sorted)
+      strategy
+        .choose_base_and_inv(&sorted)
         .map(|(_, inv_base)| inv_base)
     }
 
     let floats = vec![-0.1, 0.1, 0.100000000001, 0.33, 1.01, 1.1];
     assert_eq!(inv_base(floats), Some(100.0));
 
-    let floats = vec![-f64::NEG_INFINITY, -f64::NAN, -0.1, 1.0, 1.1, f64::NAN, f64::INFINITY];
+    let floats = vec![
+      -f64::NEG_INFINITY,
+      -f64::NAN,
+      -0.1,
+      1.0,
+      1.1,
+      f64::NAN,
+      f64::INFINITY,
+    ];
     assert_eq!(inv_base(floats), Some(10.0));
 
     let floats = vec![-(2.0_f64.powi(53)), -0.1, 1.0, 1.1];

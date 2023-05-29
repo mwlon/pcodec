@@ -156,7 +156,13 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], use_gcd: bool, use_float_mult: bool) -> Self {
+  fn new(
+    max_n_bin: usize,
+    n_unsigneds: usize,
+    sorted: &'a [U],
+    use_gcd: bool,
+    use_float_mult: bool,
+  ) -> Self {
     let float_mult_base_and_inv = if use_float_mult {
       Strategy::default().choose_base_and_inv(sorted)
     } else {
@@ -227,7 +233,13 @@ fn choose_unoptimized_bins<U: UnsignedLike>(
 
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, internal_config.use_gcds, internal_config.use_float_mult);
+  let mut bin_buffer = BinBuffer::<U>::new(
+    max_n_bin,
+    n_unsigneds,
+    sorted,
+    internal_config.use_gcds,
+    internal_config.use_float_mult,
+  );
 
   for j in 1..n_unsigneds {
     let target_j = bin_buffer.target_j;

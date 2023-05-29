@@ -68,13 +68,7 @@ impl<U: UnsignedLike> Display for Bin<U> {
 }
 
 impl<U: UnsignedLike> BinCompressionInfo<U> {
-  pub fn new(
-    count: usize,
-    lower: U,
-    upper: U,
-    run_len_jumpstart: Option<Bitlen>,
-    gcd: U,
-  ) -> Self {
+  pub fn new(count: usize, lower: U, upper: U, run_len_jumpstart: Option<Bitlen>, gcd: U) -> Self {
     let diff = (upper - lower) / gcd;
     let offset_bits = if diff == U::ZERO {
       0

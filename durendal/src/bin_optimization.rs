@@ -1,10 +1,10 @@
 use crate::base_compressor::InternalCompressorConfig;
+use crate::bin::BinCompressionInfo;
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
 use crate::data_types::UnsignedLike;
 use crate::modes::gcd;
-use crate::{bits, Flags, run_len_utils};
-use crate::bin::BinCompressionInfo;
+use crate::{bits, run_len_utils, Flags};
 
 fn bin_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
@@ -80,13 +80,13 @@ pub fn optimize_bins<U: UnsignedLike>(
       }
       let cost = best_costs[j]
         + bin_bit_cost::<U>(
-        base_meta_cost,
-        lower,
-        upper,
-        cum_count_i - cum_count[j],
-        n,
-        gcd_acc.unwrap_or(U::ONE),
-      );
+          base_meta_cost,
+          lower,
+          upper,
+          cum_count_i - cum_count[j],
+          n,
+          gcd_acc.unwrap_or(U::ONE),
+        );
       if cost < best_cost {
         best_cost = cost;
         best_j = j;
@@ -131,7 +131,7 @@ pub fn optimize_bins<U: UnsignedLike>(
 #[cfg(test)]
 mod tests {
   use crate::base_compressor::InternalCompressorConfig;
-  use crate::bin::{BinCompressionInfo};
+  use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
   use crate::{CompressorConfig, Flags};
 
@@ -140,7 +140,8 @@ mod tests {
       delta_encoding_order: 0,
       use_wrapped_mode: false,
     };
-    let internal_config = InternalCompressorConfig::from_config::<u32>(&CompressorConfig::default());
+    let internal_config =
+      InternalCompressorConfig::from_config::<u32>(&CompressorConfig::default());
     optimize_bins(bins, &internal_config, &flags, 100)
   }
 
