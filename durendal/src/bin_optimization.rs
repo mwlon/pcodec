@@ -1,38 +1,34 @@
+use crate::{bits, Flags, run_len_utils};
 use crate::base_compressor::InternalCompressorConfig;
 use crate::bin::BinCompressionInfo;
 use crate::bits::{avg_depth_bits, avg_offset_bits};
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
 use crate::data_types::UnsignedLike;
-use crate::modes::gcd;
-use crate::{bits, run_len_utils, Flags};
+use crate::modes::{gcd, Mode};
 
-fn bin_bit_cost<U: UnsignedLike>(
+fn bin_bit_cost<U: UnsignedLike, M: Mode<U>>(
   base_meta_cost: f64,
   lower: U,
   upper: U,
   count: usize,
   n: usize,
-  gcd: U,
+  mode: M,
+  acc: &M::BinOptAccumulator,
 ) -> f64 {
-  let offset_cost = avg_offset_bits(lower, upper, gcd);
   let (weight, jumpstart_cost) = run_len_utils::weight_and_jumpstart_cost(count, n);
   let total_weight = n + weight - count;
   let huffman_cost = avg_depth_bits(weight, total_weight);
-  // best approximation of GCD metadata bit cost we can do without knowing
-  // what's going on in the other bins
-  let gcd_cost = if gcd > U::ONE { U::BITS as f64 } else { 0.0 };
   base_meta_cost +
-    gcd_cost + // extra meta cost of storing GCD
     huffman_cost + // extra meta cost of storing Huffman code
     (huffman_cost + jumpstart_cost) * (weight as f64) +
-    offset_cost * count as f64
+    mode.bin_cost(lower, upper, count, acc)
 }
 
 // this is an exact optimal strategy
-pub fn optimize_bins<U: UnsignedLike>(
+pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
   bins: Vec<BinCompressionInfo<U>>,
-  internal_config: &InternalCompressorConfig,
   flags: &Flags,
+  mode: M,
   n: usize,
 ) -> Vec<BinCompressionInfo<U>> {
   let mut c = 0;
@@ -42,9 +38,8 @@ pub fn optimize_bins<U: UnsignedLike>(
     c += bin.count;
     cum_count.push(c);
   }
-  let gcds = bins.iter().map(|p| p.gcd).collect::<Vec<_>>();
-  let lower_unsigneds = bins.iter().map(|p| p.lower).collect::<Vec<_>>();
-  let upper_unsigneds = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
+  let lowers = bins.iter().map(|bin| bin.lower).collect::<Vec<_>>();
+  let uppers = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
 
   let mut best_costs = Vec::with_capacity(bins.len() + 1);
   let mut best_paths = Vec::with_capacity(bins.len() + 1);
@@ -56,36 +51,28 @@ pub fn optimize_bins<U: UnsignedLike>(
     U::BITS as f64 + // lower and upper bounds
     bits::bits_to_encode_offset_bits::<U>() as f64 +
     BITS_TO_ENCODE_CODE_LEN as f64 +
+    M::EXTRA_META_COST +
     1.0; // bit to say there is no run len jumpstart
-
-  // determine whether we can skip GCD folding to improve performance in some cases
-  let fold_gcd = gcd::use_gcd_bin_optimize(&bins, internal_config);
 
   for i in 0..bins.len() {
     let mut best_cost = f64::MAX;
     let mut best_j = usize::MAX;
-    let upper = upper_unsigneds[i];
-    let mut gcd_acc = None;
+    let mut acc = M::initial_bin_opt_acc(&bins[i]);
+    let upper = uppers[i];
     let cum_count_i = cum_count[i + 1];
     for j in (0..i + 1).rev() {
-      let lower = lower_unsigneds[j];
-      if fold_gcd {
-        gcd::fold_bin_gcds_left(
-          lower,
-          upper_unsigneds[j],
-          gcds[j],
-          upper,
-          &mut gcd_acc,
-        );
-      }
-      let cost = best_costs[j]
-        + bin_bit_cost::<U>(
+      let lower = lowers[j];
+
+      M::combine_bin_opt_acc(&bins[j], &mut acc);
+      let cost = best_costs[j] +
+        bin_bit_cost::<U, M>(
           base_meta_cost,
           lower,
           upper,
           cum_count_i - cum_count[j],
           n,
-          gcd_acc.unwrap_or(U::ONE),
+          mode,
+          &acc,
         );
       if cost < best_cost {
         best_cost = cost;
@@ -104,90 +91,97 @@ pub fn optimize_bins<U: UnsignedLike>(
   let mut res = Vec::with_capacity(path.len());
   for &(j, i) in path {
     let mut count = 0;
-    let mut gcd_acc = None;
-    for (k, p) in bins.iter().enumerate().take(i + 1).skip(j).rev() {
-      count += p.count;
-      if fold_gcd {
-        gcd::fold_bin_gcds_left(
-          lower_unsigneds[k],
-          upper_unsigneds[k],
-          p.gcd,
-          upper_unsigneds[i],
-          &mut gcd_acc,
-        );
-      }
+    let mut acc = M::initial_bin_opt_acc(&bins[i]);
+    for bin in bins.iter().take(i + 1).skip(j).rev() {
+      count += bin.count;
+      M::combine_bin_opt_acc(bin, &mut acc);
     }
-    res.push(BinCompressionInfo::new(
+    let mut optimized_bin = BinCompressionInfo {
       count,
-      bins[j].lower,
-      bins[i].upper,
-      run_len_utils::run_len_jumpstart(count, n),
-      gcd_acc.unwrap_or(U::ONE),
-    ));
+      lower: bins[j].lower,
+      upper: bins[i].upper,
+      run_len_jumpstart: run_len_utils::run_len_jumpstart(count, n),
+      ..Default::default()
+    };
+    mode.fill_optimized_compression_info(
+      acc,
+      &mut optimized_bin,
+    );
   }
   res
 }
 
 #[cfg(test)]
 mod tests {
+  use crate::{CompressorConfig, Flags};
   use crate::base_compressor::InternalCompressorConfig;
   use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
-  use crate::{CompressorConfig, Flags};
+  use crate::constants::Bitlen;
+  use crate::modes::gcd::GcdMode;
 
-  fn basic_optimize(bins: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {
+  fn basic_gcd_optimize(bins: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {
     let flags = Flags {
       delta_encoding_order: 0,
       use_wrapped_mode: false,
     };
-    let internal_config =
-      InternalCompressorConfig::from_config::<u32>(&CompressorConfig::default());
-    optimize_bins(bins, &internal_config, &flags, 100)
+    optimize_bins(bins, &flags, GcdMode, 100)
+  }
+
+  fn make_bin_info(offset_bits: Bitlen, lower: u32, upper: u32, run_len_jumpstart: Option<Bitlen>, gcd: u32) -> BinCompressionInfo<u32> {
+    BinCompressionInfo {
+      offset_bits,
+      lower,
+      upper,
+      run_len_jumpstart,
+      gcd,
+      ..Default::default()
+    }
   }
 
   #[test]
   fn test_optimize_trivial_ranges_gcd() {
     let bins = vec![
-      BinCompressionInfo::new(1, 1000_u32, 1000, None, 1_u32),
-      BinCompressionInfo::new(1, 2000_u32, 2000, None, 1_u32),
+      make_bin_info(1, 1000_u32, 1000, None, 1_u32),
+      make_bin_info(1, 2000_u32, 2000, None, 1_u32),
     ];
-    let res = basic_optimize(bins);
-    let expected = vec![BinCompressionInfo::new(2, 1000_u32, 2000, None, 1000_u32)];
+    let res = basic_gcd_optimize(bins);
+    let expected = vec![make_bin_info(2, 1000_u32, 2000, None, 1000_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_single_nontrivial_range_gcd() {
     let bins = vec![
-      BinCompressionInfo::new(100, 1000_u32, 2000, None, 10_u32),
-      BinCompressionInfo::new(1, 2100_u32, 2100, None, 1_u32),
+      make_bin_info(100, 1000_u32, 2000, None, 10_u32),
+      make_bin_info(1, 2100_u32, 2100, None, 1_u32),
     ];
-    let res = basic_optimize(bins);
-    let expected = vec![BinCompressionInfo::new(101, 1000_u32, 2100, None, 10_u32)];
+    let res = basic_gcd_optimize(bins);
+    let expected = vec![make_bin_info(101, 1000_u32, 2100, None, 10_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_nontrivial_ranges_gcd() {
     let bins = vec![
-      BinCompressionInfo::new(5, 1000_u32, 1100, None, 10_u32),
-      BinCompressionInfo::new(5, 1105, 1135, None, 15_u32),
+      make_bin_info(5, 1000_u32, 1100, None, 10_u32),
+      make_bin_info(5, 1105, 1135, None, 15_u32),
     ];
-    let res = basic_optimize(bins);
-    let expected = vec![BinCompressionInfo::new(10, 1000_u32, 1135, None, 5_u32)];
+    let res = basic_gcd_optimize(bins);
+    let expected = vec![make_bin_info(10, 1000_u32, 1135, None, 5_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_nontrivial_misaligned_ranges_gcd() {
     let bins = vec![
-      BinCompressionInfo::new(100, 1000_u32, 1100, None, 10_u32),
-      BinCompressionInfo::new(100, 1101, 1201, None, 10_u32),
+      make_bin_info(100, 1000_u32, 1100, None, 10_u32),
+      make_bin_info(100, 1101, 1201, None, 10_u32),
     ];
-    let res = basic_optimize(bins);
+    let res = basic_gcd_optimize(bins);
     let expected = vec![
-      BinCompressionInfo::new(100, 1000_u32, 1100, None, 10_u32),
-      BinCompressionInfo::new(100, 1101, 1201, None, 10_u32),
+      make_bin_info(100, 1000_u32, 1100, None, 10_u32),
+      make_bin_info(100, 1101, 1201, None, 10_u32),
     ];
     assert_eq!(res, expected);
   }

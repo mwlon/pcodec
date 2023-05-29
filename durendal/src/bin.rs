@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
-use crate::modes::ModeBin;
+use crate::modes::{float_mult, ModeBin};
 
 /// A pairing of a Huffman code with a numerical range.
 ///
@@ -67,43 +67,19 @@ impl<U: UnsignedLike> Display for Bin<U> {
   }
 }
 
-impl<U: UnsignedLike> BinCompressionInfo<U> {
-  pub fn new(count: usize, lower: U, upper: U, run_len_jumpstart: Option<Bitlen>, gcd: U) -> Self {
-    let diff = (upper - lower) / gcd;
-    let offset_bits = if diff == U::ZERO {
-      0
-    } else {
-      U::BITS - diff.leading_zeros()
-    };
-    BinCompressionInfo {
-      count,
-      lower,
-      upper,
-      offset_bits,
-      gcd,
-      run_len_jumpstart,
-      code: 0,
-      code_len: 0,
-      float_mult_lower: U::Float::default(),
-      adj_lower: U::ZERO,
-      adj_bits: 0,
-    }
-  }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BinCompressionInfo<U: UnsignedLike> {
   pub count: usize,
-  pub code: usize,
-  pub code_len: Bitlen,
   pub lower: U,
   pub upper: U,
   pub offset_bits: Bitlen,
-  pub run_len_jumpstart: Option<Bitlen>,
   pub gcd: U,
   pub float_mult_lower: U::Float,
   pub adj_lower: U,
   pub adj_bits: Bitlen,
+  pub run_len_jumpstart: Option<Bitlen>,
+  pub code: usize,
+  pub code_len: Bitlen,
 }
 
 impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
@@ -141,7 +117,7 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
       gcd: U::ONE,
       float_mult_lower: U::Float::default(),
       adj_lower: U::ZERO,
-      adj_bits: 0,
+      adj_bits: U::BITS,
     }
   }
 }

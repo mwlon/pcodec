@@ -46,7 +46,11 @@ pub fn words_to_bytes(words: &[usize]) -> Vec<u8> {
 }
 
 pub fn bits_to_encode(max_number: usize) -> Bitlen {
-  ((max_number + 1) as f64).log2().ceil() as Bitlen
+  usize::BITS - max_number.leading_zeros()
+}
+
+pub fn bits_to_encode_offset<U: UnsignedLike>(max_offset: U) -> Bitlen {
+  U::BITS - max_offset.leading_zeros()
 }
 
 pub const fn bits_to_encode_offset_bits<U: UnsignedLike>() -> Bitlen {

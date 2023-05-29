@@ -1,7 +1,8 @@
+use std::cmp::max;
 use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
+use crate::constants::{Bitlen, BITS_TO_ENCODE_ADJ_BITS, UNSIGNED_BATCH_SIZE};
 use crate::Bin;
 use std::marker::PhantomData;
 
@@ -13,7 +14,7 @@ use crate::modes::{Mode, ModeBin};
 // mantissa bits by using it.
 const REQUIRED_INFORMATION_GAIN_DENOM: Bitlen = 6;
 
-fn calc_adj_lower<U: UnsignedLike>(adj_offset_bits: Bitlen) -> U {
+pub fn calc_adj_lower<U: UnsignedLike>(adj_offset_bits: Bitlen) -> U {
   if adj_offset_bits == 0 {
     U::ZERO
   } else {
@@ -44,10 +45,31 @@ impl<U: UnsignedLike> FloatMultMode<U> {
       inv_base: base.inv(),
     }
   }
+
+  fn calc_offset_bits(&self, lower: U, upper: U) -> Bitlen {
+    let delta = self.inv_base * U::Float::from_unsigned(upper) - self.inv_base * U::Float::from_unsigned(lower);
+    U::BITS - delta.round().to_unsigned().leading_zeros()
+  }
 }
 
 impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
-  type Bin = FloatMultBin<U>;
+  const EXTRA_META_COST: f64 = BITS_TO_ENCODE_ADJ_BITS as f64;
+
+  type BinOptAccumulator = Bitlen;
+  fn combine_bin_opt_acc(bin: &BinCompressionInfo<U>, acc: &mut Self::BinOptAccumulator) {
+    *acc = max(*acc, bin.adj_bits);
+  } // adj bits
+
+  fn bin_cost(&self, lower: U, upper: U, count: usize, acc: &Self::BinOptAccumulator) -> f64 {
+    let offset_bits = self.calc_offset_bits(lower, upper);
+    (count * (acc + offset_bits) as usize) as f64
+  }
+
+  fn fill_optimized_compression_info(&self, acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
+    bin.offset_bits= self.calc_offset_bits(lower, upper);
+    bin.adj_bits= acc;
+    bin.adj_lower= calc_adj_lower(acc);
+  }
 
   #[inline]
   fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
@@ -63,6 +85,8 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     // println!("C mult_base {} mult {} approx {} adj {}", bin.float_mult_lower, mult, approx, adj);
     writer.write_diff(adj.wrapping_sub(bin.adj_lower), bin.adj_bits);
   }
+
+  type Bin = FloatMultBin<U>;
 
   fn make_mode_bin(bin: &Bin<U>) -> FloatMultBin<U> {
     FloatMultBin {

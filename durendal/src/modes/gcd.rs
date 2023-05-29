@@ -7,7 +7,7 @@ use crate::bit_writer::BitWriter;
 use crate::constants::Bitlen;
 use crate::errors::QCompressResult;
 use crate::modes::{Mode, ModeBin};
-use crate::Bin;
+use crate::{Bin, bits};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GcdBin<U: UnsignedLike> {
@@ -22,13 +22,53 @@ impl<U: UnsignedLike> ModeBin for GcdBin<U> {}
 #[derive(Clone, Copy, Debug)]
 pub struct GcdMode;
 
+struct OptAccumulator<U: UnsignedLike> {
+  upper: Option<U>,
+  gcd: Option<U>
+}
+
 impl<U: UnsignedLike> Mode<U> for GcdMode {
-  type Bin = GcdBin<U>;
+  type BinOptAccumulator = OptAccumulator<U>;
+  fn combine_bin_opt_acc(bin: &BinCompressionInfo<U>, acc: &mut Self::BinOptAccumulator) {
+    // folding GCD's involves GCD'ing with their modulo offset and (if the new
+    // range is nontrivial) with the new bin's GCD
+    if acc.upper.is_none() {
+      acc.upper = Some(bin.upper);
+    }
+
+    let upper = acc.upper.unwrap();
+    acc.gcd = Some(match acc.gcd {
+      Some(gcd) => pair_gcd(upper - bin.upper, gcd),
+      None => upper - bin.upper,
+    });
+    if bin.upper != bin.lower {
+      acc.gcd = Some(match acc.gcd {
+        Some(gcd) => pair_gcd(bin.gcd, gcd),
+        None => bin.gcd,
+      });
+    }
+  }
+
+  fn bin_cost(&self, lower: U, upper: U, count: usize, acc: &Self::BinOptAccumulator) -> f64 {
+    // best approximation of GCD metadata bit cost we can do without knowing
+    // what's going on in the other bins
+    let gcd_meta_cost = if gcd > U::ONE { U::BITS as f64 } else { 0.0 };
+    gcd_meta_cost + bits::avg_offset_bits(lower, upper, acc.unwrap_or(U::ONE)) * count as f64
+  }
+
+  fn fill_optimized_compression_info(&self, acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
+    let gcd = acc.gcd.unwrap_or(U::ONE);
+    let max_offset = (bin.upper - bin.lower) / gcd;
+    bin.gcd = gcd;
+    bin.offset_bits = bits::bits_to_encode_offset(max_offset);
+  }
 
   #[inline]
   fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
     writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
   }
+
+  type Bin = GcdBin<U>;
 
   fn make_mode_bin(bin: &Bin<U>) -> GcdBin<U> {
     GcdBin {
@@ -131,29 +171,6 @@ pub fn use_gcd_bin_optimize<U: UnsignedLike>(
 
 pub fn use_gcd_arithmetic<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
   bins.iter().any(|p| p.gcd > U::ONE && p.offset_bits > 0)
-}
-
-pub fn fold_bin_gcds_left<U: UnsignedLike>(
-  left_lower: U,
-  left_upper: U,
-  left_gcd: U,
-  right_upper: U,
-  acc: &mut Option<U>,
-) {
-  // folding GCD's involves GCD'ing with their modulo offset and (if the new
-  // range is nontrivial) with the new bin's GCD
-  if left_upper != right_upper {
-    *acc = Some(match *acc {
-      Some(gcd) => pair_gcd(right_upper - left_upper, gcd),
-      None => right_upper - left_upper,
-    });
-  }
-  if left_upper != left_lower {
-    *acc = Some(match *acc {
-      Some(gcd) => pair_gcd(left_gcd, gcd),
-      None => left_gcd,
-    });
-  }
 }
 
 #[cfg(test)]

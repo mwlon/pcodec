@@ -146,8 +146,7 @@ struct BinBuffer<'a, U: UnsignedLike> {
   max_n_bin: usize,
   n_unsigneds: usize,
   sorted: &'a [U],
-  use_gcd: bool,
-  float_mult_base_and_inv: Option<(U::Float, U::Float)>,
+  mode: DynMode<U>,
   pub target_j: usize,
 }
 
@@ -163,19 +162,24 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     use_gcd: bool,
     use_float_mult: bool,
   ) -> Self {
-    let float_mult_base_and_inv = if use_float_mult {
-      Strategy::default().choose_base_and_inv(sorted)
+    let mut mode = if use_gcd {
+      DynMode::Gcd
     } else {
-      None
+      DynMode::Classic
     };
+    if use_float_mult {
+      if let Some((base, inv_base)) = Strategy::default().choose_base_and_inv(sorted) {
+        mode = DynMode::FloatMult(inv_base)
+      }
+    }
+
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
       max_n_bin,
       n_unsigneds,
       sorted,
-      use_gcd,
-      float_mult_base_and_inv,
+      mode,
       target_j: 0,
     };
     res.calc_target_j();
@@ -193,11 +197,13 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     );
     let lower = sorted[i];
     let upper = sorted[j - 1];
+    let (gcd, )
     let gcd = if self.use_gcd {
       gcd::gcd(&sorted[i..j])
     } else {
       U::ONE
     };
+    let ()
 
     let bin = BinCompressionInfo::new(count, lower, upper, None, gcd);
     self.seq.push(bin);

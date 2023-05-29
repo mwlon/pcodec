@@ -8,6 +8,7 @@ pub const MAGIC_CHUNK_BYTE: u8 = 44; // ,
 pub const MAGIC_TERMINATION_BYTE: u8 = 46; // .
 
 // bit lengths
+pub const BITS_TO_ENCODE_ADJ_BITS: Bitlen = 6;
 pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: Bitlen = 3;
 pub const BITS_TO_ENCODE_N_ENTRIES: Bitlen = 24;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
