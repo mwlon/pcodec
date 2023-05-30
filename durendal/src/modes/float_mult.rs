@@ -1,9 +1,9 @@
-use std::cmp::{max, min};
 use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_ADJ_BITS, UNSIGNED_BATCH_SIZE};
-use crate::{Bin, bits};
+use crate::{bits, Bin};
+use std::cmp::{max, min};
 use std::marker::PhantomData;
 
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
@@ -14,7 +14,11 @@ use crate::modes::{Mode, ModeBin};
 // mantissa bits by using it.
 const REQUIRED_INFORMATION_GAIN_DENOM: Bitlen = 6;
 
-pub fn adj_bits_needed<U: UnsignedLike>(base: U::Float, inv_base: U::Float, sorted: &[U]) -> Bitlen {
+pub fn adj_bits_needed<U: UnsignedLike>(
+  base: U::Float,
+  inv_base: U::Float,
+  sorted: &[U],
+) -> Bitlen {
   let mut max_adj_bits = 0;
   for &u in sorted {
     let x = U::Float::from_unsigned(u);
@@ -58,7 +62,8 @@ impl<U: UnsignedLike> FloatMultMode<U> {
   }
 
   fn calc_offset_bits(&self, lower: U, upper: U) -> Bitlen {
-    let delta = self.inv_base * U::Float::from_unsigned(upper) - self.inv_base * U::Float::from_unsigned(lower);
+    let delta = self.inv_base * U::Float::from_unsigned(upper)
+      - self.inv_base * U::Float::from_unsigned(lower);
     U::BITS - delta.round().to_unsigned().leading_zeros()
   }
 }
@@ -76,7 +81,11 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     (count * (acc + offset_bits) as usize) as f64
   }
 
-  fn fill_optimized_compression_info(&self, acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
+  fn fill_optimized_compression_info(
+    &self,
+    acc: Self::BinOptAccumulator,
+    bin: &mut BinCompressionInfo<U>,
+  ) {
     bin.offset_bits = self.calc_offset_bits(bin.lower, bin.upper);
     bin.adj_bits = acc;
     bin.adj_lower = calc_adj_lower(acc);
@@ -195,9 +204,7 @@ impl<U: UnsignedLike> StrategyChain<U> {
               Some(a_mult) if mult != a_mult => {
                 res = StrategyChainResult::CloseToExactMultiple;
               }
-              _ => {
-                seen_mult = Some(mult)
-              }
+              _ => seen_mult = Some(mult),
             }
           }
         }

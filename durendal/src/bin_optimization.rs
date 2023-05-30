@@ -1,10 +1,10 @@
-use crate::{bits, Flags, run_len_utils};
-use crate::base_compressor::InternalCompressorConfig;
+use crate::{bits, run_len_utils, Flags};
+
 use crate::bin::BinCompressionInfo;
-use crate::bits::{avg_depth_bits, avg_offset_bits};
+use crate::bits::avg_depth_bits;
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
 use crate::data_types::UnsignedLike;
-use crate::modes::{gcd, Mode};
+use crate::modes::Mode;
 
 fn bin_bit_cost<U: UnsignedLike, M: Mode<U>>(
   base_meta_cost: f64,
@@ -64,8 +64,8 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
       let lower = lowers[j];
 
       M::combine_bin_opt_acc(&bins[j], &mut acc);
-      let cost = best_costs[j] +
-        bin_bit_cost::<U, M>(
+      let cost = best_costs[j]
+        + bin_bit_cost::<U, M>(
           base_meta_cost,
           lower,
           upper,
@@ -103,10 +103,7 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
       run_len_jumpstart: run_len_utils::run_len_jumpstart(count, n),
       ..Default::default()
     };
-    mode.fill_optimized_compression_info(
-      acc,
-      &mut optimized_bin,
-    );
+    mode.fill_optimized_compression_info(acc, &mut optimized_bin);
     res.push(optimized_bin);
   }
   res
@@ -114,11 +111,11 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
 
 #[cfg(test)]
 mod tests {
-  use crate::{bits, CompressorConfig, Flags};
-  use crate::base_compressor::InternalCompressorConfig;
+  use crate::{bits, Flags};
+
   use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
-  use crate::constants::Bitlen;
+
   use crate::modes::gcd::GcdMode;
 
   fn basic_gcd_optimize(bins: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {

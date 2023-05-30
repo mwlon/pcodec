@@ -6,7 +6,6 @@ use crate::bit_writer::BitWriter;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::Bin;
-use crate::constants::Bitlen;
 
 pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   // BIN OPTIMIZATION
@@ -14,7 +13,11 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   type BinOptAccumulator: Default;
   fn combine_bin_opt_acc(bin: &BinCompressionInfo<U>, acc: &mut Self::BinOptAccumulator);
   fn bin_cost(&self, lower: U, upper: U, count: usize, acc: &Self::BinOptAccumulator) -> f64;
-  fn fill_optimized_compression_info(&self, acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>);
+  fn fill_optimized_compression_info(
+    &self,
+    acc: Self::BinOptAccumulator,
+    bin: &mut BinCompressionInfo<U>,
+  );
 
   // COMPRESSION
   fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter);
@@ -37,10 +40,7 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
 pub enum DynMode<U: UnsignedLike> {
   Classic,
   Gcd,
-  FloatMult {
-    base: U::Float,
-    inv_base: U::Float,
-  },
+  FloatMult { base: U::Float, inv_base: U::Float },
 }
 
 pub trait ModeBin: Copy + Debug + Default {}

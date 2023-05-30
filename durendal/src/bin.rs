@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
-use crate::modes::{float_mult, ModeBin};
+use crate::modes::ModeBin;
 
 /// A pairing of a Huffman code with a numerical range.
 ///

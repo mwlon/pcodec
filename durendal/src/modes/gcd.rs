@@ -1,13 +1,12 @@
 use crate::data_types::UnsignedLike;
 
-use crate::base_compressor::InternalCompressorConfig;
 use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::Bitlen;
 use crate::errors::QCompressResult;
 use crate::modes::{Mode, ModeBin};
-use crate::{Bin, bits};
+use crate::{bits, Bin};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GcdBin<U: UnsignedLike> {
@@ -25,7 +24,7 @@ pub struct GcdMode;
 #[derive(Default)]
 pub struct OptAccumulator<U: UnsignedLike> {
   upper: Option<U>,
-  gcd: Option<U>
+  gcd: Option<U>,
 }
 
 impl<U: UnsignedLike> Mode<U> for GcdMode {
@@ -54,12 +53,20 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
     // best approximation of GCD metadata bit cost we can do without knowing
     // what's going on in the other bins
     let bin_gcd = acc.gcd.unwrap_or(U::ONE);
-    let gcd_meta_cost = if bin_gcd > U::ONE { U::BITS as f64 } else { 0.0 };
+    let gcd_meta_cost = if bin_gcd > U::ONE {
+      U::BITS as f64
+    } else {
+      0.0
+    };
     let offset_cost = bits::avg_offset_bits(lower, upper, bin_gcd);
     gcd_meta_cost + offset_cost * count as f64
   }
 
-  fn fill_optimized_compression_info(&self, acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
+  fn fill_optimized_compression_info(
+    &self,
+    acc: Self::BinOptAccumulator,
+    bin: &mut BinCompressionInfo<U>,
+  ) {
     let gcd = acc.gcd.unwrap_or(U::ONE);
     let max_offset = (bin.upper - bin.lower) / gcd;
     bin.gcd = gcd;
@@ -150,9 +157,7 @@ pub fn common_gcd_for_chunk_meta<U: UnsignedLike>(bins: &[Bin<U>]) -> Option<U> 
   }
 }
 
-pub fn use_gcd_bin_optimize<U: UnsignedLike>(
-  bins: &[BinCompressionInfo<U>],
-) -> bool {
+pub fn use_gcd_bin_optimize<U: UnsignedLike>(bins: &[BinCompressionInfo<U>]) -> bool {
   for p in bins {
     if p.gcd > U::ONE {
       return true;

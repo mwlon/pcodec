@@ -155,12 +155,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(
-    max_n_bin: usize,
-    n_unsigneds: usize,
-    sorted: &'a [U],
-    mode: DynMode<U>,
-  ) -> Self {
+  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], mode: DynMode<U>) -> Self {
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
@@ -195,10 +190,10 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
       DynMode::FloatMult { base, inv_base } => {
         adj_bits = float_mult::adj_bits_needed(base, inv_base, &sorted[i..j]);
       }
-      _ => ()
+      _ => (),
     }
 
-    let mut bin = BinCompressionInfo {
+    let bin = BinCompressionInfo {
       count,
       lower,
       upper,
@@ -229,14 +224,14 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
 
 fn choose_unoptimized_mode<U: UnsignedLike>(
   sorted: &[U],
-  internal_config: &InternalCompressorConfig
+  internal_config: &InternalCompressorConfig,
 ) -> DynMode<U> {
   // * Use float mult if enabled and an appropriate base is found
   // * Otherwise, use GCD if enabled
   // * Otherwise, use Classic
   if internal_config.use_float_mult {
     if let Some((base, inv_base)) = Strategy::default().choose_base_and_inv(sorted) {
-      return DynMode::FloatMult { base, inv_base }
+      return DynMode::FloatMult { base, inv_base };
     }
   }
 
@@ -251,9 +246,7 @@ fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
   sorted: &[U],
   internal_config: &InternalCompressorConfig,
 ) -> (DynMode<U>, Vec<BinCompressionInfo<U>>) {
-  let mut mode = choose_unoptimized_mode(
-    sorted, internal_config
-  );
+  let mode = choose_unoptimized_mode(sorted, internal_config);
 
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(
@@ -263,12 +256,7 @@ fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
 
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<U>::new(
-    max_n_bin,
-    n_unsigneds,
-    sorted,
-    mode,
-  );
+  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, mode);
 
   for j in 1..n_unsigneds {
     let target_j = bin_buffer.target_j;
@@ -329,7 +317,12 @@ fn train_mode_and_bins<U: UnsignedLike>(
   let mut optimized_infos = match unoptimized_mode {
     DynMode::Classic => bin_optimization::optimize_bins(unoptimized_bins, flags, ClassicMode, n),
     DynMode::Gcd => bin_optimization::optimize_bins(unoptimized_bins, flags, GcdMode, n),
-    DynMode::FloatMult { inv_base, .. } => bin_optimization::optimize_bins(unoptimized_bins, flags, FloatMultMode::new(inv_base), n),
+    DynMode::FloatMult { inv_base, .. } => bin_optimization::optimize_bins(
+      unoptimized_bins,
+      flags,
+      FloatMultMode::new(inv_base),
+      n,
+    ),
   };
 
   huffman_encoding::make_huffman_codes(&mut optimized_infos, n);

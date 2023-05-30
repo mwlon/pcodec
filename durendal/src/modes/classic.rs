@@ -1,13 +1,12 @@
-use std::cmp::max;
 use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
+use crate::bits::avg_offset_bits;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::modes::gcd::GcdBin;
 use crate::modes::Mode;
-use crate::{Bin, bits};
-use crate::bits::avg_offset_bits;
+use crate::{bits, Bin};
 
 // formula: bin lower + offset
 #[derive(Clone, Copy, Debug)]
@@ -20,8 +19,12 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
   fn bin_cost(&self, lower: U, upper: U, count: usize, _acc: &Self::BinOptAccumulator) -> f64 {
     avg_offset_bits(lower, upper, U::ONE) * count as f64
   }
-  fn fill_optimized_compression_info(&self, _acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
-    let max_offset = (bin.upper - bin.lower);
+  fn fill_optimized_compression_info(
+    &self,
+    _acc: Self::BinOptAccumulator,
+    bin: &mut BinCompressionInfo<U>,
+  ) {
+    let max_offset = bin.upper - bin.lower;
     bin.offset_bits = bits::bits_to_encode_offset(max_offset);
   }
 
