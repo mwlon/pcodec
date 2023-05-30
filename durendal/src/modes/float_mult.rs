@@ -93,7 +93,6 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let mult = mult_offset + bin.float_mult_lower;
     let approx = mult * self.base;
     let adj = u.wrapping_sub(approx.to_unsigned());
-    // println!("C mult_base {} mult {} approx {} adj {}", bin.float_mult_lower, mult, approx, adj);
     writer.write_diff(adj.wrapping_sub(bin.adj_lower), bin.adj_bits);
   }
 
@@ -116,7 +115,6 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let adj = bin
       .adj_lower
       .wrapping_add(reader.unchecked_read_uint(bin.adj_offset_bits));
-    // println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
     approx.to_unsigned().wrapping_add(adj)
   }
 
@@ -132,7 +130,6 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     let adj = bin
       .adj_lower
       .wrapping_add(reader.read_uint(bin.adj_offset_bits)?);
-    // println!("DU offset {} mult_base {} mult {} approx {} adj {}", offset, bin.mult_lower, mult, approx, adj);
     Ok(approx.to_unsigned().wrapping_add(adj))
   }
 }
@@ -181,70 +178,35 @@ impl<U: UnsignedLike> StrategyChain<U> {
   fn compatibility_with(&self, sorted_chunk: &[U]) -> StrategyChainResult {
     match self.current_base_and_inv() {
       Some((base, inv_base)) => {
-        let abs_floats = sorted_chunk
-          .iter()
-          .map(|&u| U::Float::from_unsigned(u).abs())
-          .collect::<Vec<_>>();
-        let base_bits: Vec<Bitlen> = abs_floats
-          .iter()
-          .map(|&x| U::Float::log2_epsilons_between_positives(x, x + base))
-          .collect();
-        let adj_bits: Vec<Bitlen> = abs_floats
-          .iter()
-          .map(|&x| {
-            let mult = (x * inv_base).round();
-            U::Float::log2_epsilons_between_positives(x, mult * base)
-          })
-          .collect();
-
         let mut res = StrategyChainResult::Uninformative;
+        let mut seen_mult: Option<U::Float> = None;
         let required_information_gain = U::Float::PRECISION_BITS / REQUIRED_INFORMATION_GAIN_DENOM;
-        println!();
-        for i in 0..sorted_chunk.len() {
-          println!("{} {} {}", i, adj_bits[i], base_bits[i]);
-          if adj_bits[i] > base_bits[i].saturating_sub(required_information_gain) {
-            println!("FAR!");
+
+        for &u in sorted_chunk {
+          let abs_float = U::Float::from_unsigned(u).abs();
+          let base_bits = U::Float::log2_epsilons_between_positives(abs_float, abs_float + base);
+          let mult = (abs_float * inv_base).round();
+          let adj_bits = U::Float::log2_epsilons_between_positives(abs_float, mult * base);
+
+          if adj_bits > base_bits.saturating_sub(required_information_gain) {
             return StrategyChainResult::FarFromExactMultiple;
-          } else if base_bits[i] >= required_information_gain {
-            println!("INFORMATIVE!");
-            res = StrategyChainResult::CloseToExactMultiple;
+          } else if base_bits >= required_information_gain {
+            match seen_mult {
+              Some(a_mult) if mult != a_mult => {
+                res = StrategyChainResult::CloseToExactMultiple;
+              }
+              _ => {
+                seen_mult = Some(mult)
+              }
+            }
           }
         }
-        println!("RET!");
+
         res
       }
       None => StrategyChainResult::Uninformative,
     }
   }
-
-  // returns None if adjustment is numerically unsafe or impossible
-  // fn abs_adjustment_needed<U: UnsignedLike<Float=F>>(&self, u: U) -> Option<U> {
-  //   match self.bases_and_invs.get(self.candidate_idx) {
-  //     Some((base, inv_base)) => {
-  //       let float = U::Float::from_unsigned(u);
-  //       let mult = (float * inv_base).round();
-  //       // note that doing the contrapositive would be invalid due to NAN
-  //       // comparison
-  //       if mult.abs() <= U::Float::MAX_PRECISE_INTEGER / 2 {
-  //         let approx = mult * base;
-  //         Some(u.wrapping_sub(approx.abs().to_unsigned()))
-  //       } else {
-  //         None
-  //       }
-  //     }
-  //     None => None
-  //   }
-  // }
-  //
-  // pub fn adjustment_bits_needed<U: UnsignedLike<Float=F>>(&self, u: U) -> Option<Bitlen> {
-  //   let adj = self.abs_adjustment_needed(u)?;
-  //   let bits_needed = if adj == U::ZERO {
-  //     0
-  //   } else {
-  //     U::BITS - adj.leading_zeros() + 1
-  //   };
-  //   Some(bits_needed)
-  // }
 
   fn is_invalid(&self) -> bool {
     self.current_base_and_inv().is_none()

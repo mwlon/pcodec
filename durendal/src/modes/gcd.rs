@@ -56,7 +56,6 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
     let bin_gcd = acc.gcd.unwrap_or(U::ONE);
     let gcd_meta_cost = if bin_gcd > U::ONE { U::BITS as f64 } else { 0.0 };
     let offset_cost = bits::avg_offset_bits(lower, upper, bin_gcd);
-    println!("GCD {} META {} OFFSET {}", bin_gcd, gcd_meta_cost, offset_cost);
     gcd_meta_cost + offset_cost * count as f64
   }
 

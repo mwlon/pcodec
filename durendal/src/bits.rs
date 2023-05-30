@@ -23,7 +23,6 @@ pub fn code_to_string(x: usize, n: Bitlen) -> String {
 // This bumpy log gives a more accurate average number of offset bits used.
 pub fn avg_offset_bits<U: UnsignedLike>(lower: U, upper: U, gcd: U) -> f64 {
   let diff = upper - lower;
-  println!("diff {} gcd {} div {}", diff, gcd, diff / gcd);
   (U::BITS - (diff / gcd).leading_zeros()) as f64
 }
 

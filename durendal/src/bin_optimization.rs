@@ -19,7 +19,6 @@ fn bin_bit_cost<U: UnsignedLike, M: Mode<U>>(
   let total_weight = n + weight - count;
   let huffman_cost = avg_depth_bits(weight, total_weight);
   let mode_cost = mode.bin_cost(lower, upper, count, acc);
-  println!("A {} {} {} {} {} {}", count, weight, jumpstart_cost, total_weight, huffman_cost, mode_cost);
   base_meta_cost + huffman_cost + // extra meta cost of storing Huffman code
     (huffman_cost + jumpstart_cost) * (weight as f64) +
     mode_cost
@@ -75,7 +74,6 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
           mode,
           &acc,
         );
-      println!("COST {}", cost);
       if cost < best_cost {
         best_cost = cost;
         best_j = j;
@@ -185,7 +183,7 @@ mod tests {
     let res = basic_gcd_optimize(bins);
     let expected = vec![
       make_gcd_bin_info(100, 1000_u32, 1100, 10_u32),
-      make_gcd_bin_info(101, 1101, 1201, 10_u32),
+      make_gcd_bin_info(100, 1101, 1201, 10_u32),
     ];
     assert_eq!(res, expected);
   }
