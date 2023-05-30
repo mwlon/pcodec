@@ -37,7 +37,10 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
 pub enum DynMode<U: UnsignedLike> {
   Classic,
   Gcd,
-  FloatMult(U::Float),
+  FloatMult {
+    base: U::Float,
+    inv_base: U::Float,
+  },
 }
 
 pub trait ModeBin: Copy + Debug + Default {}

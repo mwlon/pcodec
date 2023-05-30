@@ -17,10 +17,10 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
   type BinOptAccumulator = ();
   fn combine_bin_opt_acc(_bin: &BinCompressionInfo<U>, _acc: &mut Self::BinOptAccumulator) {}
 
-  fn bin_cost(&self, lower: U, upper: U, count: usize, _acc: &Self::BinOptAccumulator) {
-    avg_offset_bits(lower, upper, U::ONE) * count
+  fn bin_cost(&self, lower: U, upper: U, count: usize, _acc: &Self::BinOptAccumulator) -> f64 {
+    avg_offset_bits(lower, upper, U::ONE) * count as f64
   }
-  fn fill_optimized_compression_info(&self, acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
+  fn fill_optimized_compression_info(&self, _acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
     let max_offset = (bin.upper - bin.lower);
     bin.offset_bits = bits::bits_to_encode_offset(max_offset);
   }

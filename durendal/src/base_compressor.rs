@@ -15,7 +15,7 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::classic::ClassicMode;
 use crate::modes::float_mult::{FloatMultMode, Strategy};
 use crate::modes::gcd::GcdMode;
-use crate::modes::Mode;
+use crate::modes::{float_mult, Mode};
 use crate::modes::{gcd, DynMode};
 use crate::{huffman_encoding, Flags};
 
@@ -159,20 +159,8 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     max_n_bin: usize,
     n_unsigneds: usize,
     sorted: &'a [U],
-    use_gcd: bool,
-    use_float_mult: bool,
+    mode: DynMode<U>,
   ) -> Self {
-    let mut mode = if use_gcd {
-      DynMode::Gcd
-    } else {
-      DynMode::Classic
-    };
-    if use_float_mult {
-      if let Some((base, inv_base)) = Strategy::default().choose_base_and_inv(sorted) {
-        mode = DynMode::FloatMult(inv_base)
-      }
-    }
-
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
@@ -197,15 +185,27 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     );
     let lower = sorted[i];
     let upper = sorted[j - 1];
-    let (gcd, )
-    let gcd = if self.use_gcd {
-      gcd::gcd(&sorted[i..j])
-    } else {
-      U::ONE
-    };
-    let ()
 
-    let bin = BinCompressionInfo::new(count, lower, upper, None, gcd);
+    let mut bin_gcd = U::ONE;
+    let mut adj_bits = 0;
+    match self.mode {
+      DynMode::Gcd => {
+        bin_gcd = gcd::gcd(&sorted[i..j]);
+      }
+      DynMode::FloatMult { base, inv_base } => {
+        adj_bits = float_mult::adj_bits_needed(base, inv_base, &sorted[i..j]);
+      }
+      _ => ()
+    }
+
+    let mut bin = BinCompressionInfo {
+      count,
+      lower,
+      upper,
+      gcd: bin_gcd,
+      adj_bits,
+      ..Default::default()
+    };
     self.seq.push(bin);
     self.bin_idx = new_bin_idx;
     self.calc_target_j();
@@ -227,10 +227,34 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
   min(1_usize << real_comp_level, n_unsigneds)
 }
 
-fn choose_unoptimized_bins<U: UnsignedLike>(
+fn choose_unoptimized_mode<U: UnsignedLike>(
+  sorted: &[U],
+  internal_config: &InternalCompressorConfig
+) -> DynMode<U> {
+  // * Use float mult if enabled and an appropriate base is found
+  // * Otherwise, use GCD if enabled
+  // * Otherwise, use Classic
+  if internal_config.use_float_mult {
+    if let Some((base, inv_base)) = Strategy::default().choose_base_and_inv(sorted) {
+      return DynMode::FloatMult { base, inv_base }
+    }
+  }
+
+  if internal_config.use_gcds {
+    DynMode::Gcd
+  } else {
+    DynMode::Classic
+  }
+}
+
+fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
   sorted: &[U],
   internal_config: &InternalCompressorConfig,
-) -> Vec<BinCompressionInfo<U>> {
+) -> (DynMode<U>, Vec<BinCompressionInfo<U>>) {
+  let mut mode = choose_unoptimized_mode(
+    sorted, internal_config
+  );
+
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(
     internal_config.compression_level,
@@ -243,8 +267,7 @@ fn choose_unoptimized_bins<U: UnsignedLike>(
     max_n_bin,
     n_unsigneds,
     sorted,
-    internal_config.use_gcds,
-    internal_config.use_float_mult,
+    mode,
   );
 
   for j in 1..n_unsigneds {
@@ -264,17 +287,23 @@ fn choose_unoptimized_bins<U: UnsignedLike>(
   }
   bin_buffer.push_bin(i, n_unsigneds);
 
-  bin_buffer.seq
+  // in some cases, we can now reduce to a simpler mode
+  let mode = match bin_buffer.mode {
+    DynMode::Gcd if !gcd::use_gcd_bin_optimize(&bin_buffer.seq) => DynMode::Classic,
+    other => other,
+  };
+
+  (mode, bin_buffer.seq)
 }
 
-fn train_bins<U: UnsignedLike>(
+fn train_mode_and_bins<U: UnsignedLike>(
   unsigneds: Vec<U>,
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
-) -> QCompressResult<Vec<BinCompressionInfo<U>>> {
+) -> QCompressResult<(DynMode<U>, Vec<BinCompressionInfo<U>>)> {
   if unsigneds.is_empty() {
-    return Ok(Vec::new());
+    return Ok((DynMode::Classic, Vec::new()));
   }
 
   let comp_level = internal_config.compression_level;
@@ -291,18 +320,21 @@ fn train_bins<U: UnsignedLike>(
     )));
   }
 
-  let unoptimized_bins = {
+  let (unoptimized_mode, unoptimized_bins) = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
-    choose_unoptimized_bins(&sorted, internal_config)
+    choose_unoptimized_mode_and_bins(&sorted, internal_config)
   };
 
-  let mut optimized_bins =
-    bin_optimization::optimize_bins(unoptimized_bins, internal_config, flags, n);
+  let mut optimized_infos = match unoptimized_mode {
+    DynMode::Classic => bin_optimization::optimize_bins(unoptimized_bins, flags, ClassicMode, n),
+    DynMode::Gcd => bin_optimization::optimize_bins(unoptimized_bins, flags, GcdMode, n),
+    DynMode::FloatMult { inv_base, .. } => bin_optimization::optimize_bins(unoptimized_bins, flags, FloatMultMode::new(inv_base), n),
+  };
 
-  huffman_encoding::make_huffman_code(&mut optimized_bins, n);
+  huffman_encoding::make_huffman_codes(&mut optimized_infos, n);
 
-  Ok(optimized_bins)
+  Ok((unoptimized_mode, optimized_infos))
 }
 
 fn trained_compress_body<U: UnsignedLike>(
@@ -314,10 +346,10 @@ fn trained_compress_body<U: UnsignedLike>(
   match dyn_mode {
     DynMode::Classic => compress_data_page::<U, ClassicMode>(table, unsigneds, ClassicMode, writer),
     DynMode::Gcd => compress_data_page::<U, GcdMode>(table, unsigneds, GcdMode, writer),
-    DynMode::FloatMult(ratio) => compress_data_page::<U, _>(
+    DynMode::FloatMult { inv_base, .. } => compress_data_page::<U, _>(
       table,
       unsigneds,
-      FloatMultMode::new(ratio),
+      FloatMultMode::new(inv_base),
       writer,
     ),
   }
@@ -475,26 +507,27 @@ impl<T: NumberLike> BaseCompressor<T> {
     let mut unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
     let page_idxs = cumulative_sum(&page_sizes);
     let delta_momentss = delta_encoding::nth_order_deltas(&mut unsigneds, order, &page_idxs);
-    let infos = train_bins(
+    let (unoptimized_mode, infos) = train_mode_and_bins(
       unsigneds.clone(),
       &self.internal_config,
       &self.flags,
       n,
     )?;
     let bins = bins_from_compression_infos(&infos);
+
+    let optimized_mode = match unoptimized_mode {
+      DynMode::Gcd if !gcd::use_gcd_arithmetic(&bins) => DynMode::Classic,
+      other => other,
+    };
+
     let table = CompressionTable::from(infos);
 
-    let dyn_mode = if gcd::use_gcd_arithmetic(&bins) {
-      DynMode::Gcd
-    } else {
-      DynMode::Classic
-    };
     let meta = ChunkMetadata::new(n, bins);
     meta.write_to(&mut self.writer, &self.flags);
 
     self.state = State::MidChunk(MidChunkInfo {
       unsigneds,
-      dyn_mode,
+      dyn_mode: optimized_mode,
       table,
       delta_momentss,
       page_sizes,

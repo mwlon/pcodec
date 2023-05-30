@@ -85,19 +85,19 @@ impl PartialOrd for HuffmanItem {
   }
 }
 
-pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [BinCompressionInfo<U>], n: usize) {
-  let n_bins = bin_sequence.len();
+pub fn make_huffman_codes<U: UnsignedLike>(infos: &mut [BinCompressionInfo<U>], n: usize) {
+  let n_bins = infos.len();
   let mut heap = BinaryHeap::with_capacity(n_bins); // for figuring out huffman tree
   let mut items = Vec::with_capacity(n_bins); // for modifying item codes
-  for (i, bin) in bin_sequence.iter().enumerate() {
+  for (i, bin) in infos.iter().enumerate() {
     let (weight, _) = run_len_utils::weight_and_jumpstart_cost(bin.count, n);
     let item = HuffmanItem::new(weight, i);
     heap.push(item.clone());
     items.push(item);
   }
 
-  let mut id = bin_sequence.len();
-  for _ in 0..(bin_sequence.len() - 1) {
+  let mut id = infos.len();
+  for _ in 0..(infos.len() - 1) {
     let small0 = heap.pop().unwrap();
     let small1 = heap.pop().unwrap();
     let new_item = HuffmanItem::new_parent_of(&small0, &small1, id);
@@ -107,7 +107,7 @@ pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [BinCompressionInfo
   }
 
   let head_node = heap.pop().unwrap();
-  head_node.create_bits(&mut items, bin_sequence);
+  head_node.create_bits(&mut items, infos);
 }
 
 #[cfg(test)]
@@ -115,7 +115,7 @@ mod tests {
   use crate::bin::BinCompressionInfo;
   use crate::bits;
   use crate::constants::Bitlen;
-  use crate::huffman_encoding::make_huffman_code;
+  use crate::huffman_encoding::make_huffman_codes;
 
   fn coded_bin(count: usize, code: Vec<bool>) -> BinCompressionInfo<u32> {
     BinCompressionInfo {
@@ -133,7 +133,7 @@ mod tests {
   #[test]
   fn test_make_huffman_code_single() {
     let mut bin_seq = vec![uncoded_bin(100)];
-    make_huffman_code(&mut bin_seq, 100);
+    make_huffman_codes(&mut bin_seq, 100);
     assert_eq!(bin_seq, vec![coded_bin(100, vec![]),]);
   }
 
@@ -146,7 +146,7 @@ mod tests {
       uncoded_bin(4),
       uncoded_bin(5),
     ];
-    make_huffman_code(&mut bin_seq, 18);
+    make_huffman_codes(&mut bin_seq, 18);
     assert_eq!(
       bin_seq,
       vec![

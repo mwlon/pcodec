@@ -22,7 +22,9 @@ pub fn code_to_string(x: usize, n: Bitlen) -> String {
 
 // This bumpy log gives a more accurate average number of offset bits used.
 pub fn avg_offset_bits<U: UnsignedLike>(lower: U, upper: U, gcd: U) -> f64 {
-  (U::BITS - ((upper - lower) / gcd).leading_zeros()) as f64
+  let diff = upper - lower;
+  println!("diff {} gcd {} div {}", diff, gcd, diff / gcd);
+  (U::BITS - (diff / gcd).leading_zeros()) as f64
 }
 
 // The true Huffman cost of course depends on the tree. We can statistically

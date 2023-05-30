@@ -22,7 +22,8 @@ impl<U: UnsignedLike> ModeBin for GcdBin<U> {}
 #[derive(Clone, Copy, Debug)]
 pub struct GcdMode;
 
-struct OptAccumulator<U: UnsignedLike> {
+#[derive(Default)]
+pub struct OptAccumulator<U: UnsignedLike> {
   upper: Option<U>,
   gcd: Option<U>
 }
@@ -32,15 +33,15 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
   fn combine_bin_opt_acc(bin: &BinCompressionInfo<U>, acc: &mut Self::BinOptAccumulator) {
     // folding GCD's involves GCD'ing with their modulo offset and (if the new
     // range is nontrivial) with the new bin's GCD
-    if acc.upper.is_none() {
+    if let Some(upper) = acc.upper {
+      acc.gcd = Some(match acc.gcd {
+        Some(gcd) => pair_gcd(upper - bin.upper, gcd),
+        None => upper - bin.upper,
+      });
+    } else {
       acc.upper = Some(bin.upper);
     }
 
-    let upper = acc.upper.unwrap();
-    acc.gcd = Some(match acc.gcd {
-      Some(gcd) => pair_gcd(upper - bin.upper, gcd),
-      None => upper - bin.upper,
-    });
     if bin.upper != bin.lower {
       acc.gcd = Some(match acc.gcd {
         Some(gcd) => pair_gcd(bin.gcd, gcd),
@@ -52,8 +53,11 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
   fn bin_cost(&self, lower: U, upper: U, count: usize, acc: &Self::BinOptAccumulator) -> f64 {
     // best approximation of GCD metadata bit cost we can do without knowing
     // what's going on in the other bins
-    let gcd_meta_cost = if gcd > U::ONE { U::BITS as f64 } else { 0.0 };
-    gcd_meta_cost + bits::avg_offset_bits(lower, upper, acc.unwrap_or(U::ONE)) * count as f64
+    let bin_gcd = acc.gcd.unwrap_or(U::ONE);
+    let gcd_meta_cost = if bin_gcd > U::ONE { U::BITS as f64 } else { 0.0 };
+    let offset_cost = bits::avg_offset_bits(lower, upper, bin_gcd);
+    println!("GCD {} META {} OFFSET {}", bin_gcd, gcd_meta_cost, offset_cost);
+    gcd_meta_cost + offset_cost * count as f64
   }
 
   fn fill_optimized_compression_info(&self, acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
@@ -149,12 +153,7 @@ pub fn common_gcd_for_chunk_meta<U: UnsignedLike>(bins: &[Bin<U>]) -> Option<U> 
 
 pub fn use_gcd_bin_optimize<U: UnsignedLike>(
   bins: &[BinCompressionInfo<U>],
-  internal_config: &InternalCompressorConfig,
 ) -> bool {
-  if !internal_config.use_gcds {
-    return false;
-  }
-
   for p in bins {
     if p.gcd > U::ONE {
       return true;

@@ -1,9 +1,9 @@
-use std::cmp::max;
+use std::cmp::{max, min};
 use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_ADJ_BITS, UNSIGNED_BATCH_SIZE};
-use crate::Bin;
+use crate::{Bin, bits};
 use std::marker::PhantomData;
 
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
@@ -13,6 +13,17 @@ use crate::modes::{Mode, ModeBin};
 // We'll only consider using FloatMultMode if we can save at least 1/this of the
 // mantissa bits by using it.
 const REQUIRED_INFORMATION_GAIN_DENOM: Bitlen = 6;
+
+pub fn adj_bits_needed<U: UnsignedLike>(base: U::Float, inv_base: U::Float, sorted: &[U]) -> Bitlen {
+  let mut max_adj_bits = 0;
+  for &u in sorted {
+    let x = U::Float::from_unsigned(u);
+    let approx = ((x * inv_base).round() * base).to_unsigned();
+    let adj_bits = bits::bits_to_encode_offset((max(u, approx) - min(u, approx)) << 1);
+    max_adj_bits = max(max_adj_bits, adj_bits);
+  }
+  max_adj_bits
+}
 
 pub fn calc_adj_lower<U: UnsignedLike>(adj_offset_bits: Bitlen) -> U {
   if adj_offset_bits == 0 {
@@ -39,10 +50,10 @@ pub struct FloatMultMode<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> FloatMultMode<U> {
-  pub fn new(base: U::Float) -> Self {
+  pub fn new(inv_base: U::Float) -> Self {
     Self {
-      base,
-      inv_base: base.inv(),
+      base: inv_base.inv(),
+      inv_base,
     }
   }
 
@@ -66,9 +77,9 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
   }
 
   fn fill_optimized_compression_info(&self, acc: Self::BinOptAccumulator, bin: &mut BinCompressionInfo<U>) {
-    bin.offset_bits= self.calc_offset_bits(lower, upper);
-    bin.adj_bits= acc;
-    bin.adj_lower= calc_adj_lower(acc);
+    bin.offset_bits = self.calc_offset_bits(bin.lower, bin.upper);
+    bin.adj_bits = acc;
+    bin.adj_lower = calc_adj_lower(acc);
   }
 
   #[inline]
@@ -380,7 +391,7 @@ mod test {
 
   #[test]
   fn test_float_mult_lossless() -> QCompressResult<()> {
-    let mode = FloatMultMode::<u64>::new(0.1);
+    let mode = FloatMultMode::<u64>::new(10.0);
     // bin with exact arithmetic
     let bin = make_bin(5.0, 0, 0);
     check(mode, bin, 0.5, "empty bin exact")?;
@@ -437,6 +448,9 @@ mod test {
     assert_eq!(inv_base(floats), None);
 
     let floats = vec![1.0 / 7.0, 2.0 / 7.0];
+    assert_eq!(inv_base(floats), None);
+
+    let floats = vec![1.0, 1.00000000000001, 0.99999999999999];
     assert_eq!(inv_base(floats), None);
   }
 }
