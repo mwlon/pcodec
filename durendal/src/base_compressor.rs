@@ -187,8 +187,8 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
       DynMode::Gcd => {
         bin_gcd = gcd::gcd(&sorted[i..j]);
       }
-      DynMode::FloatMult { base, inv_base } => {
-        adj_bits = float_mult::adj_bits_needed(base, inv_base, &sorted[i..j]);
+      DynMode::FloatMult { inv_base } => {
+        adj_bits = float_mult::adj_bits_needed(inv_base, &sorted[i..j]);
       }
       _ => (),
     }
@@ -230,8 +230,8 @@ fn choose_unoptimized_mode<U: UnsignedLike>(
   // * Otherwise, use GCD if enabled
   // * Otherwise, use Classic
   if internal_config.use_float_mult {
-    if let Some((base, inv_base)) = Strategy::default().choose_base_and_inv(sorted) {
-      return DynMode::FloatMult { base, inv_base };
+    if let Some(inv_base) = Strategy::default().choose_inv_base(sorted) {
+      return DynMode::FloatMult { inv_base };
     }
   }
 
@@ -515,8 +515,8 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     let table = CompressionTable::from(infos);
 
-    let meta = ChunkMetadata::new(n, bins);
-    meta.write_to(&mut self.writer, &self.flags);
+    let meta = ChunkMetadata::new(n, bins, optimized_mode);
+    meta.write_to(&self.flags, &mut self.writer);
 
     self.state = State::MidChunk(MidChunkInfo {
       unsigneds,

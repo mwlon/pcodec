@@ -42,7 +42,6 @@ pub struct Bin<U: UnsignedLike> {
   /// (in the data type's corresponding unsigned integer).
   pub gcd: U,
   /// TODO
-  pub float_mult_base: U::Float,
   pub adj_bits: Bitlen,
 }
 
@@ -92,7 +91,6 @@ impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
       offset_bits: info.offset_bits,
       run_len_jumpstart: info.run_len_jumpstart,
       gcd: info.gcd,
-      float_mult_base: info.float_mult_lower,
       adj_bits: info.adj_bits,
     }
   }

@@ -1,16 +1,18 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-use crate::{bits, run_len_utils, Bin};
+use crate::{bits, run_len_utils, Bin, ChunkMetadata};
 
 use crate::bit_reader::BitReader;
+use crate::chunk_metadata::DataPageMetadata;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
 use crate::modes::classic::ClassicMode;
-use crate::modes::gcd;
+use crate::modes::{DynMode, gcd};
 use crate::modes::{Mode, ModeBin};
+use crate::modes::float_mult::FloatMultMode;
 
 use crate::modes::gcd::GcdMode;
 use crate::progress::Progress;
@@ -135,10 +137,14 @@ struct NumDecompressorImpl<U: UnsignedLike, M: Mode<U>> {
 }
 
 pub fn new<U: UnsignedLike>(
-  n: usize,
-  compressed_body_size: usize,
-  bins: &[Bin<U>],
+  data_page_meta: DataPageMetadata<U>,
 ) -> QCompressResult<Box<dyn NumDecompressor<U>>> {
+  let DataPageMetadata {
+    n,
+    compressed_body_size,
+    dyn_mode,
+    bins,
+  } = data_page_meta;
   if bins.is_empty() && n > 0 {
     return Err(QCompressError::corruption(format!(
       "unable to decompress chunk with no bins and {} numbers",
@@ -154,28 +160,46 @@ pub fn new<U: UnsignedLike>(
     .max()
     .unwrap_or(Bitlen::MAX);
   let use_run_len = run_len_utils::use_run_len(bins);
-  let res: Box<dyn NumDecompressor<U>> = if gcd::use_gcd_arithmetic(bins) {
-    Box::new(NumDecompressorImpl {
-      huffman_table: HuffmanTable::from_bins::<U, GcdMode>(bins),
-      n,
-      compressed_body_size,
-      max_bits_per_num_block,
-      max_overshoot_per_num_block,
-      use_run_len,
-      mode: GcdMode,
-      state: State::default(),
-    })
-  } else {
-    Box::new(NumDecompressorImpl {
-      huffman_table: HuffmanTable::from_bins::<U, ClassicMode>(bins),
-      n,
-      compressed_body_size,
-      max_bits_per_num_block,
-      max_overshoot_per_num_block,
-      use_run_len,
-      mode: ClassicMode,
-      state: State::default(),
-    })
+  let res: Box<dyn NumDecompressor<U>> = match dyn_mode {
+    DynMode::Classic => {
+      let mode = ClassicMode;
+      Box::new(NumDecompressorImpl {
+        huffman_table: HuffmanTable::from_bins(&mode, bins),
+        n,
+        compressed_body_size,
+        max_bits_per_num_block,
+        max_overshoot_per_num_block,
+        use_run_len,
+        mode,
+        state: State::default(),
+      })
+    }
+    DynMode::Gcd => {
+      let mode = GcdMode;
+      Box::new(NumDecompressorImpl {
+        huffman_table: HuffmanTable::from_bins(&mode, bins),
+        n,
+        compressed_body_size,
+        max_bits_per_num_block,
+        max_overshoot_per_num_block,
+        use_run_len,
+        mode,
+        state: State::default(),
+      })
+    }
+    DynMode::FloatMult { inv_base, .. } => {
+      let mode = FloatMultMode::new(inv_base);
+      Box::new(NumDecompressorImpl {
+        huffman_table: HuffmanTable::from_bins(&mode, bins),
+        n,
+        compressed_body_size,
+        max_bits_per_num_block,
+        max_overshoot_per_num_block,
+        use_run_len,
+        mode,
+        state: State::default(),
+      })
+    }
   };
 
   Ok(res)

@@ -5,6 +5,7 @@ use crate::constants::{Bitlen, BITS_TO_ENCODE_ADJ_BITS, UNSIGNED_BATCH_SIZE};
 use crate::{bits, Bin};
 use std::cmp::{max, min};
 use std::marker::PhantomData;
+use crate::bits::bits_to_encode_offset_bits;
 
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
@@ -15,11 +16,11 @@ use crate::modes::{Mode, ModeBin};
 const REQUIRED_INFORMATION_GAIN_DENOM: Bitlen = 6;
 
 pub fn adj_bits_needed<U: UnsignedLike>(
-  base: U::Float,
   inv_base: U::Float,
   sorted: &[U],
 ) -> Bitlen {
   let mut max_adj_bits = 0;
+  let base = inv_base.inv();
   for &u in sorted {
     let x = U::Float::from_unsigned(u);
     let approx = ((x * inv_base).round() * base).to_unsigned();
@@ -78,7 +79,8 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
 
   fn bin_cost(&self, lower: U, upper: U, count: usize, acc: &Self::BinOptAccumulator) -> f64 {
     let offset_bits = self.calc_offset_bits(lower, upper);
-    (count * (acc + offset_bits) as usize) as f64
+    let bits_to_encode_adj_bits = bits_to_encode_offset_bits::<U>();
+    (bits_to_encode_adj_bits as usize + count * (acc + offset_bits) as usize) as f64
   }
 
   fn fill_optimized_compression_info(
@@ -107,9 +109,9 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
 
   type Bin = FloatMultBin<U>;
 
-  fn make_mode_bin(bin: &Bin<U>) -> FloatMultBin<U> {
+  fn make_mode_bin(&self, bin: &Bin<U>) -> FloatMultBin<U> {
     FloatMultBin {
-      mult_lower: bin.float_mult_base,
+      mult_lower: U::Float::from_unsigned(bin.lower) * self.inv_base,
       mult_offset_bits: bin.offset_bits,
       adj_lower: calc_adj_lower(bin.adj_bits),
       adj_offset_bits: bin.adj_bits,
@@ -237,7 +239,7 @@ pub struct Strategy<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> Strategy<U> {
-  pub fn choose_base_and_inv(&mut self, sorted: &[U]) -> Option<(U::Float, U::Float)> {
+  pub fn choose_inv_base(&mut self, sorted: &[U]) -> Option<U::Float> {
     let smallest = U::Float::from_unsigned(sorted[0]);
     let biggest = U::Float::from_unsigned(*sorted.last().unwrap());
     let biggest_float = [smallest, biggest, biggest - smallest]
@@ -288,7 +290,6 @@ impl<U: UnsignedLike> Strategy<U> {
         }
       })
       .max_by(U::Float::total_cmp)
-      .map(|inv_base| (inv_base.inv(), inv_base))
   }
 }
 
@@ -309,16 +310,19 @@ mod test {
   use crate::data_types::NumberLike;
 
   fn make_bin(
-    float_mult_lower: f64,
+    float_lower: f64,
     offset_bits: Bitlen,
     adj_bits: Bitlen,
   ) -> BinCompressionInfo<u64> {
+    let lower = float_lower.to_unsigned();
+    // 10.0 must line up with float mult param below
+    let float_mult_lower = (float_lower * 10.0).round();
     BinCompressionInfo {
       count: 0,
       code: 0,
       code_len: 0,
       run_len_jumpstart: None,
-      lower: 0,
+      lower,
       upper: 0,
       gcd: 1,
       offset_bits,
@@ -335,7 +339,9 @@ mod test {
     desc: &str,
   ) -> QCompressResult<()> {
     let bin = Bin::from(c_info);
-    let d_info = FloatMultMode::<u64>::make_mode_bin(&bin);
+    println!("BIN {:?}", bin);
+    let d_info = mode.make_mode_bin(&bin);
+    println!("D INFO {:?}", d_info);
     let u = x.to_unsigned();
     let mut writer = BitWriter::default();
     mode.compress_offset(u, &c_info, &mut writer);
@@ -362,15 +368,15 @@ mod test {
   fn test_float_mult_lossless() -> QCompressResult<()> {
     let mode = FloatMultMode::<u64>::new(10.0);
     // bin with exact arithmetic
-    let bin = make_bin(5.0, 0, 0);
+    let bin = make_bin(0.5, 0, 0);
     check(mode, bin, 0.5, "empty bin exact")?;
 
     // 0.1 * 3.0 overshoots by exactly 1 machine epsilon
-    let bin = make_bin(3.0, 0, 1);
+    let bin = make_bin(0.3, 0, 1);
     check(mode, bin, 0.3, "inexact bin")?;
 
     // ~[-1.0, 2.1]
-    let bin = make_bin(-10.0, 5, 3);
+    let bin = make_bin(-1.0, 5, 3);
     check(mode, bin, -1.0, "regular -1.0")?;
     check(mode, bin, -1.0 + 0.1, "regular -0.9")?;
     check(mode, bin, -0.0, "regular -0")?;
@@ -392,8 +398,7 @@ mod test {
       let mut strategy = Strategy::<u64>::default();
       let sorted = floats.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
       strategy
-        .choose_base_and_inv(&sorted)
-        .map(|(_, inv_base)| inv_base)
+        .choose_inv_base(&sorted)
     }
 
     let floats = vec![-0.1, 0.1, 0.100000000001, 0.33, 1.01, 1.1];

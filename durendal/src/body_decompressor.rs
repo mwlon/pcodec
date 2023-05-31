@@ -6,10 +6,12 @@ use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
-use crate::num_decompressor;
+use crate::{ChunkMetadata, num_decompressor};
 use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
 use crate::{delta_encoding, Bin};
+use crate::chunk_metadata::DataPageMetadata;
+use crate::modes::DynMode;
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
@@ -31,21 +33,17 @@ fn unsigneds_to_nums_in_place<T: NumberLike>(dest: &mut [T::Unsigned]) {
 
 impl<T: NumberLike> BodyDecompressor<T> {
   pub(crate) fn new(
-    bins: &[Bin<T::Unsigned>],
-    n: usize,
-    compressed_body_size: usize,
+    mut data_page_meta: DataPageMetadata<T::Unsigned>,
     delta_moments: &DeltaMoments<T::Unsigned>,
   ) -> QCompressResult<Self> {
-    let num_decompressor = num_decompressor::new(
-      n.saturating_sub(delta_moments.order()),
-      compressed_body_size,
-      bins,
-    )?;
+    let n = data_page_meta.n;
+    data_page_meta.n = n.saturating_sub(delta_moments.order());
+    let num_decompressor = num_decompressor::new(data_page_meta)?;
     Ok(Self {
       num_decompressor,
       n,
-      delta_moments: delta_moments.clone(),
       n_processed: 0,
+      delta_moments: delta_moments.clone(),
       phantom: PhantomData,
     })
   }
@@ -109,10 +107,11 @@ mod tests {
   use super::BodyDecompressor;
   use crate::bin::Bin;
   use crate::bits;
-  use crate::chunk_metadata::ChunkMetadata;
+  use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
   use crate::constants::Bitlen;
   use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
+  use crate::modes::DynMode;
 
   fn bin_w_code(code: Vec<bool>) -> Bin<u64> {
     Bin {
@@ -123,33 +122,32 @@ mod tests {
       offset_bits: 6,
       run_len_jumpstart: None,
       gcd: 1,
-      float_mult_base: 0.0,
       adj_bits: 0,
     }
   }
 
   #[test]
   fn test_corrupt_bins_error_not_panic() {
-    let metadata_missing_bin = ChunkMetadata::<u64> {
+    let metadata_missing_bin = DataPageMetadata::<u64> {
       n: 2,
       compressed_body_size: 1,
-      bins: vec![bin_w_code(vec![false]), bin_w_code(vec![true, false])],
+      bins: &vec![bin_w_code(vec![false]), bin_w_code(vec![true, false])],
+      dyn_mode: DynMode::Classic,
     };
-    let metadata_duplicating_bin = ChunkMetadata::<u64> {
+    let metadata_duplicating_bin = DataPageMetadata::<u64> {
       n: 2,
       compressed_body_size: 1,
-      bins: vec![
+      bins: &vec![
         bin_w_code(vec![false]),
         bin_w_code(vec![false]),
         bin_w_code(vec![true]),
       ],
+      dyn_mode: DynMode::Classic,
     };
 
     for bad_metadata in vec![metadata_missing_bin, metadata_duplicating_bin] {
       let result = BodyDecompressor::<i64>::new(
-        &bad_metadata.bins,
-        bad_metadata.n,
-        bad_metadata.compressed_body_size,
+        bad_metadata,
         &DeltaMoments::default(),
       );
       match result {

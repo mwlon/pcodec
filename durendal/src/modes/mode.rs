@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::UnsignedLike;
+use crate::data_types::{FloatLike, UnsignedLike};
 use crate::errors::QCompressResult;
 use crate::Bin;
 
@@ -24,23 +24,23 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
 
   // DECOMPRESSION
   type Bin: ModeBin;
-  fn make_mode_bin(bin: &Bin<U>) -> Self::Bin;
-  fn make_decompression_info(bin: &Bin<U>) -> BinDecompressionInfo<Self::Bin> {
+  fn make_mode_bin(&self, bin: &Bin<U>) -> Self::Bin;
+  fn make_decompression_info(&self, bin: &Bin<U>) -> BinDecompressionInfo<Self::Bin> {
     BinDecompressionInfo {
       depth: bin.code_len,
       run_len_jumpstart: bin.run_len_jumpstart,
-      mode_bin: Self::make_mode_bin(bin),
+      mode_bin: self.make_mode_bin(bin),
     }
   }
   fn unchecked_decompress_unsigned(&self, bin: &Self::Bin, reader: &mut BitReader) -> U;
   fn decompress_unsigned(&self, bin: &Self::Bin, reader: &mut BitReader) -> QCompressResult<U>;
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DynMode<U: UnsignedLike> {
   Classic,
   Gcd,
-  FloatMult { base: U::Float, inv_base: U::Float },
+  FloatMult { inv_base: U::Float },
 }
 
 pub trait ModeBin: Copy + Debug + Default {}

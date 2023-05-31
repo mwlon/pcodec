@@ -162,6 +162,7 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         "name={} delta_encoding_order={}, use_gcds={}",
         name, delta_encoding_order, use_gcds,
       );
+      println!("{}", debug_info);
       let config = CompressorConfig {
         compression_level,
         delta_encoding_order,

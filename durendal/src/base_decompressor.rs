@@ -4,7 +4,7 @@ use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::body_decompressor::BodyDecompressor;
-use crate::chunk_metadata::ChunkMetadata;
+use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
@@ -112,10 +112,15 @@ impl<T: NumberLike> State<T> {
         QCompressError::corruption("compressed page size {} is less than data page metadata size")
       })?;
 
-    BodyDecompressor::new(
-      &chunk_meta.bins,
-      n,
+    let data_page_meta = DataPageMetadata {
       compressed_body_size,
+      n,
+      dyn_mode: chunk_meta.dyn_mode,
+      bins: &chunk_meta.bins,
+    };
+
+    BodyDecompressor::new(
+      data_page_meta,
       &delta_moments,
     )
   }

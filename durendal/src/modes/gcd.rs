@@ -80,7 +80,7 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
 
   type Bin = GcdBin<U>;
 
-  fn make_mode_bin(bin: &Bin<U>) -> GcdBin<U> {
+  fn make_mode_bin(&self, bin: &Bin<U>) -> GcdBin<U> {
     GcdBin {
       lower: bin.lower,
       offset_bits: bin.offset_bits,

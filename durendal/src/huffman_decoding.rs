@@ -84,22 +84,23 @@ impl<B: ModeBin> HuffmanTable<B> {
     }
   }
 
-  pub fn from_bins<U: UnsignedLike, M: Mode<U, Bin = B>>(bins: &[Bin<U>]) -> Self {
+  pub fn from_bins<U: UnsignedLike, M: Mode<U, Bin = B>>(mode: &M, bins: &[Bin<U>]) -> Self {
     if bins.is_empty() {
       HuffmanTable::default()
     } else {
-      build_from_bins_recursive::<U, M>(bins, 0)
+      build_from_bins_recursive(mode, bins, 0)
     }
   }
 }
 
 fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
+  mode: &M,
   bins: &[Bin<U>],
   depth: Bitlen,
 ) -> HuffmanTable<M::Bin> {
   if bins.len() == 1 {
     let bin = &bins[0];
-    HuffmanTable::Leaf(M::make_decompression_info(bin))
+    HuffmanTable::Leaf(mode.make_decompression_info(bin))
   } else {
     let max_depth = bins.iter().map(|bin| bin.code_len).max().unwrap();
     let table_size_log = min(MAX_BIN_TABLE_SIZE_LOG, max_depth - depth);
@@ -121,7 +122,7 @@ fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
     }
     let children = child_infos
       .into_iter()
-      .map(|bins| build_from_bins_recursive::<U, M>(&bins, final_depth))
+      .map(|bins| build_from_bins_recursive::<U, M>(mode, &bins, final_depth))
       .collect();
 
     HuffmanTable::NonLeaf {
