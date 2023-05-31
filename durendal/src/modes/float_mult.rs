@@ -62,7 +62,7 @@ impl<U: UnsignedLike> FloatMultMode<U> {
   fn calc_offset_bits(&self, lower: U, upper: U) -> Bitlen {
     let delta = self.inv_base * U::Float::from_unsigned(upper)
       - self.inv_base * U::Float::from_unsigned(lower);
-    U::BITS - delta.round().to_unsigned().leading_zeros()
+    U::BITS - U::from_float_numerical(delta.round()).leading_zeros()
   }
 }
 
@@ -85,6 +85,7 @@ impl<U: UnsignedLike> Mode<U> for FloatMultMode<U> {
     acc: Self::BinOptAccumulator,
     bin: &mut BinCompressionInfo<U>,
   ) {
+    bin.float_mult_lower = (U::Float::from_unsigned(bin.lower) * self.inv_base).round();
     bin.offset_bits = self.calc_offset_bits(bin.lower, bin.upper);
     bin.adj_bits = acc;
     bin.adj_lower = calc_adj_lower(acc);
@@ -332,9 +333,7 @@ mod test {
     desc: &str,
   ) -> QCompressResult<()> {
     let bin = Bin::from(c_info);
-    println!("BIN {:?}", bin);
     let d_info = mode.make_mode_bin(&bin);
-    println!("D INFO {:?}", d_info);
     let u = x.to_unsigned();
     let mut writer = BitWriter::default();
     mode.compress_offset(u, &c_info, &mut writer);

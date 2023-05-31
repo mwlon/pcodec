@@ -177,12 +177,8 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
         value
       ))),
     }?;
-    println!("{:?}", dyn_mode);
 
     let bins = parse_bins::<U>(reader, flags, dyn_mode, n)?;
-    for bin in &bins {
-      println!("{}", bin);
-    }
 
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;
 
@@ -213,11 +209,6 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       writer.write_diff(inv_base.to_unsigned(), U::BITS);
     }
 
-    println!("WRITING");
-    for bin in &self.bins {
-      println!("{}", bin);
-    }
-    println!("WROTE");
     write_bins(
       &self.bins,
       flags,

@@ -155,6 +155,16 @@ fn test_sparse_islands() {
   assert_recovers(nums, 4, "sparse islands");
 }
 
+#[test]
+fn test_decimals() {
+  let mut rng = rand::thread_rng();
+  let mut nums = Vec::new();
+  for _ in 0..300 {
+    nums.push(rng.gen_range(-1..100) as f64 * 0.01);
+  }
+  assert_recovers(nums, 2, "decimals");
+}
+
 fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: &str) {
   for delta_encoding_order in [0, 1, 7] {
     for use_gcds in [false, true] {
@@ -162,7 +172,6 @@ fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: 
         "name={} delta_encoding_order={}, use_gcds={}",
         name, delta_encoding_order, use_gcds,
       );
-      println!("{}", debug_info);
       let config = CompressorConfig {
         compression_level,
         delta_encoding_order,
