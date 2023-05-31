@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-use crate::{bits, run_len_utils, Bin, ChunkMetadata};
+use crate::{bits, run_len_utils, Bin};
 
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
@@ -10,9 +10,9 @@ use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
 use crate::modes::classic::ClassicMode;
-use crate::modes::{DynMode, gcd};
-use crate::modes::{Mode, ModeBin};
 use crate::modes::float_mult::FloatMultMode;
+use crate::modes::DynMode;
+use crate::modes::{Mode, ModeBin};
 
 use crate::modes::gcd::GcdMode;
 use crate::progress::Progress;

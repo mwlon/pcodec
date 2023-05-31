@@ -2,9 +2,9 @@ use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::*;
-use crate::data_types::{UnsignedLike, NumberLike};
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
-use crate::modes::{DynMode, gcd};
+use crate::modes::DynMode;
 use crate::{bits, Flags};
 
 /// The metadata of a Quantile-compressed chunk.
@@ -134,9 +134,12 @@ fn write_bins<U: UnsignedLike>(
         if bin.offset_bits > 0 {
           writer.write_diff(bin.gcd, U::BITS);
         }
-      },
+      }
       DynMode::FloatMult { .. } => {
-        writer.write_usize(bin.adj_bits as usize, bits::bits_to_encode_offset_bits::<U>());
+        writer.write_usize(
+          bin.adj_bits as usize,
+          bits::bits_to_encode_offset_bits::<U>(),
+        );
       }
     }
   }
@@ -169,7 +172,10 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
         let inv_base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS)?);
         Ok(DynMode::FloatMult { inv_base })
       }
-      value => Err(QCompressError::compatibility(format!("unknown mode value {}", value)))
+      value => Err(QCompressError::compatibility(format!(
+        "unknown mode value {}",
+        value
+      ))),
     }?;
     println!("{:?}", dyn_mode);
 
@@ -203,17 +209,22 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       DynMode::FloatMult { .. } => 2,
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
-    match self.dyn_mode {
-      DynMode::FloatMult { inv_base, .. } => writer.write_diff(inv_base.to_unsigned(), U::BITS),
-      _ => ()
-    };
+    if let DynMode::FloatMult { inv_base, .. } = self.dyn_mode {
+      writer.write_diff(inv_base.to_unsigned(), U::BITS);
+    }
 
     println!("WRITING");
     for bin in &self.bins {
       println!("{}", bin);
     }
     println!("WROTE");
-    write_bins(&self.bins, flags, self.dyn_mode, self.n, writer);
+    write_bins(
+      &self.bins,
+      flags,
+      self.dyn_mode,
+      self.n,
+      writer,
+    );
     writer.finish_byte();
   }
 

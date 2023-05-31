@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::{FloatLike, UnsignedLike};
+use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::Bin;
 

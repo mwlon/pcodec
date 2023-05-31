@@ -2,16 +2,15 @@ use std::cmp::min;
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
+use crate::chunk_metadata::DataPageMetadata;
 use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
+use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
-use crate::{ChunkMetadata, num_decompressor};
+use crate::num_decompressor;
 use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
-use crate::{delta_encoding, Bin};
-use crate::chunk_metadata::DataPageMetadata;
-use crate::modes::DynMode;
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
@@ -107,7 +106,7 @@ mod tests {
   use super::BodyDecompressor;
   use crate::bin::Bin;
   use crate::bits;
-  use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
+  use crate::chunk_metadata::DataPageMetadata;
   use crate::constants::Bitlen;
   use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
@@ -146,10 +145,7 @@ mod tests {
     };
 
     for bad_metadata in vec![metadata_missing_bin, metadata_duplicating_bin] {
-      let result = BodyDecompressor::<i64>::new(
-        bad_metadata,
-        &DeltaMoments::default(),
-      );
+      let result = BodyDecompressor::<i64>::new(bad_metadata, &DeltaMoments::default());
       match result {
         Ok(_) => panic!(
           "expected an error for bad metadata: {:?}",

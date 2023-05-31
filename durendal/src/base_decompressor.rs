@@ -119,10 +119,7 @@ impl<T: NumberLike> State<T> {
       bins: &chunk_meta.bins,
     };
 
-    BodyDecompressor::new(
-      data_page_meta,
-      &delta_moments,
-    )
+    BodyDecompressor::new(data_page_meta, &delta_moments)
   }
 
   pub fn step(&self) -> Step {

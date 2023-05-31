@@ -129,34 +129,6 @@ pub fn gcd<U: UnsignedLike>(sorted: &[U]) -> U {
   res
 }
 
-// Returns Some(gcd) if it is more concise to use the same GCD for all bins
-// Returns None if it is more concise to describe each bin's GCD separately
-// 4 cases:
-// * no bins: we don't even need to bother writing a common GCD, return None
-// * all bins have range 0, i.e. [x, x]: GCD doesn't affect num blocks, return Some(1)
-// * all bins with range >0 have same GCD: return Some(that GCD)
-// * two bins with range >0 have different GCD: return None
-pub fn common_gcd_for_chunk_meta<U: UnsignedLike>(bins: &[Bin<U>]) -> Option<U> {
-  let mut nontrivial_ranges_share_gcd: bool = true;
-  let mut gcd = None;
-  for bin in bins {
-    if bin.offset_bits > 0 {
-      if gcd.is_none() {
-        gcd = Some(bin.gcd);
-      } else if gcd != Some(bin.gcd) {
-        nontrivial_ranges_share_gcd = false;
-      }
-    }
-  }
-
-  match (bins.len(), nontrivial_ranges_share_gcd, gcd) {
-    (0, _, _) => None,
-    (_, false, _) => None,
-    (_, true, Some(gcd)) => Some(gcd),
-    (_, _, None) => Some(U::ONE),
-  }
-}
-
 pub fn use_gcd_bin_optimize<U: UnsignedLike>(bins: &[BinCompressionInfo<U>]) -> bool {
   for p in bins {
     if p.gcd > U::ONE {

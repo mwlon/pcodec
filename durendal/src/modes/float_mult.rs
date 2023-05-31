@@ -1,11 +1,11 @@
 use crate::bin::BinCompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
+use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_ADJ_BITS, UNSIGNED_BATCH_SIZE};
 use crate::{bits, Bin};
 use std::cmp::{max, min};
 use std::marker::PhantomData;
-use crate::bits::bits_to_encode_offset_bits;
 
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
@@ -15,10 +15,7 @@ use crate::modes::{Mode, ModeBin};
 // mantissa bits by using it.
 const REQUIRED_INFORMATION_GAIN_DENOM: Bitlen = 6;
 
-pub fn adj_bits_needed<U: UnsignedLike>(
-  inv_base: U::Float,
-  sorted: &[U],
-) -> Bitlen {
+pub fn adj_bits_needed<U: UnsignedLike>(inv_base: U::Float, sorted: &[U]) -> Bitlen {
   let mut max_adj_bits = 0;
   let base = inv_base.inv();
   for &u in sorted {
@@ -309,11 +306,7 @@ mod test {
   use crate::constants::Bitlen;
   use crate::data_types::NumberLike;
 
-  fn make_bin(
-    float_lower: f64,
-    offset_bits: Bitlen,
-    adj_bits: Bitlen,
-  ) -> BinCompressionInfo<u64> {
+  fn make_bin(float_lower: f64, offset_bits: Bitlen, adj_bits: Bitlen) -> BinCompressionInfo<u64> {
     let lower = float_lower.to_unsigned();
     // 10.0 must line up with float mult param below
     let float_mult_lower = (float_lower * 10.0).round();
@@ -397,8 +390,7 @@ mod test {
     fn inv_base(floats: Vec<f64>) -> Option<f64> {
       let mut strategy = Strategy::<u64>::default();
       let sorted = floats.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
-      strategy
-        .choose_inv_base(&sorted)
+      strategy.choose_inv_base(&sorted)
     }
 
     let floats = vec![-0.1, 0.1, 0.100000000001, 0.33, 1.01, 1.1];
