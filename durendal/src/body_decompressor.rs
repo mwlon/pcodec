@@ -8,18 +8,20 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
+use crate::modes::DynMode;
 use crate::num_decompressor;
 use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
+use crate::unsigned_src_dst::UnsignedDst;
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
 #[derive(Clone, Debug)]
 pub struct BodyDecompressor<T: NumberLike> {
+  dyn_mode: DynMode<T::Unsigned>,
   num_decompressor: Box<dyn NumDecompressor<T::Unsigned>>,
-  n: usize,
   delta_moments: DeltaMoments<T::Unsigned>,
-  n_processed: usize,
+  adjustments: [T::Unsigned; UNSIGNED_BATCH_SIZE],
   phantom: PhantomData<T>,
 }
 
@@ -32,66 +34,63 @@ fn unsigneds_to_nums_in_place<T: NumberLike>(dest: &mut [T::Unsigned]) {
 
 impl<T: NumberLike> BodyDecompressor<T> {
   pub(crate) fn new(
-    mut data_page_meta: DataPageMetadata<T::Unsigned>,
-    delta_moments: &DeltaMoments<T::Unsigned>,
+    data_page_meta: DataPageMetadata<T::Unsigned>,
   ) -> QCompressResult<Self> {
-    let n = data_page_meta.n;
-    data_page_meta.n = n.saturating_sub(delta_moments.order());
-    let num_decompressor = num_decompressor::new(data_page_meta)?;
+    let num_decompressor = num_decompressor::new(data_page_meta.clone())?;
     Ok(Self {
+      dyn_mode: data_page_meta.dyn_mode,
       num_decompressor,
-      n,
-      n_processed: 0,
-      delta_moments: delta_moments.clone(),
+      delta_moments: data_page_meta.delta_moments,
+      adjustments: [T::Unsigned::ZERO; UNSIGNED_BATCH_SIZE],
       phantom: PhantomData,
     })
   }
 
-  pub fn decompress_next_batch(
+  fn decompress_batch(
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
-    dest: &mut [T],
+    num_dst: &mut [T],
+  ) -> QCompressResult<Progress> {
+    let batch_end = min(
+      UNSIGNED_BATCH_SIZE,
+      num_dst.len(),
+    );
+    let mut u_dst = UnsignedDst::new(
+      T::transmute_to_unsigned_slice(&mut num_dst[..batch_end]),
+      &mut self.adjustments,
+    );
+    let Self {
+      num_decompressor,
+      delta_moments,
+      ..
+    } = self;
+
+    let progress = num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, &mut u_dst)?;
+
+    delta_encoding::reconstruct_in_place(delta_moments, u_dst.unsigneds_mut());
+
+    self.dyn_mode.finalize(&mut u_dst);
+
+    unsigneds_to_nums_in_place::<T>(u_dst.unsigneds_mut());
+
+    self.n_processed += progress.n_processed;
+    Ok(progress)
+  }
+
+  pub fn decompress(
+    &mut self,
+    reader: &mut BitReader,
+    error_on_insufficient_data: bool,
+    num_dst: &mut [T],
   ) -> QCompressResult<Progress> {
     let mut progress = Progress::default();
-    while progress.n_processed < dest.len()
-      && !progress.finished_body
-      && !progress.insufficient_data
-    {
-      let batch_end = min(
-        progress.n_processed + UNSIGNED_BATCH_SIZE,
-        dest.len(),
-      );
-      let u_dest = T::transmute_to_unsigned_slice(&mut dest[progress.n_processed..batch_end]);
-      let Self {
-        num_decompressor,
-        n,
-        delta_moments,
-        n_processed,
-        ..
-      } = self;
-      let u_progress =
-        num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dest)?;
-      let batch_size = if u_progress.finished_body {
-        let batch_size = min(
-          min(
-            u_dest.len(),
-            u_progress.n_processed + delta_moments.order(),
-          ),
-          *n - *n_processed,
-        );
-        u_dest[u_progress.n_processed..batch_size].fill(T::Unsigned::ZERO);
-        batch_size
-      } else {
-        u_progress.n_processed
-      };
-      delta_encoding::reconstruct_in_place(delta_moments, u_dest);
-      *n_processed += batch_size;
-      progress.n_processed += batch_size;
-      progress.finished_body = n_processed == n;
-      progress.insufficient_data = u_progress.insufficient_data;
-
-      unsigneds_to_nums_in_place::<T>(u_dest);
+    while !progress.finished_body && !progress.insufficient_data {
+      progress += self.decompress_batch(
+        reader,
+        error_on_insufficient_data,
+        &mut num_dst[progress.n_processed..]
+      )?;
     }
     Ok(progress)
   }
@@ -103,7 +102,6 @@ impl<T: NumberLike> BodyDecompressor<T> {
 
 #[cfg(test)]
 mod tests {
-  use super::BodyDecompressor;
   use crate::bin::Bin;
   use crate::bits;
   use crate::chunk_metadata::DataPageMetadata;
@@ -111,6 +109,8 @@ mod tests {
   use crate::delta_encoding::DeltaMoments;
   use crate::errors::ErrorKind;
   use crate::modes::DynMode;
+
+  use super::BodyDecompressor;
 
   fn bin_w_code(code: Vec<bool>) -> Bin<u64> {
     Bin {
@@ -132,6 +132,7 @@ mod tests {
       compressed_body_size: 1,
       bins: &vec![bin_w_code(vec![false]), bin_w_code(vec![true, false])],
       dyn_mode: DynMode::Classic,
+      delta_moments: DeltaMoments::default(),
     };
     let metadata_duplicating_bin = DataPageMetadata::<u64> {
       n: 2,
@@ -142,10 +143,11 @@ mod tests {
         bin_w_code(vec![true]),
       ],
       dyn_mode: DynMode::Classic,
+      delta_moments: DeltaMoments::default(),
     };
 
     for bad_metadata in vec![metadata_missing_bin, metadata_duplicating_bin] {
-      let result = BodyDecompressor::<i64>::new(bad_metadata, &DeltaMoments::default());
+      let result = BodyDecompressor::<i64>::new(bad_metadata);
       match result {
         Ok(_) => panic!(
           "expected an error for bad metadata: {:?}",

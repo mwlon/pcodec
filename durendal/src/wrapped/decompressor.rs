@@ -85,7 +85,7 @@ impl<T: NumberLike> Decompressor<T> {
       .check_step(Step::MidDataPage, "read next batch")?;
     self.0.with_reader(|reader, state, _| {
       let bd = state.body_decompressor.as_mut().unwrap();
-      let batch_res = bd.decompress_next_batch(reader, true, dest)?;
+      let batch_res = bd.decompress(reader, true, dest)?;
       if batch_res.finished_body {
         state.body_decompressor = None;
       }

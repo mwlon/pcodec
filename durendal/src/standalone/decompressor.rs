@@ -167,7 +167,7 @@ fn next_nums_dirty<T: NumberLike>(
   bd: &mut BodyDecompressor<T>,
   dest: &mut [T],
 ) -> QCompressResult<Progress> {
-  bd.decompress_next_batch(reader, false, dest)
+  bd.decompress(reader, false, dest)
 }
 
 fn apply_nums<T: NumberLike>(

@@ -6,6 +6,7 @@ use crate::constants::{Bitlen, MAX_JUMPSTART, MIN_FREQUENCY_TO_USE_RUN_LEN, MIN_
 use crate::data_types::UnsignedLike;
 use crate::modes::Mode;
 use crate::{num_decompressor, Bin};
+use crate::unsigned_src_dst::UnsignedDst;
 
 fn bin_needs_run_len(count: usize, n: usize, freq: f64) -> bool {
   n >= MIN_N_TO_USE_RUN_LEN && freq >= MIN_FREQUENCY_TO_USE_RUN_LEN && count < n
@@ -44,11 +45,11 @@ pub fn use_run_len<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
 pub trait RunLenOperator {
   // returns count of numbers processed
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    state: &mut num_decompressor::State<M::Bin>,
+    state: &mut num_decompressor::State<U>,
     reader: &mut BitReader,
-    bin: &BinDecompressionInfo<M::Bin>,
+    bin: &BinDecompressionInfo<U>,
     mode: M,
-    dest: &mut [U],
+    dest: &mut UnsignedDst<U>,
   ) -> usize;
 
   fn batch_ongoing(len: usize, batch_size: usize) -> bool;
@@ -59,25 +60,25 @@ pub struct GeneralRunLenOp;
 impl RunLenOperator for GeneralRunLenOp {
   #[inline]
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    state: &mut num_decompressor::State<M::Bin>,
+    state: &mut num_decompressor::State<U>,
     reader: &mut BitReader,
-    bin: &BinDecompressionInfo<M::Bin>,
+    bin: &BinDecompressionInfo<U>,
     mode: M,
-    dest: &mut [U],
-  ) -> usize {
+    dst: &mut UnsignedDst<U>,
+  ) {
     match bin.run_len_jumpstart {
-      None => {
-        dest[0] = mode.unchecked_decompress_unsigned(&bin.mode_bin, reader);
-        1
-      }
+      None => TrivialRunLenOp::unchecked_decompress_for_bin(state, reader, bin, mode, dst),
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = state.unchecked_limit_reps(bin.mode_bin, full_reps, dest.len());
-        for i in 0..reps {
-          dest[i] = mode.unchecked_decompress_unsigned(&bin.mode_bin, reader);
+        let reps = state.unchecked_limit_reps(bin.mode_bin, full_reps, dst.len());
+        for _ in 0..reps {
+          dst.write_unsigned(mode.unchecked_decompress_unsigned(&bin.mode_bin, reader));
+          if M::USES_ADJUSTMENT {
+            dst.write_adj(M::unchecked_decompress_adjustment(&bin.mode_bin, reader));
+          }
+          dst.incr();
         }
-        reps
       }
     }
   }
@@ -93,14 +94,17 @@ pub struct TrivialRunLenOp;
 impl RunLenOperator for TrivialRunLenOp {
   #[inline]
   fn unchecked_decompress_for_bin<U: UnsignedLike, M: Mode<U>>(
-    _state: &mut num_decompressor::State<M::Bin>,
+    _state: &mut num_decompressor::State<U>,
     reader: &mut BitReader,
-    bin: &BinDecompressionInfo<M::Bin>,
+    bin: &BinDecompressionInfo<U>,
     mode: M,
-    dest: &mut [U],
-  ) -> usize {
-    dest[0] = mode.unchecked_decompress_unsigned(&bin.mode_bin, reader);
-    1
+    dst: &mut UnsignedDst<U>,
+  ) {
+    dst.write_unsigned(mode.unchecked_decompress_unsigned(&bin.mode_bin, reader));
+    if M::USES_ADJUSTMENT {
+      dst.write_adj(M::unchecked_decompress_adjustment(&bin.mode_bin, reader));
+    }
+    dst.incr();
   }
 
   #[inline]

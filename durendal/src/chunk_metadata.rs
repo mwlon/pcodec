@@ -6,6 +6,8 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::DynMode;
 use crate::{bits, Flags};
+use crate::bits::bits_to_encode_offset_bits;
+use crate::delta_encoding::DeltaMoments;
 
 /// The metadata of a Quantile-compressed chunk.
 ///
@@ -35,12 +37,13 @@ pub struct ChunkMetadata<U: UnsignedLike> {
 // Importantly, `n` and `compressed_body_size` might come from either the
 // chunk metadata parsing step (standalone mode) OR from the wrapping format
 // (wrapped mode).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct DataPageMetadata<'a, U: UnsignedLike> {
   pub n: usize,
   pub compressed_body_size: usize,
   pub dyn_mode: DynMode<U>,
   pub bins: &'a [Bin<U>],
+  pub delta_moments: DeltaMoments<U>,
 }
 
 fn parse_bins<U: UnsignedLike>(
@@ -52,7 +55,7 @@ fn parse_bins<U: UnsignedLike>(
   let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
   let mut bins = Vec::with_capacity(n_bins);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
-  let offset_bits_bits = bits::bits_to_encode_offset_bits::<U>();
+  let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for _ in 0..n_bins {
     let count = reader.read_usize(bits_to_encode_count)?;
     let lower = reader.read_uint::<U>(U::BITS)?;
@@ -93,7 +96,7 @@ fn parse_bins<U: UnsignedLike>(
         };
       }
       DynMode::FloatMult { .. } => {
-        bin.adj_bits = reader.read_usize(bits::bits_to_encode_offset_bits::<U>())? as Bitlen;
+        bin.adj_bits = reader.read_usize(bits_to_encode_offset_bits::<U>())? as Bitlen;
       }
     }
     bins.push(bin);
@@ -110,7 +113,7 @@ fn write_bins<U: UnsignedLike>(
 ) {
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let bits_to_encode_count = flags.bits_to_encode_count(n);
-  let offset_bits_bits = bits::bits_to_encode_offset_bits::<U>();
+  let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for bin in bins {
     writer.write_usize(bin.count, bits_to_encode_count);
     writer.write_diff(bin.lower, U::BITS);
@@ -136,9 +139,9 @@ fn write_bins<U: UnsignedLike>(
         }
       }
       DynMode::FloatMult { .. } => {
-        writer.write_usize(
-          bin.adj_bits as usize,
-          bits::bits_to_encode_offset_bits::<U>(),
+        writer.write_bitlen(
+          bin.adj_bits,
+          bits_to_encode_offset_bits::<U>(),
         );
       }
     }
@@ -169,8 +172,9 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       0 => Ok(DynMode::Classic),
       1 => Ok(DynMode::Gcd),
       2 => {
+        let adj_bits = reader.read_bitlen(bits_to_encode_offset_bits::<U>())?;
         let inv_base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS)?);
-        Ok(DynMode::FloatMult { inv_base })
+        Ok(DynMode::float_mult(adj_bits, inv_base))
       }
       value => Err(QCompressError::compatibility(format!(
         "unknown mode value {}",
@@ -205,7 +209,8 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       DynMode::FloatMult { .. } => 2,
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
-    if let DynMode::FloatMult { inv_base, .. } = self.dyn_mode {
+    if let DynMode::FloatMult { adj_bits, inv_base, .. } = self.dyn_mode {
+      writer.write_usize(adj_bits as usize, bits_to_encode_offset_bits::<U>())? as Bitlen;
       writer.write_diff(inv_base.to_unsigned(), U::BITS);
     }
 

@@ -3,7 +3,6 @@ use std::fmt::{Display, Formatter};
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
-use crate::modes::ModeBin;
 
 /// A pairing of a Huffman code with a numerical range.
 ///
@@ -41,8 +40,6 @@ pub struct Bin<U: UnsignedLike> {
   /// The greatest common divisor of all numbers belonging to this bin
   /// (in the data type's corresponding unsigned integer).
   pub gcd: U,
-  /// TODO
-  pub adj_bits: Bitlen,
 }
 
 impl<U: UnsignedLike> Display for Bin<U> {
@@ -73,9 +70,6 @@ pub struct BinCompressionInfo<U: UnsignedLike> {
   pub upper: U,
   pub offset_bits: Bitlen,
   pub gcd: U,
-  pub float_mult_lower: U::Float,
-  pub adj_lower: U,
-  pub adj_bits: Bitlen,
   pub run_len_jumpstart: Option<Bitlen>,
   pub code: usize,
   pub code_len: Bitlen,
@@ -91,7 +85,6 @@ impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
       offset_bits: info.offset_bits,
       run_len_jumpstart: info.run_len_jumpstart,
       gcd: info.gcd,
-      adj_bits: info.adj_bits,
     }
   }
 }
@@ -113,9 +106,6 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
       offset_bits: U::BITS,
       run_len_jumpstart: None,
       gcd: U::ONE,
-      float_mult_lower: U::Float::default(),
-      adj_lower: U::ZERO,
-      adj_bits: U::BITS,
     }
   }
 }
@@ -126,8 +116,22 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
 // so we given them lousy names. This is a hack but probably better than adding
 // a bunch more generics and associated types.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct BinDecompressionInfo<B: ModeBin> {
+pub struct BinDecompressionInfo<U: UnsignedLike> {
   pub depth: Bitlen,
   pub run_len_jumpstart: Option<Bitlen>,
-  pub mode_bin: B,
+  pub lower: U,
+  pub offset_bits: Bitlen,
+  pub gcd: U,
+}
+
+impl<U: UnsignedLike> From<&Bin<U>> for BinDecompressionInfo<U> {
+  fn from(bin: &Bin<U>) -> Self {
+    Self {
+      depth: bin.code_len,
+      run_len_jumpstart: bin.run_len_jumpstart,
+      lower: bin.lower,
+      offset_bits: bin.offset_bits,
+      gcd: bin.gcd,
+    }
+  }
 }

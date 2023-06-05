@@ -8,9 +8,7 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-pub trait FloatLike:
-  Add<Output = Self> + Copy + Debug + Mul<Output = Self> + PartialOrd + Sub<Output = Self>
-{
+pub trait FloatLike: Copy + Debug + Mul<Output = Self> + PartialOrd {
   const PRECISION_BITS: Bitlen;
   const GREATEST_PRECISE_INT: Self;
   fn abs(self) -> Self;
@@ -135,6 +133,10 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// The unsigned integer this type can convert between to do
   /// bitwise logic and such.
   type Unsigned: UnsignedLike;
+
+  fn assert_float(_nums: &[Self]) -> &[<Self::Unsigned as UnsignedLike>::Float] {
+    panic!("bug; not a float")
+  }
 
   /// Used during compression to convert to an unsigned integer in a way that
   /// preserves ordering.

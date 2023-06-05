@@ -20,12 +20,6 @@ pub fn code_to_string(x: usize, n: Bitlen) -> String {
   res
 }
 
-// This bumpy log gives a more accurate average number of offset bits used.
-pub fn avg_offset_bits<U: UnsignedLike>(lower: U, upper: U, gcd: U) -> f64 {
-  let diff = upper - lower;
-  (U::BITS - (diff / gcd).leading_zeros()) as f64
-}
-
 // The true Huffman cost of course depends on the tree. We can statistically
 // model this cost and get slightly different bumpy log formulas,
 // but I haven't found
@@ -74,15 +68,6 @@ mod tests {
     assert_eq!(avg_depth_bits(2, 4), 1.0);
     assert_eq!(avg_depth_bits(2, 8), 2.0);
     assert_eq!(avg_depth_bits(4, 8), 1.0);
-  }
-
-  #[test]
-  fn test_avg_offset_bits() {
-    assert_eq!(avg_offset_bits(0_u32, 0_u32, 1), 0.0);
-    assert_eq!(avg_offset_bits(4_u32, 5_u32, 1), 1.0);
-    assert_eq!(avg_offset_bits(10_u32, 13_u32, 1), 2.0);
-    assert_eq!(avg_offset_bits(10_u32, 13_u32, 3), 1.0);
-    assert_eq!(avg_offset_bits(10_u32, 19_u32, 3), 2.0);
   }
 
   #[test]

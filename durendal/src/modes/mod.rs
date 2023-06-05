@@ -1,5 +1,5 @@
 pub mod classic;
-pub mod float_mult;
+pub mod adjusted;
 pub mod gcd;
 
 mod mode;

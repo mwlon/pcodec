@@ -47,6 +47,10 @@ macro_rules! impl_float_number {
 
       type Unsigned = $unsigned;
 
+      fn assert_float(nums: &[Self]) -> &[Self] {
+        nums
+      }
+
       #[inline]
       fn to_unsigned(self) -> Self::Unsigned {
         let mem_layout = self.to_bits();

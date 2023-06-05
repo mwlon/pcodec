@@ -3,13 +3,15 @@ use std::fmt::Debug;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::UnsignedLike;
+use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
-use crate::Bin;
+use crate::{Bin, float_mult_utils};
+use crate::constants::Bitlen;
+use crate::modes::adjusted::AdjustedMode;
+use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
 pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   // BIN OPTIMIZATION
-  const EXTRA_META_COST: f64 = 0.0;
   type BinOptAccumulator: Default;
   fn combine_bin_opt_acc(bin: &BinCompressionInfo<U>, acc: &mut Self::BinOptAccumulator);
   fn bin_cost(&self, lower: U, upper: U, count: usize, acc: &Self::BinOptAccumulator) -> f64;
@@ -20,27 +22,52 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   );
 
   // COMPRESSION
+  const USES_ADJUSTMENT: bool = false;
   fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter);
+  fn compress_adjustment(&self, _adjustment: U, _writer: &mut BitWriter) {}
 
   // DECOMPRESSION
-  type Bin: ModeBin;
-  fn make_mode_bin(&self, bin: &Bin<U>) -> Self::Bin;
-  fn make_decompression_info(&self, bin: &Bin<U>) -> BinDecompressionInfo<Self::Bin> {
-    BinDecompressionInfo {
-      depth: bin.code_len,
-      run_len_jumpstart: bin.run_len_jumpstart,
-      mode_bin: self.make_mode_bin(bin),
-    }
-  }
-  fn unchecked_decompress_unsigned(&self, bin: &Self::Bin, reader: &mut BitReader) -> U;
-  fn decompress_unsigned(&self, bin: &Self::Bin, reader: &mut BitReader) -> QCompressResult<U>;
+  fn unchecked_decompress_unsigned(&self, bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U;
+  fn decompress_unsigned(&self, bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> QCompressResult<U>;
+  #[inline]
+  fn unchecked_decompress_adjustment(&self, _reader: &mut BitReader) -> U { panic!("unreachable") }
+  #[inline]
+  fn decompress_adjustment(&self, _reader: &mut BitReader) -> QCompressResult<U> { panic!("unreachable") }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DynMode<U: UnsignedLike> {
   Classic,
   Gcd,
-  FloatMult { inv_base: U::Float },
+  FloatMult {
+    adj_bits: Bitlen,
+    inv_base: U::Float,
+    base: U::Float,
+    mode: AdjustedMode<U>,
+  },
 }
 
-pub trait ModeBin: Copy + Debug + Default {}
+impl<U: UnsignedLike> DynMode<U> {
+  pub fn float_mult(adj_bits: Bitlen, inv_base: U::Float) -> Self {
+    Self::FloatMult {
+      adj_bits,
+      inv_base,
+      base: inv_base.inv(),
+      mode: AdjustedMode::new(adj_bits),
+    }
+  }
+
+  pub fn finalize(&self, dst: &mut UnsignedDst<U>) {
+    match self {
+      DynMode::FloatMult { base, .. } => float_mult_utils::decode_apply_mult(base, dst),
+      _ => ()
+    }
+  }
+
+  pub fn create_src<T: NumberLike>(&self, nums: &[T]) -> UnsignedSrc<U> {
+    match self {
+      DynMode::FloatMult { inv_base, base, .. } => float_mult_utils::encode_apply_mult(nums, base, inv_base),
+      _ => UnsignedSrc::new(nums.iter().map(|x| x.to_unsigned()).collect(), vec![])
+    }
+  }
+}

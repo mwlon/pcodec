@@ -1,21 +1,12 @@
 use crate::data_types::UnsignedLike;
 
-use crate::bin::BinCompressionInfo;
+use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::Bitlen;
 use crate::errors::QCompressResult;
-use crate::modes::{Mode, ModeBin};
+use crate::modes::{Mode};
 use crate::{bits, Bin};
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct GcdBin<U: UnsignedLike> {
-  pub lower: U,
-  pub offset_bits: Bitlen,
-  pub gcd: U,
-}
-
-impl<U: UnsignedLike> ModeBin for GcdBin<U> {}
 
 // formula: bin lower + offset * bin gcd
 #[derive(Clone, Copy, Debug)]
@@ -58,8 +49,8 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
     } else {
       0.0
     };
-    let offset_cost = bits::avg_offset_bits(lower, upper, bin_gcd);
-    gcd_meta_cost + offset_cost * count as f64
+    let offset_cost = bits::bits_to_encode_offset((upper - lower) / bin_gcd);
+    gcd_meta_cost + (offset_cost * count) as f64
   }
 
   fn fill_optimized_compression_info(
@@ -78,23 +69,13 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
     writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
   }
 
-  type Bin = GcdBin<U>;
-
-  fn make_mode_bin(&self, bin: &Bin<U>) -> GcdBin<U> {
-    GcdBin {
-      lower: bin.lower,
-      offset_bits: bin.offset_bits,
-      gcd: bin.gcd,
-    }
-  }
-
   #[inline]
-  fn unchecked_decompress_unsigned(&self, bin: &GcdBin<U>, reader: &mut BitReader) -> U {
+  fn unchecked_decompress_unsigned(&self, bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U {
     bin.lower + reader.unchecked_read_uint::<U>(bin.offset_bits) * bin.gcd
   }
 
   #[inline]
-  fn decompress_unsigned(&self, bin: &GcdBin<U>, reader: &mut BitReader) -> QCompressResult<U> {
+  fn decompress_unsigned(&self, bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> QCompressResult<U> {
     Ok(bin.lower + reader.read_uint::<U>(bin.offset_bits)? * bin.gcd)
   }
 }

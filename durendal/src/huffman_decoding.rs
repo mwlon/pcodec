@@ -5,28 +5,27 @@ use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, MAX_BIN_TABLE_SIZE_LOG};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::modes::{Mode, ModeBin};
 
 #[derive(Clone, Debug)]
-pub enum HuffmanTable<B: ModeBin> {
-  Leaf(BinDecompressionInfo<B>),
+pub enum HuffmanTable<U: UnsignedLike> {
+  Leaf(BinDecompressionInfo<U>),
   NonLeaf {
     table_size_log: Bitlen,
-    children: Vec<HuffmanTable<B>>,
+    children: Vec<HuffmanTable<U>>,
   },
 }
 
-impl<B: ModeBin> Default for HuffmanTable<B> {
+impl<U: UnsignedLike> Default for HuffmanTable<U> {
   fn default() -> Self {
     HuffmanTable::Leaf(BinDecompressionInfo::default())
   }
 }
 
-impl<B: ModeBin> HuffmanTable<B> {
+impl<U: UnsignedLike> HuffmanTable<U> {
   pub fn search_with_reader(
     &self,
     reader: &mut BitReader,
-  ) -> QCompressResult<&BinDecompressionInfo<B>> {
+  ) -> QCompressResult<&BinDecompressionInfo<U>> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
@@ -63,7 +62,7 @@ impl<B: ModeBin> HuffmanTable<B> {
     }
   }
 
-  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> &BinDecompressionInfo<B> {
+  pub fn unchecked_search_with_reader(&self, reader: &mut BitReader) -> &BinDecompressionInfo<U> {
     let mut node = self;
     let mut read_depth = 0;
     loop {
@@ -84,23 +83,22 @@ impl<B: ModeBin> HuffmanTable<B> {
     }
   }
 
-  pub fn from_bins<U: UnsignedLike, M: Mode<U, Bin = B>>(mode: &M, bins: &[Bin<U>]) -> Self {
+  pub fn from_bins(bins: &[Bin<U>]) -> Self {
     if bins.is_empty() {
       HuffmanTable::default()
     } else {
-      build_from_bins_recursive(mode, bins, 0)
+      build_from_bins_recursive(bins, 0)
     }
   }
 }
 
-fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
-  mode: &M,
+fn build_from_bins_recursive<U: UnsignedLike>(
   bins: &[Bin<U>],
   depth: Bitlen,
-) -> HuffmanTable<M::Bin> {
+) -> HuffmanTable<U> {
   if bins.len() == 1 {
     let bin = &bins[0];
-    HuffmanTable::Leaf(mode.make_decompression_info(bin))
+    HuffmanTable::Leaf(BinDecompressionInfo::from(bin))
   } else {
     let max_depth = bins.iter().map(|bin| bin.code_len).max().unwrap();
     let table_size_log = min(MAX_BIN_TABLE_SIZE_LOG, max_depth - depth);
@@ -122,7 +120,7 @@ fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
     }
     let children = child_infos
       .into_iter()
-      .map(|bins| build_from_bins_recursive::<U, M>(mode, &bins, final_depth))
+      .map(|bins| build_from_bins_recursive::<U>(&bins, final_depth))
       .collect();
 
     HuffmanTable::NonLeaf {
@@ -135,16 +133,15 @@ fn build_from_bins_recursive<U: UnsignedLike, M: Mode<U>>(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::modes::gcd::GcdBin;
 
   #[test]
   fn huff_table_size() {
     assert_eq!(
-      std::mem::size_of::<HuffmanTable<GcdBin<u64>>>(),
+      std::mem::size_of::<HuffmanTable<u64>>(),
       48
     );
     assert_eq!(
-      std::mem::size_of::<HuffmanTable<GcdBin<u32>>>(),
+      std::mem::size_of::<HuffmanTable<u32>>(),
       32
     );
   }
