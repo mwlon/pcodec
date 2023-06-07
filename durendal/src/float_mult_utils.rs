@@ -32,7 +32,7 @@ pub fn encode_apply_mult<T: NumberLike>(
   let mut adjustments = Vec::with_capacity(n);
   for i in 0..n {
     let mult = (nums[i] * inv_base).round();
-    unsigneds[i] = mult.to_unsigned_numerical();
+    unsigneds[i] = T::Unsigned::from_float_numerical(mult);
     adjustments[i] = nums[i].to_unsigned().wrapping_sub((mult * base).to_unsigned());
   }
   UnsignedSrc::new(unsigneds, adjustments)
@@ -62,8 +62,9 @@ enum StrategyChainResult {
 
 struct StrategyChain<U: UnsignedLike> {
   bases_and_invs: Vec<(U::Float, U::Float)>,
-  candidate_idx: Option<usize>,
+  candidate_idx: usize,
   pub proven_useful: bool,
+  pub adj_bits: Bitlen,
   phantom: PhantomData<U>,
 }
 
@@ -79,31 +80,30 @@ impl<U: UnsignedLike> StrategyChain<U> {
 
     Self {
       bases_and_invs,
-      candidate_idx: Some(0),
+      candidate_idx: 0,
       proven_useful: false,
+      adj_bits: 0,
       phantom: PhantomData,
     }
   }
 
   fn current_base_and_inv(&self) -> Option<(U::Float, U::Float)> {
-    self
-      .candidate_idx
-      .and_then(|idx| self.bases_and_invs.get(idx).cloned())
+    self.bases_and_invs.get(self.candidate_idx).cloned()
   }
 
   fn current_inv_base(&self) -> Option<U::Float> {
     self.current_base_and_inv().map(|(_, inv_base)| inv_base)
   }
 
-  fn compatibility_with(&self, sorted_chunk: &[U]) -> StrategyChainResult {
+  fn compatibility_with(&self, sorted_chunk: &[U::Float]) -> StrategyChainResult {
     match self.current_base_and_inv() {
       Some((base, inv_base)) => {
         let mut res = StrategyChainResult::Uninformative;
         let mut seen_mult: Option<U::Float> = None;
         let required_information_gain = U::Float::PRECISION_BITS / REQUIRED_INFORMATION_GAIN_DENOM;
 
-        for &u in sorted_chunk {
-          let abs_float = U::Float::from_unsigned(u).abs();
+        for &x in sorted_chunk {
+          let abs_float = x.abs();
           let base_bits = U::Float::log2_epsilons_between_positives(abs_float, abs_float + base);
           let mult = (abs_float * inv_base).round();
           let adj_bits = U::Float::log2_epsilons_between_positives(abs_float, mult * base);
@@ -126,16 +126,12 @@ impl<U: UnsignedLike> StrategyChain<U> {
     }
   }
 
-  fn is_invalid(&self) -> bool {
-    self.current_base_and_inv().is_none()
+  fn is_valid(&self) -> bool {
+    self.current_base_and_inv().is_some()
   }
 
   pub fn relax(&mut self) {
-    self.candidate_idx.iter_mut().for_each(|idx| *idx += 1);
-  }
-
-  fn invalidate(&mut self) {
-    self.candidate_idx = None;
+    self.candidate_idx += 1;
   }
 }
 
@@ -148,43 +144,24 @@ pub struct Strategy<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> Strategy<U> {
-  pub fn choose_inv_base(&mut self, sorted: &[U]) -> Option<U::Float> {
-    let smallest = U::Float::from_unsigned(sorted[0]);
-    let biggest = U::Float::from_unsigned(*sorted.last().unwrap());
-    let biggest_float = [smallest, biggest, biggest - smallest]
-      .iter()
-      .map(|x| x.abs())
-      .max_by(U::Float::total_cmp)
-      .unwrap();
+  pub fn choose_adj_bits_and_inv_base<T: NumberLike<Unsigned=U>>(&mut self, nums: &[T]) -> Option<(Bitlen, U::Float)> {
+    let floats = T::assert_float(nums);
 
-    let mut invalid_count = 0;
-    for chunk in sorted.chunks(UNSIGNED_BATCH_SIZE) {
-      if invalid_count == self.chains.len() {
-        break;
-      }
-
+    // iterate over floats first for caching, performance
+    for chunk in floats.chunks(UNSIGNED_BATCH_SIZE) {
+      let mut any_valid = false;
       for chain in &mut self.chains {
-        if chain.is_invalid() {
+        if chain.is_valid() {
+          any_valid = true;
+        } else {
           continue;
         }
 
-        // but NANs are ok
-        if biggest_float * chain.current_inv_base().unwrap() >= U::Float::GREATEST_PRECISE_INT {
-          invalid_count += 1;
-          chain.invalidate();
-        }
+        chain.fit_to(chunk);
+      }
 
-        loop {
-          let compatibility = chain.compatibility_with(chunk);
-          match compatibility {
-            StrategyChainResult::FarFromExactMultiple => chain.relax(),
-            StrategyChainResult::CloseToExactMultiple => {
-              chain.proven_useful = true;
-              break;
-            }
-            _ => break,
-          }
-        }
+      if !any_valid {
+        break;
       }
     }
 
@@ -192,13 +169,17 @@ impl<U: UnsignedLike> Strategy<U> {
       .chains
       .iter()
       .flat_map(|chain| {
-        if chain.proven_useful {
-          chain.current_inv_base()
+        if chain.is_valid() {
+          chain
+            .current_inv_base()
+            .map(|inv_base| (chain.adj_bits, inv_base))
         } else {
           None
         }
       })
-      .max_by(U::Float::total_cmp)
+      .max_by(|(_, inv_base0), (_, inv_base1)| {
+        U::Float::total_cmp(inv_base0, inv_base1)
+      })
   }
 }
 
@@ -222,14 +203,13 @@ mod test {
 
   #[test]
   fn test_choose_base() {
-    fn inv_base(floats: Vec<f64>) -> Option<f64> {
+    fn adj_bits_inv_base(floats: Vec<f64>) -> Option<(Bitlen, f64)> {
       let mut strategy = Strategy::<u64>::default();
-      let sorted = floats.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
-      strategy.choose_inv_base(&sorted)
+      strategy.choose_adj_bits_and_inv_base(&floats)
     }
 
     let floats = vec![-0.1, 0.1, 0.100000000001, 0.33, 1.01, 1.1];
-    assert_eq!(inv_base(floats), Some(100.0));
+    assert_eq!(adj_bits_inv_base(floats), Some((0, 100.0)));
 
     let floats = vec![
       -f64::NEG_INFINITY,
@@ -240,18 +220,18 @@ mod test {
       f64::NAN,
       f64::INFINITY,
     ];
-    assert_eq!(inv_base(floats), Some(10.0));
+    assert_eq!(adj_bits_inv_base(floats), Some((0, 10.0)));
 
     let floats = vec![-(2.0_f64.powi(53)), -0.1, 1.0, 1.1];
-    assert_eq!(inv_base(floats), None);
+    assert_eq!(adj_bits_inv_base(floats), None);
 
     let floats = vec![-0.1, 1.0, 1.1, 2.0_f64.powi(53)];
-    assert_eq!(inv_base(floats), None);
+    assert_eq!(adj_bits_inv_base(floats), None);
 
     let floats = vec![1.0 / 7.0, 2.0 / 7.0];
-    assert_eq!(inv_base(floats), None);
+    assert_eq!(adj_bits_inv_base(floats), None);
 
     let floats = vec![1.0, 1.00000000000001, 0.99999999999999];
-    assert_eq!(inv_base(floats), None);
+    assert_eq!(adj_bits_inv_base(floats), None);
   }
 }

@@ -51,7 +51,6 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
     U::BITS as f64 + // lower and upper bounds
     bits::bits_to_encode_offset_bits::<U>() as f64 +
     BITS_TO_ENCODE_CODE_LEN as f64 +
-    M::EXTRA_META_COST +
     1.0; // bit to say there is no run len jumpstart
 
   for i in 0..bins.len() {

@@ -1,7 +1,7 @@
 use crate::data_types::UnsignedLike;
 
 // persists for a whole chunk
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UnsignedSrc<U: UnsignedLike> {
   // immutable
   unsigneds: Vec<U>,
@@ -53,7 +53,6 @@ impl<U: UnsignedLike> UnsignedSrc<U> {
 
 
 // mutable destination for unsigneds and associated information to be written
-#[derive(Clone)]
 pub struct UnsignedDst<'a, U: UnsignedLike> {
   // immutable
   unsigneds: &'a mut [U],
@@ -89,6 +88,10 @@ impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
 
   pub fn incr(&mut self) {
     self.i += 1;
+  }
+
+  pub fn len(&self) -> usize {
+    self.len
   }
 
   pub fn unsigneds_mut(&self) -> &'a mut [U] {

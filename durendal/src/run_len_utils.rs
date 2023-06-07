@@ -50,7 +50,7 @@ pub trait RunLenOperator {
     bin: &BinDecompressionInfo<U>,
     mode: M,
     dest: &mut UnsignedDst<U>,
-  ) -> usize;
+  );
 
   fn batch_ongoing(len: usize, batch_size: usize) -> bool;
 }
@@ -71,11 +71,11 @@ impl RunLenOperator for GeneralRunLenOp {
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = state.unchecked_limit_reps(bin.mode_bin, full_reps, dst.len());
+        let reps = state.unchecked_limit_reps(*bin, full_reps, dst.len());
         for _ in 0..reps {
-          dst.write_unsigned(mode.unchecked_decompress_unsigned(&bin.mode_bin, reader));
+          dst.write_unsigned(mode.unchecked_decompress_unsigned(bin, reader));
           if M::USES_ADJUSTMENT {
-            dst.write_adj(M::unchecked_decompress_adjustment(&bin.mode_bin, reader));
+            dst.write_adj(mode.unchecked_decompress_adjustment(reader));
           }
           dst.incr();
         }
@@ -100,9 +100,9 @@ impl RunLenOperator for TrivialRunLenOp {
     mode: M,
     dst: &mut UnsignedDst<U>,
   ) {
-    dst.write_unsigned(mode.unchecked_decompress_unsigned(&bin.mode_bin, reader));
+    dst.write_unsigned(mode.unchecked_decompress_unsigned(bin, reader));
     if M::USES_ADJUSTMENT {
-      dst.write_adj(M::unchecked_decompress_adjustment(&bin.mode_bin, reader));
+      dst.write_adj(mode.unchecked_decompress_adjustment(reader));
     }
     dst.incr();
   }

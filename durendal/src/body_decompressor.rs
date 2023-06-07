@@ -74,7 +74,6 @@ impl<T: NumberLike> BodyDecompressor<T> {
 
     unsigneds_to_nums_in_place::<T>(u_dst.unsigneds_mut());
 
-    self.n_processed += progress.n_processed;
     Ok(progress)
   }
 
@@ -121,7 +120,6 @@ mod tests {
       offset_bits: 6,
       run_len_jumpstart: None,
       gcd: 1,
-      adj_bits: 0,
     }
   }
 

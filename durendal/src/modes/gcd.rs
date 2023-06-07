@@ -50,7 +50,7 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
       0.0
     };
     let offset_cost = bits::bits_to_encode_offset((upper - lower) / bin_gcd);
-    gcd_meta_cost + (offset_cost * count) as f64
+    gcd_meta_cost + (offset_cost as usize * count) as f64
   }
 
   fn fill_optimized_compression_info(

@@ -1,5 +1,6 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
+use std::fs::read;
 
 use crate::{Bin, bits, run_len_utils};
 use crate::bin::BinDecompressionInfo;
@@ -192,7 +193,7 @@ pub fn new<U: UnsignedLike>(
         state: State::default(),
       })
     }
-    DynMode::FloatMult { mode, .. } => {
+    DynMode::FloatMult { adj_bits, .. } => {
       Box::new(NumDecompressorImpl {
         huffman_table: HuffmanTable::from_bins(bins),
         n,
@@ -201,7 +202,7 @@ pub fn new<U: UnsignedLike>(
         max_bits_per_num_block,
         max_overshoot_per_num_block,
         use_run_len,
-        mode,
+        mode: AdjustedMode::new(adj_bits),
         state: State::default(),
       })
     }
@@ -263,7 +264,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     &mut self,
     reader: &mut BitReader,
     dst: &mut UnsignedDst<U>,
-  ) -> usize {
+  ) {
     let bin = self.huffman_table.unchecked_search_with_reader(reader);
     RunLenOp::unchecked_decompress_for_bin::<U, M>(&mut self.state, reader, bin, self.mode, dst)
   }
@@ -287,7 +288,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     &mut self,
     reader: &mut BitReader,
     dst: &mut UnsignedDst<U>,
-  ) {
+  ) -> QCompressResult<()> {
     let start_bit_idx = reader.bit_idx();
     let bin_res = self.huffman_table.search_with_reader(reader);
     if bin_res.is_err() {
@@ -297,7 +298,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
 
     match bin.run_len_jumpstart {
       None => {
-        self.decompress_offsets(reader, &bin.mode_bin, 1, dst)?;
+        self.decompress_offsets(reader, bin, 1, dst)?;
       }
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
@@ -306,13 +307,14 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
           reader.seek_to(start_bit_idx);
         }
         let full_reps = full_reps_minus_one_res? + 1;
-        self.state.incomplete_bin = Some(bin.mode_bin);
+        self.state.incomplete_bin = Some(*bin);
         self.state.incomplete_reps = full_reps;
         let reps = min(full_reps, dst.len());
-        self.decompress_offsets(reader, &bin.mode_bin, reps, dst)?;
+        self.decompress_offsets(reader, bin, reps, dst)?;
         self.state.incomplete_reps -= reps;
       }
     }
+    Ok(())
   }
 
   // errors on insufficient data, but updates unsigneds with last complete number
@@ -327,16 +329,19 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     for _ in 0..reps {
       let start_bit_idx = reader.bit_idx();
       let u = self.mode.decompress_unsigned(bin, reader);
-      let adj = if M::USES_ADJUSTMENT {
-        self.mode.decompress_adjustment(reader)
-      } else {
-        Ok(())
-      };
-      if u.is_err() || adj.is_err() {
+      if u.is_err() {
         reader.seek_to(start_bit_idx);
       }
       dst.write_unsigned(u?);
-      dst.write_adj(adj?);
+
+      if M::USES_ADJUSTMENT {
+        let adj = self.mode.decompress_adjustment(reader);
+        if adj.is_err() {
+          reader.seek_to(start_bit_idx);
+        }
+        dst.write_adj(adj?);
+      }
+
       dst.incr();
     }
 
@@ -435,7 +440,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     while dst.n_processed() < batch_size {
       if M::USES_ADJUSTMENT {
         match self.mode.decompress_adjustment(reader) {
-          Ok(()) => (),
+          Ok(adj) => dst.write_adj(adj),
           Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => {
             return mark_insufficient(dst, e)
           }

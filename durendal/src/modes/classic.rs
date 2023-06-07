@@ -15,7 +15,7 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
   fn combine_bin_opt_acc(_bin: &BinCompressionInfo<U>, _acc: &mut Self::BinOptAccumulator) {}
 
   fn bin_cost(&self, lower: U, upper: U, count: usize, _acc: &Self::BinOptAccumulator) -> f64 {
-    (bits::bits_to_encode_offset(upper - lower) * count) as f64
+    (bits::bits_to_encode_offset(upper - lower) as usize * count) as f64
   }
   fn fill_optimized_compression_info(
     &self,

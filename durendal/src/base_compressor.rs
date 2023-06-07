@@ -474,7 +474,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     // * Otherwise, use GCD if enabled
     // * Otherwise, use Classic
     if self.internal_config.use_float_mult {
-      if let Some((adj_bits, inv_base)) = Strategy::default().choose_inv_base(nums) {
+      if let Some((adj_bits, inv_base)) = Strategy::default().choose_adj_bits_and_inv_base(nums) {
         return DynMode::float_mult(adj_bits, inv_base);
       }
     }

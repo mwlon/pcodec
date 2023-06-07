@@ -84,7 +84,6 @@ fn parse_bins<U: UnsignedLike>(
       offset_bits,
       run_len_jumpstart,
       gcd: U::ONE,
-      adj_bits: U::BITS,
     };
     match dyn_mode {
       DynMode::Classic => (),
@@ -95,9 +94,7 @@ fn parse_bins<U: UnsignedLike>(
           reader.read_uint(U::BITS)?
         };
       }
-      DynMode::FloatMult { .. } => {
-        bin.adj_bits = reader.read_usize(bits_to_encode_offset_bits::<U>())? as Bitlen;
-      }
+      DynMode::FloatMult { .. } => (),
     }
     bins.push(bin);
   }
@@ -138,12 +135,7 @@ fn write_bins<U: UnsignedLike>(
           writer.write_diff(bin.gcd, U::BITS);
         }
       }
-      DynMode::FloatMult { .. } => {
-        writer.write_bitlen(
-          bin.adj_bits,
-          bits_to_encode_offset_bits::<U>(),
-        );
-      }
+      DynMode::FloatMult { .. } => (),
     }
   }
 }
@@ -210,7 +202,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
     if let DynMode::FloatMult { adj_bits, inv_base, .. } = self.dyn_mode {
-      writer.write_usize(adj_bits as usize, bits_to_encode_offset_bits::<U>())? as Bitlen;
+      writer.write_bitlen(adj_bits, bits_to_encode_offset_bits::<U>());
       writer.write_diff(inv_base.to_unsigned(), U::BITS);
     }
 

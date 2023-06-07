@@ -43,7 +43,6 @@ pub enum DynMode<U: UnsignedLike> {
     adj_bits: Bitlen,
     inv_base: U::Float,
     base: U::Float,
-    mode: AdjustedMode<U>,
   },
 }
 
@@ -53,20 +52,19 @@ impl<U: UnsignedLike> DynMode<U> {
       adj_bits,
       inv_base,
       base: inv_base.inv(),
-      mode: AdjustedMode::new(adj_bits),
     }
   }
 
   pub fn finalize(&self, dst: &mut UnsignedDst<U>) {
     match self {
-      DynMode::FloatMult { base, .. } => float_mult_utils::decode_apply_mult(base, dst),
+      DynMode::FloatMult { base, .. } => float_mult_utils::decode_apply_mult(*base, dst),
       _ => ()
     }
   }
 
-  pub fn create_src<T: NumberLike>(&self, nums: &[T]) -> UnsignedSrc<U> {
+  pub fn create_src<T: NumberLike<Unsigned=U>>(&self, nums: &[T]) -> UnsignedSrc<U> {
     match self {
-      DynMode::FloatMult { inv_base, base, .. } => float_mult_utils::encode_apply_mult(nums, base, inv_base),
+      DynMode::FloatMult { inv_base, base, .. } => float_mult_utils::encode_apply_mult(nums, *base, *inv_base),
       _ => UnsignedSrc::new(nums.iter().map(|x| x.to_unsigned()).collect(), vec![])
     }
   }

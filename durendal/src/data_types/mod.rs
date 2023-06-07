@@ -8,7 +8,7 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-pub trait FloatLike: Copy + Debug + Mul<Output = Self> + PartialOrd {
+pub trait FloatLike: Add<Output=Self> + Copy + Debug + Mul<Output = Self> + PartialOrd {
   const PRECISION_BITS: Bitlen;
   const GREATEST_PRECISE_INT: Self;
   fn abs(self) -> Self;
