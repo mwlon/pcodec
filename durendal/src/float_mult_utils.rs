@@ -1,11 +1,10 @@
 use std::cmp::{max, min};
 use std::collections::HashMap;
+use std::ops::{RemAssign, SubAssign};
 
 use crate::bits;
-
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-
 use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
 pub fn decode_apply_mult<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
@@ -38,6 +37,9 @@ pub fn encode_apply_mult<T: NumberLike>(
 const MIN_SAMPLE: usize = 10;
 const SAMPLE_RATIO: usize = 40; // 1 in this many nums get put into sample
 const CLASSIC_SAVINGS_RATIO: f64 = 0.4;
+const NEAR_ZERO_MACHINE_EPSILON_BITS: Bitlen = 6;
+const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
+const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 
 fn min_entropy() -> f64 {
   (MIN_SAMPLE as f64).log2()
@@ -66,6 +68,9 @@ fn choose_sample<F: FloatLike>(nums: &[F]) -> Option<Vec<F>> {
     }
   }
 
+  // this is valid since all the x's are well behaved
+  res.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+
   if res.len() > MIN_SAMPLE {
     Some(res)
   } else {
@@ -74,47 +79,84 @@ fn choose_sample<F: FloatLike>(nums: &[F]) -> Option<Vec<F>> {
 }
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
-  let significant_precision_bits = F::PRECISION_BITS.saturating_sub(5) as i32;
-  x * F::from_f64_numerical(0.5_f64.powi(significant_precision_bits))
+  let significant_precision_bits = F::PRECISION_BITS.saturating_sub(NEAR_ZERO_MACHINE_EPSILON_BITS) as i32;
+  x * F::from_f64(0.5_f64.powi(significant_precision_bits))
 }
 
 fn is_approx_zero<F: FloatLike>(small: F, big: F) -> bool {
   small <= insignificant_float_to(big)
 }
 
-fn approx_pair_gcd_uncorrected<F: FloatLike>(mut x0: F, mut x1: F) -> Option<F> {
+fn approx_pair_gcd_uncorrected<F: FloatLike>(mut x0: F, mut x1: F, median: F) -> Option<F> {
   let greater = F::max(x0, x1);
-  let thresh = insignificant_float_to(greater);
-  if F::min(x0, x1) <= thresh {
+  let lesser = F::min(x0, x1);
+  if is_approx_zero(lesser, median) {
     return Some(greater);
   }
 
+  let thresh = insignificant_float_to(greater);
+  if lesser <= thresh {
+    return Some(lesser);
+  }
+
+  #[derive(Clone, Copy, Debug)]
+  struct PairMult<F: FloatLike> {
+    value: F,
+    abs_value: F,
+    mult0: F,
+    mult1: F,
+  }
+
+  let rem_assign = |lhs: &mut PairMult<F>, rhs: &PairMult<F>| {
+    let ratio = (lhs.value / rhs.value).round();
+    lhs.mult0 -= ratio * rhs.mult0;
+    lhs.mult1 -= ratio * rhs.mult1;
+    lhs.value = lhs.mult0 * x0 + lhs.mult1 * x1;
+    lhs.abs_value = lhs.value.abs()
+  };
+
+  let mut pair0 = PairMult {
+    value: x0,
+    abs_value: x0,
+    mult0: F::ONE,
+    mult1: F::ZERO,
+  };
+  let mut pair1 = PairMult {
+    value: x1,
+    abs_value: x1,
+    mult0: F::ZERO,
+    mult1: F::ONE,
+  };
+
   loop {
-    x0 %= x1;
-    if is_approx_zero(x0, x1) {
-      return Some(x1);
+    let prev = pair0.abs_value;
+    rem_assign(&mut pair0, &pair1);
+    if is_approx_zero(pair0.abs_value, prev) {
+      return Some(pair1.abs_value);
     }
 
-    if x0 <= thresh {
+    if pair0.abs_value <= thresh {
       return None;
     }
 
-    x1 %= x0;
-    if is_approx_zero(x1, x0) {
-      return Some(x0);
+    let prev = pair1.abs_value;
+    rem_assign(&mut pair1, &pair0);
+    if is_approx_zero(pair1.abs_value, prev) {
+      return Some(pair0.abs_value);
     }
 
-    if x1 <= thresh {
+    if pair1.abs_value <= thresh {
       return None;
     }
   }
 }
 
 fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
-  let mut maybe_gcd = approx_pair_gcd_uncorrected(sample[0], sample[1]);
-  for i in 2..sample.len() {
+  let mut maybe_gcd = Some(F::ZERO);
+  let median = sample[sample.len() / 2];
+  for i in 0..sample.len() {
     if let Some(gcd) = maybe_gcd {
-      maybe_gcd = approx_pair_gcd_uncorrected(sample[i], gcd);
+      maybe_gcd = approx_pair_gcd_uncorrected(sample[i], gcd, median);
     } else {
       break;
     }
@@ -161,21 +203,27 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
 
 fn center_sample_gcd<F: FloatLike>(gcd: F, sample: &[F]) -> F {
   let inv_gcd = gcd.inv();
-  let mut tweaks = F::ZERO;
+  let mut min_tweak = F::MAX;
+  let mut max_tweak = F::MIN;
   for &x in sample {
     let mult = (x * inv_gcd).round();
     let overshoot = (mult * gcd) - x;
-    tweaks += overshoot / mult;
+    min_tweak = F::min(min_tweak, overshoot / mult);
+    max_tweak = F::max(max_tweak, overshoot / mult);
   }
-  gcd + tweaks / (F::from_usize_numerical(sample.len()))
+  gcd - (min_tweak + max_tweak) / F::from_f64(2.0_f64)
 }
 
 fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
   // returns (gcd, gcd^-1)
   let inv_gcd = gcd.inv();
   let round_inv_gcd = inv_gcd.round();
-  if (inv_gcd - round_inv_gcd).abs() < F::from_f64_numerical(0.001) {
+  let decimal_inv_gcd = F::from_f64(10.0_f64.powf(inv_gcd.to_f64().log10().round()));
+  // check if relative error is below a threshold
+  if (inv_gcd - round_inv_gcd).abs() < F::from_f64(SNAP_THRESHOLD_ABSOLUTE) {
     (round_inv_gcd.inv(), round_inv_gcd)
+  } else if (inv_gcd - decimal_inv_gcd).abs() / inv_gcd < F::from_f64(SNAP_THRESHOLD_DECIMAL_RELATIVE) {
+    (decimal_inv_gcd.inv(), decimal_inv_gcd)
   } else {
     (gcd, inv_gcd)
   }
@@ -370,10 +418,20 @@ pub fn choose_config<T: NumberLike>(
 
 #[cfg(test)]
 mod test {
-
   use crate::constants::Bitlen;
 
   use super::*;
+
+  fn assert_almost_equal_me(a: f32, b: f32, machine_epsilon_tolerance: u32, desc: &str) {
+    let (a, b) = (a.to_unsigned(), b.to_unsigned());
+    let udiff = max(a, b) - min(a, b);
+    assert!(udiff < machine_epsilon_tolerance, "{} far from {}; {}", a, b, desc);
+  }
+
+  fn assert_almost_equal(a: f32, b: f32, abs_tolerance: f32, desc: &str) {
+    let diff = (a - b).abs();
+    assert!(diff < abs_tolerance, "{} far from {}; {}", a, b, desc);
+  }
 
   #[test]
   fn test_sample() {
@@ -382,6 +440,61 @@ mod test {
     assert_eq!(calc_sample_n(50), Some(11));
     assert_eq!(calc_sample_n(1010), Some(35));
     assert_eq!(calc_sample_n(1000010), Some(25010));
+  }
+
+  #[test]
+  fn test_near_zero() {
+    assert_eq!(insignificant_float_to(1.0_f64), 1.0 / ((1_u64 << 46) as f64));
+    assert_eq!(insignificant_float_to(1.0_f32), 1.0 / ((1_u64 << 17) as f32));
+    assert_eq!(insignificant_float_to(32.0_f32), 1.0 / ((1_u64 << 12) as f32));
+  }
+
+  #[test]
+  fn test_approx_pair_gcd() {
+    assert_eq!(approx_pair_gcd_uncorrected(0.0, 0.0, 1.0), Some(0.0));
+    assert_eq!(approx_pair_gcd_uncorrected(1.0, 0.0, 1.0), Some(1.0));
+    assert_eq!(approx_pair_gcd_uncorrected(0.0, 1.0, 1.0), Some(1.0));
+    assert_eq!(approx_pair_gcd_uncorrected(1.0, 1.0, 1.0), Some(1.0));
+    assert_eq!(approx_pair_gcd_uncorrected(3.0, 6.0, 1.0), Some(3.0));
+    assert_eq!(approx_pair_gcd_uncorrected(std::f32::consts::PI, 1.0, 1.0), None);
+    assert_eq!(approx_pair_gcd_uncorrected(std::f32::consts::PI, std::f32::consts::E, 1.0), None);
+    // 2^100 is not a multiple of 3, but it's certainly within machine epsilon of one
+    assert_eq!(approx_pair_gcd_uncorrected(3.0, 2.0_f32.powi(100), 1.0), Some(3.0));
+    assert_eq!(approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 1.0), Some(3.0));
+    // in this case, the median is big, so assume the lhs of 3 is just a numerical error
+    assert_eq!(approx_pair_gcd_uncorrected(3.0, 2.0_f32.powi(100), 2.0_f32.powi(99)), Some(2.0_f32.powi(100)));
+    assert_almost_equal_me(
+      approx_pair_gcd_uncorrected(1.0 / 3.0, 1.0 / 4.0, 1.0).unwrap(),
+      1.0 / 12.0,
+      1,
+      "1/3 gcd 1/4",
+    );
+  }
+
+  #[test]
+  fn test_approx_sample_gcd() {
+    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX];
+    assert_almost_equal(approx_sample_gcd(&nums).unwrap(), 1.0E-4, 1.0E-6, "10^-4 adverse");
+
+    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 0.0049, 1.0001, f32::MAX];
+    assert_almost_equal(approx_sample_gcd(&nums).unwrap(), 1.0E-4, 1.0E-9, "10^-4");
+
+    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, 1.00033333, f32::MAX];
+    assert_eq!(approx_sample_gcd(&nums), None);
+  }
+
+  #[test]
+  fn test_center_gcd() {
+    let nums = vec![6.0 / 7.0 - 1E-4, 16.0 / 7.0 + 1E-4, 18.0 / 7.0 - 1E-4];
+    assert_almost_equal(center_sample_gcd(0.28, &nums), 2.0 / 7.0, 1E-4, "center")
+  }
+
+  #[test]
+  fn test_snap() {
+    assert_eq!(snap_to_int_reciprocal(0.01000333), (0.01, 100.0));
+    assert_eq!(snap_to_int_reciprocal(0.009999666), (0.01, 100.0));
+    assert_eq!(snap_to_int_reciprocal(0.0105), (0.0105, 1.0 / 0.0105));
+    assert_eq!(snap_to_int_reciprocal(std::f32::consts::PI).0, std::f32::consts::PI);
   }
 
   #[test]

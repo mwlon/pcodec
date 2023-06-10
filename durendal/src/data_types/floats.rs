@@ -13,6 +13,9 @@ macro_rules! impl_float_number {
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS - 1;
       const GREATEST_PRECISE_INT: Self = (1_u64 << Self::MANTISSA_DIGITS) as Self;
       const ZERO: Self = 0.0;
+      const ONE: Self = 1.0;
+      const MIN: Self = Self::MIN;
+      const MAX: Self = Self::MAX;
 
       fn abs(self) -> Self {
         self.abs()
@@ -30,8 +33,12 @@ macro_rules! impl_float_number {
         x as Self
       }
 
-      fn from_f64_numerical(x: f64) -> Self {
+      fn from_f64(x: f64) -> Self {
         x as Self
+      }
+
+      fn to_f64(self) -> f64 {
+        self as f64
       }
 
       fn log2_epsilons_between_positives(a: Self, b: Self) -> Bitlen {
