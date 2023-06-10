@@ -51,7 +51,6 @@ impl<U: UnsignedLike> UnsignedSrc<U> {
   }
 }
 
-
 // mutable destination for unsigneds and associated information to be written
 pub struct UnsignedDst<'a, U: UnsignedLike> {
   // immutable

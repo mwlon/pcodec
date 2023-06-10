@@ -1,7 +1,9 @@
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
+use std::ops::{
+  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub,
+};
 
 use crate::constants::Bitlen;
 
@@ -9,7 +11,17 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-pub trait FloatLike: Add<Output=Self> + AddAssign + Copy + Debug + Mul<Output = Self> + PartialOrd + RemAssign + Sub<Output=Self> + Div<Output=Self> {
+pub trait FloatLike:
+  Add<Output = Self>
+  + AddAssign
+  + Copy
+  + Debug
+  + Mul<Output = Self>
+  + PartialOrd
+  + RemAssign
+  + Sub<Output = Self>
+  + Div<Output = Self>
+{
   const PRECISION_BITS: Bitlen;
   const GREATEST_PRECISE_INT: Self;
   const ZERO: Self;

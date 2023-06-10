@@ -1,16 +1,12 @@
-use std::cmp::{max, min};
-use std::marker::PhantomData;
-
-use crate::{Bin, bits};
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::bits::bits_to_encode_offset_bits;
-use crate::constants::{Bitlen, BITS_TO_ENCODE_ADJ_BITS, UNSIGNED_BATCH_SIZE};
-use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
+use crate::bits;
+use crate::constants::Bitlen;
+use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
-use crate::modes::{Mode};
 use crate::modes::classic::ClassicMode;
+use crate::modes::Mode;
 
 pub fn calc_adj_lower<U: UnsignedLike>(adj_offset_bits: Bitlen) -> U {
   if adj_offset_bits == 0 {
@@ -61,11 +57,18 @@ impl<U: UnsignedLike> Mode<U> for AdjustedMode<U> {
 
   #[inline]
   fn compress_adjustment(&self, adjustment: U, writer: &mut BitWriter) {
-    writer.write_diff(adjustment.wrapping_sub(self.adj_lower), self.adj_bits);
+    writer.write_diff(
+      adjustment.wrapping_sub(self.adj_lower),
+      self.adj_bits,
+    );
   }
 
   #[inline]
-  fn unchecked_decompress_unsigned(&self, bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U {
+  fn unchecked_decompress_unsigned(
+    &self,
+    bin: &BinDecompressionInfo<U>,
+    reader: &mut BitReader,
+  ) -> U {
     ClassicMode.unchecked_decompress_unsigned(bin, reader)
   }
 
@@ -80,12 +83,17 @@ impl<U: UnsignedLike> Mode<U> for AdjustedMode<U> {
 
   #[inline]
   fn unchecked_decompress_adjustment(&self, reader: &mut BitReader) -> U {
-    self.adj_lower.wrapping_add(reader.unchecked_read_uint(self.adj_bits))
+    self
+      .adj_lower
+      .wrapping_add(reader.unchecked_read_uint(self.adj_bits))
   }
 
   #[inline]
   fn decompress_adjustment(&self, reader: &mut BitReader) -> QCompressResult<U> {
-    Ok(self.adj_lower.wrapping_add(reader.read_uint(self.adj_bits)?))
+    Ok(
+      self
+        .adj_lower
+        .wrapping_add(reader.read_uint(self.adj_bits)?),
+    )
   }
 }
-

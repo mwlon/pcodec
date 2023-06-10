@@ -1,8 +1,6 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
-use std::fs::read;
 
-use crate::{Bin, bits, run_len_utils};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
@@ -10,14 +8,15 @@ use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG,
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::huffman_decoding::HuffmanTable;
-use crate::modes::{Mode};
-use crate::modes::classic::ClassicMode;
-use crate::modes::DynMode;
 use crate::modes::adjusted::AdjustedMode;
+use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
+use crate::modes::DynMode;
+use crate::modes::Mode;
 use crate::progress::Progress;
 use crate::run_len_utils::{GeneralRunLenOp, RunLenOperator, TrivialRunLenOp};
 use crate::unsigned_src_dst::UnsignedDst;
+use crate::{bits, run_len_utils, Bin};
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
@@ -97,7 +96,12 @@ pub struct State<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> State<U> {
-  pub fn unchecked_limit_reps(&mut self, bin: BinDecompressionInfo<U>, full_reps: usize, limit: usize) -> usize {
+  pub fn unchecked_limit_reps(
+    &mut self,
+    bin: BinDecompressionInfo<U>,
+    full_reps: usize,
+    limit: usize,
+  ) -> usize {
     if full_reps > limit {
       self.incomplete_bin = Some(bin);
       self.incomplete_reps = full_reps - limit;
@@ -193,19 +197,17 @@ pub fn new<U: UnsignedLike>(
         state: State::default(),
       })
     }
-    DynMode::FloatMult { adj_bits, .. } => {
-      Box::new(NumDecompressorImpl {
-        huffman_table: HuffmanTable::from_bins(bins),
-        n,
-        delta_order,
-        compressed_body_size,
-        max_bits_per_num_block,
-        max_overshoot_per_num_block,
-        use_run_len,
-        mode: AdjustedMode::new(adj_bits),
-        state: State::default(),
-      })
-    }
+    DynMode::FloatMult { adj_bits, .. } => Box::new(NumDecompressorImpl {
+      huffman_table: HuffmanTable::from_bins(bins),
+      n,
+      delta_order,
+      compressed_body_size,
+      max_bits_per_num_block,
+      max_overshoot_per_num_block,
+      use_run_len,
+      mode: AdjustedMode::new(adj_bits),
+      state: State::default(),
+    }),
   };
 
   Ok(res)
@@ -357,7 +359,10 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
   ) -> QCompressResult<Progress> {
     let remaining = self.n - self.state.n_processed;
     let batch_size = min(remaining, dst.len());
-    let delta_batch_size = min(remaining.saturating_sub(self.delta_order), dst.len());
+    let delta_batch_size = min(
+      remaining.saturating_sub(self.delta_order),
+      dst.len(),
+    );
     if batch_size == 0 {
       return Ok(Progress {
         finished_body: self.state.n_processed == self.n,

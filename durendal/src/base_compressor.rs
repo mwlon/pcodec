@@ -2,7 +2,6 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 
 use crate::bin::{Bin, BinCompressionInfo};
-use crate::{bin_optimization, float_mult_utils};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::ChunkMetadata;
 use crate::chunk_spec::ChunkSpec;
@@ -12,13 +11,14 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
-use crate::modes::adjusted::{AdjustedMode};
 use crate::modes::gcd::GcdMode;
-use crate::modes::{adjusted, Mode};
+use crate::modes::Mode;
 use crate::modes::{gcd, DynMode};
-use crate::{huffman_encoding, Flags};
 use crate::unsigned_src_dst::UnsignedSrc;
+use crate::{bin_optimization, float_mult_utils};
+use crate::{huffman_encoding, Flags};
 
 /// All configurations available for a compressor.
 ///
@@ -485,7 +485,13 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
   }
 
-  fn preprocess_src(&self, nums: &[T]) -> (DynMode<T::Unsigned>, UnsignedSrc<T::Unsigned>) {
+  fn preprocess_src(
+    &self,
+    nums: &[T],
+  ) -> (
+    DynMode<T::Unsigned>,
+    UnsignedSrc<T::Unsigned>,
+  ) {
     let dyn_mode = self.choose_naive_mode(nums);
     let src = dyn_mode.create_src(nums);
     (dyn_mode, src)

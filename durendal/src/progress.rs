@@ -1,10 +1,9 @@
 use std::ops::AddAssign;
-use std::process::Output;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Progress {
-  pub n_processed: usize, // # of numbers decompressed
-  pub finished_body: bool, // all numbers have been decompressed
+  pub n_processed: usize,      // # of numbers decompressed
+  pub finished_body: bool,     // all numbers have been decompressed
   pub insufficient_data: bool, // all bytes have been read
 }
 

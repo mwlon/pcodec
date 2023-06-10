@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::marker::PhantomData;
-use std::pin::Pin;
 
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
@@ -34,9 +33,7 @@ fn unsigneds_to_nums_in_place<T: NumberLike>(dest: &mut [T::Unsigned]) {
 }
 
 impl<T: NumberLike> BodyDecompressor<T> {
-  pub(crate) fn new(
-    data_page_meta: DataPageMetadata<T::Unsigned>,
-  ) -> QCompressResult<Self> {
+  pub(crate) fn new(data_page_meta: DataPageMetadata<T::Unsigned>) -> QCompressResult<Self> {
     let num_decompressor = num_decompressor::new(data_page_meta.clone())?;
     Ok(Self {
       dyn_mode: data_page_meta.dyn_mode,
@@ -53,10 +50,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
     error_on_insufficient_data: bool,
     num_dst: &mut [T],
   ) -> QCompressResult<Progress> {
-    let batch_end = min(
-      UNSIGNED_BATCH_SIZE,
-      num_dst.len(),
-    );
+    let batch_end = min(UNSIGNED_BATCH_SIZE, num_dst.len());
     let unsigneds_mut = T::transmute_to_unsigned_slice(&mut num_dst[..batch_end]);
     let Self {
       num_decompressor,
@@ -65,20 +59,14 @@ impl<T: NumberLike> BodyDecompressor<T> {
     } = self;
 
     let progress = {
-      let u_dst = UnsignedDst::new(
-        unsigneds_mut,
-        &mut self.adjustments,
-      );
+      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.adjustments);
       num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dst)?
     };
 
     delta_encoding::reconstruct_in_place(delta_moments, unsigneds_mut);
 
     {
-      let u_dst = UnsignedDst::new(
-        unsigneds_mut,
-        &mut self.adjustments,
-      );
+      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.adjustments);
       self.dyn_mode.finalize(u_dst);
     }
 
@@ -98,7 +86,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
       progress += self.decompress_batch(
         reader,
         error_on_insufficient_data,
-        &mut num_dst[progress.n_processed..]
+        &mut num_dst[progress.n_processed..],
       )?;
     }
     Ok(progress)
@@ -164,8 +152,7 @@ mod tests {
         Err(e) if matches!(e.kind, ErrorKind::Corruption) => (),
         Err(e) => panic!(
           "expected a different error than {:?} for bad metadata {:?}",
-          e,
-          bad_metadata
+          e, bad_metadata
         ),
       }
     }

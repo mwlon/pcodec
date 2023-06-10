@@ -1,22 +1,17 @@
 use std::cmp::{max, min};
 use std::collections::HashMap;
-use std::marker::PhantomData;
 
-use crate::{Bin, bits};
-use crate::bin::BinCompressionInfo;
-use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
-use crate::bits::bits_to_encode_offset_bits;
-use crate::constants::{Bitlen, BITS_TO_ENCODE_ADJ_BITS, UNSIGNED_BATCH_SIZE};
+use crate::bits;
+
+use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-use crate::errors::QCompressResult;
-use crate::modes::{Mode};
+
 use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
 pub fn decode_apply_mult<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   let (unsigneds, adjustments) = dst.decompose();
   for i in 0..unsigneds.len() {
-    let unadjusted = (unsigneds[i].to_float_numerical() * base);
+    let unadjusted = unsigneds[i].to_float_numerical() * base;
     unsigneds[i] = unadjusted.to_unsigned().wrapping_add(adjustments[i])
   }
 }
@@ -33,7 +28,9 @@ pub fn encode_apply_mult<T: NumberLike>(
   for i in 0..n {
     let mult = (nums[i] * inv_base).round();
     unsigneds[i] = T::Unsigned::from_float_numerical(mult);
-    adjustments[i] = nums[i].to_unsigned().wrapping_sub((mult * base).to_unsigned());
+    adjustments[i] = nums[i]
+      .to_unsigned()
+      .wrapping_sub((mult * base).to_unsigned());
   }
   UnsignedSrc::new(unsigneds, adjustments)
 }
@@ -125,7 +122,11 @@ fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
   maybe_gcd
 }
 
-fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(inv_gcd: U::Float, sample: &[U::Float], n: usize) -> Option<Bitlen> {
+fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
+  inv_gcd: U::Float,
+  sample: &[U::Float],
+  n: usize,
+) -> Option<Bitlen> {
   // For float mult, we pay the "mult" entropy and the "adjustment" entropy
   // once per number.
   // For classic, we can memorize each mult if there are few enough and be more
@@ -140,9 +141,8 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(inv_gcd: U::Float, sample: &
     *counts.entry(mult).or_default() += 1;
   }
   let sample_n = sample.len();
-  let mut miller_madow_entropy = (counts.len() - 1) as f64 / (sample_n as f64 *
-  2.0_f64 * 2.0_f64.ln()
-  );
+  let mut miller_madow_entropy =
+    (counts.len() - 1) as f64 / (sample_n as f64 * 2.0_f64 * 2.0_f64.ln());
   for &count in counts.values() {
     let p = (count as f64) / (sample_n as f64);
     miller_madow_entropy -= p * p.log2();
@@ -153,7 +153,8 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(inv_gcd: U::Float, sample: &
   }
 
   let rough_bin_meta_cost = U::BITS as f64 + 40.0;
-  let cutoff = ((miller_madow_entropy * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen;
+  let cutoff =
+    ((miller_madow_entropy * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen;
   adj_bits_needed::<U>(inv_gcd, sample, cutoff)?;
   Some(cutoff)
 }
@@ -180,8 +181,11 @@ fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
   }
 }
 
-
-fn adj_bits_needed<U: UnsignedLike>(inv_base: U::Float, nums: &[U::Float], cutoff: Bitlen) -> Option<Bitlen> {
+fn adj_bits_needed<U: UnsignedLike>(
+  inv_base: U::Float,
+  nums: &[U::Float],
+  cutoff: Bitlen,
+) -> Option<Bitlen> {
   let mut max_adj_bits = 0;
   let base = inv_base.inv();
   for &x in nums {
@@ -202,7 +206,9 @@ pub struct FloatMultConfig<F: FloatLike> {
   pub adj_bits: Bitlen,
 }
 
-pub fn choose_config<T: NumberLike>(nums: &[T]) -> Option<FloatMultConfig<<T::Unsigned as UnsignedLike>::Float>> {
+pub fn choose_config<T: NumberLike>(
+  nums: &[T],
+) -> Option<FloatMultConfig<<T::Unsigned as UnsignedLike>::Float>> {
   let nums = T::assert_float(nums);
   let n = nums.len();
   let sample = choose_sample(nums)?;
@@ -364,11 +370,8 @@ pub fn choose_config<T: NumberLike>(nums: &[T]) -> Option<FloatMultConfig<<T::Un
 
 #[cfg(test)]
 mod test {
-  use std::ops::Mul;
-  use crate::bit_words::BitWords;
+
   use crate::constants::Bitlen;
-  use crate::data_types::NumberLike;
-  use crate::modes::adjusted::AdjustedMode;
 
   use super::*;
 

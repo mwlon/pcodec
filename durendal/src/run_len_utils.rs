@@ -5,8 +5,8 @@ use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, MAX_JUMPSTART, MIN_FREQUENCY_TO_USE_RUN_LEN, MIN_N_TO_USE_RUN_LEN};
 use crate::data_types::UnsignedLike;
 use crate::modes::Mode;
-use crate::{num_decompressor, Bin};
 use crate::unsigned_src_dst::UnsignedDst;
+use crate::{num_decompressor, Bin};
 
 fn bin_needs_run_len(count: usize, n: usize, freq: f64) -> bool {
   n >= MIN_N_TO_USE_RUN_LEN && freq >= MIN_FREQUENCY_TO_USE_RUN_LEN && count < n

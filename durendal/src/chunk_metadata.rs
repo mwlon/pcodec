@@ -1,14 +1,14 @@
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::constants::*;
-use crate::data_types::{NumberLike, UnsignedLike, FloatLike};
-use crate::errors::{QCompressError, QCompressResult};
-use crate::modes::DynMode;
-use crate::{bits, Flags};
 use crate::bits::bits_to_encode_offset_bits;
+use crate::constants::*;
+use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
+use crate::errors::{QCompressError, QCompressResult};
 use crate::float_mult_utils::FloatMultConfig;
+use crate::modes::DynMode;
+use crate::Flags;
 
 /// The metadata of a Quantile-compressed chunk.
 ///
@@ -167,7 +167,11 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       2 => {
         let adj_bits = reader.read_bitlen(bits_to_encode_offset_bits::<U>())?;
         let base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS)?);
-        Ok(DynMode::float_mult(FloatMultConfig { adj_bits, base, inv_base: base.inv() }))
+        Ok(DynMode::float_mult(FloatMultConfig {
+          adj_bits,
+          base,
+          inv_base: base.inv(),
+        }))
       }
       value => Err(QCompressError::compatibility(format!(
         "unknown mode value {}",

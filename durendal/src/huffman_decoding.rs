@@ -92,10 +92,7 @@ impl<U: UnsignedLike> HuffmanTable<U> {
   }
 }
 
-fn build_from_bins_recursive<U: UnsignedLike>(
-  bins: &[Bin<U>],
-  depth: Bitlen,
-) -> HuffmanTable<U> {
+fn build_from_bins_recursive<U: UnsignedLike>(bins: &[Bin<U>], depth: Bitlen) -> HuffmanTable<U> {
   if bins.len() == 1 {
     let bin = &bins[0];
     HuffmanTable::Leaf(BinDecompressionInfo::from(bin))
@@ -136,13 +133,7 @@ mod tests {
 
   #[test]
   fn huff_table_size() {
-    assert_eq!(
-      std::mem::size_of::<HuffmanTable<u64>>(),
-      40
-    );
-    assert_eq!(
-      std::mem::size_of::<HuffmanTable<u32>>(),
-      32
-    );
+    assert_eq!(std::mem::size_of::<HuffmanTable<u64>>(), 40);
+    assert_eq!(std::mem::size_of::<HuffmanTable<u32>>(), 32);
   }
 }
