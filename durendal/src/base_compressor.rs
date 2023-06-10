@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 
 use crate::bin::{Bin, BinCompressionInfo};
-use crate::bin_optimization;
+use crate::{bin_optimization, float_mult_utils};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::ChunkMetadata;
 use crate::chunk_spec::ChunkSpec;
@@ -18,7 +18,6 @@ use crate::modes::gcd::GcdMode;
 use crate::modes::{adjusted, Mode};
 use crate::modes::{gcd, DynMode};
 use crate::{huffman_encoding, Flags};
-use crate::float_mult_utils::Strategy;
 use crate::unsigned_src_dst::UnsignedSrc;
 
 /// All configurations available for a compressor.
@@ -474,8 +473,8 @@ impl<T: NumberLike> BaseCompressor<T> {
     // * Otherwise, use GCD if enabled
     // * Otherwise, use Classic
     if self.internal_config.use_float_mult {
-      if let Some((adj_bits, inv_base)) = Strategy::default().choose_adj_bits_and_inv_base(nums) {
-        return DynMode::float_mult(adj_bits, inv_base);
+      if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
+        return DynMode::float_mult(config);
       }
     }
 

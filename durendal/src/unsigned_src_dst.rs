@@ -94,11 +94,7 @@ impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
     self.len
   }
 
-  pub fn unsigneds_mut(&self) -> &'a mut [U] {
-    self.unsigneds
-  }
-
-  pub fn adjustments(&self) -> &'a [U] {
-    self.adjustments
+  pub fn decompose(self) -> (&'a mut [U], &'a mut [U]) {
+    (self.unsigneds, self.adjustments)
   }
 }

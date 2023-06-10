@@ -138,7 +138,7 @@ mod tests {
   fn huff_table_size() {
     assert_eq!(
       std::mem::size_of::<HuffmanTable<u64>>(),
-      48
+      40
     );
     assert_eq!(
       std::mem::size_of::<HuffmanTable<u32>>(),

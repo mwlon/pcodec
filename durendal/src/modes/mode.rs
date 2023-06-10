@@ -7,6 +7,7 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
 use crate::{Bin, float_mult_utils};
 use crate::constants::Bitlen;
+use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::adjusted::AdjustedMode;
 use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
@@ -47,15 +48,15 @@ pub enum DynMode<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> DynMode<U> {
-  pub fn float_mult(adj_bits: Bitlen, inv_base: U::Float) -> Self {
+  pub fn float_mult(config: FloatMultConfig<U::Float>) -> Self {
     Self::FloatMult {
-      adj_bits,
-      inv_base,
-      base: inv_base.inv(),
+      adj_bits: config.adj_bits,
+      inv_base: config.inv_base,
+      base: config.base,
     }
   }
 
-  pub fn finalize(&self, dst: &mut UnsignedDst<U>) {
+  pub fn finalize(&self, dst: UnsignedDst<U>) {
     match self {
       DynMode::FloatMult { base, .. } => float_mult_utils::decode_apply_mult(*base, dst),
       _ => ()

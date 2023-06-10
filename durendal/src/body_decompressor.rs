@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::marker::PhantomData;
+use std::pin::Pin;
 
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
@@ -56,23 +57,32 @@ impl<T: NumberLike> BodyDecompressor<T> {
       UNSIGNED_BATCH_SIZE,
       num_dst.len(),
     );
-    let mut u_dst = UnsignedDst::new(
-      T::transmute_to_unsigned_slice(&mut num_dst[..batch_end]),
-      &mut self.adjustments,
-    );
+    let unsigneds_mut = T::transmute_to_unsigned_slice(&mut num_dst[..batch_end]);
     let Self {
       num_decompressor,
       delta_moments,
       ..
     } = self;
 
-    let progress = num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, &mut u_dst)?;
+    let progress = {
+      let u_dst = UnsignedDst::new(
+        unsigneds_mut,
+        &mut self.adjustments,
+      );
+      num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dst)?
+    };
 
-    delta_encoding::reconstruct_in_place(delta_moments, u_dst.unsigneds_mut());
+    delta_encoding::reconstruct_in_place(delta_moments, unsigneds_mut);
 
-    self.dyn_mode.finalize(&mut u_dst);
+    {
+      let u_dst = UnsignedDst::new(
+        unsigneds_mut,
+        &mut self.adjustments,
+      );
+      self.dyn_mode.finalize(u_dst);
+    }
 
-    unsigneds_to_nums_in_place::<T>(u_dst.unsigneds_mut());
+    unsigneds_to_nums_in_place::<T>(unsigneds_mut);
 
     Ok(progress)
   }
@@ -145,7 +155,7 @@ mod tests {
     };
 
     for bad_metadata in vec![metadata_missing_bin, metadata_duplicating_bin] {
-      let result = BodyDecompressor::<i64>::new(bad_metadata);
+      let result = BodyDecompressor::<i64>::new(bad_metadata.clone());
       match result {
         Ok(_) => panic!(
           "expected an error for bad metadata: {:?}",
@@ -154,7 +164,8 @@ mod tests {
         Err(e) if matches!(e.kind, ErrorKind::Corruption) => (),
         Err(e) => panic!(
           "expected a different error than {:?} for bad metadata {:?}",
-          e, bad_metadata
+          e,
+          bad_metadata
         ),
       }
     }

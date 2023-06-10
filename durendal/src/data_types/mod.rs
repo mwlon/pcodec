@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
+use std::hash::Hash;
+use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
 
 use crate::constants::Bitlen;
 
@@ -8,15 +9,20 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-pub trait FloatLike: Add<Output=Self> + Copy + Debug + Mul<Output = Self> + PartialOrd {
+pub trait FloatLike: Add<Output=Self> + AddAssign + Copy + Debug + Mul<Output = Self> + PartialOrd + RemAssign + Sub<Output=Self> + Div<Output=Self> {
   const PRECISION_BITS: Bitlen;
   const GREATEST_PRECISE_INT: Self;
+  const ZERO: Self;
   fn abs(self) -> Self;
   fn inv(self) -> Self;
   fn round(self) -> Self;
   fn log2_epsilons_between_positives(a: Self, b: Self) -> Bitlen;
-  fn from_u64_numerical(x: u64) -> Self;
+  fn from_usize_numerical(x: usize) -> Self;
+  fn from_f64_numerical(x: f64) -> Self;
   fn total_cmp(a: &Self, b: &Self) -> Ordering;
+  fn is_finite_and_normal(&self) -> bool;
+  fn max(a: Self, b: Self) -> Self;
+  fn min(a: Self, b: Self) -> Self;
 }
 
 /// Trait for data types that behave like unsigned integers.
@@ -35,6 +41,7 @@ pub trait UnsignedLike:
   + BitAndAssign
   + BitOrAssign
   + Div<Output = Self>
+  + Hash
   + Mul<Output = Self>
   + NumberLike<Unsigned = Self>
   + Ord

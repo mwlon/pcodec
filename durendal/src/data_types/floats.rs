@@ -12,6 +12,7 @@ macro_rules! impl_float_number {
     impl FloatLike for $t {
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS - 1;
       const GREATEST_PRECISE_INT: Self = (1_u64 << Self::MANTISSA_DIGITS) as Self;
+      const ZERO: Self = 0.0;
 
       fn abs(self) -> Self {
         self.abs()
@@ -25,7 +26,11 @@ macro_rules! impl_float_number {
         self.round()
       }
 
-      fn from_u64_numerical(x: u64) -> Self {
+      fn from_usize_numerical(x: usize) -> Self {
+        x as Self
+      }
+
+      fn from_f64_numerical(x: f64) -> Self {
         x as Self
       }
 
@@ -37,6 +42,18 @@ macro_rules! impl_float_number {
 
       fn total_cmp(a: &Self, b: &Self) -> Ordering {
         Self::total_cmp(a, b)
+      }
+
+      fn is_finite_and_normal(&self) -> bool {
+        self.is_finite() && !self.is_subnormal()
+      }
+
+      fn max(a: Self, b: Self) -> Self {
+        Self::max(a, b)
+      }
+
+      fn min(a: Self, b: Self) -> Self {
+        Self::min(a, b)
       }
     }
 

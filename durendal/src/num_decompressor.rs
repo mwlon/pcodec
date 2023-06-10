@@ -115,7 +115,7 @@ pub trait NumDecompressor<U: UnsignedLike>: Debug {
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
-    dst: &mut UnsignedDst<U>,
+    dst: UnsignedDst<U>,
   ) -> QCompressResult<Progress>;
 
   fn clone_inner(&self) -> Box<dyn NumDecompressor<U>>;
@@ -222,11 +222,11 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> for NumDecompressorImpl<U, 
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
-    dst: &mut UnsignedDst<U>,
+    mut dst: UnsignedDst<U>,
   ) -> QCompressResult<Progress> {
     let initial_reader = reader.clone();
     let initial_state = self.state.clone();
-    let res = self.decompress_unsigneds_dirty(reader, error_on_insufficient_data, dst);
+    let res = self.decompress_unsigneds_dirty(reader, error_on_insufficient_data, &mut dst);
     match &res {
       Ok(progress) => {
         self.state.n_processed += progress.n_processed;
