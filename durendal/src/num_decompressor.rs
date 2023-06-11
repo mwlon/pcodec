@@ -152,10 +152,11 @@ pub fn new<U: UnsignedLike>(
     bins,
     delta_moments,
   } = data_page_meta;
-  if bins.is_empty() && n > 0 {
+  let delta_order = delta_moments.order();
+  if bins.is_empty() && n > delta_order {
     return Err(QCompressError::corruption(format!(
-      "unable to decompress chunk with no bins and {} numbers",
-      n,
+      "unable to decompress chunk with no bins and {} deltas",
+      n - delta_order,
     )));
   }
   validate_bin_tree(bins)?;
@@ -167,7 +168,6 @@ pub fn new<U: UnsignedLike>(
     .max()
     .unwrap_or(Bitlen::MAX);
   let use_run_len = run_len_utils::use_run_len(bins);
-  let delta_order = delta_moments.order();
   let res: Box<dyn NumDecompressor<U>> = match dyn_mode {
     DynMode::Classic => {
       let mode = ClassicMode;
