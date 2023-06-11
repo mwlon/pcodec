@@ -1,6 +1,5 @@
 use std::cmp::{max, min};
 use std::collections::HashMap;
-use std::ops::{RemAssign, SubAssign};
 
 use crate::bits;
 use crate::constants::Bitlen;
@@ -35,7 +34,8 @@ pub fn encode_apply_mult<T: NumberLike>(
 }
 
 const MIN_SAMPLE: usize = 10;
-const SAMPLE_RATIO: usize = 40; // 1 in this many nums get put into sample
+// 1 in this many nums get put into sample
+const SAMPLE_RATIO: usize = 40;
 const CLASSIC_SAVINGS_RATIO: f64 = 0.4;
 const NEAR_ZERO_MACHINE_EPSILON_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
@@ -59,8 +59,13 @@ fn choose_sample<F: FloatLike>(nums: &[F]) -> Option<Vec<F>> {
   let sample_n = calc_sample_n(n)?;
 
   let mut res = Vec::with_capacity(sample_n);
+  // we avoid cyclic sampling by throwing in another frequency
+  let slope = n as f64 / sample_n as f64;
+  let sin_rate = std::f64::consts::TAU / 13.0;
   for i in 0..sample_n {
-    let num = nums[(i * sample_n) / n];
+    let i_f64 = i as f64;
+    let idx = ((i_f64 + (i_f64 * sin_rate).sin() * 0.5) * slope) as usize;
+    let num = nums[min(idx, n - 1)];
     // We can compress infinities, nans, and baby floats, but we can't learn
     // the GCD from them.
     if num.is_finite_and_normal() {
@@ -80,22 +85,17 @@ fn choose_sample<F: FloatLike>(nums: &[F]) -> Option<Vec<F>> {
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
   let significant_precision_bits = F::PRECISION_BITS.saturating_sub(NEAR_ZERO_MACHINE_EPSILON_BITS) as i32;
-  x * F::from_f64(0.5_f64.powi(significant_precision_bits))
+  x * F::from_f64(2.0_f64.powi(-significant_precision_bits))
 }
 
 fn is_approx_zero<F: FloatLike>(small: F, big: F) -> bool {
   small <= insignificant_float_to(big)
 }
 
-fn approx_pair_gcd_uncorrected<F: FloatLike>(mut x0: F, mut x1: F, median: F) -> Option<F> {
-  let greater = F::max(x0, x1);
-  let lesser = F::min(x0, x1);
+fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -> Option<F> {
   if is_approx_zero(lesser, median) {
     return Some(greater);
-  }
-
-  let thresh = insignificant_float_to(greater);
-  if lesser <= thresh {
+  } else if is_approx_zero(lesser, greater) {
     return Some(lesser);
   }
 
@@ -107,23 +107,24 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(mut x0: F, mut x1: F, median: F) ->
     mult1: F,
   }
 
+  // TODO is this actually more numerically stable than the obvious algorithm?
   let rem_assign = |lhs: &mut PairMult<F>, rhs: &PairMult<F>| {
     let ratio = (lhs.value / rhs.value).round();
     lhs.mult0 -= ratio * rhs.mult0;
     lhs.mult1 -= ratio * rhs.mult1;
-    lhs.value = lhs.mult0 * x0 + lhs.mult1 * x1;
+    lhs.value = lhs.mult0 * greater + lhs.mult1 * lesser;
     lhs.abs_value = lhs.value.abs()
   };
 
   let mut pair0 = PairMult {
-    value: x0,
-    abs_value: x0,
+    value: greater,
+    abs_value: greater,
     mult0: F::ONE,
     mult1: F::ZERO,
   };
   let mut pair1 = PairMult {
-    value: x1,
-    abs_value: x1,
+    value: lesser,
+    abs_value: lesser,
     mult0: F::ZERO,
     mult1: F::ONE,
   };
@@ -135,7 +136,10 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(mut x0: F, mut x1: F, median: F) ->
       return Some(pair1.abs_value);
     }
 
-    if pair0.abs_value <= thresh {
+    // for numerical stability, we need the following to be accurate:
+    // |pair0.mult0 * greater - pair1.mult1 * lesser|
+    // (that's pair0.abs_value)
+    if is_approx_zero(pair0.abs_value, (pair0.mult0 * greater).abs()) {
       return None;
     }
 
@@ -145,7 +149,7 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(mut x0: F, mut x1: F, median: F) ->
       return Some(pair0.abs_value);
     }
 
-    if pair1.abs_value <= thresh {
+    if is_approx_zero(pair1.abs_value, (pair1.mult1 * lesser).abs()) {
       return None;
     }
   }
@@ -184,7 +188,7 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
   }
   let sample_n = sample.len();
   let mut miller_madow_entropy =
-    (counts.len() - 1) as f64 / (sample_n as f64 * 2.0_f64 * 2.0_f64.ln());
+    (counts.len() - 1) as f64 * std::f64::consts::LOG2_E / (sample_n as f64 * 2.0_f64);
   for &count in counts.values() {
     let p = (count as f64) / (sample_n as f64);
     miller_madow_entropy -= p * p.log2();
@@ -196,7 +200,7 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
 
   let rough_bin_meta_cost = U::BITS as f64 + 40.0;
   let cutoff =
-    ((miller_madow_entropy * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen;
+    ((2.0_f64.powf(miller_madow_entropy) * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen;
   adj_bits_needed::<U>(inv_gcd, sample, cutoff)?;
   Some(cutoff)
 }
@@ -248,31 +252,39 @@ fn adj_bits_needed<U: UnsignedLike>(
   Some(max_adj_bits)
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct FloatMultConfig<F: FloatLike> {
   pub base: F,
   pub inv_base: F,
   pub adj_bits: Bitlen,
 }
 
-pub fn choose_config<T: NumberLike>(
-  nums: &[T],
-) -> Option<FloatMultConfig<<T::Unsigned as UnsignedLike>::Float>> {
-  let nums = T::assert_float(nums);
+fn choose_config_w_sample<U: UnsignedLike>(
+  sample: &[U::Float],
+  nums: &[U::Float],
+) -> Option<FloatMultConfig<U::Float>> {
   let n = nums.len();
-  let sample = choose_sample(nums)?;
   let gcd = approx_sample_gcd(&sample)?;
   let gcd = center_sample_gcd(gcd, &sample);
   let (gcd, inv_gcd) = snap_to_int_reciprocal(gcd);
 
-  let adj_bits_cutoff = adj_bits_cutoff_to_beat_classic::<T::Unsigned>(inv_gcd, &sample, n)?;
+  let adj_bits_cutoff = adj_bits_cutoff_to_beat_classic::<U>(inv_gcd, &sample, n)?;
 
-  let adj_bits = adj_bits_needed::<T::Unsigned>(inv_gcd, nums, adj_bits_cutoff)?;
+  let adj_bits = adj_bits_needed::<U>(inv_gcd, nums, adj_bits_cutoff)?;
 
   Some(FloatMultConfig {
     base: gcd,
     inv_base: inv_gcd,
     adj_bits,
   })
+}
+
+pub fn choose_config<T: NumberLike>(
+  nums: &[T],
+) -> Option<FloatMultConfig<<T::Unsigned as UnsignedLike>::Float>> {
+  let nums = T::assert_float(nums);
+  let sample = choose_sample(nums)?;
+  choose_config_w_sample::<T::Unsigned>(&sample, nums)
 }
 
 // We'll only consider using FloatMultMode if we can save at least 1/this of the
@@ -421,25 +433,40 @@ mod test {
   use crate::constants::Bitlen;
 
   use super::*;
+  use std::f32::consts::{E, TAU};
 
   fn assert_almost_equal_me(a: f32, b: f32, machine_epsilon_tolerance: u32, desc: &str) {
     let (a, b) = (a.to_unsigned(), b.to_unsigned());
     let udiff = max(a, b) - min(a, b);
-    assert!(udiff < machine_epsilon_tolerance, "{} far from {}; {}", a, b, desc);
+    assert!(udiff <= machine_epsilon_tolerance, "{} far from {}; {}", a, b, desc);
   }
 
   fn assert_almost_equal(a: f32, b: f32, abs_tolerance: f32, desc: &str) {
     let diff = (a - b).abs();
-    assert!(diff < abs_tolerance, "{} far from {}; {}", a, b, desc);
+    assert!(diff <= abs_tolerance, "{} far from {}; {}", a, b, desc);
+  }
+
+  fn plus_epsilons(a: f32, epsilons: i32) -> f32 {
+    f32::from_unsigned(a.to_unsigned().wrapping_add(epsilons as u32))
   }
 
   #[test]
-  fn test_sample() {
+  fn test_sample_n() {
     assert_eq!(calc_sample_n(9), None);
     assert_eq!(calc_sample_n(10), Some(10));
-    assert_eq!(calc_sample_n(50), Some(11));
-    assert_eq!(calc_sample_n(1010), Some(35));
+    assert_eq!(calc_sample_n(100), Some(12));
     assert_eq!(calc_sample_n(1000010), Some(25010));
+  }
+
+  #[test]
+  fn test_choose_sample() {
+    let mut nums = Vec::new();
+    for i in 0..150 {
+      nums.push(-i as f32);
+    }
+    let sample = choose_sample(&nums).unwrap();
+    assert_eq!(sample.len(), 13);
+    assert_eq!(&sample[0..3], &[0.0, 14.0, 27.0]);
   }
 
   #[test]
@@ -453,16 +480,12 @@ mod test {
   fn test_approx_pair_gcd() {
     assert_eq!(approx_pair_gcd_uncorrected(0.0, 0.0, 1.0), Some(0.0));
     assert_eq!(approx_pair_gcd_uncorrected(1.0, 0.0, 1.0), Some(1.0));
-    assert_eq!(approx_pair_gcd_uncorrected(0.0, 1.0, 1.0), Some(1.0));
     assert_eq!(approx_pair_gcd_uncorrected(1.0, 1.0, 1.0), Some(1.0));
-    assert_eq!(approx_pair_gcd_uncorrected(3.0, 6.0, 1.0), Some(3.0));
-    assert_eq!(approx_pair_gcd_uncorrected(std::f32::consts::PI, 1.0, 1.0), None);
-    assert_eq!(approx_pair_gcd_uncorrected(std::f32::consts::PI, std::f32::consts::E, 1.0), None);
+    assert_eq!(approx_pair_gcd_uncorrected(6.0, 3.0, 1.0), Some(3.0));
     // 2^100 is not a multiple of 3, but it's certainly within machine epsilon of one
-    assert_eq!(approx_pair_gcd_uncorrected(3.0, 2.0_f32.powi(100), 1.0), Some(3.0));
     assert_eq!(approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 1.0), Some(3.0));
     // in this case, the median is big, so assume the lhs of 3 is just a numerical error
-    assert_eq!(approx_pair_gcd_uncorrected(3.0, 2.0_f32.powi(100), 2.0_f32.powi(99)), Some(2.0_f32.powi(100)));
+    assert_eq!(approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 2.0_f32.powi(99)), Some(2.0_f32.powi(100)));
     assert_almost_equal_me(
       approx_pair_gcd_uncorrected(1.0 / 3.0, 1.0 / 4.0, 1.0).unwrap(),
       1.0 / 12.0,
@@ -481,6 +504,9 @@ mod test {
 
     let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, 1.00033333, f32::MAX];
     assert_eq!(approx_sample_gcd(&nums), None);
+
+    let nums = vec![1.0, E, TAU];
+    assert_eq!(approx_sample_gcd(&nums), None);
   }
 
   #[test]
@@ -493,42 +519,53 @@ mod test {
   fn test_snap() {
     assert_eq!(snap_to_int_reciprocal(0.01000333), (0.01, 100.0));
     assert_eq!(snap_to_int_reciprocal(0.009999666), (0.01, 100.0));
+    assert_eq!(snap_to_int_reciprocal(0.143), (1.0 / 7.0, 7.0));
     assert_eq!(snap_to_int_reciprocal(0.0105), (0.0105, 1.0 / 0.0105));
-    assert_eq!(snap_to_int_reciprocal(std::f32::consts::PI).0, std::f32::consts::PI);
+    assert_eq!(snap_to_int_reciprocal(TAU).0, TAU);
+  }
+
+  #[test]
+  fn test_adj_bits_needed() {
+    let nums = vec![f32::NEG_INFINITY, -f32::NAN, -0.3, 0.0, 0.2, 0.7, f32::NAN, f32::INFINITY];
+    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, 1), Some(0));
+
+    let nums = vec![plus_epsilons(0.1, 0)];
+    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX), Some(0));
+    let nums = vec![plus_epsilons(0.1, 1)];
+    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX), Some(2));
+    let nums = vec![plus_epsilons(0.1, 2)];
+    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX), Some(3));
+    let nums = vec![plus_epsilons(0.1, 30)];
+    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX), Some(6));
+
+    let nums = vec![plus_epsilons(0.1, 30)];
+    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, 5), None);
   }
 
   #[test]
   fn test_choose_config() {
-    fn adj_bits_inv_base(floats: Vec<f64>) -> Option<(Bitlen, f64)> {
-      // let mut strategy = Strategy::<u64>::default();
-      // strategy.choose_adj_bits_and_inv_base(&floats)
-      choose_config(&floats).map(|config| (config.adj_bits, config.inv_base))
+    let mut sevenths = Vec::new();
+    let mut ones = Vec::new();
+    let mut noisy_decimals = Vec::new();
+    let mut junk = Vec::new();
+    for i in 0..1000 {
+      sevenths.push(((i % 50) - 20) as f32 * (1.0 / 7.0));
+      ones.push(1.0);
+      noisy_decimals.push(plus_epsilons(0.1 * ((i - 100) as f32), -7 + i % 15));
+      junk.push((i as f32).sin());
     }
 
-    let floats = vec![-0.1, 0.1, 0.100000000001, 0.33, 1.01, 1.1];
-    assert_eq!(adj_bits_inv_base(floats), Some((0, 100.0)));
-
-    let floats = vec![
-      -f64::NEG_INFINITY,
-      -f64::NAN,
-      -0.1,
-      1.0,
-      1.1,
-      f64::NAN,
-      f64::INFINITY,
-    ];
-    assert_eq!(adj_bits_inv_base(floats), Some((0, 10.0)));
-
-    let floats = vec![-(2.0_f64.powi(53)), -0.1, 1.0, 1.1];
-    assert_eq!(adj_bits_inv_base(floats), None);
-
-    let floats = vec![-0.1, 1.0, 1.1, 2.0_f64.powi(53)];
-    assert_eq!(adj_bits_inv_base(floats), None);
-
-    let floats = vec![1.0 / 7.0, 2.0 / 7.0];
-    assert_eq!(adj_bits_inv_base(floats), None);
-
-    let floats = vec![1.0, 1.00000000000001, 0.99999999999999];
-    assert_eq!(adj_bits_inv_base(floats), None);
+    assert_eq!(choose_config(&sevenths), Some(FloatMultConfig {
+      base: 1.0 / 7.0,
+      inv_base: 7.0,
+      adj_bits: 0,
+    }));
+    assert_eq!(choose_config(&ones), None);
+    assert_eq!(choose_config(&noisy_decimals), Some(FloatMultConfig {
+      base: 1.0 / 10.0,
+      inv_base: 10.0,
+      adj_bits: 4,
+    }));
+    assert_eq!(choose_config(&junk), None);
   }
 }
