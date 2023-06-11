@@ -6,18 +6,15 @@ pub struct UnsignedSrc<U: UnsignedLike> {
   // immutable
   unsigneds: Vec<U>,
   adjustments: Vec<U>,
-  len: usize,
   // mutable
   i: usize,
 }
 
 impl<U: UnsignedLike> UnsignedSrc<U> {
   pub fn new(unsigneds: Vec<U>, adjustments: Vec<U>) -> Self {
-    let len = unsigneds.len();
     Self {
       unsigneds,
       adjustments,
-      len,
       i: 0,
     }
   }
@@ -38,8 +35,8 @@ impl<U: UnsignedLike> UnsignedSrc<U> {
     self.i += 1;
   }
 
-  pub fn complete(&self) -> bool {
-    self.i == self.len
+  pub fn finished_unsigneds(&self) -> bool {
+    self.i >= self.unsigneds.len()
   }
 
   pub fn unsigneds(&self) -> &[U] {

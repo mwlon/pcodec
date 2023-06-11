@@ -346,7 +346,7 @@ fn compress_data_page<U: UnsignedLike, M: Mode<U>>(
   mode: M,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
-  while !src.complete() {
+  while !src.finished_unsigneds() {
     let unsigned = src.unsigned();
     let bin = table.search(unsigned)?;
     writer.write_usize(bin.code, bin.code_len);
