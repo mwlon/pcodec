@@ -107,8 +107,8 @@ pub trait UnsignedLike:
 
   fn wrapping_sub(self, other: Self) -> Self;
 
-  fn to_float_numerical(self) -> Self::Float;
-  fn from_float_numerical(float: Self::Float) -> Self;
+  fn to_int_float(self) -> Self::Float;
+  fn from_int_float(float: Self::Float) -> Self;
 
   fn to_float_bits(self) -> Self::Float;
   fn from_float_bits(float: Self::Float) -> Self;

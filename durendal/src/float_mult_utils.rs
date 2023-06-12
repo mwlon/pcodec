@@ -9,7 +9,7 @@ use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 pub fn decode_apply_mult<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   let (unsigneds, adjustments) = dst.decompose();
   for i in 0..unsigneds.len() {
-    let unadjusted = unsigneds[i].to_float_numerical() * base;
+    let unadjusted = unsigneds[i].to_int_float() * base;
     unsigneds[i] = unadjusted.to_unsigned().wrapping_add(adjustments[i])
   }
 }
@@ -25,10 +25,10 @@ pub fn encode_apply_mult<T: NumberLike>(
   let mut adjustments = Vec::with_capacity(n);
   for i in 0..n {
     let mult = (nums[i] * inv_base).round();
-    unsigneds[i] = T::Unsigned::from_float_numerical(mult);
-    adjustments[i] = nums[i]
+    unsigneds.push(T::Unsigned::from_int_float(mult));
+    adjustments.push(nums[i]
       .to_unsigned()
-      .wrapping_sub((mult * base).to_unsigned());
+      .wrapping_sub((mult * base).to_unsigned()));
   }
   UnsignedSrc::new(unsigneds, adjustments)
 }
@@ -180,10 +180,10 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
   // adjustment entropy per number, but pay extra metadata cost per mult.
   // It's better to use float mult if both mult entropy is high (requiring
   // memorization) and
-  // adj_entropy * n * class_savings < mult_entropy * bin_meta_size
+  // adj_entropy * n * classic_savings < 2^mult_entropy * bin_meta_size
   let mut counts = HashMap::<U, usize>::new();
   for &x in sample {
-    let mult = U::from_float_numerical((x * inv_gcd).round());
+    let mult = U::from_int_float((x * inv_gcd).round());
     *counts.entry(mult).or_default() += 1;
   }
   let sample_n = sample.len();

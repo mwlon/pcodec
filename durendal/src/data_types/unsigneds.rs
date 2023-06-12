@@ -2,7 +2,7 @@ use crate::constants::Bitlen;
 use crate::data_types::{NumberLike, UnsignedLike};
 
 macro_rules! impl_unsigned {
-  ($t: ty, $float: ty) => {
+  ($t: ty, $float: ty, $signed: ty) => {
     impl UnsignedLike for $t {
       const ZERO: Self = 0;
       const ONE: Self = 1;
@@ -40,13 +40,13 @@ macro_rules! impl_unsigned {
       }
 
       #[inline]
-      fn to_float_numerical(self) -> Self::Float {
-        self as Self::Float
+      fn to_int_float(self) -> Self::Float {
+        <$signed>::from_unsigned(self) as Self::Float
       }
 
       #[inline]
-      fn from_float_numerical(float: Self::Float) -> Self {
-        float as Self
+      fn from_int_float(float: Self::Float) -> Self {
+        (float as $signed).to_unsigned()
       }
 
       #[inline]
@@ -62,8 +62,8 @@ macro_rules! impl_unsigned {
   };
 }
 
-impl_unsigned!(u32, f32);
-impl_unsigned!(u64, f64);
+impl_unsigned!(u32, f32, i32);
+impl_unsigned!(u64, f64, i64);
 
 macro_rules! impl_unsigned_number {
   ($t: ty, $signed: ty, $float: ty, $header_byte: expr) => {

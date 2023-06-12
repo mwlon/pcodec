@@ -164,12 +164,13 @@ fn test_decimals() -> QCompressResult<()> {
   for _ in 0..300 {
     nums.push(rng.gen_range(-1..100) as f64 * 0.01);
   }
+  let mut sorted = nums.clone();
+  sorted.sort_unstable_by(|a, b| a.total_cmp(b));
   assert_recovers(nums, 2, "decimals")
 }
 
 fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: &str) -> QCompressResult<()> {
   for delta_encoding_order in [0, 1, 7] {
-    println!("{}", delta_encoding_order);
     let debug_info = format!(
       "name={} delta_encoding_order={}",
       name, delta_encoding_order,

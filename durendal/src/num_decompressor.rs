@@ -403,13 +403,17 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
 
     // as long as there's enough compressed data available, we don't need checked operations
     let remaining_unsigneds = delta_batch_size - dst.n_processed();
-    let guaranteed_safe_num_blocks = min(
-      remaining_unsigneds,
-      reader
-        .bits_remaining()
-        .saturating_sub(self.max_overshoot_per_num_block as usize)
-        / self.max_bits_per_num_block,
-    );
+    let guaranteed_safe_num_blocks = if self.max_bits_per_num_block == 0 {
+      remaining_unsigneds
+    } else {
+      min(
+        remaining_unsigneds,
+        reader
+          .bits_remaining()
+          .saturating_sub(self.max_overshoot_per_num_block as usize)
+          / self.max_bits_per_num_block,
+      )
+    };
     if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
       // don't slow down the tight loops with runtime checks - do these upfront to choose
       // the best compiled tight loop
