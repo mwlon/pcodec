@@ -72,6 +72,16 @@ async fn test_streaming_decompress_sparse() -> QCompressResult<()> {
   check_streaming_recovery(&nums, 1000).await
 }
 
+#[tokio::test]
+async fn test_streaming_decompress_float_mult() -> QCompressResult<()> {
+  let mut nums = Vec::new();
+  for i in 0..100 {
+    nums.push((i as f32) * std::f32::consts::TAU);
+  }
+  check_streaming_recovery(&nums, 10).await?;
+  check_streaming_recovery(&nums, 1000).await
+}
+
 async fn check_streaming_recovery<T: NumberLike>(
   true_nums: &[T],
   blob_size: usize,
@@ -85,6 +95,8 @@ async fn check_streaming_recovery<T: NumberLike>(
     .try_fold(State::<T>::default(), streaming_collect)
     .await?;
   assert_eq!(nums.len(), true_nums.len());
-  assert_eq!(nums, true_nums);
+  for i in 0..nums.len() {
+    assert_eq!(nums[i], true_nums[i], "at {}", i);
+  }
   Ok(())
 }

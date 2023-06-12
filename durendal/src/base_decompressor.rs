@@ -100,6 +100,21 @@ impl<T: NumberLike> State<T> {
     n: usize,
     compressed_page_size: usize,
   ) -> QCompressResult<BodyDecompressor<T>> {
+    let start_bit_idx = reader.bit_idx();
+    let res = self.new_body_decompressor_dirty(reader, n, compressed_page_size);
+
+    if res.is_err () {
+      reader.seek_to(start_bit_idx);
+    }
+    res
+  }
+
+  fn new_body_decompressor_dirty(
+    &self,
+    reader: &mut BitReader,
+    n: usize,
+    compressed_page_size: usize,
+  ) -> QCompressResult<BodyDecompressor<T>> {
     let flags = self.flags.as_ref().unwrap();
     let chunk_meta = self.chunk_meta.as_ref().unwrap();
 

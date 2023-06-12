@@ -296,33 +296,30 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     if bin_res.is_err() {
       reader.seek_to(start_bit_idx);
     }
-    let bin = bin_res?;
+    let bin = *bin_res?;
 
-    match bin.run_len_jumpstart {
-      None => {
-        self.decompress_offsets(reader, bin, 1, dst)?;
-      }
+    let full_reps = match bin.run_len_jumpstart {
+      None => 1,
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps_minus_one_res = reader.read_varint(jumpstart);
         if full_reps_minus_one_res.is_err() {
           reader.seek_to(start_bit_idx);
         }
-        let full_reps = full_reps_minus_one_res? + 1;
-        self.state.incomplete_bin = Some(*bin);
-        self.state.incomplete_reps = full_reps;
-        let reps = min(full_reps, dst.len());
-        self.decompress_offsets(reader, bin, reps, dst)?;
-        self.state.incomplete_reps -= reps;
+        full_reps_minus_one_res? + 1
       }
-    }
+    };
+    self.state.incomplete_bin = Some(bin);
+    self.state.incomplete_reps = full_reps;
+    let reps = min(full_reps, dst.remaining());
+    self.decompress_offsets(reader, &bin, reps, dst)?;
     Ok(())
   }
 
   // errors on insufficient data, but updates unsigneds with last complete number
   // and leaves reader at end end of last complete number
   fn decompress_offsets(
-    &self,
+    &mut self,
     reader: &mut BitReader,
     bin: &BinDecompressionInfo<U>,
     reps: usize,
@@ -345,6 +342,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
       }
 
       dst.incr();
+      self.state.incomplete_reps -= 1;
     }
 
     Ok(())
@@ -387,11 +385,10 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
       let reps = min(incomplete_reps, delta_batch_size);
       let incomplete_res = self.decompress_offsets(
         reader,
-        self.state.incomplete_bin.as_ref().unwrap(),
+        &self.state.incomplete_bin.unwrap(),
         reps,
         dst,
       );
-      self.state.incomplete_reps -= reps;
       match incomplete_res {
         Ok(_) => (),
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => {

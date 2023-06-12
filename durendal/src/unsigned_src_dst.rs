@@ -90,6 +90,10 @@ impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
     self.len
   }
 
+  pub fn remaining(&self) -> usize {
+    self.len - self.i
+  }
+
   pub fn decompose(self) -> (&'a mut [U], &'a mut [U]) {
     (self.unsigneds, self.adjustments)
   }

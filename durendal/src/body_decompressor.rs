@@ -82,7 +82,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
     num_dst: &mut [T],
   ) -> QCompressResult<Progress> {
     let mut progress = Progress::default();
-    while !progress.finished_body && !progress.insufficient_data {
+    while progress.n_processed < num_dst.len() && !progress.finished_body && !progress.insufficient_data {
       progress += self.decompress_batch(
         reader,
         error_on_insufficient_data,

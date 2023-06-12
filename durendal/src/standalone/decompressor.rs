@@ -212,7 +212,13 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
           compressed_body_size,
           ..
         } = state.chunk_meta.as_ref().unwrap();
-        let mut bd = state.new_body_decompressor(reader, n, compressed_body_size)?;
+        let maybe_bd = state.new_body_decompressor(reader, n, compressed_body_size);
+        if let Err(e) = &maybe_bd {
+          if matches!(e.kind, ErrorKind::InsufficientData) {
+            return Ok(None)
+          }
+        }
+        let mut bd = maybe_bd?;
         let mut dest = vec![T::default(); config.numbers_limit_per_item];
         let progress = next_nums_dirty(reader, &mut bd, &mut dest)?;
         state.body_decompressor = Some(bd);

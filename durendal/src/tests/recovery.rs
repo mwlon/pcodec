@@ -1,8 +1,9 @@
-use crate::data_types::NumberLike;
-use crate::standalone::{auto_decompress, simple_compress, Compressor};
-use crate::CompressorConfig;
 use rand::Rng;
+
+use crate::{CompressorConfig};
+use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
+use crate::standalone::{auto_decompress, Compressor, simple_compress};
 
 #[test]
 fn test_edge_cases() -> QCompressResult<()> {
@@ -161,46 +162,55 @@ fn test_sparse_islands() -> QCompressResult<()> {
 fn test_decimals() -> QCompressResult<()> {
   let mut rng = rand::thread_rng();
   let mut nums = Vec::new();
-  for _ in 0..300 {
+  let n = 300;
+  for _ in 0..n {
     nums.push(rng.gen_range(-1..100) as f64 * 0.01);
   }
   let mut sorted = nums.clone();
   sorted.sort_unstable_by(|a, b| a.total_cmp(b));
+  // each number should take only log2(101) < 8 bits here, or 1 byte, plus some overhead
+  assert_recovers_within_size(&nums, 2, "decimals", 0, n + 30)?;
   assert_recovers(nums, 2, "decimals")
 }
 
 fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: &str) -> QCompressResult<()> {
   for delta_encoding_order in [0, 1, 7] {
-    let debug_info = format!(
-      "name={} delta_encoding_order={}",
-      name, delta_encoding_order,
+    assert_recovers_within_size(&nums, compression_level, name, delta_encoding_order, usize::MAX)?;
+  }
+  Ok(())
+}
+
+fn assert_recovers_within_size<T: NumberLike>(nums: &[T], compression_level: usize, name: &str, delta_encoding_order: usize, max_byte_size: usize) -> QCompressResult<()> {
+  let debug_info = format!(
+    "name={} delta_encoding_order={}",
+    name, delta_encoding_order,
+  );
+  let config = CompressorConfig {
+    compression_level,
+    delta_encoding_order,
+    ..Default::default()
+  };
+  let compressed = simple_compress(config, nums);
+  assert!(compressed.len() <= max_byte_size, "{}", debug_info);
+  let decompressed = auto_decompress::<T>(&compressed)?;
+  // We can't do assert_eq on the whole vector because even bitwise identical
+  // floats sometimes aren't equal by ==.
+  assert_eq!(
+    decompressed.len(),
+    nums.len(),
+    "{}",
+    debug_info
+  );
+  for i in 0..decompressed.len() {
+    // directly comparing numbers might not work for floats
+    assert!(
+      decompressed[i].to_unsigned() == nums[i].to_unsigned(),
+      "{} != {} at {}; {}",
+      decompressed[i],
+      nums[i],
+      i,
+      debug_info,
     );
-    let config = CompressorConfig {
-      compression_level,
-      delta_encoding_order,
-      ..Default::default()
-    };
-    let compressed = simple_compress(config, &nums);
-    let decompressed = auto_decompress::<T>(&compressed)?;
-    // We can't do assert_eq on the whole vector because even bitwise identical
-    // floats sometimes aren't equal by ==.
-    assert_eq!(
-      decompressed.len(),
-      nums.len(),
-      "{}",
-      debug_info
-    );
-    for i in 0..decompressed.len() {
-      // directly comparing numbers might not work for floats
-      assert!(
-        decompressed[i].to_unsigned() == nums[i].to_unsigned(),
-        "{} != {} at {}; {}",
-        decompressed[i],
-        nums[i],
-        i,
-        debug_info,
-      );
-    }
   }
   Ok(())
 }
