@@ -1,9 +1,9 @@
 use rand::Rng;
 
-use crate::{CompressorConfig};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::standalone::{auto_decompress, Compressor, simple_compress};
+use crate::standalone::{auto_decompress, simple_compress, Compressor};
+use crate::CompressorConfig;
 
 #[test]
 fn test_edge_cases() -> QCompressResult<()> {
@@ -173,14 +173,30 @@ fn test_decimals() -> QCompressResult<()> {
   assert_recovers(nums, 2, "decimals")
 }
 
-fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: &str) -> QCompressResult<()> {
+fn assert_recovers<T: NumberLike>(
+  nums: Vec<T>,
+  compression_level: usize,
+  name: &str,
+) -> QCompressResult<()> {
   for delta_encoding_order in [0, 1, 7] {
-    assert_recovers_within_size(&nums, compression_level, name, delta_encoding_order, usize::MAX)?;
+    assert_recovers_within_size(
+      &nums,
+      compression_level,
+      name,
+      delta_encoding_order,
+      usize::MAX,
+    )?;
   }
   Ok(())
 }
 
-fn assert_recovers_within_size<T: NumberLike>(nums: &[T], compression_level: usize, name: &str, delta_encoding_order: usize, max_byte_size: usize) -> QCompressResult<()> {
+fn assert_recovers_within_size<T: NumberLike>(
+  nums: &[T],
+  compression_level: usize,
+  name: &str,
+  delta_encoding_order: usize,
+  max_byte_size: usize,
+) -> QCompressResult<()> {
   let debug_info = format!(
     "name={} delta_encoding_order={}",
     name, delta_encoding_order,
@@ -191,7 +207,11 @@ fn assert_recovers_within_size<T: NumberLike>(nums: &[T], compression_level: usi
     ..Default::default()
   };
   let compressed = simple_compress(config, nums);
-  assert!(compressed.len() <= max_byte_size, "{}", debug_info);
+  assert!(
+    compressed.len() <= max_byte_size,
+    "{}",
+    debug_info
+  );
   let decompressed = auto_decompress::<T>(&compressed)?;
   // We can't do assert_eq on the whole vector because even bitwise identical
   // floats sometimes aren't equal by ==.

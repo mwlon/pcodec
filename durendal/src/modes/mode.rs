@@ -69,9 +69,8 @@ impl<U: UnsignedLike> DynMode<U> {
   }
 
   pub fn finalize(&self, dst: UnsignedDst<U>) {
-    match self {
-      DynMode::FloatMult { base, .. } => float_mult_utils::decode_apply_mult(*base, dst),
-      _ => (),
+    if let DynMode::FloatMult { base, .. } = self {
+      float_mult_utils::decode_apply_mult(*base, dst);
     }
   }
 

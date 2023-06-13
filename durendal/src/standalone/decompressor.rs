@@ -215,7 +215,7 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         let maybe_bd = state.new_body_decompressor(reader, n, compressed_body_size);
         if let Err(e) = &maybe_bd {
           if matches!(e.kind, ErrorKind::InsufficientData) {
-            return Ok(None)
+            return Ok(None);
           }
         }
         let mut bd = maybe_bd?;

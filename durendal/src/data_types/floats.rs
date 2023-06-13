@@ -1,4 +1,4 @@
-use std::cmp::{max, min, Ordering};
+use std::cmp::{max, min};
 
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike};
@@ -32,11 +32,6 @@ macro_rules! impl_float_number {
       }
 
       #[inline]
-      fn from_usize_numerical(x: usize) -> Self {
-        x as Self
-      }
-
-      #[inline]
       fn from_f64(x: f64) -> Self {
         x as Self
       }
@@ -50,11 +45,6 @@ macro_rules! impl_float_number {
         let (a, b) = (a.to_bits(), b.to_bits());
         let epsilons = max(a, b) - min(a, b);
         $bits - epsilons.leading_zeros()
-      }
-
-      #[inline]
-      fn total_cmp(a: &Self, b: &Self) -> Ordering {
-        Self::total_cmp(a, b)
       }
 
       #[inline]

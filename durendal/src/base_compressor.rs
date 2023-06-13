@@ -183,11 +183,8 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     let upper = sorted[j - 1];
 
     let mut bin_gcd = U::ONE;
-    match self.mode {
-      DynMode::Gcd => {
-        bin_gcd = gcd::gcd(&sorted[i..j]);
-      }
-      _ => (),
+    if self.mode == DynMode::Gcd {
+      bin_gcd = gcd::gcd(&sorted[i..j]);
     }
 
     let bin = BinCompressionInfo {
@@ -516,7 +513,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
 
     let order = self.flags.delta_encoding_order;
-    let (naive_mode, mut src) = self.preprocess_src(&nums);
+    let (naive_mode, mut src) = self.preprocess_src(nums);
     let page_idxs = cumulative_sum(&page_sizes);
     let delta_momentss = delta_encoding::nth_order_deltas(src.unsigneds_mut(), order, &page_idxs);
     let (unoptimized_mode, infos) = train_mode_and_bins(

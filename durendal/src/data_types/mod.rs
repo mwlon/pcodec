@@ -1,7 +1,9 @@
-use std::cmp::Ordering;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub, SubAssign};
+use std::ops::{
+  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub,
+  SubAssign,
+};
 
 use crate::constants::Bitlen;
 
@@ -32,10 +34,8 @@ pub trait FloatLike:
   fn inv(self) -> Self;
   fn round(self) -> Self;
   fn log2_epsilons_between_positives(a: Self, b: Self) -> Bitlen;
-  fn from_usize_numerical(x: usize) -> Self;
   fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
-  fn total_cmp(a: &Self, b: &Self) -> Ordering;
   fn is_finite_and_normal(&self) -> bool;
   fn max(a: Self, b: Self) -> Self;
   fn min(a: Self, b: Self) -> Self;

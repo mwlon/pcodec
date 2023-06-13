@@ -103,7 +103,7 @@ impl<T: NumberLike> State<T> {
     let start_bit_idx = reader.bit_idx();
     let res = self.new_body_decompressor_dirty(reader, n, compressed_page_size);
 
-    if res.is_err () {
+    if res.is_err() {
       reader.seek_to(start_bit_idx);
     }
     res

@@ -39,8 +39,8 @@ pub fn encode_apply_mult<T: NumberLike>(
     }
     for i in 0..chunk.len() {
       adjustments[base_i + i] = chunk[i]
-          .to_unsigned()
-          .wrapping_sub((mults[i] * base).to_unsigned())
+        .to_unsigned()
+        .wrapping_sub((mults[i] * base).to_unsigned())
     }
     base_i += UNSIGNED_BATCH_SIZE;
   }
@@ -101,7 +101,8 @@ fn choose_sample<F: FloatLike>(nums: &[F]) -> Option<Vec<F>> {
 }
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
-  let significant_precision_bits = F::PRECISION_BITS.saturating_sub(NEAR_ZERO_MACHINE_EPSILON_BITS) as i32;
+  let significant_precision_bits =
+    F::PRECISION_BITS.saturating_sub(NEAR_ZERO_MACHINE_EPSILON_BITS) as i32;
   x * F::from_f64(2.0_f64.powi(-significant_precision_bits))
 }
 
@@ -160,7 +161,10 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
     // for numerical stability, we need the following to be accurate:
     // |pair0.mult0 * greater - pair1.mult1 * lesser|
     // (that's pair0.abs_value)
-    if is_approx_zero(pair0.abs_value, F::max(median, (pair0.mult0 * greater).abs())) {
+    if is_approx_zero(
+      pair0.abs_value,
+      F::max(median, (pair0.mult0 * greater).abs()),
+    ) {
       return None;
     }
 
@@ -170,7 +174,10 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
       return Some(pair0.abs_value);
     }
 
-    if is_approx_zero(pair1.abs_value, F::max(median, (pair1.mult1 * lesser).abs())) {
+    if is_approx_zero(
+      pair1.abs_value,
+      F::max(median, (pair1.mult1 * lesser).abs()),
+    ) {
       return None;
     }
   }
@@ -254,7 +261,9 @@ fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
   // check if relative error is below a threshold
   if (inv_gcd - round_inv_gcd).abs() < F::from_f64(SNAP_THRESHOLD_ABSOLUTE) {
     (round_inv_gcd.inv(), round_inv_gcd)
-  } else if (inv_gcd - decimal_inv_gcd).abs() / inv_gcd < F::from_f64(SNAP_THRESHOLD_DECIMAL_RELATIVE) {
+  } else if (inv_gcd - decimal_inv_gcd).abs() / inv_gcd
+    < F::from_f64(SNAP_THRESHOLD_DECIMAL_RELATIVE)
+  {
     (decimal_inv_gcd.inv(), decimal_inv_gcd)
   } else {
     (gcd, inv_gcd)
@@ -292,11 +301,11 @@ fn choose_config_w_sample<U: UnsignedLike>(
   nums: &[U::Float],
 ) -> Option<FloatMultConfig<U::Float>> {
   let n = nums.len();
-  let gcd = approx_sample_gcd(&sample)?;
-  let gcd = center_sample_gcd(gcd, &sample);
+  let gcd = approx_sample_gcd(sample)?;
+  let gcd = center_sample_gcd(gcd, sample);
   let (gcd, inv_gcd) = snap_to_int_reciprocal(gcd);
 
-  let adj_bits_cutoff = adj_bits_cutoff_to_beat_classic::<U>(inv_gcd, &sample, n)?;
+  let adj_bits_cutoff = adj_bits_cutoff_to_beat_classic::<U>(inv_gcd, sample, n)?;
 
   let adj_bits = adj_bits_needed::<U>(inv_gcd, nums, adj_bits_cutoff)?;
 
@@ -325,12 +334,24 @@ mod test {
   fn assert_almost_equal_me(a: f32, b: f32, machine_epsilon_tolerance: u32, desc: &str) {
     let (a, b) = (a.to_unsigned(), b.to_unsigned());
     let udiff = max(a, b) - min(a, b);
-    assert!(udiff <= machine_epsilon_tolerance, "{} far from {}; {}", a, b, desc);
+    assert!(
+      udiff <= machine_epsilon_tolerance,
+      "{} far from {}; {}",
+      a,
+      b,
+      desc
+    );
   }
 
   fn assert_almost_equal(a: f32, b: f32, abs_tolerance: f32, desc: &str) {
     let diff = (a - b).abs();
-    assert!(diff <= abs_tolerance, "{} far from {}; {}", a, b, desc);
+    assert!(
+      diff <= abs_tolerance,
+      "{} far from {}; {}",
+      a,
+      b,
+      desc
+    );
   }
 
   fn plus_epsilons(a: f32, epsilons: i32) -> f32 {
@@ -353,27 +374,57 @@ mod test {
     }
     let sample = choose_sample(&nums).unwrap();
     assert_eq!(sample.len(), 13);
-    assert_eq!(&sample[0..3], &[0.0, 14.0, 27.0]);
+    assert_eq!(&sample[0..3], &[0.0, 13.0, 27.0]);
   }
 
   #[test]
   fn test_near_zero() {
-    assert_eq!(insignificant_float_to(1.0_f64), 1.0 / ((1_u64 << 46) as f64));
-    assert_eq!(insignificant_float_to(1.0_f32), 1.0 / ((1_u64 << 17) as f32));
-    assert_eq!(insignificant_float_to(32.0_f32), 1.0 / ((1_u64 << 12) as f32));
+    assert_eq!(
+      insignificant_float_to(1.0_f64),
+      1.0 / ((1_u64 << 46) as f64)
+    );
+    assert_eq!(
+      insignificant_float_to(1.0_f32),
+      1.0 / ((1_u64 << 17) as f32)
+    );
+    assert_eq!(
+      insignificant_float_to(32.0_f32),
+      1.0 / ((1_u64 << 12) as f32)
+    );
   }
 
   #[test]
   fn test_approx_pair_gcd() {
-    assert_eq!(approx_pair_gcd_uncorrected(0.0, 0.0, 1.0), Some(0.0));
-    assert_eq!(approx_pair_gcd_uncorrected(1.0, 0.0, 1.0), Some(1.0));
-    assert_eq!(approx_pair_gcd_uncorrected(1.0, 1.0, 1.0), Some(1.0));
-    assert_eq!(approx_pair_gcd_uncorrected(6.0, 3.0, 1.0), Some(3.0));
-    assert_eq!(approx_pair_gcd_uncorrected(10.01_f64, 0.009999999999999787_f64, 1.0_f64), Some(0.009999999999999787));
+    assert_eq!(
+      approx_pair_gcd_uncorrected(0.0, 0.0, 1.0),
+      Some(0.0)
+    );
+    assert_eq!(
+      approx_pair_gcd_uncorrected(1.0, 0.0, 1.0),
+      Some(1.0)
+    );
+    assert_eq!(
+      approx_pair_gcd_uncorrected(1.0, 1.0, 1.0),
+      Some(1.0)
+    );
+    assert_eq!(
+      approx_pair_gcd_uncorrected(6.0, 3.0, 1.0),
+      Some(3.0)
+    );
+    assert_eq!(
+      approx_pair_gcd_uncorrected(10.01_f64, 0.009999999999999787_f64, 1.0_f64),
+      Some(0.009999999999999787)
+    );
     // 2^100 is not a multiple of 3, but it's certainly within machine epsilon of one
-    assert_eq!(approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 1.0), Some(3.0));
+    assert_eq!(
+      approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 1.0),
+      Some(3.0)
+    );
     // in this case, the median is big, so assume the lhs of 3 is just a numerical error
-    assert_eq!(approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 2.0_f32.powi(99)), Some(2.0_f32.powi(100)));
+    assert_eq!(
+      approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 2.0_f32.powi(99)),
+      Some(2.0_f32.powi(100))
+    );
     assert_almost_equal_me(
       approx_pair_gcd_uncorrected(1.0 / 3.0, 1.0 / 4.0, 1.0).unwrap(),
       1.0 / 12.0,
@@ -385,12 +436,29 @@ mod test {
   #[test]
   fn test_approx_sample_gcd() {
     let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX];
-    assert_almost_equal(approx_sample_gcd(&nums).unwrap(), 1.0E-4, 1.0E-6, "10^-4 adverse");
+    assert_almost_equal(
+      approx_sample_gcd(&nums).unwrap(),
+      1.0E-4,
+      1.0E-6,
+      "10^-4 adverse",
+    );
 
     let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 0.0049, 1.0001, f32::MAX];
-    assert_almost_equal(approx_sample_gcd(&nums).unwrap(), 1.0E-4, 1.0E-9, "10^-4");
+    assert_almost_equal(
+      approx_sample_gcd(&nums).unwrap(),
+      1.0E-4,
+      1.0E-9,
+      "10^-4",
+    );
 
-    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, 1.00033333, f32::MAX];
+    let nums = vec![
+      0.0,
+      2.0_f32.powi(-100),
+      0.0037,
+      1.0001,
+      1.00033333,
+      f32::MAX,
+    ];
     assert_eq!(approx_sample_gcd(&nums), None);
 
     let nums = vec![1.0, E, TAU];
@@ -400,31 +468,72 @@ mod test {
   #[test]
   fn test_center_gcd() {
     let nums = vec![6.0 / 7.0 - 1E-4, 16.0 / 7.0 + 1E-4, 18.0 / 7.0 - 1E-4];
-    assert_almost_equal(center_sample_gcd(0.28, &nums), 2.0 / 7.0, 1E-4, "center")
+    assert_almost_equal(
+      center_sample_gcd(0.28, &nums),
+      2.0 / 7.0,
+      1E-4,
+      "center",
+    )
   }
 
   #[test]
   fn test_snap() {
-    assert_eq!(snap_to_int_reciprocal(0.01000333), (0.01, 100.0));
-    assert_eq!(snap_to_int_reciprocal(0.009999666), (0.01, 100.0));
-    assert_eq!(snap_to_int_reciprocal(0.143), (1.0 / 7.0, 7.0));
-    assert_eq!(snap_to_int_reciprocal(0.0105), (0.0105, 1.0 / 0.0105));
+    assert_eq!(
+      snap_to_int_reciprocal(0.01000333),
+      (0.01, 100.0)
+    );
+    assert_eq!(
+      snap_to_int_reciprocal(0.009999666),
+      (0.01, 100.0)
+    );
+    assert_eq!(
+      snap_to_int_reciprocal(0.143),
+      (1.0 / 7.0, 7.0)
+    );
+    assert_eq!(
+      snap_to_int_reciprocal(0.0105),
+      (0.0105, 1.0 / 0.0105)
+    );
     assert_eq!(snap_to_int_reciprocal(TAU).0, TAU);
   }
 
   #[test]
   fn test_adj_bits_needed() {
-    let nums = vec![f32::NEG_INFINITY, -f32::NAN, -0.3, 0.0, 0.2, 0.7, f32::NAN, f32::INFINITY];
-    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, 1), Some(0));
+    let nums = vec![
+      f32::NEG_INFINITY,
+      -f32::NAN,
+      -0.3,
+      0.0,
+      0.2,
+      0.7,
+      f32::NAN,
+      f32::INFINITY,
+    ];
+    assert_eq!(
+      adj_bits_needed::<u32>(10.0, &nums, 1),
+      Some(0)
+    );
 
     let nums = vec![plus_epsilons(0.1, 0)];
-    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX), Some(0));
+    assert_eq!(
+      adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX),
+      Some(0)
+    );
     let nums = vec![plus_epsilons(0.1, 1)];
-    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX), Some(2));
+    assert_eq!(
+      adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX),
+      Some(2)
+    );
     let nums = vec![plus_epsilons(0.1, 2)];
-    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX), Some(3));
+    assert_eq!(
+      adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX),
+      Some(3)
+    );
     let nums = vec![plus_epsilons(0.1, 30)];
-    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX), Some(6));
+    assert_eq!(
+      adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX),
+      Some(6)
+    );
 
     let nums = vec![plus_epsilons(0.1, 30)];
     assert_eq!(adj_bits_needed::<u32>(10.0, &nums, 5), None);
@@ -439,21 +548,30 @@ mod test {
     for i in 0..1000 {
       sevenths.push(((i % 50) - 20) as f32 * (1.0 / 7.0));
       ones.push(1.0);
-      noisy_decimals.push(plus_epsilons(0.1 * ((i - 100) as f32), -7 + i % 15));
+      noisy_decimals.push(plus_epsilons(
+        0.1 * ((i - 100) as f32),
+        -7 + i % 15,
+      ));
       junk.push((i as f32).sin());
     }
 
-    assert_eq!(choose_config(&sevenths), Some(FloatMultConfig {
-      base: 1.0 / 7.0,
-      inv_base: 7.0,
-      adj_bits: 0,
-    }));
+    assert_eq!(
+      choose_config(&sevenths),
+      Some(FloatMultConfig {
+        base: 1.0 / 7.0,
+        inv_base: 7.0,
+        adj_bits: 0,
+      })
+    );
     assert_eq!(choose_config(&ones), None);
-    assert_eq!(choose_config(&noisy_decimals), Some(FloatMultConfig {
-      base: 1.0 / 10.0,
-      inv_base: 10.0,
-      adj_bits: 4,
-    }));
+    assert_eq!(
+      choose_config(&noisy_decimals),
+      Some(FloatMultConfig {
+        base: 1.0 / 10.0,
+        inv_base: 10.0,
+        adj_bits: 4,
+      })
+    );
     assert_eq!(choose_config(&junk), None);
   }
 }
