@@ -1,10 +1,10 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::bin::WeightedPrefix;
-use crate::bits;
+use crate::bin::BinCompressionInfo;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
+use crate::{bits, run_len_utils};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HuffmanItem {
@@ -42,7 +42,7 @@ impl HuffmanItem {
   pub fn create_bits<U: UnsignedLike>(
     &self,
     item_idx: &mut [HuffmanItem],
-    leaf_idx: &mut [WeightedPrefix<U>],
+    leaf_idx: &mut [BinCompressionInfo<U>],
   ) {
     self.create_bits_from(Vec::new(), item_idx, leaf_idx);
   }
@@ -51,11 +51,11 @@ impl HuffmanItem {
     &self,
     bits: Vec<bool>,
     item_idx: &mut [HuffmanItem],
-    leaf_idx: &mut [WeightedPrefix<U>],
+    leaf_idx: &mut [BinCompressionInfo<U>],
   ) {
     item_idx[self.id].bits = bits.clone();
     if self.leaf_id.is_some() {
-      let leaf_bin = &mut leaf_idx[self.leaf_id.unwrap()].bin;
+      let leaf_bin = &mut leaf_idx[self.leaf_id.unwrap()];
       leaf_bin.code = bits::bits_to_usize(&bits);
       leaf_bin.code_len = bits.len() as Bitlen;
     } else {
@@ -85,18 +85,19 @@ impl PartialOrd for HuffmanItem {
   }
 }
 
-pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [WeightedPrefix<U>]) {
-  let n = bin_sequence.len();
-  let mut heap = BinaryHeap::with_capacity(n); // for figuring out huffman tree
-  let mut items = Vec::with_capacity(n); // for modifying item codes
-  for (i, bin) in bin_sequence.iter().enumerate() {
-    let item = HuffmanItem::new(bin.weight, i);
+pub fn make_huffman_codes<U: UnsignedLike>(infos: &mut [BinCompressionInfo<U>], n: usize) {
+  let n_bins = infos.len();
+  let mut heap = BinaryHeap::with_capacity(n_bins); // for figuring out huffman tree
+  let mut items = Vec::with_capacity(n_bins); // for modifying item codes
+  for (i, bin) in infos.iter().enumerate() {
+    let (weight, _) = run_len_utils::weight_and_jumpstart_cost(bin.count, n);
+    let item = HuffmanItem::new(weight, i);
     heap.push(item.clone());
     items.push(item);
   }
 
-  let mut id = bin_sequence.len();
-  for _ in 0..(bin_sequence.len() - 1) {
+  let mut id = infos.len();
+  for _ in 0..(infos.len() - 1) {
     let small0 = heap.pop().unwrap();
     let small1 = heap.pop().unwrap();
     let new_item = HuffmanItem::new_parent_of(&small0, &small1, id);
@@ -106,40 +107,33 @@ pub fn make_huffman_code<U: UnsignedLike>(bin_sequence: &mut [WeightedPrefix<U>]
   }
 
   let head_node = heap.pop().unwrap();
-  head_node.create_bits(&mut items, bin_sequence);
+  head_node.create_bits(&mut items, infos);
 }
 
 #[cfg(test)]
 mod tests {
-  use crate::bin::{BinCompressionInfo, WeightedPrefix};
+  use crate::bin::BinCompressionInfo;
   use crate::bits;
   use crate::constants::Bitlen;
-  use crate::huffman_encoding::make_huffman_code;
+  use crate::huffman_encoding::make_huffman_codes;
 
-  fn coded_bin(weight: usize, code: Vec<bool>) -> WeightedPrefix<u32> {
-    WeightedPrefix {
-      weight,
-      bin: BinCompressionInfo {
-        count: 0,
-        code: bits::bits_to_usize(&code),
-        code_len: code.len() as Bitlen,
-        lower: 0,
-        upper: 0,
-        offset_bits: 0,
-        run_len_jumpstart: None,
-        gcd: 1,
-      },
+  fn coded_bin(count: usize, code: Vec<bool>) -> BinCompressionInfo<u32> {
+    BinCompressionInfo {
+      count,
+      code: bits::bits_to_usize(&code),
+      code_len: code.len() as Bitlen,
+      ..Default::default()
     }
   }
 
-  fn uncoded_bin(weight: usize) -> WeightedPrefix<u32> {
+  fn uncoded_bin(weight: usize) -> BinCompressionInfo<u32> {
     coded_bin(weight, Vec::new())
   }
 
   #[test]
   fn test_make_huffman_code_single() {
     let mut bin_seq = vec![uncoded_bin(100)];
-    make_huffman_code(&mut bin_seq);
+    make_huffman_codes(&mut bin_seq, 100);
     assert_eq!(bin_seq, vec![coded_bin(100, vec![]),]);
   }
 
@@ -152,7 +146,7 @@ mod tests {
       uncoded_bin(4),
       uncoded_bin(5),
     ];
-    make_huffman_code(&mut bin_seq);
+    make_huffman_codes(&mut bin_seq, 18);
     assert_eq!(
       bin_seq,
       vec![

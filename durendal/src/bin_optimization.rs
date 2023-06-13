@@ -1,54 +1,48 @@
-use crate::base_compressor::InternalCompressorConfig;
-use crate::bin::WeightedPrefix;
-use crate::bits::{avg_depth_bits, avg_offset_bits};
+use crate::{bits, run_len_utils, Flags};
+
+use crate::bin::BinCompressionInfo;
+use crate::bits::avg_depth_bits;
 use crate::constants::BITS_TO_ENCODE_CODE_LEN;
 use crate::data_types::UnsignedLike;
-use crate::modes::gcd;
-use crate::{bits, Flags};
+use crate::modes::Mode;
 
-fn bin_bit_cost<U: UnsignedLike>(
+fn bin_bit_cost<U: UnsignedLike, M: Mode<U>>(
   base_meta_cost: f64,
   lower: U,
   upper: U,
-  weight: usize,
-  total_weight: usize,
-  gcd: U,
+  count: usize,
+  n: usize,
+  mode: M,
+  acc: &M::BinOptAccumulator,
 ) -> f64 {
-  let offset_cost = avg_offset_bits(lower, upper, gcd);
+  let (weight, jumpstart_cost) = run_len_utils::weight_and_jumpstart_cost(count, n);
+  let total_weight = n + weight - count;
   let huffman_cost = avg_depth_bits(weight, total_weight);
-  // best approximation of GCD metadata bit cost we can do without knowing
-  // what's going on in the other bins
-  let gcd_cost = if gcd > U::ONE { U::BITS as f64 } else { 0.0 };
-  base_meta_cost +
-    gcd_cost + // extra meta cost of storing GCD
-    huffman_cost + // extra meta cost of storing Huffman code
-    (offset_cost + huffman_cost) * weight as f64 // body cost
+  let mode_cost = mode.bin_cost(lower, upper, count, acc);
+  base_meta_cost + huffman_cost + // extra meta cost of storing Huffman code
+    (huffman_cost + jumpstart_cost) * (weight as f64) +
+    mode_cost
 }
 
 // this is an exact optimal strategy
-pub fn optimize_bins<U: UnsignedLike>(
-  wbins: Vec<WeightedPrefix<U>>,
-  internal_config: &InternalCompressorConfig,
+pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
+  bins: Vec<BinCompressionInfo<U>>,
   flags: &Flags,
+  mode: M,
   n: usize,
-) -> Vec<WeightedPrefix<U>> {
+) -> Vec<BinCompressionInfo<U>> {
   let mut c = 0;
-  let mut cum_weight = Vec::with_capacity(wbins.len() + 1);
-  cum_weight.push(0);
-  for wp in &wbins {
-    c += wp.weight;
-    cum_weight.push(c);
+  let mut cum_count = Vec::with_capacity(bins.len() + 1);
+  cum_count.push(0);
+  for bin in &bins {
+    c += bin.count;
+    cum_count.push(c);
   }
-  let bins = wbins.iter().map(|wp| wp.bin).collect::<Vec<_>>();
-  let gcds = bins.iter().map(|p| p.gcd).collect::<Vec<_>>();
-  let total_weight = c;
-  let lower_unsigneds = bins.iter().map(|p| p.lower).collect::<Vec<_>>();
-  let upper_unsigneds = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
+  let lowers = bins.iter().map(|bin| bin.lower).collect::<Vec<_>>();
+  let uppers = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
 
-  let maybe_rep_idx = bins.iter().position(|p| p.run_len_jumpstart.is_some());
-
-  let mut best_costs = Vec::with_capacity(wbins.len() + 1);
-  let mut best_paths = Vec::with_capacity(wbins.len() + 1);
+  let mut best_costs = Vec::with_capacity(bins.len() + 1);
+  let mut best_paths = Vec::with_capacity(bins.len() + 1);
   best_costs.push(0.0);
   best_paths.push(Vec::new());
 
@@ -59,39 +53,25 @@ pub fn optimize_bins<U: UnsignedLike>(
     BITS_TO_ENCODE_CODE_LEN as f64 +
     1.0; // bit to say there is no run len jumpstart
 
-  // determine whether we can skip GCD folding to improve performance in some cases
-  let fold_gcd = gcd::use_gcd_bin_optimize(&bins, internal_config);
-
-  for i in 0..wbins.len() {
+  for i in 0..bins.len() {
     let mut best_cost = f64::MAX;
     let mut best_j = usize::MAX;
-    let upper = upper_unsigneds[i];
-    let cum_weight_i = cum_weight[i + 1];
-    let start_j = match maybe_rep_idx {
-      Some(ind) if ind < i => ind + 1,
-      Some(ind) if ind == i => ind,
-      _ => 0,
-    };
-    let mut gcd_acc = None;
-    for j in (start_j..i + 1).rev() {
-      let lower = lower_unsigneds[j];
-      if fold_gcd {
-        gcd::fold_bin_gcds_left(
-          lower,
-          upper_unsigneds[j],
-          gcds[j],
-          upper,
-          &mut gcd_acc,
-        );
-      }
+    let mut acc = M::BinOptAccumulator::default();
+    let upper = uppers[i];
+    let cum_count_i = cum_count[i + 1];
+    for j in (0..i + 1).rev() {
+      let lower = lowers[j];
+
+      M::combine_bin_opt_acc(&bins[j], &mut acc);
       let cost = best_costs[j]
-        + bin_bit_cost::<U>(
+        + bin_bit_cost::<U, M>(
           base_meta_cost,
           lower,
           upper,
-          cum_weight_i - cum_weight[j],
-          total_weight,
-          gcd_acc.unwrap_or(U::ONE),
+          cum_count_i - cum_count[j],
+          n,
+          mode,
+          &acc,
         );
       if cost < best_cost {
         best_cost = cost;
@@ -110,93 +90,96 @@ pub fn optimize_bins<U: UnsignedLike>(
   let mut res = Vec::with_capacity(path.len());
   for &(j, i) in path {
     let mut count = 0;
-    let mut gcd_acc = None;
-    for (k, p) in bins.iter().enumerate().take(i + 1).skip(j).rev() {
-      count += p.count;
-      if fold_gcd {
-        gcd::fold_bin_gcds_left(
-          lower_unsigneds[k],
-          upper_unsigneds[k],
-          p.gcd,
-          upper_unsigneds[i],
-          &mut gcd_acc,
-        );
-      }
+    let mut acc = M::BinOptAccumulator::default();
+    for bin in bins.iter().take(i + 1).skip(j).rev() {
+      count += bin.count;
+      M::combine_bin_opt_acc(bin, &mut acc);
     }
-    res.push(WeightedPrefix::new(
+    let mut optimized_bin = BinCompressionInfo {
       count,
-      cum_weight[i + 1] - cum_weight[j],
-      bins[j].lower,
-      bins[i].upper,
-      bins[i].run_len_jumpstart,
-      gcd_acc.unwrap_or(U::ONE),
-    ));
+      lower: bins[j].lower,
+      upper: bins[i].upper,
+      run_len_jumpstart: run_len_utils::run_len_jumpstart(count, n),
+      ..Default::default()
+    };
+    mode.fill_optimized_compression_info(acc, &mut optimized_bin);
+    res.push(optimized_bin);
   }
   res
 }
 
 #[cfg(test)]
 mod tests {
-  use crate::base_compressor::InternalCompressorConfig;
-  use crate::bin::WeightedPrefix;
-  use crate::bin_optimization::optimize_bins;
-  use crate::Flags;
+  use crate::{bits, Flags};
 
-  fn basic_optimize(wps: Vec<WeightedPrefix<u32>>) -> Vec<WeightedPrefix<u32>> {
+  use crate::bin::BinCompressionInfo;
+  use crate::bin_optimization::optimize_bins;
+
+  use crate::modes::gcd::GcdMode;
+
+  fn basic_gcd_optimize(bins: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {
     let flags = Flags {
       delta_encoding_order: 0,
       use_wrapped_mode: false,
     };
-    let internal_config = InternalCompressorConfig {
-      compression_level: 6,
-      use_gcds: true,
-    };
-    optimize_bins(wps, &internal_config, &flags, 100)
+    optimize_bins(bins, &flags, GcdMode, 100)
+  }
+
+  fn make_gcd_bin_info(count: usize, lower: u32, upper: u32, gcd: u32) -> BinCompressionInfo<u32> {
+    let offset_bits = bits::bits_to_encode_offset((upper - lower) / gcd);
+    BinCompressionInfo {
+      count,
+      offset_bits,
+      lower,
+      upper,
+      gcd,
+      ..Default::default()
+    }
   }
 
   #[test]
   fn test_optimize_trivial_ranges_gcd() {
-    let wps = vec![
-      WeightedPrefix::new(1, 1, 1000_u32, 1000, None, 1_u32),
-      WeightedPrefix::new(1, 1, 2000_u32, 2000, None, 1_u32),
+    let bins = vec![
+      make_gcd_bin_info(1, 1000_u32, 1000, 1_u32),
+      make_gcd_bin_info(1, 2000_u32, 2000, 1_u32),
     ];
-    let res = basic_optimize(wps);
-    let expected = vec![WeightedPrefix::new(2, 2, 1000_u32, 2000, None, 1000_u32)];
+    let res = basic_gcd_optimize(bins);
+    let expected = vec![make_gcd_bin_info(2, 1000_u32, 2000, 1000_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_single_nontrivial_range_gcd() {
-    let wps = vec![
-      WeightedPrefix::new(100, 100, 1000_u32, 2000, None, 10_u32),
-      WeightedPrefix::new(1, 1, 2100_u32, 2100, None, 1_u32),
+    let bins = vec![
+      make_gcd_bin_info(100, 1000_u32, 2000, 10_u32),
+      make_gcd_bin_info(1, 2100_u32, 2100, 1_u32),
     ];
-    let res = basic_optimize(wps);
-    let expected = vec![WeightedPrefix::new(101, 101, 1000_u32, 2100, None, 10_u32)];
+    let res = basic_gcd_optimize(bins);
+    let expected = vec![make_gcd_bin_info(101, 1000_u32, 2100, 10_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_nontrivial_ranges_gcd() {
-    let wps = vec![
-      WeightedPrefix::new(5, 5, 1000_u32, 1100, None, 10_u32),
-      WeightedPrefix::new(5, 5, 1105, 1135, None, 15_u32),
+    let bins = vec![
+      make_gcd_bin_info(5, 1000_u32, 1100, 10_u32),
+      make_gcd_bin_info(5, 1105, 1135, 15_u32),
     ];
-    let res = basic_optimize(wps);
-    let expected = vec![WeightedPrefix::new(10, 10, 1000_u32, 1135, None, 5_u32)];
+    let res = basic_gcd_optimize(bins);
+    let expected = vec![make_gcd_bin_info(10, 1000_u32, 1135, 5_u32)];
     assert_eq!(res, expected);
   }
 
   #[test]
   fn test_optimize_nontrivial_misaligned_ranges_gcd() {
-    let wps = vec![
-      WeightedPrefix::new(100, 100, 1000_u32, 1100, None, 10_u32),
-      WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
+    let bins = vec![
+      make_gcd_bin_info(100, 1000_u32, 1100, 10_u32),
+      make_gcd_bin_info(100, 1101, 1201, 10_u32),
     ];
-    let res = basic_optimize(wps);
+    let res = basic_gcd_optimize(bins);
     let expected = vec![
-      WeightedPrefix::new(100, 100, 1000_u32, 1100, None, 10_u32),
-      WeightedPrefix::new(100, 100, 1101, 1201, None, 10_u32),
+      make_gcd_bin_info(100, 1000_u32, 1100, 10_u32),
+      make_gcd_bin_info(100, 1101, 1201, 10_u32),
     ];
     assert_eq!(res, expected);
   }

@@ -1,43 +1,43 @@
 use crate::base_decompressor::DecompressorConfig;
 use crate::data_types::NumberLike;
-use crate::errors::ErrorKind;
+use crate::errors::{ErrorKind, QCompressResult};
 use crate::standalone::{Compressor, DecompressedItem, Decompressor};
 use crate::CompressorConfig;
 use std::io::Write;
 
 #[test]
-fn test_low_level_short() {
+fn test_low_level_short() -> QCompressResult<()> {
   let nums = vec![vec![0], vec![10, 11], vec![20, 21, 22]];
-  assert_lowest_level_behavior(nums);
+  assert_lowest_level_behavior(nums)
 }
 
 #[test]
-fn test_low_level_long() {
+fn test_low_level_long() -> QCompressResult<()> {
   let nums = vec![(0..100).collect::<Vec<_>>()];
-  assert_lowest_level_behavior(nums);
+  assert_lowest_level_behavior(nums)
 }
 
 #[test]
-fn test_low_level_sparse() {
+fn test_low_level_sparse() -> QCompressResult<()> {
   let mut nums = vec![0; 1000];
   nums.push(1);
   nums.resize(2000, 0);
-  assert_lowest_level_behavior(vec![nums]);
+  assert_lowest_level_behavior(vec![nums])
 }
 
-fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) {
+fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) -> QCompressResult<()> {
   for delta_encoding_order in [0, 7] {
     let debug_info = format!("delta order={}", delta_encoding_order);
     let mut compressor = Compressor::<T>::from_config(CompressorConfig {
       delta_encoding_order,
       ..Default::default()
     });
-    compressor.header().unwrap();
+    compressor.header()?;
     let mut metadatas = Vec::new();
     for nums in &chunks {
-      metadatas.push(compressor.chunk(nums).unwrap());
+      metadatas.push(compressor.chunk(nums)?);
     }
-    compressor.footer().unwrap();
+    compressor.footer()?;
 
     let bytes = compressor.drain_bytes();
 
@@ -46,13 +46,13 @@ fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) {
       ..Default::default()
     });
     decompressor.write_all(&bytes).unwrap();
-    let flags = decompressor.header().unwrap();
+    let flags = decompressor.header()?;
     assert_eq!(&flags, compressor.flags(), "{}", debug_info);
     let mut chunk_idx = 0;
     let mut chunk_nums = Vec::<T>::new();
     let mut terminated = false;
     for maybe_item in &mut decompressor {
-      let item = maybe_item.unwrap();
+      let item = maybe_item?;
       match item {
         DecompressedItem::Flags(_) => panic!("already read flags"),
         DecompressedItem::ChunkMetadata(meta) => {
@@ -92,4 +92,5 @@ fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) {
     );
     assert!(terminated, "{}", debug_info);
   }
+  Ok(())
 }

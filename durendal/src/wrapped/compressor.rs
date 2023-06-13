@@ -63,7 +63,7 @@ impl<T: NumberLike> Compressor<T> {
     &mut self,
     nums: &[T],
     spec: &ChunkSpec,
-  ) -> QCompressResult<ChunkMetadata<T>> {
+  ) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
     self.0.chunk_metadata_internal(nums, spec)
   }
 

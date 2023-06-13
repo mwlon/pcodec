@@ -1,15 +1,45 @@
+use std::cmp::Ordering;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub};
+use std::hash::Hash;
+use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub, SubAssign};
 
-use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
 use crate::constants::Bitlen;
-
-use crate::errors::QCompressResult;
 
 mod floats;
 mod signeds;
 mod unsigneds;
+
+pub trait FloatLike:
+  Add<Output = Self>
+  + AddAssign
+  + Copy
+  + Debug
+  + Display
+  + Mul<Output = Self>
+  + PartialOrd
+  + RemAssign
+  + Sub<Output = Self>
+  + SubAssign
+  + Div<Output = Self>
+{
+  const PRECISION_BITS: Bitlen;
+  const GREATEST_PRECISE_INT: Self;
+  const ZERO: Self;
+  const ONE: Self;
+  const MIN: Self;
+  const MAX: Self;
+  fn abs(self) -> Self;
+  fn inv(self) -> Self;
+  fn round(self) -> Self;
+  fn log2_epsilons_between_positives(a: Self, b: Self) -> Bitlen;
+  fn from_usize_numerical(x: usize) -> Self;
+  fn from_f64(x: f64) -> Self;
+  fn to_f64(self) -> f64;
+  fn total_cmp(a: &Self, b: &Self) -> Ordering;
+  fn is_finite_and_normal(&self) -> bool;
+  fn max(a: Self, b: Self) -> Self;
+  fn min(a: Self, b: Self) -> Self;
+}
 
 /// Trait for data types that behave like unsigned integers.
 ///
@@ -26,10 +56,8 @@ pub trait UnsignedLike:
   + BitOr<Output = Self>
   + BitAndAssign
   + BitOrAssign
-  + Copy
-  + Debug
-  + Display
   + Div<Output = Self>
+  + Hash
   + Mul<Output = Self>
   + NumberLike<Unsigned = Self>
   + Ord
@@ -44,6 +72,8 @@ pub trait UnsignedLike:
   const MID: Self;
   const MAX: Self;
   const BITS: Bitlen;
+
+  type Float: FloatLike + NumberLike<Unsigned = Self>;
 
   /// Converts a `usize` into this type. Panics if the conversion is
   /// impossible.
@@ -76,6 +106,12 @@ pub trait UnsignedLike:
   fn wrapping_add(self, other: Self) -> Self;
 
   fn wrapping_sub(self, other: Self) -> Self;
+
+  fn to_int_float(self) -> Self::Float;
+  fn from_int_float(float: Self::Float) -> Self;
+
+  fn to_float_bits(self) -> Self::Float;
+  fn from_float_bits(float: Self::Float) -> Self;
 }
 
 /// Trait for data types supported for compression/decompression.
@@ -115,10 +151,15 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// implementations.
   /// Note that booleans have 8 physical bits (not 1).
   const PHYSICAL_BITS: usize;
+  const IS_FLOAT: bool = false;
 
   /// The unsigned integer this type can convert between to do
   /// bitwise logic and such.
   type Unsigned: UnsignedLike;
+
+  fn assert_float(_nums: &[Self]) -> &[<Self::Unsigned as UnsignedLike>::Float] {
+    panic!("bug; not a float")
+  }
 
   /// Used during compression to convert to an unsigned integer in a way that
   /// preserves ordering.
@@ -127,16 +168,6 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// Used during decompression to convert back from an unsigned integer in a
   /// way that preserves ordering.
   fn from_unsigned(off: Self::Unsigned) -> Self;
-
-  fn write_to(self, writer: &mut BitWriter) {
-    writer.write_diff(self.to_unsigned(), Self::Unsigned::BITS)
-  }
-
-  fn read_from(reader: &mut BitReader) -> QCompressResult<Self> {
-    Ok(Self::from_unsigned(
-      reader.read_uint(Self::Unsigned::BITS)?,
-    ))
-  }
 
   // These transmute functions do not preserve ordering.
   // Their purpose is to allow certain operations in-place, relying on the fact

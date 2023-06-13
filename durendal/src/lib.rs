@@ -36,12 +36,14 @@ mod compression_table;
 mod constants;
 mod delta_encoding;
 mod flags;
+mod float_mult_utils;
 mod huffman_decoding;
 mod huffman_encoding;
 mod modes;
 mod num_decompressor;
 mod progress;
 mod run_len_utils;
+mod unsigned_src_dst;
 
 #[cfg(test)]
 mod tests;

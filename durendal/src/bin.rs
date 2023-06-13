@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::bits;
 use crate::constants::Bitlen;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::UnsignedLike;
 
 /// A pairing of a Huffman code with a numerical range.
 ///
@@ -17,7 +17,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 /// available, and then the exact offset within the range for the number.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct Bin<T: NumberLike> {
+pub struct Bin<U: UnsignedLike> {
   /// The count of numbers in the chunk that fall into this bin's range.
   /// Not available in wrapped mode.
   pub count: usize,
@@ -27,29 +27,29 @@ pub struct Bin<T: NumberLike> {
   /// ranges.
   pub code: usize,
   pub code_len: Bitlen,
-  /// The lower bound for this bin's numerical range.
-  pub lower: T,
-  /// The log of the size of this bin's (inclusive) numerical range.
-  pub offset_bits: Bitlen,
   /// A parameter used for the most common bin in a sparse distribution.
   /// For instance, if 90% of a chunk's numbers are exactly 7, then the
   /// bin for the range `[7, 7]` will have a `run_len_jumpstart`.
   /// The jumpstart value tunes the varint encoding of the number of
   /// consecutive repetitions of the bin.
   pub run_len_jumpstart: Option<Bitlen>,
+  /// The lower bound for this bin's numerical range.
+  pub lower: U,
+  /// The log of the size of this bin's (inclusive) numerical range.
+  pub offset_bits: Bitlen,
   /// The greatest common divisor of all numbers belonging to this bin
   /// (in the data type's corresponding unsigned integer).
-  pub gcd: T::Unsigned,
+  pub gcd: U,
 }
 
-impl<T: NumberLike> Display for Bin<T> {
+impl<U: UnsignedLike> Display for Bin<U> {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     let jumpstart_str = if let Some(jumpstart) = self.run_len_jumpstart {
       format!(" (jumpstart: {})", jumpstart)
     } else {
       "".to_string()
     };
-    let gcd_str = if self.gcd > T::Unsigned::ONE {
+    let gcd_str = if self.gcd > U::ONE {
       format!(" (gcd: {})", self.gcd)
     } else {
       "".to_string()
@@ -63,66 +63,25 @@ impl<T: NumberLike> Display for Bin<T> {
   }
 }
 
-// used during compression to determine Huffman codes
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WeightedPrefix<U: UnsignedLike> {
-  pub bin: BinCompressionInfo<U>,
-  // How to weight this bin during huffman coding,
-  // in contrast to bin.count, which is the actual number of training
-  // entries belonging to it.
-  // Usually these are the same, but a bin with repetitions will have lower
-  // weight than count.
-  pub weight: usize,
-}
-
-impl<U: UnsignedLike> WeightedPrefix<U> {
-  pub fn new(
-    count: usize,
-    weight: usize,
-    lower: U,
-    upper: U,
-    run_len_jumpstart: Option<Bitlen>,
-    gcd: U,
-  ) -> WeightedPrefix<U> {
-    let diff = (upper - lower) / gcd;
-    let offset_bits = if diff == U::ZERO {
-      0
-    } else {
-      U::BITS - diff.leading_zeros()
-    };
-    let bin = BinCompressionInfo {
-      count,
-      lower,
-      upper,
-      offset_bits,
-      run_len_jumpstart,
-      gcd,
-      code: 0,
-      code_len: 0,
-    };
-    WeightedPrefix { bin, weight }
-  }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BinCompressionInfo<U: UnsignedLike> {
   pub count: usize,
-  pub code: usize,
-  pub code_len: Bitlen,
   pub lower: U,
   pub upper: U,
   pub offset_bits: Bitlen,
-  pub run_len_jumpstart: Option<Bitlen>,
   pub gcd: U,
+  pub run_len_jumpstart: Option<Bitlen>,
+  pub code: usize,
+  pub code_len: Bitlen,
 }
 
-impl<T: NumberLike> From<BinCompressionInfo<T::Unsigned>> for Bin<T> {
-  fn from(info: BinCompressionInfo<T::Unsigned>) -> Self {
+impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
+  fn from(info: BinCompressionInfo<U>) -> Self {
     Bin {
       count: info.count,
       code: info.code,
       code_len: info.code_len,
-      lower: T::from_unsigned(info.lower),
+      lower: info.lower,
       offset_bits: info.offset_bits,
       run_len_jumpstart: info.run_len_jumpstart,
       gcd: info.gcd,
@@ -151,35 +110,27 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
+// Default here is meaningless and should only be used to fill in empty
+// vectors.
+// Note that different modes use the unsigneds and bitlens in different ways,
+// so we given them lousy names. This is a hack but probably better than adding
+// a bunch more generics and associated types.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct BinDecompressionInfo<U: UnsignedLike> {
-  pub lower_unsigned: U,
-  pub offset_bits: Bitlen,
   pub depth: Bitlen,
   pub run_len_jumpstart: Option<Bitlen>,
+  pub lower: U,
+  pub offset_bits: Bitlen,
   pub gcd: U,
 }
 
-impl<U: UnsignedLike> Default for BinDecompressionInfo<U> {
-  fn default() -> Self {
-    BinDecompressionInfo {
-      lower_unsigned: U::ZERO,
-      offset_bits: U::BITS,
-      depth: 0,
-      run_len_jumpstart: None,
-      gcd: U::ONE,
-    }
-  }
-}
-
-impl<T: NumberLike> From<&Bin<T>> for BinDecompressionInfo<T::Unsigned> {
-  fn from(bin: &Bin<T>) -> Self {
-    let lower_unsigned = bin.lower.to_unsigned();
-    BinDecompressionInfo {
-      lower_unsigned,
-      offset_bits: bin.offset_bits,
-      run_len_jumpstart: bin.run_len_jumpstart,
+impl<U: UnsignedLike> From<&Bin<U>> for BinDecompressionInfo<U> {
+  fn from(bin: &Bin<U>) -> Self {
+    Self {
       depth: bin.code_len,
+      run_len_jumpstart: bin.run_len_jumpstart,
+      lower: bin.lower,
+      offset_bits: bin.offset_bits,
       gcd: bin.gcd,
     }
   }

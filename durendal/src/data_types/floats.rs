@@ -1,4 +1,7 @@
-use crate::data_types::NumberLike;
+use std::cmp::{max, min, Ordering};
+
+use crate::constants::Bitlen;
+use crate::data_types::{FloatLike, NumberLike};
 
 // Note that in all conversions between float and unsigned int, we are using
 // the unsigned int to indicate an offset.
@@ -6,11 +9,80 @@ use crate::data_types::NumberLike;
 // 1.0 + (3.0 * 2.0 ^ -23).
 macro_rules! impl_float_number {
   ($t: ty, $signed: ty, $unsigned: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr) => {
+    impl FloatLike for $t {
+      const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS - 1;
+      const GREATEST_PRECISE_INT: Self = (1_u64 << Self::MANTISSA_DIGITS) as Self;
+      const ZERO: Self = 0.0;
+      const ONE: Self = 1.0;
+      const MIN: Self = Self::MIN;
+      const MAX: Self = Self::MAX;
+
+      #[inline]
+      fn abs(self) -> Self {
+        self.abs()
+      }
+
+      fn inv(self) -> Self {
+        1.0 / self
+      }
+
+      #[inline]
+      fn round(self) -> Self {
+        self.round()
+      }
+
+      #[inline]
+      fn from_usize_numerical(x: usize) -> Self {
+        x as Self
+      }
+
+      #[inline]
+      fn from_f64(x: f64) -> Self {
+        x as Self
+      }
+
+      #[inline]
+      fn to_f64(self) -> f64 {
+        self as f64
+      }
+
+      fn log2_epsilons_between_positives(a: Self, b: Self) -> Bitlen {
+        let (a, b) = (a.to_bits(), b.to_bits());
+        let epsilons = max(a, b) - min(a, b);
+        $bits - epsilons.leading_zeros()
+      }
+
+      #[inline]
+      fn total_cmp(a: &Self, b: &Self) -> Ordering {
+        Self::total_cmp(a, b)
+      }
+
+      #[inline]
+      fn is_finite_and_normal(&self) -> bool {
+        self.is_finite() && !self.is_subnormal()
+      }
+
+      #[inline]
+      fn max(a: Self, b: Self) -> Self {
+        Self::max(a, b)
+      }
+
+      #[inline]
+      fn min(a: Self, b: Self) -> Self {
+        Self::min(a, b)
+      }
+    }
+
     impl NumberLike for $t {
       const HEADER_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = $bits;
+      const IS_FLOAT: bool = true;
 
       type Unsigned = $unsigned;
+
+      fn assert_float(nums: &[Self]) -> &[Self] {
+        nums
+      }
 
       #[inline]
       fn to_unsigned(self) -> Self::Unsigned {

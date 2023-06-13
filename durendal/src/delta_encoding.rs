@@ -16,14 +16,14 @@ impl<U: UnsignedLike> DeltaMoments<U> {
   pub fn parse_from(reader: &mut BitReader, order: usize) -> QCompressResult<Self> {
     let mut moments = Vec::new();
     for _ in 0..order {
-      moments.push(U::read_from(reader)?);
+      moments.push(reader.read_uint::<U>(U::BITS)?);
     }
     Ok(DeltaMoments { moments })
   }
 
   pub fn write_to(&self, writer: &mut BitWriter) {
-    for moment in &self.moments {
-      moment.write_to(writer);
+    for &moment in &self.moments {
+      writer.write_diff(moment, U::BITS);
     }
   }
 

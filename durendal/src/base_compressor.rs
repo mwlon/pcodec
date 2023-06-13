@@ -1,8 +1,7 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-use crate::bin::{Bin, BinCompressionInfo, WeightedPrefix};
-use crate::bin_optimization;
+use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::ChunkMetadata;
 use crate::chunk_spec::ChunkSpec;
@@ -12,16 +11,14 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
 use crate::modes::{gcd, DynMode};
+use crate::unsigned_src_dst::UnsignedSrc;
+use crate::{bin_optimization, float_mult_utils};
 use crate::{huffman_encoding, Flags};
-
-struct JumpstartConfiguration {
-  weight: usize,
-  jumpstart: Bitlen,
-}
 
 /// All configurations available for a compressor.
 ///
@@ -78,6 +75,8 @@ pub struct CompressorConfig {
   /// When this is helpful and in rare cases when it isn't, compression speed
   /// is slightly reduced.
   pub use_gcds: bool,
+  // TODO
+  pub use_float_mult: bool,
 }
 
 impl Default for CompressorConfig {
@@ -86,6 +85,7 @@ impl Default for CompressorConfig {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: 0,
       use_gcds: true,
+      use_float_mult: true,
     }
   }
 }
@@ -117,20 +117,16 @@ impl CompressorConfig {
 pub struct InternalCompressorConfig {
   pub compression_level: usize,
   pub use_gcds: bool,
+  pub use_float_mult: bool,
 }
 
-impl From<&CompressorConfig> for InternalCompressorConfig {
-  fn from(config: &CompressorConfig) -> Self {
+impl InternalCompressorConfig {
+  pub fn from_config<T: NumberLike>(config: &CompressorConfig) -> Self {
     InternalCompressorConfig {
       compression_level: config.compression_level,
       use_gcds: config.use_gcds,
+      use_float_mult: config.use_float_mult && T::IS_FLOAT,
     }
-  }
-}
-
-impl Default for InternalCompressorConfig {
-  fn default() -> Self {
-    Self::from(&CompressorConfig::default())
   }
 }
 
@@ -145,27 +141,13 @@ fn cumulative_sum(sizes: &[usize]) -> Vec<usize> {
   res
 }
 
-fn choose_run_len_jumpstart(count: usize, n: usize) -> JumpstartConfiguration {
-  let freq = (count as f64) / (n as f64);
-  let non_freq = 1.0 - freq;
-  let jumpstart = min(
-    (-non_freq.log2()).ceil() as Bitlen,
-    MAX_JUMPSTART,
-  );
-  let expected_n_runs = (freq * non_freq * n as f64).ceil() as usize;
-  JumpstartConfiguration {
-    weight: expected_n_runs,
-    jumpstart,
-  }
-}
-
 struct BinBuffer<'a, U: UnsignedLike> {
-  pub seq: Vec<WeightedPrefix<U>>,
+  pub seq: Vec<BinCompressionInfo<U>>,
   bin_idx: usize,
   max_n_bin: usize,
   n_unsigneds: usize,
   sorted: &'a [U],
-  use_gcd: bool,
+  mode: DynMode<U>,
   pub target_j: usize,
 }
 
@@ -174,14 +156,14 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], use_gcd: bool) -> Self {
+  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], mode: DynMode<U>) -> Self {
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
       max_n_bin,
       n_unsigneds,
       sorted,
-      use_gcd,
+      mode,
       target_j: 0,
     };
     res.calc_target_j();
@@ -193,39 +175,29 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     let n_unsigneds = self.n_unsigneds;
 
     let count = j - i;
-    let frequency = count as f64 / self.n_unsigneds as f64;
     let new_bin_idx = max(
       self.bin_idx + 1,
       (j * self.max_n_bin) / n_unsigneds,
     );
     let lower = sorted[i];
     let upper = sorted[j - 1];
-    let gcd = if self.use_gcd {
-      gcd::gcd(&sorted[i..j])
-    } else {
-      U::ONE
+
+    let mut bin_gcd = U::ONE;
+    match self.mode {
+      DynMode::Gcd => {
+        bin_gcd = gcd::gcd(&sorted[i..j]);
+      }
+      _ => (),
+    }
+
+    let bin = BinCompressionInfo {
+      count,
+      lower,
+      upper,
+      gcd: bin_gcd,
+      ..Default::default()
     };
-    let wp = if n_unsigneds < MIN_N_TO_USE_RUN_LEN
-      || frequency < MIN_FREQUENCY_TO_USE_RUN_LEN
-      || count == n_unsigneds
-    {
-      // The usual case - a bin for a range that represents either 100% or
-      // <=80% of the data.
-      WeightedPrefix::new(count, count, lower, upper, None, gcd)
-    } else {
-      // The weird case - a range that represents almost all (but not all) the data.
-      // We create extra bins that can describe `reps` copies of the range at once.
-      let config = choose_run_len_jumpstart(count, n_unsigneds);
-      WeightedPrefix::new(
-        count,
-        config.weight,
-        lower,
-        upper,
-        Some(config.jumpstart),
-        gcd,
-      )
-    };
-    self.seq.push(wp);
+    self.seq.push(bin);
     self.bin_idx = new_bin_idx;
     self.calc_target_j();
   }
@@ -246,20 +218,20 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
   min(1_usize << real_comp_level, n_unsigneds)
 }
 
-fn choose_unoptimized_bins<U: UnsignedLike>(
+fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
   sorted: &[U],
   internal_config: &InternalCompressorConfig,
-) -> Vec<WeightedPrefix<U>> {
+  naive_mode: DynMode<U>,
+) -> (DynMode<U>, Vec<BinCompressionInfo<U>>) {
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(
     internal_config.compression_level,
     n_unsigneds,
   );
 
-  let use_gcd = internal_config.use_gcds;
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, use_gcd);
+  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, naive_mode);
 
   for j in 1..n_unsigneds {
     let target_j = bin_buffer.target_j;
@@ -278,17 +250,24 @@ fn choose_unoptimized_bins<U: UnsignedLike>(
   }
   bin_buffer.push_bin(i, n_unsigneds);
 
-  bin_buffer.seq
+  // in some cases, we can now reduce to a simpler mode
+  let unoptimized_mode = match bin_buffer.mode {
+    DynMode::Gcd if !gcd::use_gcd_bin_optimize(&bin_buffer.seq) => DynMode::Classic,
+    other => other,
+  };
+
+  (unoptimized_mode, bin_buffer.seq)
 }
 
-fn train_bins<U: UnsignedLike>(
+fn train_mode_and_bins<U: UnsignedLike>(
   unsigneds: Vec<U>,
   internal_config: &InternalCompressorConfig,
   flags: &Flags,
+  naive_mode: DynMode<U>,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
-) -> QCompressResult<Vec<BinCompressionInfo<U>>> {
+) -> QCompressResult<(DynMode<U>, Vec<BinCompressionInfo<U>>)> {
   if unsigneds.is_empty() {
-    return Ok(Vec::new());
+    return Ok((DynMode::Classic, Vec::new()));
   }
 
   let comp_level = internal_config.compression_level;
@@ -305,52 +284,79 @@ fn train_bins<U: UnsignedLike>(
     )));
   }
 
-  let unoptimized_bins = {
+  let (unoptimized_mode, unoptimized_bins) = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
-    choose_unoptimized_bins(&sorted, internal_config)
+    choose_unoptimized_mode_and_bins(&sorted, internal_config, naive_mode)
   };
 
-  let mut optimized_bins =
-    bin_optimization::optimize_bins(unoptimized_bins, internal_config, flags, n);
+  let mut optimized_infos = match unoptimized_mode {
+    DynMode::Classic => bin_optimization::optimize_bins(unoptimized_bins, flags, ClassicMode, n),
+    DynMode::Gcd => bin_optimization::optimize_bins(unoptimized_bins, flags, GcdMode, n),
+    DynMode::FloatMult { adj_bits, .. } => bin_optimization::optimize_bins(
+      unoptimized_bins,
+      flags,
+      AdjustedMode::new(adj_bits),
+      n,
+    ),
+  };
 
-  huffman_encoding::make_huffman_code(&mut optimized_bins);
+  huffman_encoding::make_huffman_codes(&mut optimized_infos, n);
 
-  let bins = optimized_bins.iter().map(|wp| wp.bin).collect();
-  Ok(bins)
+  Ok((unoptimized_mode, optimized_infos))
 }
 
 fn trained_compress_body<U: UnsignedLike>(
+  src: &mut UnsignedSrc<U>,
+  flags: &Flags,
   table: &CompressionTable<U>,
-  dyn_mode: DynMode,
-  unsigneds: &[U],
+  dyn_mode: DynMode<U>,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
   match dyn_mode {
-    DynMode::Classic => compress_data_page::<U, ClassicMode>(table, unsigneds, ClassicMode, writer),
-    DynMode::Gcd => compress_data_page::<U, GcdMode>(table, unsigneds, GcdMode, writer),
+    DynMode::Classic => compress_data_page(src, flags, table, ClassicMode, writer),
+    DynMode::Gcd => compress_data_page(src, flags, table, GcdMode, writer),
+    DynMode::FloatMult { adj_bits, .. } => compress_data_page(
+      src,
+      flags,
+      table,
+      AdjustedMode::new(adj_bits),
+      writer,
+    ),
   }
 }
 
+fn compress_offset<U: UnsignedLike, M: Mode<U>>(
+  src: &mut UnsignedSrc<U>,
+  bin: &BinCompressionInfo<U>,
+  mode: M,
+  writer: &mut BitWriter,
+) {
+  mode.compress_offset(src.unsigned(), bin, writer);
+  if M::USES_ADJUSTMENT {
+    mode.compress_adjustment(src.adjustment(), writer);
+  }
+  src.incr();
+}
+
 fn compress_data_page<U: UnsignedLike, M: Mode<U>>(
+  src: &mut UnsignedSrc<U>,
+  flags: &Flags,
   table: &CompressionTable<U>,
-  unsigneds: &[U],
   mode: M,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
-  let mut i = 0;
-  while i < unsigneds.len() {
-    let unsigned = unsigneds[i];
+  while !src.finished_unsigneds() {
+    let unsigned = src.unsigned();
     let bin = table.search(unsigned)?;
     writer.write_usize(bin.code, bin.code_len);
     match bin.run_len_jumpstart {
       None => {
-        mode.compress_offset(unsigned, bin, writer);
-        i += 1;
+        compress_offset(src, bin, mode, writer);
       }
       Some(jumpstart) => {
         let mut reps = 1;
-        for &other in unsigneds.iter().skip(i + 1) {
+        for &other in src.unsigneds().iter().skip(src.idx() + 1) {
           if bin.contains(other) {
             reps += 1;
           } else {
@@ -362,12 +368,17 @@ fn compress_data_page<U: UnsignedLike, M: Mode<U>>(
         // because the bin already implies there is at least 1 occurrence
         writer.write_varint(reps - 1, jumpstart);
 
-        for &unsigned in unsigneds.iter().skip(i).take(reps) {
-          mode.compress_offset(unsigned, bin, writer);
+        for _ in 0..reps {
+          compress_offset(src, bin, mode, writer);
         }
-        i += reps;
       }
     }
+  }
+  for _ in 0..flags.delta_encoding_order {
+    if M::USES_ADJUSTMENT {
+      mode.compress_adjustment(src.adjustment(), writer);
+    }
+    src.incr();
   }
   writer.finish_byte();
   Ok(())
@@ -376,21 +387,16 @@ fn compress_data_page<U: UnsignedLike, M: Mode<U>>(
 #[derive(Clone, Debug)]
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
-  unsigneds: Vec<U>,
-  dyn_mode: DynMode,
+  dyn_mode: DynMode<U>,
   table: CompressionTable<U>,
   delta_momentss: Vec<DeltaMoments<U>>,
   page_sizes: Vec<usize>,
   // mutable:
-  idx: usize,
+  src: UnsignedSrc<U>,
   page_idx: usize,
 }
 
 impl<U: UnsignedLike> MidChunkInfo<U> {
-  fn data_page_n(&self) -> usize {
-    self.page_sizes[self.page_idx]
-  }
-
   fn data_page_moments(&self) -> &DeltaMoments<U> {
     &self.delta_momentss[self.page_idx]
   }
@@ -432,16 +438,14 @@ pub struct BaseCompressor<T: NumberLike> {
   pub state: State<T::Unsigned>,
 }
 
-fn bins_from_compression_infos<T: NumberLike>(
-  infos: &[BinCompressionInfo<T::Unsigned>],
-) -> Vec<Bin<T>> {
+fn bins_from_compression_infos<U: UnsignedLike>(infos: &[BinCompressionInfo<U>]) -> Vec<Bin<U>> {
   infos.iter().cloned().map(Bin::from).collect()
 }
 
 impl<T: NumberLike> BaseCompressor<T> {
   pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> Self {
     Self {
-      internal_config: InternalCompressorConfig::from(&config),
+      internal_config: InternalCompressorConfig::from_config::<T>(&config),
       flags: Flags::from_config(&config, use_wrapped_mode),
       writer: BitWriter::default(),
       state: State::default(),
@@ -460,11 +464,40 @@ impl<T: NumberLike> BaseCompressor<T> {
     Ok(())
   }
 
+  fn choose_naive_mode(&self, nums: &[T]) -> DynMode<T::Unsigned> {
+    // * Use float mult if enabled and an appropriate base is found
+    // * Otherwise, use GCD if enabled
+    // * Otherwise, use Classic
+    if self.internal_config.use_float_mult {
+      if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
+        return DynMode::float_mult(config);
+      }
+    }
+
+    if self.internal_config.use_gcds {
+      DynMode::Gcd
+    } else {
+      DynMode::Classic
+    }
+  }
+
+  fn preprocess_src(
+    &self,
+    nums: &[T],
+  ) -> (
+    DynMode<T::Unsigned>,
+    UnsignedSrc<T::Unsigned>,
+  ) {
+    let dyn_mode = self.choose_naive_mode(nums);
+    let src = dyn_mode.create_src(nums);
+    (dyn_mode, src)
+  }
+
   pub fn chunk_metadata_internal(
     &mut self,
     nums: &[T],
     spec: &ChunkSpec,
-  ) -> QCompressResult<ChunkMetadata<T>> {
+  ) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
     if !matches!(self.state, State::StartOfChunk) {
       return Err(self.state.wrong_step_err("chunk metadata"));
     }
@@ -483,33 +516,34 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
 
     let order = self.flags.delta_encoding_order;
-    let mut unsigneds = nums.iter().map(|x| x.to_unsigned()).collect::<Vec<_>>();
+    let (naive_mode, mut src) = self.preprocess_src(&nums);
     let page_idxs = cumulative_sum(&page_sizes);
-    let delta_momentss = delta_encoding::nth_order_deltas(&mut unsigneds, order, &page_idxs);
-    let infos = train_bins(
-      unsigneds.clone(),
+    let delta_momentss = delta_encoding::nth_order_deltas(src.unsigneds_mut(), order, &page_idxs);
+    let (unoptimized_mode, infos) = train_mode_and_bins(
+      src.unsigneds().to_vec(),
       &self.internal_config,
       &self.flags,
+      naive_mode,
       n,
     )?;
     let bins = bins_from_compression_infos(&infos);
+
+    let optimized_mode = match unoptimized_mode {
+      DynMode::Gcd if !gcd::use_gcd_arithmetic(&bins) => DynMode::Classic,
+      other => other,
+    };
+
     let table = CompressionTable::from(infos);
 
-    let dyn_mode = if gcd::use_gcd_arithmetic(&bins) {
-      DynMode::Gcd
-    } else {
-      DynMode::Classic
-    };
-    let meta = ChunkMetadata::new(n, bins);
-    meta.write_to(&mut self.writer, &self.flags);
+    let meta = ChunkMetadata::new(n, bins, optimized_mode);
+    meta.write_to(&self.flags, &mut self.writer);
 
     self.state = State::MidChunk(MidChunkInfo {
-      unsigneds,
-      dyn_mode,
+      dyn_mode: optimized_mode,
       table,
       delta_momentss,
       page_sizes,
-      idx: 0,
+      src,
       page_idx: 0,
     });
 
@@ -523,23 +557,15 @@ impl<T: NumberLike> BaseCompressor<T> {
         other => Err(other.wrong_step_err("data page")),
       }?;
 
-      let start = info.idx;
-      let data_page_n = info.data_page_n();
-      let end = start + data_page_n.saturating_sub(self.flags.delta_encoding_order);
       info.data_page_moments().write_to(&mut self.writer);
-      let slice = if end > start {
-        &info.unsigneds[start..end]
-      } else {
-        &[]
-      };
       trained_compress_body(
+        &mut info.src,
+        &self.flags,
         &info.table,
         info.dyn_mode,
-        slice,
         &mut self.writer,
       )?;
 
-      info.idx += data_page_n;
       info.page_idx += 1;
 
       info.page_idx < info.n_pages()

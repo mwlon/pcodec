@@ -50,7 +50,7 @@ pub struct Decompressor<T: NumberLike>(BaseDecompressor<T>);
 #[derive(Clone, Debug)]
 pub enum DecompressedItem<T: NumberLike> {
   Flags(Flags),
-  ChunkMetadata(ChunkMetadata<T>),
+  ChunkMetadata(ChunkMetadata<T::Unsigned>),
   Numbers(Vec<T>),
   Footer,
 }
@@ -80,7 +80,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// is not byte-aligned,
   /// runs out of data,
   /// or finds any corruptions.
-  pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T>>> {
+  pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T::Unsigned>>> {
     self
       .0
       .state
@@ -167,7 +167,7 @@ fn next_nums_dirty<T: NumberLike>(
   bd: &mut BodyDecompressor<T>,
   dest: &mut [T],
 ) -> QCompressResult<Progress> {
-  bd.decompress_next_batch(reader, false, dest)
+  bd.decompress(reader, false, dest)
 }
 
 fn apply_nums<T: NumberLike>(
@@ -212,7 +212,13 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
           compressed_body_size,
           ..
         } = state.chunk_meta.as_ref().unwrap();
-        let mut bd = state.new_body_decompressor(reader, n, compressed_body_size)?;
+        let maybe_bd = state.new_body_decompressor(reader, n, compressed_body_size);
+        if let Err(e) = &maybe_bd {
+          if matches!(e.kind, ErrorKind::InsufficientData) {
+            return Ok(None)
+          }
+        }
+        let mut bd = maybe_bd?;
         let mut dest = vec![T::default(); config.numbers_limit_per_item];
         let progress = next_nums_dirty(reader, &mut bd, &mut dest)?;
         state.body_decompressor = Some(bd);

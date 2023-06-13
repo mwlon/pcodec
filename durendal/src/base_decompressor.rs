@@ -4,7 +4,7 @@ use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::body_decompressor::BodyDecompressor;
-use crate::chunk_metadata::ChunkMetadata;
+use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
@@ -32,7 +32,7 @@ impl Default for DecompressorConfig {
 pub struct State<T: NumberLike> {
   pub bit_idx: usize,
   pub flags: Option<Flags>,
-  pub chunk_meta: Option<ChunkMetadata<T>>,
+  pub chunk_meta: Option<ChunkMetadata<T::Unsigned>>,
   pub body_decompressor: Option<BodyDecompressor<T>>,
   pub terminated: bool,
 }
@@ -80,7 +80,7 @@ impl<T: NumberLike> State<T> {
   pub fn chunk_meta_option_dirty(
     &self,
     reader: &mut BitReader,
-  ) -> QCompressResult<Option<ChunkMetadata<T>>> {
+  ) -> QCompressResult<Option<ChunkMetadata<T::Unsigned>>> {
     let magic_byte = reader.read_aligned_bytes(1)?[0];
     if magic_byte == MAGIC_TERMINATION_BYTE {
       return Ok(None);
@@ -91,10 +91,25 @@ impl<T: NumberLike> State<T> {
       )));
     }
 
-    ChunkMetadata::<T>::parse_from(reader, self.flags.as_ref().unwrap()).map(Some)
+    ChunkMetadata::<T::Unsigned>::parse_from(reader, self.flags.as_ref().unwrap()).map(Some)
   }
 
   pub fn new_body_decompressor(
+    &self,
+    reader: &mut BitReader,
+    n: usize,
+    compressed_page_size: usize,
+  ) -> QCompressResult<BodyDecompressor<T>> {
+    let start_bit_idx = reader.bit_idx();
+    let res = self.new_body_decompressor_dirty(reader, n, compressed_page_size);
+
+    if res.is_err () {
+      reader.seek_to(start_bit_idx);
+    }
+    res
+  }
+
+  fn new_body_decompressor_dirty(
     &self,
     reader: &mut BitReader,
     n: usize,
@@ -112,12 +127,15 @@ impl<T: NumberLike> State<T> {
         QCompressError::corruption("compressed page size {} is less than data page metadata size")
       })?;
 
-    BodyDecompressor::new(
-      &chunk_meta.bins,
-      n,
+    let data_page_meta = DataPageMetadata {
       compressed_body_size,
-      &delta_moments,
-    )
+      n,
+      dyn_mode: chunk_meta.dyn_mode,
+      bins: &chunk_meta.bins,
+      delta_moments,
+    };
+
+    BodyDecompressor::new(data_page_meta)
   }
 
   pub fn step(&self) -> Step {
@@ -225,7 +243,7 @@ impl<T: NumberLike> BaseDecompressor<T> {
     let old_bd = self.state.body_decompressor.clone();
     self.with_reader(|reader, state, _| {
       let mut bd = state.new_body_decompressor(reader, n, compressed_page_size)?;
-      let res = bd.decompress_next_batch(reader, true, dest);
+      let res = bd.decompress(reader, true, dest);
       // we need to roll back the body decompressor if this failed
       state.body_decompressor = if res.is_ok() { None } else { old_bd };
       res?;

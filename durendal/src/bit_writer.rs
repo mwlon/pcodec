@@ -74,13 +74,6 @@ impl BitWriter {
     self.j += 1;
   }
 
-  /// Appends the bits to the writer.
-  pub fn write(&mut self, bs: &[bool]) {
-    for &b in bs {
-      self.write_one(b);
-    }
-  }
-
   pub fn write_usize(&mut self, mut x: usize, n: Bitlen) {
     if n == 0 {
       return;
@@ -210,7 +203,7 @@ mod tests {
   #[test]
   fn test_write_bigger_num() {
     let mut writer = BitWriter::default();
-    writer.write(&[true, true, true, true]);
+    writer.write_diff(31_u32, 4);
     // 1111
     writer.write_usize(27, 4);
     // 11111101
