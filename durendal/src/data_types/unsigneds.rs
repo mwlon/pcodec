@@ -17,14 +17,17 @@ macro_rules! impl_unsigned {
         word as Self
       }
 
+      #[inline]
       fn leading_zeros(self) -> Bitlen {
         self.leading_zeros() as Bitlen
       }
 
+      #[inline]
       fn rshift_word(self, shift: Bitlen) -> usize {
         (self >> shift) as usize
       }
 
+      #[inline]
       fn lshift_word(self, shift: Bitlen) -> usize {
         (self as usize) << shift
       }

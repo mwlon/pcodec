@@ -44,6 +44,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
     })
   }
 
+  #[inline(never)]
   fn decompress_batch(
     &mut self,
     reader: &mut BitReader,

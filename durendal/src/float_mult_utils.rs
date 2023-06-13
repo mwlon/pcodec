@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 use std::collections::HashMap;
 
 use crate::bits;
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
@@ -21,14 +21,28 @@ pub fn encode_apply_mult<T: NumberLike>(
 ) -> UnsignedSrc<T::Unsigned> {
   let nums = T::assert_float(nums);
   let n = nums.len();
-  let mut unsigneds = Vec::with_capacity(n);
-  let mut adjustments = Vec::with_capacity(n);
-  for i in 0..n {
-    let mult = (nums[i] * inv_base).round();
-    unsigneds.push(T::Unsigned::from_int_float(mult));
-    adjustments.push(nums[i]
-      .to_unsigned()
-      .wrapping_sub((mult * base).to_unsigned()));
+  let uninit_vec = || unsafe {
+    let mut res = Vec::<T::Unsigned>::with_capacity(n);
+    res.set_len(n);
+    res
+  };
+  let mut unsigneds = uninit_vec();
+  let mut adjustments = uninit_vec();
+  let mut mults = [<T::Unsigned as UnsignedLike>::Float::ZERO; UNSIGNED_BATCH_SIZE];
+  let mut base_i = 0;
+  for chunk in nums.chunks(UNSIGNED_BATCH_SIZE) {
+    for i in 0..chunk.len() {
+      mults[i] = (chunk[i] * inv_base).round();
+    }
+    for i in 0..chunk.len() {
+      unsigneds[base_i + i] = T::Unsigned::from_int_float(mults[i]);
+    }
+    for i in 0..chunk.len() {
+      adjustments[base_i + i] = chunk[i]
+          .to_unsigned()
+          .wrapping_sub((mults[i] * base).to_unsigned())
+    }
+    base_i += UNSIGNED_BATCH_SIZE;
   }
   UnsignedSrc::new(unsigneds, adjustments)
 }
@@ -42,6 +56,7 @@ const CLASSIC_SAVINGS_RATIO: f64 = 0.4;
 const NEAR_ZERO_MACHINE_EPSILON_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
 const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
+const SAMPLE_SIN_PERIOD: usize = 16;
 
 fn min_entropy() -> f64 {
   (MIN_SAMPLE as f64).log2()
@@ -63,10 +78,10 @@ fn choose_sample<F: FloatLike>(nums: &[F]) -> Option<Vec<F>> {
   let mut res = Vec::with_capacity(sample_n);
   // we avoid cyclic sampling by throwing in another frequency
   let slope = n as f64 / sample_n as f64;
-  let sin_rate = std::f64::consts::TAU / 13.0;
+  let sin_rate = std::f64::consts::TAU / (SAMPLE_SIN_PERIOD as f64);
+  let sins: [f64; SAMPLE_SIN_PERIOD] = core::array::from_fn(|i| (i as f64 * sin_rate).sin() * 0.5);
   for i in 0..sample_n {
-    let i_f64 = i as f64;
-    let idx = ((i_f64 + (i_f64 * sin_rate).sin() * 0.5) * slope) as usize;
+    let idx = ((i as f64 + sins[i % 16]) * slope) as usize;
     let num = nums[min(idx, n - 1)];
     // We can compress infinities, nans, and baby floats, but we can't learn
     // the GCD from them.
@@ -187,7 +202,7 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
   // It's better to use float mult if both mult entropy is high (requiring
   // memorization) and
   // adj_entropy * n * classic_savings < 2^mult_entropy * bin_meta_size
-  let mut counts = HashMap::<U, usize>::new();
+  let mut counts = HashMap::<U, usize>::with_capacity(sample.len());
   for &x in sample {
     let mult = U::from_int_float((x * inv_gcd).round());
     *counts.entry(mult).or_default() += 1;

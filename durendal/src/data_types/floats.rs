@@ -17,6 +17,7 @@ macro_rules! impl_float_number {
       const MIN: Self = Self::MIN;
       const MAX: Self = Self::MAX;
 
+      #[inline]
       fn abs(self) -> Self {
         self.abs()
       }
@@ -25,18 +26,22 @@ macro_rules! impl_float_number {
         1.0 / self
       }
 
+      #[inline]
       fn round(self) -> Self {
         self.round()
       }
 
+      #[inline]
       fn from_usize_numerical(x: usize) -> Self {
         x as Self
       }
 
+      #[inline]
       fn from_f64(x: f64) -> Self {
         x as Self
       }
 
+      #[inline]
       fn to_f64(self) -> f64 {
         self as f64
       }
@@ -47,18 +52,22 @@ macro_rules! impl_float_number {
         $bits - epsilons.leading_zeros()
       }
 
+      #[inline]
       fn total_cmp(a: &Self, b: &Self) -> Ordering {
         Self::total_cmp(a, b)
       }
 
+      #[inline]
       fn is_finite_and_normal(&self) -> bool {
         self.is_finite() && !self.is_subnormal()
       }
 
+      #[inline]
       fn max(a: Self, b: Self) -> Self {
         Self::max(a, b)
       }
 
+      #[inline]
       fn min(a: Self, b: Self) -> Self {
         Self::min(a, b)
       }
