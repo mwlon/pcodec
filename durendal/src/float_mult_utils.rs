@@ -36,6 +36,8 @@ pub fn encode_apply_mult<T: NumberLike>(
 const MIN_SAMPLE: usize = 10;
 // 1 in this many nums get put into sample
 const SAMPLE_RATIO: usize = 40;
+// # of bins before classic can't memorize them anymore, even if it tried
+const CLASSIC_MEMORIZATION_THRESH: f64 = 512.0;
 const CLASSIC_SAVINGS_RATIO: f64 = 0.4;
 const NEAR_ZERO_MACHINE_EPSILON_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
@@ -92,6 +94,10 @@ fn is_approx_zero<F: FloatLike>(small: F, big: F) -> bool {
   small <= insignificant_float_to(big)
 }
 
+fn is_small_remainder<F: FloatLike>(remainder: F, original: F) -> bool {
+  remainder <= original * F::from_f64(2.0_f64.powi(-16))
+}
+
 fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -> Option<F> {
   if is_approx_zero(lesser, median) {
     return Some(greater);
@@ -132,24 +138,24 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
   loop {
     let prev = pair0.abs_value;
     rem_assign(&mut pair0, &pair1);
-    if is_approx_zero(pair0.abs_value, prev) {
+    if is_small_remainder(pair0.abs_value, prev) {
       return Some(pair1.abs_value);
     }
 
     // for numerical stability, we need the following to be accurate:
     // |pair0.mult0 * greater - pair1.mult1 * lesser|
     // (that's pair0.abs_value)
-    if is_approx_zero(pair0.abs_value, (pair0.mult0 * greater).abs()) {
+    if is_approx_zero(pair0.abs_value, F::max(median, (pair0.mult0 * greater).abs())) {
       return None;
     }
 
     let prev = pair1.abs_value;
     rem_assign(&mut pair1, &pair0);
-    if is_approx_zero(pair1.abs_value, prev) {
+    if is_small_remainder(pair1.abs_value, prev) {
       return Some(pair0.abs_value);
     }
 
-    if is_approx_zero(pair1.abs_value, (pair1.mult1 * lesser).abs()) {
+    if is_approx_zero(pair1.abs_value, F::max(median, (pair1.mult1 * lesser).abs())) {
       return None;
     }
   }
@@ -199,9 +205,16 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
   }
 
   let rough_bin_meta_cost = U::BITS as f64 + 40.0;
-  let cutoff =
-    ((2.0_f64.powf(miller_madow_entropy) * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen;
-  adj_bits_needed::<U>(inv_gcd, sample, cutoff)?;
+  let rough_classic_bins = 2.0_f64.powf(miller_madow_entropy);
+  let cutoff = if rough_classic_bins > CLASSIC_MEMORIZATION_THRESH {
+    let median = sample[sample.len() / 2];
+    let gcd = inv_gcd.inv();
+    U::Float::log2_epsilons_between_positives(median, median + gcd) / 2
+  } else {
+    ((rough_classic_bins * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen
+  };
+
+  adj_bits_needed::<U>(inv_gcd, sample, cutoff)?; // check the sample abides this
   Some(cutoff)
 }
 
@@ -287,147 +300,6 @@ pub fn choose_config<T: NumberLike>(
   choose_config_w_sample::<T::Unsigned>(&sample, nums)
 }
 
-// We'll only consider using FloatMultMode if we can save at least 1/this of the
-// mantissa bits by using it.
-// const REQUIRED_INFORMATION_GAIN_DENOM: Bitlen = 6;
-// enum StrategyChainResult {
-//   CloseToExactMultiple,
-//   FarFromExactMultiple,
-//   Uninformative, // the base is not much bigger than machine epsilon
-// }
-//
-// struct StrategyChain<U: UnsignedLike> {
-//   bases_and_invs: Vec<(U::Float, U::Float)>,
-//   candidate_idx: usize,
-//   pub proven_useful: bool,
-//   pub adj_bits: Bitlen,
-//   phantom: PhantomData<U>,
-// }
-//
-// impl<U: UnsignedLike> StrategyChain<U> {
-//   fn inv_powers_of(inv_base_0: u64, n_powers: u32) -> Self {
-//     let mut inv_base = inv_base_0;
-//     let mut bases_and_invs = Vec::new();
-//     for _ in 0..n_powers {
-//       let inv_base_float = U::Float::from_u64_numerical(inv_base);
-//       bases_and_invs.push((inv_base_float.inv(), inv_base_float));
-//       inv_base *= inv_base_0;
-//     }
-//
-//     Self {
-//       bases_and_invs,
-//       candidate_idx: 0,
-//       proven_useful: false,
-//       adj_bits: 0,
-//       phantom: PhantomData,
-//     }
-//   }
-//
-//   fn current_base_and_inv(&self) -> Option<(U::Float, U::Float)> {
-//     self.bases_and_invs.get(self.candidate_idx).cloned()
-//   }
-//
-//   fn current_inv_base(&self) -> Option<U::Float> {
-//     self.current_base_and_inv().map(|(_, inv_base)| inv_base)
-//   }
-//
-//   fn compatibility_with(&self, sorted_chunk: &[U::Float]) -> StrategyChainResult {
-//     match self.current_base_and_inv() {
-//       Some((base, inv_base)) => {
-//         let mut res = StrategyChainResult::Uninformative;
-//         let mut seen_mult: Option<U::Float> = None;
-//         let required_information_gain = U::Float::PRECISION_BITS / REQUIRED_INFORMATION_GAIN_DENOM;
-//
-//         for &x in sorted_chunk {
-//           let abs_float = x.abs();
-//           let base_bits = U::Float::log2_epsilons_between_positives(abs_float, abs_float + base);
-//           let mult = (abs_float * inv_base).round();
-//           let adj_bits = U::Float::log2_epsilons_between_positives(abs_float, mult * base);
-//
-//           if adj_bits > base_bits.saturating_sub(required_information_gain) {
-//             return StrategyChainResult::FarFromExactMultiple;
-//           } else if base_bits >= required_information_gain {
-//             match seen_mult {
-//               Some(a_mult) if mult != a_mult => {
-//                 res = StrategyChainResult::CloseToExactMultiple;
-//               }
-//               _ => seen_mult = Some(mult),
-//             }
-//           }
-//         }
-//
-//         res
-//       }
-//       None => StrategyChainResult::Uninformative,
-//     }
-//   }
-//
-//   fn is_valid(&self) -> bool {
-//     self.current_base_and_inv().is_some()
-//   }
-//
-//   pub fn relax(&mut self) {
-//     self.candidate_idx += 1;
-//   }
-// }
-//
-// // We'll go through all the nums and check if each one is numerically close to
-// // a multiple of the first base in each chain. If not, we'll fall back to the
-// // 2nd base here, and so forth, assuming that all numbers divisible by the nth
-// // base are also divisible by the n+1st.
-// pub struct Strategy<U: UnsignedLike> {
-//   chains: Vec<StrategyChain<U>>,
-// }
-//
-// impl<U: UnsignedLike> Strategy<U> {
-//   pub fn choose_adj_bits_and_inv_base<T: NumberLike<Unsigned=U>>(&mut self, nums: &[T]) -> Option<(Bitlen, U::Float)> {
-//     let floats = T::assert_float(nums);
-//
-//     // iterate over floats first for caching, performance
-//     for chunk in floats.chunks(UNSIGNED_BATCH_SIZE) {
-//       let mut any_valid = false;
-//       for chain in &mut self.chains {
-//         if chain.is_valid() {
-//           any_valid = true;
-//         } else {
-//           continue;
-//         }
-//
-//         chain.fit_to(chunk);
-//       }
-//
-//       if !any_valid {
-//         break;
-//       }
-//     }
-//
-//     self
-//       .chains
-//       .iter()
-//       .flat_map(|chain| {
-//         if chain.is_valid() {
-//           chain
-//             .current_inv_base()
-//             .map(|inv_base| (chain.adj_bits, inv_base))
-//         } else {
-//           None
-//         }
-//       })
-//       .max_by(|(_, inv_base0), (_, inv_base1)| {
-//         U::Float::total_cmp(inv_base0, inv_base1)
-//       })
-//   }
-// }
-//
-// impl<U: UnsignedLike> Default for Strategy<U> {
-//   fn default() -> Self {
-//     // 0.1, 0.01, ... 10^-9
-//     Self {
-//       chains: vec![StrategyChain::inv_powers_of(10, 9)],
-//     }
-//   }
-// }
-
 #[cfg(test)]
 mod test {
   use crate::constants::Bitlen;
@@ -482,6 +354,7 @@ mod test {
     assert_eq!(approx_pair_gcd_uncorrected(1.0, 0.0, 1.0), Some(1.0));
     assert_eq!(approx_pair_gcd_uncorrected(1.0, 1.0, 1.0), Some(1.0));
     assert_eq!(approx_pair_gcd_uncorrected(6.0, 3.0, 1.0), Some(3.0));
+    assert_eq!(approx_pair_gcd_uncorrected(10.01_f64, 0.009999999999999787_f64, 1.0_f64), Some(0.009999999999999787));
     // 2^100 is not a multiple of 3, but it's certainly within machine epsilon of one
     assert_eq!(approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 1.0), Some(3.0));
     // in this case, the median is big, so assume the lhs of 3 is just a numerical error

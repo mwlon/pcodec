@@ -397,10 +397,6 @@ pub struct MidChunkInfo<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> MidChunkInfo<U> {
-  fn data_page_n(&self) -> usize {
-    self.page_sizes[self.page_idx]
-  }
-
   fn data_page_moments(&self) -> &DeltaMoments<U> {
     &self.delta_momentss[self.page_idx]
   }

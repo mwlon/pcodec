@@ -132,6 +132,9 @@ write_f64(np.random.randint(0, 2 ** 30, size=n), 'integers')
 np.random.seed(0)
 write_f64(np.random.randint(1000, 10000, size=n) / 100, 'decimal')
 
+np.random.seed(0)
+write_f64((np.arange(n) + 10) * np.pi, 'radians')
+
 # 10 interleaved 0th order sequences with different scales
 np.random.seed(0)
 bases = 10 ** np.arange(10)
