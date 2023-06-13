@@ -71,7 +71,7 @@ impl RunLenOperator for GeneralRunLenOp {
       // we stored the number of occurrences minus 1 because we knew it's at least 1
       Some(jumpstart) => {
         let full_reps = reader.unchecked_read_varint(jumpstart) + 1;
-        let reps = state.unchecked_limit_reps(*bin, full_reps, dst.len());
+        let reps = state.unchecked_limit_reps(*bin, full_reps, dst.remaining());
         for _ in 0..reps {
           dst.write_unsigned(mode.unchecked_decompress_unsigned(bin, reader));
           if M::USES_ADJUSTMENT {
