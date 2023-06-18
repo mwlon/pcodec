@@ -21,8 +21,7 @@ pub mod errors;
 pub mod standalone;
 pub mod wrapped;
 
-mod ans_encoding;
-mod ans_decoding;
+mod ans;
 mod base_compressor;
 mod base_decompressor;
 mod bin;

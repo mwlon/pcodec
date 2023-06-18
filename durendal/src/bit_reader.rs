@@ -48,17 +48,17 @@ impl<U: UnsignedLike> ReadableUint for U {
   }
 }
 
-/// Wrapper around compressed data, enabling a
-/// [`Decompressor`][crate::Decompressor] to read
-/// bit-level information and maintain its position in the data.
-///
-/// It does this with a slice of `usize`s representing the data and
-/// maintaining
-/// * an index into the slice and
-/// * a bit index from 0 to `usize::BITS` within the current `usize`.
-///
-/// The reader is consider is considered "aligned" if the current bit index
-/// is byte-aligned; e.g. `bit_idx % 8 == 0`.
+// Wrapper around compressed data, enabling a
+// [`Decompressor`][crate::Decompressor] to read
+// bit-level information and maintain its position in the data.
+//
+// It does this with a slice of `usize`s representing the data and
+// maintaining
+// * an index into the slice and
+// * a bit index from 0 to `usize::BITS` within the current `usize`.
+//
+// The reader is consider is considered "aligned" if the current bit index
+// is byte-aligned; e.g. `bit_idx % 8 == 0`.
 #[derive(Clone)]
 pub struct BitReader<'a> {
   // word = words[i], but must be carefully used and maintained:
@@ -82,9 +82,9 @@ impl<'a> From<&'a BitWords> for BitReader<'a> {
 }
 
 impl<'a> BitReader<'a> {
-  /// Returns the reader's current byte index. Will return an error if the
-  /// reader is at
-  /// a misaligned position.
+  // Returns the reader's current byte index. Will return an error if the
+  // reader is at
+  // a misaligned position.
   pub fn aligned_byte_idx(&self) -> QCompressResult<usize> {
     let (i, j) = self.idxs();
     if j == 0 {
@@ -101,13 +101,13 @@ impl<'a> BitReader<'a> {
     self.bit_idx
   }
 
-  /// Returns the number of bits between the reader's current position and
-  /// the end.
+  // Returns the number of bits between the reader's current position and
+  // the end.
   pub fn bits_remaining(&self) -> usize {
     self.total_bits - self.bit_idx()
   }
 
-  /// Returns the number of bytes in the reader.
+  // Returns the number of bytes in the reader.
   pub fn byte_size(&self) -> usize {
     bits::ceil_div(self.total_bits, 8)
   }
@@ -126,9 +126,9 @@ impl<'a> BitReader<'a> {
     }
   }
 
-  /// Returns the next `n` bytes. Will return an error if
-  /// there are not enough bytes remaining in the reader or the reader is
-  /// misaligned.
+  // Returns the next `n` bytes. Will return an error if
+  // there are not enough bytes remaining in the reader or the reader is
+  // misaligned.
   pub fn read_aligned_bytes(&mut self, n: usize) -> QCompressResult<Vec<u8>> {
     let byte_idx = self.aligned_byte_idx()?;
     let new_byte_idx = byte_idx + n;
@@ -144,8 +144,8 @@ impl<'a> BitReader<'a> {
     }
   }
 
-  /// Returns the next bit. Will return an error if we have reached the end
-  /// of the reader.
+  // Returns the next bit. Will return an error if we have reached the end
+  // of the reader.
   pub fn read_one(&mut self) -> QCompressResult<bool> {
     self.insufficient_data_check("read_one", 1)?;
     Ok(self.unchecked_read_one())
@@ -214,8 +214,8 @@ impl<'a> BitReader<'a> {
     usize::from_le_bytes(raw_bytes)
   }
 
-  /// Returns the next bit. Will panic if we have reached the end of the
-  /// reader. This tends to be much faster than `read_one()`.
+  // Returns the next bit. Will panic if we have reached the end of the
+  // reader. This tends to be much faster than `read_one()`.
   pub fn unchecked_read_one(&mut self) -> bool {
     let (i, j) = self.idxs();
     let res = (self.bytes[i] & (1 << j)) > 0;
@@ -283,22 +283,22 @@ impl<'a> BitReader<'a> {
     Ok(())
   }
 
-  /// Sets the bit reader's current position to the specified bit index.
-  /// Will NOT check whether the resulting position is in bounds or not.
+  // Sets the bit reader's current position to the specified bit index.
+  // Will NOT check whether the resulting position is in bounds or not.
   pub fn seek_to(&mut self, bit_idx: usize) {
     self.bit_idx = bit_idx;
   }
 
-  /// Skips forward `n` bits. Will NOT check whether
-  /// the resulting position is in bounds or not.
-  ///
-  /// Wraps [`seek_to`][BitReader::seek_to].
+  // Skips forward `n` bits. Will NOT check whether
+  // the resulting position is in bounds or not.
+  //
+  // Wraps [`seek_to`][BitReader::seek_to].
   pub fn seek(&mut self, n: usize) {
     self.seek_to(self.bit_idx() + n);
   }
 
-  /// Skips backward `n` bits where n <= 32.
-  /// Will panic if the resulting position is out of bounds.
+  // Skips backward `n` bits where n <= 32.
+  // Will panic if the resulting position is out of bounds.
   #[inline]
   pub fn rewind_bin_overshoot(&mut self, n: Bitlen) {
     self.bit_idx -= n as usize;
