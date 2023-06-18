@@ -129,7 +129,7 @@ mod tests {
   }
 
   #[test]
-  fn ans_spec_new_sparse() -> QCompressResult<()> {
+  fn ans_spec_new() -> QCompressResult<()> {
     assert_state_tokens(
       vec![1, 1, 3, 11],
       vec![3, 3, 3, 3, 2, 3, 3, 3, 3, 2, 3, 3, 3, 2, 1, 0],
