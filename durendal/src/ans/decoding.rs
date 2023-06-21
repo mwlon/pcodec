@@ -1,20 +1,23 @@
 use crate::ans::spec::{AnsSpec, Token};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::bits;
+use crate::{Bin, bits};
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
+use crate::errors::QCompressResult;
 
+#[derive(Clone, Debug)]
 struct Node {
   token: Token,
   next_state_base: usize,
   bits_to_read: Bitlen,
 }
 
+#[derive(Clone, Debug)]
 pub struct AnsDecoder {
   table_size: usize,
   nodes: Vec<Node>,
-  state: usize,
+  pub state: usize,
 }
 
 impl AnsDecoder {
@@ -45,11 +48,25 @@ impl AnsDecoder {
     }
   }
 
+  pub fn from_bins<U: UnsignedLike>(size_log: Bitlen, bins: &[Bin<U>], final_state: usize) -> QCompressResult<Self> {
+    let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
+    let spec = AnsSpec::from_weights(size_log, weights)?;
+    Ok(Self::new(&spec, final_state))
+  }
+
   pub fn unchecked_decode(&mut self, reader: &mut BitReader) -> Token {
     let node = &self.nodes[self.state - self.table_size];
     let bits_read = reader.unchecked_read_uint::<usize>(node.bits_to_read);
     let next_state = node.next_state_base + bits_read;
     self.state = next_state;
     node.token
+  }
+
+  pub fn decode(&mut self, reader: &mut BitReader) -> QCompressResult<Token> {
+    let node = &self.nodes[self.state - self.table_size];
+    let bits_read = reader.read_usize(node.bits_to_read)?;
+    let next_state = node.next_state_base + bits_read;
+    self.state = next_state;
+    Ok(node.token)
   }
 }

@@ -2,8 +2,10 @@ mod encoding;
 mod decoding;
 mod spec;
 
-pub use decoding::AnsDecoder;
 pub use encoding::AnsEncoder;
+pub use encoding::quantize_weights;
+pub use decoding::AnsDecoder;
+pub use spec::Token;
 
 #[cfg(test)]
 mod tests {

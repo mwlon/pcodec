@@ -117,9 +117,11 @@ impl<T: NumberLike> State<T> {
   ) -> QCompressResult<BodyDecompressor<T>> {
     let flags = self.flags.as_ref().unwrap();
     let chunk_meta = self.chunk_meta.as_ref().unwrap();
+    let ans_size_log = chunk_meta.ans_size_log;
 
     let start_byte_idx = reader.aligned_byte_idx()?;
     let delta_moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
+    let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
     let end_byte_idx = reader.aligned_byte_idx()?;
     let compressed_body_size = compressed_page_size
       .checked_sub(end_byte_idx - start_byte_idx)
@@ -133,6 +135,8 @@ impl<T: NumberLike> State<T> {
       dyn_mode: chunk_meta.dyn_mode,
       bins: &chunk_meta.bins,
       delta_moments,
+      ans_size_log,
+      ans_final_state
     };
 
     BodyDecompressor::new(data_page_meta)

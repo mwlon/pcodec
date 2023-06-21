@@ -31,7 +31,7 @@ impl<U: UnsignedLike> CompressionTable<U> {
       return CompressionTable::Leaf(bins[0]);
     }
 
-    let total_count: usize = bins.iter().map(|p| p.count).sum();
+    let total_count: usize = bins.iter().map(|p| p.weight).sum();
 
     let mut last_idx = 0;
     let mut idx = 0;
@@ -40,9 +40,9 @@ impl<U: UnsignedLike> CompressionTable<U> {
     for i in 0..TARGET_BRANCHING_FACTOR {
       let target = (total_count * (i + 1)) / TARGET_BRANCHING_FACTOR;
       while cumulative < target {
-        let incr = bins[idx].count;
+        let incr = bins[idx].weight;
         if incr < 2 * target - cumulative {
-          cumulative += bins[idx].count;
+          cumulative += bins[idx].weight;
           idx += 1;
         } else {
           break;

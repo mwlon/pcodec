@@ -1,8 +1,12 @@
+use std::cmp::{max, Ordering};
 use crate::ans::spec::{AnsSpec, Token};
 use crate::bit_writer::BitWriter;
-use crate::bits;
+use crate::{Bin, bits};
 use crate::constants::Bitlen;
+use crate::data_types::UnsignedLike;
+use crate::errors::QCompressResult;
 
+#[derive(Clone, Debug)]
 struct TokenInfo {
   renorm_bit_cutoff: usize,
   min_renorm_bits: Bitlen,
@@ -15,12 +19,20 @@ impl TokenInfo {
   }
 }
 
+#[derive(Clone, Debug)]
 pub struct AnsEncoder {
   token_infos: Vec<TokenInfo>,
   state: usize,
+  size_log: Bitlen,
 }
 
 impl AnsEncoder {
+  pub fn from_bins<U: UnsignedLike>(size_log: Bitlen, bins: &Vec<Bin<U>>) -> QCompressResult<Self> {
+    let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
+    let spec = AnsSpec::from_weights(size_log, weights)?;
+    Ok(Self::new(&spec))
+  }
+
   pub fn new(spec: &AnsSpec) -> Self {
     let table_size = spec.table_size();
 
@@ -51,6 +63,7 @@ impl AnsEncoder {
       // the first token.
       state: table_size,
       token_infos,
+      size_log: spec.size_log,
     }
   }
 
@@ -73,5 +86,56 @@ impl AnsEncoder {
 
   pub fn state(&self) -> usize {
     self.state
+  }
+
+  pub fn size_log(&self) -> Bitlen {
+    self.size_log
+  }
+}
+
+const ACCEPTABLE_KL_DIVERGENCE_RATIO: f32 = 0.02;
+
+// given size_log, quantize the counts
+fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -> Vec<usize> {
+  let float_weights = counts.iter().map(|&count| count as f32 / total_count as f32).collect::<Vec<_>>();
+  let mut weights = float_weights.iter().map(|&weight| weight.round() as usize).collect::<Vec<_>>();
+  let mut weight_sum = weights.iter().sum::<usize>();
+  let target_weight_sum = 1 << size_log;
+
+  let mut i = 0;
+  while weight_sum > target_weight_sum {
+    if weights[i] > 1 && weights[i] as f32 > float_weights[i] {
+      weights[i] -= 1;
+    }
+    i += 1;
+  }
+  i = 0;
+  while weight_sum < target_weight_sum {
+    if (weights[i] as f32) < float_weights[i] {
+      weights[i] += 1;
+    }
+    i += 1;
+  }
+
+  weights
+}
+
+// choose both size_log and weights
+pub fn quantize_weights(counts: Vec<usize>, total_count: usize, max_size_log: Bitlen) -> (Bitlen, Vec<usize>) {
+  let min_size_log = usize::BITS - (counts.len() - 1).leading_zeros();
+  // TODO limit table size more when possible
+  let size_log = max(
+    min_size_log,
+    max_size_log,
+  );
+  let weights = quantize_weights_to(&counts, total_count, size_log);
+  (size_log, weights)
+}
+
+#[cfg(test)]
+mod tests {
+  #[test]
+  fn test_choose_weights() {
+
   }
 }

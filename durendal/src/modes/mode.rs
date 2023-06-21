@@ -24,7 +24,6 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
 
   // COMPRESSION
   const USES_ADJUSTMENT: bool = false;
-  fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter);
   fn compress_adjustment(&self, _adjustment: U, _writer: &mut BitWriter) {}
 
   // DECOMPRESSION
@@ -48,8 +47,9 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DynMode<U: UnsignedLike> {
+  #[default]
   Classic,
   Gcd,
   FloatMult {
@@ -83,6 +83,13 @@ impl<U: UnsignedLike> DynMode<U> {
         nums.iter().map(|x| x.to_unsigned()).collect(),
         vec![],
       ),
+    }
+  }
+
+  pub fn adjustment_bits(&self) -> Bitlen {
+    match self {
+      Self::FloatMult { adj_bits, .. } => *adj_bits,
+      _ => 0,
     }
   }
 }

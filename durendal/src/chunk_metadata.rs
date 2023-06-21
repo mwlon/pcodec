@@ -31,6 +31,8 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   pub dyn_mode: DynMode<U>,
   /// *How* the chunk body was compressed.
   pub bins: Vec<Bin<U>>,
+  /// log2 of the number of the number of states in this chunk's tANS table
+  pub ans_size_log: Bitlen,
 }
 
 // Data page metadata is slightly semantically different from chunk metadata,
@@ -45,20 +47,20 @@ pub struct DataPageMetadata<'a, U: UnsignedLike> {
   pub dyn_mode: DynMode<U>,
   pub bins: &'a [Bin<U>],
   pub delta_moments: DeltaMoments<U>,
+  pub ans_size_log: Bitlen,
+  pub ans_final_state: usize,
 }
 
 fn parse_bins<U: UnsignedLike>(
   reader: &mut BitReader,
-  flags: &Flags,
   dyn_mode: DynMode<U>,
-  n: usize,
+  ans_size_log: Bitlen,
 ) -> QCompressResult<Vec<Bin<U>>> {
   let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
   let mut bins = Vec::with_capacity(n_bins);
-  let bits_to_encode_count = flags.bits_to_encode_count(n);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for _ in 0..n_bins {
-    let count = reader.read_usize(bits_to_encode_count)?;
+    let weight = reader.read_usize(ans_size_log)?;
     let lower = reader.read_uint::<U>(U::BITS)?;
 
     let offset_bits = reader.read_bitlen(offset_bits_bits)?;
@@ -70,20 +72,10 @@ fn parse_bins<U: UnsignedLike>(
       )));
     }
 
-    let code_len = reader.read_bitlen(BITS_TO_ENCODE_CODE_LEN)?;
-    let code = reader.read_usize(code_len)?;
-    let run_len_jumpstart = if reader.read_one()? {
-      Some(reader.read_bitlen(BITS_TO_ENCODE_JUMPSTART)?)
-    } else {
-      None
-    };
     let mut bin = Bin {
-      count,
-      code,
-      code_len,
+      weight,
       lower,
       offset_bits,
-      run_len_jumpstart,
       gcd: U::ONE,
     };
     match dyn_mode {
@@ -104,30 +96,16 @@ fn parse_bins<U: UnsignedLike>(
 
 fn write_bins<U: UnsignedLike>(
   bins: &[Bin<U>],
-  flags: &Flags,
   mode: DynMode<U>,
-  n: usize,
+  ans_size_log: Bitlen,
   writer: &mut BitWriter,
 ) {
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
-  let bits_to_encode_count = flags.bits_to_encode_count(n);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for bin in bins {
-    writer.write_usize(bin.count, bits_to_encode_count);
+    writer.write_usize(bin.weight, ans_size_log);
     writer.write_diff(bin.lower, U::BITS);
     writer.write_bitlen(bin.offset_bits, offset_bits_bits);
-    writer.write_bitlen(bin.code_len, BITS_TO_ENCODE_CODE_LEN);
-    writer.write_usize(bin.code, bin.code_len);
-
-    match bin.run_len_jumpstart {
-      None => {
-        writer.write_one(false);
-      }
-      Some(jumpstart) => {
-        writer.write_one(true);
-        writer.write_bitlen(jumpstart, BITS_TO_ENCODE_JUMPSTART);
-      }
-    }
 
     match mode {
       DynMode::Classic => (),
@@ -142,12 +120,13 @@ fn write_bins<U: UnsignedLike>(
 }
 
 impl<U: UnsignedLike> ChunkMetadata<U> {
-  pub(crate) fn new(n: usize, bins: Vec<Bin<U>>, dyn_mode: DynMode<U>) -> Self {
+  pub(crate) fn new(n: usize, bins: Vec<Bin<U>>, dyn_mode: DynMode<U>, ans_size_log: Bitlen) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
       bins,
       dyn_mode,
+      ans_size_log,
     }
   }
 
@@ -179,7 +158,9 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       ))),
     }?;
 
-    let bins = parse_bins::<U>(reader, flags, dyn_mode, n)?;
+    let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG)?;
+
+    let bins = parse_bins::<U>(reader, dyn_mode, ans_size_log)?;
 
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;
 
@@ -188,6 +169,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       compressed_body_size,
       bins,
       dyn_mode,
+      ans_size_log,
     })
   }
 
@@ -211,11 +193,12 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       writer.write_diff(base.to_unsigned(), U::BITS);
     }
 
+    writer.write_bitlen(self.ans_size_log, BITS_TO_ENCODE_ANS_SIZE_LOG);
+
     write_bins(
       &self.bins,
-      flags,
       self.dyn_mode,
-      self.n,
+      self.ans_size_log,
       writer,
     );
     writer.finish_byte();

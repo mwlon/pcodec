@@ -18,6 +18,7 @@ pub struct AnsSpec {
 }
 
 impl AnsSpec {
+  // TODO this can be slow when there are many tokens
   fn choose_state_tokens(size_log: Bitlen, token_weights: &[usize]) -> QCompressResult<Vec<Token>> {
     struct TokenInitInfo {
       token: Token,
@@ -96,7 +97,7 @@ impl AnsSpec {
   // states and rarer tokens somewhat present in the high states, so for best
   // compression, we expect token_weights to be ordered from least frequent to
   // most frequent.
-  pub fn from_counts(size_log: Bitlen, token_weights: Vec<usize>) -> QCompressResult<Self> {
+  pub fn from_weights(size_log: Bitlen, token_weights: Vec<usize>) -> QCompressResult<Self> {
     let state_tokens = Self::choose_state_tokens(size_log, &token_weights)?;
 
     Ok(Self {
@@ -123,7 +124,7 @@ mod tests {
 
   fn assert_state_tokens(weights: Vec<usize>, expected: Vec<Token>) -> QCompressResult<()> {
     let table_size_log = weights.iter().sum::<usize>().ilog2();
-    let spec = AnsSpec::from_counts(table_size_log, weights)?;
+    let spec = AnsSpec::from_weights(table_size_log, weights)?;
     assert_eq!(spec.state_tokens, expected);
     Ok(())
   }
