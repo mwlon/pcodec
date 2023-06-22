@@ -1,4 +1,4 @@
-use std::cmp::{max, Ordering};
+use std::cmp::{max, min, Ordering};
 use crate::ans::spec::{AnsSpec, Token};
 use crate::bit_writer::BitWriter;
 use crate::{Bin, bits};
@@ -97,22 +97,51 @@ const ACCEPTABLE_KL_DIVERGENCE_RATIO: f32 = 0.02;
 
 // given size_log, quantize the counts
 fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -> Vec<usize> {
-  let float_weights = counts.iter().map(|&count| count as f32 / total_count as f32).collect::<Vec<_>>();
+  if size_log == 0 {
+    return vec![1];
+  }
+
+  let target_weight_sum = 1 << size_log;
+  let multiplier = target_weight_sum as f32 / total_count as f32;
+  let surplus_idxs = counts.iter().enumerate().filter_map(|(i, &count)|
+    if count as f32 * multiplier > 1.0 {
+      Some(i)
+    } else {
+      None
+    }
+  ).collect::<Vec<_>>();
+  let mut surplus = vec![0.0; counts.len()];
+  let mut total_surplus = 0.0;
+  for idx in surplus_idxs {
+    surplus[idx] = counts[idx] as f32 * multiplier - 1.0;
+    total_surplus += surplus[idx];
+  }
+  let target_surplus = target_weight_sum - counts.len();
+  let surplus_mult = target_surplus as f32 / total_surplus;
+
+  let mut float_weights = vec![1.0; counts.len()];
+  for idx in 0..counts.len() {
+    float_weights[idx] = 1.0 + (surplus[idx] * surplus_mult);
+  }
+
   let mut weights = float_weights.iter().map(|&weight| weight.round() as usize).collect::<Vec<_>>();
   let mut weight_sum = weights.iter().sum::<usize>();
-  let target_weight_sum = 1 << size_log;
 
   let mut i = 0;
   while weight_sum > target_weight_sum {
     if weights[i] > 1 && weights[i] as f32 > float_weights[i] {
       weights[i] -= 1;
+      weight_sum -= 1;
     }
     i += 1;
   }
   i = 0;
+  println!();
   while weight_sum < target_weight_sum {
+    println!("{} {} {} vs {}", i, weight_sum, weights[i], float_weights[i]);
     if (weights[i] as f32) < float_weights[i] {
       weights[i] += 1;
+      weight_sum += 1;
     }
     i += 1;
   }
@@ -122,6 +151,10 @@ fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -
 
 // choose both size_log and weights
 pub fn quantize_weights(counts: Vec<usize>, total_count: usize, max_size_log: Bitlen) -> (Bitlen, Vec<usize>) {
+  if counts.len() == 1 {
+    return (0, vec![1]);
+  }
+
   let min_size_log = usize::BITS - (counts.len() - 1).leading_zeros();
   // TODO limit table size more when possible
   let size_log = max(
@@ -134,6 +167,24 @@ pub fn quantize_weights(counts: Vec<usize>, total_count: usize, max_size_log: Bi
 
 #[cfg(test)]
 mod tests {
+  use super::*;
+
+  #[test]
+  fn test_quantize_weights_to() {
+    let quantized = quantize_weights_to(&vec![777], 777, 0);
+    assert_eq!(quantized, vec![1]);
+
+    let quantized = quantize_weights_to(&vec![777, 1], 778, 1);
+    assert_eq!(quantized, vec![1, 1]);
+
+    let quantized = quantize_weights_to(&vec![777, 1], 778, 2);
+    assert_eq!(quantized, vec![3, 1]);
+
+    let quantized = quantize_weights_to(&vec![2, 3, 6, 5, 1], 17, 3);
+    assert_eq!(quantized, vec![1, 1, 3, 2, 1]);
+  }
+
+  // TODO
   #[test]
   fn test_choose_weights() {
 

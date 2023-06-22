@@ -108,6 +108,7 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
 #[cfg(test)]
 mod tests {
   use crate::{bits, Flags};
+  use crate::ans::Token;
 
   use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
@@ -118,15 +119,19 @@ mod tests {
     optimize_bins(bins, 0, GcdMode, 100)
   }
 
-  fn make_gcd_bin_info(count: usize, lower: u32, upper: u32, gcd: u32) -> BinCompressionInfo<u32> {
+  fn make_gcd_bin_info(weight: usize, lower: u32, upper: u32, gcd: u32) -> BinCompressionInfo<u32> {
+    expected_gcd_bin_info(weight, lower, upper, gcd, 0)
+  }
+
+  fn expected_gcd_bin_info(weight: usize, lower: u32, upper: u32, gcd: u32, token: Token) -> BinCompressionInfo<u32> {
     let offset_bits = bits::bits_to_encode_offset((upper - lower) / gcd);
     BinCompressionInfo {
-      weight: count,
+      weight,
       offset_bits,
       lower,
       upper,
       gcd,
-      ..Default::default()
+      token,
     }
   }
 
@@ -137,7 +142,7 @@ mod tests {
       make_gcd_bin_info(1, 2000_u32, 2000, 1_u32),
     ];
     let res = basic_gcd_optimize(bins);
-    let expected = vec![make_gcd_bin_info(2, 1000_u32, 2000, 1000_u32)];
+    let expected = vec![expected_gcd_bin_info(2, 1000_u32, 2000, 1000_u32, 0)];
     assert_eq!(res, expected);
   }
 
@@ -148,7 +153,7 @@ mod tests {
       make_gcd_bin_info(1, 2100_u32, 2100, 1_u32),
     ];
     let res = basic_gcd_optimize(bins);
-    let expected = vec![make_gcd_bin_info(101, 1000_u32, 2100, 10_u32)];
+    let expected = vec![expected_gcd_bin_info(101, 1000_u32, 2100, 10_u32, 0)];
     assert_eq!(res, expected);
   }
 
@@ -159,7 +164,7 @@ mod tests {
       make_gcd_bin_info(5, 1105, 1135, 15_u32),
     ];
     let res = basic_gcd_optimize(bins);
-    let expected = vec![make_gcd_bin_info(10, 1000_u32, 1135, 5_u32)];
+    let expected = vec![expected_gcd_bin_info(10, 1000_u32, 1135, 5_u32, 0)];
     assert_eq!(res, expected);
   }
 
@@ -171,8 +176,8 @@ mod tests {
     ];
     let res = basic_gcd_optimize(bins);
     let expected = vec![
-      make_gcd_bin_info(100, 1000_u32, 1100, 10_u32),
-      make_gcd_bin_info(100, 1101, 1201, 10_u32),
+      expected_gcd_bin_info(100, 1000_u32, 1100, 10_u32, 0),
+      expected_gcd_bin_info(100, 1101, 1201, 10_u32, 1),
     ];
     assert_eq!(res, expected);
   }

@@ -1,3 +1,4 @@
+use std::ops::BitXor;
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -59,8 +60,21 @@ fn parse_bins<U: UnsignedLike>(
   let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
   let mut bins = Vec::with_capacity(n_bins);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
+  if 1 << ans_size_log < n_bins {
+    return Err(QCompressError::corruption(format!(
+      "ANS size log ({}) is too small for number of bins ({})",
+      ans_size_log,
+      n_bins,
+    )));
+  }
+  if n_bins == 1 && ans_size_log > 0 {
+    return Err(QCompressError::corruption(format!(
+      "Only 1 bin but ANS size log is {} (should be 0)",
+      ans_size_log,
+    )));
+  }
   for _ in 0..n_bins {
-    let weight = reader.read_usize(ans_size_log)?;
+    let weight = reader.read_usize(ans_size_log)? + 1;
     let lower = reader.read_uint::<U>(U::BITS)?;
 
     let offset_bits = reader.read_bitlen(offset_bits_bits)?;
@@ -103,7 +117,7 @@ fn write_bins<U: UnsignedLike>(
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for bin in bins {
-    writer.write_usize(bin.weight, ans_size_log);
+    writer.write_usize(bin.weight - 1, ans_size_log);
     writer.write_diff(bin.lower, U::BITS);
     writer.write_bitlen(bin.offset_bits, offset_bits_bits);
 

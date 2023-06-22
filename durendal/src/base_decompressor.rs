@@ -122,6 +122,7 @@ impl<T: NumberLike> State<T> {
     let start_byte_idx = reader.aligned_byte_idx()?;
     let delta_moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
     let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
+    reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
     let end_byte_idx = reader.aligned_byte_idx()?;
     let compressed_body_size = compressed_page_size
       .checked_sub(end_byte_idx - start_byte_idx)

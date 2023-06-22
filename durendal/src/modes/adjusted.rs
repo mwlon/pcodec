@@ -51,11 +51,6 @@ impl<U: UnsignedLike> Mode<U> for AdjustedMode<U> {
   const USES_ADJUSTMENT: bool = true;
 
   #[inline]
-  fn offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
-    ClassicMode.offset(u, bin, writer);
-  }
-
-  #[inline]
   fn compress_adjustment(&self, adjustment: U, writer: &mut BitWriter) {
     writer.write_diff(
       adjustment.wrapping_sub(self.adj_lower),

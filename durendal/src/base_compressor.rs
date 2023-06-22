@@ -283,7 +283,6 @@ struct TrainedBins<U: UnsignedLike> {
 fn train_mode_and_bins<U: UnsignedLike>(
   unsigneds: Vec<U>,
   internal_config: &InternalCompressorConfig,
-  flags: &Flags,
   naive_mode: DynMode<U>,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
 ) -> QCompressResult<TrainedBins<U>> {
@@ -305,24 +304,26 @@ fn train_mode_and_bins<U: UnsignedLike>(
     )));
   }
 
+  let n_unsigneds = unsigneds.len();
   let (unoptimized_mode, unoptimized_bins) = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
     choose_unoptimized_mode_and_bins(&sorted, internal_config, naive_mode)
   };
 
+  let estimated_ans_size_log = (internal_config.compression_level + 2) as Bitlen;
   let mut optimized_infos = match unoptimized_mode {
-    DynMode::Classic => bin_optimization::optimize_bins(unoptimized_bins, flags, ClassicMode, n),
-    DynMode::Gcd => bin_optimization::optimize_bins(unoptimized_bins, flags, GcdMode, n),
+    DynMode::Classic => bin_optimization::optimize_bins(unoptimized_bins, estimated_ans_size_log, ClassicMode, n),
+    DynMode::Gcd => bin_optimization::optimize_bins(unoptimized_bins, estimated_ans_size_log, GcdMode, n),
     DynMode::FloatMult { adj_bits, .. } => bin_optimization::optimize_bins(
       unoptimized_bins,
-      flags,
+      estimated_ans_size_log,
       AdjustedMode::new(adj_bits),
       n,
     ),
   };
 
-  let ans_size_log = quantize_weights(&mut optimized_infos, unsigneds.len(), &internal_config);
+  let ans_size_log = quantize_weights(&mut optimized_infos, n_unsigneds, &internal_config);
 
   Ok(TrainedBins {
     dyn_mode: unoptimized_mode,
@@ -354,7 +355,13 @@ fn trained_compress_body<U: UnsignedLike>(
     encoder.state() - (1 << encoder.size_log()),
     encoder.size_log(),
   );
-  compress_data_page(src, flags, adjustment_bits, writer)
+  writer.finish_byte();
+
+  if adjustment_bits > 0 {
+    compress_data_page::<U, true>(src, flags, adjustment_bits, writer)
+  } else {
+    compress_data_page::<U, false>(src, flags, adjustment_bits, writer)
+  }
 }
 
 // returns the ANS final state after decomposing the unsigneds in reverse order
@@ -363,7 +370,10 @@ fn decompose_unsigneds<U: UnsignedLike, const USE_GCD: bool>(
   encoder: &mut AnsEncoder,
   src: &mut UnsignedSrc<U>,
 ) -> QCompressResult<()> {
-  for (idx, &u) in src.unsigneds().iter().enumerate().rev() {
+  let unsigneds = src.unsigneds();
+  let mut decomposeds = Vec::with_capacity(unsigneds.len());
+  for &u in src.unsigneds() {
+    let u = src.unsigned();
     let info = table.search(u)?;
     let (ans_word, ans_bits) = encoder.encode(info.token);
     let offset = if USE_GCD {
@@ -371,17 +381,18 @@ fn decompose_unsigneds<U: UnsignedLike, const USE_GCD: bool>(
     } else {
       (u - info.lower)
     };
-    src.set_decomposed(idx, DecomposedUnsigned {
+    decomposeds.push(DecomposedUnsigned {
       ans_word,
       ans_bits,
       offset,
       offset_bits: info.offset_bits,
     });
   }
+  src.set_decomposeds(decomposeds);
   Ok(())
 }
 
-fn compress_data_page<U: UnsignedLike>(
+fn compress_data_page<U: UnsignedLike, const USE_ADJUSTMENT: bool>(
   src: &mut UnsignedSrc<U>,
   flags: &Flags,
   adjustment_bits: Bitlen,
@@ -391,15 +402,18 @@ fn compress_data_page<U: UnsignedLike>(
     let decomposed = src.decomposed();
     writer.write_usize(decomposed.ans_word, decomposed.ans_bits);
     writer.write_diff(decomposed.offset, decomposed.offset_bits);
-    // add const generic for whether to compress adjustments?
-    writer.write_diff(src.adjustment(), adjustment_bits);
+    if USE_ADJUSTMENT {
+      writer.write_diff(src.adjustment(), adjustment_bits);
+    }
     src.incr();
   }
 
   // if delta encoding is used, we have a few fewer deltas than adjustments
-  for _ in 0..flags.delta_encoding_order {
-    writer.write_diff(src.adjustment(), adjustment_bits);
-    src.incr();
+  if USE_ADJUSTMENT {
+    for _ in 0..flags.delta_encoding_order {
+      writer.write_diff(src.adjustment(), adjustment_bits);
+      src.incr();
+    }
   }
   writer.finish_byte();
   Ok(())
@@ -544,7 +558,6 @@ impl<T: NumberLike> BaseCompressor<T> {
     let trained_bins = train_mode_and_bins(
       src.unsigneds().to_vec(),
       &self.internal_config,
-      &self.flags,
       naive_mode,
       n,
     )?;

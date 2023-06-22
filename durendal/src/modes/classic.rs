@@ -26,11 +26,6 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
   }
 
   #[inline]
-  fn offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
-    writer.write_diff(u - bin.lower, bin.offset_bits);
-  }
-
-  #[inline]
   fn unchecked_decompress_unsigned(
     &self,
     bin: &BinDecompressionInfo<U>,

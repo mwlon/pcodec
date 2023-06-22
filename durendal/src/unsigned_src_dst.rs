@@ -12,11 +12,9 @@ pub struct DecomposedUnsigned<U: UnsignedLike> {
 // persists for a whole chunk
 #[derive(Clone, Debug)]
 pub struct UnsignedSrc<U: UnsignedLike> {
-  // immutable
   unsigneds: Vec<U>,
   adjustments: Vec<U>,
-  // mutable
-  decomposed: Vec<DecomposedUnsigned<U>>,
+  decomposeds: Vec<DecomposedUnsigned<U>>,
   i: usize,
 }
 
@@ -25,21 +23,17 @@ impl<U: UnsignedLike> UnsignedSrc<U> {
     Self {
       unsigneds,
       adjustments,
-      decomposed: unsafe {
-        let mut res = Vec::with_capacity(unsigneds.len());
-        res.set_len(unsigneds.len());
-        res
-      },
+      decomposeds: Vec::new(),
       i: 0,
     }
   }
 
-  pub fn set_decomposed(&mut self, idx: usize, decomposed: DecomposedUnsigned<U>) {
-    self.decomposed[idx] = decomposed;
+  pub fn set_decomposeds(&mut self, decomposeds: Vec<DecomposedUnsigned<U>>) {
+    self.decomposeds = decomposeds;
   }
 
   pub fn decomposed(&self) -> &DecomposedUnsigned<U> {
-    &self.decomposed[self.i]
+    &self.decomposeds[self.i]
   }
 
   pub fn unsigned(&self) -> U {

@@ -65,11 +65,6 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
   }
 
   #[inline]
-  fn offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
-    writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
-  }
-
-  #[inline]
   fn unchecked_decompress_unsigned(
     &self,
     bin: &BinDecompressionInfo<U>,
