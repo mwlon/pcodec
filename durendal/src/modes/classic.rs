@@ -40,6 +40,7 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> QCompressResult<U> {
-    Ok(bin.lower + reader.read_uint::<U>(bin.offset_bits)?)
+    let offset = reader.read_uint::<U>(bin.offset_bits)?;
+    Ok(bin.lower + offset)
   }
 }

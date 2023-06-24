@@ -26,7 +26,7 @@ fn test_moderate_data() -> QCompressResult<()> {
   for i in -50000..50000 {
     v.push(i);
   }
-  assert_recovers(v, 5, "moderate data")
+  assert_recovers(v, 3, "moderate data")
 }
 
 #[test]

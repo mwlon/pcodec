@@ -325,6 +325,7 @@ fn train_mode_and_bins<U: UnsignedLike>(
 
   let ans_size_log = quantize_weights(&mut optimized_infos, n_unsigneds, &internal_config);
 
+
   Ok(TrainedBins {
     dyn_mode: unoptimized_mode,
     infos: optimized_infos,
@@ -372,8 +373,9 @@ fn decompose_unsigneds<U: UnsignedLike, const USE_GCD: bool>(
 ) -> QCompressResult<()> {
   let unsigneds = src.unsigneds();
   let mut decomposeds = Vec::with_capacity(unsigneds.len());
-  for &u in src.unsigneds() {
-    let u = src.unsigned();
+  unsafe { decomposeds.set_len(unsigneds.len()) }
+  for i in (0..unsigneds.len()).rev() {
+    let u = unsigneds[i];
     let info = table.search(u)?;
     let (ans_word, ans_bits) = encoder.encode(info.token);
     let offset = if USE_GCD {
@@ -381,12 +383,12 @@ fn decompose_unsigneds<U: UnsignedLike, const USE_GCD: bool>(
     } else {
       (u - info.lower)
     };
-    decomposeds.push(DecomposedUnsigned {
+    decomposeds[i] = DecomposedUnsigned {
       ans_word,
       ans_bits,
       offset,
       offset_bits: info.offset_bits,
-    });
+    };
   }
   src.set_decomposeds(decomposeds);
   Ok(())

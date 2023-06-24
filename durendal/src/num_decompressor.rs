@@ -185,7 +185,8 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
   ) {
     let token = self.state.ans_decoder.unchecked_decode(reader);
     let bin = &self.infos[token as usize];
-    dst.write_unsigned(self.mode.unchecked_decompress_unsigned(bin, reader));
+    let u = self.mode.unchecked_decompress_unsigned(bin, reader);
+    dst.write_unsigned(u);
     if M::USES_ADJUSTMENT {
       dst.write_adj(self.mode.unchecked_decompress_adjustment(reader));
     }

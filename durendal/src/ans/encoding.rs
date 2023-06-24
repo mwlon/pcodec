@@ -136,9 +136,7 @@ fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -
     i += 1;
   }
   i = 0;
-  println!();
   while weight_sum < target_weight_sum {
-    println!("{} {} {} vs {}", i, weight_sum, weights[i], float_weights[i]);
     if (weights[i] as f32) < float_weights[i] {
       weights[i] += 1;
       weight_sum += 1;

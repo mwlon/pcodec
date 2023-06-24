@@ -49,9 +49,8 @@ impl AnsSpec {
       .collect::<Vec<_>>();
 
     let mut state_idx = table_size;
-    let mut min_token_left = 0;
     while state_idx > 0 {
-      for token in min_token_left..n_tokens {
+      for token in 0..n_tokens {
         let info = &mut token_infos[token];
         let states_finished = table_size - state_idx + 1;
         // reps_short is how many reps of this token we would need to add to
@@ -77,9 +76,6 @@ impl AnsSpec {
         }
 
         info.current_weight += reps;
-        if info.current_weight == info.weight {
-          min_token_left = token + 1;
-        }
 
         if state_idx == 0 {
           break;
@@ -98,6 +94,12 @@ impl AnsSpec {
   // compression, we expect token_weights to be ordered from least frequent to
   // most frequent.
   pub fn from_weights(size_log: Bitlen, token_weights: Vec<usize>) -> QCompressResult<Self> {
+    let token_weights = if token_weights.is_empty() {
+      vec![1]
+    } else {
+      token_weights
+    };
+
     let state_tokens = Self::choose_state_tokens(size_log, &token_weights)?;
 
     Ok(Self {
