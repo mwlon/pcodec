@@ -1,7 +1,6 @@
 use crate::ans::Token;
-use crate::bits;
-
 use crate::bin::BinCompressionInfo;
+use crate::bits;
 use crate::bits::avg_depth_bits;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
@@ -106,11 +105,9 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
 #[cfg(test)]
 mod tests {
   use crate::ans::Token;
-  use crate::bits;
-
   use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
-
+  use crate::bits;
   use crate::modes::gcd::GcdMode;
 
   fn basic_gcd_optimize(bins: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {

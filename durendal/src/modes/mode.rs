@@ -8,7 +8,6 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
 use crate::float_mult_utils;
 use crate::float_mult_utils::FloatMultConfig;
-
 use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
 pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {

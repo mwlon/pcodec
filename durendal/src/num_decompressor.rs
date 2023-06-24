@@ -1,21 +1,19 @@
 use std::cmp::min;
 use std::fmt::Debug;
 
+use crate::ans::AnsDecoder;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
-
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
-use crate::modes::gcd::GcdMode;
 use crate::modes::DynMode;
+use crate::modes::gcd::GcdMode;
 use crate::modes::Mode;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
-
-use crate::ans::AnsDecoder;
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;
 

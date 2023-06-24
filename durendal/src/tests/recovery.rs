@@ -1,9 +1,9 @@
 use rand::Rng;
 
+use crate::CompressorConfig;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::standalone::{auto_decompress, simple_compress, Compressor};
-use crate::CompressorConfig;
+use crate::standalone::{auto_decompress, Compressor, simple_compress};
 
 #[test]
 fn test_edge_cases() -> QCompressResult<()> {

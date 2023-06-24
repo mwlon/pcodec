@@ -1,12 +1,12 @@
 use std::io::Write;
 
+use crate::{ChunkMetadata, DecompressorConfig, Flags};
 use crate::base_decompressor::{BaseDecompressor, State, Step};
 use crate::bit_reader::BitReader;
 use crate::body_decompressor::BodyDecompressor;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::progress::Progress;
-use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
 /// Converts .qco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.

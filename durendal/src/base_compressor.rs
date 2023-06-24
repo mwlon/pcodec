@@ -1,6 +1,9 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
+use crate::{ans, delta_encoding};
+use crate::{bin_optimization, float_mult_utils};
+use crate::ans::AnsEncoder;
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::ChunkMetadata;
@@ -10,16 +13,12 @@ use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::Flags;
+use crate::modes::{DynMode, gcd};
 use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
-use crate::{ans, delta_encoding};
-
-use crate::ans::AnsEncoder;
-use crate::modes::{gcd, DynMode};
 use crate::unsigned_src_dst::{DecomposedUnsigned, UnsignedSrc};
-use crate::Flags;
-use crate::{bin_optimization, float_mult_utils};
 
 /// All configurations available for a compressor.
 ///

@@ -5,9 +5,9 @@
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::bit_writer::BitWriter;
+use crate::CompressorConfig;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
-use crate::CompressorConfig;
 
 /// The configuration stored in a Quantile-compressed header.
 ///

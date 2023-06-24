@@ -326,10 +326,11 @@ pub fn choose_config<T: NumberLike>(
 
 #[cfg(test)]
 mod test {
+  use std::f32::consts::{E, TAU};
+
   use crate::constants::Bitlen;
 
   use super::*;
-  use std::f32::consts::{E, TAU};
 
   fn assert_almost_equal_me(a: f32, b: f32, machine_epsilon_tolerance: u32, desc: &str) {
     let (a, b) = (a.to_unsigned(), b.to_unsigned());

@@ -1,6 +1,5 @@
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-
 use crate::bits;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;

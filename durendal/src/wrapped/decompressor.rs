@@ -1,10 +1,10 @@
 use std::io::Write;
 
+use crate::{ChunkMetadata, DecompressorConfig, Flags};
 use crate::base_decompressor::{BaseDecompressor, Step};
 use crate::bit_words::BitWords;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
 /// Converts wrapped Quantile-compressed data into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.

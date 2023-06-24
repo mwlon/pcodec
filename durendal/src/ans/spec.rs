@@ -1,7 +1,8 @@
+use std::cmp::{max, min};
+
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::errors::{QCompressError, QCompressResult};
-use std::cmp::{max, min};
 
 // Here and in encoding/decoding, state is between [0, table_size)
 

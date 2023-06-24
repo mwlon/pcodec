@@ -281,11 +281,12 @@ impl<'a> BitReader<'a> {
 
 #[cfg(test)]
 mod tests {
-  use super::BitReader;
   use crate::bit_words::BitWords;
   use crate::bit_writer::BitWriter;
   use crate::constants::WORD_BITLEN;
   use crate::errors::QCompressResult;
+
+  use super::BitReader;
 
   #[test]
   fn test_bit_reader() -> QCompressResult<()> {

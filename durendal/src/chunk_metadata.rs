@@ -6,9 +6,9 @@ use crate::constants::*;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
+use crate::Flags;
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::DynMode;
-use crate::Flags;
 
 /// The metadata of a Quantile-compressed chunk.
 ///

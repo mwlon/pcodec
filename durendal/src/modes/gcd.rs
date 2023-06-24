@@ -1,11 +1,9 @@
-use crate::data_types::UnsignedLike;
-
+use crate::{Bin, bits};
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-
+use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
-use crate::{bits, Bin};
 
 // formula: bin lower + offset * bin gcd
 #[derive(Clone, Copy, Debug)]

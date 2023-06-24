@@ -1,11 +1,11 @@
 use std::cmp::min;
 
+use crate::{CompressorConfig, DecompressorConfig};
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
+use crate::standalone::{Compressor, simple_compress};
 use crate::standalone::simple::simple_decompress;
-use crate::standalone::{simple_compress, Compressor};
-use crate::{CompressorConfig, DecompressorConfig};
 
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,

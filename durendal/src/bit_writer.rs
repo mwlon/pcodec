@@ -176,7 +176,7 @@ impl BitWriter {
 mod tests {
   use super::BitWriter;
 
-  // I find little endian confusing, hence all the comments.
+// I find little endian confusing, hence all the comments.
   // All the bytes are written backwards, e.g. 00000001 = 2^7
 
   #[test]

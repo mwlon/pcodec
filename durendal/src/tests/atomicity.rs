@@ -1,8 +1,8 @@
 use std::io::Write;
 
-use crate::errors::ErrorKind;
-use crate::standalone::{simple_compress, Decompressor};
 use crate::CompressorConfig;
+use crate::errors::ErrorKind;
+use crate::standalone::{Decompressor, simple_compress};
 
 #[test]
 fn test_errors_do_not_mutate_decompressor() {
