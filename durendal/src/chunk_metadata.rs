@@ -1,4 +1,3 @@
-
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -63,8 +62,7 @@ fn parse_bins<U: UnsignedLike>(
   if 1 << ans_size_log < n_bins {
     return Err(QCompressError::corruption(format!(
       "ANS size log ({}) is too small for number of bins ({})",
-      ans_size_log,
-      n_bins,
+      ans_size_log, n_bins,
     )));
   }
   if n_bins == 1 && ans_size_log > 0 {
@@ -134,7 +132,12 @@ fn write_bins<U: UnsignedLike>(
 }
 
 impl<U: UnsignedLike> ChunkMetadata<U> {
-  pub(crate) fn new(n: usize, bins: Vec<Bin<U>>, dyn_mode: DynMode<U>, ans_size_log: Bitlen) -> Self {
+  pub(crate) fn new(
+    n: usize,
+    bins: Vec<Bin<U>>,
+    dyn_mode: DynMode<U>,
+    ans_size_log: Bitlen,
+  ) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
@@ -207,7 +210,10 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       writer.write_diff(base.to_unsigned(), U::BITS);
     }
 
-    writer.write_bitlen(self.ans_size_log, BITS_TO_ENCODE_ANS_SIZE_LOG);
+    writer.write_bitlen(
+      self.ans_size_log,
+      BITS_TO_ENCODE_ANS_SIZE_LOG,
+    );
 
     write_bins(
       &self.bins,

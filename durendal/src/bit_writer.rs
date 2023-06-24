@@ -1,7 +1,5 @@
 use crate::bits;
-use crate::constants::{
-  Bitlen, BYTES_PER_WORD, WORD_BITLEN, WORD_SIZE,
-};
+use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 

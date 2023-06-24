@@ -1,10 +1,10 @@
-use std::cmp::{max};
 use crate::ans::spec::{AnsSpec, Token};
+use std::cmp::max;
 
-use crate::{Bin};
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
+use crate::Bin;
 
 #[derive(Clone, Debug)]
 struct TokenInfo {
@@ -36,25 +36,30 @@ impl AnsEncoder {
   pub fn new(spec: &AnsSpec) -> Self {
     let table_size = spec.table_size();
 
-    let mut token_infos = spec.token_weights.iter().map(|&weight| {
-      // e.g. If the token count is 3 and table size is 16, so the x_s values
-      // are in [3, 6).
-      // We find the power of 2 in this range (4), then compare its log to 16
-      // to find the min renormalization bits (4 - 2 = 2).
-      // Finally we choose the cutoff as 2 * 3 * 2 ^ renorm_bits = 24.
-      let max_x_s = 2 * weight - 1;
-      let min_renorm_bits = spec.size_log - max_x_s.ilog2();
-      let renorm_bit_cutoff = 2 * weight * (1 << min_renorm_bits);
-      TokenInfo {
-        renorm_bit_cutoff,
-        min_renorm_bits,
-        next_states: Vec::with_capacity(weight),
-      }
-    })
+    let mut token_infos = spec
+      .token_weights
+      .iter()
+      .map(|&weight| {
+        // e.g. If the token count is 3 and table size is 16, so the x_s values
+        // are in [3, 6).
+        // We find the power of 2 in this range (4), then compare its log to 16
+        // to find the min renormalization bits (4 - 2 = 2).
+        // Finally we choose the cutoff as 2 * 3 * 2 ^ renorm_bits = 24.
+        let max_x_s = 2 * weight - 1;
+        let min_renorm_bits = spec.size_log - max_x_s.ilog2();
+        let renorm_bit_cutoff = 2 * weight * (1 << min_renorm_bits);
+        TokenInfo {
+          renorm_bit_cutoff,
+          min_renorm_bits,
+          next_states: Vec::with_capacity(weight),
+        }
+      })
       .collect::<Vec<_>>();
 
     for (state_idx, &token) in spec.state_tokens.iter().enumerate() {
-      token_infos[token as usize].next_states.push(table_size + state_idx);
+      token_infos[token as usize]
+        .next_states
+        .push(table_size + state_idx);
     }
 
     Self {
@@ -101,13 +106,17 @@ fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -
 
   let target_weight_sum = 1 << size_log;
   let multiplier = target_weight_sum as f32 / total_count as f32;
-  let surplus_idxs = counts.iter().enumerate().filter_map(|(i, &count)|
-    if count as f32 * multiplier > 1.0 {
-      Some(i)
-    } else {
-      None
-    }
-  ).collect::<Vec<_>>();
+  let surplus_idxs = counts
+    .iter()
+    .enumerate()
+    .filter_map(|(i, &count)| {
+      if count as f32 * multiplier > 1.0 {
+        Some(i)
+      } else {
+        None
+      }
+    })
+    .collect::<Vec<_>>();
   let mut surplus = vec![0.0; counts.len()];
   let mut total_surplus = 0.0;
   for idx in surplus_idxs {
@@ -122,7 +131,10 @@ fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -
     float_weights[idx] = 1.0 + (surplus[idx] * surplus_mult);
   }
 
-  let mut weights = float_weights.iter().map(|&weight| weight.round() as usize).collect::<Vec<_>>();
+  let mut weights = float_weights
+    .iter()
+    .map(|&weight| weight.round() as usize)
+    .collect::<Vec<_>>();
   let mut weight_sum = weights.iter().sum::<usize>();
 
   let mut i = 0;
@@ -146,17 +158,18 @@ fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -
 }
 
 // choose both size_log and weights
-pub fn quantize_weights(counts: Vec<usize>, total_count: usize, max_size_log: Bitlen) -> (Bitlen, Vec<usize>) {
+pub fn quantize_weights(
+  counts: Vec<usize>,
+  total_count: usize,
+  max_size_log: Bitlen,
+) -> (Bitlen, Vec<usize>) {
   if counts.len() == 1 {
     return (0, vec![1]);
   }
 
   let min_size_log = usize::BITS - (counts.len() - 1).leading_zeros();
   // TODO limit table size more when possible
-  let size_log = max(
-    min_size_log,
-    max_size_log,
-  );
+  let size_log = max(min_size_log, max_size_log);
   let weights = quantize_weights_to(&counts, total_count, size_log);
   (size_log, weights)
 }
@@ -182,7 +195,5 @@ mod tests {
 
   // TODO
   #[test]
-  fn test_choose_weights() {
-
-  }
+  fn test_choose_weights() {}
 }

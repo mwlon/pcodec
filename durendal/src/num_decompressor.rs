@@ -1,7 +1,5 @@
-use std::cmp::{min};
+use std::cmp::min;
 use std::fmt::Debug;
-
-
 
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
@@ -78,16 +76,21 @@ pub fn new<U: UnsignedLike>(
   let ans_decoder = AnsDecoder::from_bins(ans_size_log, bins, ans_final_state)?;
   let adj_bits = dyn_mode.adjustment_bits();
 
-  let max_bits_per_num_block = bins.iter().map(|bin| {
-    let max_ans_bits = ans_size_log - bin.weight.ilog2();
-    (max_ans_bits + bin.offset_bits + adj_bits) as usize
-  }).max().unwrap_or(usize::MAX);
+  let max_bits_per_num_block = bins
+    .iter()
+    .map(|bin| {
+      let max_ans_bits = ans_size_log - bin.weight.ilog2();
+      (max_ans_bits + bin.offset_bits + adj_bits) as usize
+    })
+    .max()
+    .unwrap_or(usize::MAX);
   let state = State {
     n_processed: 0,
     bits_processed: 0,
     ans_decoder,
   };
-  let infos = bins.iter()
+  let infos = bins
+    .iter()
     .map(|bin| BinDecompressionInfo::from(bin))
     .collect::<Vec<_>>();
   let res: Box<dyn NumDecompressor<U>> = match dyn_mode {
@@ -178,11 +181,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> for NumDecompressorImpl<U, 
 
 impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
   #[inline]
-  fn unchecked_decompress_num_block(
-    &mut self,
-    reader: &mut BitReader,
-    dst: &mut UnsignedDst<U>,
-  ) {
+  fn unchecked_decompress_num_block(&mut self, reader: &mut BitReader, dst: &mut UnsignedDst<U>) {
     let token = self.state.ans_decoder.unchecked_decode(reader);
     let bin = &self.infos[token as usize];
     let u = self.mode.unchecked_decompress_unsigned(bin, reader);
@@ -281,19 +280,13 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     } else {
       min(
         remaining_unsigneds,
-        reader
-          .bits_remaining()
-          / self.max_bits_per_num_block,
+        reader.bits_remaining() / self.max_bits_per_num_block,
       )
     };
     if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
       // don't slow down the tight loops with runtime checks - do these upfront to choose
       // the best compiled tight loop
-      self.unchecked_decompress_num_blocks(
-        reader,
-        guaranteed_safe_num_blocks,
-        dst,
-      );
+      self.unchecked_decompress_num_blocks(reader, guaranteed_safe_num_blocks, dst);
     }
 
     // do checked operations for the rest

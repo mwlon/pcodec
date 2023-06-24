@@ -137,7 +137,7 @@ impl<T: NumberLike> State<T> {
       bins: &chunk_meta.bins,
       delta_moments,
       ans_size_log,
-      ans_final_state
+      ans_final_state,
     };
 
     BodyDecompressor::new(data_page_meta)

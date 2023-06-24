@@ -3,7 +3,6 @@ use crate::data_types::UnsignedLike;
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 
-
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
 use crate::{bits, Bin};

@@ -1,10 +1,10 @@
 use crate::ans::spec::{AnsSpec, Token};
 
 use crate::bit_reader::BitReader;
-use crate::{Bin};
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
+use crate::Bin;
 
 #[derive(Clone, Debug)]
 struct Node {
@@ -48,7 +48,11 @@ impl AnsDecoder {
     }
   }
 
-  pub fn from_bins<U: UnsignedLike>(size_log: Bitlen, bins: &[Bin<U>], final_state: usize) -> QCompressResult<Self> {
+  pub fn from_bins<U: UnsignedLike>(
+    size_log: Bitlen,
+    bins: &[Bin<U>],
+    final_state: usize,
+  ) -> QCompressResult<Self> {
     let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
     let spec = AnsSpec::from_weights(size_log, weights)?;
     Ok(Self::new(&spec, final_state))

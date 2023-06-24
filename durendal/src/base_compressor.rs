@@ -8,19 +8,18 @@ use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::{ans, delta_encoding};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
+use crate::{ans, delta_encoding};
 
+use crate::ans::AnsEncoder;
 use crate::modes::{gcd, DynMode};
 use crate::unsigned_src_dst::{DecomposedUnsigned, UnsignedSrc};
+use crate::Flags;
 use crate::{bin_optimization, float_mult_utils};
-use crate::{Flags};
-use crate::ans::AnsEncoder;
-
 
 /// All configurations available for a compressor.
 ///
@@ -313,8 +312,18 @@ fn train_mode_and_bins<U: UnsignedLike>(
 
   let estimated_ans_size_log = (internal_config.compression_level + 2) as Bitlen;
   let mut optimized_infos = match unoptimized_mode {
-    DynMode::Classic => bin_optimization::optimize_bins(unoptimized_bins, estimated_ans_size_log, ClassicMode, n),
-    DynMode::Gcd => bin_optimization::optimize_bins(unoptimized_bins, estimated_ans_size_log, GcdMode, n),
+    DynMode::Classic => bin_optimization::optimize_bins(
+      unoptimized_bins,
+      estimated_ans_size_log,
+      ClassicMode,
+      n,
+    ),
+    DynMode::Gcd => bin_optimization::optimize_bins(
+      unoptimized_bins,
+      estimated_ans_size_log,
+      GcdMode,
+      n,
+    ),
     DynMode::FloatMult { adj_bits, .. } => bin_optimization::optimize_bins(
       unoptimized_bins,
       estimated_ans_size_log,
@@ -323,8 +332,11 @@ fn train_mode_and_bins<U: UnsignedLike>(
     ),
   };
 
-  let ans_size_log = quantize_weights(&mut optimized_infos, n_unsigneds, &internal_config);
-
+  let ans_size_log = quantize_weights(
+    &mut optimized_infos,
+    n_unsigneds,
+    &internal_config,
+  );
 
   Ok(TrainedBins {
     dyn_mode: unoptimized_mode,
@@ -574,7 +586,10 @@ impl<T: NumberLike> BaseCompressor<T> {
     let encoder = AnsEncoder::from_bins(trained_bins.ans_size_log, &bins)?;
 
     let meta = ChunkMetadata::new(
-      n, bins, optimized_mode, trained_bins.ans_size_log,
+      n,
+      bins,
+      optimized_mode,
+      trained_bins.ans_size_log,
     );
     meta.write_to(&self.flags, &mut self.writer);
 

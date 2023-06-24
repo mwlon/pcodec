@@ -1,7 +1,7 @@
-use std::cmp::{max, min};
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::errors::{QCompressError, QCompressResult};
+use std::cmp::{max, min};
 
 // Here and in encoding/decoding, state is between [0, table_size)
 
@@ -29,21 +29,22 @@ impl AnsSpec {
     if table_size != (1 << size_log) {
       return Err(QCompressError::corruption(format!(
         "table size log of {} does not agree with total weight of {}",
-        size_log,
-        table_size,
+        size_log, table_size,
       )));
     }
 
     let mut state_tokens = vec![0; table_size];
     if token_weights.len() == 1 {
-      return Ok(state_tokens)
+      return Ok(state_tokens);
     }
 
     let n_tokens = token_weights.len();
-    let mut token_infos = token_weights.iter().map(|&weight| TokenInitInfo {
-      weight,
-      current_weight: 0,
-    })
+    let mut token_infos = token_weights
+      .iter()
+      .map(|&weight| TokenInitInfo {
+        weight,
+        current_weight: 0,
+      })
       .collect::<Vec<_>>();
 
     let mut state_idx = table_size;
@@ -64,10 +65,7 @@ impl AnsSpec {
           1,
           weight_remaining / (remaining_states - weight_remaining + 1),
         );
-        let reps = min(
-          reps_short,
-          reps_needed_to_interleave,
-        );
+        let reps = min(reps_short, reps_needed_to_interleave);
         for _ in 0..reps {
           state_idx -= 1;
           state_tokens[state_idx] = token as Token;
@@ -134,13 +132,7 @@ mod tests {
 
   #[test]
   fn ans_spec_new_trivial() -> QCompressResult<()> {
-    assert_state_tokens(
-      vec![1],
-      vec![0],
-    )?;
-    assert_state_tokens(
-      vec![2],
-      vec![0, 0],
-    )
+    assert_state_tokens(vec![1], vec![0])?;
+    assert_state_tokens(vec![2], vec![0, 0])
   }
 }

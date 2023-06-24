@@ -1,9 +1,9 @@
-use crate::{bits};
 use crate::ans::Token;
+use crate::bits;
 
 use crate::bin::BinCompressionInfo;
 use crate::bits::avg_depth_bits;
-use crate::constants::{Bitlen};
+use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::modes::Mode;
 
@@ -18,9 +18,7 @@ fn bin_bit_cost<U: UnsignedLike, M: Mode<U>>(
 ) -> f64 {
   let ans_cost = avg_depth_bits(count, n);
   let mode_cost = mode.bin_cost(lower, upper, count, acc);
-  base_meta_cost +
-    ans_cost * (count as f64) +
-    mode_cost
+  base_meta_cost + ans_cost * (count as f64) + mode_cost
 }
 
 // this is an exact optimal strategy
@@ -107,8 +105,8 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
 
 #[cfg(test)]
 mod tests {
-  use crate::{bits};
   use crate::ans::Token;
+  use crate::bits;
 
   use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
@@ -123,7 +121,13 @@ mod tests {
     expected_gcd_bin_info(weight, lower, upper, gcd, 0)
   }
 
-  fn expected_gcd_bin_info(weight: usize, lower: u32, upper: u32, gcd: u32, token: Token) -> BinCompressionInfo<u32> {
+  fn expected_gcd_bin_info(
+    weight: usize,
+    lower: u32,
+    upper: u32,
+    gcd: u32,
+    token: Token,
+  ) -> BinCompressionInfo<u32> {
     let offset_bits = bits::bits_to_encode_offset((upper - lower) / gcd);
     BinCompressionInfo {
       weight,
