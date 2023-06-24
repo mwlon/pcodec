@@ -13,13 +13,9 @@ pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: Bitlen = 3;
 pub const BITS_TO_ENCODE_MODE: Bitlen = 4;
 pub const BITS_TO_ENCODE_N_ENTRIES: Bitlen = 24;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
-pub const BITS_TO_ENCODE_JUMPSTART: Bitlen = 5;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
-pub const BITS_TO_ENCODE_CODE_LEN: Bitlen = 5;
-pub const MAX_JUMPSTART: Bitlen = BITS_TO_ENCODE_N_ENTRIES;
 
 // performance tuning parameters
-pub const MAX_BIN_TABLE_SIZE_LOG: Bitlen = 8;
 pub const UNSIGNED_BATCH_SIZE: usize = 512;
 
 // native architecture info
@@ -32,8 +28,6 @@ pub const AUTO_DELTA_LIMIT: usize = 1100;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
 pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
 pub const MAX_ENTRIES: usize = (1 << 24) - 1;
-pub const MIN_FREQUENCY_TO_USE_RUN_LEN: f64 = 0.8;
-pub const MIN_N_TO_USE_RUN_LEN: usize = 1001;
 pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 
 // defaults
@@ -41,16 +35,14 @@ pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 
 #[cfg(test)]
 mod tests {
-  use crate::bits::bits_to_encode;
   use crate::constants::*;
+
+  fn bits_to_encode(max_value: usize) -> Bitlen {
+    usize::BITS - max_value.leading_zeros()
+  }
 
   fn assert_can_encode(n_bits: Bitlen, max_number: usize) {
     assert!(n_bits >= bits_to_encode(max_number));
-  }
-
-  #[test]
-  fn test_max_jumpstart_bound() {
-    assert!(MAX_JUMPSTART <= BITS_TO_ENCODE_N_ENTRIES);
   }
 
   #[test]
@@ -64,24 +56,5 @@ mod tests {
   #[test]
   fn test_bits_to_encode_n_entries() {
     assert_can_encode(BITS_TO_ENCODE_N_ENTRIES, MAX_ENTRIES);
-  }
-
-  #[test]
-  fn test_bits_to_encode_jumpstart() {
-    assert_can_encode(
-      BITS_TO_ENCODE_JUMPSTART,
-      MAX_JUMPSTART as usize,
-    );
-  }
-
-  #[test]
-  fn test_bin_table_size_fits_in_word() {
-    assert!(MAX_BIN_TABLE_SIZE_LOG > 0);
-    assert!(MAX_BIN_TABLE_SIZE_LOG <= WORD_BITLEN);
-  }
-
-  #[test]
-  fn test_auto_detects_sparsity() {
-    assert!(AUTO_DELTA_LIMIT > MIN_N_TO_USE_RUN_LEN + MAX_DELTA_ENCODING_ORDER);
   }
 }

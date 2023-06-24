@@ -1,7 +1,7 @@
-use std::cmp::{max, min, Ordering};
+use std::cmp::{max};
 use crate::ans::spec::{AnsSpec, Token};
-use crate::bit_writer::BitWriter;
-use crate::{Bin, bits};
+
+use crate::{Bin};
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
@@ -92,8 +92,6 @@ impl AnsEncoder {
     self.size_log
   }
 }
-
-const ACCEPTABLE_KL_DIVERGENCE_RATIO: f32 = 0.02;
 
 // given size_log, quantize the counts
 fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -> Vec<usize> {

@@ -1,9 +1,9 @@
-use crate::{bits, Flags};
+use crate::{bits};
 use crate::ans::Token;
 
 use crate::bin::BinCompressionInfo;
 use crate::bits::avg_depth_bits;
-use crate::constants::{Bitlen, BITS_TO_ENCODE_CODE_LEN};
+use crate::constants::{Bitlen};
 use crate::data_types::UnsignedLike;
 use crate::modes::Mode;
 
@@ -107,7 +107,7 @@ pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
 
 #[cfg(test)]
 mod tests {
-  use crate::{bits, Flags};
+  use crate::{bits};
   use crate::ans::Token;
 
   use crate::bin::BinCompressionInfo;

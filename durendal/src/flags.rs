@@ -5,8 +5,7 @@
 use crate::bit_reader::BitReader;
 use crate::bit_words::BitWords;
 use crate::bit_writer::BitWriter;
-use crate::bits;
-use crate::constants::{Bitlen, BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
+use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::CompressorConfig;
 
@@ -116,17 +115,6 @@ impl Flags {
       ))
     } else {
       Ok(())
-    }
-  }
-
-  pub(crate) fn bits_to_encode_count(&self, n: usize) -> Bitlen {
-    // If we use wrapped mode, we don't encode the bin counts at all (even
-    // though they are nonzero). This propagates nicely through bin
-    // optimization.
-    if self.use_wrapped_mode {
-      0
-    } else {
-      bits::bits_to_encode(n)
     }
   }
 

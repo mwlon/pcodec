@@ -35,7 +35,7 @@ mod tests {
     let bit_words = BitWords::from(bytes);
     let mut reader = BitReader::from(&bit_words);
     let mut decoded = Vec::new();
-    for i in 0..tokens.len() {
+    for _i in 0..tokens.len() {
       decoded.push(decoder.unchecked_decode(&mut reader));
     }
 

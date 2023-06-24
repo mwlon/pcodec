@@ -1,6 +1,6 @@
 use crate::bits;
 use crate::constants::{
-  Bitlen, BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, MAX_ENTRIES, WORD_BITLEN, WORD_SIZE,
+  Bitlen, BYTES_PER_WORD, WORD_BITLEN, WORD_SIZE,
 };
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
@@ -135,25 +135,6 @@ impl BitWriter {
     self.j = n - processed;
   }
 
-  pub fn write_varint(&mut self, mut x: usize, jumpstart: Bitlen) {
-    if x > MAX_ENTRIES {
-      panic!("unable to encode varint greater than max number of entries");
-    }
-
-    self.write_usize(x, jumpstart);
-    x >>= jumpstart;
-    for _ in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
-      if x > 0 {
-        self.write_one(true);
-        self.write_one(x & 1 > 0);
-        x >>= 1;
-      } else {
-        break;
-      }
-    }
-    self.write_one(false);
-  }
-
   pub fn finish_byte(&mut self) {
     self.j = bits::ceil_div(self.j as usize, 8) as Bitlen * 8;
   }
@@ -248,7 +229,7 @@ mod tests {
     // 10100001 00000000
     writer.write_aligned_byte(123).expect("misaligned");
     // 10100001 00000000 11011110
-    writer.write_varint(100, 3);
+    writer.write_diff(1964_u32, 12);
     // 10100001 00000000 11011110 00110101 1110
     writer.write_usize(5, 4);
     // 10100001 00000000 11011110 00110101 11101010

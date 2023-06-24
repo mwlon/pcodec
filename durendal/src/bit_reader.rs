@@ -4,7 +4,7 @@ use std::ops::*;
 
 use crate::bit_words::BitWords;
 use crate::bits;
-use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, BYTES_PER_WORD, WORD_BITLEN};
+use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 
@@ -193,20 +193,6 @@ impl<'a> BitReader<'a> {
     Ok((bits_read, res))
   }
 
-  pub fn read_varint(&mut self, jumpstart: Bitlen) -> QCompressResult<usize> {
-    let mut res = self.read_usize(jumpstart)?;
-    for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
-      if self.read_one()? {
-        if self.read_one()? {
-          res |= 1 << i
-        }
-      } else {
-        break;
-      }
-    }
-    Ok(res)
-  }
-
   #[inline]
   fn unchecked_word(&self, i: usize) -> usize {
     // we can do this because BitWords made sure to pad self.bytes
@@ -252,20 +238,6 @@ impl<'a> BitReader<'a> {
     let (i, j) = self.idxs();
     self.bit_idx += table_size_log as usize;
     (self.unchecked_word(i) >> j) & (usize::MAX >> (WORD_BITLEN - table_size_log))
-  }
-
-  pub fn unchecked_read_varint(&mut self, jumpstart: Bitlen) -> usize {
-    let mut res = self.unchecked_read_uint::<usize>(jumpstart);
-    for i in jumpstart..BITS_TO_ENCODE_N_ENTRIES {
-      if self.unchecked_read_one() {
-        if self.unchecked_read_one() {
-          res |= 1 << i
-        }
-      } else {
-        break;
-      }
-    }
-    res
   }
 
   // Seek to the end of the byte.
@@ -331,7 +303,6 @@ mod tests {
       bit_reader.unchecked_read_uint::<u32>(3),
       1_u32
     );
-    assert_eq!(bit_reader.unchecked_read_varint(2), 5);
     //leaves 1 bit left over
     Ok(())
   }

@@ -21,7 +21,6 @@ impl AnsSpec {
   // TODO this can be slow when there are many tokens
   fn choose_state_tokens(size_log: Bitlen, token_weights: &[usize]) -> QCompressResult<Vec<Token>> {
     struct TokenInitInfo {
-      token: Token,
       weight: usize,
       current_weight: usize, // mutable
     }
@@ -41,8 +40,7 @@ impl AnsSpec {
     }
 
     let n_tokens = token_weights.len();
-    let mut token_infos = token_weights.iter().enumerate().map(|(token, &weight)| TokenInitInfo {
-      token: token as Token,
+    let mut token_infos = token_weights.iter().map(|&weight| TokenInitInfo {
       weight,
       current_weight: 0,
     })
@@ -111,11 +109,6 @@ impl AnsSpec {
 
   pub fn table_size(&self) -> usize {
     1 << self.size_log
-  }
-
-  // number of distinct tokens
-  pub fn alphabet_size(&self) -> usize {
-    self.token_weights.len()
   }
 }
 

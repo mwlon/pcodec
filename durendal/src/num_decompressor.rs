@@ -1,12 +1,12 @@
-use std::cmp::{max, min};
+use std::cmp::{min};
 use std::fmt::Debug;
-use std::fs::read;
-use std::marker::PhantomData;
+
+
 
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
-use crate::constants::{Bitlen, BITS_TO_ENCODE_N_ENTRIES, MAX_BIN_TABLE_SIZE_LOG, MAX_ENTRIES};
+
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::modes::adjusted::AdjustedMode;
@@ -16,7 +16,7 @@ use crate::modes::DynMode;
 use crate::modes::Mode;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
-use crate::{bits, Bin};
+
 use crate::ans::AnsDecoder;
 
 const UNCHECKED_NUM_THRESHOLD: usize = 30;

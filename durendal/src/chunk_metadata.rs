@@ -1,4 +1,4 @@
-use std::ops::BitXor;
+
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;

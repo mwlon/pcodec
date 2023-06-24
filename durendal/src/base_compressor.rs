@@ -14,13 +14,13 @@ use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
-use crate::modes::Mode;
+
 use crate::modes::{gcd, DynMode};
 use crate::unsigned_src_dst::{DecomposedUnsigned, UnsignedSrc};
 use crate::{bin_optimization, float_mult_utils};
 use crate::{Flags};
 use crate::ans::AnsEncoder;
-use crate::float_mult_utils::encode_apply_mult;
+
 
 /// All configurations available for a compressor.
 ///
@@ -381,7 +381,7 @@ fn decompose_unsigneds<U: UnsignedLike, const USE_GCD: bool>(
     let offset = if USE_GCD {
       (u - info.lower) / info.gcd
     } else {
-      (u - info.lower)
+      u - info.lower
     };
     decomposeds[i] = DecomposedUnsigned {
       ans_word,
