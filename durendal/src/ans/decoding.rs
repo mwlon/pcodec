@@ -58,6 +58,7 @@ impl AnsDecoder {
     Ok(Self::new(&spec, final_state))
   }
 
+  #[inline]
   pub fn unchecked_decode(&mut self, reader: &mut BitReader) -> Token {
     let node = &self.nodes[self.state - self.table_size];
     let bits_read = reader.unchecked_read_uint::<usize>(node.bits_to_read);
@@ -72,5 +73,13 @@ impl AnsDecoder {
     let next_state = node.next_state_base + bits_read;
     self.state = next_state;
     Ok(node.token)
+  }
+
+  pub fn state(&self) -> usize {
+    self.state
+  }
+
+  pub fn recover(&mut self, state: usize) {
+    self.state = state;
   }
 }

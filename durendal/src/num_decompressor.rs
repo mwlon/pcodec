@@ -26,6 +26,28 @@ pub struct State {
   ans_decoder: AnsDecoder,
 }
 
+struct Backup {
+  n_processed: usize,
+  bits_processed: usize,
+  ans_decoder_backup: usize,
+}
+
+impl State {
+  fn backup(&self) -> Backup {
+    Backup {
+      n_processed: self.n_processed,
+      bits_processed: self.bits_processed,
+      ans_decoder_backup: self.ans_decoder.state(),
+    }
+  }
+
+  fn recover(&mut self, backup: Backup) {
+    self.n_processed = backup.n_processed;
+    self.bits_processed = backup.bits_processed;
+    self.ans_decoder.recover(backup.ans_decoder_backup);
+  }
+}
+
 pub trait NumDecompressor<U: UnsignedLike>: Debug {
   fn bits_remaining(&self) -> usize;
 
@@ -146,7 +168,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> for NumDecompressorImpl<U, 
     mut dst: UnsignedDst<U>,
   ) -> QCompressResult<Progress> {
     let initial_reader = reader.clone();
-    let initial_state = self.state.clone();
+    let state_backup = self.state.backup();
     let res = self.decompress_unsigneds_dirty(reader, error_on_insufficient_data, &mut dst);
     match &res {
       Ok(progress) => {
@@ -168,7 +190,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> for NumDecompressorImpl<U, 
       }
       Err(_) => {
         *reader = initial_reader;
-        self.state = initial_state;
+        self.state.recover(state_backup);
       }
     }
     res
@@ -180,7 +202,6 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressor<U> for NumDecompressorImpl<U, 
 }
 
 impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
-  #[inline]
   fn unchecked_decompress_num_block(&mut self, reader: &mut BitReader, dst: &mut UnsignedDst<U>) {
     let token = self.state.ans_decoder.unchecked_decode(reader);
     let bin = &self.infos[token as usize];

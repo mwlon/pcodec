@@ -33,6 +33,7 @@ impl ReadableUint for usize {
   const MAX: Self = usize::MAX;
   const BITS: Bitlen = WORD_BITLEN;
 
+  #[inline]
   fn from_word(word: usize) -> Self {
     word
   }
@@ -43,6 +44,7 @@ impl<U: UnsignedLike> ReadableUint for U {
   const MAX: Self = <Self as UnsignedLike>::MAX;
   const BITS: Bitlen = <Self as UnsignedLike>::BITS;
 
+  #[inline]
   fn from_word(word: usize) -> Self {
     <Self as UnsignedLike>::from_word(word)
   }
