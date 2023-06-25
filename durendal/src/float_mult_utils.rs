@@ -40,7 +40,7 @@ pub fn encode_apply_mult<T: NumberLike>(
     for i in 0..chunk.len() {
       adjustments[base_i + i] = chunk[i]
         .to_unsigned()
-        .wrapping_sub((mults[i] * base).to_unsigned())
+        .wrapping_sub((mults[i] * base).to_unsigned());
     }
     base_i += UNSIGNED_BATCH_SIZE;
   }
@@ -275,17 +275,24 @@ fn adj_bits_needed<U: UnsignedLike>(
   nums: &[U::Float],
   cutoff: Bitlen,
 ) -> Option<Bitlen> {
-  let mut max_adj_bits = 0;
+  let mut max_abs_adj = U::ZERO;
+  let abs_adj_cutoff = if cutoff >= U::BITS {
+    U::MAX
+  } else {
+    ((U::ONE << cutoff) - U::ONE) >> 1
+  };
   let base = inv_base.inv();
   for &x in nums {
     let u = x.to_unsigned();
     let approx = ((x * inv_base).round() * base).to_unsigned();
-    let adj_bits = bits::bits_to_encode_offset((max(u, approx) - min(u, approx)) << 1);
-    if adj_bits > cutoff {
+    let abs_adj = max(u, approx) - min(u, approx);
+    if abs_adj > abs_adj_cutoff {
       return None;
     }
-    max_adj_bits = max(max_adj_bits, adj_bits);
+    max_abs_adj = max(max_abs_adj, abs_adj);
   }
+  // multiply by 2 because we need it symmetric around approx
+  let max_adj_bits = bits::bits_to_encode_offset(max_abs_adj << 1);
   Some(max_adj_bits)
 }
 
@@ -326,10 +333,11 @@ pub fn choose_config<T: NumberLike>(
 
 #[cfg(test)]
 mod test {
+  use std::f32::consts::{E, TAU};
+
   use crate::constants::Bitlen;
 
   use super::*;
-  use std::f32::consts::{E, TAU};
 
   fn assert_almost_equal_me(a: f32, b: f32, machine_epsilon_tolerance: u32, desc: &str) {
     let (a, b) = (a.to_unsigned(), b.to_unsigned());
@@ -456,7 +464,7 @@ mod test {
       2.0_f32.powi(-100),
       0.0037,
       1.0001,
-      1.00033333,
+      1.000_333_3,
       f32::MAX,
     ];
     assert_eq!(approx_sample_gcd(&nums), None);

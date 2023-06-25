@@ -28,7 +28,15 @@ macro_rules! impl_float_number {
 
       #[inline]
       fn round(self) -> Self {
-        self.round()
+        // Unfortunately rounding alone isn't enough, because numbers can round
+        // to -0, which is different from how they'll come out after conversion
+        // to integers.
+        let maybe_neg_zero = self.round();
+        if maybe_neg_zero == -0.0 {
+          0.0
+        } else {
+          maybe_neg_zero
+        }
       }
 
       #[inline]

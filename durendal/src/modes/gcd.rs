@@ -1,9 +1,6 @@
-use crate::data_types::UnsignedLike;
-
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
-
+use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::modes::Mode;
 use crate::{bits, Bin};
@@ -62,11 +59,6 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
     let max_offset = (bin.upper - bin.lower) / gcd;
     bin.gcd = gcd;
     bin.offset_bits = bits::bits_to_encode_offset(max_offset);
-  }
-
-  #[inline]
-  fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
-    writer.write_diff((u - bin.lower) / bin.gcd, bin.offset_bits);
   }
 
   #[inline]

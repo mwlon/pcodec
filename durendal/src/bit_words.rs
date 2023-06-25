@@ -1,45 +1,41 @@
-use crate::constants::BYTES_PER_WORD;
+use crate::constants::DECOMPRESS_BYTE_PADDING;
 
-/// Wrapper around a `Vec<usize>` with a specific number of bits.
-///
-/// This is used during decompression because doing bit-level operations on a
-/// `Vec<usize>` is faster than on a `Vec<u8>`; `usize` represents the
-/// true word size of the processor.
+// maintains padding at the end of the bytes, even as new ones are added
 #[derive(Clone, Debug)]
-pub struct BitWords {
+pub struct PaddedBytes {
   pub(crate) bytes: Vec<u8>,
 }
 
-impl Default for BitWords {
+impl Default for PaddedBytes {
   fn default() -> Self {
     Self::from(&[])
   }
 }
 
-impl<B: AsRef<[u8]>> From<B> for BitWords {
+impl<B: AsRef<[u8]>> From<B> for PaddedBytes {
   fn from(bytes_wrapper: B) -> Self {
-    let mut res = BitWords {
-      bytes: Vec::with_capacity(bytes_wrapper.as_ref().len() + BYTES_PER_WORD),
+    let mut res = PaddedBytes {
+      bytes: Vec::with_capacity(bytes_wrapper.as_ref().len() + DECOMPRESS_BYTE_PADDING),
     };
     res.extend_bytes(bytes_wrapper);
     res
   }
 }
 
-impl BitWords {
+impl PaddedBytes {
   pub fn total_bits(&self) -> usize {
-    (self.bytes.len() - BYTES_PER_WORD) * 8
+    (self.bytes.len() - DECOMPRESS_BYTE_PADDING) * 8
   }
 
   pub fn extend_bytes<B: AsRef<[u8]>>(&mut self, bytes: B) {
     self
       .bytes
-      .truncate(self.bytes.len().saturating_sub(BYTES_PER_WORD));
+      .truncate(self.bytes.len().saturating_sub(DECOMPRESS_BYTE_PADDING));
     self
       .bytes
-      .reserve((bytes.as_ref().len() + BYTES_PER_WORD).saturating_sub(self.bytes.len()));
+      .reserve((bytes.as_ref().len() + DECOMPRESS_BYTE_PADDING).saturating_sub(self.bytes.len()));
     self.bytes.extend(bytes.as_ref());
-    self.bytes.extend(&vec![0; BYTES_PER_WORD]);
+    self.bytes.extend(&vec![0; DECOMPRESS_BYTE_PADDING]);
   }
 
   pub fn truncate_left(&mut self, bytes_to_free: usize) {
@@ -50,15 +46,15 @@ impl BitWords {
 #[cfg(test)]
 mod tests {
   use crate::bit_reader::BitReader;
-  use crate::bit_words::BitWords;
+  use crate::bit_words::PaddedBytes;
 
   #[test]
   fn test_extend() {
-    let mut words = BitWords::default();
-    words.extend_bytes(&[0, 1, 2, 3, 4, 5, 6, 7]);
-    words.extend_bytes(&[8]);
-    words.extend_bytes(&[9, 10]);
-    words.extend_bytes(&[11, 12, 13, 14, 15, 16]);
+    let mut words = PaddedBytes::default();
+    words.extend_bytes([0, 1, 2, 3, 4, 5, 6, 7]);
+    words.extend_bytes([8]);
+    words.extend_bytes([9, 10]);
+    words.extend_bytes([11, 12, 13, 14, 15, 16]);
 
     let mut reader = BitReader::from(&words);
     for i in 0_u32..17 {

@@ -109,7 +109,7 @@ mod tests {
     let mut deltas = orig_unsigneds.to_vec();
     let order = 2;
     let zero_delta = u32::MID;
-    let mut momentss = nth_order_deltas(&mut deltas, order, &vec![0, 3]);
+    let mut momentss = nth_order_deltas(&mut deltas, order, &[0, 3]);
 
     // add back some padding we lose during compression
     assert_eq!(deltas.len(), orig_unsigneds.len() - order);

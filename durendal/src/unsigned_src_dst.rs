@@ -1,12 +1,20 @@
+use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
+
+#[derive(Clone, Debug)]
+pub struct DecomposedUnsigned<U: UnsignedLike> {
+  pub ans_word: usize,
+  pub ans_bits: Bitlen,
+  pub offset: U,
+  pub offset_bits: Bitlen,
+}
 
 // persists for a whole chunk
 #[derive(Clone, Debug)]
 pub struct UnsignedSrc<U: UnsignedLike> {
-  // immutable
   unsigneds: Vec<U>,
   adjustments: Vec<U>,
-  // mutable
+  decomposeds: Vec<DecomposedUnsigned<U>>,
   i: usize,
 }
 
@@ -15,8 +23,17 @@ impl<U: UnsignedLike> UnsignedSrc<U> {
     Self {
       unsigneds,
       adjustments,
+      decomposeds: Vec::new(),
       i: 0,
     }
+  }
+
+  pub fn set_decomposeds(&mut self, decomposeds: Vec<DecomposedUnsigned<U>>) {
+    self.decomposeds = decomposeds;
+  }
+
+  pub fn decomposed(&self) -> &DecomposedUnsigned<U> {
+    &self.decomposeds[self.i]
   }
 
   pub fn unsigned(&self) -> U {

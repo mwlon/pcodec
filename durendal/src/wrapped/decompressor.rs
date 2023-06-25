@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::base_decompressor::{BaseDecompressor, Step};
-use crate::bit_words::BitWords;
+use crate::bit_words::PaddedBytes;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
@@ -127,7 +127,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// [`.next_nums`][Self::next_batch], and
   /// this method.
   pub fn clear_compressed_bytes(&mut self) {
-    self.0.words = BitWords::default();
+    self.0.words = PaddedBytes::default();
     self.0.state.bit_idx = 0;
   }
 

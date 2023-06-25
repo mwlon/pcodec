@@ -2,13 +2,11 @@ use std::fmt::Debug;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
 use crate::constants::Bitlen;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
 use crate::float_mult_utils;
 use crate::float_mult_utils::FloatMultConfig;
-
 use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
 pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
@@ -24,8 +22,6 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
 
   // COMPRESSION
   const USES_ADJUSTMENT: bool = false;
-  fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter);
-  fn compress_adjustment(&self, _adjustment: U, _writer: &mut BitWriter) {}
 
   // DECOMPRESSION
   fn unchecked_decompress_unsigned(
@@ -48,8 +44,9 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DynMode<U: UnsignedLike> {
+  #[default]
   Classic,
   Gcd,
   FloatMult {
@@ -83,6 +80,13 @@ impl<U: UnsignedLike> DynMode<U> {
         nums.iter().map(|x| x.to_unsigned()).collect(),
         vec![],
       ),
+    }
+  }
+
+  pub fn adjustment_bits(&self) -> Bitlen {
+    match self {
+      Self::FloatMult { adj_bits, .. } => *adj_bits,
+      _ => 0,
     }
   }
 }

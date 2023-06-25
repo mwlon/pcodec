@@ -26,7 +26,7 @@ fn test_moderate_data() -> QCompressResult<()> {
   for i in -50000..50000 {
     v.push(i);
   }
-  assert_recovers(v, 5, "moderate data")
+  assert_recovers(v, 3, "moderate data")
 }
 
 #[test]
@@ -78,6 +78,7 @@ fn test_f32_codec() -> QCompressResult<()> {
       f32::NAN,
       f32::NEG_INFINITY,
       f32::INFINITY,
+      -0.0,
       0.0,
       77.7,
     ],
@@ -95,6 +96,7 @@ fn test_f64_codec() -> QCompressResult<()> {
       f64::NAN,
       f64::NEG_INFINITY,
       f64::INFINITY,
+      -0.0,
       0.0,
       77.7,
     ],
@@ -163,13 +165,26 @@ fn test_decimals() -> QCompressResult<()> {
   let mut rng = rand::thread_rng();
   let mut nums = Vec::new();
   let n = 300;
-  for _ in 0..n {
-    nums.push(rng.gen_range(-1..100) as f64 * 0.01);
+
+  pub fn plus_epsilons(a: f64, epsilons: i64) -> f64 {
+    f64::from_unsigned(a.to_unsigned().wrapping_add(epsilons as u64))
   }
-  let mut sorted = nums.clone();
-  sorted.sort_unstable_by(|a, b| a.total_cmp(b));
-  // each number should take only log2(101) < 8 bits here, or 1 byte, plus some overhead
-  assert_recovers_within_size(&nums, 2, "decimals", 0, n + 30)?;
+
+  for _ in 0..n {
+    let unadjusted_num = (rng.gen_range(-1..100) as f64) * 0.01;
+    let adj = rng.gen_range(-1..2);
+    nums.push(plus_epsilons(unadjusted_num, adj));
+  }
+  // each number should take only 7 bits for offset and 2 bits for adjustment,
+  // plus some overhead
+  let overhead_bytes = 50;
+  assert_recovers_within_size(
+    &nums,
+    2,
+    "decimals",
+    0,
+    (9 * n) / 8 + overhead_bytes,
+  )?;
   assert_recovers(nums, 2, "decimals")
 }
 
@@ -209,7 +224,9 @@ fn assert_recovers_within_size<T: NumberLike>(
   let compressed = simple_compress(config, nums);
   assert!(
     compressed.len() <= max_byte_size,
-    "{}",
+    "compressed size {} > {}; {}",
+    compressed.len(),
+    max_byte_size,
     debug_info
   );
   let decompressed = auto_decompress::<T>(&compressed)?;

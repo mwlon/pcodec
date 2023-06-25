@@ -205,7 +205,6 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
         Err(e) => Err(e),
       },
-      // TODO allow streaming to provided dest
       Step::StartOfDataPage => self.0.with_reader(|reader, state, config| {
         let &ChunkMetadata {
           n,

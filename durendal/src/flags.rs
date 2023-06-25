@@ -3,10 +3,9 @@
 // New flags may be added in over time in a backward-compatible way.
 
 use crate::bit_reader::BitReader;
-use crate::bit_words::BitWords;
+use crate::bit_words::PaddedBytes;
 use crate::bit_writer::BitWriter;
-use crate::bits;
-use crate::constants::{Bitlen, BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
+use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::CompressorConfig;
 
@@ -61,7 +60,7 @@ impl Flags {
   pub(crate) fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
     let n_bytes = reader.read_aligned_bytes(1)?[0] as usize;
     let bytes = reader.read_aligned_bytes(n_bytes)?;
-    let sub_bit_words = BitWords::from(bytes);
+    let sub_bit_words = PaddedBytes::from(bytes);
     let mut sub_reader = BitReader::from(&sub_bit_words);
 
     let mut flags = Flags {
@@ -116,17 +115,6 @@ impl Flags {
       ))
     } else {
       Ok(())
-    }
-  }
-
-  pub(crate) fn bits_to_encode_count(&self, n: usize) -> Bitlen {
-    // If we use wrapped mode, we don't encode the bin counts at all (even
-    // though they are nonzero). This propagates nicely through bin
-    // optimization.
-    if self.use_wrapped_mode {
-      0
-    } else {
-      bits::bits_to_encode(n)
     }
   }
 

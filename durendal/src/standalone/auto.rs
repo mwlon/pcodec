@@ -131,12 +131,8 @@ mod tests {
   #[test]
   fn test_auto_delta_encoding_order_step() {
     let mut nums = Vec::with_capacity(2000);
-    for _ in 0..1000 {
-      nums.push(77);
-    }
-    for _ in 1000..2000 {
-      nums.push(78);
-    }
+    nums.resize(1000, 77);
+    nums.resize(2000, 78);
     assert_eq!(auto_delta_encoding_order(&nums, 3), 1);
   }
 }

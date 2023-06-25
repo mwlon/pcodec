@@ -1,6 +1,5 @@
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
@@ -8,11 +7,11 @@ use crate::errors::QCompressResult;
 use crate::modes::classic::ClassicMode;
 use crate::modes::Mode;
 
-pub fn calc_adj_lower<U: UnsignedLike>(adj_offset_bits: Bitlen) -> U {
-  if adj_offset_bits == 0 {
+pub fn calc_adj_lower<U: UnsignedLike>(adj_bits: Bitlen) -> U {
+  if adj_bits == 0 {
     U::ZERO
   } else {
-    U::ZERO.wrapping_sub(U::ONE << (adj_offset_bits - 1))
+    U::ZERO.wrapping_sub(U::ONE << (adj_bits - 1))
   }
 }
 
@@ -49,19 +48,6 @@ impl<U: UnsignedLike> Mode<U> for AdjustedMode<U> {
   }
 
   const USES_ADJUSTMENT: bool = true;
-
-  #[inline]
-  fn compress_offset(&self, u: U, bin: &BinCompressionInfo<U>, writer: &mut BitWriter) {
-    ClassicMode.compress_offset(u, bin, writer);
-  }
-
-  #[inline]
-  fn compress_adjustment(&self, adjustment: U, writer: &mut BitWriter) {
-    writer.write_diff(
-      adjustment.wrapping_sub(self.adj_lower),
-      self.adj_bits,
-    );
-  }
 
   #[inline]
   fn unchecked_decompress_unsigned(

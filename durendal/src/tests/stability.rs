@@ -40,13 +40,10 @@ fn test_insufficient_data_short_bins() {
 
   let metadata = assert_panic_safe(nums);
   assert_eq!(metadata.bins.len(), 2);
-  for p in &metadata.bins {
-    assert_eq!(p.code_len, 1);
-  }
 }
 
 #[test]
-fn test_insufficient_data_many_reps() {
+fn test_insufficient_data_sparse() {
   let mut nums = vec![0];
   for _ in 0..(1 << 16) + 1 {
     nums.push(1);
@@ -54,10 +51,6 @@ fn test_insufficient_data_many_reps() {
 
   let metadata = assert_panic_safe(nums);
   assert_eq!(metadata.bins.len(), 2);
-  let has_reps = metadata.bins.iter().any(|p| p.run_len_jumpstart.is_some());
-  if !has_reps {
-    panic!("expected a bin to have reps");
-  }
 }
 
 #[test]
