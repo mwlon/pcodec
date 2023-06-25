@@ -288,10 +288,7 @@ mod tests {
       bit_reader.unchecked_read_uint::<u64>(2),
       2_u64
     );
-    assert_eq!(
-      bit_reader.unchecked_read_small(3),
-      1_usize
-    );
+    assert_eq!(bit_reader.unchecked_read_small(3), 1_usize);
     //leaves 1 bit left over
     Ok(())
   }

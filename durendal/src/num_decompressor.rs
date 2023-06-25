@@ -16,7 +16,6 @@ use crate::modes::Mode;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
 
-
 #[derive(Clone, Debug)]
 pub struct State {
   n_processed: usize,
