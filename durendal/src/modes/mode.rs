@@ -2,7 +2,6 @@ use std::fmt::Debug;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
 use crate::constants::Bitlen;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
@@ -23,7 +22,6 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
 
   // COMPRESSION
   const USES_ADJUSTMENT: bool = false;
-  fn compress_adjustment(&self, _adjustment: U, _writer: &mut BitWriter) {}
 
   // DECOMPRESSION
   fn unchecked_decompress_unsigned(

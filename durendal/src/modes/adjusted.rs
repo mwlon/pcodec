@@ -1,6 +1,5 @@
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
@@ -49,14 +48,6 @@ impl<U: UnsignedLike> Mode<U> for AdjustedMode<U> {
   }
 
   const USES_ADJUSTMENT: bool = true;
-
-  #[inline]
-  fn compress_adjustment(&self, adjustment: U, writer: &mut BitWriter) {
-    writer.write_diff(
-      adjustment.wrapping_sub(self.adj_lower),
-      self.adj_bits,
-    );
-  }
 
   #[inline]
   fn unchecked_decompress_unsigned(
