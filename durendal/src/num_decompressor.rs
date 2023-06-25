@@ -5,6 +5,7 @@ use crate::ans::AnsDecoder;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
+use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::modes::adjusted::AdjustedMode;
@@ -68,7 +69,7 @@ struct NumDecompressorImpl<U: UnsignedLike, M: Mode<U>> {
   n: usize,
   delta_order: usize, // only used to infer how many extra 0's are at the end
   compressed_body_size: usize,
-  max_bits_per_num_block: usize,
+  max_bits_per_num_block: Bitlen,
 
   // mutable state
   state: State,
@@ -100,10 +101,10 @@ pub fn new<U: UnsignedLike>(
     .iter()
     .map(|bin| {
       let max_ans_bits = ans_size_log - bin.weight.ilog2();
-      (max_ans_bits + bin.offset_bits + adj_bits) as usize
+      max_ans_bits + bin.offset_bits + adj_bits
     })
     .max()
-    .unwrap_or(usize::MAX);
+    .unwrap_or(Bitlen::MAX);
   let state = State {
     n_processed: 0,
     bits_processed: 0,
@@ -299,7 +300,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     } else {
       min(
         remaining_unsigneds,
-        reader.bits_remaining() / self.max_bits_per_num_block,
+        reader.bits_remaining() / self.max_bits_per_num_block as usize,
       )
     };
     if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
