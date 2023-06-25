@@ -1,7 +1,4 @@
-use std::cmp::{max, min};
-
-use crate::bits;
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, WORD_BITLEN};
 use crate::errors::{QCompressError, QCompressResult};
 
 // Here and in encoding/decoding, state is between [0, table_size)
@@ -18,14 +15,24 @@ pub struct Spec {
   pub token_weights: Vec<usize>,
 }
 
+// We use a relatively prime (odd) number near 3/5 of the table size. In this
+// way, uncommon tokens with weight=2, 3, 4, 5 all get pretty reasonable
+// spreads (in a slightly more balanced way than e.g. 4/7 would):
+// * 2 -> [0, 0.6]
+// * 3 -> [0, 0.2, 0.6]
+// * 4 -> [0, 0.2, 0.6, 0.8]
+// * 5 -> [0, 0.2, 0.4, 0.6, 0.8]
+fn choose_stride(table_size: usize) -> usize {
+  let mut res = (3 * table_size) / 5;
+  if res % 2 == 0 {
+    res += 1;
+  }
+  res
+}
+
 impl Spec {
   // TODO this can be slow when there are many tokens
-  fn choose_state_tokens(size_log: Bitlen, token_weights: &[usize]) -> QCompressResult<Vec<Token>> {
-    struct TokenInitInfo {
-      weight: usize,
-      current_weight: usize, // mutable
-    }
-
+  fn spread_state_tokens(size_log: Bitlen, token_weights: &[usize]) -> QCompressResult<Vec<Token>> {
     let table_size = token_weights.iter().sum::<usize>();
     if table_size != (1 << size_log) {
       return Err(QCompressError::corruption(format!(
@@ -34,53 +41,19 @@ impl Spec {
       )));
     }
 
-    let mut state_tokens = vec![0; table_size];
-    if token_weights.len() == 1 {
-      return Ok(state_tokens);
-    }
-
-    let n_tokens = token_weights.len();
-    let mut token_infos = token_weights
-      .iter()
-      .map(|&weight| TokenInitInfo {
-        weight,
-        current_weight: 0,
-      })
-      .collect::<Vec<_>>();
-
-    let mut state_idx = table_size;
-    while state_idx > 0 {
-      for token in 0..n_tokens {
-        let info = &mut token_infos[token];
-        let states_finished = table_size - state_idx + 1;
-        // reps_short is how many reps of this token we would need to add to
-        // exceed this token's overall frequency among the states allocated
-        // so far.
-        let reps_short = bits::ceil_div(
-          (info.weight * states_finished).saturating_sub(info.current_weight * table_size),
-          table_size - info.weight,
-        );
-        let weight_remaining = info.weight - info.current_weight;
-        let remaining_states = state_idx;
-        let reps_needed_to_interleave = max(
-          1,
-          weight_remaining / (remaining_states - weight_remaining + 1),
-        );
-        let reps = min(reps_short, reps_needed_to_interleave);
-        for _ in 0..reps {
-          state_idx -= 1;
-          state_tokens[state_idx] = token as Token;
-        }
-
-        info.current_weight += reps;
-
-        if state_idx == 0 {
-          break;
-        }
+    let mut res = vec![0; table_size];
+    let mut step = 0;
+    let stride = choose_stride(table_size);
+    let mod_table_size = usize::MAX >> 1 >> (WORD_BITLEN - size_log - 1);
+    for (token, &weight) in token_weights.iter().enumerate() {
+      for _ in 0..weight {
+        let state = (stride * step) & mod_table_size;
+        res[state] = token as Token;
+        step += 1;
       }
     }
 
-    Ok(state_tokens)
+    Ok(res)
   }
   // This needs to remain backward compatible.
   // The general idea is to spread the tokens out as much as possible,
@@ -97,7 +70,7 @@ impl Spec {
       token_weights
     };
 
-    let state_tokens = Self::choose_state_tokens(size_log, &token_weights)?;
+    let state_tokens = Self::spread_state_tokens(size_log, &token_weights)?;
 
     Ok(Self {
       size_log,
