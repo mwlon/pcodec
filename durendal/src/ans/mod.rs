@@ -1,6 +1,6 @@
-pub use decoding::AnsDecoder;
+pub use decoding::Decoder;
 pub use encoding::quantize_weights;
-pub use encoding::AnsEncoder;
+pub use encoding::Encoder;
 pub use spec::Token;
 
 mod decoding;
@@ -9,15 +9,15 @@ mod spec;
 
 #[cfg(test)]
 mod tests {
-  use crate::ans::spec::{AnsSpec, Token};
-  use crate::ans::{AnsDecoder, AnsEncoder};
+  use crate::ans::spec::{Spec, Token};
+  use crate::ans::{Decoder, Encoder};
   use crate::bit_reader::BitReader;
   use crate::bit_words::PaddedBytes;
   use crate::bit_writer::BitWriter;
 
-  fn assert_recovers(spec: &AnsSpec, tokens: Vec<Token>, expected_byte_len: usize) {
+  fn assert_recovers(spec: &Spec, tokens: Vec<Token>, expected_byte_len: usize) {
     // ENCODE
-    let mut encoder = AnsEncoder::new(spec);
+    let mut encoder = Encoder::new(spec);
     let mut to_write = Vec::new();
     for &token in tokens.iter().rev() {
       to_write.push(encoder.encode(token));
@@ -29,7 +29,7 @@ mod tests {
     let final_state = encoder.state();
 
     // DECODE
-    let mut decoder = AnsDecoder::new(spec, final_state);
+    let mut decoder = Decoder::new(spec, final_state);
     let bytes = writer.drain_bytes();
     assert_eq!(bytes.len(), expected_byte_len);
     let bit_words = PaddedBytes::from(bytes);
@@ -44,7 +44,7 @@ mod tests {
 
   #[test]
   fn ans_encoder_decoder() {
-    let spec = AnsSpec {
+    let spec = Spec {
       size_log: 3,
       state_tokens: vec![0, 1, 2, 0, 1, 2, 0, 1],
       token_weights: vec![3, 3, 2],
@@ -70,7 +70,7 @@ mod tests {
 
   #[test]
   fn ans_encoder_decoder_sparse() {
-    let spec = AnsSpec {
+    let spec = Spec {
       size_log: 3,
       state_tokens: vec![0, 0, 0, 0, 0, 0, 0, 1],
       token_weights: vec![7, 1],

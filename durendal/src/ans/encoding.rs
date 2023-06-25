@@ -1,6 +1,6 @@
 use std::cmp::max;
 
-use crate::ans::spec::{AnsSpec, Token};
+use crate::ans::spec::{Spec, Token};
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
@@ -20,20 +20,20 @@ impl TokenInfo {
 }
 
 #[derive(Clone, Debug)]
-pub struct AnsEncoder {
+pub struct Encoder {
   token_infos: Vec<TokenInfo>,
   state: usize,
   size_log: Bitlen,
 }
 
-impl AnsEncoder {
+impl Encoder {
   pub fn from_bins<U: UnsignedLike>(size_log: Bitlen, bins: &[Bin<U>]) -> QCompressResult<Self> {
     let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
-    let spec = AnsSpec::from_weights(size_log, weights)?;
+    let spec = Spec::from_weights(size_log, weights)?;
     Ok(Self::new(&spec))
   }
 
-  pub fn new(spec: &AnsSpec) -> Self {
+  pub fn new(spec: &Spec) -> Self {
     let table_size = spec.table_size();
 
     let mut token_infos = spec

@@ -362,7 +362,7 @@ mod test {
     );
   }
 
-  pub fn plus_epsilons(a: f32, epsilons: i32) -> f32 {
+  fn plus_epsilons(a: f32, epsilons: i32) -> f32 {
     f32::from_unsigned(a.to_unsigned().wrapping_add(epsilons as u32))
   }
 

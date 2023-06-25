@@ -1,7 +1,6 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-use crate::ans::AnsEncoder;
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::ChunkMetadata;
@@ -348,7 +347,7 @@ fn trained_compress_body<U: UnsignedLike>(
   src: &mut UnsignedSrc<U>,
   flags: &Flags,
   table: &CompressionTable<U>,
-  encoder: &mut AnsEncoder,
+  encoder: &mut ans::Encoder,
   dyn_mode: DynMode<U>,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
@@ -379,7 +378,7 @@ fn trained_compress_body<U: UnsignedLike>(
 // returns the ANS final state after decomposing the unsigneds in reverse order
 fn decompose_unsigneds<U: UnsignedLike, const USE_GCD: bool>(
   table: &CompressionTable<U>,
-  encoder: &mut AnsEncoder,
+  encoder: &mut ans::Encoder,
   src: &mut UnsignedSrc<U>,
 ) -> QCompressResult<()> {
   let unsigneds = src.unsigneds();
@@ -448,7 +447,7 @@ pub struct MidChunkInfo<U: UnsignedLike> {
   page_sizes: Vec<usize>,
   // mutable:
   src: UnsignedSrc<U>,
-  encoder: AnsEncoder,
+  encoder: ans::Encoder,
   page_idx: usize,
 }
 
@@ -589,7 +588,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     };
 
     let table = CompressionTable::from(trained_bins.infos);
-    let encoder = AnsEncoder::from_bins(trained_bins.ans_size_log, &bins)?;
+    let encoder = ans::Encoder::from_bins(trained_bins.ans_size_log, &bins)?;
 
     let meta = ChunkMetadata::new(
       n,

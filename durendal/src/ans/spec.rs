@@ -8,7 +8,7 @@ use crate::errors::{QCompressError, QCompressResult};
 
 pub type Token = u32;
 
-pub struct AnsSpec {
+pub struct Spec {
   // log base 2 of the table size
   // e.g. the table states will be in [2^size_log, 2^(size_log + 1))
   pub size_log: Bitlen,
@@ -18,7 +18,7 @@ pub struct AnsSpec {
   pub token_weights: Vec<usize>,
 }
 
-impl AnsSpec {
+impl Spec {
   // TODO this can be slow when there are many tokens
   fn choose_state_tokens(size_log: Bitlen, token_weights: &[usize]) -> QCompressResult<Vec<Token>> {
     struct TokenInitInfo {
@@ -113,12 +113,12 @@ impl AnsSpec {
 
 #[cfg(test)]
 mod tests {
-  use crate::ans::spec::{AnsSpec, Token};
+  use crate::ans::spec::{Spec, Token};
   use crate::errors::QCompressResult;
 
   fn assert_state_tokens(weights: Vec<usize>, expected: Vec<Token>) -> QCompressResult<()> {
     let table_size_log = weights.iter().sum::<usize>().ilog2();
-    let spec = AnsSpec::from_weights(table_size_log, weights)?;
+    let spec = Spec::from_weights(table_size_log, weights)?;
     assert_eq!(spec.state_tokens, expected);
     Ok(())
   }

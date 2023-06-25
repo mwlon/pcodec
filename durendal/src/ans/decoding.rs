@@ -1,4 +1,4 @@
-use crate::ans::spec::{AnsSpec, Token};
+use crate::ans::spec::{Spec, Token};
 use crate::bit_reader::BitReader;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
@@ -13,14 +13,14 @@ struct Node {
 }
 
 #[derive(Clone, Debug)]
-pub struct AnsDecoder {
+pub struct Decoder {
   table_size: usize,
   nodes: Vec<Node>,
   pub state: usize,
 }
 
-impl AnsDecoder {
-  pub fn new(spec: &AnsSpec, final_state: usize) -> Self {
+impl Decoder {
+  pub fn new(spec: &Spec, final_state: usize) -> Self {
     let table_size = spec.table_size();
     let mut nodes = Vec::with_capacity(table_size);
     // x_s from Jarek Duda's paper
@@ -53,7 +53,7 @@ impl AnsDecoder {
     final_state: usize,
   ) -> QCompressResult<Self> {
     let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
-    let spec = AnsSpec::from_weights(size_log, weights)?;
+    let spec = Spec::from_weights(size_log, weights)?;
     Ok(Self::new(&spec, final_state))
   }
 

@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::fmt::Debug;
 
-use crate::ans::AnsDecoder;
+use crate::ans;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
@@ -21,7 +21,7 @@ use crate::unsigned_src_dst::UnsignedDst;
 pub struct State {
   n_processed: usize,
   bits_processed: usize,
-  ans_decoder: AnsDecoder,
+  ans_decoder: ans::Decoder,
 }
 
 struct Backup {
@@ -93,7 +93,7 @@ pub fn new<U: UnsignedLike>(
       n - delta_order,
     )));
   }
-  let ans_decoder = AnsDecoder::from_bins(ans_size_log, bins, ans_final_state)?;
+  let ans_decoder = ans::Decoder::from_bins(ans_size_log, bins, ans_final_state)?;
   let adj_bits = dyn_mode.adjustment_bits();
 
   let max_bits_per_num_block = bins
