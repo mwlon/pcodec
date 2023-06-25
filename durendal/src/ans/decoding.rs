@@ -68,7 +68,7 @@ impl AnsDecoder {
 
   pub fn decode(&mut self, reader: &mut BitReader) -> QCompressResult<Token> {
     let node = &self.nodes[self.state - self.table_size];
-    let bits_read = reader.read_usize(node.bits_to_read)?;
+    let bits_read = reader.read_small(node.bits_to_read)?;
     let next_state = node.next_state_base + bits_read;
     self.state = next_state;
     Ok(node.token)

@@ -1,4 +1,3 @@
-use std::cmp::min;
 use std::fmt::{Debug, Display};
 use std::ops::*;
 
@@ -8,7 +7,7 @@ use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
 use crate::errors::{QCompressError, QCompressResult};
 
-pub(crate) trait ReadableUint:
+pub trait ReadableUint:
   Add<Output = Self>
   + BitAnd<Output = Self>
   + BitOr<Output = Self>
@@ -153,7 +152,7 @@ impl<'a> BitReader<'a> {
     Ok(self.unchecked_read_one())
   }
 
-  pub(crate) fn read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> QCompressResult<U> {
+  pub fn read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> QCompressResult<U> {
     self.insufficient_data_check("read_uint", n)?;
 
     Ok(self.unchecked_read_uint::<U>(n))
@@ -176,23 +175,9 @@ impl<'a> BitReader<'a> {
   }
 
   // returns (bits read, idx)
-  pub fn read_bin_table_idx(&mut self, table_size_log: Bitlen) -> QCompressResult<(Bitlen, usize)> {
-    let bit_idx = self.bit_idx();
-    if bit_idx >= self.total_bits {
-      return Err(QCompressError::insufficient_data_recipe(
-        "read_bin_table_idx",
-        1,
-        bit_idx,
-        self.total_bits,
-      ));
-    }
-
-    let bits_read = min(
-      self.total_bits - bit_idx,
-      table_size_log as usize,
-    ) as Bitlen;
-    let res = self.read_usize(bits_read)?;
-    Ok((bits_read, res))
+  pub fn read_small(&mut self, n: Bitlen) -> QCompressResult<usize> {
+    self.insufficient_data_check("read_small", n)?;
+    Ok(self.unchecked_read_small(n))
   }
 
   #[inline]
@@ -211,7 +196,7 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  pub(crate) fn unchecked_read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> U {
+  pub fn unchecked_read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> U {
     if n == 0 {
       return U::ZERO;
     }
@@ -236,10 +221,14 @@ impl<'a> BitReader<'a> {
     res & (U::MAX >> (U::BITS - n))
   }
 
-  pub fn unchecked_read_bin_table_idx(&mut self, table_size_log: Bitlen) -> usize {
+  #[inline]
+  pub fn unchecked_read_small(&mut self, n: Bitlen) -> usize {
     let (i, j) = self.idxs();
-    self.bit_idx += table_size_log as usize;
-    (self.unchecked_word(i) >> j) & (usize::MAX >> (WORD_BITLEN - table_size_log))
+    // Shockingly, combining this line with the last slows things down.
+    // Pipelining?
+    let res = self.unchecked_word(i) >> j;
+    self.bit_idx += n as usize;
+    res & (usize::MAX >> (WORD_BITLEN - n))
   }
 
   // Seek to the end of the byte.
@@ -270,13 +259,6 @@ impl<'a> BitReader<'a> {
   pub fn seek(&mut self, n: usize) {
     self.seek_to(self.bit_idx() + n);
   }
-
-  // Skips backward `n` bits where n <= 32.
-  // Will panic if the resulting position is out of bounds.
-  #[inline]
-  pub fn rewind_bin_overshoot(&mut self, n: Bitlen) {
-    self.bit_idx -= n as usize;
-  }
 }
 
 #[cfg(test)]
@@ -303,8 +285,8 @@ mod tests {
       2_u64
     );
     assert_eq!(
-      bit_reader.unchecked_read_uint::<u32>(3),
-      1_u32
+      bit_reader.unchecked_read_small(3),
+      1_usize
     );
     //leaves 1 bit left over
     Ok(())
@@ -325,49 +307,5 @@ mod tests {
         i as usize
       );
     }
-  }
-
-  #[test]
-  fn test_read_bin_table_idx() -> QCompressResult<()> {
-    let bytes = (0..17).collect::<Vec<_>>();
-    let words = BitWords::from(bytes);
-    let mut reader = BitReader::from(&words);
-    reader.seek(56);
-    // bytes 7 and 8, all data available
-    assert_eq!(
-      reader.read_bin_table_idx(16)?,
-      (16, 7 + (8 << 8))
-    );
-    // byte 9 and part of 10
-    assert_eq!(
-      reader.read_bin_table_idx(11)?,
-      (11, 9 + (2 << 8))
-    );
-    reader.seek_to(120);
-    // 2 bytes left, but we'll ask for 3
-    assert_eq!(
-      reader.read_bin_table_idx(24)?,
-      (16, 15 + (16 << 8))
-    );
-    Ok(())
-  }
-
-  #[test]
-  fn test_seek_rewind() {
-    let bytes = vec![0; 6];
-    let words = BitWords::from(&bytes);
-    let mut reader = BitReader::from(&words);
-    reader.seek(43);
-
-    reader.rewind_bin_overshoot(2);
-    assert_eq!(reader.bit_idx(), 41);
-    reader.rewind_bin_overshoot(2);
-    assert_eq!(reader.bit_idx(), 39);
-    reader.rewind_bin_overshoot(7);
-    assert_eq!(reader.bit_idx(), 32);
-    reader.rewind_bin_overshoot(8);
-    assert_eq!(reader.bit_idx(), 24);
-    reader.rewind_bin_overshoot(17);
-    assert_eq!(reader.bit_idx(), 7);
   }
 }
