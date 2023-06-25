@@ -4,8 +4,11 @@ use std::io::ErrorKind;
 use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{Duration, Instant};
+use tabled::{Table, Tabled};
 
 use structopt::StructOpt;
+use tabled::settings::{Alignment, Modify, Style};
+use tabled::settings::object::{Columns};
 
 use durendal::data_types::NumberLike as DNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
@@ -32,7 +35,6 @@ struct Opt {
 
 trait NumberLike: QNumberLike {
   type Durendal: DNumberLike;
-  const SUPPORTS_DUR: bool;
 
   fn slice_to_durendal(slice: &[Self]) -> &[Self::Durendal];
   fn vec_from_durendal(v: Vec<Self::Durendal>) -> Vec<Self>;
@@ -42,7 +44,6 @@ macro_rules! impl_dur_number_like {
   ($t: ty, $dur: ty) => {
     impl NumberLike for $t {
       type Durendal = $dur;
-      const SUPPORTS_DUR: bool = true;
 
       fn slice_to_durendal(slice: &[$t]) -> &[Self::Durendal] {
         unsafe { std::mem::transmute(slice) }
@@ -55,28 +56,10 @@ macro_rules! impl_dur_number_like {
   };
 }
 
-macro_rules! impl_non_dur_number_like {
-  ($t: ty) => {
-    impl NumberLike for $t {
-      type Durendal = u32;
-      const SUPPORTS_DUR: bool = false;
-
-      fn slice_to_durendal(_slice: &[$t]) -> &[Self::Durendal] {
-        panic!()
-      }
-
-      fn vec_from_durendal(_v: Vec<Self::Durendal>) -> Vec<Self> {
-        panic!()
-      }
-    }
-  };
-}
-
 impl_dur_number_like!(i64, i64);
 impl_dur_number_like!(f32, f32);
 impl_dur_number_like!(f64, f64);
 impl_dur_number_like!(TimestampMicros, i64);
-impl_non_dur_number_like!(bool);
 
 #[derive(Clone, Debug)]
 enum MultiCompressorConfig {
@@ -171,6 +154,7 @@ impl Opt {
   }
 }
 
+#[derive(Clone, Default)]
 struct BenchStat {
   pub dataset: String,
   pub codec: String,
@@ -180,14 +164,42 @@ struct BenchStat {
   pub iters: usize,
 }
 
+#[derive(Tabled)]
+struct PrintStat {
+  pub dataset: String,
+  pub codec: String,
+  pub compress_dt: String,
+  pub decompress_dt: String,
+  pub compressed_size: usize,
+}
+
 impl AddAssign for BenchStat {
   fn add_assign(&mut self, rhs: Self) {
-    if self.compressed_size == 0 {
-      self.compressed_size = rhs.compressed_size;
-    }
+    self.compressed_size += rhs.compressed_size;
     self.compress_dt += rhs.compress_dt;
     self.decompress_dt += rhs.decompress_dt;
     self.iters += rhs.iters;
+  }
+}
+
+impl BenchStat {
+  fn normalize(&mut self) {
+    self.compressed_size /= self.iters;
+    self.compress_dt /= self.iters as u32;
+    self.decompress_dt /= self.iters as u32;
+    self.iters = 1;
+  }
+}
+
+impl From<BenchStat> for PrintStat {
+  fn from(value: BenchStat) -> Self {
+    PrintStat {
+      dataset: value.dataset,
+      codec: value.codec,
+      compressed_size: value.compressed_size,
+      compress_dt: format!("{:?}", value.compress_dt),
+      decompress_dt: format!("{:?}", value.decompress_dt),
+    }
   }
 }
 
@@ -404,84 +416,36 @@ fn handle<T: NumberLike>(
   path: &Path,
   config: &MultiCompressorConfig,
   opt: &Opt,
-) -> Option<BenchStat> {
+) -> BenchStat {
   let dataset = basename_no_ext(path);
-  match config {
-    MultiCompressorConfig::Durendal(_) if !T::SUPPORTS_DUR => {
-      println!(
-        "Skipping {} for Durendal; unsupported dtype",
-        dataset
-      );
-      return None;
-    }
-    _ => (),
-  };
 
   let precomputed = warmup_iter::<T>(path, &dataset, config, opt);
-  let mut full_stat = None;
+  let mut full_stat = BenchStat {
+    codec: config.codec().to_string(),
+    dataset: dataset.clone(),
+    ..Default::default()
+  };
   for _ in 0..opt.iters {
     let iter_stat = stats_iter::<T>(dataset.clone(), config, &precomputed, opt);
-
-    if let Some(stat) = &mut full_stat {
-      *stat += iter_stat;
-    } else {
-      full_stat = Some(iter_stat);
-    }
+    full_stat.codec = iter_stat.codec.clone(); // sometimes we get a more precise codec name
+    full_stat += iter_stat;
   }
+  full_stat.normalize();
   full_stat
 }
 
-fn left_pad(s: &str, size: usize) -> String {
-  let mut res = " ".repeat(size.saturating_sub(s.len()));
-  res.push_str(s);
-  res
-}
-
-fn right_pad(s: &str, size: usize) -> String {
-  let mut res = s.to_string();
-  res.push_str(&" ".repeat(size.saturating_sub(s.len())));
-  res
-}
-
-fn print_table_line(
-  dataset: &str,
-  codec: &str,
-  size: &str,
-  compress_dt: &str,
-  decompress_dt: &str,
-) {
-  println!(
-    "|{}|{}|{}|{}|{}|",
-    right_pad(dataset, 20),
-    right_pad(codec, 14),
-    left_pad(size, 10),
-    left_pad(compress_dt, 13),
-    left_pad(decompress_dt, 13),
-  );
-}
-
 fn print_stats(stats: &[BenchStat]) {
-  println!();
-  print_table_line(
-    "dataset",
-    "compressor",
-    "size",
-    "compress dt",
-    "decompress dt",
-  );
-  print_table_line("", "", "", "", "");
+  let mut print_stats = stats.iter().cloned().map(PrintStat::from).collect::<Vec<_>>();
+  let mut aggregate = BenchStat::default();
   for stat in stats {
-    print_table_line(
-      &stat.dataset,
-      &stat.codec,
-      &format!("{}", stat.compressed_size),
-      &format!("{:?}", stat.compress_dt / stat.iters as u32),
-      &format!(
-        "{:?}",
-        stat.decompress_dt / stat.iters as u32
-      ),
-    );
+    aggregate += stat.clone();
   }
+  print_stats.push(PrintStat::from(aggregate));
+  let table = Table::new(print_stats)
+    .with(Style::rounded())
+    .with(Modify::new(Columns::new(2..)).with(Alignment::right()))
+    .to_string();
+  println!("{}", table);
 }
 
 fn main() {
@@ -513,8 +477,6 @@ fn main() {
         handle::<f64>(&path, config, &opt)
       } else if path_str.contains("f32") {
         handle::<f32>(&path, config, &opt)
-      } else if path_str.contains("bool") {
-        handle::<bool>(&path, config, &opt)
       } else if path_str.contains("micros") {
         handle::<TimestampMicros>(&path, config, &opt)
       } else {
@@ -523,7 +485,7 @@ fn main() {
           path_str
         );
       };
-      stats.extend(stat);
+      stats.push(stat);
     }
   }
 
