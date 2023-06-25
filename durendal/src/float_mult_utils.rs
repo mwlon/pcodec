@@ -464,7 +464,7 @@ mod test {
       2.0_f32.powi(-100),
       0.0037,
       1.0001,
-      1.00033333,
+      1.000_333_3,
       f32::MAX,
     ];
     assert_eq!(approx_sample_gcd(&nums), None);

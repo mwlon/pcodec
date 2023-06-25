@@ -223,6 +223,10 @@ impl<'a> BitReader<'a> {
 
   #[inline]
   pub fn unchecked_read_small(&mut self, n: Bitlen) -> usize {
+    if n == 0 {
+      return 0;
+    }
+
     let (i, j) = self.idxs();
     // Shockingly, combining this line with the last slows things down.
     // Pipelining?

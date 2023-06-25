@@ -27,7 +27,7 @@ pub struct AnsEncoder {
 }
 
 impl AnsEncoder {
-  pub fn from_bins<U: UnsignedLike>(size_log: Bitlen, bins: &Vec<Bin<U>>) -> QCompressResult<Self> {
+  pub fn from_bins<U: UnsignedLike>(size_log: Bitlen, bins: &[Bin<U>]) -> QCompressResult<Self> {
     let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
     let spec = AnsSpec::from_weights(size_log, weights)?;
     Ok(Self::new(&spec))
@@ -180,16 +180,16 @@ mod tests {
 
   #[test]
   fn test_quantize_weights_to() {
-    let quantized = quantize_weights_to(&vec![777], 777, 0);
+    let quantized = quantize_weights_to(&[777], 777, 0);
     assert_eq!(quantized, vec![1]);
 
-    let quantized = quantize_weights_to(&vec![777, 1], 778, 1);
+    let quantized = quantize_weights_to(&[777, 1], 778, 1);
     assert_eq!(quantized, vec![1, 1]);
 
-    let quantized = quantize_weights_to(&vec![777, 1], 778, 2);
+    let quantized = quantize_weights_to(&[777, 1], 778, 2);
     assert_eq!(quantized, vec![3, 1]);
 
-    let quantized = quantize_weights_to(&vec![2, 3, 6, 5, 1], 17, 3);
+    let quantized = quantize_weights_to(&[2, 3, 6, 5, 1], 17, 3);
     assert_eq!(quantized, vec![1, 1, 3, 2, 1]);
   }
 

@@ -112,7 +112,7 @@ pub fn new<U: UnsignedLike>(
   };
   let infos = bins
     .iter()
-    .map(|bin| BinDecompressionInfo::from(bin))
+    .map(BinDecompressionInfo::from)
     .collect::<Vec<_>>();
   let res: Box<dyn NumDecompressor<U>> = match dyn_mode {
     DynMode::Classic => {

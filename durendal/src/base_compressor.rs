@@ -334,7 +334,7 @@ fn train_mode_and_bins<U: UnsignedLike>(
   let ans_size_log = quantize_weights(
     &mut optimized_infos,
     n_unsigneds,
-    &internal_config,
+    internal_config,
   );
 
   Ok(TrainedBins {
