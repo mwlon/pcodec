@@ -14,7 +14,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::Flags;
-use crate::modes::{DynMode, gcd};
+use crate::modes::{adjusted, DynMode, gcd};
 use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
@@ -408,15 +408,16 @@ fn decompose_unsigneds<U: UnsignedLike, const USE_GCD: bool>(
 fn compress_data_page<U: UnsignedLike, const USE_ADJUSTMENT: bool>(
   src: &mut UnsignedSrc<U>,
   flags: &Flags,
-  adjustment_bits: Bitlen,
+  adj_bits: Bitlen,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
+  let adj_lower = adjusted::calc_adj_lower(adj_bits);
   while !src.finished_unsigneds() {
     let decomposed = src.decomposed();
     writer.write_usize(decomposed.ans_word, decomposed.ans_bits);
     writer.write_diff(decomposed.offset, decomposed.offset_bits);
     if USE_ADJUSTMENT {
-      writer.write_diff(src.adjustment(), adjustment_bits);
+      writer.write_diff(src.adjustment().wrapping_sub(adj_lower), adj_bits);
     }
     src.incr();
   }
@@ -424,7 +425,7 @@ fn compress_data_page<U: UnsignedLike, const USE_ADJUSTMENT: bool>(
   // if delta encoding is used, we have a few fewer deltas than adjustments
   if USE_ADJUSTMENT {
     for _ in 0..flags.delta_encoding_order {
-      writer.write_diff(src.adjustment(), adjustment_bits);
+      writer.write_diff(src.adjustment().wrapping_sub(adj_lower), adj_bits);
       src.incr();
     }
   }

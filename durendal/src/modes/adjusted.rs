@@ -8,11 +8,11 @@ use crate::errors::QCompressResult;
 use crate::modes::classic::ClassicMode;
 use crate::modes::Mode;
 
-pub fn calc_adj_lower<U: UnsignedLike>(adj_offset_bits: Bitlen) -> U {
-  if adj_offset_bits == 0 {
+pub fn calc_adj_lower<U: UnsignedLike>(adj_bits: Bitlen) -> U {
+  if adj_bits == 0 {
     U::ZERO
   } else {
-    U::ZERO.wrapping_sub(U::ONE << (adj_offset_bits - 1))
+    U::ZERO.wrapping_sub(U::ONE << (adj_bits - 1))
   }
 }
 
