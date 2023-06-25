@@ -3,7 +3,7 @@
 // New flags may be added in over time in a backward-compatible way.
 
 use crate::bit_reader::BitReader;
-use crate::bit_words::BitWords;
+use crate::bit_words::PaddedBytes;
 use crate::bit_writer::BitWriter;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
@@ -60,7 +60,7 @@ impl Flags {
   pub(crate) fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
     let n_bytes = reader.read_aligned_bytes(1)?[0] as usize;
     let bytes = reader.read_aligned_bytes(n_bytes)?;
-    let sub_bit_words = BitWords::from(bytes);
+    let sub_bit_words = PaddedBytes::from(bytes);
     let mut sub_reader = BitReader::from(&sub_bit_words);
 
     let mut flags = Flags {

@@ -12,7 +12,7 @@ mod tests {
   use crate::ans::spec::{AnsSpec, Token};
   use crate::ans::{AnsDecoder, AnsEncoder};
   use crate::bit_reader::BitReader;
-  use crate::bit_words::BitWords;
+  use crate::bit_words::PaddedBytes;
   use crate::bit_writer::BitWriter;
 
   fn assert_recovers(spec: &AnsSpec, tokens: Vec<Token>, expected_byte_len: usize) {
@@ -32,7 +32,7 @@ mod tests {
     let mut decoder = AnsDecoder::new(spec, final_state);
     let bytes = writer.drain_bytes();
     assert_eq!(bytes.len(), expected_byte_len);
-    let bit_words = BitWords::from(bytes);
+    let bit_words = PaddedBytes::from(bytes);
     let mut reader = BitReader::from(&bit_words);
     let mut decoded = Vec::new();
     for _i in 0..tokens.len() {

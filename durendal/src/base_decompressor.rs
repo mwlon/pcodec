@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::io::Write;
 
 use crate::bit_reader::BitReader;
-use crate::bit_words::BitWords;
+use crate::bit_words::PaddedBytes;
 use crate::body_decompressor::BodyDecompressor;
 use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
@@ -186,7 +186,7 @@ impl Step {
 #[derive(Clone, Debug, Default)]
 pub struct BaseDecompressor<T: NumberLike> {
   pub config: DecompressorConfig,
-  pub words: BitWords,
+  pub words: PaddedBytes,
   pub state: State<T>,
 }
 

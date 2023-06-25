@@ -16,6 +16,8 @@ pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
 
 // performance tuning parameters
+pub const DECOMPRESS_UNCHECKED_THRESHOLD: usize = 32;
+pub const DECOMPRESS_BYTE_PADDING: usize = BYTES_PER_WORD + DECOMPRESS_UNCHECKED_THRESHOLD * 8;
 pub const UNSIGNED_BATCH_SIZE: usize = 512;
 
 // native architecture info
@@ -43,6 +45,13 @@ mod tests {
 
   fn assert_can_encode(n_bits: Bitlen, max_number: usize) {
     assert!(n_bits >= bits_to_encode(max_number));
+  }
+
+  #[test]
+  fn test_padding_sufficient() {
+    // We need at least 8 bytes of padding to ensure reading a word doesn't
+    // go out of bounds on any architecture.
+    assert!(DECOMPRESS_BYTE_PADDING >= 8);
   }
 
   #[test]

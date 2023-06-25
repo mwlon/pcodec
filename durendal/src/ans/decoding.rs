@@ -73,12 +73,4 @@ impl AnsDecoder {
     self.state = next_state;
     Ok(node.token)
   }
-
-  pub fn state(&self) -> usize {
-    self.state
-  }
-
-  pub fn recover(&mut self, state: usize) {
-    self.state = state;
-  }
 }

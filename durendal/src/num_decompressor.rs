@@ -5,7 +5,7 @@ use crate::ans::AnsDecoder;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, DECOMPRESS_UNCHECKED_THRESHOLD};
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
 use crate::modes::adjusted::AdjustedMode;
@@ -16,7 +16,6 @@ use crate::modes::Mode;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
 
-const UNCHECKED_NUM_THRESHOLD: usize = 30;
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -36,14 +35,14 @@ impl State {
     Backup {
       n_processed: self.n_processed,
       bits_processed: self.bits_processed,
-      ans_decoder_backup: self.ans_decoder.state(),
+      ans_decoder_backup: self.ans_decoder.state,
     }
   }
 
   fn recover(&mut self, backup: Backup) {
     self.n_processed = backup.n_processed;
     self.bits_processed = backup.bits_processed;
-    self.ans_decoder.recover(backup.ans_decoder_backup);
+    self.ans_decoder.state = backup.ans_decoder_backup;
   }
 }
 
@@ -303,7 +302,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
         reader.bits_remaining() / self.max_bits_per_num_block as usize,
       )
     };
-    if guaranteed_safe_num_blocks >= UNCHECKED_NUM_THRESHOLD {
+    if guaranteed_safe_num_blocks >= DECOMPRESS_UNCHECKED_THRESHOLD {
       // don't slow down the tight loops with runtime checks - do these upfront to choose
       // the best compiled tight loop
       self.unchecked_decompress_num_blocks(reader, guaranteed_safe_num_blocks, dst);

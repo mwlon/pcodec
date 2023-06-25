@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 use std::ops::*;
 
-use crate::bit_words::BitWords;
+use crate::bit_words::PaddedBytes;
 use crate::bits;
 use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
@@ -71,8 +71,8 @@ pub struct BitReader<'a> {
   total_bits: usize,
 }
 
-impl<'a> From<&'a BitWords> for BitReader<'a> {
-  fn from(bit_words: &'a BitWords) -> Self {
+impl<'a> From<&'a PaddedBytes> for BitReader<'a> {
+  fn from(bit_words: &'a PaddedBytes) -> Self {
     BitReader {
       bytes: &bit_words.bytes,
       // ptr: bit_words.bytes.as_ptr(),
@@ -267,7 +267,7 @@ impl<'a> BitReader<'a> {
 
 #[cfg(test)]
 mod tests {
-  use crate::bit_words::BitWords;
+  use crate::bit_words::PaddedBytes;
   use crate::bit_writer::BitWriter;
   use crate::constants::WORD_BITLEN;
   use crate::errors::QCompressResult;
@@ -278,7 +278,7 @@ mod tests {
   fn test_bit_reader() -> QCompressResult<()> {
     // bits: 1001 1010  1101 0110  1011 0100
     let bytes = vec![0x9a, 0xd6, 0xb4];
-    let words = BitWords::from(&bytes);
+    let words = PaddedBytes::from(&bytes);
     let mut bit_reader = BitReader::from(&words);
     assert_eq!(bit_reader.read_aligned_bytes(1)?, vec![0x9a],);
     assert!(!bit_reader.unchecked_read_one());
@@ -303,7 +303,7 @@ mod tests {
       writer.write_usize(i as usize, i);
     }
     let bytes = writer.drain_bytes();
-    let words = BitWords::from(&bytes);
+    let words = PaddedBytes::from(&bytes);
     let mut usize_reader = BitReader::from(&words);
     for i in 1..WORD_BITLEN + 1 {
       assert_eq!(
