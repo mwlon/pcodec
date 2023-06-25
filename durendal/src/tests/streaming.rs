@@ -3,10 +3,10 @@ use std::io::Write;
 use futures::{StreamExt, TryStreamExt};
 use rand::Rng;
 
-use crate::{DecompressorConfig, DEFAULT_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 use crate::standalone::{DecompressedItem, Decompressor};
+use crate::{DecompressorConfig, DEFAULT_COMPRESSION_LEVEL};
 
 struct State<T: NumberLike> {
   decompressor: Decompressor<T>,

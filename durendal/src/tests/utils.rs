@@ -1,11 +1,11 @@
 use std::convert::TryInto;
 use std::io::Write;
 
-use crate::{CompressorConfig, DecompressorConfig};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::wrapped::{Compressor, Decompressor};
 use crate::wrapped::ChunkSpec;
+use crate::wrapped::{Compressor, Decompressor};
+use crate::{CompressorConfig, DecompressorConfig};
 
 fn encode_usize(x: usize) -> [u8; 4] {
   (x as u32).to_le_bytes()

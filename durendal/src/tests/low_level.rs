@@ -1,10 +1,10 @@
 use std::io::Write;
 
 use crate::base_decompressor::DecompressorConfig;
-use crate::CompressorConfig;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, QCompressResult};
 use crate::standalone::{Compressor, DecompressedItem, Decompressor};
+use crate::CompressorConfig;
 
 #[test]
 fn test_low_level_short() -> QCompressResult<()> {

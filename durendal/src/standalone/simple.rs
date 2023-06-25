@@ -1,9 +1,9 @@
 use std::io::Write;
 
-use crate::{bits, CompressorConfig, DecompressorConfig};
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
 use crate::standalone::{Compressor, Decompressor};
+use crate::{bits, CompressorConfig, DecompressorConfig};
 
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 

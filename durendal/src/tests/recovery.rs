@@ -1,9 +1,9 @@
 use rand::Rng;
 
-use crate::CompressorConfig;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
-use crate::standalone::{auto_decompress, Compressor, simple_compress};
+use crate::standalone::{auto_decompress, simple_compress, Compressor};
+use crate::CompressorConfig;
 
 #[test]
 fn test_edge_cases() -> QCompressResult<()> {
@@ -178,7 +178,13 @@ fn test_decimals() -> QCompressResult<()> {
   // each number should take only 7 bits for offset and 2 bits for adjustment,
   // plus some overhead
   let overhead_bytes = 50;
-  assert_recovers_within_size(&nums, 2, "decimals", 0, (9 * n) / 8 + overhead_bytes)?;
+  assert_recovers_within_size(
+    &nums,
+    2,
+    "decimals",
+    0,
+    (9 * n) / 8 + overhead_bytes,
+  )?;
   assert_recovers(nums, 2, "decimals")
 }
 

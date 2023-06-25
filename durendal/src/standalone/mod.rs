@@ -8,4 +8,3 @@ mod auto;
 mod compressor;
 mod decompressor;
 mod simple;
-

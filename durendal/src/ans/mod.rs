@@ -1,6 +1,6 @@
 pub use decoding::AnsDecoder;
-pub use encoding::AnsEncoder;
 pub use encoding::quantize_weights;
+pub use encoding::AnsEncoder;
 pub use spec::Token;
 
 mod decoding;
@@ -9,8 +9,8 @@ mod spec;
 
 #[cfg(test)]
 mod tests {
-  use crate::ans::{AnsDecoder, AnsEncoder};
   use crate::ans::spec::{AnsSpec, Token};
+  use crate::ans::{AnsDecoder, AnsEncoder};
   use crate::bit_reader::BitReader;
   use crate::bit_words::BitWords;
   use crate::bit_writer::BitWriter;

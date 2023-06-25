@@ -1,9 +1,9 @@
 use crate::ans::spec::{AnsSpec, Token};
-use crate::Bin;
 use crate::bit_reader::BitReader;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
+use crate::Bin;
 
 #[derive(Clone, Debug)]
 struct Node {

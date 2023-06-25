@@ -1,9 +1,9 @@
-use crate::{ChunkMetadata, CompressorConfig, Flags};
 use crate::base_compressor::{BaseCompressor, State};
 use crate::chunk_spec::ChunkSpec;
 use crate::constants::MAGIC_TERMINATION_BYTE;
 use crate::data_types::NumberLike;
 use crate::errors::QCompressResult;
+use crate::{ChunkMetadata, CompressorConfig, Flags};
 
 /// Converts vectors of numbers into compressed bytes in
 /// .qco format.

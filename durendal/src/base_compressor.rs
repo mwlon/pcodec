@@ -1,8 +1,6 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-use crate::{ans, delta_encoding};
-use crate::{bin_optimization, float_mult_utils};
 use crate::ans::AnsEncoder;
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
@@ -13,12 +11,14 @@ use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::Flags;
-use crate::modes::{adjusted, DynMode, gcd};
 use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
+use crate::modes::{adjusted, gcd, DynMode};
 use crate::unsigned_src_dst::{DecomposedUnsigned, UnsignedSrc};
+use crate::Flags;
+use crate::{ans, delta_encoding};
+use crate::{bin_optimization, float_mult_utils};
 
 /// All configurations available for a compressor.
 ///
@@ -417,7 +417,10 @@ fn compress_data_page<U: UnsignedLike, const USE_ADJUSTMENT: bool>(
     writer.write_usize(decomposed.ans_word, decomposed.ans_bits);
     writer.write_diff(decomposed.offset, decomposed.offset_bits);
     if USE_ADJUSTMENT {
-      writer.write_diff(src.adjustment().wrapping_sub(adj_lower), adj_bits);
+      writer.write_diff(
+        src.adjustment().wrapping_sub(adj_lower),
+        adj_bits,
+      );
     }
     src.incr();
   }
@@ -425,7 +428,10 @@ fn compress_data_page<U: UnsignedLike, const USE_ADJUSTMENT: bool>(
   // if delta encoding is used, we have a few fewer deltas than adjustments
   if USE_ADJUSTMENT {
     for _ in 0..flags.delta_encoding_order {
-      writer.write_diff(src.adjustment().wrapping_sub(adj_lower), adj_bits);
+      writer.write_diff(
+        src.adjustment().wrapping_sub(adj_lower),
+        adj_bits,
+      );
       src.incr();
     }
   }
