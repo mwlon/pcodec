@@ -74,7 +74,6 @@ pub struct CompressorConfig {
   /// When this is helpful and in rare cases when it isn't, compression speed
   /// is slightly reduced.
   pub use_gcds: bool,
-  // TODO
   pub use_float_mult: bool,
 }
 
@@ -262,7 +261,14 @@ fn quantize_weights<U: UnsignedLike>(
   internal_config: &InternalCompressorConfig,
 ) -> Bitlen {
   let counts = infos.iter().map(|info| info.weight).collect::<Vec<_>>();
-  let max_size_log = internal_config.compression_level as Bitlen + 2;
+  // This max size isn't big enough for all the bins when compression level is
+  // high, but it gets overridden later by min compression level if necessary.
+  // Going past 2^10 is undesirable because things might stop fitting in L1
+  // cache.
+  let max_size_log = min(
+    internal_config.compression_level as Bitlen + 2,
+    10,
+  );
   let (size_log, weights) = ans::quantize_weights(counts, n_unsigneds, max_size_log);
   for (i, weight) in weights.into_iter().enumerate() {
     infos[i].weight = weight;

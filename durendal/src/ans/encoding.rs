@@ -168,7 +168,6 @@ pub fn quantize_weights(
   }
 
   let min_size_log = usize::BITS - (counts.len() - 1).leading_zeros();
-  // TODO limit table size more when possible
   let size_log = max(min_size_log, max_size_log);
   let weights = quantize_weights_to(&counts, total_count, size_log);
   (size_log, weights)

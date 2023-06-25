@@ -4,18 +4,6 @@ use crate::ans::Token;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 
-// TODO
-/// A pairing of a Huffman code with a numerical range.
-///
-/// Quantile Compression works by splitting the distribution of numbers
-/// into ranges and associating a Huffman code (a short sequence of bits)
-/// with each range.
-/// The combination of these pieces of information, plus a couple others,
-/// is called a `Bin`.
-/// When compressing a number, the compressor finds the bin containing
-/// it, then writes out its Huffman code, optionally the number of
-/// consecutive repetitions of that number if `run_length_jumpstart` is
-/// available, and then the exact offset within the range for the number.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Bin<U: UnsignedLike> {
