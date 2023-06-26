@@ -1,8 +1,8 @@
 use anyhow::Result;
-use std::io::Write;
-use durendal::Bin;
 use durendal::data_types::{NumberLike, UnsignedLike};
 use durendal::standalone::Decompressor;
+use durendal::Bin;
+use std::io::Write;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -30,7 +30,10 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
 
     let flags = decompressor.header()?;
     println!("=================\n");
-    println!("data type: {}", utils::dtype_name::<P::Num>());
+    println!(
+      "data type: {}",
+      utils::dtype_name::<P::Num>()
+    );
     println!("flags: {:?}", flags);
     let header_size = decompressor.bit_idx() / 8;
     let mut metadata_size = 0;

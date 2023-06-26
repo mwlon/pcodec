@@ -2,13 +2,16 @@ use std::convert::TryFrom;
 use std::marker::PhantomData;
 
 use anyhow::Result;
-use arrow::datatypes::{Float32Type, Float64Type, Int32Type, Int64Type, TimestampMicrosecondType, TimestampNanosecondType, UInt32Type, UInt64Type};
+use arrow::datatypes::{
+  Float32Type, Float64Type, Int32Type, Int64Type, TimestampMicrosecondType,
+  TimestampNanosecondType, UInt32Type, UInt64Type,
+};
 
-use crate::number_like_arrow::NumberLikeArrow;
 use crate::compress_handler::CompressHandler;
 use crate::decompress_handler::DecompressHandler;
 use crate::dtype::DType;
 use crate::inspect_handler::InspectHandler;
+use crate::number_like_arrow::NumberLikeArrow;
 
 fn new_boxed_handler<P: NumberLikeArrow>() -> Box<dyn Handler> {
   Box::new(HandlerImpl {

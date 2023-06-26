@@ -5,13 +5,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use arrow::array::PrimitiveArray;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
-use arrow::datatypes::ArrowPrimitiveType;
 use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
 use durendal::standalone::Decompressor;
 
-use crate::number_like_arrow::NumberLikeArrow;
 use crate::handlers::HandlerImpl;
+use crate::number_like_arrow::NumberLikeArrow;
 use crate::opt::DecompressOpt;
 
 pub trait DecompressHandler {
@@ -25,7 +24,7 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
     decompressor.header()?;
 
     let mut writer = new_column_writer::<P>(opt)?;
-    let mut remaining_limit = opt.limit.unwrap_or(usize::MAX);
+    let remaining_limit = opt.limit.unwrap_or(usize::MAX);
 
     loop {
       if remaining_limit == 0 {
@@ -75,11 +74,7 @@ impl<P: NumberLikeArrow> ColumnWriter<P> for StdoutWriter<P> {
   }
 
   fn write(&mut self, arrow_natives: Vec<P::Native>) -> Result<()> {
-    let schema = Schema::new(vec![Field::new(
-      "c0",
-      P::DATA_TYPE,
-      false,
-    )]);
+    let schema = Schema::new(vec![Field::new("c0", P::DATA_TYPE, false)]);
     let c0 = PrimitiveArray::<P>::from_iter_values(arrow_natives);
     let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(c0)])?;
     let mut stdout_bytes = Vec::<u8>::new();

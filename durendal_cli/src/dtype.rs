@@ -5,9 +5,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes::{DataType as ArrowDataType, TimeUnit};
 
-use durendal::data_types::{
-  NumberLike
-};
+use durendal::data_types::NumberLike;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]

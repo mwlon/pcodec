@@ -13,11 +13,11 @@ use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::file::reader::SerializedFileReader;
 
 use durendal::data_types::NumberLike;
-use durendal::{CompressorConfig, standalone};
 use durendal::standalone::Compressor;
+use durendal::{standalone, CompressorConfig};
 
-use crate::number_like_arrow::NumberLikeArrow;
 use crate::handlers::HandlerImpl;
+use crate::number_like_arrow::NumberLikeArrow;
 use crate::opt::CompressOpt;
 use crate::utils;
 
@@ -46,7 +46,8 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
         "automatically choosing delta encoding order based on first nums (specify --delta-order to skip)",
       );
       let head_nums = head_nums::<P>(schema, opt)?;
-      let best_order = standalone::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
+      let best_order =
+        standalone::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
       println!(
         "determined best delta encoding order: {}",
         best_order

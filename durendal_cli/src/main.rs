@@ -3,7 +3,6 @@ use structopt::StructOpt;
 
 use crate::opt::Opt;
 
-mod number_like_arrow;
 mod compress;
 mod compress_handler;
 mod decompress;
@@ -12,6 +11,7 @@ mod dtype;
 mod handlers;
 mod inspect;
 mod inspect_handler;
+mod number_like_arrow;
 mod opt;
 mod utils;
 
