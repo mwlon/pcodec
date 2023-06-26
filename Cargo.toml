@@ -3,6 +3,7 @@
 members = [
   "bench",
   "durendal",
+  "durendal_cli",
   "ffi",
   "q_compress",
   "q_compress_cli",
