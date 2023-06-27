@@ -1,7 +1,7 @@
 use anyhow::Result;
 use durendal::data_types::{NumberLike, UnsignedLike};
 use durendal::standalone::Decompressor;
-use durendal::Bin;
+use durendal::{Bin, DynMode};
 use std::io::Write;
 
 use crate::handlers::HandlerImpl;
@@ -15,7 +15,7 @@ pub trait InspectHandler {
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()>;
 }
 
-fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], delta_encoded: bool) {
+fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], delta_encoded: bool, use_float_mult: bool) {
   for bin in bins {
     let gcd_str = if bin.gcd == T::Unsigned::ONE {
       "".to_string()
@@ -30,7 +30,11 @@ fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], delta_encoded: bool) {
         (bin.lower - T::Unsigned::MID).to_string()
       }
     } else {
-      T::from_unsigned(bin.lower).to_string()
+      if use_float_mult {
+        bin.lower.to_int_float().to_string()
+      } else {
+        T::from_unsigned(bin.lower).to_string()
+      }
     };
     println!(
       "{}weight: {} lower: {} offset bits: {}{}",
@@ -101,14 +105,19 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     );
 
     for (i, m) in metadatas.iter().enumerate() {
+      let (use_float_mult, float_mult_str) = match m.dyn_mode {
+        DynMode::FloatMult { base, .. } => (true, format!(" [float mult: {}]", base)),
+        _ => (false, "".to_string()),
+      };
       println!(
-        "\nchunk: {} n: {} n_bins: {} ANS size log: {}",
+        "\nchunk: {} n: {} n_bins: {} ANS size log: {}{}",
         i,
         m.n,
         m.bins.len(),
-        m.ans_size_log
+        m.ans_size_log,
+        float_mult_str,
       );
-      print_bins::<P::Num>(&m.bins, flags.delta_encoding_order > 0);
+      print_bins::<P::Num>(&m.bins, flags.delta_encoding_order > 0, use_float_mult);
     }
 
     Ok(())

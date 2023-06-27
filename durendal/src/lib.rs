@@ -11,6 +11,7 @@ pub use bin::Bin;
 pub use chunk_metadata::ChunkMetadata;
 pub use constants::DEFAULT_COMPRESSION_LEVEL;
 pub use flags::Flags;
+pub use modes::DynMode;
 
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)]
