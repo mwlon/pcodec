@@ -31,7 +31,10 @@ fn choose_stride(table_size: usize) -> usize {
 }
 
 impl Spec {
-  // TODO this can be slow when there are many tokens
+  // This needs to remain backward compatible.
+  // The general idea is to spread the tokens out as much as possible,
+  // deterministically, and ensuring each one gets as least one state.
+  // Long runs of tokens are generally bad.
   fn spread_state_tokens(size_log: Bitlen, token_weights: &[usize]) -> QCompressResult<Vec<Token>> {
     let table_size = token_weights.iter().sum::<usize>();
     if table_size != (1 << size_log) {
@@ -55,14 +58,7 @@ impl Spec {
 
     Ok(res)
   }
-  // This needs to remain backward compatible.
-  // The general idea is to spread the tokens out as much as possible,
-  // deterministically, and ensuring each one gets as least one state.
-  // Long runs of tokens are generally bad.
-  // In the sparse case, it's best to have the very frequent tokens in the low
-  // states and rarer tokens somewhat present in the high states, so for best
-  // compression, we expect token_weights to be ordered from least frequent to
-  // most frequent.
+
   pub fn from_weights(size_log: Bitlen, token_weights: Vec<usize>) -> QCompressResult<Self> {
     let token_weights = if token_weights.is_empty() {
       vec![1]
@@ -100,7 +96,7 @@ mod tests {
   fn ans_spec_new() -> QCompressResult<()> {
     assert_state_tokens(
       vec![1, 1, 3, 11],
-      vec![3, 3, 3, 3, 2, 3, 3, 3, 3, 2, 3, 3, 3, 2, 1, 0],
+      vec![0, 3, 2, 3, 2, 3, 3, 3, 3, 1, 3, 2, 3, 3, 3, 3],
     )
   }
 
