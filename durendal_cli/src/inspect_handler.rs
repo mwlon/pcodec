@@ -29,12 +29,10 @@ fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], delta_encoded: bool, use
       } else {
         (bin.lower - T::Unsigned::MID).to_string()
       }
+    } else if use_float_mult {
+      bin.lower.to_int_float().to_string()
     } else {
-      if use_float_mult {
-        bin.lower.to_int_float().to_string()
-      } else {
-        T::from_unsigned(bin.lower).to_string()
-      }
+      T::from_unsigned(bin.lower).to_string()
     };
     println!(
       "{}weight: {} lower: {} offset bits: {}{}",
@@ -117,7 +115,11 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
         m.ans_size_log,
         float_mult_str,
       );
-      print_bins::<P::Num>(&m.bins, flags.delta_encoding_order > 0, use_float_mult);
+      print_bins::<P::Num>(
+        &m.bins,
+        flags.delta_encoding_order > 0,
+        use_float_mult,
+      );
     }
 
     Ok(())
