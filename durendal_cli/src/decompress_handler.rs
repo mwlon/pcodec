@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -24,7 +25,7 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
     decompressor.header()?;
 
     let mut writer = new_column_writer::<P>(opt)?;
-    let remaining_limit = opt.limit.unwrap_or(usize::MAX);
+    let mut remaining_limit = opt.limit.unwrap_or(usize::MAX);
 
     loop {
       if remaining_limit == 0 {
@@ -33,9 +34,11 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
 
       let maybe_chunk_meta = decompressor.chunk_metadata()?;
       if let Some(chunk_meta) = maybe_chunk_meta {
-        let mut nums = vec![P::Num::default(); chunk_meta.n];
+        let batch_size = min(chunk_meta.n, remaining_limit);
+        let mut nums = vec![P::Num::default(); batch_size];
         decompressor.chunk_body(&mut nums)?;
         writer.write(nums.into_iter().map(P::num_to_native).collect::<Vec<_>>())?;
+        remaining_limit -= batch_size;
       } else {
         break;
       }
@@ -83,7 +86,6 @@ impl<P: NumberLikeArrow> ColumnWriter<P> for StdoutWriter<P> {
         .has_headers(false)
         .with_timestamp_format(self.timestamp_format.clone())
         .build(&mut stdout_bytes);
-      // &mut stdout_bytes);
       writer.write(&batch)?;
     }
     print!("{}", String::from_utf8(stdout_bytes)?);

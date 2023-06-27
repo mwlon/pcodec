@@ -32,7 +32,10 @@ fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], delta_encoded: bool) {
     } else {
       T::from_unsigned(bin.lower).to_string()
     };
-    println!("{}weight: {} lower: {} offset bits: {}{}", INDENT, bin.weight, lower_str, bin.offset_bits, gcd_str);
+    println!(
+      "{}weight: {} lower: {} offset bits: {}{}",
+      INDENT, bin.weight, lower_str, bin.offset_bits, gcd_str
+    );
   }
 }
 
@@ -98,7 +101,13 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     );
 
     for (i, m) in metadatas.iter().enumerate() {
-      println!("\nchunk: {} n: {} n_bins: {} ANS size log: {}", i, m.n, m.bins.len(), m.ans_size_log);
+      println!(
+        "\nchunk: {} n: {} n_bins: {} ANS size log: {}",
+        i,
+        m.n,
+        m.bins.len(),
+        m.ans_size_log
+      );
       print_bins::<P::Num>(&m.bins, flags.delta_encoding_order > 0);
     }
 

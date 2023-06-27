@@ -172,7 +172,7 @@ pub fn quantize_weights(
   let mut weights = quantize_weights_to(&counts, total_count, size_log);
 
   let power_of_2 = weights.iter().map(|&w| w.trailing_zeros()).min().unwrap();
-  size_log = size_log - power_of_2;
+  size_log -= power_of_2;
   for weight in &mut weights {
     *weight >>= power_of_2;
   }
