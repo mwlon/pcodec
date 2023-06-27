@@ -1,5 +1,6 @@
 use arrow::datatypes as arrow_dtypes;
 use arrow::datatypes::ArrowPrimitiveType;
+
 use durendal::data_types::NumberLike;
 
 pub trait NumberLikeArrow: ArrowPrimitiveType {

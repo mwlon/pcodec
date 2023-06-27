@@ -8,6 +8,7 @@ use arrow::array::PrimitiveArray;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
 use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
+
 use durendal::standalone::Decompressor;
 
 use crate::handlers::HandlerImpl;

@@ -1,8 +1,10 @@
+use std::io::Write;
+
 use anyhow::Result;
+
 use durendal::data_types::{NumberLike, UnsignedLike};
 use durendal::standalone::Decompressor;
 use durendal::{Bin, DynMode};
-use std::io::Write;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;

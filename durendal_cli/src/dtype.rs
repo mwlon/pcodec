@@ -100,9 +100,10 @@ impl DType {
 
 #[cfg(test)]
 mod tests {
+  use std::str::FromStr;
+
   use anyhow::Result;
   use enum_iterator::IntoEnumIterator;
-  use std::str::FromStr;
 
   use crate::dtype::DType;
 

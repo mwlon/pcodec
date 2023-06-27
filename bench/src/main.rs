@@ -4,11 +4,11 @@ use std::io::ErrorKind;
 use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{Duration, Instant};
-use tabled::{Table, Tabled};
 
 use structopt::StructOpt;
+use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
-use tabled::settings::object::{Columns};
+use tabled::{Table, Tabled};
 
 use durendal::data_types::NumberLike as DNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
@@ -412,11 +412,7 @@ fn stats_iter<T: NumberLike>(
   }
 }
 
-fn handle<T: NumberLike>(
-  path: &Path,
-  config: &MultiCompressorConfig,
-  opt: &Opt,
-) -> BenchStat {
+fn handle<T: NumberLike>(path: &Path, config: &MultiCompressorConfig, opt: &Opt) -> BenchStat {
   let dataset = basename_no_ext(path);
 
   let precomputed = warmup_iter::<T>(path, &dataset, config, opt);
@@ -435,7 +431,11 @@ fn handle<T: NumberLike>(
 }
 
 fn print_stats(stats: &[BenchStat]) {
-  let mut print_stats = stats.iter().cloned().map(PrintStat::from).collect::<Vec<_>>();
+  let mut print_stats = stats
+    .iter()
+    .cloned()
+    .map(PrintStat::from)
+    .collect::<Vec<_>>();
   let mut aggregate = BenchStat::default();
   for stat in stats {
     aggregate += stat.clone();
