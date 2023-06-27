@@ -1,5 +1,3 @@
-use std::fmt::{Display, Formatter};
-
 use crate::ans::Token;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
@@ -17,21 +15,6 @@ pub struct Bin<U: UnsignedLike> {
   /// The greatest common divisor of all numbers belonging to this bin
   /// (in the data type's corresponding unsigned integer).
   pub gcd: U,
-}
-
-impl<U: UnsignedLike> Display for Bin<U> {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    let gcd_str = if self.gcd > U::ONE {
-      format!(" (gcd: {})", self.gcd)
-    } else {
-      "".to_string()
-    };
-    write!(
-      f,
-      "weight: {} lower: {} offset bits: {}{}",
-      self.weight, self.lower, self.offset_bits, gcd_str,
-    )
-  }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

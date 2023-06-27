@@ -168,8 +168,14 @@ pub fn quantize_weights(
   }
 
   let min_size_log = usize::BITS - (counts.len() - 1).leading_zeros();
-  let size_log = max(min_size_log, max_size_log);
-  let weights = quantize_weights_to(&counts, total_count, size_log);
+  let mut size_log = max(min_size_log, max_size_log);
+  let mut weights = quantize_weights_to(&counts, total_count, size_log);
+
+  let power_of_2 = weights.iter().map(|&w| w.trailing_zeros()).min().unwrap();
+  size_log = size_log - power_of_2;
+  for weight in &mut weights {
+    *weight >>= power_of_2;
+  }
   (size_log, weights)
 }
 
@@ -192,7 +198,12 @@ mod tests {
     assert_eq!(quantized, vec![1, 1, 3, 2, 1]);
   }
 
-  // TODO
   #[test]
-  fn test_choose_weights() {}
+  fn test_quantize_weights() {
+    let quantized = quantize_weights(vec![77, 100], 177, 4);
+    assert_eq!(quantized, (4, vec![7, 9]));
+
+    let quantized = quantize_weights(vec![77, 77], 154, 4);
+    assert_eq!(quantized, (1, vec![1, 1]));
+  }
 }

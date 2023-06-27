@@ -15,10 +15,24 @@ pub trait InspectHandler {
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()>;
 }
 
-fn print_bins<U: UnsignedLike>(bins: &[Bin<U>]) {
-  println!("{}{} bins:", INDENT, bins.len());
+fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], delta_encoded: bool) {
   for bin in bins {
-    println!("{}{}{}", INDENT, INDENT, bin);
+    let gcd_str = if bin.gcd == T::Unsigned::ONE {
+      "".to_string()
+    } else {
+      format!(" [gcd: {}]", bin.gcd)
+    };
+    let lower_str = if delta_encoded {
+      // hacky way to print the centered unsigned as a signed integer
+      if bin.lower < T::Unsigned::MID {
+        format!("-{}", T::Unsigned::MID - bin.lower)
+      } else {
+        (bin.lower - T::Unsigned::MID).to_string()
+      }
+    } else {
+      T::from_unsigned(bin.lower).to_string()
+    };
+    println!("{}weight: {} lower: {} offset bits: {}{}", INDENT, bin.weight, lower_str, bin.offset_bits, gcd_str);
   }
 }
 
@@ -84,9 +98,8 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     );
 
     for (i, m) in metadatas.iter().enumerate() {
-      println!("\nchunk {}", i);
-      println!("{}n: {}", INDENT, m.n);
-      print_bins(&m.bins);
+      println!("\nchunk: {} n: {} n_bins: {} ANS size log: {}", i, m.n, m.bins.len(), m.ans_size_log);
+      print_bins::<P::Num>(&m.bins, flags.delta_encoding_order > 0);
     }
 
     Ok(())
