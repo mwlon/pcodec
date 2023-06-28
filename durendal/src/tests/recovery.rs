@@ -175,15 +175,17 @@ fn test_decimals() -> QCompressResult<()> {
     let adj = rng.gen_range(-1..2);
     nums.push(plus_epsilons(unadjusted_num, adj));
   }
-  // each number should take only 7 bits for offset and 2 bits for adjustment,
-  // plus some overhead
-  let overhead_bytes = 50;
+  nums.resize(2 * n, f64::INFINITY); // some big numbers just to test losslessness
+  // Each regular number should take only 7 bits for offset and 2 bits for
+  // adjustment, plus some overhead. Each infinity should take 1 bit plus maybe
+  // 2 for adjustment.
+  let overhead_bytes = 100;
   assert_recovers_within_size(
     &nums,
     2,
     "decimals",
     0,
-    (9 * n) / 8 + overhead_bytes,
+    (9 * n + 3 * n) / 8 + overhead_bytes,
   )?;
   assert_recovers(nums, 2, "decimals")
 }
