@@ -136,42 +136,94 @@ mod tests {
   #[test]
   fn int_float32_invertibility() {
     for x in [
-      -f32::NAN, f32::NEG_INFINITY, f32::MIN, -1.0, -0.0, 0.0, 3.0, f32::MAX, f32::INFINITY, f32::NAN,
+      -f32::NAN,
+      f32::NEG_INFINITY,
+      f32::MIN,
+      -1.0,
+      -0.0,
+      0.0,
+      3.0,
+      f32::MAX,
+      f32::INFINITY,
+      f32::NAN,
     ] {
       let int = u32::from_int_float(x);
       let recovered = u32::to_int_float(int);
       // gotta compare unsigneds because floats don't implement Equal
-      assert_eq!(recovered.to_unsigned(), x.to_unsigned(), "{} != {}", x, recovered);
+      assert_eq!(
+        recovered.to_unsigned(),
+        x.to_unsigned(),
+        "{} != {}",
+        x,
+        recovered
+      );
     }
   }
 
   #[test]
   fn int_float64_invertibility() {
     for x in [
-      -f64::NAN, f64::NEG_INFINITY, f64::MIN, -1.0, -0.0, 0.0, 3.0, f64::MAX, f64::INFINITY, f64::NAN,
+      -f64::NAN,
+      f64::NEG_INFINITY,
+      f64::MIN,
+      -1.0,
+      -0.0,
+      0.0,
+      3.0,
+      f64::MAX,
+      f64::INFINITY,
+      f64::NAN,
     ] {
       let int = u64::from_int_float(x);
       let recovered = u64::to_int_float(int);
       // gotta compare unsigneds because floats don't implement Equal
-      assert_eq!(recovered.to_unsigned(), x.to_unsigned(), "{} != {}", x, recovered);
+      assert_eq!(
+        recovered.to_unsigned(),
+        x.to_unsigned(),
+        "{} != {}",
+        x,
+        recovered
+      );
     }
   }
 
   #[test]
   fn int_float_ordering() {
-    let values = vec![-f32::NAN, f32::NEG_INFINITY, f32::MIN, -1.0, -0.0, 0.0, 3.0,
-                      f32::GREATEST_PRECISE_INT,
-                      f32::MAX, f32::INFINITY, f32::NAN];
+    let values = vec![
+      -f32::NAN,
+      f32::NEG_INFINITY,
+      f32::MIN,
+      -1.0,
+      -0.0,
+      0.0,
+      3.0,
+      f32::GREATEST_PRECISE_INT,
+      f32::MAX,
+      f32::INFINITY,
+      f32::NAN,
+    ];
     let mut last_int = None;
     for x in values {
       let int = u32::from_int_float(x);
       if let Some(last_int) = last_int {
-        assert!(last_int < int, "at {}; int {} vs {}", x, last_int, int);
+        assert!(
+          last_int < int,
+          "at {}; int {} vs {}",
+          x,
+          last_int,
+          int
+        );
       }
       last_int = Some(int)
     }
 
-    assert_eq!(u32::from_int_float(f32::GREATEST_PRECISE_INT) - 1, u32::from_int_float(f32::GREATEST_PRECISE_INT - 1.0));
-    assert_eq!(u32::from_int_float(f32::GREATEST_PRECISE_INT) + 1, u32::from_int_float(f32::GREATEST_PRECISE_INT + 2.0));
+    assert_eq!(
+      u32::from_int_float(f32::GREATEST_PRECISE_INT) - 1,
+      u32::from_int_float(f32::GREATEST_PRECISE_INT - 1.0)
+    );
+    assert_eq!(
+      u32::from_int_float(f32::GREATEST_PRECISE_INT) + 1,
+      u32::from_int_float(f32::GREATEST_PRECISE_INT + 2.0)
+    );
   }
 }

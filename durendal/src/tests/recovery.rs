@@ -175,7 +175,8 @@ fn test_decimals() -> QCompressResult<()> {
     let adj = rng.gen_range(-1..2);
     nums.push(plus_epsilons(unadjusted_num, adj));
   }
-  nums.resize(2 * n, f64::INFINITY); // some big numbers just to test losslessness
+  // add some big numbers just to test losslessness
+  nums.resize(2 * n, f64::INFINITY);
   // Each regular number should take only 7 bits for offset and 2 bits for
   // adjustment, plus some overhead. Each infinity should take 1 bit plus maybe
   // 2 for adjustment.
