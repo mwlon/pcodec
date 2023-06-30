@@ -203,9 +203,9 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     let token = self.state.ans_decoder.unchecked_decode(reader);
     let bin = &self.infos[token as usize];
     let u = self.mode.unchecked_decompress_unsigned(bin, reader);
-    dst.write_unsigned(u);
+    dst.write(0, u);
     if M::USES_ADJUSTMENT {
-      dst.write_adj(self.mode.unchecked_decompress_adjustment(reader));
+      dst.write(1, self.mode.unchecked_decompress_adjustment(reader));
     }
     dst.incr();
   }
@@ -236,9 +236,9 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     } else {
       U::ZERO
     };
-    dst.write_unsigned(u);
+    dst.write(0, u);
     if M::USES_ADJUSTMENT {
-      dst.write_adj(adj);
+      dst.write(1, adj);
     }
     dst.incr();
     Ok(())
@@ -322,7 +322,7 @@ impl<U: UnsignedLike, M: Mode<U>> NumDecompressorImpl<U, M> {
     while dst.n_processed() < batch_size {
       if M::USES_ADJUSTMENT {
         match self.mode.decompress_adjustment(reader) {
-          Ok(adj) => dst.write_adj(adj),
+          Ok(adj) => dst.write(1, adj),
           Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => {
             return mark_insufficient(dst, e)
           }

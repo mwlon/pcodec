@@ -66,33 +66,36 @@ impl<U: UnsignedLike> UnsignedSrc<U> {
 }
 
 // mutable destination for unsigneds and associated information to be written
+// Each stream interleaved in the data writes to a corresponding stream here.
+// It would be nicer to have a single data member for all the streams, but
+// that's not possible because the primary stream may be provided by the user
+// for performance reasons (and is therefore in a different memory location).
 pub struct UnsignedDst<'a, U: UnsignedLike> {
-  // immutable
-  unsigneds: &'a mut [U],
-  adjustments: &'a mut [U],
+  primary_stream: &'a mut [U],
+  stream1: &'a mut [U],
   len: usize,
-  // mutable
   i: usize,
 }
 
 impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
-  pub fn new(unsigneds: &'a mut [U], adjustments: &'a mut [U]) -> Self {
-    let len = unsigneds.len();
-    assert!(adjustments.len() >= len);
+  pub fn new(primary_stream: &'a mut [U], stream1: &'a mut [U]) -> Self {
+    let len = primary_stream.len();
+    assert!(stream1.len() >= len);
     Self {
-      unsigneds,
-      adjustments,
+      primary_stream,
+      stream1,
       len,
       i: 0,
     }
   }
 
-  pub fn write_unsigned(&mut self, u: U) {
-    self.unsigneds[self.i] = u;
-  }
-
-  pub fn write_adj(&mut self, u: U) {
-    self.adjustments[self.i] = u;
+  #[inline]
+  pub fn write(&mut self, stream_idx: usize, u: U) {
+    match stream_idx {
+      0 => self.primary_stream[self.i] = u,
+      1 => self.stream1[self.i] = u,
+      _ => panic!("invalid stream; should be unreachable"),
+    }
   }
 
   pub fn n_processed(&self) -> usize {
@@ -112,6 +115,6 @@ impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
   }
 
   pub fn decompose(self) -> (&'a mut [U], &'a mut [U]) {
-    (self.unsigneds, self.adjustments)
+    (self.primary_stream, self.stream1)
   }
 }
