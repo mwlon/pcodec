@@ -41,7 +41,7 @@ macro_rules! impl_float_number {
         self as f64
       }
 
-      fn log2_epsilons_between_positives(a: Self, b: Self) -> Bitlen {
+      fn log2_ulps_between_positives(a: Self, b: Self) -> Bitlen {
         let (a, b) = (a.to_bits(), b.to_bits());
         let epsilons = max(a, b) - min(a, b);
         $bits - epsilons.leading_zeros()

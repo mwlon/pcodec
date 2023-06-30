@@ -231,7 +231,7 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
   let cutoff = if rough_classic_bins > CLASSIC_MEMORIZATION_THRESH {
     let median = sample[sample.len() / 2];
     let gcd = inv_gcd.inv();
-    U::Float::log2_epsilons_between_positives(median, median + gcd) / 2
+    U::Float::log2_ulps_between_positives(median, median + gcd) / 2
   } else {
     ((rough_classic_bins * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen
   };

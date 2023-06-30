@@ -33,7 +33,7 @@ pub trait FloatLike:
   fn abs(self) -> Self;
   fn inv(self) -> Self;
   fn round(self) -> Self;
-  fn log2_epsilons_between_positives(a: Self, b: Self) -> Bitlen;
+  fn log2_ulps_between_positives(a: Self, b: Self) -> Bitlen;
   fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
   fn is_finite_and_normal(&self) -> bool;
