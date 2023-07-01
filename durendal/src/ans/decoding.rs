@@ -4,6 +4,7 @@ use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
 use crate::Bin;
+use crate::chunk_metadata::DataPageStreamMetadata;
 
 #[derive(Clone, Debug)]
 struct Node {
@@ -47,14 +48,12 @@ impl Decoder {
     }
   }
 
-  pub fn from_bins<U: UnsignedLike>(
-    size_log: Bitlen,
-    bins: &[Bin<U>],
-    final_state: usize,
+  pub fn from_stream_meta<U: UnsignedLike>(
+    stream: &DataPageStreamMetadata<U>,
   ) -> QCompressResult<Self> {
-    let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
-    let spec = Spec::from_weights(size_log, weights)?;
-    Ok(Self::new(&spec, final_state))
+    let weights = stream.bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
+    let spec = Spec::from_weights(stream.ans_size_log, weights)?;
+    Ok(Self::new(&spec, stream.ans_final_state))
   }
 
   #[inline]

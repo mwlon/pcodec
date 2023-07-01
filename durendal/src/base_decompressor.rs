@@ -4,7 +4,7 @@ use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_words::PaddedBytes;
 use crate::body_decompressor::BodyDecompressor;
-use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
+use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata, DataPageStreamMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
 use crate::delta_encoding::DeltaMoments;
@@ -117,11 +117,17 @@ impl<T: NumberLike> State<T> {
   ) -> QCompressResult<BodyDecompressor<T>> {
     let flags = self.flags.as_ref().unwrap();
     let chunk_meta = self.chunk_meta.as_ref().unwrap();
-    let ans_size_log = chunk_meta.ans_size_log;
 
     let start_byte_idx = reader.aligned_byte_idx()?;
-    let delta_moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
-    let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
+
+    let mut streams = Vec::with_capacity(chunk_meta.streams.len());
+    for chunk_stream_meta in &chunk_meta.streams {
+      let ans_size_log = chunk_stream_meta.ans_size_log;
+      let delta_moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
+      let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
+      streams.push(DataPageStreamMetadata::new(chunk_stream_meta, delta_moments, ans_final_state));
+    }
+
     reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
     let end_byte_idx = reader.aligned_byte_idx()?;
     let compressed_body_size = compressed_page_size
@@ -134,10 +140,7 @@ impl<T: NumberLike> State<T> {
       compressed_body_size,
       n,
       dyn_mode: chunk_meta.dyn_mode,
-      bins: &chunk_meta.bins,
-      delta_moments,
-      ans_size_log,
-      ans_final_state,
+      streams,
     };
 
     BodyDecompressor::new(data_page_meta)

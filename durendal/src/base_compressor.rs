@@ -382,7 +382,7 @@ fn trained_compress_body<U: UnsignedLike>(
 }
 
 // returns the ANS final state after decomposing the unsigneds in reverse order
-fn decompose_unsigneds<U: UnsignedLike, const USE_GCD: bool>(
+fn decompose_unsigneds<U: UnsignedLike, M: Mode<U>>(
   table: &CompressionTable<U>,
   encoder: &mut ans::Encoder,
   src: &mut UnsignedSrc<U>,

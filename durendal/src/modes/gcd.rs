@@ -63,7 +63,6 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
 
   #[inline]
   fn unchecked_decompress_unsigned(
-    &self,
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> U {
@@ -72,7 +71,6 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
 
   #[inline]
   fn decompress_unsigned(
-    &self,
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> QCompressResult<U> {

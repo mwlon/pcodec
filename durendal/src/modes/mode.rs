@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
+use crate::bit_writer::BitWriter;
 use crate::constants::Bitlen;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
@@ -9,6 +10,8 @@ use crate::float_mult_utils;
 use crate::float_mult_utils::FloatMultConfig;
 use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
+// Static, compile-time modes. Logic should go here if it's called in hot
+// loops.
 pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   // BIN OPTIMIZATION
   type BinOptAccumulator: Default;
@@ -21,29 +24,24 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   );
 
   // COMPRESSION
-  const USES_ADJUSTMENT: bool = false;
+  fn compress_unsigned(
+    u: U,
+    bin: &BinCompressionInfo<U>,
+    writer: &mut BitWriter,
+  );
 
   // DECOMPRESSION
   fn unchecked_decompress_unsigned(
-    &self,
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> U;
   fn decompress_unsigned(
-    &self,
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> QCompressResult<U>;
-  #[inline]
-  fn unchecked_decompress_adjustment(&self, _reader: &mut BitReader) -> U {
-    panic!("unreachable")
-  }
-  #[inline]
-  fn decompress_adjustment(&self, _reader: &mut BitReader) -> QCompressResult<U> {
-    panic!("unreachable")
-  }
 }
 
+// Dynamic modes. Logic should go here if it isn't called in hot loops.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DynMode<U: UnsignedLike> {
   #[default]
@@ -62,6 +60,13 @@ impl<U: UnsignedLike> DynMode<U> {
       adj_bits: config.adj_bits,
       inv_base: config.inv_base,
       base: config.base,
+    }
+  }
+
+  pub fn n_streams(&self) -> usize {
+    match self {
+      DynMode::Classic | DynMode::Gcd => 1,
+      DynMode::FloatMult { .. } => 2,
     }
   }
 
