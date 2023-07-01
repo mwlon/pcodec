@@ -34,3 +34,27 @@ trivial_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);
 trivial_arrow!(i64, arrow_dtypes::TimestampNanosecondType);
 trivial_arrow!(u32, arrow_dtypes::UInt32Type);
 trivial_arrow!(u64, arrow_dtypes::UInt64Type);
+
+impl NumberLikeArrow for arrow_dtypes::Int16Type {
+  type Num = i32;
+
+  fn native_to_num(native: Self::Native) -> Self::Num {
+    native as i32
+  }
+
+  fn num_to_native(num: Self::Num) -> Self::Native {
+    num as i16
+  }
+}
+
+impl NumberLikeArrow for arrow_dtypes::UInt16Type {
+  type Num = u32;
+
+  fn native_to_num(native: Self::Native) -> Self::Num {
+    native as u32
+  }
+
+  fn num_to_native(num: Self::Num) -> Self::Native {
+    num as u16
+  }
+}

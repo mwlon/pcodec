@@ -12,10 +12,12 @@ use durendal::data_types::NumberLike;
 pub enum DType {
   F32,
   F64,
+  I16,
   I32,
   I64,
   TimestampMicros,
   TimestampNanos,
+  U16,
   U32,
   U64,
 }
@@ -67,8 +69,10 @@ impl DType {
     let res = match self {
       DType::F32 => ArrowDataType::Float32,
       DType::F64 => ArrowDataType::Float64,
+      DType::I16 => ArrowDataType::Int16,
       DType::I32 => ArrowDataType::Int32,
       DType::I64 => ArrowDataType::Int64,
+      DType::U16 => ArrowDataType::UInt16,
       DType::U32 => ArrowDataType::UInt32,
       DType::U64 => ArrowDataType::UInt64,
       DType::TimestampMicros => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
@@ -81,8 +85,10 @@ impl DType {
     let res = match arrow_dtype {
       ArrowDataType::Float32 => DType::F32,
       ArrowDataType::Float64 => DType::F64,
+      ArrowDataType::Int16 => DType::I16,
       ArrowDataType::Int32 => DType::I32,
       ArrowDataType::Int64 => DType::I64,
+      ArrowDataType::UInt16 => DType::U16,
       ArrowDataType::UInt32 => DType::U32,
       ArrowDataType::UInt64 => DType::U64,
       ArrowDataType::Timestamp(TimeUnit::Microsecond, _) => DType::TimestampMicros,
