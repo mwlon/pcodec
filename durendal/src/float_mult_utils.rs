@@ -6,7 +6,7 @@ use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::unsigned_src_dst::{UnsignedDst, StreamSrc};
 
-pub fn decode_apply_mult<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
+pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   let (unsigneds, adjustments) = dst.decompose();
   for i in 0..unsigneds.len() {
     let unadjusted = unsigneds[i].to_int_float() * base;
@@ -14,7 +14,7 @@ pub fn decode_apply_mult<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   }
 }
 
-pub fn encode_apply_mult<T: NumberLike>(
+pub fn split_streams<T: NumberLike>(
   nums: &[T],
   base: <T::Unsigned as UnsignedLike>::Float,
   inv_base: <T::Unsigned as UnsignedLike>::Float,
@@ -44,7 +44,7 @@ pub fn encode_apply_mult<T: NumberLike>(
     }
     base_i += UNSIGNED_BATCH_SIZE;
   }
-  StreamSrc::new(unsigneds, adjustments)
+  StreamSrc::new([unsigneds, adjustments])
 }
 
 const MIN_SAMPLE: usize = 10;

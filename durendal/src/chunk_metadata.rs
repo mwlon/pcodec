@@ -10,7 +10,7 @@ use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::DynMode;
 use crate::Flags;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ChunkStreamMetadata<U: UnsignedLike> {
   /// *How* the chunk body was compressed.
   pub bins: Vec<Bin<U>>,

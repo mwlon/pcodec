@@ -11,10 +11,9 @@ use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
-use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{GcdMode, use_gcd_arithmetic};
-use crate::modes::{adjusted, gcd, DynMode, Mode};
+use crate::modes::{gcd, DynMode, Mode};
 use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
 use crate::Flags;
 use crate::{ans, delta_encoding};
@@ -316,7 +315,7 @@ fn train_mode_and_infos<U: UnsignedLike>(
 
   let estimated_ans_size_log = (internal_config.compression_level + 2) as Bitlen;
   let mut optimized_infos = match unoptimized_mode {
-    DynMode::Classic => bin_optimization::optimize_bins(
+    DynMode::Classic | DynMode::FloatMult { .. } => bin_optimization::optimize_bins(
       unoptimized_bins,
       estimated_ans_size_log,
       ClassicMode,
@@ -326,12 +325,6 @@ fn train_mode_and_infos<U: UnsignedLike>(
       unoptimized_bins,
       estimated_ans_size_log,
       GcdMode,
-      n,
-    ),
-    DynMode::FloatMult { adj_bits, .. } => bin_optimization::optimize_bins(
-      unoptimized_bins,
-      estimated_ans_size_log,
-      AdjustedMode::new(adj_bits),
       n,
     ),
   };
@@ -368,7 +361,7 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: Mode<U>, const STREAMS: usize>(
       ..
     } = &mut stream_configs[stream_idx];
     for i in (0..stream.len()).rev() {
-      let u = unsigneds[i];
+      let u = stream[i];
       let info = table.search(u)?;
       let (ans_word, ans_bits) = encoder.encode(info.token);
       let offset = M::calc_offset(u, info);
@@ -530,11 +523,12 @@ impl<T: NumberLike> BaseCompressor<T> {
     nums: &[T],
   ) -> StreamSrc<T::Unsigned> {
     match naive_mode {
-      DynMode::Classic | DynMode::Gcd => StreamSrc::new(
+      DynMode::Classic | DynMode::Gcd => StreamSrc::new([
         nums.iter().map(|x| x.to_unsigned()).collect(),
-      ),
+        vec![],
+      ]),
       DynMode::FloatMult { inv_base, base, .. } => {
-        float_mult_utils::encode_apply_mult(nums, *base, *inv_base)
+        float_mult_utils::split_streams(nums, base, inv_base)
       },
     }
   }
@@ -585,13 +579,13 @@ impl<T: NumberLike> BaseCompressor<T> {
       )?;
       let bins = bins_from_compression_infos(&trained.infos);
 
+      let table = CompressionTable::from(trained.infos);
+      let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
+
       stream_metas.push(ChunkStreamMetadata {
         bins,
         ans_size_log: trained.ans_size_log,
       });
-
-      let table = CompressionTable::from(trained_bins.infos);
-      let encoder = ans::Encoder::from_bins(trained_bins.ans_size_log, &bins)?;
       stream_configs.push(StreamConfig {
         delta_order,
         table,
@@ -600,7 +594,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       });
     }
 
-    let optimized_mode = match unoptimized_mode {
+    let optimized_mode = match naive_mode {
       DynMode::Gcd => {
         if stream_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
           DynMode::Gcd
@@ -639,23 +633,31 @@ impl<T: NumberLike> BaseCompressor<T> {
 
       let decomposeds = decompose_unsigneds(info)?;
 
-      for stream_idx in info.dyn_mode.n_streams() {
+      for stream_idx in 0..info.dyn_mode.n_streams() {
         info.data_page_moments(stream_idx).write_to(&mut self.writer);
 
         // write the final ANS state, moving it down the range [0, table_size)
         let size_log = info.stream_configs[stream_idx].encoder.size_log();
         let final_state = decomposeds.ans_final_state(stream_idx);
-        writer.write_usize(
+        self.writer.write_usize(
           final_state - (1 << size_log),
           size_log,
         );
       }
 
-      trained_compress_body(
-        decomposeds,
-        info.page_sizes[info.page_idx],
-        &mut self.writer,
-      )?;
+      match info.dyn_mode.n_streams() {
+        1 => trained_compress_body::<_, 1>(
+            decomposeds,
+            info.page_sizes[info.page_idx],
+            &mut self.writer,
+          ),
+        2 => trained_compress_body::<_, 2>(
+          decomposeds,
+          info.page_sizes[info.page_idx],
+          &mut self.writer,
+        ),
+        _ => panic!("should be unreachable!"),
+      }?;
 
       info.page_idx += 1;
       info.page_idx < info.n_pages()

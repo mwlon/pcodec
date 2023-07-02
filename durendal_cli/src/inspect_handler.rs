@@ -105,23 +105,29 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     );
 
     for (i, m) in metadatas.iter().enumerate() {
-      let (use_float_mult, float_mult_str) = match m.dyn_mode {
-        DynMode::FloatMult { base, .. } => (true, format!(" [float mult: {}]", base)),
-        _ => (false, "".to_string()),
-      };
-      println!(
-        "\nchunk: {} n: {} n_bins: {} ANS size log: {}{}",
-        i,
-        m.n,
-        m.bins.len(),
-        m.ans_size_log,
-        float_mult_str,
-      );
-      print_bins::<P::Num>(
-        &m.bins,
-        flags.delta_encoding_order > 0,
-        use_float_mult,
-      );
+      for (stream_idx, stream) in m.streams.iter().enumerate() {
+        let stream_name = match (m.dyn_mode, stream_idx) {
+          (DynMode::Classic, 1) => "primary".to_string(),
+          (DynMode::Gcd, 1) => "primary".to_string(),
+          (DynMode::FloatMult { base, .. }, 1) => format!("multiplier [x{}]", base),
+          (DynMode::FloatMult { .. }, 2) => "ULPs adjustment".to_string(),
+          _ => panic!("unknown stream: {:?}/{}", m.dyn_mode, stream_idx),
+        };
+        let use_float_mult = matches!(m.dyn_mode, DynMode::FloatMult { .. });
+        println!(
+          "\nchunk: {} stream: {} n: {} n_bins: {} ANS size log: {}",
+          i,
+          stream_name,
+          m.n,
+          stream.bins.len(),
+          stream.ans_size_log,
+        );
+        print_bins::<P::Num>(
+          &stream.bins,
+          flags.delta_encoding_order > 0,
+          use_float_mult,
+        );
+      }
     }
 
     Ok(())

@@ -69,15 +69,6 @@ impl<U: UnsignedLike> DynMode<U> {
     }
   }
 
-  pub fn finalize(&self, dst: UnsignedDst<U>) {
-    if let DynMode::FloatMult { base, .. } = self {
-      float_mult_utils::decode_apply_mult(*base, dst);
-    }
-  }
-
-  pub fn create_src<T: NumberLike<Unsigned = U>>(&self, nums: &[T]) -> StreamSrc<U> {
-  }
-
   pub fn adjustment_bits(&self) -> Bitlen {
     match self {
       Self::FloatMult { adj_bits, .. } => *adj_bits,

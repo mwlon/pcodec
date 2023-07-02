@@ -34,7 +34,7 @@ impl<U: UnsignedLike> StreamSrc<U> {
 
   #[inline]
   pub fn unsigned(&self, stream_idx: usize) -> U {
-    self.unsigneds[stream_idx][self.i]
+    self.streams[stream_idx][self.i]
   }
 
   pub fn idx(&self) -> usize {

@@ -11,7 +11,6 @@ use crate::chunk_metadata::DataPageMetadata;
 use crate::constants::{Bitlen, DECOMPRESS_UNCHECKED_THRESHOLD, MAX_DELTA_ENCODING_ORDER};
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, QCompressError, QCompressResult};
-use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
 use crate::modes::DynMode;
@@ -32,19 +31,29 @@ struct Backup<const STREAMS: usize> {
   ans_decoder_backups: [usize; STREAMS],
 }
 
+fn decoder_states<const STREAMS: usize>(decoders: &[ans::Decoder; STREAMS]) -> [usize; STREAMS] {
+  core::array::from_fn(|stream_idx| decoders[stream_idx].state)
+}
+
+fn recover_decoders<const STREAMS: usize>(backups: [usize; STREAMS], decoders: &mut[ans::Decoder; STREAMS]) {
+  for stream_idx in 0..STREAMS {
+    decoders[stream_idx].state = backups[stream_idx];
+  }
+}
+
 impl<const STREAMS: usize> State<STREAMS> {
   fn backup(&self) -> Backup<STREAMS> {
     Backup {
       n_processed: self.n_processed,
       bits_processed: self.bits_processed,
-      ans_decoder_backups: self.ans_decoders.iter().map(|decoder| decoder.state).collect(),
+      ans_decoder_backups: decoder_states(&self.ans_decoders),
     }
   }
 
   fn recover(&mut self, backup: Backup<STREAMS>) {
     self.n_processed = backup.n_processed;
     self.bits_processed = backup.bits_processed;
-    self.ans_decoders.state = backup.ans_decoder_backups;
+    recover_decoders(backup.ans_decoder_backups, &mut self.ans_decoders);
   }
 }
 
@@ -95,7 +104,7 @@ pub fn new<U: UnsignedLike>(
       .max()
       .unwrap_or(Bitlen::MAX);
   }
-  let res: Box<dyn NumDecompressor<U>> = match dyn_mode {
+  let res: Box<dyn NumDecompressor<U>> = match data_page_meta.dyn_mode {
     DynMode::Classic => Box::new(NumDecompressorImpl::<U, ClassicMode, 1>::new(data_page_meta, max_bits_per_num_block)?),
     DynMode::Gcd => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(data_page_meta, max_bits_per_num_block)?),
     DynMode::FloatMult { .. } => Box::new(NumDecompressorImpl::<U, ClassicMode, 2>::new(data_page_meta, max_bits_per_num_block)?),
@@ -160,7 +169,6 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
       ..
     } = data_page_meta;
 
-    let mut configs: [MaybeUninit<StreamConfig<U>>; STREAMS] = unsafe { MaybeUninit::uninit().assume_init() };
     let mut decoders: [MaybeUninit<ans::Decoder>; STREAMS] = unsafe { MaybeUninit::uninit().assume_init() };
     for i in 0..STREAMS {
       let stream = &streams[i];
@@ -173,28 +181,33 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
         )));
       }
 
-      decoders[i].write(ans::Decoder::from_stream_meta(stream)?);
+      decoders[i].write(
+        ans::Decoder::from_stream_meta(stream)?
+      );
+    }
 
+    let stream_configs = core::array::from_fn(|stream_idx| {
+      let stream = &streams[stream_idx];
       let infos = stream.bins
         .iter()
         .map(BinDecompressionInfo::from)
         .collect::<Vec<_>>();
-      configs[i].write(StreamConfig {
+      StreamConfig {
         infos,
-        delta_order,
-      });
-    }
+        delta_order: stream.delta_moments.order(),
+      }
+    });
 
     Ok(Self {
       n,
       compressed_body_size,
       max_bits_per_num_block,
-      stream_configs: unsafe { mem::transmute(configs) },
+      stream_configs,
       phantom: PhantomData,
       state: State {
         n_processed: 0,
         bits_processed: 0,
-        ans_decoders: unsafe { mem::transmute(decoders) },
+        ans_decoders: decoders.map(|decoder| unsafe { MaybeUninit::assume_init(decoder) }),
       },
     })
   }
@@ -249,11 +262,11 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
     dst: &mut UnsignedDst<U>,
   ) -> QCompressResult<()> {
     let start_bit_idx = reader.bit_idx();
-    let start_ans_state = self.state.ans_decoders.state;
+    let decoder_backups = decoder_states::<STREAMS>(&self.state.ans_decoders);
     let res = self.decompress_num_block_dirty(reader, batch_size, dst);
     if res.is_err() {
       reader.seek_to(start_bit_idx);
-      self.state.ans_decoders.state = start_ans_state;
+      recover_decoders::<STREAMS>(decoder_backups, &mut self.state.ans_decoders);
     }
     res
   }
