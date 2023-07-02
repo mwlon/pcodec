@@ -215,12 +215,12 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
 
 fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
   sorted: &[U],
-  internal_config: &InternalCompressorConfig,
+  comp_level: usize,
   naive_mode: DynMode<U>,
 ) -> (DynMode<U>, Vec<BinCompressionInfo<U>>) {
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(
-    internal_config.compression_level,
+    comp_level,
     n_unsigneds,
   );
 
@@ -258,7 +258,7 @@ fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
 fn quantize_weights<U: UnsignedLike>(
   infos: &mut [BinCompressionInfo<U>],
   n_unsigneds: usize,
-  internal_config: &InternalCompressorConfig,
+  comp_level: usize,
 ) -> Bitlen {
   let counts = infos.iter().map(|info| info.weight).collect::<Vec<_>>();
   // This max size isn't big enough for all the bins when compression level is
@@ -266,7 +266,7 @@ fn quantize_weights<U: UnsignedLike>(
   // Going past 2^10 is undesirable because things might stop fitting in L1
   // cache.
   let max_size_log = min(
-    internal_config.compression_level as Bitlen + 2,
+    comp_level as Bitlen + 2,
     10,
   );
   let (size_log, weights) = ans::quantize_weights(counts, n_unsigneds, max_size_log);
@@ -284,7 +284,7 @@ struct TrainedBins<U: UnsignedLike> {
 
 fn train_mode_and_infos<U: UnsignedLike>(
   unsigneds: Vec<U>,
-  internal_config: &InternalCompressorConfig,
+  comp_level: usize,
   naive_mode: DynMode<U>,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
 ) -> QCompressResult<TrainedBins<U>> {
@@ -292,7 +292,6 @@ fn train_mode_and_infos<U: UnsignedLike>(
     return Ok(TrainedBins::default());
   }
 
-  let comp_level = internal_config.compression_level;
   if comp_level > MAX_COMPRESSION_LEVEL {
     return Err(QCompressError::invalid_argument(format!(
       "compression level may not exceed {} (was {})",
@@ -310,10 +309,10 @@ fn train_mode_and_infos<U: UnsignedLike>(
   let (unoptimized_mode, unoptimized_bins) = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
-    choose_unoptimized_mode_and_bins(&sorted, internal_config, naive_mode)
+    choose_unoptimized_mode_and_bins(&sorted, comp_level, naive_mode)
   };
 
-  let estimated_ans_size_log = (internal_config.compression_level + 2) as Bitlen;
+  let estimated_ans_size_log = (comp_level + 2) as Bitlen;
   let mut optimized_infos = match unoptimized_mode {
     DynMode::Classic | DynMode::FloatMult { .. } => bin_optimization::optimize_bins(
       unoptimized_bins,
@@ -332,7 +331,7 @@ fn train_mode_and_infos<U: UnsignedLike>(
   let ans_size_log = quantize_weights(
     &mut optimized_infos,
     n_unsigneds,
-    internal_config,
+    comp_level,
   );
 
   Ok(TrainedBins {
@@ -570,9 +569,17 @@ impl<T: NumberLike> BaseCompressor<T> {
         delta_order,
         &page_idxs,
       );
+
+      // secondary streams should be compressed faster
+      let comp_level = if stream_idx == 0 {
+        self.internal_config.compression_level
+      } else {
+        min(self.internal_config.compression_level, 5)
+      };
+
       let trained = train_mode_and_infos(
         src.stream(stream_idx).to_vec(),
-        &self.internal_config,
+        comp_level,
         naive_mode,
         n,
       )?;

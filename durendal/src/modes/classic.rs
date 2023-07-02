@@ -24,6 +24,7 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
     bin.offset_bits = bits::bits_to_encode_offset(bin.upper - bin.lower);
   }
 
+  #[inline]
   fn calc_offset(u: U, bin: &BinCompressionInfo<U>) -> U {
     u - bin.lower
   }

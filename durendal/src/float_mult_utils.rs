@@ -1,13 +1,14 @@
 use std::cmp::{max, min};
 use std::collections::HashMap;
 
-use crate::bits;
+use crate::{bits, delta_encoding};
 use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::unsigned_src_dst::{UnsignedDst, StreamSrc};
 
 pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   let (unsigneds, adjustments) = dst.decompose();
+  delta_encoding::toggle_center_deltas_in_place(adjustments);
   for i in 0..unsigneds.len() {
     let unadjusted = unsigneds[i].to_int_float() * base;
     unsigneds[i] = unadjusted.to_unsigned().wrapping_add(adjustments[i])
@@ -42,6 +43,7 @@ pub fn split_streams<T: NumberLike>(
         .to_unsigned()
         .wrapping_sub((mults[i] * base).to_unsigned());
     }
+    delta_encoding::toggle_center_deltas_in_place(&mut adjustments[base_i..base_i + chunk.len()]);
     base_i += UNSIGNED_BATCH_SIZE;
   }
   StreamSrc::new([unsigneds, adjustments])

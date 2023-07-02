@@ -17,21 +17,21 @@ pub trait InspectHandler {
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()>;
 }
 
-fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], delta_encoded: bool, use_float_mult: bool) {
+fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], show_as_delta: bool, show_as_float_int: bool) {
   for bin in bins {
     let gcd_str = if bin.gcd == T::Unsigned::ONE {
       "".to_string()
     } else {
       format!(" [gcd: {}]", bin.gcd)
     };
-    let lower_str = if delta_encoded {
+    let lower_str = if show_as_delta {
       // hacky way to print the centered unsigned as a signed integer
       if bin.lower < T::Unsigned::MID {
         format!("-{}", T::Unsigned::MID - bin.lower)
       } else {
         (bin.lower - T::Unsigned::MID).to_string()
       }
-    } else if use_float_mult {
+    } else if show_as_float_int {
       bin.lower.to_int_float().to_string()
     } else {
       T::from_unsigned(bin.lower).to_string()
@@ -114,7 +114,8 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
           (DynMode::FloatMult { .. }, 1) => "ULPs adjustment".to_string(),
           _ => panic!("unknown stream: {:?}/{}", m.dyn_mode, stream_idx),
         };
-        let use_float_mult = matches!(m.dyn_mode, DynMode::FloatMult { .. });
+        let show_as_float_int = matches!(m.dyn_mode, DynMode::FloatMult { .. }) && stream_idx == 0;
+        let show_as_delta = (matches!(m.dyn_mode, DynMode::FloatMult { .. }) && stream_idx == 1) || flags.delta_encoding_order > 0;
         println!(
           "stream: {} n_bins: {} ANS size log: {}",
           stream_name,
@@ -123,8 +124,8 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
         );
         print_bins::<P::Num>(
           &stream.bins,
-          flags.delta_encoding_order > 0,
-          use_float_mult,
+          show_as_delta,
+          show_as_float_int,
         );
       }
     }
