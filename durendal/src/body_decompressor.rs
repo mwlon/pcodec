@@ -5,7 +5,6 @@ use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
 use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::{delta_encoding, float_mult_utils};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::QCompressResult;
 use crate::modes::DynMode;
@@ -13,6 +12,7 @@ use crate::num_decompressor;
 use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
+use crate::{delta_encoding, float_mult_utils};
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.
@@ -42,7 +42,11 @@ fn join_streams<U: UnsignedLike>(mode: DynMode<U>, dst: UnsignedDst<U>) {
 
 impl<T: NumberLike> BodyDecompressor<T> {
   pub(crate) fn new(data_page_meta: DataPageMetadata<T::Unsigned>) -> QCompressResult<Self> {
-    let delta_momentss = data_page_meta.streams.iter().map(|stream| stream.delta_moments.clone()).collect();
+    let delta_momentss = data_page_meta
+      .streams
+      .iter()
+      .map(|stream| stream.delta_moments.clone())
+      .collect();
     let dyn_mode = data_page_meta.dyn_mode;
     let num_decompressor = num_decompressor::new(data_page_meta)?;
     Ok(Self {

@@ -3,7 +3,7 @@ use crate::bit_reader::BitReader;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
-use crate::Bin;
+
 use crate::chunk_metadata::DataPageStreamMetadata;
 
 #[derive(Clone, Debug)]

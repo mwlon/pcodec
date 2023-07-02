@@ -1,7 +1,7 @@
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::mem;
+
 use std::mem::MaybeUninit;
 
 use crate::ans;
@@ -35,7 +35,10 @@ fn decoder_states<const STREAMS: usize>(decoders: &[ans::Decoder; STREAMS]) -> [
   core::array::from_fn(|stream_idx| decoders[stream_idx].state)
 }
 
-fn recover_decoders<const STREAMS: usize>(backups: [usize; STREAMS], decoders: &mut[ans::Decoder; STREAMS]) {
+fn recover_decoders<const STREAMS: usize>(
+  backups: [usize; STREAMS],
+  decoders: &mut [ans::Decoder; STREAMS],
+) {
   for stream_idx in 0..STREAMS {
     decoders[stream_idx].state = backups[stream_idx];
   }
@@ -53,7 +56,10 @@ impl<const STREAMS: usize> State<STREAMS> {
   fn recover(&mut self, backup: Backup<STREAMS>) {
     self.n_processed = backup.n_processed;
     self.bits_processed = backup.bits_processed;
-    recover_decoders(backup.ans_decoder_backups, &mut self.ans_decoders);
+    recover_decoders(
+      backup.ans_decoder_backups,
+      &mut self.ans_decoders,
+    );
   }
 }
 
@@ -95,7 +101,8 @@ pub fn new<U: UnsignedLike>(
 ) -> QCompressResult<Box<dyn NumDecompressor<U>>> {
   let mut max_bits_per_num_block = 0;
   for stream in &data_page_meta.streams {
-    max_bits_per_num_block += stream.bins
+    max_bits_per_num_block += stream
+      .bins
       .iter()
       .map(|bin| {
         let max_ans_bits = stream.ans_size_log - bin.weight.ilog2();
@@ -105,15 +112,24 @@ pub fn new<U: UnsignedLike>(
       .unwrap_or(Bitlen::MAX);
   }
   let res: Box<dyn NumDecompressor<U>> = match data_page_meta.dyn_mode {
-    DynMode::Classic => Box::new(NumDecompressorImpl::<U, ClassicMode, 1>::new(data_page_meta, max_bits_per_num_block)?),
-    DynMode::Gcd => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(data_page_meta, max_bits_per_num_block)?),
-    DynMode::FloatMult { .. } => Box::new(NumDecompressorImpl::<U, ClassicMode, 2>::new(data_page_meta, max_bits_per_num_block)?),
+    DynMode::Classic => Box::new(
+      NumDecompressorImpl::<U, ClassicMode, 1>::new(data_page_meta, max_bits_per_num_block)?,
+    ),
+    DynMode::Gcd => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
+      data_page_meta,
+      max_bits_per_num_block,
+    )?),
+    DynMode::FloatMult { .. } => Box::new(
+      NumDecompressorImpl::<U, ClassicMode, 2>::new(data_page_meta, max_bits_per_num_block)?,
+    ),
   };
 
   Ok(res)
 }
 
-impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U> for NumDecompressorImpl<U, M, STREAMS> {
+impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U>
+  for NumDecompressorImpl<U, M, STREAMS>
+{
   fn bits_remaining(&self) -> usize {
     self.compressed_body_size * 8 - self.state.bits_processed
   }
@@ -161,7 +177,10 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U> for N
 }
 
 impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
-  fn new(data_page_meta: DataPageMetadata<U>, max_bits_per_num_block: Bitlen) -> QCompressResult<Self> {
+  fn new(
+    data_page_meta: DataPageMetadata<U>,
+    max_bits_per_num_block: Bitlen,
+  ) -> QCompressResult<Self> {
     let DataPageMetadata {
       n,
       compressed_body_size,
@@ -169,7 +188,8 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
       ..
     } = data_page_meta;
 
-    let mut decoders: [MaybeUninit<ans::Decoder>; STREAMS] = unsafe { MaybeUninit::uninit().assume_init() };
+    let mut decoders: [MaybeUninit<ans::Decoder>; STREAMS] =
+      unsafe { MaybeUninit::uninit().assume_init() };
     for i in 0..STREAMS {
       let stream = &streams[i];
 
@@ -181,14 +201,13 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
         )));
       }
 
-      decoders[i].write(
-        ans::Decoder::from_stream_meta(stream)?
-      );
+      decoders[i].write(ans::Decoder::from_stream_meta(stream)?);
     }
 
     let stream_configs = core::array::from_fn(|stream_idx| {
       let stream = &streams[stream_idx];
-      let infos = stream.bins
+      let infos = stream
+        .bins
         .iter()
         .map(BinDecompressionInfo::from)
         .collect::<Vec<_>>();
@@ -256,7 +275,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
   fn decompress_num_block(
     &mut self,
     reader: &mut BitReader,
-    batch_size: usize,
+    _batch_size: usize,
     dst: &mut UnsignedDst<U>,
   ) -> QCompressResult<()> {
     let start_bit_idx = reader.bit_idx();

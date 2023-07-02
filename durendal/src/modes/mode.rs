@@ -2,13 +2,11 @@ use std::fmt::Debug;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
-use crate::constants::Bitlen;
-use crate::data_types::{NumberLike, UnsignedLike};
+
+use crate::data_types::UnsignedLike;
 use crate::errors::QCompressResult;
-use crate::float_mult_utils;
+
 use crate::float_mult_utils::FloatMultConfig;
-use crate::unsigned_src_dst::{UnsignedDst, StreamSrc};
 
 // Static, compile-time modes. Logic should go here if it's called in hot
 // loops.
@@ -24,16 +22,10 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   );
 
   // COMPRESSION
-  fn calc_offset(
-    u: U,
-    bin: &BinCompressionInfo<U>,
-  ) -> U;
+  fn calc_offset(u: U, bin: &BinCompressionInfo<U>) -> U;
 
   // DECOMPRESSION
-  fn unchecked_decompress_unsigned(
-    bin: &BinDecompressionInfo<U>,
-    reader: &mut BitReader,
-  ) -> U;
+  fn unchecked_decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U;
   fn decompress_unsigned(
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
@@ -73,7 +65,10 @@ impl<U: UnsignedLike> DynMode<U> {
       (DynMode::Gcd, 0) => delta_order,
       (DynMode::FloatMult { .. }, 0) => delta_order,
       (DynMode::FloatMult { .. }, 1) => 0,
-      _ => panic!("should be unreachable; unknown stream {:?}/{}", self, stream_idx),
+      _ => panic!(
+        "should be unreachable; unknown stream {:?}/{}",
+        self, stream_idx
+      ),
     }
   }
 }

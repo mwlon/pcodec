@@ -2,7 +2,6 @@ use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, MAX_N_STREAMS};
 use crate::data_types::UnsignedLike;
 
-
 #[derive(Clone, Debug)]
 pub struct Decomposed<U: UnsignedLike> {
   pub ans_word: usize,
@@ -21,28 +20,11 @@ impl<U: UnsignedLike> Decomposed<U> {
 #[derive(Clone, Debug)]
 pub struct StreamSrc<U: UnsignedLike> {
   streams: [Vec<U>; MAX_N_STREAMS],
-  i: usize,
 }
 
 impl<U: UnsignedLike> StreamSrc<U> {
   pub fn new(streams: [Vec<U>; MAX_N_STREAMS]) -> Self {
-    Self {
-      streams,
-      i: 0,
-    }
-  }
-
-  #[inline]
-  pub fn unsigned(&self, stream_idx: usize) -> U {
-    self.streams[stream_idx][self.i]
-  }
-
-  pub fn idx(&self) -> usize {
-    self.i
-  }
-
-  pub fn incr(&mut self) {
-    self.i += 1;
+    Self { streams }
   }
 
   pub fn stream(&self, stream_idx: usize) -> &[U] {
@@ -62,7 +44,10 @@ pub struct DecomposedSrc<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> DecomposedSrc<U> {
-  pub fn new(decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS], ans_final_states: [usize; MAX_N_STREAMS]) -> Self {
+  pub fn new(
+    decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS],
+    ans_final_states: [usize; MAX_N_STREAMS],
+  ) -> Self {
     Self {
       decomposeds,
       ans_final_states,

@@ -17,7 +17,11 @@ pub trait InspectHandler {
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()>;
 }
 
-fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], show_as_delta: bool, show_as_float_int: bool) {
+fn print_bins<T: NumberLike>(
+  bins: &[Bin<T::Unsigned>],
+  show_as_delta: bool,
+  show_as_float_int: bool,
+) {
   for bin in bins {
     let gcd_str = if bin.gcd == T::Unsigned::ONE {
       "".to_string()
@@ -105,17 +109,24 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     );
 
     for (i, m) in metadatas.iter().enumerate() {
-      println!("\nchunk: {} n: {} mode: {:?}", i, m.n, m.dyn_mode);
+      println!(
+        "\nchunk: {} n: {} mode: {:?}",
+        i, m.n, m.dyn_mode
+      );
       for (stream_idx, stream) in m.streams.iter().enumerate() {
         let stream_name = match (m.dyn_mode, stream_idx) {
           (DynMode::Classic, 0) => "primary".to_string(),
           (DynMode::Gcd, 0) => "primary".to_string(),
           (DynMode::FloatMult { base, .. }, 0) => format!("multiplier [x{}]", base),
           (DynMode::FloatMult { .. }, 1) => "ULPs adjustment".to_string(),
-          _ => panic!("unknown stream: {:?}/{}", m.dyn_mode, stream_idx),
+          _ => panic!(
+            "unknown stream: {:?}/{}",
+            m.dyn_mode, stream_idx
+          ),
         };
         let show_as_float_int = matches!(m.dyn_mode, DynMode::FloatMult { .. }) && stream_idx == 0;
-        let show_as_delta = (matches!(m.dyn_mode, DynMode::FloatMult { .. }) && stream_idx == 1) || flags.delta_encoding_order > 0;
+        let show_as_delta = (matches!(m.dyn_mode, DynMode::FloatMult { .. }) && stream_idx == 1)
+          || flags.delta_encoding_order > 0;
         println!(
           "stream: {} n_bins: {} ANS size log: {}",
           stream_name,

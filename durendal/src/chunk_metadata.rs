@@ -23,10 +23,7 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG)?;
     let bins = parse_bins::<U>(reader, dyn_mode, ans_size_log)?;
 
-    Ok(Self {
-      bins,
-      ans_size_log
-    })
+    Ok(Self { bins, ans_size_log })
   }
 
   fn write_to(&self, dyn_mode: DynMode<U>, writer: &mut BitWriter) {
@@ -53,7 +50,11 @@ pub struct DataPageStreamMetadata<'a, U: UnsignedLike> {
 }
 
 impl<'a, U: UnsignedLike> DataPageStreamMetadata<'a, U> {
-  pub fn new(chunk_stream_meta: &'a ChunkStreamMetadata<U>, delta_moments: DeltaMoments<U>, ans_final_state: usize) -> Self {
+  pub fn new(
+    chunk_stream_meta: &'a ChunkStreamMetadata<U>,
+    delta_moments: DeltaMoments<U>,
+    ans_final_state: usize,
+  ) -> Self {
     Self {
       bins: &chunk_stream_meta.bins,
       delta_moments,
@@ -95,7 +96,7 @@ pub struct DataPageMetadata<'a, U: UnsignedLike> {
   pub n: usize,
   pub compressed_body_size: usize,
   pub dyn_mode: DynMode<U>,
-  pub streams: Vec<DataPageStreamMetadata<'a, U>>
+  pub streams: Vec<DataPageStreamMetadata<'a, U>>,
 }
 
 fn parse_bins<U: UnsignedLike>(
@@ -179,11 +180,7 @@ fn write_bins<U: UnsignedLike>(
 }
 
 impl<U: UnsignedLike> ChunkMetadata<U> {
-  pub(crate) fn new(
-    n: usize,
-    dyn_mode: DynMode<U>,
-    streams: Vec<ChunkStreamMetadata<U>>,
-  ) -> Self {
+  pub(crate) fn new(n: usize, dyn_mode: DynMode<U>, streams: Vec<ChunkStreamMetadata<U>>) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
@@ -222,7 +219,9 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
 
     let mut streams = Vec::with_capacity(n_streams);
     for _ in 0..n_streams {
-      streams.push(ChunkStreamMetadata::parse_from(reader, dyn_mode)?)
+      streams.push(ChunkStreamMetadata::parse_from(
+        reader, dyn_mode,
+      )?)
     }
 
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;

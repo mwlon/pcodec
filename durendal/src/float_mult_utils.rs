@@ -1,10 +1,10 @@
 use std::cmp::{max, min};
 use std::collections::HashMap;
 
-use crate::{bits, delta_encoding};
 use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-use crate::unsigned_src_dst::{UnsignedDst, StreamSrc};
+use crate::unsigned_src_dst::{StreamSrc, UnsignedDst};
+use crate::{bits, delta_encoding};
 
 pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   let (unsigneds, adjustments) = dst.decompose();
