@@ -206,10 +206,8 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       0 => Ok(DynMode::Classic),
       1 => Ok(DynMode::Gcd),
       2 => {
-        let adj_bits = reader.read_bitlen(bits_to_encode_offset_bits::<U>())?;
         let base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS)?);
         Ok(DynMode::float_mult(FloatMultConfig {
-          adj_bits,
           base,
           inv_base: base.inv(),
         }))
@@ -252,8 +250,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       DynMode::FloatMult { .. } => 2,
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
-    if let DynMode::FloatMult { adj_bits, base, .. } = self.dyn_mode {
-      writer.write_bitlen(adj_bits, bits_to_encode_offset_bits::<U>());
+    if let DynMode::FloatMult { base, .. } = self.dyn_mode {
       writer.write_diff(base.to_unsigned(), U::BITS);
     }
 

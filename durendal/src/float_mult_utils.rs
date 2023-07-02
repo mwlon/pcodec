@@ -300,7 +300,6 @@ fn adj_bits_needed<U: UnsignedLike>(
 pub struct FloatMultConfig<F: FloatLike> {
   pub base: F,
   pub inv_base: F,
-  pub adj_bits: Bitlen,
 }
 
 fn choose_config_w_sample<U: UnsignedLike>(
@@ -314,12 +313,11 @@ fn choose_config_w_sample<U: UnsignedLike>(
 
   let adj_bits_cutoff = adj_bits_cutoff_to_beat_classic::<U>(inv_gcd, sample, n)?;
 
-  let adj_bits = adj_bits_needed::<U>(inv_gcd, nums, adj_bits_cutoff)?;
+  adj_bits_needed::<U>(inv_gcd, nums, adj_bits_cutoff)?;
 
   Some(FloatMultConfig {
     base: gcd,
     inv_base: inv_gcd,
-    adj_bits,
   })
 }
 
@@ -568,7 +566,6 @@ mod test {
       Some(FloatMultConfig {
         base: 1.0 / 7.0,
         inv_base: 7.0,
-        adj_bits: 0,
       })
     );
     assert_eq!(choose_config(&ones), None);
@@ -577,7 +574,6 @@ mod test {
       Some(FloatMultConfig {
         base: 1.0 / 10.0,
         inv_base: 10.0,
-        adj_bits: 4,
       })
     );
     assert_eq!(choose_config(&junk), None);

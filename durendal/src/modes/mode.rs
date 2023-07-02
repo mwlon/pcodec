@@ -47,7 +47,6 @@ pub enum DynMode<U: UnsignedLike> {
   Classic,
   Gcd,
   FloatMult {
-    adj_bits: Bitlen,
     inv_base: U::Float,
     base: U::Float,
   },
@@ -56,7 +55,6 @@ pub enum DynMode<U: UnsignedLike> {
 impl<U: UnsignedLike> DynMode<U> {
   pub fn float_mult(config: FloatMultConfig<U::Float>) -> Self {
     Self::FloatMult {
-      adj_bits: config.adj_bits,
       inv_base: config.inv_base,
       base: config.base,
     }
@@ -69,10 +67,13 @@ impl<U: UnsignedLike> DynMode<U> {
     }
   }
 
-  pub fn adjustment_bits(&self) -> Bitlen {
-    match self {
-      Self::FloatMult { adj_bits, .. } => *adj_bits,
-      _ => 0,
+  pub fn stream_delta_order(&self, stream_idx: usize, delta_order: usize) -> usize {
+    match (self, stream_idx) {
+      (DynMode::Classic, 0) => delta_order,
+      (DynMode::Gcd, 0) => delta_order,
+      (DynMode::FloatMult { .. }, 0) => delta_order,
+      (DynMode::FloatMult { .. }, 1) => 0,
+      _ => panic!("should be unreachable; unknown stream {:?}/{}", self, stream_idx),
     }
   }
 }

@@ -21,7 +21,7 @@ pub struct BodyDecompressor<T: NumberLike> {
   dyn_mode: DynMode<T::Unsigned>,
   num_decompressor: Box<dyn NumDecompressor<T::Unsigned>>,
   delta_momentss: Vec<DeltaMoments<T::Unsigned>>, // one per stream
-  adjustments: [T::Unsigned; UNSIGNED_BATCH_SIZE],
+  secondary_stream: [T::Unsigned; UNSIGNED_BATCH_SIZE],
   phantom: PhantomData<T>,
 }
 
@@ -49,7 +49,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
       dyn_mode,
       num_decompressor,
       delta_momentss,
-      adjustments: [T::Unsigned::ZERO; UNSIGNED_BATCH_SIZE],
+      secondary_stream: [T::Unsigned::ZERO; UNSIGNED_BATCH_SIZE],
       phantom: PhantomData,
     })
   }
@@ -70,7 +70,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
     } = self;
 
     let progress = {
-      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.adjustments);
+      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
       num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dst)?
     };
 
@@ -80,7 +80,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
     }
 
     {
-      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.adjustments);
+      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
       join_streams(self.dyn_mode, u_dst);
     }
 

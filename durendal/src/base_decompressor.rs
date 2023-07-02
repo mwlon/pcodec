@@ -121,9 +121,10 @@ impl<T: NumberLike> State<T> {
     let start_byte_idx = reader.aligned_byte_idx()?;
 
     let mut streams = Vec::with_capacity(chunk_meta.streams.len());
-    for chunk_stream_meta in &chunk_meta.streams {
+    for (stream_idx, chunk_stream_meta) in chunk_meta.streams.iter().enumerate() {
+      let delta_order = chunk_meta.dyn_mode.stream_delta_order(stream_idx, flags.delta_encoding_order);
       let ans_size_log = chunk_stream_meta.ans_size_log;
-      let delta_moments = DeltaMoments::parse_from(reader, flags.delta_encoding_order)?;
+      let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
       let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
       streams.push(DataPageStreamMetadata::new(chunk_stream_meta, delta_moments, ans_final_state));
     }

@@ -238,18 +238,16 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
   fn decompress_num_block_dirty(
     &mut self,
     reader: &mut BitReader,
-    batch_size: usize,
     dst: &mut UnsignedDst<U>,
   ) -> QCompressResult<()> {
     for stream_idx in 0..STREAMS {
       let config = &self.stream_configs[stream_idx];
-      if dst.n_processed() + config.delta_order >= batch_size {
-        continue;
+      if dst.n_processed() + config.delta_order < self.n - self.state.n_processed {
+        let token = self.state.ans_decoders[stream_idx].decode(reader)?;
+        let bin = &config.infos[token as usize];
+        let u = M::decompress_unsigned(bin, reader)?;
+        dst.write(stream_idx, u);
       }
-      let token = self.state.ans_decoders[stream_idx].decode(reader)?;
-      let bin = &config.infos[token as usize];
-      let u = M::decompress_unsigned(bin, reader)?;
-      dst.write(stream_idx, u);
     }
     dst.incr();
     Ok(())
@@ -263,7 +261,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
   ) -> QCompressResult<()> {
     let start_bit_idx = reader.bit_idx();
     let decoder_backups = decoder_states::<STREAMS>(&self.state.ans_decoders);
-    let res = self.decompress_num_block_dirty(reader, batch_size, dst);
+    let res = self.decompress_num_block_dirty(reader, dst);
     if res.is_err() {
       reader.seek_to(start_bit_idx);
       recover_decoders::<STREAMS>(decoder_backups, &mut self.state.ans_decoders);

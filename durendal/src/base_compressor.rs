@@ -401,10 +401,9 @@ fn trained_compress_body<U: UnsignedLike, const STREAMS: usize>(
 
   while src.n_processed() < page_size {
     for stream_idx in 0..STREAMS {
-      if src.n_processed() >= src.stream_len(stream_idx) {
-        continue;
+      if src.n_processed() < src.stream_len(stream_idx) {
+        src.decomposed(stream_idx).write_to(writer);
       }
-      src.decomposed(stream_idx).write_to(writer);
     }
     src.incr();
   }
@@ -557,7 +556,6 @@ impl<T: NumberLike> BaseCompressor<T> {
       self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
     }
 
-    let delta_order = self.flags.delta_encoding_order;
     let naive_mode = self.choose_naive_mode(nums);
     let mut src = self.split_streams(naive_mode, nums);
     let page_idxs = cumulative_sum(&page_sizes);
@@ -566,6 +564,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     let mut stream_metas = Vec::with_capacity(n_streams);
     let mut stream_configs = Vec::with_capacity(n_streams);
     for stream_idx in 0..n_streams {
+      let delta_order = naive_mode.stream_delta_order(stream_idx, self.flags.delta_encoding_order);
       let delta_momentss = delta_encoding::nth_order_deltas(
         src.stream_mut(stream_idx),
         delta_order,
