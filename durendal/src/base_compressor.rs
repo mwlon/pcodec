@@ -645,6 +645,8 @@ impl<T: NumberLike> BaseCompressor<T> {
         );
       }
 
+      self.writer.finish_byte();
+
       match info.dyn_mode.n_streams() {
         1 => trained_compress_body::<_, 1>(
             decomposeds,
