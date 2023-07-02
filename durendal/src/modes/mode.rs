@@ -8,7 +8,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::QCompressResult;
 use crate::float_mult_utils;
 use crate::float_mult_utils::FloatMultConfig;
-use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
+use crate::unsigned_src_dst::{UnsignedDst, StreamSrc};
 
 // Static, compile-time modes. Logic should go here if it's called in hot
 // loops.
@@ -24,11 +24,10 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   );
 
   // COMPRESSION
-  fn compress_unsigned(
+  fn calc_offset(
     u: U,
     bin: &BinCompressionInfo<U>,
-    writer: &mut BitWriter,
-  );
+  ) -> U;
 
   // DECOMPRESSION
   fn unchecked_decompress_unsigned(
@@ -76,16 +75,7 @@ impl<U: UnsignedLike> DynMode<U> {
     }
   }
 
-  pub fn create_src<T: NumberLike<Unsigned = U>>(&self, nums: &[T]) -> UnsignedSrc<U> {
-    match self {
-      DynMode::FloatMult { inv_base, base, .. } => {
-        float_mult_utils::encode_apply_mult(nums, *base, *inv_base)
-      }
-      _ => UnsignedSrc::new(
-        nums.iter().map(|x| x.to_unsigned()).collect(),
-        vec![],
-      ),
-    }
+  pub fn create_src<T: NumberLike<Unsigned = U>>(&self, nums: &[T]) -> StreamSrc<U> {
   }
 
   pub fn adjustment_bits(&self) -> Bitlen {

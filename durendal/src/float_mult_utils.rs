@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::bits;
 use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
+use crate::unsigned_src_dst::{UnsignedDst, StreamSrc};
 
 pub fn decode_apply_mult<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   let (unsigneds, adjustments) = dst.decompose();
@@ -18,7 +18,7 @@ pub fn encode_apply_mult<T: NumberLike>(
   nums: &[T],
   base: <T::Unsigned as UnsignedLike>::Float,
   inv_base: <T::Unsigned as UnsignedLike>::Float,
-) -> UnsignedSrc<T::Unsigned> {
+) -> StreamSrc<T::Unsigned> {
   let nums = T::assert_float(nums);
   let n = nums.len();
   let uninit_vec = || unsafe {
@@ -44,7 +44,7 @@ pub fn encode_apply_mult<T: NumberLike>(
     }
     base_i += UNSIGNED_BATCH_SIZE;
   }
-  UnsignedSrc::new(unsigneds, adjustments)
+  StreamSrc::new(unsigneds, adjustments)
 }
 
 const MIN_SAMPLE: usize = 10;

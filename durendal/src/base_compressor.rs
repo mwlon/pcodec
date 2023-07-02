@@ -1,9 +1,10 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
+use std::mem::MaybeUninit;
 
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
-use crate::chunk_metadata::ChunkMetadata;
+use crate::chunk_metadata::{ChunkMetadata, ChunkStreamMetadata, DataPageStreamMetadata};
 use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -12,9 +13,9 @@ use crate::delta_encoding::DeltaMoments;
 use crate::errors::{QCompressError, QCompressResult};
 use crate::modes::adjusted::AdjustedMode;
 use crate::modes::classic::ClassicMode;
-use crate::modes::gcd::GcdMode;
-use crate::modes::{adjusted, gcd, DynMode};
-use crate::unsigned_src_dst::{DecomposedUnsigned, UnsignedSrc};
+use crate::modes::gcd::{GcdMode, use_gcd_arithmetic};
+use crate::modes::{adjusted, gcd, DynMode, Mode};
+use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
 use crate::Flags;
 use crate::{ans, delta_encoding};
 use crate::{bin_optimization, float_mult_utils};
@@ -278,12 +279,11 @@ fn quantize_weights<U: UnsignedLike>(
 
 #[derive(Default)]
 struct TrainedBins<U: UnsignedLike> {
-  dyn_mode: DynMode<U>,
   infos: Vec<BinCompressionInfo<U>>,
   ans_size_log: Bitlen,
 }
 
-fn train_mode_and_bins<U: UnsignedLike>(
+fn train_mode_and_infos<U: UnsignedLike>(
   unsigneds: Vec<U>,
   internal_config: &InternalCompressorConfig,
   naive_mode: DynMode<U>,
@@ -343,103 +343,79 @@ fn train_mode_and_bins<U: UnsignedLike>(
   );
 
   Ok(TrainedBins {
-    dyn_mode: unoptimized_mode,
     infos: optimized_infos,
     ans_size_log,
   })
 }
 
-fn trained_compress_body<U: UnsignedLike>(
-  src: &mut UnsignedSrc<U>,
-  flags: &Flags,
-  table: &CompressionTable<U>,
-  encoder: &mut ans::Encoder,
-  dyn_mode: DynMode<U>,
-  writer: &mut BitWriter,
-) -> QCompressResult<()> {
-  let (use_gcd, adjustment_bits) = match dyn_mode {
-    DynMode::Classic => (false, 0),
-    DynMode::Gcd => (true, 0),
-    DynMode::FloatMult { adj_bits, .. } => (false, adj_bits),
-  };
-  if use_gcd {
-    decompose_unsigneds::<U, true>(table, encoder, src)?;
-  } else {
-    decompose_unsigneds::<U, false>(table, encoder, src)?;
-  }
-  // write the final ANS state idx in [0, table_size)
-  writer.write_usize(
-    encoder.state() - (1 << encoder.size_log()),
-    encoder.size_log(),
-  );
-  writer.finish_byte();
-
-  if adjustment_bits > 0 {
-    compress_data_page::<U, true>(src, flags, adjustment_bits, writer)
-  } else {
-    compress_data_page::<U, false>(src, flags, adjustment_bits, writer)
-  }
-}
-
 // returns the ANS final state after decomposing the unsigneds in reverse order
-fn decompose_unsigneds<U: UnsignedLike, M: Mode<U>>(
-  table: &CompressionTable<U>,
-  encoder: &mut ans::Encoder,
-  src: &mut UnsignedSrc<U>,
-) -> QCompressResult<()> {
-  let unsigneds = src.unsigneds();
-  let mut decomposeds = Vec::with_capacity(unsigneds.len());
-  unsafe { decomposeds.set_len(unsigneds.len()) }
-  for i in (0..unsigneds.len()).rev() {
-    let u = unsigneds[i];
-    let info = table.search(u)?;
-    let (ans_word, ans_bits) = encoder.encode(info.token);
-    let offset = if USE_GCD {
-      (u - info.lower) / info.gcd
-    } else {
-      u - info.lower
-    };
-    decomposeds[i] = DecomposedUnsigned {
-      ans_word,
-      ans_bits,
-      offset,
-      offset_bits: info.offset_bits,
-    };
+fn mode_decompose_unsigneds<U: UnsignedLike, M: Mode<U>, const STREAMS: usize>(
+  stream_configs: &mut [StreamConfig<U>],
+  src: &mut StreamSrc<U>,
+) -> QCompressResult<DecomposedSrc<U>> {
+  let empty_decomposeds = |n_unsigneds| unsafe {
+    let mut res = Vec::with_capacity(n_unsigneds);
+    res.set_len(n_unsigneds);
+    res
+  };
+  let mut decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS] = core::array::from_fn(|stream_idx| empty_decomposeds(src.stream(stream_idx).len()));
+  let mut ans_final_states = [0; MAX_N_STREAMS];
+  for stream_idx in 0..STREAMS {
+    let stream = src.stream(stream_idx);
+    let StreamConfig {
+      table,
+      encoder,
+      ..
+    } = &mut stream_configs[stream_idx];
+    for i in (0..stream.len()).rev() {
+      let u = unsigneds[i];
+      let info = table.search(u)?;
+      let (ans_word, ans_bits) = encoder.encode(info.token);
+      let offset = M::calc_offset(u, info);
+      decomposeds[stream_idx][i] = Decomposed {
+        ans_word,
+        ans_bits,
+        offset,
+        offset_bits: info.offset_bits,
+      };
+    }
+    ans_final_states[stream_idx] = encoder.state();
   }
-  src.set_decomposeds(decomposeds);
-  Ok(())
+  Ok(DecomposedSrc::new(decomposeds, ans_final_states))
 }
 
-fn compress_data_page<U: UnsignedLike, const USE_ADJUSTMENT: bool>(
-  src: &mut UnsignedSrc<U>,
-  flags: &Flags,
-  adj_bits: Bitlen,
+fn decompose_unsigneds<U: UnsignedLike>(mid_chunk_info: &mut MidChunkInfo<U>) -> QCompressResult<DecomposedSrc<U>> {
+  let MidChunkInfo { dyn_mode, stream_configs, src, .. } = mid_chunk_info;
+  match *dyn_mode {
+    DynMode::Classic => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
+    DynMode::Gcd => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
+    DynMode::FloatMult { .. } => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
+  }
+}
+
+fn trained_compress_body<U: UnsignedLike, const STREAMS: usize>(
+  mut src: DecomposedSrc<U>,
+  page_size: usize,
   writer: &mut BitWriter,
 ) -> QCompressResult<()> {
-  let adj_lower = adjusted::calc_adj_lower(adj_bits);
-  while !src.finished_unsigneds() {
-    let decomposed = src.decomposed();
-    writer.write_usize(decomposed.ans_word, decomposed.ans_bits);
-    writer.write_diff(decomposed.offset, decomposed.offset_bits);
-    if USE_ADJUSTMENT {
-      writer.write_diff(
-        src.adjustment().wrapping_sub(adj_lower),
-        adj_bits,
-      );
+  let max_safe_idx = page_size.saturating_sub(MAX_DELTA_ENCODING_ORDER);
+  while src.n_processed() < max_safe_idx {
+    for stream_idx in 0..STREAMS {
+      src.decomposed(stream_idx).write_to(writer);
     }
     src.incr();
   }
 
-  // if delta encoding is used, we have a few fewer deltas than adjustments
-  if USE_ADJUSTMENT {
-    for _ in 0..flags.delta_encoding_order {
-      writer.write_diff(
-        src.adjustment().wrapping_sub(adj_lower),
-        adj_bits,
-      );
-      src.incr();
+  while src.n_processed() < page_size {
+    for stream_idx in 0..STREAMS {
+      if src.n_processed() >= src.stream_len(stream_idx) {
+        continue;
+      }
+      src.decomposed(stream_idx).write_to(writer);
     }
+    src.incr();
   }
+
   writer.finish_byte();
   Ok(())
 }
@@ -447,19 +423,17 @@ fn compress_data_page<U: UnsignedLike, const USE_ADJUSTMENT: bool>(
 #[derive(Clone, Debug)]
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
+  stream_configs: Vec<StreamConfig<U>>,
   dyn_mode: DynMode<U>,
-  table: CompressionTable<U>,
-  delta_momentss: Vec<DeltaMoments<U>>,
   page_sizes: Vec<usize>,
   // mutable:
-  src: UnsignedSrc<U>,
-  encoder: ans::Encoder,
+  src: StreamSrc<U>,
   page_idx: usize,
 }
 
 impl<U: UnsignedLike> MidChunkInfo<U> {
-  fn data_page_moments(&self) -> &DeltaMoments<U> {
-    &self.delta_momentss[self.page_idx]
+  fn data_page_moments(&self, stream_idx: usize) -> &DeltaMoments<U> {
+    &self.stream_configs[stream_idx].delta_momentss[self.page_idx]
   }
 
   fn n_pages(&self) -> usize {
@@ -489,6 +463,14 @@ impl<U: UnsignedLike> State<U> {
       description, step_str,
     ))
   }
+}
+
+#[derive(Clone, Debug)]
+struct StreamConfig<U: UnsignedLike> {
+  delta_order: usize,
+  table: CompressionTable<U>,
+  delta_momentss: Vec<DeltaMoments<U>>,
+  encoder: ans::Encoder,
 }
 
 #[derive(Clone, Debug)]
@@ -542,18 +524,23 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
   }
 
-  fn preprocess_src(
+  fn split_streams(
     &self,
+    naive_mode: DynMode<T::Unsigned>,
     nums: &[T],
-  ) -> (
-    DynMode<T::Unsigned>,
-    UnsignedSrc<T::Unsigned>,
-  ) {
-    let dyn_mode = self.choose_naive_mode(nums);
-    let src = dyn_mode.create_src(nums);
-    (dyn_mode, src)
+  ) -> StreamSrc<T::Unsigned> {
+    match naive_mode {
+      DynMode::Classic | DynMode::Gcd => StreamSrc::new(
+        nums.iter().map(|x| x.to_unsigned()).collect(),
+      ),
+      DynMode::FloatMult { inv_base, base, .. } => {
+        float_mult_utils::encode_apply_mult(nums, *base, *inv_base)
+      },
+    }
   }
 
+  // This function actually does much of the work of compressing the whole
+  // chunk. We defer as much work as we can to writing the data pages though.
   pub fn chunk_metadata_internal(
     &mut self,
     nums: &[T],
@@ -576,39 +563,65 @@ impl<T: NumberLike> BaseCompressor<T> {
       self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
     }
 
-    let order = self.flags.delta_encoding_order;
-    let (naive_mode, mut src) = self.preprocess_src(nums);
+    let delta_order = self.flags.delta_encoding_order;
+    let naive_mode = self.choose_naive_mode(nums);
+    let mut src = self.split_streams(naive_mode, nums);
     let page_idxs = cumulative_sum(&page_sizes);
-    let delta_momentss = delta_encoding::nth_order_deltas(src.unsigneds_mut(), order, &page_idxs);
-    let trained_bins = train_mode_and_bins(
-      src.unsigneds().to_vec(),
-      &self.internal_config,
-      naive_mode,
-      n,
-    )?;
-    let bins = bins_from_compression_infos(&trained_bins.infos);
+    let n_streams = naive_mode.n_streams();
 
-    let optimized_mode = match trained_bins.dyn_mode {
-      DynMode::Gcd if !gcd::use_gcd_arithmetic(&bins) => DynMode::Classic,
+    let mut stream_metas = Vec::with_capacity(n_streams);
+    let mut stream_configs = Vec::with_capacity(n_streams);
+    for stream_idx in 0..n_streams {
+      let delta_momentss = delta_encoding::nth_order_deltas(
+        src.stream_mut(stream_idx),
+        delta_order,
+        &page_idxs,
+      );
+      let trained = train_mode_and_infos(
+        src.stream(stream_idx).to_vec(),
+        &self.internal_config,
+        naive_mode,
+        n,
+      )?;
+      let bins = bins_from_compression_infos(&trained.infos);
+
+      stream_metas.push(ChunkStreamMetadata {
+        bins,
+        ans_size_log: trained.ans_size_log,
+      });
+
+      let table = CompressionTable::from(trained_bins.infos);
+      let encoder = ans::Encoder::from_bins(trained_bins.ans_size_log, &bins)?;
+      stream_configs.push(StreamConfig {
+        delta_order,
+        table,
+        delta_momentss,
+        encoder,
+      });
+    }
+
+    let optimized_mode = match unoptimized_mode {
+      DynMode::Gcd => {
+        if stream_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
+          DynMode::Gcd
+        } else {
+          DynMode::Classic
+        }
+      }
       other => other,
     };
 
-    let table = CompressionTable::from(trained_bins.infos);
-    let encoder = ans::Encoder::from_bins(trained_bins.ans_size_log, &bins)?;
 
     let meta = ChunkMetadata::new(
       n,
-      bins,
       optimized_mode,
-      trained_bins.ans_size_log,
+      stream_metas,
     );
     meta.write_to(&self.flags, &mut self.writer);
 
     self.state = State::MidChunk(MidChunkInfo {
+      stream_configs,
       dyn_mode: optimized_mode,
-      table,
-      encoder,
-      delta_momentss,
       page_sizes,
       src,
       page_idx: 0,
@@ -624,18 +637,27 @@ impl<T: NumberLike> BaseCompressor<T> {
         other => Err(other.wrong_step_err("data page")),
       }?;
 
-      info.data_page_moments().write_to(&mut self.writer);
+      let decomposeds = decompose_unsigneds(info)?;
+
+      for stream_idx in info.dyn_mode.n_streams() {
+        info.data_page_moments(stream_idx).write_to(&mut self.writer);
+
+        // write the final ANS state, moving it down the range [0, table_size)
+        let size_log = info.stream_configs[stream_idx].encoder.size_log();
+        let final_state = decomposeds.ans_final_state(stream_idx);
+        writer.write_usize(
+          final_state - (1 << size_log),
+          size_log,
+        );
+      }
+
       trained_compress_body(
-        &mut info.src,
-        &self.flags,
-        &info.table,
-        &mut info.encoder,
-        info.dyn_mode,
+        decomposeds,
+        info.page_sizes[info.page_idx],
         &mut self.writer,
       )?;
 
       info.page_idx += 1;
-
       info.page_idx < info.n_pages()
     };
 

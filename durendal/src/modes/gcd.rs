@@ -61,6 +61,10 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
     bin.offset_bits = bits::bits_to_encode_offset(max_offset);
   }
 
+  fn calc_offset(u: U, bin: &BinCompressionInfo<U>) -> U {
+    (u - bin.lower) / bin.gcd
+  }
+
   #[inline]
   fn unchecked_decompress_unsigned(
     bin: &BinDecompressionInfo<U>,

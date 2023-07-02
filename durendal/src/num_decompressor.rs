@@ -1,5 +1,6 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::mem;
 use std::mem::MaybeUninit;
 
@@ -74,6 +75,7 @@ struct NumDecompressorImpl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> {
   compressed_body_size: usize,
   max_bits_per_num_block: Bitlen,
   stream_configs: [StreamConfig<U>; STREAMS],
+  phantom: PhantomData<M>,
 
   // mutable state
   state: State<STREAMS>,
@@ -188,6 +190,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
       compressed_body_size,
       max_bits_per_num_block,
       stream_configs: unsafe { mem::transmute(configs) },
+      phantom: PhantomData,
       state: State {
         n_processed: 0,
         bits_processed: 0,

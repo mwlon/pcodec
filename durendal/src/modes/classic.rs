@@ -24,9 +24,12 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
     bin.offset_bits = bits::bits_to_encode_offset(bin.upper - bin.lower);
   }
 
+  fn calc_offset(u: U, bin: &BinCompressionInfo<U>) -> U {
+    u - bin.lower
+  }
+
   #[inline]
   fn unchecked_decompress_unsigned(
-    &self,
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> U {
@@ -35,7 +38,6 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
 
   #[inline]
   fn decompress_unsigned(
-    &self,
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> QCompressResult<U> {
