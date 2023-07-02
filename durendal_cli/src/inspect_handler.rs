@@ -105,20 +105,19 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     );
 
     for (i, m) in metadatas.iter().enumerate() {
+      println!("\nchunk: {} n: {} mode: {:?}", i, m.n, m.dyn_mode);
       for (stream_idx, stream) in m.streams.iter().enumerate() {
         let stream_name = match (m.dyn_mode, stream_idx) {
-          (DynMode::Classic, 1) => "primary".to_string(),
-          (DynMode::Gcd, 1) => "primary".to_string(),
-          (DynMode::FloatMult { base, .. }, 1) => format!("multiplier [x{}]", base),
-          (DynMode::FloatMult { .. }, 2) => "ULPs adjustment".to_string(),
+          (DynMode::Classic, 0) => "primary".to_string(),
+          (DynMode::Gcd, 0) => "primary".to_string(),
+          (DynMode::FloatMult { base, .. }, 0) => format!("multiplier [x{}]", base),
+          (DynMode::FloatMult { .. }, 1) => "ULPs adjustment".to_string(),
           _ => panic!("unknown stream: {:?}/{}", m.dyn_mode, stream_idx),
         };
         let use_float_mult = matches!(m.dyn_mode, DynMode::FloatMult { .. });
         println!(
-          "\nchunk: {} stream: {} n: {} n_bins: {} ANS size log: {}",
-          i,
+          "stream: {} n_bins: {} ANS size log: {}",
           stream_name,
-          m.n,
           stream.bins.len(),
           stream.ans_size_log,
         );
