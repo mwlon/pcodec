@@ -6,6 +6,7 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::unsigned_src_dst::{StreamSrc, UnsignedDst};
 use crate::{bits, delta_encoding};
 
+// BodyDecompressor is already doing batching
 pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   let (unsigneds, adjustments) = dst.decompose();
   delta_encoding::toggle_center_deltas_in_place(adjustments);
@@ -15,6 +16,7 @@ pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   }
 }
 
+// compressor doesn't batch, so we do that ourselves for efficiency
 pub fn split_streams<T: NumberLike>(
   nums: &[T],
   base: <T::Unsigned as UnsignedLike>::Float,
@@ -52,17 +54,12 @@ pub fn split_streams<T: NumberLike>(
 const MIN_SAMPLE: usize = 10;
 // 1 in this many nums get put into sample
 const SAMPLE_RATIO: usize = 40;
+const SAMPLE_SIN_PERIOD: usize = 16;
 // # of bins before classic can't memorize them anymore, even if it tried
-const CLASSIC_MEMORIZATION_THRESH: f64 = 512.0;
-const CLASSIC_SAVINGS_RATIO: f64 = 0.4;
+const CLASSIC_MEMORIZATION_THRESH: f64 = 256.0;
 const NEAR_ZERO_MACHINE_EPSILON_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
 const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
-const SAMPLE_SIN_PERIOD: usize = 16;
-
-fn min_entropy() -> f64 {
-  (MIN_SAMPLE as f64).log2()
-}
 
 fn calc_sample_n(n: usize) -> Option<usize> {
   if n >= MIN_SAMPLE {
@@ -202,15 +199,8 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
   inv_gcd: U::Float,
   sample: &[U::Float],
   n: usize,
-) -> Option<Bitlen> {
-  // For float mult, we pay the "mult" entropy and the "adjustment" entropy
-  // once per number.
-  // For classic, we can memorize each mult if there are few enough and be more
-  // precise around each number, paying mult entropy and a fraction of
-  // adjustment entropy per number, but pay extra metadata cost per mult.
-  // It's better to use float mult if both mult entropy is high (requiring
-  // memorization) and
-  // adj_entropy * n * classic_savings < 2^mult_entropy * bin_meta_size
+) -> Option<usize> {
+  // TODO
   let mut counts = HashMap::<U, usize>::with_capacity(sample.len());
   for &x in sample {
     let mult = U::from_int_float((x * inv_gcd).round());
@@ -238,7 +228,7 @@ fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
     ((rough_classic_bins * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen
   };
 
-  adj_bits_needed::<U>(inv_gcd, sample, cutoff)?; // check the sample abides this
+  check_beats_classic::<U>(inv_gcd, sample, cutoff)?; // check the sample abides this
   Some(cutoff)
 }
 
@@ -272,30 +262,23 @@ fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
   }
 }
 
-fn adj_bits_needed<U: UnsignedLike>(
+fn check_beats_classic<U: UnsignedLike>(
   inv_base: U::Float,
   nums: &[U::Float],
-  cutoff: Bitlen,
-) -> Option<Bitlen> {
-  let mut max_abs_adj = U::ZERO;
-  let abs_adj_cutoff = if cutoff >= U::BITS {
-    U::MAX
-  } else {
-    ((U::ONE << cutoff) - U::ONE) >> 1
-  };
+  total_adj_bits_cutoff: usize,
+) -> Option<()> {
   let base = inv_base.inv();
+  let mut total_adj_bits = 0;
   for &x in nums {
     let u = x.to_unsigned();
     let approx = ((x * inv_base).round() * base).to_unsigned();
     let abs_adj = max(u, approx) - min(u, approx);
-    if abs_adj > abs_adj_cutoff {
-      return None;
+    total_adj_bits += U::BITS - (2 * abs_adj).leading_zeros();
+    if total_adj_bits > total_adj_bits_cutoff {
+      return None
     }
-    max_abs_adj = max(max_abs_adj, abs_adj);
   }
-  // multiply by 2 because we need it symmetric around approx
-  let max_adj_bits = bits::bits_to_encode_offset(max_abs_adj << 1);
-  Some(max_adj_bits)
+  return Some(())
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -313,9 +296,8 @@ fn choose_config_w_sample<U: UnsignedLike>(
   let gcd = center_sample_gcd(gcd, sample);
   let (gcd, inv_gcd) = snap_to_int_reciprocal(gcd);
 
-  let adj_bits_cutoff = adj_bits_cutoff_to_beat_classic::<U>(inv_gcd, sample, n)?;
-
-  adj_bits_needed::<U>(inv_gcd, nums, adj_bits_cutoff)?;
+  let total_adj_bits_cutoff = adj_bits_cutoff_to_beat_classic::<U>(inv_gcd, sample, n)?;
+  check_beats_classic::<U>(inv_gcd, nums, total_adj_bits_cutoff)?;
 
   Some(FloatMultConfig {
     base: gcd,
@@ -518,33 +500,33 @@ mod test {
       f32::INFINITY,
     ];
     assert_eq!(
-      adj_bits_needed::<u32>(10.0, &nums, 1),
+      check_beats_classic::<u32>(10.0, &nums, 1),
       Some(0)
     );
 
     let nums = vec![plus_epsilons(0.1, 0)];
     assert_eq!(
-      adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX),
+      check_beats_classic::<u32>(10.0, &nums, usize::MAX),
       Some(0)
     );
     let nums = vec![plus_epsilons(0.1, 1)];
     assert_eq!(
-      adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX),
+      check_beats_classic::<u32>(10.0, &nums, usize::MAX),
       Some(2)
     );
     let nums = vec![plus_epsilons(0.1, 2)];
     assert_eq!(
-      adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX),
+      check_beats_classic::<u32>(10.0, &nums, usize::MAX),
       Some(3)
     );
     let nums = vec![plus_epsilons(0.1, 30)];
     assert_eq!(
-      adj_bits_needed::<u32>(10.0, &nums, Bitlen::MAX),
+      check_beats_classic::<u32>(10.0, &nums, usize::MAX),
       Some(6)
     );
 
     let nums = vec![plus_epsilons(0.1, 30)];
-    assert_eq!(adj_bits_needed::<u32>(10.0, &nums, 5), None);
+    assert_eq!(check_beats_classic::<u32>(10.0, &nums, 5), None);
   }
 
   #[test]
