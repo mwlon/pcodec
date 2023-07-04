@@ -12,9 +12,9 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::file::reader::SerializedFileReader;
 
-use durendal::data_types::NumberLike;
-use durendal::standalone::Compressor;
-use durendal::{standalone, CompressorConfig};
+use pco::data_types::NumberLike;
+use pco::standalone::Compressor;
+use pco::{standalone, CompressorConfig};
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -37,7 +37,7 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
     } else {
       open_options.create_new(true);
     }
-    let mut file = open_options.open(&opt.qco_path)?;
+    let mut file = open_options.open(&opt.pco_path)?;
 
     let delta_encoding_order = if let Some(order) = opt.delta_encoding_order {
       order

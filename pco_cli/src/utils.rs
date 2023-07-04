@@ -4,7 +4,7 @@ use anyhow::Result;
 use arrow::array::ArrayRef;
 use arrow::datatypes::Schema;
 
-use durendal::data_types::NumberLike;
+use pco::data_types::NumberLike;
 
 use crate::number_like_arrow::NumberLikeArrow;
 use crate::opt::CompressOpt;

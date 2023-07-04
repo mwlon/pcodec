@@ -17,8 +17,8 @@ use crate::{ChunkMetadata, DecompressorConfig, Flags};
 /// You can use the standalone decompressor at a chunk, or stream level.
 /// ```
 /// use std::io::Write;
-/// use durendal::standalone::{DecompressedItem, Decompressor};
-/// use durendal::DecompressorConfig;
+/// use pco::standalone::{DecompressedItem, Decompressor};
+/// use pco::DecompressorConfig;
 ///
 /// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46];
 /// let mut dest = Vec::<i32>::new(); // where decompressed numbers go

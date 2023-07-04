@@ -10,7 +10,7 @@ use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
-use durendal::data_types::NumberLike as DNumberLike;
+use pco::data_types::NumberLike as DNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
 
 const BASE_DIR: &str = "bench/data";
@@ -23,7 +23,7 @@ struct Opt {
   datasets: String,
   #[structopt(long, short, default_value = "10")]
   pub iters: usize,
-  #[structopt(long, short, default_value = "dur")]
+  #[structopt(long, short, default_value = "pco")]
   compressors: String,
   #[structopt(long)]
   pub no_compress: bool,
@@ -34,36 +34,36 @@ struct Opt {
 }
 
 trait NumberLike: QNumberLike {
-  type Durendal: DNumberLike;
+  type Pco: DNumberLike;
 
-  fn slice_to_durendal(slice: &[Self]) -> &[Self::Durendal];
-  fn vec_from_durendal(v: Vec<Self::Durendal>) -> Vec<Self>;
+  fn slice_to_pco(slice: &[Self]) -> &[Self::Pco];
+  fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self>;
 }
 
-macro_rules! impl_dur_number_like {
-  ($t: ty, $dur: ty) => {
+macro_rules! impl_pco_number_like {
+  ($t: ty, $pco: ty) => {
     impl NumberLike for $t {
-      type Durendal = $dur;
+      type Pco = $pco;
 
-      fn slice_to_durendal(slice: &[$t]) -> &[Self::Durendal] {
+      fn slice_to_pco(slice: &[$t]) -> &[Self::Pco] {
         unsafe { std::mem::transmute(slice) }
       }
 
-      fn vec_from_durendal(v: Vec<Self::Durendal>) -> Vec<Self> {
+      fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self> {
         unsafe { std::mem::transmute(v) }
       }
     }
   };
 }
 
-impl_dur_number_like!(i64, i64);
-impl_dur_number_like!(f32, f32);
-impl_dur_number_like!(f64, f64);
-impl_dur_number_like!(TimestampMicros, i64);
+impl_pco_number_like!(i64, i64);
+impl_pco_number_like!(f32, f32);
+impl_pco_number_like!(f64, f64);
+impl_pco_number_like!(TimestampMicros, i64);
 
 #[derive(Clone, Debug)]
 enum MultiCompressorConfig {
-  Durendal(durendal::CompressorConfig),
+  Pco(pco::CompressorConfig),
   QCompress(q_compress::CompressorConfig),
   ZStd(usize),
 }
@@ -71,7 +71,7 @@ enum MultiCompressorConfig {
 impl MultiCompressorConfig {
   pub fn codec(&self) -> &'static str {
     match self {
-      MultiCompressorConfig::Durendal(_) => "dur",
+      MultiCompressorConfig::Pco(_) => "pco",
       MultiCompressorConfig::QCompress(_) => "qco",
       MultiCompressorConfig::ZStd(_) => "zstd",
     }
@@ -79,7 +79,7 @@ impl MultiCompressorConfig {
 
   pub fn details(&self) -> String {
     match self {
-      MultiCompressorConfig::Durendal(config) => {
+      MultiCompressorConfig::Pco(config) => {
         format!(
           "{}:{}:{}",
           config.compression_level, config.delta_encoding_order, config.use_gcds
@@ -120,18 +120,18 @@ impl Opt {
         None
       };
       res.push(match parts[0] {
-        "d" | "dur" | "durendal" => {
+        "p" | "pco" | "pcodec" => {
           let delta_encoding_order = if parts.len() > 2 {
             parts[2].parse().unwrap()
           } else {
             AUTO_DELTA
           };
           let use_gcds = !(parts.len() > 3 && &parts[3].to_lowercase()[0..3] == "off");
-          let config = durendal::CompressorConfig::default()
+          let config = pco::CompressorConfig::default()
             .with_compression_level(level.unwrap_or(q_compress::DEFAULT_COMPRESSION_LEVEL))
             .with_delta_encoding_order(delta_encoding_order)
             .with_use_gcds(use_gcds);
-          MultiCompressorConfig::Durendal(config)
+          MultiCompressorConfig::Pco(config)
         }
         "q" | "qco" | "q_compress" => {
           let delta_encoding_order = if parts.len() > 2 {
@@ -235,14 +235,14 @@ fn cast_to_nums<T: NumberLike>(bytes: Vec<u8>) -> Vec<T> {
   }
 }
 
-fn compress_dur<T: DNumberLike>(nums: &[T], config: durendal::CompressorConfig) -> Vec<u8> {
-  durendal::standalone::simple_compress(config, nums)
+fn compress_pco<T: DNumberLike>(nums: &[T], config: pco::CompressorConfig) -> Vec<u8> {
+  pco::standalone::simple_compress(config, nums)
 }
 
-fn decompress_dur<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
+fn decompress_pco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
   let v =
-    durendal::standalone::auto_decompress::<T::Durendal>(bytes).expect("could not decompress");
-  T::vec_from_durendal(v)
+    pco::standalone::auto_decompress::<T::Pco>(bytes).expect("could not decompress");
+  T::vec_from_pco(v)
 }
 
 fn compress_qco<T: NumberLike>(nums: &[T], config: q_compress::CompressorConfig) -> Vec<u8> {
@@ -261,16 +261,16 @@ fn compress<T: NumberLike>(
   let t = Instant::now();
   let mut qualified_config = config.clone();
   let compressed = match &mut qualified_config {
-    MultiCompressorConfig::Durendal(dur_conf) => {
-      let mut conf = dur_conf.clone();
-      let dur_nums = T::slice_to_durendal(nums);
+    MultiCompressorConfig::Pco(pco_conf) => {
+      let mut conf = pco_conf.clone();
+      let pco_nums = T::slice_to_pco(nums);
       if conf.delta_encoding_order == AUTO_DELTA {
         conf.delta_encoding_order =
-          durendal::standalone::auto_compressor_config(dur_nums, conf.compression_level)
+          pco::standalone::auto_compressor_config(pco_nums, conf.compression_level)
             .delta_encoding_order;
       }
-      *dur_conf = conf.clone();
-      compress_dur(dur_nums, conf)
+      *pco_conf = conf.clone();
+      compress_pco(pco_nums, conf)
     }
     MultiCompressorConfig::QCompress(qco_conf) => {
       let mut conf = qco_conf.clone();
@@ -299,7 +299,7 @@ fn decompress<T: NumberLike>(
 ) -> (Duration, Vec<T>) {
   let t = Instant::now();
   let rec_nums = match config {
-    MultiCompressorConfig::Durendal(_) => decompress_dur(compressed),
+    MultiCompressorConfig::Pco(_) => decompress_pco(compressed),
     MultiCompressorConfig::QCompress(_) => decompress_qco(compressed),
     MultiCompressorConfig::ZStd(_) => {
       // to do justice to zstd, unsafely convert the bytes it writes into T

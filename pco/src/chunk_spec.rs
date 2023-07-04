@@ -20,7 +20,7 @@ impl ChunkSpec {
   ///
   /// E.g.
   /// ```
-  /// use durendal::wrapped::ChunkSpec;
+  /// use pco::wrapped::ChunkSpec;
   /// let spec = ChunkSpec::default().with_page_sizes(vec![1, 2, 3]);
   /// ```
   /// can only be used if the chunk actually contains 1+2+3=6 numbers.

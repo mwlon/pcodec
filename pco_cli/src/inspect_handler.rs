@@ -2,9 +2,9 @@ use std::io::Write;
 
 use anyhow::Result;
 
-use durendal::data_types::{NumberLike, UnsignedLike};
-use durendal::standalone::Decompressor;
-use durendal::{Bin, DynMode};
+use pco::data_types::{NumberLike, UnsignedLike};
+use pco::standalone::Decompressor;
+use pco::{Bin, DynMode};
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;

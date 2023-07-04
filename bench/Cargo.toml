@@ -9,7 +9,7 @@ name = "bench"
 path = "src/main.rs"
 
 [dependencies]
-durendal = {path = "../durendal"}
+pco = {path = "../pco" }
 q_compress = {path = "../q_compress"}
 structopt = "0.3.26"
 tabled = "0.12.2"

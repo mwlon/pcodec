@@ -76,7 +76,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 name = "bench"
 version = "0.0.0"
 dependencies = [
- "durendal",
+ "pco",
  "q_compress",
  "structopt",
  "tabled",
@@ -189,27 +189,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "durendal"
-version = "0.0.0"
-dependencies = [
- "futures",
- "rand",
- "tokio",
-]
-
-[[package]]
-name = "durendal_cli"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "arrow",
- "durendal",
- "enum-iterator",
- "parquet",
- "structopt",
 ]
 
 [[package]]
@@ -741,6 +720,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f0c06cdcd5460967c485f9c40a821746f5955ad81990533c7fae95dbd9bc0b5"
 dependencies = [
  "thrift",
+]
+
+[[package]]
+name = "pco"
+version = "0.0.0"
+dependencies = [
+ "futures",
+ "rand",
+ "tokio",
+]
+
+[[package]]
+name = "pco_cli"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "arrow",
+ "enum-iterator",
+ "parquet",
+ "pco",
+ "structopt",
 ]
 
 [[package]]
