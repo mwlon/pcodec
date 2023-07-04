@@ -259,7 +259,6 @@ fn has_enough_infrequent_ints<U: UnsignedLike>(inv_gcd: U::Float, sample: &[U::F
       }
     })
     .sum::<f64>();
-  println!("imwe {}", infrequent_mult_weight_estimate);
   infrequent_mult_weight_estimate > INFREQUENT_MULT_WEIGHT_THRESH
 }
 
@@ -277,14 +276,9 @@ fn uses_few_enough_adj_bits<U: UnsignedLike>(inv_base: U::Float, nums: &[U::Floa
     let adj_bits = U::BITS - (abs_adj << 1).leading_zeros();
     let inter_base_bits =
       (U::Float::PRECISION_BITS as usize).saturating_sub(max(mult.exponent(), 0) as usize);
-    println!("adj {} inter {}", adj_bits, inter_base_bits);
     total_bits_saved += inter_base_bits.saturating_sub(adj_bits as usize);
     total_inter_base_bits += inter_base_bits;
   }
-  println!(
-    "saved {} vs {}",
-    total_bits_saved, total_uncompressed_size
-  );
   let total_bits_saved = total_bits_saved as f64;
   total_bits_saved > total_inter_base_bits as f64 * ADJ_BITS_RELATIVE_SAVINGS_THRESH
     && total_bits_saved > total_uncompressed_size as f64 * ADJ_BITS_ABSOLUTE_SAVINGS_THRESH
