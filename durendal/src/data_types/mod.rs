@@ -33,10 +33,10 @@ pub trait FloatLike:
   fn abs(self) -> Self;
   fn inv(self) -> Self;
   fn round(self) -> Self;
-  fn log2_ulps_between_positives(a: Self, b: Self) -> Bitlen;
   fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
   fn is_finite_and_normal(&self) -> bool;
+  fn exponent(&self) -> i32;
   fn max(a: Self, b: Self) -> Self;
   fn min(a: Self, b: Self) -> Self;
 }
@@ -104,7 +104,6 @@ pub trait UnsignedLike:
   fn lshift_word(self, shift: Bitlen) -> usize;
 
   fn wrapping_add(self, other: Self) -> Self;
-
   fn wrapping_sub(self, other: Self) -> Self;
 
   fn to_int_float(self) -> Self::Float;

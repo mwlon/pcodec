@@ -56,10 +56,19 @@ const MIN_SAMPLE: usize = 10;
 const SAMPLE_RATIO: usize = 40;
 const SAMPLE_SIN_PERIOD: usize = 16;
 // # of bins before classic can't memorize them anymore, even if it tried
-const CLASSIC_MEMORIZATION_THRESH: f64 = 256.0;
 const NEAR_ZERO_MACHINE_EPSILON_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
 const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
+// Int mults will be considered infrequent if they occur less than 1/this of
+// the time.
+const CLASSIC_MEMORIZATION_THRESH: f64 = 256.0;
+// what proportion of numbers must come from infrequent mults
+const INFREQUENT_MULT_WEIGHT_THRESH: f64 = 0.1;
+// We require that using adj bits (as opposed to full offsets between
+// consecutive multiples of the base) saves at least this proportion of the
+// full offsets (relative) or full uncompressed size (absolute).
+const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
+const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.2;
 
 fn calc_sample_n(n: usize) -> Option<usize> {
   if n >= MIN_SAMPLE {
@@ -195,43 +204,6 @@ fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
   maybe_gcd
 }
 
-fn adj_bits_cutoff_to_beat_classic<U: UnsignedLike>(
-  inv_gcd: U::Float,
-  sample: &[U::Float],
-  n: usize,
-) -> Option<usize> {
-  // TODO
-  let mut counts = HashMap::<U, usize>::with_capacity(sample.len());
-  for &x in sample {
-    let mult = U::from_int_float((x * inv_gcd).round());
-    *counts.entry(mult).or_default() += 1;
-  }
-  let sample_n = sample.len();
-  let mut miller_madow_entropy =
-    (counts.len() - 1) as f64 * std::f64::consts::LOG2_E / (sample_n as f64 * 2.0_f64);
-  for &count in counts.values() {
-    let p = (count as f64) / (sample_n as f64);
-    miller_madow_entropy -= p * p.log2();
-  }
-
-  if miller_madow_entropy < min_entropy() {
-    return None;
-  }
-
-  let rough_bin_meta_cost = U::BITS as f64 + 40.0;
-  let rough_classic_bins = 2.0_f64.powf(miller_madow_entropy);
-  let cutoff = if rough_classic_bins > CLASSIC_MEMORIZATION_THRESH {
-    let median = sample[sample.len() / 2];
-    let gcd = inv_gcd.inv();
-    U::Float::log2_ulps_between_positives(median, median + gcd) / 2
-  } else {
-    ((rough_classic_bins * rough_bin_meta_cost) / (CLASSIC_SAVINGS_RATIO * n as f64)) as Bitlen
-  };
-
-  check_beats_classic::<U>(inv_gcd, sample, cutoff)?; // check the sample abides this
-  Some(cutoff)
-}
-
 fn center_sample_gcd<F: FloatLike>(gcd: F, sample: &[F]) -> F {
   let inv_gcd = gcd.inv();
   let mut min_tweak = F::MAX;
@@ -262,23 +234,67 @@ fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
   }
 }
 
-fn check_beats_classic<U: UnsignedLike>(
+fn has_enough_infrequent_ints<U: UnsignedLike>(
+  inv_gcd: U::Float,
+  sample: &[U::Float],
+) -> bool {
+  let mut mult_counts = HashMap::<U, usize>::with_capacity(sample.len());
+  for &x in sample {
+    let mult = U::from_int_float((x * inv_gcd).round());
+    *mult_counts.entry(mult).or_default() += 1;
+  }
+
+  let inv_sample_size = 1.0 / sample.len() as f64;
+  let infrequent_cutoff = max(
+    1,
+    (sample.len() as f64 / CLASSIC_MEMORIZATION_THRESH) as usize,
+  );
+
+  // Maybe this should be made fuzzy instead of a hard cutoff because it's just
+  // a sample.
+  let infrequent_mult_weight_estimate = mult_counts.values().map(|&count| {
+    if count <= infrequent_cutoff {
+      count as f64 * inv_sample_size
+    } else {
+      0.0
+    }
+  }).sum::<f64>();
+  println!("imwe {}", infrequent_mult_weight_estimate);
+  infrequent_mult_weight_estimate > INFREQUENT_MULT_WEIGHT_THRESH
+}
+
+// TODO there is redundant work between this and split_streams
+fn uses_few_enough_adj_bits<U: UnsignedLike>(
   inv_base: U::Float,
   nums: &[U::Float],
-  total_adj_bits_cutoff: usize,
-) -> Option<()> {
+) -> bool {
   let base = inv_base.inv();
-  let mut total_adj_bits = 0;
+  let total_uncompressed_size = nums.len() * U::BITS as usize;
+  let mut total_bits_saved = 0;
+  let mut total_inter_base_bits = 0;
   for &x in nums {
     let u = x.to_unsigned();
-    let approx = ((x * inv_base).round() * base).to_unsigned();
+    let mult = (x * inv_base).round();
+    let approx = (mult * base).to_unsigned();
     let abs_adj = max(u, approx) - min(u, approx);
-    total_adj_bits += U::BITS - (2 * abs_adj).leading_zeros();
-    if total_adj_bits > total_adj_bits_cutoff {
-      return None
-    }
+    let adj_bits = U::BITS - (abs_adj << 1).leading_zeros();
+    let inter_base_bits = (U::Float::PRECISION_BITS as usize).saturating_sub(max(mult.exponent(), 0) as usize);
+    println!("adj {} inter {}", adj_bits, inter_base_bits);
+    total_bits_saved += inter_base_bits.saturating_sub(adj_bits as usize);
+    total_inter_base_bits += inter_base_bits;
   }
-  return Some(())
+  println!("saved {} vs {}", total_bits_saved, total_uncompressed_size);
+  let total_bits_saved = total_bits_saved as f64;
+  total_bits_saved > total_inter_base_bits as f64 * ADJ_BITS_RELATIVE_SAVINGS_THRESH &&
+    total_bits_saved > total_uncompressed_size as f64 * ADJ_BITS_ABSOLUTE_SAVINGS_THRESH
+}
+
+fn better_compression_than_classic<U: UnsignedLike>(
+  inv_gcd: U::Float,
+  sample: &[U::Float],
+  nums: &[U::Float],
+) -> bool {
+  has_enough_infrequent_ints::<U>(inv_gcd, sample) && uses_few_enough_adj_bits::<U>(inv_gcd, nums)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -291,13 +307,13 @@ fn choose_config_w_sample<U: UnsignedLike>(
   sample: &[U::Float],
   nums: &[U::Float],
 ) -> Option<FloatMultConfig<U::Float>> {
-  let n = nums.len();
   let gcd = approx_sample_gcd(sample)?;
   let gcd = center_sample_gcd(gcd, sample);
   let (gcd, inv_gcd) = snap_to_int_reciprocal(gcd);
 
-  let total_adj_bits_cutoff = adj_bits_cutoff_to_beat_classic::<U>(inv_gcd, sample, n)?;
-  check_beats_classic::<U>(inv_gcd, nums, total_adj_bits_cutoff)?;
+  if !better_compression_than_classic::<U>(inv_gcd, sample, nums) {
+    return None;
+  }
 
   Some(FloatMultConfig {
     base: gcd,
@@ -488,45 +504,44 @@ mod test {
   }
 
   #[test]
-  fn test_adj_bits_needed() {
+  fn test_float_mult_better_than_classic() {
     let nums = vec![
       f32::NEG_INFINITY,
       -f32::NAN,
+      -999.0,
       -0.3,
       0.0,
+      0.1,
       0.2,
+      0.3,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
       0.7,
       f32::NAN,
       f32::INFINITY,
     ];
-    assert_eq!(
-      check_beats_classic::<u32>(10.0, &nums, 1),
-      Some(0)
-    );
+    assert!(better_compression_than_classic::<u32>(10.0, &nums, &nums));
 
-    let nums = vec![plus_epsilons(0.1, 0)];
-    assert_eq!(
-      check_beats_classic::<u32>(10.0, &nums, usize::MAX),
-      Some(0)
-    );
-    let nums = vec![plus_epsilons(0.1, 1)];
-    assert_eq!(
-      check_beats_classic::<u32>(10.0, &nums, usize::MAX),
-      Some(2)
-    );
-    let nums = vec![plus_epsilons(0.1, 2)];
-    assert_eq!(
-      check_beats_classic::<u32>(10.0, &nums, usize::MAX),
-      Some(3)
-    );
-    let nums = vec![plus_epsilons(0.1, 30)];
-    assert_eq!(
-      check_beats_classic::<u32>(10.0, &nums, usize::MAX),
-      Some(6)
-    );
+    for n in [10, 1000] {
+      let nums = (0..n).into_iter().map(|x| plus_epsilons((x as f32) * 0.1, x % 2)).collect::<Vec<_>>();
+      assert!(better_compression_than_classic::<u32>(10.0, &nums, &nums), "n={}", n);
+    }
+  }
 
-    let nums = vec![plus_epsilons(0.1, 30)];
-    assert_eq!(check_beats_classic::<u32>(10.0, &nums, 5), None);
+  #[test]
+  fn test_float_mult_worse_than_classic() {
+    for n in [10, 1000] {
+      let nums = vec![0.1; n];
+      assert!(!better_compression_than_classic::<u32>(10.0, &nums, &nums), "n={}", n);
+
+      let nums = (0..n).into_iter().map(|x| (x as f32) * 0.77).collect::<Vec<_>>();
+      assert!(!better_compression_than_classic::<u32>(10.0, &nums, &nums), "n={}", n);
+
+      let nums = (0..n).into_iter().map(|x| (x + 200000) as f32 * 0.1).collect::<Vec<_>>();
+      assert!(!better_compression_than_classic::<u32>(10.0, &nums, &nums), "n={}", n);
+    }
   }
 
   #[test]

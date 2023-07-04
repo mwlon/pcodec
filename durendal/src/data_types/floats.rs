@@ -8,7 +8,7 @@ use crate::data_types::{FloatLike, NumberLike};
 // For instance, since f32 has 23 fraction bits, here we want 1.0 + 3_u32 to be
 // 1.0 + (3.0 * 2.0 ^ -23).
 macro_rules! impl_float_number {
-  ($t: ty, $signed: ty, $unsigned: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr) => {
+  ($t: ty, $signed: ty, $unsigned: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
     impl FloatLike for $t {
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS - 1;
       const GREATEST_PRECISE_INT: Self = (1_u64 << Self::MANTISSA_DIGITS) as Self;
@@ -41,15 +41,14 @@ macro_rules! impl_float_number {
         self as f64
       }
 
-      fn log2_ulps_between_positives(a: Self, b: Self) -> Bitlen {
-        let (a, b) = (a.to_bits(), b.to_bits());
-        let epsilons = max(a, b) - min(a, b);
-        $bits - epsilons.leading_zeros()
-      }
-
       #[inline]
       fn is_finite_and_normal(&self) -> bool {
         self.is_finite() && !self.is_subnormal()
+      }
+
+      #[inline]
+      fn exponent(&self) -> i32 {
+        (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 + $exp_offset
       }
 
       #[inline]
@@ -110,5 +109,5 @@ macro_rules! impl_float_number {
   };
 }
 
-impl_float_number!(f32, i32, u32, 32, 1_u32 << 31, 6);
-impl_float_number!(f64, i64, u64, 64, 1_u64 << 63, 5);
+impl_float_number!(f32, i32, u32, 32, 1_u32 << 31, 6, -126);
+impl_float_number!(f64, i64, u64, 64, 1_u64 << 63, 5, -1022);
