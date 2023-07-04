@@ -3,8 +3,8 @@ use std::collections::HashMap;
 
 use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
+use crate::delta_encoding;
 use crate::unsigned_src_dst::{StreamSrc, UnsignedDst};
-use crate::{bits, delta_encoding};
 
 // BodyDecompressor is already doing batching
 pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
@@ -234,10 +234,7 @@ fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
   }
 }
 
-fn has_enough_infrequent_ints<U: UnsignedLike>(
-  inv_gcd: U::Float,
-  sample: &[U::Float],
-) -> bool {
+fn has_enough_infrequent_ints<U: UnsignedLike>(inv_gcd: U::Float, sample: &[U::Float]) -> bool {
   let mut mult_counts = HashMap::<U, usize>::with_capacity(sample.len());
   for &x in sample {
     let mult = U::from_int_float((x * inv_gcd).round());
@@ -252,22 +249,22 @@ fn has_enough_infrequent_ints<U: UnsignedLike>(
 
   // Maybe this should be made fuzzy instead of a hard cutoff because it's just
   // a sample.
-  let infrequent_mult_weight_estimate = mult_counts.values().map(|&count| {
-    if count <= infrequent_cutoff {
-      count as f64 * inv_sample_size
-    } else {
-      0.0
-    }
-  }).sum::<f64>();
+  let infrequent_mult_weight_estimate = mult_counts
+    .values()
+    .map(|&count| {
+      if count <= infrequent_cutoff {
+        count as f64 * inv_sample_size
+      } else {
+        0.0
+      }
+    })
+    .sum::<f64>();
   println!("imwe {}", infrequent_mult_weight_estimate);
   infrequent_mult_weight_estimate > INFREQUENT_MULT_WEIGHT_THRESH
 }
 
 // TODO there is redundant work between this and split_streams
-fn uses_few_enough_adj_bits<U: UnsignedLike>(
-  inv_base: U::Float,
-  nums: &[U::Float],
-) -> bool {
+fn uses_few_enough_adj_bits<U: UnsignedLike>(inv_base: U::Float, nums: &[U::Float]) -> bool {
   let base = inv_base.inv();
   let total_uncompressed_size = nums.len() * U::BITS as usize;
   let mut total_bits_saved = 0;
@@ -278,15 +275,19 @@ fn uses_few_enough_adj_bits<U: UnsignedLike>(
     let approx = (mult * base).to_unsigned();
     let abs_adj = max(u, approx) - min(u, approx);
     let adj_bits = U::BITS - (abs_adj << 1).leading_zeros();
-    let inter_base_bits = (U::Float::PRECISION_BITS as usize).saturating_sub(max(mult.exponent(), 0) as usize);
+    let inter_base_bits =
+      (U::Float::PRECISION_BITS as usize).saturating_sub(max(mult.exponent(), 0) as usize);
     println!("adj {} inter {}", adj_bits, inter_base_bits);
     total_bits_saved += inter_base_bits.saturating_sub(adj_bits as usize);
     total_inter_base_bits += inter_base_bits;
   }
-  println!("saved {} vs {}", total_bits_saved, total_uncompressed_size);
+  println!(
+    "saved {} vs {}",
+    total_bits_saved, total_uncompressed_size
+  );
   let total_bits_saved = total_bits_saved as f64;
-  total_bits_saved > total_inter_base_bits as f64 * ADJ_BITS_RELATIVE_SAVINGS_THRESH &&
-    total_bits_saved > total_uncompressed_size as f64 * ADJ_BITS_ABSOLUTE_SAVINGS_THRESH
+  total_bits_saved > total_inter_base_bits as f64 * ADJ_BITS_RELATIVE_SAVINGS_THRESH
+    && total_bits_saved > total_uncompressed_size as f64 * ADJ_BITS_ABSOLUTE_SAVINGS_THRESH
 }
 
 fn better_compression_than_classic<U: UnsignedLike>(
@@ -332,8 +333,6 @@ pub fn choose_config<T: NumberLike>(
 #[cfg(test)]
 mod test {
   use std::f32::consts::{E, TAU};
-
-  use crate::constants::Bitlen;
 
   use super::*;
 
@@ -522,11 +521,20 @@ mod test {
       f32::NAN,
       f32::INFINITY,
     ];
-    assert!(better_compression_than_classic::<u32>(10.0, &nums, &nums));
+    assert!(better_compression_than_classic::<u32>(
+      10.0, &nums, &nums
+    ));
 
     for n in [10, 1000] {
-      let nums = (0..n).into_iter().map(|x| plus_epsilons((x as f32) * 0.1, x % 2)).collect::<Vec<_>>();
-      assert!(better_compression_than_classic::<u32>(10.0, &nums, &nums), "n={}", n);
+      let nums = (0..n)
+        .into_iter()
+        .map(|x| plus_epsilons((x as f32) * 0.1, x % 2))
+        .collect::<Vec<_>>();
+      assert!(
+        better_compression_than_classic::<u32>(10.0, &nums, &nums),
+        "n={}",
+        n
+      );
     }
   }
 
@@ -534,13 +542,31 @@ mod test {
   fn test_float_mult_worse_than_classic() {
     for n in [10, 1000] {
       let nums = vec![0.1; n];
-      assert!(!better_compression_than_classic::<u32>(10.0, &nums, &nums), "n={}", n);
+      assert!(
+        !better_compression_than_classic::<u32>(10.0, &nums, &nums),
+        "n={}",
+        n
+      );
 
-      let nums = (0..n).into_iter().map(|x| (x as f32) * 0.77).collect::<Vec<_>>();
-      assert!(!better_compression_than_classic::<u32>(10.0, &nums, &nums), "n={}", n);
+      let nums = (0..n)
+        .into_iter()
+        .map(|x| (x as f32) * 0.77)
+        .collect::<Vec<_>>();
+      assert!(
+        !better_compression_than_classic::<u32>(10.0, &nums, &nums),
+        "n={}",
+        n
+      );
 
-      let nums = (0..n).into_iter().map(|x| (x + 200000) as f32 * 0.1).collect::<Vec<_>>();
-      assert!(!better_compression_than_classic::<u32>(10.0, &nums, &nums), "n={}", n);
+      let nums = (0..n)
+        .into_iter()
+        .map(|x| (x + 200000) as f32 * 0.1)
+        .collect::<Vec<_>>();
+      assert!(
+        !better_compression_than_classic::<u32>(10.0, &nums, &nums),
+        "n={}",
+        n
+      );
     }
   }
 

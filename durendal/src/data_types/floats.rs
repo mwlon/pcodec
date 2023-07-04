@@ -1,5 +1,3 @@
-use std::cmp::{max, min};
-
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike};
 
