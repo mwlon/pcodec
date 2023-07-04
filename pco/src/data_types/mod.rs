@@ -85,7 +85,7 @@ pub trait UnsignedLike:
   /// `usize`.
   /// For example,
   /// ```
-  /// use durendal::data_types::UnsignedLike;
+  /// use pco::data_types::UnsignedLike;
   /// assert_eq!(6_u32.rshift_word(1), 3_usize);
   /// ```
   ///
@@ -96,7 +96,7 @@ pub trait UnsignedLike:
   /// `usize`.
   /// For example,
   /// ```
-  /// use durendal::data_types::UnsignedLike;
+  /// use pco::data_types::UnsignedLike;
   /// assert_eq!(6_u32.lshift_word(1), 12_usize);
   /// ```
   ///

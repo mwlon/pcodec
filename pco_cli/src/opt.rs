@@ -6,11 +6,10 @@ use structopt::StructOpt;
 
 use crate::dtype::DType;
 
-// TODO
 #[derive(Clone, Debug, StructOpt)]
 #[structopt {
-  name = "q_compress CLI",
-  about = "A command line tool to compress, decompress, and inspect .qco files",
+  name = "pcodec CLI",
+  about = "A command line tool to compress, decompress, and inspect .pco files",
 }]
 pub enum Opt {
   #[structopt(name = "compress")]
@@ -54,8 +53,7 @@ pub struct CompressOpt {
   #[structopt(long = "csv-delimiter", default_value = ",")]
   pub delimiter: char,
 
-  // TODO
-  pub qco_path: PathBuf,
+  pub pco_path: PathBuf,
 }
 
 impl CompressOpt {
@@ -79,7 +77,7 @@ pub struct DecompressOpt {
   #[structopt(long, default_value = "%Y-%m-%dT%H:%M:%S%.f")]
   pub timestamp_format: String,
 
-  pub qco_path: PathBuf,
+  pub pco_path: PathBuf,
 }
 
 #[derive(Clone, Debug, StructOpt)]

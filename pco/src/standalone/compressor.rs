@@ -14,7 +14,7 @@ use crate::{ChunkMetadata, CompressorConfig, Flags};
 ///
 /// You can use the standalone compressor at a chunk level.
 /// ```
-/// use durendal::standalone::Compressor;
+/// use pco::standalone::Compressor;
 ///
 /// let my_nums = vec![1, 2, 3];
 ///

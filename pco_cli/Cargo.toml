@@ -1,5 +1,5 @@
 [package]
-name = "durendal_cli"
+name = "pco_cli"
 version = "0.0.0"
 edition = "2018"
 
@@ -12,7 +12,7 @@ license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
 
 [[bin]]
-name = "dur"
+name = "pco"
 path = "src/main.rs"
 
 [dependencies]
@@ -20,7 +20,7 @@ anyhow = "1.0.53"
 arrow = {version = "9.0.2", features = ["csv"], default-features=false}
 parquet = {version = "9.0.2", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
 structopt = "0.3.26"
-durendal = {version = "0.0", path = "../durendal"}
+pco = {version = "0.0", path = "../pco" }
 
 [dev-dependencies]
 enum-iterator = "0.7.0"

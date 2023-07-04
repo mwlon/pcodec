@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes::{DataType as ArrowDataType, TimeUnit};
 
-use durendal::data_types::NumberLike;
+use pco::data_types::NumberLike;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]
@@ -29,8 +29,10 @@ impl FromStr for DType {
     let res = match s.to_lowercase().as_str() {
       "f32" => DType::F32,
       "f64" => DType::F64,
+      "i16" => DType::I16,
       "i32" => DType::I32,
       "i64" => DType::I64,
+      "u16" => DType::U16,
       "u32" => DType::U32,
       "u64" => DType::U64,
       "micros" | "timestampmicros" => DType::TimestampMicros,
@@ -95,7 +97,7 @@ impl DType {
       ArrowDataType::Timestamp(TimeUnit::Nanosecond, _) => DType::TimestampNanos,
       _ => {
         return Err(anyhow!(
-          "unable to convert arrow dtype {:?} to durendal",
+          "unable to convert arrow dtype {:?} to pco",
           arrow_dtype
         ))
       }
