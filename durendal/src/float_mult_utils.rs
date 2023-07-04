@@ -63,7 +63,7 @@ const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 // the time.
 const CLASSIC_MEMORIZATION_THRESH: f64 = 256.0;
 // what proportion of numbers must come from infrequent mults
-const INFREQUENT_MULT_WEIGHT_THRESH: f64 = 0.1;
+const INFREQUENT_MULT_WEIGHT_THRESH: f64 = 0.05;
 // We require that using adj bits (as opposed to full offsets between
 // consecutive multiples of the base) saves at least this proportion of the
 // full offsets (relative) or full uncompressed size (absolute).
