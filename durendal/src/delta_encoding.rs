@@ -35,7 +35,7 @@ impl<U: UnsignedLike> DeltaMoments<U> {
 // Without this, deltas in (say) [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].
 #[inline(never)]
-fn toggle_center_deltas_in_place<U: UnsignedLike>(dest: &mut [U]) {
+pub fn toggle_center_deltas_in_place<U: UnsignedLike>(dest: &mut [U]) {
   for u in dest.iter_mut() {
     *u = u.wrapping_add(U::MID);
   }

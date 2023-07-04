@@ -39,7 +39,8 @@ fn test_insufficient_data_short_bins() {
   }
 
   let metadata = assert_panic_safe(nums);
-  assert_eq!(metadata.bins.len(), 2);
+  assert_eq!(metadata.streams.len(), 1);
+  assert_eq!(metadata.streams[0].bins.len(), 2);
 }
 
 #[test]
@@ -50,7 +51,8 @@ fn test_insufficient_data_sparse() {
   }
 
   let metadata = assert_panic_safe(nums);
-  assert_eq!(metadata.bins.len(), 2);
+  assert_eq!(metadata.streams.len(), 1);
+  assert_eq!(metadata.streams[0].bins.len(), 2);
 }
 
 #[test]
@@ -62,6 +64,7 @@ fn test_insufficient_data_long_offsets() {
   }
 
   let metadata = assert_panic_safe(nums);
-  assert_eq!(metadata.bins.len(), 1);
-  assert_eq!(metadata.bins[0].offset_bits, 64);
+  assert_eq!(metadata.streams.len(), 1);
+  assert_eq!(metadata.streams[0].bins.len(), 1);
+  assert_eq!(metadata.streams[0].bins[0].offset_bits, 64);
 }

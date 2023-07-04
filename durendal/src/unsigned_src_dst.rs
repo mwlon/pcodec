@@ -1,50 +1,66 @@
-use crate::constants::Bitlen;
+use crate::bit_writer::BitWriter;
+use crate::constants::{Bitlen, MAX_N_STREAMS};
 use crate::data_types::UnsignedLike;
 
 #[derive(Clone, Debug)]
-pub struct DecomposedUnsigned<U: UnsignedLike> {
+pub struct Decomposed<U: UnsignedLike> {
   pub ans_word: usize,
   pub ans_bits: Bitlen,
   pub offset: U,
   pub offset_bits: Bitlen,
 }
 
-// persists for a whole chunk
+impl<U: UnsignedLike> Decomposed<U> {
+  pub fn write_to(&self, writer: &mut BitWriter) {
+    writer.write_usize(self.ans_word, self.ans_bits);
+    writer.write_diff(self.offset, self.offset_bits);
+  }
+}
+
 #[derive(Clone, Debug)]
-pub struct UnsignedSrc<U: UnsignedLike> {
-  unsigneds: Vec<U>,
-  adjustments: Vec<U>,
-  decomposeds: Vec<DecomposedUnsigned<U>>,
+pub struct StreamSrc<U: UnsignedLike> {
+  streams: [Vec<U>; MAX_N_STREAMS],
+}
+
+impl<U: UnsignedLike> StreamSrc<U> {
+  pub fn new(streams: [Vec<U>; MAX_N_STREAMS]) -> Self {
+    Self { streams }
+  }
+
+  pub fn stream(&self, stream_idx: usize) -> &[U] {
+    &self.streams[stream_idx]
+  }
+
+  pub fn stream_mut(&mut self, stream_idx: usize) -> &mut Vec<U> {
+    &mut self.streams[stream_idx]
+  }
+}
+
+#[derive(Clone, Debug)]
+pub struct DecomposedSrc<U: UnsignedLike> {
+  decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS],
+  ans_final_states: [usize; MAX_N_STREAMS],
   i: usize,
 }
 
-impl<U: UnsignedLike> UnsignedSrc<U> {
-  pub fn new(unsigneds: Vec<U>, adjustments: Vec<U>) -> Self {
+impl<U: UnsignedLike> DecomposedSrc<U> {
+  pub fn new(
+    decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS],
+    ans_final_states: [usize; MAX_N_STREAMS],
+  ) -> Self {
     Self {
-      unsigneds,
-      adjustments,
-      decomposeds: Vec::new(),
+      decomposeds,
+      ans_final_states,
       i: 0,
     }
   }
 
-  pub fn set_decomposeds(&mut self, decomposeds: Vec<DecomposedUnsigned<U>>) {
-    self.decomposeds = decomposeds;
+  #[inline]
+  pub fn decomposed(&self, stream_idx: usize) -> &Decomposed<U> {
+    &self.decomposeds[stream_idx][self.i]
   }
 
-  pub fn decomposed(&self) -> &DecomposedUnsigned<U> {
-    &self.decomposeds[self.i]
-  }
-
-  pub fn unsigned(&self) -> U {
-    self.unsigneds[self.i]
-  }
-
-  pub fn adjustment(&self) -> U {
-    self.adjustments[self.i]
-  }
-
-  pub fn idx(&self) -> usize {
+  pub fn n_processed(&self) -> usize {
     self.i
   }
 
@@ -52,47 +68,46 @@ impl<U: UnsignedLike> UnsignedSrc<U> {
     self.i += 1;
   }
 
-  pub fn finished_unsigneds(&self) -> bool {
-    self.i >= self.unsigneds.len()
+  pub fn ans_final_state(&self, stream_idx: usize) -> usize {
+    self.ans_final_states[stream_idx]
   }
 
-  pub fn unsigneds(&self) -> &[U] {
-    &self.unsigneds
-  }
-
-  pub fn unsigneds_mut(&mut self) -> &mut Vec<U> {
-    &mut self.unsigneds
+  pub fn stream_len(&self, stream_idx: usize) -> usize {
+    self.decomposeds[stream_idx].len()
   }
 }
 
 // mutable destination for unsigneds and associated information to be written
+// Each stream interleaved in the data writes to a corresponding stream here.
+// It would be nicer to have a single data member for all the streams, but
+// that's not possible because the primary stream may be provided by the user
+// for performance reasons (and is therefore in a different memory location).
 pub struct UnsignedDst<'a, U: UnsignedLike> {
-  // immutable
-  unsigneds: &'a mut [U],
-  adjustments: &'a mut [U],
+  primary_stream: &'a mut [U],
+  stream1: &'a mut [U],
   len: usize,
-  // mutable
   i: usize,
 }
 
 impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
-  pub fn new(unsigneds: &'a mut [U], adjustments: &'a mut [U]) -> Self {
-    let len = unsigneds.len();
-    assert!(adjustments.len() >= len);
+  pub fn new(primary_stream: &'a mut [U], stream1: &'a mut [U]) -> Self {
+    let len = primary_stream.len();
+    assert!(stream1.len() >= len);
     Self {
-      unsigneds,
-      adjustments,
+      primary_stream,
+      stream1,
       len,
       i: 0,
     }
   }
 
-  pub fn write_unsigned(&mut self, u: U) {
-    self.unsigneds[self.i] = u;
-  }
-
-  pub fn write_adj(&mut self, u: U) {
-    self.adjustments[self.i] = u;
+  #[inline]
+  pub fn write(&mut self, stream_idx: usize, u: U) {
+    match stream_idx {
+      0 => self.primary_stream[self.i] = u,
+      1 => self.stream1[self.i] = u,
+      _ => panic!("invalid stream; should be unreachable"),
+    }
   }
 
   pub fn n_processed(&self) -> usize {
@@ -112,6 +127,6 @@ impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
   }
 
   pub fn decompose(self) -> (&'a mut [U], &'a mut [U]) {
-    (self.unsigneds, self.adjustments)
+    (self.primary_stream, self.stream1)
   }
 }

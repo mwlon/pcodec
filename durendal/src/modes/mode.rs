@@ -2,13 +2,14 @@ use std::fmt::Debug;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-use crate::constants::Bitlen;
-use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::QCompressResult;
-use crate::float_mult_utils;
-use crate::float_mult_utils::FloatMultConfig;
-use crate::unsigned_src_dst::{UnsignedDst, UnsignedSrc};
 
+use crate::data_types::UnsignedLike;
+use crate::errors::QCompressResult;
+
+use crate::float_mult_utils::FloatMultConfig;
+
+// Static, compile-time modes. Logic should go here if it's called in hot
+// loops.
 pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   // BIN OPTIMIZATION
   type BinOptAccumulator: Default;
@@ -21,36 +22,23 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   );
 
   // COMPRESSION
-  const USES_ADJUSTMENT: bool = false;
+  fn calc_offset(u: U, bin: &BinCompressionInfo<U>) -> U;
 
   // DECOMPRESSION
-  fn unchecked_decompress_unsigned(
-    &self,
-    bin: &BinDecompressionInfo<U>,
-    reader: &mut BitReader,
-  ) -> U;
+  fn unchecked_decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U;
   fn decompress_unsigned(
-    &self,
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
   ) -> QCompressResult<U>;
-  #[inline]
-  fn unchecked_decompress_adjustment(&self, _reader: &mut BitReader) -> U {
-    panic!("unreachable")
-  }
-  #[inline]
-  fn decompress_adjustment(&self, _reader: &mut BitReader) -> QCompressResult<U> {
-    panic!("unreachable")
-  }
 }
 
+// Dynamic modes. Logic should go here if it isn't called in hot loops.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DynMode<U: UnsignedLike> {
   #[default]
   Classic,
   Gcd,
   FloatMult {
-    adj_bits: Bitlen,
     inv_base: U::Float,
     base: U::Float,
   },
@@ -59,34 +47,28 @@ pub enum DynMode<U: UnsignedLike> {
 impl<U: UnsignedLike> DynMode<U> {
   pub fn float_mult(config: FloatMultConfig<U::Float>) -> Self {
     Self::FloatMult {
-      adj_bits: config.adj_bits,
       inv_base: config.inv_base,
       base: config.base,
     }
   }
 
-  pub fn finalize(&self, dst: UnsignedDst<U>) {
-    if let DynMode::FloatMult { base, .. } = self {
-      float_mult_utils::decode_apply_mult(*base, dst);
+  pub fn n_streams(&self) -> usize {
+    match self {
+      DynMode::Classic | DynMode::Gcd => 1,
+      DynMode::FloatMult { .. } => 2,
     }
   }
 
-  pub fn create_src<T: NumberLike<Unsigned = U>>(&self, nums: &[T]) -> UnsignedSrc<U> {
-    match self {
-      DynMode::FloatMult { inv_base, base, .. } => {
-        float_mult_utils::encode_apply_mult(nums, *base, *inv_base)
-      }
-      _ => UnsignedSrc::new(
-        nums.iter().map(|x| x.to_unsigned()).collect(),
-        vec![],
+  pub fn stream_delta_order(&self, stream_idx: usize, delta_order: usize) -> usize {
+    match (self, stream_idx) {
+      (DynMode::Classic, 0) => delta_order,
+      (DynMode::Gcd, 0) => delta_order,
+      (DynMode::FloatMult { .. }, 0) => delta_order,
+      (DynMode::FloatMult { .. }, 1) => 0,
+      _ => panic!(
+        "should be unreachable; unknown stream {:?}/{}",
+        self, stream_idx
       ),
-    }
-  }
-
-  pub fn adjustment_bits(&self) -> Bitlen {
-    match self {
-      Self::FloatMult { adj_bits, .. } => *adj_bits,
-      _ => 0,
     }
   }
 }

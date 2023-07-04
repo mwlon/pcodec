@@ -35,6 +35,9 @@ pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 // defaults
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 
+// other
+pub const MAX_N_STREAMS: usize = 2;
+
 #[cfg(test)]
 mod tests {
   use crate::constants::*;

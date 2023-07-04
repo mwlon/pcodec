@@ -6,6 +6,7 @@ use structopt::StructOpt;
 
 use crate::dtype::DType;
 
+// TODO
 #[derive(Clone, Debug, StructOpt)]
 #[structopt {
   name = "q_compress CLI",
@@ -53,6 +54,7 @@ pub struct CompressOpt {
   #[structopt(long = "csv-delimiter", default_value = ",")]
   pub delimiter: char,
 
+  // TODO
   pub qco_path: PathBuf,
 }
 
