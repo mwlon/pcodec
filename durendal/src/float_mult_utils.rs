@@ -241,7 +241,6 @@ fn has_enough_infrequent_ints<U: UnsignedLike>(inv_gcd: U::Float, sample: &[U::F
     *mult_counts.entry(mult).or_default() += 1;
   }
 
-  let inv_sample_size = 1.0 / sample.len() as f64;
   let infrequent_cutoff = max(
     1,
     (sample.len() as f64 / CLASSIC_MEMORIZATION_THRESH) as usize,
@@ -251,15 +250,9 @@ fn has_enough_infrequent_ints<U: UnsignedLike>(inv_gcd: U::Float, sample: &[U::F
   // a sample.
   let infrequent_mult_weight_estimate = mult_counts
     .values()
-    .map(|&count| {
-      if count <= infrequent_cutoff {
-        count as f64 * inv_sample_size
-      } else {
-        0.0
-      }
-    })
-    .sum::<f64>();
-  infrequent_mult_weight_estimate > INFREQUENT_MULT_WEIGHT_THRESH
+    .filter(|&&count| count <= infrequent_cutoff)
+    .sum::<usize>();
+  (infrequent_mult_weight_estimate as f64 / sample.len() as f64) > INFREQUENT_MULT_WEIGHT_THRESH
 }
 
 // TODO there is redundant work between this and split_streams
