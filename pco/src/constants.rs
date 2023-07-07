@@ -3,7 +3,7 @@
 pub type Bitlen = u32;
 
 // magic identification bytes
-pub const MAGIC_HEADER: [u8; 4] = [113, 99, 111, 33]; // ascii for qco!
+pub const MAGIC_HEADER: [u8; 4] = [112, 99, 111, 33]; // ascii for pco!
 pub const MAGIC_CHUNK_BYTE: u8 = 44; // ,
 pub const MAGIC_TERMINATION_BYTE: u8 = 46; // .
 

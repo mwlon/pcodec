@@ -4,19 +4,18 @@ use std::marker::PhantomData;
 
 use std::mem::MaybeUninit;
 
-use crate::ans;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
 use crate::constants::{Bitlen, DECOMPRESS_UNCHECKED_THRESHOLD, MAX_DELTA_ENCODING_ORDER};
 use crate::data_types::UnsignedLike;
-use crate::errors::{ErrorKind, QCompressError, QCompressResult};
+use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
-use crate::modes::DynMode;
-use crate::modes::Mode;
+use crate::modes::ConstMode;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
+use crate::{ans, Mode};
 
 #[derive(Clone, Debug)]
 pub struct State<const STREAMS: usize> {
@@ -71,7 +70,7 @@ pub trait NumDecompressor<U: UnsignedLike>: Debug {
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
     dst: UnsignedDst<U>,
-  ) -> QCompressResult<Progress>;
+  ) -> PcoResult<Progress>;
 
   fn clone_inner(&self) -> Box<dyn NumDecompressor<U>>;
 }
@@ -84,7 +83,7 @@ struct StreamConfig<U: UnsignedLike> {
 
 // NumDecompressor does the main work of decoding bytes into NumberLikes
 #[derive(Clone, Debug)]
-struct NumDecompressorImpl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> {
+struct NumDecompressorImpl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> {
   // known information about the chunk
   n: usize,
   compressed_body_size: usize,
@@ -98,7 +97,7 @@ struct NumDecompressorImpl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> {
 
 pub fn new<U: UnsignedLike>(
   data_page_meta: DataPageMetadata<U>,
-) -> QCompressResult<Box<dyn NumDecompressor<U>>> {
+) -> PcoResult<Box<dyn NumDecompressor<U>>> {
   let mut max_bits_per_num_block = 0;
   for stream in &data_page_meta.streams {
     max_bits_per_num_block += stream
@@ -111,15 +110,15 @@ pub fn new<U: UnsignedLike>(
       .max()
       .unwrap_or(Bitlen::MAX);
   }
-  let res: Box<dyn NumDecompressor<U>> = match data_page_meta.dyn_mode {
-    DynMode::Classic => Box::new(
+  let res: Box<dyn NumDecompressor<U>> = match data_page_meta.mode {
+    Mode::Classic => Box::new(
       NumDecompressorImpl::<U, ClassicMode, 1>::new(data_page_meta, max_bits_per_num_block)?,
     ),
-    DynMode::Gcd => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
+    Mode::Gcd => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
       data_page_meta,
       max_bits_per_num_block,
     )?),
-    DynMode::FloatMult { .. } => Box::new(
+    Mode::FloatMult { .. } => Box::new(
       NumDecompressorImpl::<U, ClassicMode, 2>::new(data_page_meta, max_bits_per_num_block)?,
     ),
   };
@@ -127,7 +126,7 @@ pub fn new<U: UnsignedLike>(
   Ok(res)
 }
 
-impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U>
+impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
   for NumDecompressorImpl<U, M, STREAMS>
 {
   fn bits_remaining(&self) -> usize {
@@ -141,7 +140,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U>
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
     mut dst: UnsignedDst<U>,
-  ) -> QCompressResult<Progress> {
+  ) -> PcoResult<Progress> {
     let initial_reader = reader.clone();
     let state_backup = self.state.backup();
     let res = self.decompress_unsigneds_dirty(reader, error_on_insufficient_data, &mut dst);
@@ -156,7 +155,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U>
         if progress.finished_body {
           let compressed_body_bit_size = self.compressed_body_size * 8;
           if compressed_body_bit_size != self.state.bits_processed {
-            return Err(QCompressError::corruption(format!(
+            return Err(PcoError::corruption(format!(
               "expected the compressed body to contain {} bits but instead processed {}",
               compressed_body_bit_size, self.state.bits_processed,
             )));
@@ -176,11 +175,8 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U>
   }
 }
 
-impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
-  fn new(
-    data_page_meta: DataPageMetadata<U>,
-    max_bits_per_num_block: Bitlen,
-  ) -> QCompressResult<Self> {
+impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
+  fn new(data_page_meta: DataPageMetadata<U>, max_bits_per_num_block: Bitlen) -> PcoResult<Self> {
     let DataPageMetadata {
       n,
       compressed_body_size,
@@ -195,7 +191,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
 
       let delta_order = stream.delta_moments.order();
       if stream.bins.is_empty() && n > delta_order {
-        return Err(QCompressError::corruption(format!(
+        return Err(PcoError::corruption(format!(
           "unable to decompress chunk with no bins and {} deltas",
           n - delta_order,
         )));
@@ -258,7 +254,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
     &mut self,
     reader: &mut BitReader,
     dst: &mut UnsignedDst<U>,
-  ) -> QCompressResult<()> {
+  ) -> PcoResult<()> {
     for stream_idx in 0..STREAMS {
       let config = &self.stream_configs[stream_idx];
       if dst.n_processed() + config.delta_order < self.n - self.state.n_processed {
@@ -277,7 +273,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
     reader: &mut BitReader,
     _batch_size: usize,
     dst: &mut UnsignedDst<U>,
-  ) -> QCompressResult<()> {
+  ) -> PcoResult<()> {
     let start_bit_idx = reader.bit_idx();
     let decoder_backups = decoder_states::<STREAMS>(&self.state.ans_decoders);
     let res = self.decompress_num_block_dirty(reader, dst);
@@ -294,7 +290,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
     dst: &mut UnsignedDst<U>,
-  ) -> QCompressResult<Progress> {
+  ) -> PcoResult<Progress> {
     let remaining = self.n - self.state.n_processed;
     let batch_size = min(remaining, dst.len());
     let delta_batch_size = min(
@@ -308,7 +304,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M
       });
     }
 
-    let mark_insufficient = |dst: &mut UnsignedDst<U>, e: QCompressError| {
+    let mark_insufficient = |dst: &mut UnsignedDst<U>, e: PcoError| {
       if error_on_insufficient_data {
         Err(e)
       } else {

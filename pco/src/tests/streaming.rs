@@ -4,7 +4,7 @@ use futures::{StreamExt, TryStreamExt};
 use rand::Rng;
 
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::standalone::{DecompressedItem, Decompressor};
 use crate::{DecompressorConfig, DEFAULT_COMPRESSION_LEVEL};
 
@@ -29,7 +29,7 @@ impl<T: NumberLike> Default for State<T> {
 async fn streaming_collect<T: NumberLike>(
   state: State<T>,
   compressed_blob: &[u8],
-) -> QCompressResult<State<T>> {
+) -> PcoResult<State<T>> {
   let State {
     mut decompressor,
     mut nums,
@@ -48,7 +48,7 @@ async fn streaming_collect<T: NumberLike>(
 }
 
 #[tokio::test]
-async fn test_streaming_decompress_dense() -> QCompressResult<()> {
+async fn test_streaming_decompress_dense() -> PcoResult<()> {
   let mut rng = rand::thread_rng();
   let mut nums = Vec::<i32>::new();
   let n: usize = 100000;
@@ -59,7 +59,7 @@ async fn test_streaming_decompress_dense() -> QCompressResult<()> {
 }
 
 #[tokio::test]
-async fn test_streaming_decompress_sparse() -> QCompressResult<()> {
+async fn test_streaming_decompress_sparse() -> PcoResult<()> {
   let mut rng = rand::thread_rng();
   let mut nums = Vec::new();
   for _ in 0..10000 {
@@ -73,7 +73,7 @@ async fn test_streaming_decompress_sparse() -> QCompressResult<()> {
 }
 
 #[tokio::test]
-async fn test_streaming_decompress_float_mult() -> QCompressResult<()> {
+async fn test_streaming_decompress_float_mult() -> PcoResult<()> {
   let mut nums = Vec::new();
   for i in 0..100 {
     nums.push((i as f32) * std::f32::consts::TAU);
@@ -85,7 +85,7 @@ async fn test_streaming_decompress_float_mult() -> QCompressResult<()> {
 async fn check_streaming_recovery<T: NumberLike>(
   true_nums: &[T],
   blob_size: usize,
-) -> QCompressResult<()> {
+) -> PcoResult<()> {
   let compressed_bytes = crate::standalone::auto_compress(true_nums, DEFAULT_COMPRESSION_LEVEL);
   let compressed_blobs = compressed_bytes.chunks(blob_size);
 

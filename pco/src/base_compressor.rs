@@ -9,10 +9,11 @@ use crate::compression_table::CompressionTable;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{PcoError, PcoResult};
+use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
-use crate::modes::{gcd, DynMode, Mode};
+use crate::modes::{gcd, ConstMode, Mode};
 use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
 use crate::Flags;
 use crate::{ans, delta_encoding};
@@ -31,8 +32,7 @@ pub struct CompressorConfig {
   /// The compressor uses up to 2^`compression_level` bins.
   ///
   /// For example,
-  /// * Level 0 achieves a modest amount of compression with 1 bin and can
-  /// be twice as fast as level 8.
+  /// * Level 0 achieves a small amount of compression with 1 bin.
   /// * Level 8 achieves nearly the best compression with 256 bins and still
   /// runs in reasonable time. In some cases, its compression ratio is 3-4x as
   /// high as level level 0's.
@@ -61,18 +61,30 @@ pub struct CompressorConfig {
   /// [`auto_compressor_config()`][crate::auto_compressor_config] to choose it.
   pub delta_encoding_order: usize,
   /// `use_gcds` improves compression ratio in cases where all
-  /// numbers in a range share a nontrivial Greatest Common Divisor
+  /// numbers in a bin share a nontrivial Greatest Common Divisor
   /// (default true).
   ///
   /// Examples where this helps:
-  /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
-  /// * floats `[1.0, 2.0, ... 1000.0]` shuffled
   /// * nanosecond-precision timestamps that are all whole numbers of
   /// microseconds
+  /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
   ///
-  /// When this is helpful and in rare cases when it isn't, compression speed
-  /// is slightly reduced.
+  /// When this is helpful, compression and decompression speeds are slightly
+  /// reduced (up to ~15%). In rare cases, this configuration may reduce
+  /// compression speed even when it isn't helpful.
   pub use_gcds: bool,
+  /// `use_float_mult` improves compression ratio in cases where the data type
+  /// is a float and all numbers are close to a multiple of a single float
+  /// `base`.
+  /// (default true).
+  ///
+  /// `base` is automatically detected. For example, this is helpful if all
+  /// floats are approximately decimals (multiples of 0.01).
+  ///
+  /// When this is helpful, compression and decompression speeds are
+  /// substantially reduced (up to ~100%). In rare cases, this configuration
+  /// may reduce compression speed somewhat even when it isn't helpful.
+  /// However, the compression ratio improvements tend to be quite large.
   pub use_float_mult: bool,
 }
 
@@ -144,7 +156,7 @@ struct BinBuffer<'a, U: UnsignedLike> {
   max_n_bin: usize,
   n_unsigneds: usize,
   sorted: &'a [U],
-  mode: DynMode<U>,
+  mode: Mode<U>,
   pub target_j: usize,
 }
 
@@ -153,7 +165,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], mode: DynMode<U>) -> Self {
+  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], mode: Mode<U>) -> Self {
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
@@ -180,7 +192,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     let upper = sorted[j - 1];
 
     let mut bin_gcd = U::ONE;
-    if self.mode == DynMode::Gcd {
+    if self.mode == Mode::Gcd {
       bin_gcd = gcd::gcd(&sorted[i..j]);
     }
 
@@ -215,8 +227,8 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
 fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
   sorted: &[U],
   comp_level: usize,
-  naive_mode: DynMode<U>,
-) -> (DynMode<U>, Vec<BinCompressionInfo<U>>) {
+  naive_mode: Mode<U>,
+) -> (Mode<U>, Vec<BinCompressionInfo<U>>) {
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(comp_level, n_unsigneds);
 
@@ -243,7 +255,7 @@ fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
 
   // in some cases, we can now reduce to a simpler mode
   let unoptimized_mode = match bin_buffer.mode {
-    DynMode::Gcd if !gcd::use_gcd_bin_optimize(&bin_buffer.seq) => DynMode::Classic,
+    Mode::Gcd if !gcd::use_gcd_bin_optimize(&bin_buffer.seq) => Mode::Classic,
     other => other,
   };
 
@@ -278,21 +290,21 @@ struct TrainedBins<U: UnsignedLike> {
 fn train_mode_and_infos<U: UnsignedLike>(
   unsigneds: Vec<U>,
   comp_level: usize,
-  naive_mode: DynMode<U>,
+  naive_mode: Mode<U>,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
-) -> QCompressResult<TrainedBins<U>> {
+) -> PcoResult<TrainedBins<U>> {
   if unsigneds.is_empty() {
     return Ok(TrainedBins::default());
   }
 
   if comp_level > MAX_COMPRESSION_LEVEL {
-    return Err(QCompressError::invalid_argument(format!(
+    return Err(PcoError::invalid_argument(format!(
       "compression level may not exceed {} (was {})",
       MAX_COMPRESSION_LEVEL, comp_level,
     )));
   }
   if n > MAX_ENTRIES {
-    return Err(QCompressError::invalid_argument(format!(
+    return Err(PcoError::invalid_argument(format!(
       "count may not exceed {} per chunk (was {})",
       MAX_ENTRIES, n,
     )));
@@ -307,13 +319,13 @@ fn train_mode_and_infos<U: UnsignedLike>(
 
   let estimated_ans_size_log = (comp_level + 2) as Bitlen;
   let mut optimized_infos = match unoptimized_mode {
-    DynMode::Classic | DynMode::FloatMult { .. } => bin_optimization::optimize_bins(
+    Mode::Classic | Mode::FloatMult { .. } => bin_optimization::optimize_bins(
       unoptimized_bins,
       estimated_ans_size_log,
       ClassicMode,
       n,
     ),
-    DynMode::Gcd => bin_optimization::optimize_bins(
+    Mode::Gcd => bin_optimization::optimize_bins(
       unoptimized_bins,
       estimated_ans_size_log,
       GcdMode,
@@ -330,10 +342,10 @@ fn train_mode_and_infos<U: UnsignedLike>(
 }
 
 // returns the ANS final state after decomposing the unsigneds in reverse order
-fn mode_decompose_unsigneds<U: UnsignedLike, M: Mode<U>, const STREAMS: usize>(
+fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize>(
   stream_configs: &mut [StreamConfig<U>],
   src: &mut StreamSrc<U>,
-) -> QCompressResult<DecomposedSrc<U>> {
+) -> PcoResult<DecomposedSrc<U>> {
   let empty_decomposeds = |n_unsigneds| unsafe {
     let mut res = Vec::with_capacity(n_unsigneds);
     res.set_len(n_unsigneds);
@@ -367,17 +379,17 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: Mode<U>, const STREAMS: usize>(
 
 fn decompose_unsigneds<U: UnsignedLike>(
   mid_chunk_info: &mut MidChunkInfo<U>,
-) -> QCompressResult<DecomposedSrc<U>> {
+) -> PcoResult<DecomposedSrc<U>> {
   let MidChunkInfo {
-    dyn_mode,
+    mode: dyn_mode,
     stream_configs,
     src,
     ..
   } = mid_chunk_info;
   match *dyn_mode {
-    DynMode::Classic => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
-    DynMode::Gcd => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
-    DynMode::FloatMult { .. } => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
+    Mode::Classic => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
+    Mode::Gcd => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
+    Mode::FloatMult { .. } => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
   }
 }
 
@@ -385,7 +397,7 @@ fn trained_compress_body<U: UnsignedLike, const STREAMS: usize>(
   mut src: DecomposedSrc<U>,
   page_size: usize,
   writer: &mut BitWriter,
-) -> QCompressResult<()> {
+) -> PcoResult<()> {
   let max_safe_idx = page_size.saturating_sub(MAX_DELTA_ENCODING_ORDER);
   while src.n_processed() < max_safe_idx {
     for stream_idx in 0..STREAMS {
@@ -411,7 +423,7 @@ fn trained_compress_body<U: UnsignedLike, const STREAMS: usize>(
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
   stream_configs: Vec<StreamConfig<U>>,
-  dyn_mode: DynMode<U>,
+  mode: Mode<U>,
   page_sizes: Vec<usize>,
   // mutable:
   src: StreamSrc<U>,
@@ -438,14 +450,14 @@ pub enum State<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> State<U> {
-  pub fn wrong_step_err(&self, description: &str) -> QCompressError {
+  pub fn wrong_step_err(&self, description: &str) -> PcoError {
     let step_str = match self {
       State::PreHeader => "has not yet written header",
       State::StartOfChunk => "is at the start of a chunk",
       State::MidChunk(_) => "is mid-chunk",
       State::Terminated => "has already written the footer",
     };
-    QCompressError::invalid_argument(format!(
+    PcoError::invalid_argument(format!(
       "attempted to write {} when compressor {}",
       description, step_str,
     ))
@@ -481,7 +493,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
   }
 
-  pub fn header(&mut self) -> QCompressResult<()> {
+  pub fn header(&mut self) -> PcoResult<()> {
     if !matches!(self.state, State::PreHeader) {
       return Err(self.state.wrong_step_err("header"));
     }
@@ -493,29 +505,29 @@ impl<T: NumberLike> BaseCompressor<T> {
     Ok(())
   }
 
-  fn choose_naive_mode(&self, nums: &[T]) -> DynMode<T::Unsigned> {
+  fn choose_naive_mode(&self, nums: &[T]) -> Mode<T::Unsigned> {
     // * Use float mult if enabled and an appropriate base is found
     // * Otherwise, use GCD if enabled
     // * Otherwise, use Classic
     if self.internal_config.use_float_mult {
       if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
-        return DynMode::float_mult(config);
+        return Mode::FloatMult(config);
       }
     }
 
     if self.internal_config.use_gcds {
-      DynMode::Gcd
+      Mode::Gcd
     } else {
-      DynMode::Classic
+      Mode::Classic
     }
   }
 
-  fn split_streams(&self, naive_mode: DynMode<T::Unsigned>, nums: &[T]) -> StreamSrc<T::Unsigned> {
+  fn split_streams(&self, naive_mode: Mode<T::Unsigned>, nums: &[T]) -> StreamSrc<T::Unsigned> {
     match naive_mode {
-      DynMode::Classic | DynMode::Gcd => {
+      Mode::Classic | Mode::Gcd => {
         StreamSrc::new([nums.iter().map(|x| x.to_unsigned()).collect(), vec![]])
       }
-      DynMode::FloatMult { inv_base, base, .. } => {
+      Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
         float_mult_utils::split_streams(nums, base, inv_base)
       }
     }
@@ -527,13 +539,13 @@ impl<T: NumberLike> BaseCompressor<T> {
     &mut self,
     nums: &[T],
     spec: &ChunkSpec,
-  ) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
+  ) -> PcoResult<ChunkMetadata<T::Unsigned>> {
     if !matches!(self.state, State::StartOfChunk) {
       return Err(self.state.wrong_step_err("chunk metadata"));
     }
 
     if nums.is_empty() {
-      return Err(QCompressError::invalid_argument(
+      return Err(PcoError::invalid_argument(
         "cannot compress empty chunk",
       ));
     }
@@ -590,11 +602,11 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
 
     let optimized_mode = match naive_mode {
-      DynMode::Gcd => {
+      Mode::Gcd => {
         if stream_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
-          DynMode::Gcd
+          Mode::Gcd
         } else {
-          DynMode::Classic
+          Mode::Classic
         }
       }
       other => other,
@@ -605,7 +617,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     self.state = State::MidChunk(MidChunkInfo {
       stream_configs,
-      dyn_mode: optimized_mode,
+      mode: optimized_mode,
       page_sizes,
       src,
       page_idx: 0,
@@ -614,7 +626,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     Ok(meta)
   }
 
-  pub fn data_page_internal(&mut self) -> QCompressResult<()> {
+  pub fn data_page_internal(&mut self) -> PcoResult<()> {
     let has_pages_remaining = {
       let info = match &mut self.state {
         State::MidChunk(info) => Ok(info),
@@ -623,7 +635,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
       let decomposeds = decompose_unsigneds(info)?;
 
-      for stream_idx in 0..info.dyn_mode.n_streams() {
+      for stream_idx in 0..info.mode.n_streams() {
         info
           .data_page_moments(stream_idx)
           .write_to(&mut self.writer);
@@ -638,7 +650,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
       self.writer.finish_byte();
 
-      match info.dyn_mode.n_streams() {
+      match info.mode.n_streams() {
         1 => trained_compress_body::<_, 1>(
           decomposeds,
           info.page_sizes[info.page_idx],

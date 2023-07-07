@@ -2,14 +2,14 @@ use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::bits;
 use crate::data_types::UnsignedLike;
-use crate::errors::QCompressResult;
-use crate::modes::Mode;
+use crate::errors::PcoResult;
+use crate::modes::ConstMode;
 
 // formula: bin lower + offset
 #[derive(Clone, Copy, Debug)]
 pub struct ClassicMode;
 
-impl<U: UnsignedLike> Mode<U> for ClassicMode {
+impl<U: UnsignedLike> ConstMode<U> for ClassicMode {
   type BinOptAccumulator = ();
   fn combine_bin_opt_acc(_bin: &BinCompressionInfo<U>, _acc: &mut Self::BinOptAccumulator) {}
 
@@ -35,10 +35,7 @@ impl<U: UnsignedLike> Mode<U> for ClassicMode {
   }
 
   #[inline]
-  fn decompress_unsigned(
-    bin: &BinDecompressionInfo<U>,
-    reader: &mut BitReader,
-  ) -> QCompressResult<U> {
+  fn decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> PcoResult<U> {
     let offset = reader.read_uint::<U>(bin.offset_bits)?;
     Ok(bin.lower + offset)
   }

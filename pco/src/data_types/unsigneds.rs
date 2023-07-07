@@ -126,7 +126,7 @@ macro_rules! impl_unsigned_number {
   };
 }
 
-impl_unsigned_number!(u32, i32, f32, 4);
+impl_unsigned_number!(u32, i32, f32, 1);
 impl_unsigned_number!(u64, i64, f64, 2);
 
 #[cfg(test)]

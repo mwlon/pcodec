@@ -4,7 +4,7 @@ members = [
   "bench",
   "pco",
   "pco_cli",
-  "ffi",
-  "q_compress",
-  "q_compress_cli",
+  "quantile-compression/ffi",
+  "quantile-compression/q_compress",
+  "quantile-compression/q_compress_cli",
 ]

@@ -285,10 +285,10 @@ fn better_compression_than_classic<U: UnsignedLike>(
   has_enough_infrequent_ints::<U>(inv_gcd, sample) && uses_few_enough_adj_bits::<U>(inv_gcd, nums)
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FloatMultConfig<F: FloatLike> {
   pub base: F,
-  pub inv_base: F,
+  pub(crate) inv_base: F,
 }
 
 fn choose_config_w_sample<U: UnsignedLike>(

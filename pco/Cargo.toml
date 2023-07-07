@@ -5,9 +5,9 @@ edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding"]
-description = "Good compression for numerical sequences and time series"
+description = "Good compression for numerical sequences"
 include = ["src/**/*.rs", "Cargo.toml", "README.md"]
-keywords = ["compression", "numerical", "quantile", "delta"]
+keywords = ["compression", "numerical", "delta"]
 license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
 

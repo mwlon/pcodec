@@ -1,5 +1,5 @@
 use crate::chunk_metadata::DataPagingSpec;
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{PcoError, PcoResult};
 
 /// A specification for how many elements there will be in each of a chunk's
 /// data pages.
@@ -29,7 +29,7 @@ impl ChunkSpec {
     self
   }
 
-  pub(crate) fn page_sizes(&self, n: usize) -> QCompressResult<Vec<usize>> {
+  pub(crate) fn page_sizes(&self, n: usize) -> PcoResult<Vec<usize>> {
     let page_sizes = match &self.data_paging_spec {
       DataPagingSpec::SinglePage => Ok(vec![n]),
       DataPagingSpec::ExactPageSizes(sizes) => {
@@ -37,7 +37,7 @@ impl ChunkSpec {
         if sizes_n == n {
           Ok(sizes.clone())
         } else {
-          Err(QCompressError::invalid_argument(format!(
+          Err(PcoError::invalid_argument(format!(
             "chunk spec suggests {} numbers but {} were given",
             sizes_n, n,
           )))
@@ -47,7 +47,7 @@ impl ChunkSpec {
 
     for &size in &page_sizes {
       if size == 0 {
-        return Err(QCompressError::invalid_argument(
+        return Err(PcoError::invalid_argument(
           "cannot write data page of 0 numbers",
         ));
       }

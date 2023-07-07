@@ -2,31 +2,31 @@ use std::io::Write;
 
 use crate::base_decompressor::DecompressorConfig;
 use crate::data_types::NumberLike;
-use crate::errors::{ErrorKind, QCompressResult};
+use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{Compressor, DecompressedItem, Decompressor};
 use crate::CompressorConfig;
 
 #[test]
-fn test_low_level_short() -> QCompressResult<()> {
+fn test_low_level_short() -> PcoResult<()> {
   let nums = vec![vec![0], vec![10, 11], vec![20, 21, 22]];
   assert_lowest_level_behavior(nums)
 }
 
 #[test]
-fn test_low_level_long() -> QCompressResult<()> {
+fn test_low_level_long() -> PcoResult<()> {
   let nums = vec![(0..100).collect::<Vec<_>>()];
   assert_lowest_level_behavior(nums)
 }
 
 #[test]
-fn test_low_level_sparse() -> QCompressResult<()> {
+fn test_low_level_sparse() -> PcoResult<()> {
   let mut nums = vec![0; 1000];
   nums.push(1);
   nums.resize(2000, 0);
   assert_lowest_level_behavior(vec![nums])
 }
 
-fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) -> QCompressResult<()> {
+fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) -> PcoResult<()> {
   for delta_encoding_order in [0, 7] {
     let debug_info = format!("delta order={}", delta_encoding_order);
     let mut compressor = Compressor::<T>::from_config(CompressorConfig {

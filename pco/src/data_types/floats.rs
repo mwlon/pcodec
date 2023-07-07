@@ -6,7 +6,7 @@ use crate::data_types::{FloatLike, NumberLike};
 // For instance, since f32 has 23 fraction bits, here we want 1.0 + 3_u32 to be
 // 1.0 + (3.0 * 2.0 ^ -23).
 macro_rules! impl_float_number {
-  ($t: ty, $signed: ty, $unsigned: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
+  ($t: ty, $unsigned: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
     impl FloatLike for $t {
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS - 1;
       const GREATEST_PRECISE_INT: Self = (1_u64 << Self::MANTISSA_DIGITS) as Self;
@@ -107,5 +107,5 @@ macro_rules! impl_float_number {
   };
 }
 
-impl_float_number!(f32, i32, u32, 32, 1_u32 << 31, 6, -126);
-impl_float_number!(f64, i64, u64, 64, 1_u64 << 63, 5, -1022);
+impl_float_number!(f32, u32, 32, 1_u32 << 31, 5, -126);
+impl_float_number!(f64, u64, 64, 1_u64 << 63, 6, -1022);

@@ -1,3 +1,5 @@
+#![allow(clippy::useless_transmute)]
+
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::io::ErrorKind;
@@ -240,8 +242,7 @@ fn compress_pco<T: DNumberLike>(nums: &[T], config: pco::CompressorConfig) -> Ve
 }
 
 fn decompress_pco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
-  let v =
-    pco::standalone::auto_decompress::<T::Pco>(bytes).expect("could not decompress");
+  let v = pco::standalone::auto_decompress::<T::Pco>(bytes).expect("could not decompress");
   T::vec_from_pco(v)
 }
 
@@ -266,8 +267,7 @@ fn compress<T: NumberLike>(
       let pco_nums = T::slice_to_pco(nums);
       if conf.delta_encoding_order == AUTO_DELTA {
         conf.delta_encoding_order =
-          pco::standalone::auto_compressor_config(pco_nums, conf.compression_level)
-            .delta_encoding_order;
+          pco::auto_compressor_config(pco_nums, conf.compression_level).delta_encoding_order;
       }
       *pco_conf = conf.clone();
       compress_pco(pco_nums, conf)

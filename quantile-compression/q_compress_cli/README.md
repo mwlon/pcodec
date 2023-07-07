@@ -3,6 +3,11 @@
 [crates-badge]: https://img.shields.io/crates/v/q_compress_cli.svg
 [crates-url]: https://crates.io/crates/q_compress_cli
 
+**⚠️ It is highly recommended to use [pco](..) instead of q_compress.
+Pco achieves better compression ratio, is more robust, and decompresses faster.
+Quantile Compression will only be maintained for bug fixes going forward.
+⚠️**
+
 # `q_compress` CLI
 
 ## Setup

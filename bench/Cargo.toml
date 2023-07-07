@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 pco = {path = "../pco" }
-q_compress = {path = "../q_compress"}
+q_compress = {path = "../quantile-compression/q_compress" }
 structopt = "0.3.26"
 tabled = "0.12.2"
 zstd = "0.10"

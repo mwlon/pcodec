@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::constants::Bitlen;
 
-/// The different kinds of errors for `q_compress`.
+/// The different kinds of errors the library can return.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ErrorKind {
@@ -12,7 +12,7 @@ pub enum ErrorKind {
   /// version is not up-to-date enough for the provided data.
   Compatibility,
   /// `Corruption` errors occur during decompression, indicating the
-  /// provided data is inconsistent or violates the Quantile Compression format.
+  /// provided data is inconsistent or violates the pco format.
   /// It also applies to cases where standalone files were read but a wrapped
   /// format was detected, or vice versa.
   Corruption,
@@ -24,16 +24,16 @@ pub enum ErrorKind {
   InvalidArgument,
 }
 
-/// The error type used in results for all `q_compress` functionality.
+/// The error type used in results for all `pco` functionality.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct QCompressError {
+pub struct PcoError {
   pub kind: ErrorKind,
   pub message: String,
 }
 
-impl QCompressError {
+impl PcoError {
   pub(crate) fn new<S: AsRef<str>>(kind: ErrorKind, message: S) -> Self {
-    QCompressError {
+    PcoError {
       kind,
       message: message.as_ref().to_string(),
     }
@@ -68,16 +68,16 @@ impl QCompressError {
   }
 }
 
-impl Display for QCompressError {
+impl Display for PcoError {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     write!(
       f,
-      "q_compress {:?} error: {}",
+      "pco {:?} error: {}",
       self.kind, &self.message
     )
   }
 }
 
-impl Error for QCompressError {}
+impl Error for PcoError {}
 
-pub type QCompressResult<T> = Result<T, QCompressError>;
+pub type PcoResult<T> = Result<T, PcoError>;

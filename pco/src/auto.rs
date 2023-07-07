@@ -1,53 +1,8 @@
-use std::cmp::min;
-
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
-use crate::standalone::simple::simple_decompress;
-use crate::standalone::{simple_compress, Compressor};
-use crate::{CompressorConfig, DecompressorConfig};
-
-/// Automatically makes an educated guess for the best compression
-/// configuration, based on `nums` and `compression_level`,
-/// then compresses the numbers to .qco bytes.
-///
-/// This adds some compute cost by trying different configurations on a subset
-/// of the numbers to determine the most likely one to do well.
-/// If you know what configuration you want ahead of time (namely delta
-/// encoding order), you can use [`Compressor::from_config`] instead to spare
-/// the compute cost.
-/// See [`CompressorConfig`] for information about compression levels.
-pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
-  let config = auto_compressor_config(nums, compression_level);
-  simple_compress(config, nums)
-}
-
-/// Automatically makes an educated guess for the best decompression
-/// configuration, then decompresses .qco bytes into numbers.
-///
-/// There are currently no relevant fields in the decompression configuration,
-/// so there is no compute downside to using this function.
-pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> QCompressResult<Vec<T>> {
-  simple_decompress(DecompressorConfig::default(), bytes)
-}
-
-/// Automatically makes an educated guess for the best compression
-/// configuration, based on `nums` and `compression_level`.
-///
-/// This has some compute cost by trying different configurations on a subset
-/// of the numbers to determine the most likely one to do well.
-/// See [`CompressorConfig`] for information about compression levels.
-pub fn auto_compressor_config<T: NumberLike>(
-  nums: &[T],
-  compression_level: usize,
-) -> CompressorConfig {
-  let delta_encoding_order = auto_delta_encoding_order(nums, compression_level);
-  CompressorConfig {
-    compression_level,
-    delta_encoding_order,
-    ..Default::default()
-  }
-}
+use crate::standalone::Compressor;
+use crate::CompressorConfig;
+use std::cmp::min;
 
 fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> usize {
   let mut sampled_nums;
@@ -98,6 +53,24 @@ fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize
     }
   }
   best_order
+}
+
+/// Automatically makes an educated guess for the best compression
+/// configuration, based on `nums` and `compression_level`.
+///
+/// This has some compute cost by trying different configurations on a subset
+/// of the numbers to determine the most likely one to do well.
+/// See [`CompressorConfig`] for information about compression levels.
+pub fn auto_compressor_config<T: NumberLike>(
+  nums: &[T],
+  compression_level: usize,
+) -> CompressorConfig {
+  let delta_encoding_order = auto_delta_encoding_order(nums, compression_level);
+  CompressorConfig {
+    compression_level,
+    delta_encoding_order,
+    ..Default::default()
+  }
 }
 
 #[cfg(test)]

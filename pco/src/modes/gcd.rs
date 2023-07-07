@@ -1,8 +1,8 @@
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::data_types::UnsignedLike;
-use crate::errors::QCompressResult;
-use crate::modes::Mode;
+use crate::errors::PcoResult;
+use crate::modes::ConstMode;
 use crate::{bits, Bin};
 
 // formula: bin lower + offset * bin gcd
@@ -15,7 +15,7 @@ pub struct OptAccumulator<U: UnsignedLike> {
   gcd: Option<U>,
 }
 
-impl<U: UnsignedLike> Mode<U> for GcdMode {
+impl<U: UnsignedLike> ConstMode<U> for GcdMode {
   type BinOptAccumulator = OptAccumulator<U>;
   fn combine_bin_opt_acc(bin: &BinCompressionInfo<U>, acc: &mut Self::BinOptAccumulator) {
     // folding GCD's involves GCD'ing with their modulo offset and (if the new
@@ -72,10 +72,7 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
   }
 
   #[inline]
-  fn decompress_unsigned(
-    bin: &BinDecompressionInfo<U>,
-    reader: &mut BitReader,
-  ) -> QCompressResult<U> {
+  fn decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> PcoResult<U> {
     Ok(bin.lower + reader.read_uint::<U>(bin.offset_bits)? * bin.gcd)
   }
 }

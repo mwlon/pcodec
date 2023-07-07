@@ -11,6 +11,12 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
+/// Trait for data types that behave like floats.
+///
+/// This is used internally for compressing and decompressing with
+/// [`FloatMultMode`][`crate::Mode::FloatMult`].
+///
+/// API stability of `FloatLike` is not guaranteed!
 pub trait FloatLike:
   Add<Output = Self>
   + AddAssign
@@ -24,7 +30,11 @@ pub trait FloatLike:
   + SubAssign
   + Div<Output = Self>
 {
+  /// Number of bits that aren't used for exponent or sign.
+  /// E.g. for f32 this should be 23.
   const PRECISION_BITS: Bitlen;
+  /// The largest positive int `x` expressible in this float such that
+  /// `x - 1.0` is also exactly representable as this float.
   const GREATEST_PRECISE_INT: Self;
   const ZERO: Self;
   const ONE: Self;
@@ -36,6 +46,8 @@ pub trait FloatLike:
   fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
   fn is_finite_and_normal(&self) -> bool;
+  /// Returns the float's exponent. For instance, for f32 this should be
+  /// between -126 and +127.
   fn exponent(&self) -> i32;
   fn max(a: Self, b: Self) -> Self;
   fn min(a: Self, b: Self) -> Self;
@@ -43,13 +55,14 @@ pub trait FloatLike:
 
 /// Trait for data types that behave like unsigned integers.
 ///
-/// This is used extensively in `q_compress` to guarantee that bitwise
+/// This is used extensively in `pco` to guarantee that bitwise
 /// operations like `>>` and `|=` are available and that certain properties
 /// hold.
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
+/// Metadata stores numbers as their unsigned representations.
 ///
-/// Note: API stability of `UnsignedLike` is not guaranteed.
+/// API stability of `UnsignedLike` is not guaranteed!
 pub trait UnsignedLike:
   Add<Output = Self>
   + BitAnd<Output = Self>
@@ -73,6 +86,7 @@ pub trait UnsignedLike:
   const MAX: Self;
   const BITS: Bitlen;
 
+  /// The floating point type with the same number of bits.
   type Float: FloatLike + NumberLike<Unsigned = Self>;
 
   /// Converts a `usize` into this type. Panics if the conversion is
@@ -106,10 +120,16 @@ pub trait UnsignedLike:
   fn wrapping_add(self, other: Self) -> Self;
   fn wrapping_sub(self, other: Self) -> Self;
 
+  /// This should surjectively map the unsigned to the set of integers in its
+  /// floating point type. E.g. 3.0, Inf, and NaN are int floats, but 3.5 is
+  /// not.
   fn to_int_float(self) -> Self::Float;
+  /// This should be the inverse of to_int_float.
   fn from_int_float(float: Self::Float) -> Self;
 
+  /// This should use something like [`f32::from_bits()`]
   fn to_float_bits(self) -> Self::Float;
+  /// This should use something like [`f32::to_bits()`]
   fn from_float_bits(float: Self::Float) -> Self;
 }
 
@@ -118,19 +138,14 @@ pub trait UnsignedLike:
 /// If you have a new data type you would like to add to the library or
 /// implement as custom in your own, these are the questions you need to
 /// answer:
-/// * What are the corresponding signed integer and unsigned integer types?
-/// These are usually the next-larger signed and unsigned integers.
-/// * How can I convert to these signed and unsigned representations and back
-/// in *a way that preserves ordering*? For instance, converting `f32` to `i32`
-/// can be done trivially by transmuting the bytes in memory, but converting
-/// from `f32`
-/// to `u32` in an order-preserving way requires flipping the sign bit and, if
-/// negative, the rest of the bits.
-/// * How can I encode and decode this number in an uncompressed way? This
-/// uncompressed representation is used to store metadata in each chunk of the
-/// Quantile Compression format.
+/// * What is the corresponding unsigned integer type? This is probably the
+/// smallest unsigned integer with enough bits to represent the number.
+/// * How can I convert to this unsigned representation and back
+/// in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
+/// wouldn't preserve ordering and would cause pco to fail. In this example,
+/// one needs to flip the sign bit and, if negative, the rest of the bits.
 ///
-/// Note: API stability of `NumberLike` is not guaranteed.
+/// API stability of `NumberLike` is not guaranteed!
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// A number from 0-255 that corresponds to the number's data type.
   ///
@@ -141,8 +156,8 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   ///
   /// To choose a header byte for a new data type, review all header bytes in
   /// the library and pick an unused one. For instance, as of writing, bytes
-  /// 1 through 15 are used, so 16 would be a good choice for another
-  /// `q_compress`-supported data type, and 255 would be a good choice for a
+  /// 1 through 6 are used, so 7 would be a good choice for another
+  /// `pco` data type implementation, and 255 would be a good choice for a
   /// custom data type.
   const HEADER_BYTE: u8;
   /// The number of bits in the number's uncompressed representation.
@@ -156,6 +171,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// bitwise logic and such.
   type Unsigned: UnsignedLike;
 
+  /// If IS_FLOAT = true, this must be reimplemented as an identity function.
   fn assert_float(_nums: &[Self]) -> &[<Self::Unsigned as UnsignedLike>::Float] {
     panic!("bug; not a float")
   }
@@ -171,7 +187,11 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   // These transmute functions do not preserve ordering.
   // Their purpose is to allow certain operations in-place, relying on the fact
   // that each NumberLike should have the same size as its UnsignedLike.
+  /// Used during decompression to share memory for this type and its
+  /// corresponding UnsignedLike.
   fn transmute_to_unsigned_slice(slice: &mut [Self]) -> &mut [Self::Unsigned];
 
+  /// Used during decompression to share memory for this type and its
+  /// corresponding UnsignedLike.
   fn transmute_to_unsigned(self) -> Self::Unsigned;
 }

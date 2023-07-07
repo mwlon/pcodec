@@ -2,7 +2,7 @@ use crate::ans::spec::{Spec, Token};
 use crate::bit_reader::BitReader;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 
 use crate::chunk_metadata::DataPageStreamMetadata;
 
@@ -48,9 +48,7 @@ impl Decoder {
     }
   }
 
-  pub fn from_stream_meta<U: UnsignedLike>(
-    stream: &DataPageStreamMetadata<U>,
-  ) -> QCompressResult<Self> {
+  pub fn from_stream_meta<U: UnsignedLike>(stream: &DataPageStreamMetadata<U>) -> PcoResult<Self> {
     let weights = stream.bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
     let spec = Spec::from_weights(stream.ans_size_log, weights)?;
     Ok(Self::new(&spec, stream.ans_final_state))
@@ -65,7 +63,7 @@ impl Decoder {
     node.token
   }
 
-  pub fn decode(&mut self, reader: &mut BitReader) -> QCompressResult<Token> {
+  pub fn decode(&mut self, reader: &mut BitReader) -> PcoResult<Token> {
     let node = &self.nodes[self.state - self.table_size];
     let bits_read = reader.read_small(node.bits_to_read)?;
     let next_state = node.next_state_base + bits_read;

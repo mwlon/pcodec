@@ -1,9 +1,9 @@
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::tests::utils;
 use crate::{CompressorConfig, DecompressorConfig};
 
 #[test]
-fn test_dummy_wrapped_format_recovery() -> QCompressResult<()> {
+fn test_dummy_wrapped_format_recovery() -> PcoResult<()> {
   let nums = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   let config = CompressorConfig {
     delta_encoding_order: 2,

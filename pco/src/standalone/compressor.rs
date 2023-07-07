@@ -2,11 +2,10 @@ use crate::base_compressor::{BaseCompressor, State};
 use crate::chunk_spec::ChunkSpec;
 use crate::constants::MAGIC_TERMINATION_BYTE;
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::{ChunkMetadata, CompressorConfig, Flags};
 
-/// Converts vectors of numbers into compressed bytes in
-/// .qco format.
+/// Converts vectors of numbers into compressed bytes in .pco format.
 ///
 /// Most compressor methods leave its state unchanged if they return an error.
 /// You can configure behavior like compression level by instantiating with
@@ -53,12 +52,12 @@ impl<T: NumberLike> Compressor<T> {
   /// Writes out a header using the compressor's data type and flags.
   /// Will return an error if the compressor has already written the header.
   ///
-  /// Each .qco file must start with such a header, which contains:
-  /// * a 4-byte magic header for "qco!" in ascii,
-  /// * a byte for the data type (e.g. `i64` has byte 1 and `f64` has byte
-  /// 5), and
+  /// Each .pco file must start with such a header, which contains:
+  /// * a 4-byte magic header for "pco!" in ascii,
+  /// * a byte for the data type (e.g. `u32` has byte 1 and `f64` has byte
+  /// 6), and
   /// * bytes for the flags used to compress.
-  pub fn header(&mut self) -> QCompressResult<()> {
+  pub fn header(&mut self) -> PcoResult<()> {
     self.0.header()
   }
 
@@ -68,7 +67,7 @@ impl<T: NumberLike> Compressor<T> {
   ///
   /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
   /// The chunk body encodes the numbers passed in here.
-  pub fn chunk(&mut self, nums: &[T]) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
+  pub fn chunk(&mut self, nums: &[T]) -> PcoResult<ChunkMetadata<T::Unsigned>> {
     let pre_meta_bit_idx = self.0.writer.bit_size();
     let mut meta = self
       .0
@@ -82,10 +81,10 @@ impl<T: NumberLike> Compressor<T> {
     Ok(meta)
   }
 
-  /// Writes out a single footer byte indicating that the .qco file has ended.
+  /// Writes out a single footer byte indicating that the .pco file has ended.
   /// Will return an error if the compressor has not yet written the header
   /// or already written the footer.
-  pub fn footer(&mut self) -> QCompressResult<()> {
+  pub fn footer(&mut self) -> PcoResult<()> {
     if !matches!(self.0.state, State::StartOfChunk) {
       return Err(self.0.state.wrong_step_err("footer"));
     }
