@@ -10,11 +10,24 @@ use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::{Mode};
 use crate::Flags;
 
+/// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a stream
+/// interleaved into the compressed data.
+///
+/// For instance, with
+/// [classic mode][crate::Mode::Classic], there is a single stream
+/// corresponding to the actual numbers' (or deltas') bins and offsets
+/// relative to those bins.
+///
+/// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChunkStreamMetadata<U: UnsignedLike> {
-  /// *How* the chunk body was compressed.
+  /// How the numbers or deltas are encoded, depending on their numerical
+  /// range.
   pub bins: Vec<Bin<U>>,
-  /// log2 of the number of the number of states in this chunk's tANS table
+  /// The log2 of the number of the number of states in this chunk's tANS
+  /// table.
+  ///
+  /// See <https://en.wikipedia.org/wiki/Asymmetric_numeral_systems>.
   pub ans_size_log: Bitlen,
 }
 
@@ -79,10 +92,14 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   /// The count of numbers in the chunk.
   /// Not available in wrapped mode.
   pub n: usize,
-  /// The compressed byte length of the body that immediately follow this chunk metadata section.
+  /// The compressed byte length of the body that immediately follow this chunk
+  /// metadata section.
   /// Not available in wrapped mode.
   pub compressed_body_size: usize,
+  /// The formula `pco` used to compress each number at a low level.
   pub mode: Mode<U>,
+  /// The interleaved streams needed by `pco` to compress/decompress the inputs
+  /// to the formula used by `mode`.
   pub streams: Vec<ChunkStreamMetadata<U>>,
 }
 

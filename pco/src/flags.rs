@@ -25,11 +25,11 @@ use crate::CompressorConfig;
 pub struct Flags {
   /// How many times delta encoding was applied during compression.
   /// This is stored as 3 bits to express 0-7.
-  /// See `CompressorConfig` for more details.
+  /// See [`CompressorConfig`][crate::CompressorConfig] for more details.
   ///
   /// Introduced in 0.0.0.
   pub delta_encoding_order: usize,
-  /// Whether to release control to a wrapping columnar format.
+  /// Whether to the data is part of a wrapping format.
   /// This causes `pco` to omit count and compressed size metadata
   /// and also break each chunk into finer data pages.
   ///

@@ -54,8 +54,8 @@ impl<T: NumberLike> Compressor<T> {
   ///
   /// Each .pco file must start with such a header, which contains:
   /// * a 4-byte magic header for "pco!" in ascii,
-  /// * a byte for the data type (e.g. `i64` has byte 1 and `f64` has byte
-  /// 5), and
+  /// * a byte for the data type (e.g. `u32` has byte 1 and `f64` has byte
+  /// 6), and
   /// * bytes for the flags used to compress.
   pub fn header(&mut self) -> PcoResult<()> {
     self.0.header()

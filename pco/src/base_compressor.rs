@@ -32,8 +32,7 @@ pub struct CompressorConfig {
   /// The compressor uses up to 2^`compression_level` bins.
   ///
   /// For example,
-  /// * Level 0 achieves a modest amount of compression with 1 bin and can
-  /// be twice as fast as level 8.
+  /// * Level 0 achieves a small amount of compression with 1 bin.
   /// * Level 8 achieves nearly the best compression with 256 bins and still
   /// runs in reasonable time. In some cases, its compression ratio is 3-4x as
   /// high as level level 0's.
@@ -62,18 +61,30 @@ pub struct CompressorConfig {
   /// [`auto_compressor_config()`][crate::auto_compressor_config] to choose it.
   pub delta_encoding_order: usize,
   /// `use_gcds` improves compression ratio in cases where all
-  /// numbers in a range share a nontrivial Greatest Common Divisor
+  /// numbers in a bin share a nontrivial Greatest Common Divisor
   /// (default true).
   ///
   /// Examples where this helps:
-  /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
-  /// * floats `[1.0, 2.0, ... 1000.0]` shuffled
   /// * nanosecond-precision timestamps that are all whole numbers of
   /// microseconds
+  /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
   ///
-  /// When this is helpful and in rare cases when it isn't, compression speed
-  /// is slightly reduced.
+  /// When this is helpful, compression and decompression speeds are slightly
+  /// reduced (up to ~15%). In rare cases, this configuration may reduce
+  /// compression speed even when it isn't helpful.
   pub use_gcds: bool,
+  /// `use_float_mult` improves compression ratio in cases where the data type
+  /// is a float and all numbers are close to a multiple of a single float
+  /// `base`.
+  /// (default true).
+  ///
+  /// `base` is automatically detected. For example, this is helpful if all
+  /// floats are approximately decimals (multiples of 0.01).
+  ///
+  /// When this is helpful, compression and decompression speeds are
+  /// substantially reduced (up to ~100%). In rare cases, this configuration
+  /// may reduce compression speed somewhat even when it isn't helpful.
+  /// However, the compression ratio improvements tend to be quite large.
   pub use_float_mult: bool,
 }
 

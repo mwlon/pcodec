@@ -7,10 +7,8 @@ use crate::{bits, CompressorConfig, DecompressorConfig};
 
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
-/// Takes in a slice of numbers and returns compressed bytes.
-///
-/// Unlike most methods, this does not guarantee atomicity of the
-/// compressor's state.
+/// Takes in a slice of numbers and an exact configuration and returns
+/// compressed bytes.
 pub fn simple_compress<T: NumberLike>(config: CompressorConfig, nums: &[T]) -> Vec<u8> {
   // The following unwraps are safe because the writer will be byte-aligned
   // after each step and ensure each chunk has appropriate size.
@@ -30,12 +28,10 @@ pub fn simple_compress<T: NumberLike>(config: CompressorConfig, nums: &[T]) -> V
   compressor.drain_bytes()
 }
 
-/// Takes in compressed bytes and returns a vector of numbers.
+/// Takes in compressed bytes and an exact configuration and returns a vector
+/// of numbers.
 /// Will return an error if there are any compatibility, corruption,
 /// or insufficient data issues.
-///
-/// Unlike most methods, this does not guarantee atomicity of the
-/// compressor's state.
 pub fn simple_decompress<T: NumberLike>(
   config: DecompressorConfig,
   bytes: &[u8],
@@ -60,7 +56,7 @@ pub fn simple_decompress<T: NumberLike>(
 
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,
-/// then compresses the numbers to .pco bytes.
+/// then uses [`simple_compress`] to compresses the numbers to .pco bytes.
 ///
 /// This adds some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
@@ -74,7 +70,8 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 }
 
 /// Automatically makes an educated guess for the best decompression
-/// configuration, then decompresses .pco bytes into numbers.
+/// configuration, then uses [`simple_decompress`] to decompress .pco bytes
+/// into numbers.
 ///
 /// There are currently no relevant fields in the decompression configuration,
 /// so there is no compute downside to using this function.
