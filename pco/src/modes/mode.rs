@@ -59,14 +59,14 @@ pub enum Mode<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> Mode<U> {
-  pub fn n_streams(&self) -> usize {
+  pub(crate) fn n_streams(&self) -> usize {
     match self {
       Mode::Classic | Mode::Gcd => 1,
       Mode::FloatMult { .. } => 2,
     }
   }
 
-  pub fn stream_delta_order(&self, stream_idx: usize, delta_order: usize) -> usize {
+  pub(crate) fn stream_delta_order(&self, stream_idx: usize, delta_order: usize) -> usize {
     match (self, stream_idx) {
       (Mode::Classic, 0) => delta_order,
       (Mode::Gcd, 0) => delta_order,

@@ -152,6 +152,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// bitwise logic and such.
   type Unsigned: UnsignedLike;
 
+  /// If IS_FLOAT = true, this must be reimplemented as an identity function.
   fn assert_float(_nums: &[Self]) -> &[<Self::Unsigned as UnsignedLike>::Float] {
     panic!("bug; not a float")
   }
@@ -167,7 +168,11 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   // These transmute functions do not preserve ordering.
   // Their purpose is to allow certain operations in-place, relying on the fact
   // that each NumberLike should have the same size as its UnsignedLike.
+  /// Used during decompression to share memory for this type and its
+  /// corresponding UnsignedLike.
   fn transmute_to_unsigned_slice(slice: &mut [Self]) -> &mut [Self::Unsigned];
 
+  /// Used during decompression to share memory for this type and its
+  /// corresponding UnsignedLike.
   fn transmute_to_unsigned(self) -> Self::Unsigned;
 }
