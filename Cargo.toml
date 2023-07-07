@@ -1,7 +1,10 @@
 [workspace]
 
 members = [
-  "ffi",
-  "q_compress",
-  "q_compress_cli",
+  "bench",
+  "pco",
+  "pco_cli",
+  "quantile-compression/ffi",
+  "quantile-compression/q_compress",
+  "quantile-compression/q_compress_cli",
 ]
