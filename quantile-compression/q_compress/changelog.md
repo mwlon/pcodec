@@ -1,6 +1,6 @@
 # `q_compress` Changelog
 
-## 0.11.7 (not yet released)
+## 0.11.7
 * Enabled compression of nontrivial bins with run length, improving compression
 ratio noticeably in some cases.
 * Enabled shared GCD metadata, reducing metadata size slightly.
