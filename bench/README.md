@@ -78,11 +78,11 @@ You can compare file sizes with `ls`:
 3.6M	f64_integers_8:0:true.qco
 6.6M	f64_normal_at_0_8:0:true.qco
 4.2M	f64_normal_at_1M_8:0:true.qco
-55B	    f64_radians_8:1:true.qco
+55B	f64_radians_8:1:true.qco
 1.8M	f64_slow_cosine_8:5:true.qco
 202K	i64_bad_huffman_8:0:true.qco
 432K	i64_cents_8:0:true.qco
-28B	    i64_constant_8:0:true.qco
+28B	i64_constant_8:0:true.qco
 2.6M	i64_dist_shift_8:0:true.qco
 605K	i64_dollars_8:0:true.qco
 245K	i64_geo2_8:0:true.qco
@@ -118,10 +118,10 @@ You can compare file sizes with `ls`:
 1.9M	i64_interl1.zstd.parquet
 2.3M	i64_interl_scrambl1.zstd.parquet
 2.3M	i64_lomax05_long.zstd.parquet
-11K	    i64_lomax05_short.zstd.parquet
+11K	i64_lomax05_short.zstd.parquet
 1.8M	i64_lomax25.zstd.parquet
 1.8M	i64_slow_cosine.zstd.parquet
-17K	    i64_sparse.zstd.parquet
+17K	i64_sparse.zstd.parquet
 1.4M	i64_total_cents.zstd.parquet
 7.9M	i64_uniform.zstd.parquet
 5.9M	micros_millis.zstd.parquet
