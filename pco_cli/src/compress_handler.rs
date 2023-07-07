@@ -47,7 +47,7 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
       );
       let head_nums = head_nums::<P>(schema, opt)?;
       let best_order =
-        standalone::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
+        pco::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
       println!(
         "determined best delta encoding order: {}",
         best_order

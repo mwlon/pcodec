@@ -12,7 +12,7 @@ license = "Apache-2.0"
 repository = "https://github.com/mwlon/quantile-compression"
 
 [[bin]]
-name = "pco"
+name = "pcodec"
 path = "src/main.rs"
 
 [dependencies]

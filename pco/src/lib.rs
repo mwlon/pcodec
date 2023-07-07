@@ -5,6 +5,7 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::uninit_vec)]
 
+pub use auto::auto_compressor_config;
 pub use base_compressor::CompressorConfig;
 pub use base_decompressor::DecompressorConfig;
 pub use bin::Bin;
@@ -23,6 +24,7 @@ pub mod standalone;
 pub mod wrapped;
 
 mod ans;
+mod auto;
 mod base_compressor;
 mod base_decompressor;
 mod bin;

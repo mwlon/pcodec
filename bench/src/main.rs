@@ -266,7 +266,7 @@ fn compress<T: NumberLike>(
       let pco_nums = T::slice_to_pco(nums);
       if conf.delta_encoding_order == AUTO_DELTA {
         conf.delta_encoding_order =
-          pco::standalone::auto_compressor_config(pco_nums, conf.compression_level)
+          pco::auto_compressor_config(pco_nums, conf.compression_level)
             .delta_encoding_order;
       }
       *pco_conf = conf.clone();
