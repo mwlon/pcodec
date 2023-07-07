@@ -3,7 +3,8 @@
 ## Usage as a Standalone Format
 
 ```rust
-use pco::{auto_compress, auto_decompress, DEFAULT_COMPRESSION_LEVEL};
+use pco::standalone::{auto_compress, auto_decompress};
+use pco::DEFAULT_COMPRESSION_LEVEL;
 
 fn main() {
   // your data
