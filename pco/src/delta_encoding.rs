@@ -81,9 +81,9 @@ pub fn nth_order_deltas<U: UnsignedLike>(
 }
 
 fn first_order_reconstruct_in_place<U: UnsignedLike>(moment: &mut U, dest: &mut [U]) {
-  for i in 0..dest.len() {
-    let tmp = dest[i];
-    dest[i] = *moment;
+  for delta in dest.iter_mut() {
+    let tmp = *delta;
+    *delta = *moment;
     *moment = moment.wrapping_add(tmp);
   }
 }

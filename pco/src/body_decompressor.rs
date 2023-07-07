@@ -77,8 +77,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
       num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dst)?
     };
 
-    for stream_idx in 0..self.mode.n_streams() {
-      let delta_moments = &mut delta_momentss[stream_idx];
+    for delta_moments in delta_momentss.iter_mut().take(self.mode.n_streams()) {
       delta_encoding::reconstruct_in_place(delta_moments, unsigneds_mut);
     }
 

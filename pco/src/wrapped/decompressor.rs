@@ -6,7 +6,7 @@ use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
-/// Converts wrapped pcodec data into [`Flags`], [`ChunkMetadata`], and vectors
+/// Converts wrapped pco data into [`Flags`], [`ChunkMetadata`], and vectors
 /// of numbers.
 ///
 /// All decompressor methods leave its state unchanged if they return an

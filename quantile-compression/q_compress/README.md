@@ -3,11 +3,6 @@
 [crates-badge]: https://img.shields.io/crates/v/q_compress.svg
 [crates-url]: https://crates.io/crates/q_compress
 
-**⚠️ It is highly recommended to use [pco](..) instead of q_compress.
-Pco achieves better compression ratio, is more robust, and decompresses faster.
-Quantile Compression will only be maintained for bug fixes going forward.
-⚠️**
-
 # `q_compress`
 
 ## Usage as a Standalone Format
@@ -35,7 +30,7 @@ fn main() {
 ```
 
 To run something right away, try
-[the primary example](./examples/primary.md).
+[the benchmarks](../../bench/README.md).
 
 For a lower-level standalone API that allows writing/reading one chunk at a time and
 extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compress/latest/q_compress/).

@@ -194,9 +194,9 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
 fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
   let mut maybe_gcd = Some(F::ZERO);
   let median = sample[sample.len() / 2];
-  for i in 0..sample.len() {
+  for &x in sample {
     if let Some(gcd) = maybe_gcd {
-      maybe_gcd = approx_pair_gcd_uncorrected(sample[i], gcd, median);
+      maybe_gcd = approx_pair_gcd_uncorrected(x, gcd, median);
     } else {
       break;
     }

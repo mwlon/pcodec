@@ -72,7 +72,7 @@ impl<'a, U: UnsignedLike> DataPageStreamMetadata<'a, U> {
   }
 }
 
-/// The metadata of a pcodec chunk.
+/// The metadata of a pco chunk.
 ///
 /// One can also create a rough histogram (or a histogram of deltas, if
 /// delta encoding was used) by aggregating chunk metadata.

@@ -52,7 +52,7 @@ This command prints numbers in a .pco file to stdout.
 Examples:
 
 ```shell
-pco decompress --limit 10 in.pco
+pcodec decompress --limit 10 in.pco
 ```
 
 ### Inspect
@@ -62,7 +62,7 @@ This command prints out information about a .pco file.
 Examples:
 
 ```shell
-% pcompress inspect in.pco
+% pcodec inspect in.pco
 ```
 
 ## Versioning

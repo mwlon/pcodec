@@ -1,8 +1,6 @@
 //! For crate-level documentation, see either
 //! <https://crates.io/crates/pco> or
-//! <https://github.com/mwlon/pcompress/tree/main/pco>.
-#![allow(clippy::manual_range_contains)]
-#![allow(clippy::needless_range_loop)]
+//! <https://github.com/mwlon/quantile-compression/tree/main/pco>.
 #![allow(clippy::uninit_vec)]
 
 pub use auto::auto_compressor_config;

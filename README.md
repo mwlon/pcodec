@@ -1,3 +1,5 @@
+[Click here for Quantile Compression](./quantile-compression/README.md).
+
 # Pcodec
 
 Pcodec (or pco) losslessly compresses and decompresses numerical sequences
