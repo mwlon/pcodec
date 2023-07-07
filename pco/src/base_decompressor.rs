@@ -37,10 +37,7 @@ pub struct State<T: NumberLike> {
   pub terminated: bool,
 }
 
-fn header_dirty<T: NumberLike>(
-  reader: &mut BitReader,
-  use_wrapped_mode: bool,
-) -> PcoResult<Flags> {
+fn header_dirty<T: NumberLike>(reader: &mut BitReader, use_wrapped_mode: bool) -> PcoResult<Flags> {
   let bytes = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
   if bytes != MAGIC_HEADER {
     return Err(PcoError::corruption(format!(

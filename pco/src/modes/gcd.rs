@@ -72,10 +72,7 @@ impl<U: UnsignedLike> ConstMode<U> for GcdMode {
   }
 
   #[inline]
-  fn decompress_unsigned(
-    bin: &BinDecompressionInfo<U>,
-    reader: &mut BitReader,
-  ) -> PcoResult<U> {
+  fn decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> PcoResult<U> {
     Ok(bin.lower + reader.read_uint::<U>(bin.offset_bits)? * bin.gcd)
   }
 }

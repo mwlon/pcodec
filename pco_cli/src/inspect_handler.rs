@@ -119,10 +119,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
           (Mode::Gcd, 0) => "primary".to_string(),
           (Mode::FloatMult(config), 0) => format!("multiplier [x{}]", config.base),
           (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
-          _ => panic!(
-            "unknown stream: {:?}/{}",
-            m.mode, stream_idx
-          ),
+          _ => panic!("unknown stream: {:?}/{}", m.mode, stream_idx),
         };
         let show_as_float_int = matches!(m.mode, Mode::FloatMult { .. }) && stream_idx == 0;
         let show_as_delta = (matches!(m.mode, Mode::FloatMult { .. }) && stream_idx == 1)

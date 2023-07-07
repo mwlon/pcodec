@@ -1,8 +1,8 @@
-use std::cmp::min;
-use crate::CompressorConfig;
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::standalone::Compressor;
+use crate::CompressorConfig;
+use std::cmp::min;
 
 fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> usize {
   let mut sampled_nums;

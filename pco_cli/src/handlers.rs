@@ -2,7 +2,10 @@ use std::convert::TryFrom;
 use std::marker::PhantomData;
 
 use anyhow::Result;
-use arrow::datatypes::{Float32Type, Float64Type, Int16Type, Int32Type, Int64Type, TimestampMicrosecondType, TimestampNanosecondType, UInt16Type, UInt32Type, UInt64Type};
+use arrow::datatypes::{
+  Float32Type, Float64Type, Int16Type, Int32Type, Int64Type, TimestampMicrosecondType,
+  TimestampNanosecondType, UInt16Type, UInt32Type, UInt64Type,
+};
 
 use crate::compress_handler::CompressHandler;
 use crate::decompress_handler::DecompressHandler;

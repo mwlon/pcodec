@@ -10,14 +10,14 @@ use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
+use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
-use crate::modes::{gcd, Mode, ConstMode};
+use crate::modes::{gcd, ConstMode, Mode};
 use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
-use crate::{Flags};
+use crate::Flags;
 use crate::{ans, delta_encoding};
 use crate::{bin_optimization, float_mult_utils};
-use crate::float_mult_utils::FloatMultConfig;
 
 /// All configurations available for a compressor.
 ///
@@ -527,7 +527,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       Mode::Classic | Mode::Gcd => {
         StreamSrc::new([nums.iter().map(|x| x.to_unsigned()).collect(), vec![]])
       }
-      Mode::FloatMult(FloatMultConfig {base, inv_base}) => {
+      Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
         float_mult_utils::split_streams(nums, base, inv_base)
       }
     }

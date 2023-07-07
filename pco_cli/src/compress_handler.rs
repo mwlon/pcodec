@@ -14,7 +14,7 @@ use parquet::file::reader::SerializedFileReader;
 
 use pco::data_types::NumberLike;
 use pco::standalone::Compressor;
-use pco::{CompressorConfig};
+use pco::CompressorConfig;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -46,8 +46,7 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
         "automatically choosing delta encoding order based on first nums (specify --delta-order to skip)",
       );
       let head_nums = head_nums::<P>(schema, opt)?;
-      let best_order =
-        pco::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
+      let best_order = pco::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
       println!(
         "determined best delta encoding order: {}",
         best_order

@@ -35,10 +35,7 @@ impl<U: UnsignedLike> ConstMode<U> for ClassicMode {
   }
 
   #[inline]
-  fn decompress_unsigned(
-    bin: &BinDecompressionInfo<U>,
-    reader: &mut BitReader,
-  ) -> PcoResult<U> {
+  fn decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> PcoResult<U> {
     let offset = reader.read_uint::<U>(bin.offset_bits)?;
     Ok(bin.lower + offset)
   }

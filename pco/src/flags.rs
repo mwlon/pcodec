@@ -42,9 +42,8 @@ impl Flags {
     flags.delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)?;
     flags.use_wrapped_mode = reader.read_one()?;
 
-    let compat_err = PcoError::compatibility(
-      "cannot parse flags; likely written by newer version of pco",
-    );
+    let compat_err =
+      PcoError::compatibility("cannot parse flags; likely written by newer version of pco");
     reader
       .drain_empty_byte("")
       .map_err(|_| compat_err.clone())?;

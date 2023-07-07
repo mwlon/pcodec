@@ -48,9 +48,7 @@ impl Decoder {
     }
   }
 
-  pub fn from_stream_meta<U: UnsignedLike>(
-    stream: &DataPageStreamMetadata<U>,
-  ) -> PcoResult<Self> {
+  pub fn from_stream_meta<U: UnsignedLike>(stream: &DataPageStreamMetadata<U>) -> PcoResult<Self> {
     let weights = stream.bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
     let spec = Spec::from_weights(stream.ans_size_log, weights)?;
     Ok(Self::new(&spec, stream.ans_final_state))

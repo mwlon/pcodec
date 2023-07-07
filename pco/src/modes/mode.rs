@@ -24,10 +24,7 @@ pub trait ConstMode<U: UnsignedLike>: Copy + Debug + 'static {
 
   // DECOMPRESSION
   fn unchecked_decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U;
-  fn decompress_unsigned(
-    bin: &BinDecompressionInfo<U>,
-    reader: &mut BitReader,
-  ) -> PcoResult<U>;
+  fn decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> PcoResult<U>;
 }
 
 // Dynamic modes. Logic should go here if it isn't called in hot loops.

@@ -7,7 +7,7 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::modes::{Mode};
+use crate::modes::Mode;
 use crate::Flags;
 
 /// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a stream
@@ -45,12 +45,7 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
       BITS_TO_ENCODE_ANS_SIZE_LOG,
     );
 
-    write_bins(
-      &self.bins,
-      mode,
-      self.ans_size_log,
-      writer,
-    );
+    write_bins(&self.bins, mode, self.ans_size_log, writer);
   }
 }
 

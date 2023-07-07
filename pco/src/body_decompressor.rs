@@ -7,11 +7,11 @@ use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::PcoResult;
-use crate::{Mode, num_decompressor};
 use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
 use crate::{delta_encoding, float_mult_utils};
+use crate::{num_decompressor, Mode};
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
 // delta encoding.

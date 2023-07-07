@@ -4,7 +4,6 @@ use std::marker::PhantomData;
 
 use std::mem::MaybeUninit;
 
-use crate::{ans, Mode};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
@@ -16,6 +15,7 @@ use crate::modes::gcd::GcdMode;
 use crate::modes::ConstMode;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
+use crate::{ans, Mode};
 
 #[derive(Clone, Debug)]
 pub struct State<const STREAMS: usize> {
@@ -176,10 +176,7 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
 }
 
 impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
-  fn new(
-    data_page_meta: DataPageMetadata<U>,
-    max_bits_per_num_block: Bitlen,
-  ) -> PcoResult<Self> {
+  fn new(data_page_meta: DataPageMetadata<U>, max_bits_per_num_block: Bitlen) -> PcoResult<Self> {
     let DataPageMetadata {
       n,
       compressed_body_size,
