@@ -11,6 +11,12 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
+/// Trait for data types that behave like floats.
+///
+/// This is used internally for compressing and decompressing with
+/// [`FloatMultMode`][`crate::Mode::FloatMult`].
+///
+/// API stability of `FloatLike` is not guaranteed!
 pub trait FloatLike:
   Add<Output = Self>
   + AddAssign
@@ -24,7 +30,11 @@ pub trait FloatLike:
   + SubAssign
   + Div<Output = Self>
 {
+  /// Number of bits that aren't used for exponent or sign.
+  /// E.g. for f32 this should be 23.
   const PRECISION_BITS: Bitlen;
+  /// The largest positive int `x` expressible in this float such that
+  /// `x - 1.0` is also exactly representable as this float.
   const GREATEST_PRECISE_INT: Self;
   const ZERO: Self;
   const ONE: Self;
@@ -36,6 +46,8 @@ pub trait FloatLike:
   fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
   fn is_finite_and_normal(&self) -> bool;
+  /// Returns the float's exponent. For instance, for f32 this should be
+  /// between -126 and +127.
   fn exponent(&self) -> i32;
   fn max(a: Self, b: Self) -> Self;
   fn min(a: Self, b: Self) -> Self;
@@ -74,6 +86,7 @@ pub trait UnsignedLike:
   const MAX: Self;
   const BITS: Bitlen;
 
+  /// The floating point type with the same number of bits.
   type Float: FloatLike + NumberLike<Unsigned = Self>;
 
   /// Converts a `usize` into this type. Panics if the conversion is
@@ -107,10 +120,16 @@ pub trait UnsignedLike:
   fn wrapping_add(self, other: Self) -> Self;
   fn wrapping_sub(self, other: Self) -> Self;
 
+  /// This should surjectively map the unsigned to the set of integers in its
+  /// floating point type. E.g. 3.0, Inf, and NaN are int floats, but 3.5 is
+  /// not.
   fn to_int_float(self) -> Self::Float;
+  /// This should be the inverse of to_int_float.
   fn from_int_float(float: Self::Float) -> Self;
 
+  /// This should use something like [`f32::from_bits()`]
   fn to_float_bits(self) -> Self::Float;
+  /// This should use something like [`f32::to_bits()`]
   fn from_float_bits(float: Self::Float) -> Self;
 }
 
