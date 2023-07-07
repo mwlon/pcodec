@@ -9,7 +9,7 @@ description = "Good compression for numerical sequences and time series"
 include = ["src/**/*.rs", "Cargo.toml", "README.md"]
 keywords = ["compression", "numerical", "quantile", "delta"]
 license = "Apache-2.0"
-repository = "https://github.com/mwlon/quantile-compression"
+repository = "https://github.com/mwlon/pcodec"
 
 [features]
 timestamps_96 = []

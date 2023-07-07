@@ -9,7 +9,7 @@ description = "CLI for q_compress and .qco format"
 include = ["src/**/*.rs", "Cargo.toml", "README.md"]
 keywords = ["compression", "numerical", "quantile", "delta"]
 license = "Apache-2.0"
-repository = "https://github.com/mwlon/quantile-compression"
+repository = "https://github.com/mwlon/pcodec"
 
 [[bin]]
 name = "qcompress"
