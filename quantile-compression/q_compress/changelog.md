@@ -1,5 +1,10 @@
 # `q_compress` Changelog
 
+## 0.11.7 (not yet released)
+* Enabled compression of nontrivial bins with run length, improving compression
+ratio noticeably in some cases.
+* Enabled shared GCD metadata, reducing metadata size slightly.
+
 ## 0.11.6
 * Improved decompression speed ~3% for non-sparse distributions.
 * Improved delta decoding speed (part of decompression) by ~200%.
