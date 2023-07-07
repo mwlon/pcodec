@@ -25,17 +25,17 @@ zstd = "0.10"
 
 [[example]]
 name="wrapped_time_series"
-path="examples/wrapped_time_series.rs"
+path= "examples/wrapped_time_series.rs"
 
 [[example]]
 name="fast_seeking"
-path="examples/fast_seeking.rs"
+path= "examples/fast_seeking.rs"
 
 [[example]]
 name="compatibility_test_case_generator"
-path="examples/compatibility_test_case_generator.rs"
+path= "examples/compatibility_test_case_generator.rs"
 required-features = ["timestamps_96"]
 
 [[example]]
 name = "streaming_sum"
-path="examples/streaming_sum.rs"
+path= "examples/streaming_sum.rs"

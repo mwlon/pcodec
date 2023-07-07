@@ -3,6 +3,11 @@
 [crates-badge]: https://img.shields.io/crates/v/q_compress.svg
 [crates-url]: https://crates.io/crates/q_compress
 
+**⚠️ It is highly recommended to use [pco](..) instead of q_compress.
+Pco achieves better compression ratio, is more robust, and decompresses faster.
+Quantile Compression will only be maintained for bug fixes going forward.
+⚠️**
+
 # `q_compress`
 
 ## Usage as a Standalone Format
@@ -38,8 +43,8 @@ extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compr
 ## Usage as a Wrapped Format
 
 To embed/interleave `q_compress` in another data format, it is better to use
-the [wrapped API and format](./src/wrapped) than standalone. 
-See the [wrapped time series](./examples/wrapped_time_series.rs) example.
+the [wrapped API and format](src/wrapped) than standalone. 
+See the [wrapped time series](examples/wrapped_time_series.rs) example.
 This allows
 * fine-level data paging with good compression ratio down to page sizes of >20 numbers
 (as long as the overall chunk has >2k or so)
@@ -47,7 +52,7 @@ This allows
 
 ## Library Changelog
 
-See [changelog.md](./changelog.md)
+See [changelog.md](changelog.md)
 
 ## Advanced
 
@@ -77,4 +82,4 @@ One can aggregate them to obtain the total count of numbers in the whole file
 and even an approximate histogram.
 This is typically about 100x faster than decompressing all the numbers.
 
-See the [fast seeking example](./examples/fast_seeking.rs).
+See the [fast seeking example](examples/fast_seeking.rs).

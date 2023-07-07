@@ -5,7 +5,7 @@ edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding", "command-line-utilities"]
-description = "TODO"
+description = "compresses, inspects, and decompres pco data"
 include = ["src/**/*.rs", "Cargo.toml", "README.md"]
 keywords = ["compression", "numerical", "quantile", "delta"]
 license = "Apache-2.0"
