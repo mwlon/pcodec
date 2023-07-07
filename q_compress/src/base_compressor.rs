@@ -379,18 +379,13 @@ impl<T: NumberLike> MidChunkInfo<T> {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum State<T: NumberLike> {
+  #[default]
   PreHeader,
   StartOfChunk,
   MidChunk(MidChunkInfo<T>),
   Terminated,
-}
-
-impl<T: NumberLike> Default for State<T> {
-  fn default() -> Self {
-    State::PreHeader
-  }
 }
 
 impl<T: NumberLike> State<T> {

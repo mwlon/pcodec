@@ -7,7 +7,7 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::modes::DynMode;
+use crate::modes::{Mode};
 use crate::Flags;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -19,14 +19,14 @@ pub struct ChunkStreamMetadata<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> ChunkStreamMetadata<U> {
-  fn parse_from(reader: &mut BitReader, dyn_mode: DynMode<U>) -> PcoResult<Self> {
+  fn parse_from(reader: &mut BitReader, mode: Mode<U>) -> PcoResult<Self> {
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG)?;
-    let bins = parse_bins::<U>(reader, dyn_mode, ans_size_log)?;
+    let bins = parse_bins::<U>(reader, mode, ans_size_log)?;
 
     Ok(Self { bins, ans_size_log })
   }
 
-  fn write_to(&self, dyn_mode: DynMode<U>, writer: &mut BitWriter) {
+  fn write_to(&self, mode: Mode<U>, writer: &mut BitWriter) {
     writer.write_bitlen(
       self.ans_size_log,
       BITS_TO_ENCODE_ANS_SIZE_LOG,
@@ -34,7 +34,7 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
 
     write_bins(
       &self.bins,
-      dyn_mode,
+      mode,
       self.ans_size_log,
       writer,
     );
@@ -82,7 +82,7 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   /// The compressed byte length of the body that immediately follow this chunk metadata section.
   /// Not available in wrapped mode.
   pub compressed_body_size: usize,
-  pub dyn_mode: DynMode<U>,
+  pub mode: Mode<U>,
   pub streams: Vec<ChunkStreamMetadata<U>>,
 }
 
@@ -95,13 +95,13 @@ pub struct ChunkMetadata<U: UnsignedLike> {
 pub struct DataPageMetadata<'a, U: UnsignedLike> {
   pub n: usize,
   pub compressed_body_size: usize,
-  pub dyn_mode: DynMode<U>,
+  pub mode: Mode<U>,
   pub streams: Vec<DataPageStreamMetadata<'a, U>>,
 }
 
 fn parse_bins<U: UnsignedLike>(
   reader: &mut BitReader,
-  dyn_mode: DynMode<U>,
+  mode: Mode<U>,
   ans_size_log: Bitlen,
 ) -> PcoResult<Vec<Bin<U>>> {
   let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
@@ -138,16 +138,16 @@ fn parse_bins<U: UnsignedLike>(
       offset_bits,
       gcd: U::ONE,
     };
-    match dyn_mode {
-      DynMode::Classic => (),
-      DynMode::Gcd => {
+    match mode {
+      Mode::Classic => (),
+      Mode::Gcd => {
         bin.gcd = if offset_bits == 0 {
           U::ONE
         } else {
           reader.read_uint(U::BITS)?
         };
       }
-      DynMode::FloatMult { .. } => (),
+      Mode::FloatMult { .. } => (),
     }
     bins.push(bin);
   }
@@ -156,7 +156,7 @@ fn parse_bins<U: UnsignedLike>(
 
 fn write_bins<U: UnsignedLike>(
   bins: &[Bin<U>],
-  mode: DynMode<U>,
+  mode: Mode<U>,
   ans_size_log: Bitlen,
   writer: &mut BitWriter,
 ) {
@@ -168,23 +168,23 @@ fn write_bins<U: UnsignedLike>(
     writer.write_bitlen(bin.offset_bits, offset_bits_bits);
 
     match mode {
-      DynMode::Classic => (),
-      DynMode::Gcd => {
+      Mode::Classic => (),
+      Mode::Gcd => {
         if bin.offset_bits > 0 {
           writer.write_diff(bin.gcd, U::BITS);
         }
       }
-      DynMode::FloatMult { .. } => (),
+      Mode::FloatMult { .. } => (),
     }
   }
 }
 
 impl<U: UnsignedLike> ChunkMetadata<U> {
-  pub(crate) fn new(n: usize, dyn_mode: DynMode<U>, streams: Vec<ChunkStreamMetadata<U>>) -> Self {
+  pub(crate) fn new(n: usize, mode: Mode<U>, streams: Vec<ChunkStreamMetadata<U>>) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
-      dyn_mode,
+      mode,
       streams,
     }
   }
@@ -199,12 +199,12 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       )
     };
 
-    let dyn_mode = match reader.read_usize(BITS_TO_ENCODE_MODE)? {
-      0 => Ok(DynMode::Classic),
-      1 => Ok(DynMode::Gcd),
+    let mode = match reader.read_usize(BITS_TO_ENCODE_MODE)? {
+      0 => Ok(Mode::Classic),
+      1 => Ok(Mode::Gcd),
       2 => {
         let base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS)?);
-        Ok(DynMode::float_mult(FloatMultConfig {
+        Ok(Mode::FloatMult(FloatMultConfig {
           base,
           inv_base: base.inv(),
         }))
@@ -215,12 +215,12 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       ))),
     }?;
 
-    let n_streams = dyn_mode.n_streams();
+    let n_streams = mode.n_streams();
 
     let mut streams = Vec::with_capacity(n_streams);
     for _ in 0..n_streams {
       streams.push(ChunkStreamMetadata::parse_from(
-        reader, dyn_mode,
+        reader, mode,
       )?)
     }
 
@@ -229,7 +229,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     Ok(Self {
       n,
       compressed_body_size,
-      dyn_mode,
+      mode,
       streams,
     })
   }
@@ -243,18 +243,18 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       );
     }
 
-    let mode_value = match self.dyn_mode {
-      DynMode::Classic => 0,
-      DynMode::Gcd => 1,
-      DynMode::FloatMult { .. } => 2,
+    let mode_value = match self.mode {
+      Mode::Classic => 0,
+      Mode::Gcd => 1,
+      Mode::FloatMult { .. } => 2,
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
-    if let DynMode::FloatMult { base, .. } = self.dyn_mode {
-      writer.write_diff(base.to_unsigned(), U::BITS);
+    if let Mode::FloatMult(config) = self.mode {
+      writer.write_diff(config.base.to_unsigned(), U::BITS);
     }
 
     for stream in &self.streams {
-      stream.write_to(self.dyn_mode, writer);
+      stream.write_to(self.mode, writer);
     }
 
     writer.finish_byte();

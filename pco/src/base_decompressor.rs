@@ -123,7 +123,7 @@ impl<T: NumberLike> State<T> {
     let mut streams = Vec::with_capacity(chunk_meta.streams.len());
     for (stream_idx, chunk_stream_meta) in chunk_meta.streams.iter().enumerate() {
       let delta_order = chunk_meta
-        .dyn_mode
+        .mode
         .stream_delta_order(stream_idx, flags.delta_encoding_order);
       let ans_size_log = chunk_stream_meta.ans_size_log;
       let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
@@ -146,7 +146,7 @@ impl<T: NumberLike> State<T> {
     let data_page_meta = DataPageMetadata {
       compressed_body_size,
       n,
-      dyn_mode: chunk_meta.dyn_mode,
+      mode: chunk_meta.mode,
       streams,
     };
 

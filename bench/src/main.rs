@@ -1,3 +1,5 @@
+#![allow(clippy::useless_transmute)]
+
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::io::ErrorKind;

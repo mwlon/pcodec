@@ -2,15 +2,13 @@ use std::fmt::Debug;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
-
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
-
 use crate::float_mult_utils::FloatMultConfig;
 
 // Static, compile-time modes. Logic should go here if it's called in hot
 // loops.
-pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
+pub trait ConstMode<U: UnsignedLike>: Copy + Debug + 'static {
   // BIN OPTIMIZATION
   type BinOptAccumulator: Default;
   fn combine_bin_opt_acc(bin: &BinCompressionInfo<U>, acc: &mut Self::BinOptAccumulator);
@@ -33,40 +31,47 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
 }
 
 // Dynamic modes. Logic should go here if it isn't called in hot loops.
-///
+/// A variation of how pco serializes and deserializes numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum DynMode<U: UnsignedLike> {
+pub enum Mode<U: UnsignedLike> {
+  /// Each number is compressed as
+  /// * which bin it's in and
+  /// * the offset in that bin.
+  ///
+  /// Formula: bin.lower + offset
   #[default]
   Classic,
+  /// Each number is compressed as
+  /// * which bin it's in and
+  /// * the offset in that bin as a multiplier of that bin's GCD.
+  ///
+  /// Formula: bin.lower + multiplier * bin.gcd
   Gcd,
-  FloatMult {
-    inv_base: U::Float,
-    base: U::Float,
-  },
+  /// Each number is compressed as
+  /// * which bin it's in,
+  /// * the approximate offset in that bin as a multiplier of the base,
+  /// * which bin the additional ULPs adjustment is in, and
+  /// * the offset in that adjusment bin.
+  ///
+  /// Formula: (bin.lower + offset) * mode.base +
+  /// (adj_bin.lower + adj_bin.offset) * machine_epsilon
+  FloatMult(FloatMultConfig<U::Float>),
 }
 
-impl<U: UnsignedLike> DynMode<U> {
-  pub fn float_mult(config: FloatMultConfig<U::Float>) -> Self {
-    Self::FloatMult {
-      inv_base: config.inv_base,
-      base: config.base,
-    }
-  }
-
+impl<U: UnsignedLike> Mode<U> {
   pub fn n_streams(&self) -> usize {
     match self {
-      DynMode::Classic | DynMode::Gcd => 1,
-      DynMode::FloatMult { .. } => 2,
+      Mode::Classic | Mode::Gcd => 1,
+      Mode::FloatMult { .. } => 2,
     }
   }
 
   pub fn stream_delta_order(&self, stream_idx: usize, delta_order: usize) -> usize {
     match (self, stream_idx) {
-      (DynMode::Classic, 0) => delta_order,
-      (DynMode::Gcd, 0) => delta_order,
-      (DynMode::FloatMult { .. }, 0) => delta_order,
-      (DynMode::FloatMult { .. }, 1) => 0,
+      (Mode::Classic, 0) => delta_order,
+      (Mode::Gcd, 0) => delta_order,
+      (Mode::FloatMult { .. }, 0) => delta_order,
+      (Mode::FloatMult { .. }, 1) => 0,
       _ => panic!(
         "should be unreachable; unknown stream {:?}/{}",
         self, stream_idx

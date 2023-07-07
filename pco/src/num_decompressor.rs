@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use std::mem::MaybeUninit;
 
-use crate::ans;
+use crate::{ans, Mode};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
@@ -13,8 +13,7 @@ use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
-use crate::modes::DynMode;
-use crate::modes::Mode;
+use crate::modes::ConstMode;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
 
@@ -84,7 +83,7 @@ struct StreamConfig<U: UnsignedLike> {
 
 // NumDecompressor does the main work of decoding bytes into NumberLikes
 #[derive(Clone, Debug)]
-struct NumDecompressorImpl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> {
+struct NumDecompressorImpl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> {
   // known information about the chunk
   n: usize,
   compressed_body_size: usize,
@@ -111,15 +110,15 @@ pub fn new<U: UnsignedLike>(
       .max()
       .unwrap_or(Bitlen::MAX);
   }
-  let res: Box<dyn NumDecompressor<U>> = match data_page_meta.dyn_mode {
-    DynMode::Classic => Box::new(
+  let res: Box<dyn NumDecompressor<U>> = match data_page_meta.mode {
+    Mode::Classic => Box::new(
       NumDecompressorImpl::<U, ClassicMode, 1>::new(data_page_meta, max_bits_per_num_block)?,
     ),
-    DynMode::Gcd => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
+    Mode::Gcd => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
       data_page_meta,
       max_bits_per_num_block,
     )?),
-    DynMode::FloatMult { .. } => Box::new(
+    Mode::FloatMult { .. } => Box::new(
       NumDecompressorImpl::<U, ClassicMode, 2>::new(data_page_meta, max_bits_per_num_block)?,
     ),
   };
@@ -127,7 +126,7 @@ pub fn new<U: UnsignedLike>(
   Ok(res)
 }
 
-impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U>
+impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
   for NumDecompressorImpl<U, M, STREAMS>
 {
   fn bits_remaining(&self) -> usize {
@@ -176,7 +175,7 @@ impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressor<U>
   }
 }
 
-impl<U: UnsignedLike, M: Mode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
+impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
   fn new(
     data_page_meta: DataPageMetadata<U>,
     max_bits_per_num_block: Bitlen,

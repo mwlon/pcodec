@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use pco::data_types::{NumberLike, UnsignedLike};
 use pco::standalone::Decompressor;
-use pco::{Bin, DynMode};
+use pco::{Bin, Mode};
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -111,21 +111,21 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     for (i, m) in metadatas.iter().enumerate() {
       println!(
         "\nchunk: {} n: {} mode: {:?}",
-        i, m.n, m.dyn_mode
+        i, m.n, m.mode
       );
       for (stream_idx, stream) in m.streams.iter().enumerate() {
-        let stream_name = match (m.dyn_mode, stream_idx) {
-          (DynMode::Classic, 0) => "primary".to_string(),
-          (DynMode::Gcd, 0) => "primary".to_string(),
-          (DynMode::FloatMult { base, .. }, 0) => format!("multiplier [x{}]", base),
-          (DynMode::FloatMult { .. }, 1) => "ULPs adjustment".to_string(),
+        let stream_name = match (m.mode, stream_idx) {
+          (Mode::Classic, 0) => "primary".to_string(),
+          (Mode::Gcd, 0) => "primary".to_string(),
+          (Mode::FloatMult(config), 0) => format!("multiplier [x{}]", config.base),
+          (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
           _ => panic!(
             "unknown stream: {:?}/{}",
-            m.dyn_mode, stream_idx
+            m.mode, stream_idx
           ),
         };
-        let show_as_float_int = matches!(m.dyn_mode, DynMode::FloatMult { .. }) && stream_idx == 0;
-        let show_as_delta = (matches!(m.dyn_mode, DynMode::FloatMult { .. }) && stream_idx == 1)
+        let show_as_float_int = matches!(m.mode, Mode::FloatMult { .. }) && stream_idx == 0;
+        let show_as_delta = (matches!(m.mode, Mode::FloatMult { .. }) && stream_idx == 1)
           || flags.delta_encoding_order > 0;
         println!(
           "stream: {} n_bins: {} ANS size log: {}",

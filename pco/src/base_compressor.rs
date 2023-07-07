@@ -12,11 +12,12 @@ use crate::delta_encoding::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
-use crate::modes::{gcd, DynMode, Mode};
+use crate::modes::{gcd, Mode, ConstMode};
 use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
-use crate::Flags;
+use crate::{Flags};
 use crate::{ans, delta_encoding};
 use crate::{bin_optimization, float_mult_utils};
+use crate::float_mult_utils::FloatMultConfig;
 
 /// All configurations available for a compressor.
 ///
@@ -144,7 +145,7 @@ struct BinBuffer<'a, U: UnsignedLike> {
   max_n_bin: usize,
   n_unsigneds: usize,
   sorted: &'a [U],
-  mode: DynMode<U>,
+  mode: Mode<U>,
   pub target_j: usize,
 }
 
@@ -153,7 +154,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], mode: DynMode<U>) -> Self {
+  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], mode: Mode<U>) -> Self {
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
@@ -180,7 +181,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     let upper = sorted[j - 1];
 
     let mut bin_gcd = U::ONE;
-    if self.mode == DynMode::Gcd {
+    if self.mode == Mode::Gcd {
       bin_gcd = gcd::gcd(&sorted[i..j]);
     }
 
@@ -215,8 +216,8 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
 fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
   sorted: &[U],
   comp_level: usize,
-  naive_mode: DynMode<U>,
-) -> (DynMode<U>, Vec<BinCompressionInfo<U>>) {
+  naive_mode: Mode<U>,
+) -> (Mode<U>, Vec<BinCompressionInfo<U>>) {
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(comp_level, n_unsigneds);
 
@@ -243,7 +244,7 @@ fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
 
   // in some cases, we can now reduce to a simpler mode
   let unoptimized_mode = match bin_buffer.mode {
-    DynMode::Gcd if !gcd::use_gcd_bin_optimize(&bin_buffer.seq) => DynMode::Classic,
+    Mode::Gcd if !gcd::use_gcd_bin_optimize(&bin_buffer.seq) => Mode::Classic,
     other => other,
   };
 
@@ -278,7 +279,7 @@ struct TrainedBins<U: UnsignedLike> {
 fn train_mode_and_infos<U: UnsignedLike>(
   unsigneds: Vec<U>,
   comp_level: usize,
-  naive_mode: DynMode<U>,
+  naive_mode: Mode<U>,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
 ) -> PcoResult<TrainedBins<U>> {
   if unsigneds.is_empty() {
@@ -307,13 +308,13 @@ fn train_mode_and_infos<U: UnsignedLike>(
 
   let estimated_ans_size_log = (comp_level + 2) as Bitlen;
   let mut optimized_infos = match unoptimized_mode {
-    DynMode::Classic | DynMode::FloatMult { .. } => bin_optimization::optimize_bins(
+    Mode::Classic | Mode::FloatMult { .. } => bin_optimization::optimize_bins(
       unoptimized_bins,
       estimated_ans_size_log,
       ClassicMode,
       n,
     ),
-    DynMode::Gcd => bin_optimization::optimize_bins(
+    Mode::Gcd => bin_optimization::optimize_bins(
       unoptimized_bins,
       estimated_ans_size_log,
       GcdMode,
@@ -330,7 +331,7 @@ fn train_mode_and_infos<U: UnsignedLike>(
 }
 
 // returns the ANS final state after decomposing the unsigneds in reverse order
-fn mode_decompose_unsigneds<U: UnsignedLike, M: Mode<U>, const STREAMS: usize>(
+fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize>(
   stream_configs: &mut [StreamConfig<U>],
   src: &mut StreamSrc<U>,
 ) -> PcoResult<DecomposedSrc<U>> {
@@ -369,15 +370,15 @@ fn decompose_unsigneds<U: UnsignedLike>(
   mid_chunk_info: &mut MidChunkInfo<U>,
 ) -> PcoResult<DecomposedSrc<U>> {
   let MidChunkInfo {
-    dyn_mode,
+    mode: dyn_mode,
     stream_configs,
     src,
     ..
   } = mid_chunk_info;
   match *dyn_mode {
-    DynMode::Classic => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
-    DynMode::Gcd => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
-    DynMode::FloatMult { .. } => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
+    Mode::Classic => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
+    Mode::Gcd => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
+    Mode::FloatMult { .. } => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
   }
 }
 
@@ -411,7 +412,7 @@ fn trained_compress_body<U: UnsignedLike, const STREAMS: usize>(
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
   stream_configs: Vec<StreamConfig<U>>,
-  dyn_mode: DynMode<U>,
+  mode: Mode<U>,
   page_sizes: Vec<usize>,
   // mutable:
   src: StreamSrc<U>,
@@ -493,29 +494,29 @@ impl<T: NumberLike> BaseCompressor<T> {
     Ok(())
   }
 
-  fn choose_naive_mode(&self, nums: &[T]) -> DynMode<T::Unsigned> {
+  fn choose_naive_mode(&self, nums: &[T]) -> Mode<T::Unsigned> {
     // * Use float mult if enabled and an appropriate base is found
     // * Otherwise, use GCD if enabled
     // * Otherwise, use Classic
     if self.internal_config.use_float_mult {
       if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
-        return DynMode::float_mult(config);
+        return Mode::FloatMult(config);
       }
     }
 
     if self.internal_config.use_gcds {
-      DynMode::Gcd
+      Mode::Gcd
     } else {
-      DynMode::Classic
+      Mode::Classic
     }
   }
 
-  fn split_streams(&self, naive_mode: DynMode<T::Unsigned>, nums: &[T]) -> StreamSrc<T::Unsigned> {
+  fn split_streams(&self, naive_mode: Mode<T::Unsigned>, nums: &[T]) -> StreamSrc<T::Unsigned> {
     match naive_mode {
-      DynMode::Classic | DynMode::Gcd => {
+      Mode::Classic | Mode::Gcd => {
         StreamSrc::new([nums.iter().map(|x| x.to_unsigned()).collect(), vec![]])
       }
-      DynMode::FloatMult { inv_base, base, .. } => {
+      Mode::FloatMult(FloatMultConfig {base, inv_base}) => {
         float_mult_utils::split_streams(nums, base, inv_base)
       }
     }
@@ -590,11 +591,11 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
 
     let optimized_mode = match naive_mode {
-      DynMode::Gcd => {
+      Mode::Gcd => {
         if stream_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
-          DynMode::Gcd
+          Mode::Gcd
         } else {
-          DynMode::Classic
+          Mode::Classic
         }
       }
       other => other,
@@ -605,7 +606,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     self.state = State::MidChunk(MidChunkInfo {
       stream_configs,
-      dyn_mode: optimized_mode,
+      mode: optimized_mode,
       page_sizes,
       src,
       page_idx: 0,
@@ -623,7 +624,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
       let decomposeds = decompose_unsigneds(info)?;
 
-      for stream_idx in 0..info.dyn_mode.n_streams() {
+      for stream_idx in 0..info.mode.n_streams() {
         info
           .data_page_moments(stream_idx)
           .write_to(&mut self.writer);
@@ -638,7 +639,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
       self.writer.finish_byte();
 
-      match info.dyn_mode.n_streams() {
+      match info.mode.n_streams() {
         1 => trained_compress_body::<_, 1>(
           decomposeds,
           info.page_sizes[info.page_idx],

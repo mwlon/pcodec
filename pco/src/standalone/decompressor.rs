@@ -20,7 +20,7 @@ use crate::{ChunkMetadata, DecompressorConfig, Flags};
 /// use pco::standalone::{DecompressedItem, Decompressor};
 /// use pco::DecompressorConfig;
 ///
-/// let my_bytes = vec![113, 99, 111, 33, 3, 0, 46];
+/// let my_bytes = vec![112, 99, 111, 33, 3, 0, 46];
 /// let mut dest = Vec::<i32>::new(); // where decompressed numbers go
 ///
 /// // DECOMPRESS BY CHUNK

@@ -4,9 +4,9 @@ use crate::bits;
 use crate::bits::avg_depth_bits;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
-use crate::modes::Mode;
+use crate::modes::ConstMode;
 
-fn bin_bit_cost<U: UnsignedLike, M: Mode<U>>(
+fn bin_bit_cost<U: UnsignedLike, M: ConstMode<U>>(
   base_meta_cost: f64,
   lower: U,
   upper: U,
@@ -21,7 +21,7 @@ fn bin_bit_cost<U: UnsignedLike, M: Mode<U>>(
 }
 
 // this is an exact optimal strategy
-pub fn optimize_bins<U: UnsignedLike, M: Mode<U>>(
+pub fn optimize_bins<U: UnsignedLike, M: ConstMode<U>>(
   bins: Vec<BinCompressionInfo<U>>,
   ans_size_log: Bitlen,
   mode: M,
