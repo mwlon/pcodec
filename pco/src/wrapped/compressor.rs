@@ -1,7 +1,7 @@
 use crate::base_compressor::BaseCompressor;
 use crate::chunk_spec::ChunkSpec;
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::{ChunkMetadata, CompressorConfig, Flags};
 
 /// Converts vectors of numbers into compressed bytes for use in a wrapping
@@ -40,12 +40,12 @@ impl<T: NumberLike> Compressor<T> {
   /// Writes out a header using the compressor's data type and flags.
   /// Will return an error if the compressor has already written the header.
   ///
-  /// Each .qco file must start with such a header, which contains:
-  /// * a 4-byte magic header for "qco!" in ascii,
+  /// The header is required. It contains:
+  /// * a 4-byte magic header for "pco!" in ascii,
   /// * a byte for the data type (e.g. `i64` has byte 1 and `f64` has byte
   /// 5), and
   /// * bytes for the flags used to compress.
-  pub fn header(&mut self) -> QCompressResult<()> {
+  pub fn header(&mut self) -> PcoResult<()> {
     self.0.header()
   }
 
@@ -63,7 +63,7 @@ impl<T: NumberLike> Compressor<T> {
     &mut self,
     nums: &[T],
     spec: &ChunkSpec,
-  ) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
+  ) -> PcoResult<ChunkMetadata<T::Unsigned>> {
     self.0.chunk_metadata_internal(nums, spec)
   }
 
@@ -71,7 +71,7 @@ impl<T: NumberLike> Compressor<T> {
   /// [`.chunk_metadata`][Self::chunk_metadata].
   /// Will return an error if the compressor is not at the start of a data
   /// page in the middle of a chunk.
-  pub fn data_page(&mut self) -> QCompressResult<()> {
+  pub fn data_page(&mut self) -> PcoResult<()> {
     self.0.data_page_internal()
   }
 

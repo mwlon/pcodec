@@ -14,7 +14,7 @@ use parquet::file::reader::SerializedFileReader;
 
 use pco::data_types::NumberLike;
 use pco::standalone::Compressor;
-use pco::{standalone, CompressorConfig};
+use pco::{CompressorConfig};
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;

@@ -9,7 +9,7 @@ use crate::compression_table::CompressionTable;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{PcoError, PcoResult};
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::modes::{gcd, DynMode, Mode};
@@ -280,19 +280,19 @@ fn train_mode_and_infos<U: UnsignedLike>(
   comp_level: usize,
   naive_mode: DynMode<U>,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
-) -> QCompressResult<TrainedBins<U>> {
+) -> PcoResult<TrainedBins<U>> {
   if unsigneds.is_empty() {
     return Ok(TrainedBins::default());
   }
 
   if comp_level > MAX_COMPRESSION_LEVEL {
-    return Err(QCompressError::invalid_argument(format!(
+    return Err(PcoError::invalid_argument(format!(
       "compression level may not exceed {} (was {})",
       MAX_COMPRESSION_LEVEL, comp_level,
     )));
   }
   if n > MAX_ENTRIES {
-    return Err(QCompressError::invalid_argument(format!(
+    return Err(PcoError::invalid_argument(format!(
       "count may not exceed {} per chunk (was {})",
       MAX_ENTRIES, n,
     )));
@@ -333,7 +333,7 @@ fn train_mode_and_infos<U: UnsignedLike>(
 fn mode_decompose_unsigneds<U: UnsignedLike, M: Mode<U>, const STREAMS: usize>(
   stream_configs: &mut [StreamConfig<U>],
   src: &mut StreamSrc<U>,
-) -> QCompressResult<DecomposedSrc<U>> {
+) -> PcoResult<DecomposedSrc<U>> {
   let empty_decomposeds = |n_unsigneds| unsafe {
     let mut res = Vec::with_capacity(n_unsigneds);
     res.set_len(n_unsigneds);
@@ -367,7 +367,7 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: Mode<U>, const STREAMS: usize>(
 
 fn decompose_unsigneds<U: UnsignedLike>(
   mid_chunk_info: &mut MidChunkInfo<U>,
-) -> QCompressResult<DecomposedSrc<U>> {
+) -> PcoResult<DecomposedSrc<U>> {
   let MidChunkInfo {
     dyn_mode,
     stream_configs,
@@ -385,7 +385,7 @@ fn trained_compress_body<U: UnsignedLike, const STREAMS: usize>(
   mut src: DecomposedSrc<U>,
   page_size: usize,
   writer: &mut BitWriter,
-) -> QCompressResult<()> {
+) -> PcoResult<()> {
   let max_safe_idx = page_size.saturating_sub(MAX_DELTA_ENCODING_ORDER);
   while src.n_processed() < max_safe_idx {
     for stream_idx in 0..STREAMS {
@@ -438,14 +438,14 @@ pub enum State<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> State<U> {
-  pub fn wrong_step_err(&self, description: &str) -> QCompressError {
+  pub fn wrong_step_err(&self, description: &str) -> PcoError {
     let step_str = match self {
       State::PreHeader => "has not yet written header",
       State::StartOfChunk => "is at the start of a chunk",
       State::MidChunk(_) => "is mid-chunk",
       State::Terminated => "has already written the footer",
     };
-    QCompressError::invalid_argument(format!(
+    PcoError::invalid_argument(format!(
       "attempted to write {} when compressor {}",
       description, step_str,
     ))
@@ -481,7 +481,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
   }
 
-  pub fn header(&mut self) -> QCompressResult<()> {
+  pub fn header(&mut self) -> PcoResult<()> {
     if !matches!(self.state, State::PreHeader) {
       return Err(self.state.wrong_step_err("header"));
     }
@@ -527,13 +527,13 @@ impl<T: NumberLike> BaseCompressor<T> {
     &mut self,
     nums: &[T],
     spec: &ChunkSpec,
-  ) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
+  ) -> PcoResult<ChunkMetadata<T::Unsigned>> {
     if !matches!(self.state, State::StartOfChunk) {
       return Err(self.state.wrong_step_err("chunk metadata"));
     }
 
     if nums.is_empty() {
-      return Err(QCompressError::invalid_argument(
+      return Err(PcoError::invalid_argument(
         "cannot compress empty chunk",
       ));
     }
@@ -614,7 +614,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     Ok(meta)
   }
 
-  pub fn data_page_internal(&mut self) -> QCompressResult<()> {
+  pub fn data_page_internal(&mut self) -> PcoResult<()> {
     let has_pages_remaining = {
       let info = match &mut self.state {
         State::MidChunk(info) => Ok(info),

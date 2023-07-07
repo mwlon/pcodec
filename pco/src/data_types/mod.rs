@@ -43,13 +43,14 @@ pub trait FloatLike:
 
 /// Trait for data types that behave like unsigned integers.
 ///
-/// This is used extensively in `q_compress` to guarantee that bitwise
+/// This is used extensively in `pco` to guarantee that bitwise
 /// operations like `>>` and `|=` are available and that certain properties
 /// hold.
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
+/// Metadata stores numbers as their unsigned representations.
 ///
-/// Note: API stability of `UnsignedLike` is not guaranteed.
+/// API stability of `UnsignedLike` is not guaranteed!
 pub trait UnsignedLike:
   Add<Output = Self>
   + BitAnd<Output = Self>
@@ -118,19 +119,14 @@ pub trait UnsignedLike:
 /// If you have a new data type you would like to add to the library or
 /// implement as custom in your own, these are the questions you need to
 /// answer:
-/// * What are the corresponding signed integer and unsigned integer types?
-/// These are usually the next-larger signed and unsigned integers.
-/// * How can I convert to these signed and unsigned representations and back
-/// in *a way that preserves ordering*? For instance, converting `f32` to `i32`
-/// can be done trivially by transmuting the bytes in memory, but converting
-/// from `f32`
-/// to `u32` in an order-preserving way requires flipping the sign bit and, if
-/// negative, the rest of the bits.
-/// * How can I encode and decode this number in an uncompressed way? This
-/// uncompressed representation is used to store metadata in each chunk of the
-/// Quantile Compression format.
+/// * What is the corresponding unsigned integer type? This is probably the
+/// smallest unsigned integer with enough bits to represent the number.
+/// * How can I convert to this unsigned representation and back
+/// in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
+/// wouldn't preserve ordering and would cause pco to fail. In this example,
+/// one needs to flip the sign bit and, if negative, the rest of the bits.
 ///
-/// Note: API stability of `NumberLike` is not guaranteed.
+/// API stability of `NumberLike` is not guaranteed!
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// A number from 0-255 that corresponds to the number's data type.
   ///
@@ -141,8 +137,8 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   ///
   /// To choose a header byte for a new data type, review all header bytes in
   /// the library and pick an unused one. For instance, as of writing, bytes
-  /// 1 through 15 are used, so 16 would be a good choice for another
-  /// `q_compress`-supported data type, and 255 would be a good choice for a
+  /// 1 through 6 are used, so 7 would be a good choice for another
+  /// `pco` data type implementation, and 255 would be a good choice for a
   /// custom data type.
   const HEADER_BYTE: u8;
   /// The number of bits in the number's uncompressed representation.

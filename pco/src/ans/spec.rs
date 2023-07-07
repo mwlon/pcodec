@@ -1,5 +1,5 @@
 use crate::constants::{Bitlen, WORD_BITLEN};
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{PcoError, PcoResult};
 
 // Here and in encoding/decoding, state is between [0, table_size)
 
@@ -35,10 +35,10 @@ impl Spec {
   // The general idea is to spread the tokens out as much as possible,
   // deterministically, and ensuring each one gets as least one state.
   // Long runs of tokens are generally bad.
-  fn spread_state_tokens(size_log: Bitlen, token_weights: &[usize]) -> QCompressResult<Vec<Token>> {
+  fn spread_state_tokens(size_log: Bitlen, token_weights: &[usize]) -> PcoResult<Vec<Token>> {
     let table_size = token_weights.iter().sum::<usize>();
     if table_size != (1 << size_log) {
-      return Err(QCompressError::corruption(format!(
+      return Err(PcoError::corruption(format!(
         "table size log of {} does not agree with total weight of {}",
         size_log, table_size,
       )));
@@ -59,7 +59,7 @@ impl Spec {
     Ok(res)
   }
 
-  pub fn from_weights(size_log: Bitlen, token_weights: Vec<usize>) -> QCompressResult<Self> {
+  pub fn from_weights(size_log: Bitlen, token_weights: Vec<usize>) -> PcoResult<Self> {
     let token_weights = if token_weights.is_empty() {
       vec![1]
     } else {
@@ -83,9 +83,9 @@ impl Spec {
 #[cfg(test)]
 mod tests {
   use crate::ans::spec::{Spec, Token};
-  use crate::errors::QCompressResult;
+  use crate::errors::PcoResult;
 
-  fn assert_state_tokens(weights: Vec<usize>, expected: Vec<Token>) -> QCompressResult<()> {
+  fn assert_state_tokens(weights: Vec<usize>, expected: Vec<Token>) -> PcoResult<()> {
     let table_size_log = weights.iter().sum::<usize>().ilog2();
     let spec = Spec::from_weights(table_size_log, weights)?;
     assert_eq!(spec.state_tokens, expected);
@@ -93,7 +93,7 @@ mod tests {
   }
 
   #[test]
-  fn ans_spec_new() -> QCompressResult<()> {
+  fn ans_spec_new() -> PcoResult<()> {
     assert_state_tokens(
       vec![1, 1, 3, 11],
       vec![0, 3, 2, 3, 2, 3, 3, 3, 3, 1, 3, 2, 3, 3, 3, 3],
@@ -101,7 +101,7 @@ mod tests {
   }
 
   #[test]
-  fn ans_spec_new_trivial() -> QCompressResult<()> {
+  fn ans_spec_new_trivial() -> PcoResult<()> {
     assert_state_tokens(vec![1], vec![0])?;
     assert_state_tokens(vec![2], vec![0, 0])
   }

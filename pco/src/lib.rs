@@ -1,6 +1,6 @@
 //! For crate-level documentation, see either
-//! <https://crates.io/crates/q_compress> or
-//! <https://github.com/mwlon/quantile-compression/tree/main/q_compress>.
+//! <https://crates.io/crates/pco> or
+//! <https://github.com/mwlon/pcompress/tree/main/pco>.
 #![allow(clippy::manual_range_contains)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::uninit_vec)]
@@ -20,7 +20,9 @@ struct ReadmeDoctest;
 
 pub mod data_types;
 pub mod errors;
+/// for compressing/decompressing .pco files
 pub mod standalone;
+/// for compressing/decompressing as part of an outer, wrapping format
 pub mod wrapped;
 
 mod ans;

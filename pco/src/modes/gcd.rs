@@ -1,7 +1,7 @@
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 use crate::data_types::UnsignedLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::modes::Mode;
 use crate::{bits, Bin};
 
@@ -75,7 +75,7 @@ impl<U: UnsignedLike> Mode<U> for GcdMode {
   fn decompress_unsigned(
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
-  ) -> QCompressResult<U> {
+  ) -> PcoResult<U> {
     Ok(bin.lower + reader.read_uint::<U>(bin.offset_bits)? * bin.gcd)
   }
 }

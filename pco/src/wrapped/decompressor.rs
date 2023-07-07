@@ -3,16 +3,18 @@ use std::io::Write;
 use crate::base_decompressor::{BaseDecompressor, Step};
 use crate::bit_words::PaddedBytes;
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
-/// Converts wrapped Quantile-compressed data into [`Flags`],
-/// [`ChunkMetadata`], and vectors of numbers.
+/// Converts wrapped pcodec data into [`Flags`], [`ChunkMetadata`], and vectors
+/// of numbers.
 ///
 /// All decompressor methods leave its state unchanged if they return an
 /// error.
 ///
 /// You can use the wrapped decompressor at a data page level.
+/// This allows the wrapping format to use its own data page indices to support
+/// complex filtering and seeking.
 #[derive(Clone, Debug, Default)]
 pub struct Decompressor<T: NumberLike>(BaseDecompressor<T>);
 
@@ -27,9 +29,9 @@ impl<T: NumberLike> Decompressor<T> {
   /// Will return an error if the decompressor has already parsed a header,
   /// is not byte-aligned,
   /// runs out of data,
-  /// finds flags from a newer, incompatible version of q_compress,
+  /// finds flags from a newer, incompatible version of pco,
   /// or finds any corruptions.
-  pub fn header(&mut self) -> QCompressResult<Flags> {
+  pub fn header(&mut self) -> PcoResult<Flags> {
     self.0.header(true)
   }
 
@@ -41,7 +43,7 @@ impl<T: NumberLike> Decompressor<T> {
   ///
   /// This can be used regardless of whether the decompressor has finished
   /// reading all data pages from the preceding chunk.
-  pub fn chunk_metadata(&mut self) -> QCompressResult<ChunkMetadata<T::Unsigned>> {
+  pub fn chunk_metadata(&mut self) -> PcoResult<ChunkMetadata<T::Unsigned>> {
     self.0.state.check_step_among(
       &[Step::StartOfChunk, Step::StartOfDataPage, Step::MidDataPage],
       "read chunk metadata",
@@ -63,7 +65,7 @@ impl<T: NumberLike> Decompressor<T> {
   ///
   /// This can be used regardless of whether the decompressor has finished
   /// reading the previous data page.
-  pub fn begin_data_page(&mut self, n: usize, compressed_page_size: usize) -> QCompressResult<()> {
+  pub fn begin_data_page(&mut self, n: usize, compressed_page_size: usize) -> PcoResult<()> {
     self.0.state.check_step_among(
       &[Step::StartOfDataPage, Step::MidDataPage],
       "begin data page",
@@ -78,7 +80,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// Reads up to `limit` numbers from the current data page.
   /// Will return an error if the decompressor is not in a data page,
   /// it runs out of data, or any corruptions are found.
-  pub fn next_batch(&mut self, dest: &mut [T]) -> QCompressResult<()> {
+  pub fn next_batch(&mut self, dest: &mut [T]) -> PcoResult<()> {
     self
       .0
       .state
@@ -104,7 +106,7 @@ impl<T: NumberLike> Decompressor<T> {
     n: usize,
     compressed_page_size: usize,
     dest: &mut [T],
-  ) -> QCompressResult<()> {
+  ) -> PcoResult<()> {
     self.0.state.check_step_among(
       &[Step::StartOfDataPage, Step::MidDataPage],
       "data page",

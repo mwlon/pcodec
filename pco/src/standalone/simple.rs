@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::standalone::{Compressor, Decompressor};
 use crate::{bits, CompressorConfig, DecompressorConfig};
 
@@ -39,7 +39,7 @@ pub fn simple_compress<T: NumberLike>(config: CompressorConfig, nums: &[T]) -> V
 pub fn simple_decompress<T: NumberLike>(
   config: DecompressorConfig,
   bytes: &[u8],
-) -> QCompressResult<Vec<T>> {
+) -> PcoResult<Vec<T>> {
   // cloning/extending by a single chunk's numbers can slow down by 2%
   // so we just take ownership of the first chunk's numbers instead
   let mut decompressor = Decompressor::<T>::from_config(config);
@@ -60,7 +60,7 @@ pub fn simple_decompress<T: NumberLike>(
 
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,
-/// then compresses the numbers to .qco bytes.
+/// then compresses the numbers to .pco bytes.
 ///
 /// This adds some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
@@ -74,10 +74,10 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 }
 
 /// Automatically makes an educated guess for the best decompression
-/// configuration, then decompresses .qco bytes into numbers.
+/// configuration, then decompresses .pco bytes into numbers.
 ///
 /// There are currently no relevant fields in the decompression configuration,
 /// so there is no compute downside to using this function.
-pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> QCompressResult<Vec<T>> {
+pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> PcoResult<Vec<T>> {
   simple_decompress(DecompressorConfig::default(), bytes)
 }

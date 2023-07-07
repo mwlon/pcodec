@@ -1,7 +1,7 @@
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::data_types::UnsignedLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DeltaMoments<U: UnsignedLike> {
@@ -13,7 +13,7 @@ impl<U: UnsignedLike> DeltaMoments<U> {
     Self { moments }
   }
 
-  pub fn parse_from(reader: &mut BitReader, order: usize) -> QCompressResult<Self> {
+  pub fn parse_from(reader: &mut BitReader, order: usize) -> PcoResult<Self> {
     let mut moments = Vec::new();
     for _ in 0..order {
       moments.push(reader.read_uint::<U>(U::BITS)?);

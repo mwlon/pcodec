@@ -2,6 +2,8 @@ use crate::ans::Token;
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 
+/// Part of [`ChunkMetadata`][`crate::ChunkMetadata`] representing a numerical
+/// range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Bin<U: UnsignedLike> {

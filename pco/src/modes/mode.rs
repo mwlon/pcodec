@@ -4,7 +4,7 @@ use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
 
 use crate::data_types::UnsignedLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 
 use crate::float_mult_utils::FloatMultConfig;
 
@@ -29,11 +29,13 @@ pub trait Mode<U: UnsignedLike>: Copy + Debug + 'static {
   fn decompress_unsigned(
     bin: &BinDecompressionInfo<U>,
     reader: &mut BitReader,
-  ) -> QCompressResult<U>;
+  ) -> PcoResult<U>;
 }
 
 // Dynamic modes. Logic should go here if it isn't called in hot loops.
+///
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DynMode<U: UnsignedLike> {
   #[default]
   Classic,

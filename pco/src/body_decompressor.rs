@@ -6,7 +6,7 @@ use crate::chunk_metadata::DataPageMetadata;
 use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::modes::DynMode;
 use crate::num_decompressor;
 use crate::num_decompressor::NumDecompressor;
@@ -41,7 +41,7 @@ fn join_streams<U: UnsignedLike>(mode: DynMode<U>, dst: UnsignedDst<U>) {
 }
 
 impl<T: NumberLike> BodyDecompressor<T> {
-  pub(crate) fn new(data_page_meta: DataPageMetadata<T::Unsigned>) -> QCompressResult<Self> {
+  pub(crate) fn new(data_page_meta: DataPageMetadata<T::Unsigned>) -> PcoResult<Self> {
     let delta_momentss = data_page_meta
       .streams
       .iter()
@@ -64,7 +64,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
     num_dst: &mut [T],
-  ) -> QCompressResult<Progress> {
+  ) -> PcoResult<Progress> {
     let batch_end = min(UNSIGNED_BATCH_SIZE, num_dst.len());
     let unsigneds_mut = T::transmute_to_unsigned_slice(&mut num_dst[..batch_end]);
     let Self {
@@ -98,7 +98,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
     num_dst: &mut [T],
-  ) -> QCompressResult<Progress> {
+  ) -> PcoResult<Progress> {
     let mut progress = Progress::default();
     while progress.n_processed < num_dst.len()
       && !progress.finished_body

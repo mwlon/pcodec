@@ -1,6 +1,6 @@
 use crate::bin::BinCompressionInfo;
 use crate::data_types::UnsignedLike;
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{PcoError, PcoResult};
 
 const TARGET_BRANCHING_FACTOR: usize = 16; // chosen for performance
 
@@ -60,7 +60,7 @@ impl<U: UnsignedLike> CompressionTable<U> {
     CompressionTable::NonLeaf(children)
   }
 
-  pub fn search(&self, unsigned: U) -> QCompressResult<&BinCompressionInfo<U>> {
+  pub fn search(&self, unsigned: U) -> PcoResult<&BinCompressionInfo<U>> {
     let mut node = self;
     loop {
       match node {
@@ -68,7 +68,7 @@ impl<U: UnsignedLike> CompressionTable<U> {
           return if info.contains(unsigned) {
             Ok(info)
           } else {
-            Err(QCompressError::invalid_argument(format!(
+            Err(PcoError::invalid_argument(format!(
               "chunk compressor was not trained to include number with unsigned value {}",
               unsigned,
             )))
@@ -85,7 +85,7 @@ impl<U: UnsignedLike> CompressionTable<U> {
           }
 
           if !found {
-            return Err(QCompressError::invalid_argument(format!(
+            return Err(PcoError::invalid_argument(format!(
               "chunk compressor was not trained to include number with unsigned value {}",
               unsigned,
             )));

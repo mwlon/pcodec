@@ -1,7 +1,7 @@
 use crate::bits;
 use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN, WORD_SIZE};
 use crate::data_types::UnsignedLike;
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{PcoError, PcoResult};
 
 /// Builds compressed data, enabling a [`Compressor`][crate::Compressor] to
 /// write bit-level information and ultimately output a `Vec<u8>`.
@@ -29,13 +29,13 @@ impl BitWriter {
     self.words.len() * WORD_SIZE + self.j as usize
   }
 
-  pub fn write_aligned_byte(&mut self, byte: u8) -> QCompressResult<()> {
+  pub fn write_aligned_byte(&mut self, byte: u8) -> PcoResult<()> {
     self.write_aligned_bytes(&[byte])
   }
 
   /// Appends the bits to the writer. Will return an error if the writer is
   /// misaligned.
-  pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> QCompressResult<()> {
+  pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> PcoResult<()> {
     if self.j % 8 == 0 {
       for &byte in bytes {
         self.refresh_if_needed();
@@ -44,7 +44,7 @@ impl BitWriter {
       }
       Ok(())
     } else {
-      Err(QCompressError::invalid_argument(format!(
+      Err(PcoError::invalid_argument(format!(
         "cannot write aligned bytes to unaligned bit reader at word {} bit {}",
         self.words.len(),
         self.j,

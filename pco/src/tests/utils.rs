@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::io::Write;
 
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::wrapped::ChunkSpec;
 use crate::wrapped::{Compressor, Decompressor};
 use crate::{CompressorConfig, DecompressorConfig};
@@ -20,7 +20,7 @@ pub fn wrapped_compress<T: NumberLike>(
   nums: &[T],
   config: CompressorConfig,
   sizess: Vec<Vec<usize>>,
-) -> QCompressResult<Vec<u8>> {
+) -> PcoResult<Vec<u8>> {
   let mut res = Vec::new();
 
   let mut compressor = Compressor::<T>::from_config(config);
@@ -59,7 +59,7 @@ pub fn wrapped_compress<T: NumberLike>(
 pub fn wrapped_decompress<T: NumberLike>(
   mut compressed: Vec<u8>,
   config: DecompressorConfig,
-) -> QCompressResult<Vec<T>> {
+) -> PcoResult<Vec<T>> {
   let mut res = Vec::new();
   let mut i = 0;
   let mut decompressor = Decompressor::<T>::from_config(config);

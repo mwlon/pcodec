@@ -4,11 +4,11 @@ use crate::base_decompressor::{BaseDecompressor, State, Step};
 use crate::bit_reader::BitReader;
 use crate::body_decompressor::BodyDecompressor;
 use crate::data_types::NumberLike;
-use crate::errors::{ErrorKind, QCompressError, QCompressResult};
+use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::progress::Progress;
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
-/// Converts .qco compressed bytes into [`Flags`],
+/// Converts .pco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
 ///
 /// Most `Decompressor` methods leave its state unchanged if they return an
@@ -66,21 +66,21 @@ impl<T: NumberLike> Decompressor<T> {
   /// Will return an error if the decompressor has already parsed a header,
   /// is not byte-aligned,
   /// runs out of data,
-  /// finds flags from a newer, incompatible version of q_compress,
+  /// finds flags from a newer, incompatible version of pco,
   /// or finds any corruptions.
-  pub fn header(&mut self) -> QCompressResult<Flags> {
+  pub fn header(&mut self) -> PcoResult<Flags> {
     self.0.header(false)
   }
 
   /// Reads a [`ChunkMetadata`], returning it.
   /// Will return `None` if it instead finds a termination footer
-  /// (indicating end of the .qco file).
+  /// (indicating end of the file).
   /// Will return an error if the decompressor has not parsed the header,
   /// has not finished the last chunk body,
   /// is not byte-aligned,
   /// runs out of data,
   /// or finds any corruptions.
-  pub fn chunk_metadata(&mut self) -> QCompressResult<Option<ChunkMetadata<T::Unsigned>>> {
+  pub fn chunk_metadata(&mut self) -> PcoResult<Option<ChunkMetadata<T::Unsigned>>> {
     self
       .0
       .state
@@ -99,7 +99,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// Skips the chunk body, returning nothing.
   /// Will return an error if the decompressor is not in a chunk body,
   /// or runs out of data.
-  pub fn skip_chunk_body(&mut self) -> QCompressResult<()> {
+  pub fn skip_chunk_body(&mut self) -> PcoResult<()> {
     self.0.state.check_step_among(
       &[Step::StartOfDataPage, Step::MidDataPage],
       "skip chunk body",
@@ -120,7 +120,7 @@ impl<T: NumberLike> Decompressor<T> {
       self.0.state.body_decompressor = None;
       Ok(())
     } else {
-      Err(QCompressError::insufficient_data(format!(
+      Err(PcoError::insufficient_data(format!(
         "unable to skip chunk body to bit index {} when only {} bits available",
         skipped_bit_idx,
         self.0.words.total_bits(),
@@ -132,7 +132,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// Will return an error if the decompressor is not in a chunk body,
   /// runs out of data,
   /// or finds any corruptions.
-  pub fn chunk_body(&mut self, dest: &mut [T]) -> QCompressResult<()> {
+  pub fn chunk_body(&mut self, dest: &mut [T]) -> PcoResult<()> {
     self
       .0
       .state
@@ -166,7 +166,7 @@ fn next_nums_dirty<T: NumberLike>(
   reader: &mut BitReader,
   bd: &mut BodyDecompressor<T>,
   dest: &mut [T],
-) -> QCompressResult<Progress> {
+) -> PcoResult<Progress> {
   bd.decompress(reader, false, dest)
 }
 
@@ -190,10 +190,10 @@ fn apply_nums<T: NumberLike>(
 
 /// Will return an error for files in wrapped mode.
 impl<T: NumberLike> Iterator for &mut Decompressor<T> {
-  type Item = QCompressResult<DecompressedItem<T>>;
+  type Item = PcoResult<DecompressedItem<T>>;
 
   fn next(&mut self) -> Option<Self::Item> {
-    let res: QCompressResult<Option<DecompressedItem<T>>> = match self.0.state.step() {
+    let res: PcoResult<Option<DecompressedItem<T>>> = match self.0.state.step() {
       Step::PreHeader => match self.header() {
         Ok(flags) => Ok(Some(DecompressedItem::Flags(flags))),
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),

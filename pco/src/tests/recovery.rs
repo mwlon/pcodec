@@ -1,12 +1,12 @@
 use rand::Rng;
 
 use crate::data_types::NumberLike;
-use crate::errors::QCompressResult;
+use crate::errors::PcoResult;
 use crate::standalone::{auto_decompress, simple_compress, Compressor};
 use crate::CompressorConfig;
 
 #[test]
-fn test_edge_cases() -> QCompressResult<()> {
+fn test_edge_cases() -> PcoResult<()> {
   assert_recovers(vec![u64::MIN, u64::MAX], 0, "int extremes 0")?;
   assert_recovers(
     vec![f64::MIN, f64::MAX],
@@ -21,7 +21,7 @@ fn test_edge_cases() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_moderate_data() -> QCompressResult<()> {
+fn test_moderate_data() -> PcoResult<()> {
   let mut v = Vec::new();
   for i in -50000..50000 {
     v.push(i);
@@ -30,7 +30,7 @@ fn test_moderate_data() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_sparse() -> QCompressResult<()> {
+fn test_sparse() -> PcoResult<()> {
   let mut v = Vec::new();
   for _ in 0..10000 {
     v.push(1);
@@ -42,17 +42,17 @@ fn test_sparse() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_u32_codec() -> QCompressResult<()> {
+fn test_u32_codec() -> PcoResult<()> {
   assert_recovers(vec![0_u32, u32::MAX, 3, 4, 5], 1, "u32s")
 }
 
 #[test]
-fn test_u64_codec() -> QCompressResult<()> {
+fn test_u64_codec() -> PcoResult<()> {
   assert_recovers(vec![0_u64, u64::MAX, 3, 4, 5], 1, "u64s")
 }
 
 #[test]
-fn test_i32_codec() -> QCompressResult<()> {
+fn test_i32_codec() -> PcoResult<()> {
   assert_recovers(
     vec![0_i32, -1, i32::MAX, i32::MIN, 7],
     1,
@@ -61,7 +61,7 @@ fn test_i32_codec() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_i64_codec() -> QCompressResult<()> {
+fn test_i64_codec() -> PcoResult<()> {
   assert_recovers(
     vec![0_i64, -1, i64::MAX, i64::MIN, 7],
     1,
@@ -70,7 +70,7 @@ fn test_i64_codec() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_f32_codec() -> QCompressResult<()> {
+fn test_f32_codec() -> PcoResult<()> {
   assert_recovers(
     vec![
       f32::MAX,
@@ -88,7 +88,7 @@ fn test_f32_codec() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_f64_codec() -> QCompressResult<()> {
+fn test_f64_codec() -> PcoResult<()> {
   assert_recovers(
     vec![
       f64::MAX,
@@ -106,7 +106,7 @@ fn test_f64_codec() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_multi_chunk() -> QCompressResult<()> {
+fn test_multi_chunk() -> PcoResult<()> {
   let mut compressor = Compressor::<i64>::default();
   compressor.header()?;
   compressor.chunk(&[1, 2, 3])?;
@@ -120,7 +120,7 @@ fn test_multi_chunk() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_with_gcds() -> QCompressResult<()> {
+fn test_with_gcds() -> PcoResult<()> {
   assert_recovers(vec![7, 7, 21, 21], 1, "trivial gcd ranges")?;
   assert_recovers(
     vec![7, 7, 21, 28],
@@ -147,7 +147,7 @@ fn test_with_gcds() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_sparse_islands() -> QCompressResult<()> {
+fn test_sparse_islands() -> PcoResult<()> {
   let mut rng = rand::thread_rng();
   let mut nums = Vec::new();
   // sparse - one common island of [0, 8) and one rare of [1000, 1008)
@@ -161,7 +161,7 @@ fn test_sparse_islands() -> QCompressResult<()> {
 }
 
 #[test]
-fn test_decimals() -> QCompressResult<()> {
+fn test_decimals() -> PcoResult<()> {
   let mut rng = rand::thread_rng();
   let mut nums = Vec::new();
   let n = 300;
@@ -195,7 +195,7 @@ fn assert_recovers<T: NumberLike>(
   nums: Vec<T>,
   compression_level: usize,
   name: &str,
-) -> QCompressResult<()> {
+) -> PcoResult<()> {
   for delta_encoding_order in [0, 1, 7] {
     assert_recovers_within_size(
       &nums,
@@ -214,7 +214,7 @@ fn assert_recovers_within_size<T: NumberLike>(
   name: &str,
   delta_encoding_order: usize,
   max_byte_size: usize,
-) -> QCompressResult<()> {
+) -> PcoResult<()> {
   let debug_info = format!(
     "name={} delta_encoding_order={}",
     name, delta_encoding_order,

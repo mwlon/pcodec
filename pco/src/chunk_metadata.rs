@@ -5,7 +5,7 @@ use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::DynMode;
 use crate::Flags;
@@ -19,7 +19,7 @@ pub struct ChunkStreamMetadata<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> ChunkStreamMetadata<U> {
-  fn parse_from(reader: &mut BitReader, dyn_mode: DynMode<U>) -> QCompressResult<Self> {
+  fn parse_from(reader: &mut BitReader, dyn_mode: DynMode<U>) -> PcoResult<Self> {
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG)?;
     let bins = parse_bins::<U>(reader, dyn_mode, ans_size_log)?;
 
@@ -64,12 +64,12 @@ impl<'a, U: UnsignedLike> DataPageStreamMetadata<'a, U> {
   }
 }
 
-/// The metadata of a Quantile-compressed chunk.
+/// The metadata of a pcodec chunk.
 ///
 /// One can also create a rough histogram (or a histogram of deltas, if
 /// delta encoding was used) by aggregating chunk metadata.
 ///
-/// Each .qco file may contain multiple metadata sections, so to count the
+/// Each .pco file may contain multiple metadata sections, so to count the
 /// entries, one must sum the count `n` for each chunk metadata. This can
 /// be done easily - see the fast_seeking.rs example. For wrapped data,
 /// `n` and `compressed_body_size` are not stored.
@@ -103,18 +103,18 @@ fn parse_bins<U: UnsignedLike>(
   reader: &mut BitReader,
   dyn_mode: DynMode<U>,
   ans_size_log: Bitlen,
-) -> QCompressResult<Vec<Bin<U>>> {
+) -> PcoResult<Vec<Bin<U>>> {
   let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
   let mut bins = Vec::with_capacity(n_bins);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   if 1 << ans_size_log < n_bins {
-    return Err(QCompressError::corruption(format!(
+    return Err(PcoError::corruption(format!(
       "ANS size log ({}) is too small for number of bins ({})",
       ans_size_log, n_bins,
     )));
   }
   if n_bins == 1 && ans_size_log > 0 {
-    return Err(QCompressError::corruption(format!(
+    return Err(PcoError::corruption(format!(
       "Only 1 bin but ANS size log is {} (should be 0)",
       ans_size_log,
     )));
@@ -125,7 +125,7 @@ fn parse_bins<U: UnsignedLike>(
 
     let offset_bits = reader.read_bitlen(offset_bits_bits)?;
     if offset_bits > U::BITS {
-      return Err(QCompressError::corruption(format!(
+      return Err(PcoError::corruption(format!(
         "offset bits of {} exceeds data type of {} bits",
         offset_bits,
         U::BITS,
@@ -189,7 +189,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     }
   }
 
-  pub(crate) fn parse_from(reader: &mut BitReader, flags: &Flags) -> QCompressResult<Self> {
+  pub(crate) fn parse_from(reader: &mut BitReader, flags: &Flags) -> PcoResult<Self> {
     let (n, compressed_body_size) = if flags.use_wrapped_mode {
       (0, 0)
     } else {
@@ -209,7 +209,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
           inv_base: base.inv(),
         }))
       }
-      value => Err(QCompressError::compatibility(format!(
+      value => Err(PcoError::compatibility(format!(
         "unknown mode value {}",
         value
       ))),

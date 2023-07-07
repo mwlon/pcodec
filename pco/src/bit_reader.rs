@@ -5,7 +5,7 @@ use crate::bit_words::PaddedBytes;
 use crate::bits;
 use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
-use crate::errors::{QCompressError, QCompressResult};
+use crate::errors::{PcoError, PcoResult};
 
 pub trait ReadableUint:
   Add<Output = Self>
@@ -86,12 +86,12 @@ impl<'a> BitReader<'a> {
   // Returns the reader's current byte index. Will return an error if the
   // reader is at
   // a misaligned position.
-  pub fn aligned_byte_idx(&self) -> QCompressResult<usize> {
+  pub fn aligned_byte_idx(&self) -> PcoResult<usize> {
     let (i, j) = self.idxs();
     if j == 0 {
       Ok(i)
     } else {
-      Err(QCompressError::invalid_argument(format!(
+      Err(PcoError::invalid_argument(format!(
         "cannot get aligned byte index on misaligned bit reader at bit {}",
         self.bit_idx
       )))
@@ -113,10 +113,10 @@ impl<'a> BitReader<'a> {
     bits::ceil_div(self.total_bits, 8)
   }
 
-  fn insufficient_data_check(&self, name: &str, n: Bitlen) -> QCompressResult<()> {
+  fn insufficient_data_check(&self, name: &str, n: Bitlen) -> PcoResult<()> {
     let bit_idx = self.bit_idx();
     if bit_idx + n as usize > self.total_bits {
-      Err(QCompressError::insufficient_data_recipe(
+      Err(PcoError::insufficient_data_recipe(
         name,
         n,
         bit_idx,
@@ -130,12 +130,12 @@ impl<'a> BitReader<'a> {
   // Returns the next `n` bytes. Will return an error if
   // there are not enough bytes remaining in the reader or the reader is
   // misaligned.
-  pub fn read_aligned_bytes(&mut self, n: usize) -> QCompressResult<Vec<u8>> {
+  pub fn read_aligned_bytes(&mut self, n: usize) -> PcoResult<Vec<u8>> {
     let byte_idx = self.aligned_byte_idx()?;
     let new_byte_idx = byte_idx + n;
     let byte_size = self.byte_size();
     if new_byte_idx > byte_size {
-      Err(QCompressError::insufficient_data(format!(
+      Err(PcoError::insufficient_data(format!(
         "cannot read {} aligned bytes at byte idx {} out of {}",
         n, byte_idx, byte_size,
       )))
@@ -147,22 +147,22 @@ impl<'a> BitReader<'a> {
 
   // Returns the next bit. Will return an error if we have reached the end
   // of the reader.
-  pub fn read_one(&mut self) -> QCompressResult<bool> {
+  pub fn read_one(&mut self) -> PcoResult<bool> {
     self.insufficient_data_check("read_one", 1)?;
     Ok(self.unchecked_read_one())
   }
 
-  pub fn read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> QCompressResult<U> {
+  pub fn read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> PcoResult<U> {
     self.insufficient_data_check("read_uint", n)?;
 
     Ok(self.unchecked_read_uint::<U>(n))
   }
 
-  pub fn read_usize(&mut self, n: Bitlen) -> QCompressResult<usize> {
+  pub fn read_usize(&mut self, n: Bitlen) -> PcoResult<usize> {
     self.read_uint::<usize>(n)
   }
 
-  pub fn read_bitlen(&mut self, n: Bitlen) -> QCompressResult<Bitlen> {
+  pub fn read_bitlen(&mut self, n: Bitlen) -> PcoResult<Bitlen> {
     self.read_uint::<Bitlen>(n)
   }
 
@@ -175,7 +175,7 @@ impl<'a> BitReader<'a> {
   }
 
   // returns (bits read, idx)
-  pub fn read_small(&mut self, n: Bitlen) -> QCompressResult<usize> {
+  pub fn read_small(&mut self, n: Bitlen) -> PcoResult<usize> {
     self.insufficient_data_check("read_small", n)?;
     Ok(self.unchecked_read_small(n))
   }
@@ -238,11 +238,11 @@ impl<'a> BitReader<'a> {
   // Seek to the end of the byte.
   // Used to skip to the next metadata or body section of the file, since they
   // always start byte-aligned.
-  pub fn drain_empty_byte(&mut self, message: &str) -> QCompressResult<()> {
+  pub fn drain_empty_byte(&mut self, message: &str) -> PcoResult<()> {
     let (i, j) = self.idxs();
     if j != 0 {
       if (self.bytes[i] >> j) > 0 {
-        return Err(QCompressError::corruption(message));
+        return Err(PcoError::corruption(message));
       }
       let new_bit_idx = 8 * bits::ceil_div(self.bit_idx, 8);
       self.bit_idx = new_bit_idx;
@@ -270,12 +270,12 @@ mod tests {
   use crate::bit_words::PaddedBytes;
   use crate::bit_writer::BitWriter;
   use crate::constants::WORD_BITLEN;
-  use crate::errors::QCompressResult;
+  use crate::errors::PcoResult;
 
   use super::BitReader;
 
   #[test]
-  fn test_bit_reader() -> QCompressResult<()> {
+  fn test_bit_reader() -> PcoResult<()> {
     // bits: 1001 1010  1101 0110  1011 0100
     let bytes = vec![0x9a, 0xd6, 0xb4];
     let words = PaddedBytes::from(&bytes);

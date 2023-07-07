@@ -6,13 +6,13 @@ use crate::bit_reader::BitReader;
 use crate::bit_words::PaddedBytes;
 use crate::bit_writer::BitWriter;
 use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
-use crate::errors::{ErrorKind, QCompressError, QCompressResult};
+use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::CompressorConfig;
 
-/// The configuration stored in a Quantile-compressed header.
+/// The configuration stored in a pco header.
 ///
 /// During compression, flags are determined based on your `CompressorConfig`
-/// and the `q_compress` version.
+/// and the `pco` version.
 /// Flags affect the encoding of the rest of the file, so decompressing with
 /// the wrong flags will likely cause a corruption error.
 ///
@@ -30,20 +30,20 @@ pub struct Flags {
   /// Introduced in 0.0.0.
   pub delta_encoding_order: usize,
   /// Whether to release control to a wrapping columnar format.
-  /// This causes q_compress to omit count and compressed size metadata
-  /// and also break each chuk into finer data pages.
+  /// This causes `pco` to omit count and compressed size metadata
+  /// and also break each chunk into finer data pages.
   ///
   /// Introduced in 0.0.0.
   pub use_wrapped_mode: bool,
 }
 
 impl Flags {
-  fn core_parse_from(flags: &mut Flags, reader: &mut BitReader) -> QCompressResult<()> {
+  fn core_parse_from(flags: &mut Flags, reader: &mut BitReader) -> PcoResult<()> {
     flags.delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)?;
     flags.use_wrapped_mode = reader.read_one()?;
 
-    let compat_err = QCompressError::compatibility(
-      "cannot parse flags; likely written by newer version of q_compress",
+    let compat_err = PcoError::compatibility(
+      "cannot parse flags; likely written by newer version of pco",
     );
     reader
       .drain_empty_byte("")
@@ -57,7 +57,7 @@ impl Flags {
     }
   }
 
-  pub(crate) fn parse_from(reader: &mut BitReader) -> QCompressResult<Self> {
+  pub(crate) fn parse_from(reader: &mut BitReader) -> PcoResult<Self> {
     let n_bytes = reader.read_aligned_bytes(1)?[0] as usize;
     let bytes = reader.read_aligned_bytes(n_bytes)?;
     let sub_bit_words = PaddedBytes::from(bytes);
@@ -75,9 +75,9 @@ impl Flags {
     }
   }
 
-  pub(crate) fn write_to(&self, writer: &mut BitWriter) -> QCompressResult<()> {
+  pub(crate) fn write_to(&self, writer: &mut BitWriter) -> PcoResult<()> {
     if self.delta_encoding_order > MAX_DELTA_ENCODING_ORDER {
-      return Err(QCompressError::invalid_argument(format!(
+      return Err(PcoError::invalid_argument(format!(
         "delta encoding order may not exceed {} (was {})",
         MAX_DELTA_ENCODING_ORDER, self.delta_encoding_order,
       )));
@@ -98,7 +98,7 @@ impl Flags {
     let byte_len = writer.byte_size() - pre_byte_size;
 
     if byte_len > u8::MAX as usize {
-      return Err(QCompressError::invalid_argument(
+      return Err(PcoError::invalid_argument(
         "cannot write flags of more than 255 bytes",
       ));
     }
@@ -108,9 +108,9 @@ impl Flags {
     Ok(())
   }
 
-  pub(crate) fn check_mode(&self, expect_wrapped_mode: bool) -> QCompressResult<()> {
+  pub(crate) fn check_mode(&self, expect_wrapped_mode: bool) -> PcoResult<()> {
     if self.use_wrapped_mode != expect_wrapped_mode {
-      Err(QCompressError::invalid_argument(
+      Err(PcoError::invalid_argument(
         "found conflicting standalone/wrapped modes between decompressor and header",
       ))
     } else {
