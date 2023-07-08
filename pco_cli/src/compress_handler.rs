@@ -2,15 +2,14 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::marker::PhantomData;
 use std::path::Path;
-use std::sync::Arc;
 
 use anyhow::Result;
+use arrow::csv;
 use arrow::csv::Reader as CsvReader;
 use arrow::datatypes::{Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
-use parquet::file::reader::SerializedFileReader;
+use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
+use parquet::arrow::ProjectionMask;
 
 use pco::data_types::NumberLike;
 use pco::standalone::Compressor;
@@ -125,10 +124,16 @@ struct ParquetColumnReader<T> {
 
 impl<P: NumberLikeArrow> ColumnReader<P> for ParquetColumnReader<P> {
   fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self> {
-    let reader = SerializedFileReader::new(File::open(path)?)?;
-    let mut arrow_reader = ParquetFileArrowReader::new(Arc::new(reader));
+    let file = File::open(path)?;
+    let batch_reader_builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+    let parquet_schema = parquet::arrow::arrow_to_parquet_schema(schema)?;
     let col_idx = utils::find_col_idx(schema, opt);
-    let batch_reader = arrow_reader.get_record_reader_by_columns(vec![col_idx], opt.chunk_size)?;
+    let batch_reader = batch_reader_builder
+      .with_projection(ProjectionMask::leaves(
+        &parquet_schema,
+        vec![col_idx],
+      ))
+      .build()?;
     Ok(Self {
       batch_reader,
       phantom: PhantomData,
@@ -156,16 +161,11 @@ impl<P: NumberLikeArrow> ColumnReader<P> for CsvColumnReader<P> {
   where
     Self: Sized,
   {
-    let csv_reader = CsvReader::from_reader(
-      File::open(path)?,
-      SchemaRef::new(schema.clone()),
-      opt.csv_has_header()?,
-      Some(opt.delimiter as u8),
-      opt.chunk_size,
-      None,
-      None,
-      Some(opt.timestamp_format.clone()),
-    );
+    let csv_reader = csv::ReaderBuilder::new(SchemaRef::new(schema.clone()))
+      .has_header(opt.csv_has_header()?)
+      .with_batch_size(opt.chunk_size)
+      .with_delimiter(opt.delimiter as u8)
+      .build(File::open(path)?)?;
     let col_idx = utils::find_col_idx(schema, opt);
 
     Ok(Self {

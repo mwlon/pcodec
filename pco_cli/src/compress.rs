@@ -40,7 +40,7 @@ fn infer_csv_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
           ));
         }
         _ => {
-          fields.push(field.clone());
+          fields.push(field.as_ref().clone());
         }
       }
     }
