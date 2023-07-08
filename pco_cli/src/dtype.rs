@@ -8,7 +8,7 @@ use arrow::datatypes::{DataType as ArrowDataType, TimeUnit};
 use pco::data_types::NumberLike;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]
+#[cfg_attr(test, derive(enum_iterator::Sequence))]
 pub enum DType {
   F32,
   F64,
@@ -111,13 +111,13 @@ mod tests {
   use std::str::FromStr;
 
   use anyhow::Result;
-  use enum_iterator::IntoEnumIterator;
+  use enum_iterator::all;
 
   use crate::dtype::DType;
 
   #[test]
   fn test_arrow_dtypes_consistent() -> Result<()> {
-    for dtype in DType::into_enum_iter() {
+    for dtype in all::<DType>() {
       if let Ok(arrow_dtype) = dtype.to_arrow() {
         assert_eq!(DType::from_arrow(&arrow_dtype)?, dtype);
       }
@@ -127,7 +127,7 @@ mod tests {
 
   #[test]
   fn test_dtype_nameable() -> Result<()> {
-    for dtype in DType::into_enum_iter() {
+    for dtype in all::<DType>() {
       let name = format!("{:?}", dtype);
       let recovered = DType::from_str(&name)?;
       assert_eq!(recovered, dtype);

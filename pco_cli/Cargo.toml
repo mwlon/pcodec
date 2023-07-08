@@ -17,10 +17,11 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.53"
-arrow = {version = "9.0.2", features = ["csv"], default-features=false}
-parquet = {version = "9.0.2", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
+arrow = {version = "43.0.0", features = ["csv"], default-features=false}
+num-complex = "0.4.3"
+parquet = {version = "43.0.0", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
 structopt = "0.3.26"
 pco = {version = "0.0.0-alpha.0", path = "../pco" }
 
 [dev-dependencies]
-enum-iterator = "0.7.0"
+enum-iterator = "1.4.1"

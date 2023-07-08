@@ -6,5 +6,4 @@ members = [
   "pco_cli",
   "quantile-compression/ffi",
   "quantile-compression/q_compress",
-  "quantile-compression/q_compress_cli",
 ]
