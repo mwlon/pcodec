@@ -1,16 +1,21 @@
-mod pco;
-
+use std::{fs, mem};
 use std::fmt::{Debug, Display, Formatter};
 use std::io::ErrorKind;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use std::{fs, mem};
 
-use crate::codecs::pco::PcoConfig;
-use crate::opt::HandlerOpt;
-use crate::{BenchStat, NumberLike, Precomputed, BASE_DIR};
 use anyhow::{anyhow, Result};
+
+use q_compress::data_types::TimestampMicros;
+
+use crate::{BASE_DIR, BenchStat, dtype_str, NumberLike, Precomputed};
+use crate::codecs::pco::PcoConfig;
+use crate::num_vec::NumVec;
+use crate::opt::HandlerOpt;
+
+mod pco;
+pub mod utils;
 
 // Unfortunately we can't make a Box<dyn this> because it has generic
 // functions, so we use a wrapping trait (CodecSurface) to manually dynamic
@@ -26,22 +31,36 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
 
   // sad manual dynamic dispatch, but at least we don't need all combinations
   // of (dtype x codec)
-  fn compress_dynamic(&self, dtype: &str, raw_bytes: &[u8]) -> Vec<u8> {
-    unsafe {
-      match dtype {
-        "i64" => self.compress::<i64>(mem::transmute(raw_bytes)),
-        other => panic!("unknown dtype: {}", other),
-      }
+  fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
+    match num_vec {
+      NumVec::I64(nums) => self.compress(nums),
+      NumVec::F64(nums) => self.compress(nums),
+      NumVec::Micros(nums) => self.compress(nums),
     }
   }
 
-  #[allow(clippy::unsound_collection_transmute)]
-  fn decompress_dynamic(&self, dtype: &str, compressed: &[u8]) -> Vec<u8> {
-    unsafe {
-      match dtype {
-        "i64" => mem::transmute(self.decompress::<i64>(compressed)),
-        other => panic!("unknown dtype: {}", other),
-      }
+  fn decompress_dynamic(&self, dtype: &str, compressed: &[u8]) -> NumVec {
+    match dtype {
+      "i64" => NumVec::I64(self.decompress::<i64>(compressed)),
+      "f64" => NumVec::F64(self.decompress::<f64>(compressed)),
+      "micros" => NumVec::Micros(self.decompress::<TimestampMicros>(compressed)),
+      _ => panic!("unknown dtype {}", dtype),
+    }
+  }
+
+  fn compare_nums<T: NumberLike>(&self, recovered: &[T], original: &[T]) {
+    assert_eq!(recovered.len(), original.len());
+    for (i, (x, y)) in recovered.iter().zip(original.iter()).enumerate() {
+      assert_eq!(x, y, "at {}", i);
+    }
+  }
+
+  fn compare_nums_dynamic(&self, recovered: &NumVec, original: &NumVec) {
+    match (recovered, original) {
+      (NumVec::I64(x), NumVec::I64(y)) => self.compare_nums(x, y),
+      (NumVec::F64(x), NumVec::F64(y)) => self.compare_nums(x, y),
+      (NumVec::Micros(x), NumVec::Micros(y)) => self.compare_nums(x, y),
+      _ => panic!("should be unreachable"),
     }
   }
 }
@@ -53,15 +72,10 @@ pub trait CodecSurface: Debug + Send + Sync {
   fn set_conf(&mut self, key: &str, value: String) -> Result<()>;
   fn details(&self, confs: &[String]) -> String;
 
-  fn warmup_iter(&self, path: &Path, dataset: &str, fname: &str, opt: &HandlerOpt) -> Precomputed;
-
-  fn stats_iter(&self, dataset: &str, precomputed: &Precomputed, opt: &HandlerOpt) -> BenchStat;
+  fn warmup_iter(&self, num_vec: &NumVec, dataset: &str, fname: &str, opt: &HandlerOpt) -> Precomputed;
+  fn stats_iter(&self, nums: &NumVec, precomputed: &Precomputed, opt: &HandlerOpt) -> BenchStat;
 
   fn clone_to_box(&self) -> Box<dyn CodecSurface>;
-}
-
-fn dtype_str(dataset: &str) -> &str {
-  dataset.split('_').next().unwrap()
 }
 
 impl<C: CodecInternal> CodecSurface for C {
@@ -89,13 +103,11 @@ impl<C: CodecInternal> CodecSurface for C {
     res
   }
 
-  fn warmup_iter(&self, path: &Path, dataset: &str, fname: &str, opt: &HandlerOpt) -> Precomputed {
-    // read in data
-    let raw_bytes = fs::read(path).expect("could not read");
+  fn warmup_iter(&self, nums: &NumVec, dataset: &str, fname: &str, opt: &HandlerOpt) -> Precomputed {
+    let dtype = dtype_str(&dataset);
 
     // compress
-    let dtype = dtype_str(dataset);
-    let compressed = self.compress_dynamic(dtype, &raw_bytes);
+    let compressed = self.compress_dynamic(nums);
     println!(
       "\nwarmup for {}: compressed to {} bytes",
       dataset,
@@ -116,26 +128,23 @@ impl<C: CodecInternal> CodecSurface for C {
     fs::write(output_path, &compressed).expect("couldn't write");
 
     // decompress
-    let rec_raw_bytes = self.decompress_dynamic(dtype, &compressed);
+    let rec_nums = self.decompress_dynamic(dtype, &compressed);
 
-    // TODO make this more informative
     if !opt.no_assertions {
-      assert_eq!(rec_raw_bytes, raw_bytes);
+      self.compare_nums_dynamic(&rec_nums, &nums);
     }
 
     Precomputed {
-      raw_bytes,
       compressed,
+      dtype: dtype.to_string(),
     }
   }
 
-  fn stats_iter(&self, dataset: &str, precomputed: &Precomputed, opt: &HandlerOpt) -> BenchStat {
-    let dtype = dtype_str(dataset);
-
+  fn stats_iter(&self, nums: &NumVec, precomputed: &Precomputed, opt: &HandlerOpt) -> BenchStat {
     // compress
     let compress_dt = if !opt.no_compress {
       let t = Instant::now();
-      let _ = self.compress_dynamic(dtype, &precomputed.raw_bytes);
+      let _ = self.compress_dynamic(nums);
       let dt = Instant::now() - t;
       println!("\tcompressed in {:?}", dt);
       dt
@@ -146,7 +155,7 @@ impl<C: CodecInternal> CodecSurface for C {
     // decompress
     let decompress_dt = if !opt.no_decompress {
       let t = Instant::now();
-      let _ = self.decompress_dynamic(dtype, &precomputed.compressed);
+      let _ = self.decompress_dynamic(&precomputed.dtype, &precomputed.compressed);
       let dt = Instant::now() - t;
       println!("\tdecompressed in {:?}", dt);
       dt

@@ -2,6 +2,7 @@
 
 mod codecs;
 mod opt;
+pub mod num_vec;
 
 use std::fs;
 
@@ -17,11 +18,17 @@ use crate::codecs::CodecConfig;
 use opt::Opt;
 use pco::data_types::NumberLike as PNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
+use crate::num_vec::NumVec;
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
 
-trait NumberLike: QNumberLike {
+fn dtype_str(dataset: &str) -> &str {
+  dataset.split('_').next().unwrap()
+}
+
+
+pub trait NumberLike: QNumberLike {
   type Pco: PNumberLike;
 
   fn slice_to_pco(slice: &[Self]) -> &[Self::Pco];
@@ -113,8 +120,8 @@ fn basename_no_ext(path: &Path) -> String {
 }
 
 pub struct Precomputed {
-  raw_bytes: Vec<u8>,
   compressed: Vec<u8>,
+  dtype: String,
 }
 
 // fn compress_pco<T: DNumberLike>(nums: &[T], config: pco::CompressorConfig) -> Vec<u8> {
@@ -185,21 +192,25 @@ pub struct Precomputed {
 //   (Instant::now() - t, rec_nums)
 // }
 
-fn handle<T: NumberLike>(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
+fn handle(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   let dataset = basename_no_ext(path);
+  let dtype = dtype_str(&dataset);
+
 
   let mut fname = dataset.to_string();
   fname.push('_');
   fname.push_str(&config.details());
+  let raw_bytes = fs::read(path).expect("could not read");
+  let num_vec = NumVec::new(dtype, raw_bytes);
   let precomputed = config
     .inner
-    .warmup_iter(path, &dataset, &fname, &opt.handler_opt);
+    .warmup_iter(&num_vec, &dataset, &fname, &opt.handler_opt);
   let mut benches = Vec::with_capacity(opt.iters);
   for _ in 0..opt.iters {
     benches.push(
       config
         .inner
-        .stats_iter(&dataset, &precomputed, &opt.handler_opt),
+        .stats_iter(&num_vec, &precomputed, &opt.handler_opt),
     );
   }
   PrintStat::compute(dataset, config.to_string(), &benches)
@@ -243,21 +254,7 @@ fn main() {
     }
 
     for config in &opt.codecs {
-      let stat = if path_str.contains("i64") || path_str.contains("micros") {
-        handle::<i64>(&path, config, &opt)
-      } else if path_str.contains("f64") {
-        handle::<f64>(&path, config, &opt)
-      } else if path_str.contains("f32") {
-        handle::<f32>(&path, config, &opt)
-      } else if path_str.contains("micros") {
-        handle::<TimestampMicros>(&path, config, &opt)
-      } else {
-        panic!(
-          "Could not determine dtype for file {}!",
-          path_str
-        );
-      };
-      stats.push(stat);
+      stats.push(handle(&path, config, &opt));
     }
   }
 
