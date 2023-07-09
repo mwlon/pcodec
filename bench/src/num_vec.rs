@@ -1,6 +1,5 @@
-use std::mem::transmute_copy;
-use q_compress::data_types::TimestampMicros;
 use crate::NumberLike;
+use q_compress::data_types::TimestampMicros;
 
 pub enum NumVec {
   I64(Vec<i64>),
@@ -11,11 +10,10 @@ pub enum NumVec {
 // very cursed!
 fn byte_vec_to_nums<T: NumberLike>(raw_bytes: Vec<u8>) -> Vec<T> {
   let bytes_per_num = T::PHYSICAL_BITS / 8;
-  unsafe {
-    let mut v: Vec<T> = transmute_copy(&raw_bytes);
-    v.set_len(raw_bytes.len() / bytes_per_num);
-    v
-  }
+  raw_bytes
+    .chunks_exact(bytes_per_num)
+    .map(|chunk| T::from_bytes(chunk).unwrap())
+    .collect::<Vec<_>>()
 }
 
 impl NumVec {

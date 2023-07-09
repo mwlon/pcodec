@@ -1,8 +1,8 @@
 #![allow(clippy::useless_transmute)]
 
 mod codecs;
-mod opt;
 pub mod num_vec;
+mod opt;
 
 use std::fs;
 
@@ -15,10 +15,10 @@ use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
 use crate::codecs::CodecConfig;
+use crate::num_vec::NumVec;
 use opt::Opt;
 use pco::data_types::NumberLike as PNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
-use crate::num_vec::NumVec;
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
@@ -26,7 +26,6 @@ const BASE_DIR: &str = "bench/data";
 fn dtype_str(dataset: &str) -> &str {
   dataset.split('_').next().unwrap()
 }
-
 
 pub trait NumberLike: QNumberLike {
   type Pco: PNumberLike;
@@ -195,7 +194,6 @@ pub struct Precomputed {
 fn handle(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   let dataset = basename_no_ext(path);
   let dtype = dtype_str(&dataset);
-
 
   let mut fname = dataset.to_string();
   fname.push('_');

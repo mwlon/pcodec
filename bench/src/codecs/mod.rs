@@ -1,7 +1,7 @@
-use std::{fs, mem};
 use std::fmt::{Debug, Display, Formatter};
+use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -9,10 +9,10 @@ use anyhow::{anyhow, Result};
 
 use q_compress::data_types::TimestampMicros;
 
-use crate::{BASE_DIR, BenchStat, dtype_str, NumberLike, Precomputed};
 use crate::codecs::pco::PcoConfig;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
+use crate::{dtype_str, BenchStat, NumberLike, Precomputed, BASE_DIR};
 
 mod pco;
 pub mod utils;
@@ -72,7 +72,13 @@ pub trait CodecSurface: Debug + Send + Sync {
   fn set_conf(&mut self, key: &str, value: String) -> Result<()>;
   fn details(&self, confs: &[String]) -> String;
 
-  fn warmup_iter(&self, num_vec: &NumVec, dataset: &str, fname: &str, opt: &HandlerOpt) -> Precomputed;
+  fn warmup_iter(
+    &self,
+    num_vec: &NumVec,
+    dataset: &str,
+    fname: &str,
+    opt: &HandlerOpt,
+  ) -> Precomputed;
   fn stats_iter(&self, nums: &NumVec, precomputed: &Precomputed, opt: &HandlerOpt) -> BenchStat;
 
   fn clone_to_box(&self) -> Box<dyn CodecSurface>;
@@ -103,7 +109,13 @@ impl<C: CodecInternal> CodecSurface for C {
     res
   }
 
-  fn warmup_iter(&self, nums: &NumVec, dataset: &str, fname: &str, opt: &HandlerOpt) -> Precomputed {
+  fn warmup_iter(
+    &self,
+    nums: &NumVec,
+    dataset: &str,
+    fname: &str,
+    opt: &HandlerOpt,
+  ) -> Precomputed {
     let dtype = dtype_str(&dataset);
 
     // compress
