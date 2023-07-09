@@ -16,7 +16,7 @@ name = "pcodec"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.53"
+anyhow = "1.0.71"
 arrow = {version = "43.0.0", features = ["csv"], default-features=false}
 clap = {version = "4.3.11", features = ["derive"]}
 num-complex = "0.4.3"

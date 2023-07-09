@@ -9,6 +9,7 @@ name = "bench"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0.71"
 clap = {version = "4.3.11", features = ["derive"]}
 pco = {path = "../pco" }
 q_compress = {path = "../quantile-compression/q_compress" }

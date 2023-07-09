@@ -1,11 +1,11 @@
 #![allow(clippy::useless_transmute)]
 
 mod opt;
-mod codec_config;
+mod codecs;
 
 use std::fs;
 use std::io::ErrorKind;
-use std::ops::AddAssign;
+use std::ops::{AddAssign, Div};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -15,16 +15,16 @@ use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
 use opt::Opt;
-use codec_config::CodecConfig;
-use pco::data_types::NumberLike as DNumberLike;
+use pco::data_types::NumberLike as PNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
+use crate::codecs::CodecConfig;
 use crate::opt::AUTO_DELTA;
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
 
 trait NumberLike: QNumberLike {
-  type Pco: DNumberLike;
+  type Pco: PNumberLike;
 
   fn slice_to_pco(slice: &[Self]) -> &[Self::Pco];
   fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self>;
@@ -53,49 +53,45 @@ impl_pco_number_like!(TimestampMicros, i64);
 
 #[derive(Clone, Default)]
 struct BenchStat {
-  pub dataset: String,
-  pub codec: String,
   pub compress_dt: Duration,
   pub decompress_dt: Duration,
   pub compressed_size: usize,
-  pub iters: usize,
 }
 
-#[derive(Tabled)]
+fn median_duration(mut durations: Vec<Duration>) -> Duration {
+  durations.sort_unstable();
+  let lo = durations[durations.len() / 2];
+  let hi = durations[(durations.len() + 1) / 2];
+  (lo + hi) / 2
+}
+
+fn display_duration(duration: &Duration) -> String {
+  format!("{:?}", duration)
+}
+
+#[derive(Tabled, Default)]
 struct PrintStat {
   pub dataset: String,
   pub codec: String,
-  pub compress_dt: String,
-  pub decompress_dt: String,
+  #[tabled(display_with = "display_duration")]
+  pub compress_dt: Duration,
+  #[tabled(display_with = "display_duration")]
+  pub decompress_dt: Duration,
   pub compressed_size: usize,
 }
 
-impl AddAssign for BenchStat {
-  fn add_assign(&mut self, rhs: Self) {
-    self.compressed_size += rhs.compressed_size;
-    self.compress_dt += rhs.compress_dt;
-    self.decompress_dt += rhs.decompress_dt;
-    self.iters += rhs.iters;
-  }
-}
+impl PrintStat {
+  fn compute(dataset: String, codec: String, benches: &[BenchStat]) -> Self {
+    let compressed_size = benches[0].compressed_size;
+    let compress_dts = benches.iter().map(|bench| bench.compress_dt).collect::<Vec<_>>();
+    let decompress_dts = benches.iter().map(|bench| bench.decompress_dt).collect::<Vec<_>>();
 
-impl BenchStat {
-  fn normalize(&mut self) {
-    self.compressed_size /= self.iters;
-    self.compress_dt /= self.iters as u32;
-    self.decompress_dt /= self.iters as u32;
-    self.iters = 1;
-  }
-}
-
-impl From<BenchStat> for PrintStat {
-  fn from(value: BenchStat) -> Self {
     PrintStat {
-      dataset: value.dataset,
-      codec: value.codec,
-      compressed_size: value.compressed_size,
-      compress_dt: format!("{:?}", value.compress_dt),
-      decompress_dt: format!("{:?}", value.decompress_dt),
+      dataset,
+      codec,
+      compressed_size,
+      compress_dt: median_duration(compress_dts),
+      decompress_dt: median_duration(decompress_dts),
     }
   }
 }
@@ -112,231 +108,118 @@ fn basename_no_ext(path: &Path) -> String {
   }
 }
 
-struct Precomputed<T: NumberLike> {
+struct Precomputed {
   raw_bytes: Vec<u8>,
-  nums: Vec<T>,
   compressed: Vec<u8>,
-  codec: String,
 }
 
-fn cast_to_nums<T: NumberLike>(bytes: Vec<u8>) -> Vec<T> {
+fn cast_to_nums<T: NumberLike>(bytes: &[u8]) -> &[T] {
   // Here we're assuming the bytes are in the right format for our data type.
   // For instance, chunks of 8 little-endian bytes on most platforms for
   // i64's.
   // This is fast and should work across platforms.
-  let n = bytes.len() / (T::PHYSICAL_BITS / 8);
-  unsafe {
-    let mut nums = std::mem::transmute::<_, Vec<T>>(bytes);
-    nums.set_len(n);
-    nums
-  }
+  unsafe { std::mem::transmute(bytes) }
 }
 
-fn compress_pco<T: DNumberLike>(nums: &[T], config: pco::CompressorConfig) -> Vec<u8> {
-  pco::standalone::simple_compress(config, nums)
+fn cast_to_bytes<T: NumberLike>(nums: &[T]) -> &[u8] {
+  // Here we're assuming the bytes are in the right format for our data type.
+  // For instance, chunks of 8 little-endian bytes on most platforms for
+  // i64's.
+  // This is fast and should work across platforms.
+  unsafe { std::mem::transmute(nums) }
 }
 
-fn decompress_pco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
-  let v = pco::standalone::auto_decompress::<T::Pco>(bytes).expect("could not decompress");
-  T::vec_from_pco(v)
-}
+// fn compress_pco<T: DNumberLike>(nums: &[T], config: pco::CompressorConfig) -> Vec<u8> {
+//   pco::standalone::simple_compress(config, nums)
+// }
+//
+// fn compress_qco<T: NumberLike>(nums: &[T], config: q_compress::CompressorConfig) -> Vec<u8> {
+//   q_compress::Compressor::<T>::from_config(config).simple_compress(nums)
+// }
+//
+// fn decompress_qco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
+//   q_compress::auto_decompress(bytes).expect("could not decompress")
+// }
+//
+// fn compress<T: NumberLike>(
+//   nums: &[T],
+//   config: &CodecConfig,
+// ) -> (Duration, Vec<u8>) {
+//   let t = Instant::now();
+//   let compressed = config.inner.compress(nums);
+//   // let compressed = match &mut qualified_config {
+//   //   CodecConfig::Pco(pco_conf) => {
+//   //     let mut conf = pco_conf.clone();
+//   //     let pco_nums = T::slice_to_pco(nums);
+//   //     if conf.delta_encoding_order == AUTO_DELTA {
+//   //       conf.delta_encoding_order =
+//   //         pco::auto_compressor_config(pco_nums, conf.compression_level).delta_encoding_order;
+//   //     }
+//   //     *pco_conf = conf.clone();
+//   //     compress_pco(pco_nums, conf)
+//   //   }
+//   //   CodecConfig::QCompress(qco_conf) => {
+//   //     let mut conf = qco_conf.clone();
+//   //     if conf.delta_encoding_order == AUTO_DELTA {
+//   //       conf.delta_encoding_order =
+//   //         q_compress::auto_compressor_config(nums, conf.compression_level).delta_encoding_order;
+//   //     }
+//   //     *qco_conf = conf.clone();
+//   //     compress_qco(nums, conf)
+//   //   }
+//   //   CodecConfig::ZStd(level) => {
+//   //     let level = *level as i32;
+//   //     zstd::encode_all(raw_bytes, level).unwrap()
+//   //   }
+//   // };
+//   (
+//     Instant::now() - t,
+//     compressed,
+//   )
+// }
 
-fn compress_qco<T: NumberLike>(nums: &[T], config: q_compress::CompressorConfig) -> Vec<u8> {
-  q_compress::Compressor::<T>::from_config(config).simple_compress(nums)
-}
+// fn decompress<T: NumberLike>(
+//   compressed: &[u8],
+//   config: &CodecConfig,
+// ) -> (Duration, Vec<T>) {
+//   let t = Instant::now();
+//   let rec_nums = config.inner.decompress(compressed);
+//   // let rec_nums = match config {
+//   //   CodecConfig::Pco(_) => decompress_pco(compressed),
+//   //   CodecConfig::QCompress(_) => decompress_qco(compressed),
+//   //   CodecConfig::ZStd(_) => {
+//   //     // to do justice to zstd, unsafely convert the bytes it writes into T
+//   //     // without copying
+//   //     let decoded_bytes = zstd::decode_all(compressed).unwrap();
+//   //     cast_to_nums(decoded_bytes)
+//   //   }
+//   // };
+//   (Instant::now() - t, rec_nums)
+// }
 
-fn decompress_qco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
-  q_compress::auto_decompress(bytes).expect("could not decompress")
-}
-
-fn compress<T: NumberLike>(
-  raw_bytes: &[u8],
-  nums: &[T],
-  config: &CodecConfig,
-) -> (Duration, CodecConfig, Vec<u8>) {
-  let t = Instant::now();
-  let mut qualified_config = config.clone();
-  let compressed = match &mut qualified_config {
-    CodecConfig::Pco(pco_conf) => {
-      let mut conf = pco_conf.clone();
-      let pco_nums = T::slice_to_pco(nums);
-      if conf.delta_encoding_order == AUTO_DELTA {
-        conf.delta_encoding_order =
-          pco::auto_compressor_config(pco_nums, conf.compression_level).delta_encoding_order;
-      }
-      *pco_conf = conf.clone();
-      compress_pco(pco_nums, conf)
-    }
-    CodecConfig::QCompress(qco_conf) => {
-      let mut conf = qco_conf.clone();
-      if conf.delta_encoding_order == AUTO_DELTA {
-        conf.delta_encoding_order =
-          q_compress::auto_compressor_config(nums, conf.compression_level).delta_encoding_order;
-      }
-      *qco_conf = conf.clone();
-      compress_qco(nums, conf)
-    }
-    CodecConfig::ZStd(level) => {
-      let level = *level as i32;
-      zstd::encode_all(raw_bytes, level).unwrap()
-    }
-  };
-  (
-    Instant::now() - t,
-    qualified_config,
-    compressed,
-  )
-}
-
-fn decompress<T: NumberLike>(
-  compressed: &[u8],
-  config: &CodecConfig,
-) -> (Duration, Vec<T>) {
-  let t = Instant::now();
-  let rec_nums = match config {
-    CodecConfig::Pco(_) => decompress_pco(compressed),
-    CodecConfig::QCompress(_) => decompress_qco(compressed),
-    CodecConfig::ZStd(_) => {
-      // to do justice to zstd, unsafely convert the bytes it writes into T
-      // without copying
-      let decoded_bytes = zstd::decode_all(compressed).unwrap();
-      cast_to_nums(decoded_bytes)
-    }
-  };
-  (Instant::now() - t, rec_nums)
-}
-
-fn warmup_iter<T: NumberLike>(
-  path: &Path,
-  dataset: &str,
-  config: &CodecConfig,
-  opt: &Opt,
-) -> Precomputed<T> {
-  // read in data
-  let raw_bytes = fs::read(path).expect("could not read");
-  let nums = cast_to_nums(raw_bytes.clone());
-
-  // compress
-  let (_, qualified_config, compressed) = compress(&raw_bytes, &nums, config);
-  println!(
-    "\ndataset warmup: {} config: {:?}",
-    dataset, qualified_config
-  );
-  println!("\tcompressed to {} bytes", compressed.len());
-
-  // write to disk
-  let mut fname = dataset.to_string();
-  fname.push('_');
-  fname.push_str(&qualified_config.details());
-  let output_dir = format!("{}/{}", BASE_DIR, config.codec());
-  let output_path = format!("{}/{}.qco", output_dir, fname);
-
-  match fs::create_dir(&output_dir) {
-    Ok(()) => (),
-    Err(e) => match e.kind() {
-      ErrorKind::AlreadyExists => (),
-      _ => panic!("{}", e),
-    },
-  }
-  fs::write(output_path, &compressed).expect("couldn't write");
-
-  // decompress
-  let (_, rec_nums) = decompress::<T>(&compressed, config);
-
-  if !opt.no_assertions {
-    // make sure everything came back correct
-    if rec_nums.len() != nums.len() {
-      println!(
-        "original len: {} recovered len: {}",
-        nums.len(),
-        rec_nums.len()
-      );
-      panic!("got back the wrong number of numbers!");
-    }
-    for i in 0..rec_nums.len() {
-      if !rec_nums[i].num_eq(&nums[i]) {
-        println!("{} num {} -> {}", i, nums[i], rec_nums[i]);
-        panic!("failed to recover nums by compressing and decompressing!");
-      }
-    }
-  }
-
-  Precomputed {
-    raw_bytes,
-    nums,
-    compressed,
-    codec: qualified_config.to_string(),
-  }
-}
-
-fn stats_iter<T: NumberLike>(
-  dataset: String,
-  config: &CodecConfig,
-  precomputed: &Precomputed<T>,
-  opt: &Opt,
-) -> BenchStat {
-  // compress
-  let compress_dt = if !opt.no_compress {
-    let (dt, _, _) = compress(
-      &precomputed.raw_bytes,
-      &precomputed.nums,
-      config,
-    );
-    println!("\tcompressed in {:?}", dt);
-    dt
-  } else {
-    Duration::ZERO
-  };
-
-  // decompress
-  let decompress_dt = if !opt.no_decompress {
-    let (dt, _) = decompress::<T>(&precomputed.compressed, config);
-    println!("\tdecompressed in {:?}", dt);
-    dt
-  } else {
-    Duration::ZERO
-  };
-
-  BenchStat {
-    dataset,
-    codec: precomputed.codec.clone(),
-    compressed_size: precomputed.compressed.len(),
-    compress_dt,
-    decompress_dt,
-    iters: 1,
-  }
-}
-
-fn handle<T: NumberLike>(path: &Path, config: &CodecConfig, opt: &Opt) -> BenchStat {
+fn handle<T: NumberLike>(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   let dataset = basename_no_ext(path);
 
-  let precomputed = warmup_iter::<T>(path, &dataset, config, opt);
-  let mut full_stat = BenchStat {
-    codec: config.codec().to_string(),
-    dataset: dataset.clone(),
-    ..Default::default()
-  };
+  let mut fname = dataset.to_string();
+  fname.push('_');
+  fname.push_str(&config.details());
+  let precomputed = config.inner.warmup_iter(path, &dataset, &fname, &opt.handler_opt);
+  let mut benches = Vec::with_capacity(opt.iters);
   for _ in 0..opt.iters {
-    let iter_stat = stats_iter::<T>(dataset.clone(), config, &precomputed, opt);
-    full_stat.codec = iter_stat.codec.clone(); // sometimes we get a more precise codec name
-    full_stat += iter_stat;
+    benches.push(config.inner.stats_iter(&dataset, &precomputed, &opt.handler_opt));
   }
-  full_stat.normalize();
-  full_stat
+  PrintStat::compute(dataset, config.to_string(), &benches)
 }
 
-fn print_stats(stats: &[BenchStat]) {
-  let mut print_stats = stats
-    .iter()
-    .cloned()
-    .map(PrintStat::from)
-    .collect::<Vec<_>>();
-  let mut aggregate = BenchStat::default();
-  for stat in stats {
-    aggregate += stat.clone();
+fn print_stats(mut stats: Vec<PrintStat>) {
+  let mut aggregate = PrintStat::default();
+  for stat in &stats {
+    aggregate.compressed_size += stat.compressed_size;
+    aggregate.compress_dt += stat.compress_dt;
+    aggregate.decompress_dt += stat.decompress_dt;
   }
-  print_stats.push(PrintStat::from(aggregate));
-  let table = Table::new(print_stats)
+  stats.push(aggregate);
+  let table = Table::new(stats)
     .with(Style::rounded())
     .with(Modify::new(Columns::new(2..)).with(Alignment::right()))
     .to_string();
@@ -382,5 +265,5 @@ fn main() {
     }
   }
 
-  print_stats(&stats);
+  print_stats(stats);
 }
