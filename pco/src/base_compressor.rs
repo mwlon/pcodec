@@ -82,7 +82,7 @@ pub struct CompressorConfig {
   /// floats are approximately decimals (multiples of 0.01).
   ///
   /// When this is helpful, compression and decompression speeds are
-  /// substantially reduced (up to ~100%). In rare cases, this configuration
+  /// substantially reduced (up to ~50%). In rare cases, this configuration
   /// may reduce compression speed somewhat even when it isn't helpful.
   /// However, the compression ratio improvements tend to be quite large.
   pub use_float_mult: bool,

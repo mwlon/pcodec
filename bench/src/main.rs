@@ -51,7 +51,6 @@ macro_rules! impl_pco_number_like {
 }
 
 impl_pco_number_like!(i64, i64);
-impl_pco_number_like!(f32, f32);
 impl_pco_number_like!(f64, f64);
 impl_pco_number_like!(TimestampMicros, i64);
 
@@ -122,43 +121,6 @@ pub struct Precomputed {
   compressed: Vec<u8>,
   dtype: String,
 }
-
-// fn compress<T: NumberLike>(
-//   nums: &[T],
-//   config: &CodecConfig,
-// ) -> (Duration, Vec<u8>) {
-//   let t = Instant::now();
-//   let compressed = config.inner.compress(nums);
-//   // let compressed = match &mut qualified_config {
-//   //   CodecConfig::ZStd(level) => {
-//   //     let level = *level as i32;
-//   //     zstd::encode_all(raw_bytes, level).unwrap()
-//   //   }
-//   // };
-//   (
-//     Instant::now() - t,
-//     compressed,
-//   )
-// }
-
-// fn decompress<T: NumberLike>(
-//   compressed: &[u8],
-//   config: &CodecConfig,
-// ) -> (Duration, Vec<T>) {
-//   let t = Instant::now();
-//   let rec_nums = config.inner.decompress(compressed);
-//   // let rec_nums = match config {
-//   //   CodecConfig::Pco(_) => decompress_pco(compressed),
-//   //   CodecConfig::QCompress(_) => decompress_qco(compressed),
-//   //   CodecConfig::ZStd(_) => {
-//   //     // to do justice to zstd, unsafely convert the bytes it writes into T
-//   //     // without copying
-//   //     let decoded_bytes = zstd::decode_all(compressed).unwrap();
-//   //     cast_to_nums(decoded_bytes)
-//   //   }
-//   // };
-//   (Instant::now() - t, rec_nums)
-// }
 
 fn handle(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   let dataset = basename_no_ext(path);

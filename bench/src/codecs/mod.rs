@@ -1,7 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
 use std::io::ErrorKind;
-
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -9,12 +8,12 @@ use anyhow::{anyhow, Result};
 
 use q_compress::data_types::TimestampMicros;
 
+use crate::{BASE_DIR, BenchStat, dtype_str, NumberLike, Precomputed};
 use crate::codecs::pco::PcoConfig;
 use crate::codecs::qco::QcoConfig;
 use crate::codecs::zstd::ZstdConfig;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
-use crate::{dtype_str, BenchStat, NumberLike, Precomputed, BASE_DIR};
 
 mod pco;
 mod qco;
