@@ -4,10 +4,10 @@ mod opt;
 mod codecs;
 
 use std::fs;
-use std::io::ErrorKind;
-use std::ops::{AddAssign, Div};
+
+
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 
 use clap::Parser;
 use tabled::settings::object::Columns;
@@ -18,7 +18,7 @@ use opt::Opt;
 use pco::data_types::NumberLike as PNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
 use crate::codecs::CodecConfig;
-use crate::opt::AUTO_DELTA;
+
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
@@ -52,7 +52,7 @@ impl_pco_number_like!(f64, f64);
 impl_pco_number_like!(TimestampMicros, i64);
 
 #[derive(Clone, Default)]
-struct BenchStat {
+pub struct BenchStat {
   pub compress_dt: Duration,
   pub decompress_dt: Duration,
   pub compressed_size: usize,
@@ -108,25 +108,9 @@ fn basename_no_ext(path: &Path) -> String {
   }
 }
 
-struct Precomputed {
+pub struct Precomputed {
   raw_bytes: Vec<u8>,
   compressed: Vec<u8>,
-}
-
-fn cast_to_nums<T: NumberLike>(bytes: &[u8]) -> &[T] {
-  // Here we're assuming the bytes are in the right format for our data type.
-  // For instance, chunks of 8 little-endian bytes on most platforms for
-  // i64's.
-  // This is fast and should work across platforms.
-  unsafe { std::mem::transmute(bytes) }
-}
-
-fn cast_to_bytes<T: NumberLike>(nums: &[T]) -> &[u8] {
-  // Here we're assuming the bytes are in the right format for our data type.
-  // For instance, chunks of 8 little-endian bytes on most platforms for
-  // i64's.
-  // This is fast and should work across platforms.
-  unsafe { std::mem::transmute(nums) }
 }
 
 // fn compress_pco<T: DNumberLike>(nums: &[T], config: pco::CompressorConfig) -> Vec<u8> {

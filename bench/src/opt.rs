@@ -1,10 +1,8 @@
 use std::str::FromStr;
 
-use anyhow::{anyhow, Result};
 use clap::{Args, Parser};
-use crate::codecs::CodecConfig;
 
-pub const AUTO_DELTA: usize = usize::MAX;
+use crate::codecs::CodecConfig;
 
 #[derive(Parser)]
 pub struct Opt {

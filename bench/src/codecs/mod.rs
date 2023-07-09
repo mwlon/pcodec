@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use crate::codecs::pco::PcoConfig;
-use crate::{BASE_DIR, BenchStat, cast_to_nums, NumberLike, Precomputed};
+use crate::{BASE_DIR, BenchStat, NumberLike, Precomputed};
 use crate::opt::HandlerOpt;
 
 // Unfortunately we can't make a Box<dyn this> because it has generic
@@ -35,6 +35,7 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
     }
   }
 
+  #[allow(clippy::unsound_collection_transmute)]
   fn decompress_dynamic(&self, dtype: &str, compressed: &[u8]) -> Vec<u8> {
     unsafe {
       match dtype {
@@ -144,7 +145,7 @@ impl<C: CodecInternal> CodecSurface for C {
   }
 
   fn stats_iter(&self, dataset: &str, precomputed: &Precomputed, opt: &HandlerOpt) -> BenchStat {
-    let dtype = dtype_str(&dataset);
+    let dtype = dtype_str(dataset);
 
     // compress
     let compress_dt = if !opt.no_compress {
@@ -205,7 +206,7 @@ impl FromStr for CodecConfig {
     }
 
     let mut codec: Box<dyn CodecSurface> = match name {
-      "p" | "pco" | "pcodec" => Box::new(PcoConfig::default()),
+      "p" | "pco" | "pcodec" => Box::<PcoConfig>::default(),
       // "q" | "qco" | "q_compress" => Box::new(QcoConfig::default()),
       // "zstd" => Box::new(ZstdConfig::default()),
       _ => return Err(anyhow!("unknown codec: {}", name)),
@@ -214,7 +215,7 @@ impl FromStr for CodecConfig {
     for (k, v) in &confs {
       codec.set_conf(k, v.to_string())?;
     }
-    let mut confs = confs.into_iter().map(|(k, v)| k).collect::<Vec<_>>();
+    let mut confs = confs.into_iter().map(|(k, _v)| k).collect::<Vec<_>>();
     confs.sort_unstable();
 
     Ok(Self {

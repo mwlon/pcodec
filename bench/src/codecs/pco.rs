@@ -30,7 +30,7 @@ impl CodecInternal for PcoConfig {
   }
 
   fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
-    Ok(match key {
+    match key {
       "level" => self.compressor_config.compression_level = value.parse::<usize>().unwrap(),
       "delta_order" => {
         if let Ok(order) = value.parse::<usize>() {
@@ -45,7 +45,8 @@ impl CodecInternal for PcoConfig {
       _ => {
         return Err(anyhow!("unknown conf: {}", key))
       },
-    })
+    }
+    Ok(())
   }
 
   fn compress<T: NumberLike>(&self, nums: &[T]) -> Vec<u8> {
