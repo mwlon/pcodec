@@ -1,6 +1,8 @@
 #![allow(clippy::useless_transmute)]
 
-use std::fmt::{Display, Formatter};
+mod opt;
+mod codec_config;
+
 use std::fs;
 use std::io::ErrorKind;
 use std::ops::AddAssign;
@@ -12,28 +14,14 @@ use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
+use opt::Opt;
+use codec_config::CodecConfig;
 use pco::data_types::NumberLike as DNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
+use crate::opt::AUTO_DELTA;
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
-const AUTO_DELTA: usize = usize::MAX;
-
-#[derive(Parser)]
-struct Opt {
-  #[arg(long, short, default_value = "all")]
-  datasets: String,
-  #[arg(long, short, default_value = "10")]
-  pub iters: usize,
-  #[arg(long, short, default_value = "pco")]
-  compressors: String,
-  #[arg(long)]
-  pub no_compress: bool,
-  #[arg(long)]
-  pub no_decompress: bool,
-  #[arg(long)]
-  pub no_assertions: bool,
-}
 
 trait NumberLike: QNumberLike {
   type Pco: DNumberLike;
@@ -62,99 +50,6 @@ impl_pco_number_like!(i64, i64);
 impl_pco_number_like!(f32, f32);
 impl_pco_number_like!(f64, f64);
 impl_pco_number_like!(TimestampMicros, i64);
-
-#[derive(Clone, Debug)]
-enum MultiCompressorConfig {
-  Pco(pco::CompressorConfig),
-  QCompress(q_compress::CompressorConfig),
-  ZStd(usize),
-}
-
-impl MultiCompressorConfig {
-  pub fn codec(&self) -> &'static str {
-    match self {
-      MultiCompressorConfig::Pco(_) => "pco",
-      MultiCompressorConfig::QCompress(_) => "qco",
-      MultiCompressorConfig::ZStd(_) => "zstd",
-    }
-  }
-
-  pub fn details(&self) -> String {
-    match self {
-      MultiCompressorConfig::Pco(config) => {
-        format!(
-          "{}:{}:{}",
-          config.compression_level, config.delta_encoding_order, config.use_gcds
-        )
-      }
-      MultiCompressorConfig::QCompress(config) => {
-        format!(
-          "{}:{}:{}",
-          config.compression_level, config.delta_encoding_order, config.use_gcds
-        )
-      }
-      MultiCompressorConfig::ZStd(level) => {
-        format!("{}", level,)
-      }
-    }
-  }
-}
-
-impl Display for MultiCompressorConfig {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}:{}", self.codec(), self.details(),)
-  }
-}
-
-impl Opt {
-  pub fn get_datasets(&self) -> Vec<String> {
-    let d = self.datasets.to_lowercase();
-    d.split(',').map(|s| s.to_string()).collect::<Vec<_>>()
-  }
-
-  pub fn get_compressors(&self) -> Vec<MultiCompressorConfig> {
-    let mut res = Vec::new();
-    for s in self.compressors.to_lowercase().split(',') {
-      let parts = s.split(':').collect::<Vec<_>>();
-      let level = if parts.len() > 1 {
-        Some(parts[1].parse().unwrap())
-      } else {
-        None
-      };
-      res.push(match parts[0] {
-        "p" | "pco" | "pcodec" => {
-          let delta_encoding_order = if parts.len() > 2 {
-            parts[2].parse().unwrap()
-          } else {
-            AUTO_DELTA
-          };
-          let use_gcds = !(parts.len() > 3 && &parts[3].to_lowercase()[0..3] == "off");
-          let config = pco::CompressorConfig::default()
-            .with_compression_level(level.unwrap_or(q_compress::DEFAULT_COMPRESSION_LEVEL))
-            .with_delta_encoding_order(delta_encoding_order)
-            .with_use_gcds(use_gcds);
-          MultiCompressorConfig::Pco(config)
-        }
-        "q" | "qco" | "q_compress" => {
-          let delta_encoding_order = if parts.len() > 2 {
-            parts[2].parse().unwrap()
-          } else {
-            AUTO_DELTA
-          };
-          let use_gcds = !(parts.len() > 3 && &parts[3].to_lowercase()[0..3] == "off");
-          let config = q_compress::CompressorConfig::default()
-            .with_compression_level(level.unwrap_or(q_compress::DEFAULT_COMPRESSION_LEVEL))
-            .with_delta_encoding_order(delta_encoding_order)
-            .with_use_gcds(use_gcds);
-          MultiCompressorConfig::QCompress(config)
-        }
-        "zstd" => MultiCompressorConfig::ZStd(level.unwrap_or(3)),
-        _ => panic!("unknown compressor"),
-      })
-    }
-    res
-  }
-}
 
 #[derive(Clone, Default)]
 struct BenchStat {
@@ -257,12 +152,12 @@ fn decompress_qco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
 fn compress<T: NumberLike>(
   raw_bytes: &[u8],
   nums: &[T],
-  config: &MultiCompressorConfig,
-) -> (Duration, MultiCompressorConfig, Vec<u8>) {
+  config: &CodecConfig,
+) -> (Duration, CodecConfig, Vec<u8>) {
   let t = Instant::now();
   let mut qualified_config = config.clone();
   let compressed = match &mut qualified_config {
-    MultiCompressorConfig::Pco(pco_conf) => {
+    CodecConfig::Pco(pco_conf) => {
       let mut conf = pco_conf.clone();
       let pco_nums = T::slice_to_pco(nums);
       if conf.delta_encoding_order == AUTO_DELTA {
@@ -272,7 +167,7 @@ fn compress<T: NumberLike>(
       *pco_conf = conf.clone();
       compress_pco(pco_nums, conf)
     }
-    MultiCompressorConfig::QCompress(qco_conf) => {
+    CodecConfig::QCompress(qco_conf) => {
       let mut conf = qco_conf.clone();
       if conf.delta_encoding_order == AUTO_DELTA {
         conf.delta_encoding_order =
@@ -281,7 +176,7 @@ fn compress<T: NumberLike>(
       *qco_conf = conf.clone();
       compress_qco(nums, conf)
     }
-    MultiCompressorConfig::ZStd(level) => {
+    CodecConfig::ZStd(level) => {
       let level = *level as i32;
       zstd::encode_all(raw_bytes, level).unwrap()
     }
@@ -295,13 +190,13 @@ fn compress<T: NumberLike>(
 
 fn decompress<T: NumberLike>(
   compressed: &[u8],
-  config: &MultiCompressorConfig,
+  config: &CodecConfig,
 ) -> (Duration, Vec<T>) {
   let t = Instant::now();
   let rec_nums = match config {
-    MultiCompressorConfig::Pco(_) => decompress_pco(compressed),
-    MultiCompressorConfig::QCompress(_) => decompress_qco(compressed),
-    MultiCompressorConfig::ZStd(_) => {
+    CodecConfig::Pco(_) => decompress_pco(compressed),
+    CodecConfig::QCompress(_) => decompress_qco(compressed),
+    CodecConfig::ZStd(_) => {
       // to do justice to zstd, unsafely convert the bytes it writes into T
       // without copying
       let decoded_bytes = zstd::decode_all(compressed).unwrap();
@@ -314,7 +209,7 @@ fn decompress<T: NumberLike>(
 fn warmup_iter<T: NumberLike>(
   path: &Path,
   dataset: &str,
-  config: &MultiCompressorConfig,
+  config: &CodecConfig,
   opt: &Opt,
 ) -> Precomputed<T> {
   // read in data
@@ -376,7 +271,7 @@ fn warmup_iter<T: NumberLike>(
 
 fn stats_iter<T: NumberLike>(
   dataset: String,
-  config: &MultiCompressorConfig,
+  config: &CodecConfig,
   precomputed: &Precomputed<T>,
   opt: &Opt,
 ) -> BenchStat {
@@ -412,7 +307,7 @@ fn stats_iter<T: NumberLike>(
   }
 }
 
-fn handle<T: NumberLike>(path: &Path, config: &MultiCompressorConfig, opt: &Opt) -> BenchStat {
+fn handle<T: NumberLike>(path: &Path, config: &CodecConfig, opt: &Opt) -> BenchStat {
   let dataset = basename_no_ext(path);
 
   let precomputed = warmup_iter::<T>(path, &dataset, config, opt);
@@ -457,20 +352,18 @@ fn main() {
     .map(|f| f.unwrap().path())
     .collect::<Vec<_>>();
   paths.sort();
-  let configs = opt.get_compressors();
-  let datasets = opt.get_datasets();
 
   let mut stats = Vec::new();
   for path in paths {
     let path_str = path.to_str().unwrap();
-    let keep = datasets
+    let keep = opt.datasets.is_empty() || opt.datasets
       .iter()
-      .any(|dataset| path_str.contains(dataset) || dataset == "all");
+      .any(|dataset| path_str.contains(dataset));
     if !keep {
       continue;
     }
 
-    for config in &configs {
+    for config in &opt.codecs {
       let stat = if path_str.contains("i64") || path_str.contains("micros") {
         handle::<i64>(&path, config, &opt)
       } else if path_str.contains("f64") {

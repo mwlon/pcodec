@@ -7,7 +7,7 @@ use anyhow::Result;
 use crate::dtype::DType;
 
 #[derive(Clone, Debug, Parser)]
-#[command(about = "A command line tool to compress, decompress, and inspect .pco files")]
+#[command(about = "compress, decompress, and inspect .pco files")]
 pub struct OptWrapper {
   #[command(subcommand)]
   pub opt: Opt,
@@ -21,6 +21,7 @@ pub enum Opt {
 }
 
 #[derive(Clone, Debug, Parser)]
+#[command(about = "compress from a different format into standalone .pco")]
 pub struct CompressOpt {
   #[arg(long = "csv")]
   pub csv_path: Option<PathBuf>,
@@ -71,6 +72,7 @@ impl CompressOpt {
 }
 
 #[derive(Clone, Debug, Parser)]
+#[command(about = "decompress from standalone .pco into stdout")]
 pub struct DecompressOpt {
   #[arg(long)]
   pub limit: Option<usize>,
@@ -81,6 +83,7 @@ pub struct DecompressOpt {
 }
 
 #[derive(Clone, Debug, Parser)]
+#[command(about = "print metadata about a standalone .pco file")]
 pub struct InspectOpt {
   pub path: PathBuf,
 }
