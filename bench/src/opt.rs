@@ -8,7 +8,7 @@ use crate::codecs::CodecConfig;
 pub struct Opt {
   #[arg(long, short, default_value = "pco", value_parser=CodecConfig::from_str, value_delimiter=',')]
   pub codecs: Vec<CodecConfig>,
-  #[arg(long, short, default_value = "", value_delimiter=',')]
+  #[arg(long, short, default_value = "", value_delimiter = ',')]
   pub datasets: Vec<String>,
   #[arg(long, short, default_value = "10")]
   pub iters: usize,

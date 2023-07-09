@@ -1,24 +1,22 @@
 #![allow(clippy::useless_transmute)]
 
-mod opt;
 mod codecs;
+mod opt;
 
 use std::fs;
 
-
 use std::path::Path;
-use std::time::{Duration};
+use std::time::Duration;
 
 use clap::Parser;
 use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
+use crate::codecs::CodecConfig;
 use opt::Opt;
 use pco::data_types::NumberLike as PNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
-use crate::codecs::CodecConfig;
-
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
@@ -83,8 +81,14 @@ struct PrintStat {
 impl PrintStat {
   fn compute(dataset: String, codec: String, benches: &[BenchStat]) -> Self {
     let compressed_size = benches[0].compressed_size;
-    let compress_dts = benches.iter().map(|bench| bench.compress_dt).collect::<Vec<_>>();
-    let decompress_dts = benches.iter().map(|bench| bench.decompress_dt).collect::<Vec<_>>();
+    let compress_dts = benches
+      .iter()
+      .map(|bench| bench.compress_dt)
+      .collect::<Vec<_>>();
+    let decompress_dts = benches
+      .iter()
+      .map(|bench| bench.decompress_dt)
+      .collect::<Vec<_>>();
 
     PrintStat {
       dataset,
@@ -187,10 +191,16 @@ fn handle<T: NumberLike>(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintS
   let mut fname = dataset.to_string();
   fname.push('_');
   fname.push_str(&config.details());
-  let precomputed = config.inner.warmup_iter(path, &dataset, &fname, &opt.handler_opt);
+  let precomputed = config
+    .inner
+    .warmup_iter(path, &dataset, &fname, &opt.handler_opt);
   let mut benches = Vec::with_capacity(opt.iters);
   for _ in 0..opt.iters {
-    benches.push(config.inner.stats_iter(&dataset, &precomputed, &opt.handler_opt));
+    benches.push(
+      config
+        .inner
+        .stats_iter(&dataset, &precomputed, &opt.handler_opt),
+    );
   }
   PrintStat::compute(dataset, config.to_string(), &benches)
 }
@@ -223,9 +233,11 @@ fn main() {
   let mut stats = Vec::new();
   for path in paths {
     let path_str = path.to_str().unwrap();
-    let keep = opt.datasets.is_empty() || opt.datasets
-      .iter()
-      .any(|dataset| path_str.contains(dataset));
+    let keep = opt.datasets.is_empty()
+      || opt
+        .datasets
+        .iter()
+        .any(|dataset| path_str.contains(dataset));
     if !keep {
       continue;
     }

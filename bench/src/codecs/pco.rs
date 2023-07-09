@@ -1,6 +1,6 @@
-use anyhow::{anyhow, Result};
 use crate::codecs::CodecInternal;
 use crate::NumberLike;
+use anyhow::{anyhow, Result};
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {
@@ -22,7 +22,7 @@ impl CodecInternal for PcoConfig {
         } else {
           "auto".to_string()
         }
-      },
+      }
       "use_gcds" => self.compressor_config.use_gcds.to_string(),
       "use_float_mult" => self.compressor_config.use_float_mult.to_string(),
       _ => panic!("bad conf"),
@@ -37,14 +37,15 @@ impl CodecInternal for PcoConfig {
           self.compressor_config.delta_encoding_order = order;
           self.use_fixed_delta = true;
         } else if value.to_lowercase() != "auto" {
-          return Err(anyhow!("cannot parse delta order: {}", value))
+          return Err(anyhow!(
+            "cannot parse delta order: {}",
+            value
+          ));
         }
-      },
+      }
       "use_gcds" => self.compressor_config.use_gcds = value.parse::<bool>().unwrap(),
       "use_float_mult" => self.compressor_config.use_float_mult = value.parse::<bool>().unwrap(),
-      _ => {
-        return Err(anyhow!("unknown conf: {}", key))
-      },
+      _ => return Err(anyhow!("unknown conf: {}", key)),
     }
     Ok(())
   }
@@ -64,4 +65,3 @@ impl CodecInternal for PcoConfig {
     T::vec_from_pco(v)
   }
 }
-
