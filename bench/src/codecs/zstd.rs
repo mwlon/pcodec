@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use anyhow::{anyhow, Result};
 
-use crate::codecs::{CodecInternal, utils};
+use crate::codecs::{utils, CodecInternal};
 use crate::NumberLike;
 
 #[derive(Clone, Debug, Default)]
@@ -35,7 +35,12 @@ impl CodecInternal for ZstdConfig {
     let mut res = Vec::new();
     res.extend((nums.len() as u32).to_le_bytes());
     unsafe {
-      zstd::stream::copy_encode(utils::num_slice_to_bytes(nums), &mut res, self.level).unwrap();
+      zstd::stream::copy_encode(
+        utils::num_slice_to_bytes(nums),
+        &mut res,
+        self.level,
+      )
+      .unwrap();
     }
     res
   }
@@ -45,7 +50,11 @@ impl CodecInternal for ZstdConfig {
     let mut res = Vec::<T>::with_capacity(len);
     unsafe {
       res.set_len(len);
-      zstd::stream::copy_decode(&bytes[4..], utils::num_slice_to_bytes_mut(res.as_mut_slice())).unwrap();
+      zstd::stream::copy_decode(
+        &bytes[4..],
+        utils::num_slice_to_bytes_mut(res.as_mut_slice()),
+      )
+      .unwrap();
     }
     res
   }

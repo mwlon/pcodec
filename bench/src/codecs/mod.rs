@@ -10,16 +10,16 @@ use anyhow::{anyhow, Result};
 use q_compress::data_types::TimestampMicros;
 
 use crate::codecs::pco::PcoConfig;
+use crate::codecs::qco::QcoConfig;
+use crate::codecs::zstd::ZstdConfig;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
 use crate::{dtype_str, BenchStat, NumberLike, Precomputed, BASE_DIR};
-use crate::codecs::qco::QcoConfig;
-use crate::codecs::zstd::ZstdConfig;
 
 mod pco;
 mod qco;
-mod zstd;
 pub mod utils;
+mod zstd;
 
 // Unfortunately we can't make a Box<dyn this> because it has generic
 // functions, so we use a wrapping trait (CodecSurface) to manually dynamic
@@ -55,7 +55,14 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
   fn compare_nums<T: NumberLike>(&self, recovered: &[T], original: &[T]) {
     assert_eq!(recovered.len(), original.len());
     for (i, (x, y)) in recovered.iter().zip(original.iter()).enumerate() {
-      assert_eq!(x.to_unsigned(), y.to_unsigned(), "{} != {} at {}", x, y, i);
+      assert_eq!(
+        x.to_unsigned(),
+        y.to_unsigned(),
+        "{} != {} at {}",
+        x,
+        y,
+        i
+      );
     }
   }
 
