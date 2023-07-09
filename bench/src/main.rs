@@ -7,7 +7,7 @@ use std::ops::AddAssign;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use structopt::StructOpt;
+use clap::Parser;
 use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
@@ -19,19 +19,19 @@ const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
 const AUTO_DELTA: usize = usize::MAX;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Opt {
-  #[structopt(long, short, default_value = "all")]
+  #[arg(long, short, default_value = "all")]
   datasets: String,
-  #[structopt(long, short, default_value = "10")]
+  #[arg(long, short, default_value = "10")]
   pub iters: usize,
-  #[structopt(long, short, default_value = "pco")]
+  #[arg(long, short, default_value = "pco")]
   compressors: String,
-  #[structopt(long)]
+  #[arg(long)]
   pub no_compress: bool,
-  #[structopt(long)]
+  #[arg(long)]
   pub no_decompress: bool,
-  #[structopt(long)]
+  #[arg(long)]
   pub no_assertions: bool,
 }
 
@@ -449,7 +449,7 @@ fn print_stats(stats: &[BenchStat]) {
 }
 
 fn main() {
-  let opt: Opt = Opt::from_args();
+  let opt: Opt = Opt::parse();
 
   let files = fs::read_dir(format!("{}/binary", BASE_DIR)).expect("couldn't read");
   let mut paths = files
