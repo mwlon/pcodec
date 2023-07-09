@@ -13,5 +13,6 @@ anyhow = "1.0.71"
 clap = {version = "4.3.11", features = ["derive"]}
 pco = {path = "../pco" }
 q_compress = {path = "../quantile-compression/q_compress" }
+snap = "1.1.0"
 tabled = "0.12.2"
 zstd = "0.12"

@@ -8,15 +8,17 @@ use anyhow::{anyhow, Result};
 
 use q_compress::data_types::TimestampMicros;
 
-use crate::{BASE_DIR, BenchStat, dtype_str, NumberLike, Precomputed};
 use crate::codecs::pco::PcoConfig;
 use crate::codecs::qco::QcoConfig;
+use crate::codecs::snappy::SnappyConfig;
 use crate::codecs::zstd::ZstdConfig;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
+use crate::{dtype_str, BenchStat, NumberLike, Precomputed, BASE_DIR};
 
 mod pco;
 mod qco;
+mod snappy;
 pub mod utils;
 mod zstd;
 
@@ -126,7 +128,7 @@ impl<C: CodecInternal> CodecSurface for C {
     fname: &str,
     opt: &HandlerOpt,
   ) -> Precomputed {
-    let dtype = dtype_str(&dataset);
+    let dtype = dtype_str(dataset);
 
     // compress
     let compressed = self.compress_dynamic(nums);
@@ -153,7 +155,7 @@ impl<C: CodecInternal> CodecSurface for C {
     let rec_nums = self.decompress_dynamic(dtype, &compressed);
 
     if !opt.no_assertions {
-      self.compare_nums_dynamic(&rec_nums, &nums);
+      self.compare_nums_dynamic(&rec_nums, nums);
     }
 
     Precomputed {
@@ -225,6 +227,7 @@ impl FromStr for CodecConfig {
       "p" | "pco" | "pcodec" => Box::<PcoConfig>::default(),
       "q" | "qco" | "q_compress" => Box::<QcoConfig>::default(),
       "zstd" => Box::<ZstdConfig>::default(),
+      "snap" | "snappy" => Box::<SnappyConfig>::default(),
       _ => return Err(anyhow!("unknown codec: {}", name)),
     };
 

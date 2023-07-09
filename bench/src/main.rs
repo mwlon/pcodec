@@ -1,4 +1,5 @@
 #![allow(clippy::useless_transmute)]
+#![allow(clippy::uninit_vec)]
 
 mod codecs;
 pub mod num_vec;
