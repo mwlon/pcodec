@@ -1,22 +1,15 @@
-// use std::mem;
-// use std::ptr::slice_from_raw_parts;
-// use crate::NumberLike;
-//
-// pub fn byte_slice_to_nums<T: NumberLike>(bytes: &[u8]) -> &[T] {
-//   let bytes_per_num = T::PHYSICAL_BITS / 8;
-//   unsafe {
-//     mem::transmute(slice_from_raw_parts(mem::transmute::<_, *const T>(bytes.as_ptr()), bytes.len() / bytes_per_num))
-//   }
-// }
-//
-// pub fn num_vec_to_bytes<T: NumberLike>(nums: Vec<T>) -> Vec<u8> {
-//   let bytes_per_num = T::PHYSICAL_BITS / 8;
-//   let byte_len = nums.len() * bytes_per_num;
-//   unsafe {
-//     Vec::from_raw_parts(
-//       mem::transmute::<_, *mut u8>(nums.as_ptr()),
-//       byte_len,
-//       byte_len,
-//     )
-//   }
-// }
+use std::mem;
+use crate::NumberLike;
+
+// cursed ways to convert nums to bytes and back without doing work
+pub unsafe fn num_slice_to_bytes<T: NumberLike>(slice: &[T]) -> &[u8] {
+  let len = slice.len();
+  let byte_len = len * (T::PHYSICAL_BITS / 8);
+  &*std::ptr::slice_from_raw_parts(mem::transmute::<_, *const u8>(slice.as_ptr()), byte_len)
+}
+
+pub unsafe fn num_slice_to_bytes_mut<T: NumberLike>(slice: &mut [T]) -> &mut [u8] {
+  let len = slice.len();
+  let byte_len = len * (T::PHYSICAL_BITS / 8);
+  &mut *std::ptr::slice_from_raw_parts_mut(mem::transmute::<_, *mut u8>(slice.as_ptr()), byte_len)
+}

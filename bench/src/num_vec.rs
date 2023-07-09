@@ -7,7 +7,6 @@ pub enum NumVec {
   Micros(Vec<TimestampMicros>),
 }
 
-// very cursed!
 fn byte_vec_to_nums<T: NumberLike>(raw_bytes: Vec<u8>) -> Vec<T> {
   let bytes_per_num = T::PHYSICAL_BITS / 8;
   raw_bytes

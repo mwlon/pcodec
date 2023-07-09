@@ -64,8 +64,8 @@ pub struct BenchStat {
 
 fn median_duration(mut durations: Vec<Duration>) -> Duration {
   durations.sort_unstable();
-  let lo = durations[durations.len() / 2];
-  let hi = durations[(durations.len() + 1) / 2];
+  let lo = durations[(durations.len() - 1) / 2];
+  let hi = durations[durations.len() / 2];
   (lo + hi) / 2
 }
 
@@ -123,18 +123,6 @@ pub struct Precomputed {
   dtype: String,
 }
 
-// fn compress_pco<T: DNumberLike>(nums: &[T], config: pco::CompressorConfig) -> Vec<u8> {
-//   pco::standalone::simple_compress(config, nums)
-// }
-//
-// fn compress_qco<T: NumberLike>(nums: &[T], config: q_compress::CompressorConfig) -> Vec<u8> {
-//   q_compress::Compressor::<T>::from_config(config).simple_compress(nums)
-// }
-//
-// fn decompress_qco<T: NumberLike>(bytes: &[u8]) -> Vec<T> {
-//   q_compress::auto_decompress(bytes).expect("could not decompress")
-// }
-//
 // fn compress<T: NumberLike>(
 //   nums: &[T],
 //   config: &CodecConfig,
@@ -142,25 +130,6 @@ pub struct Precomputed {
 //   let t = Instant::now();
 //   let compressed = config.inner.compress(nums);
 //   // let compressed = match &mut qualified_config {
-//   //   CodecConfig::Pco(pco_conf) => {
-//   //     let mut conf = pco_conf.clone();
-//   //     let pco_nums = T::slice_to_pco(nums);
-//   //     if conf.delta_encoding_order == AUTO_DELTA {
-//   //       conf.delta_encoding_order =
-//   //         pco::auto_compressor_config(pco_nums, conf.compression_level).delta_encoding_order;
-//   //     }
-//   //     *pco_conf = conf.clone();
-//   //     compress_pco(pco_nums, conf)
-//   //   }
-//   //   CodecConfig::QCompress(qco_conf) => {
-//   //     let mut conf = qco_conf.clone();
-//   //     if conf.delta_encoding_order == AUTO_DELTA {
-//   //       conf.delta_encoding_order =
-//   //         q_compress::auto_compressor_config(nums, conf.compression_level).delta_encoding_order;
-//   //     }
-//   //     *qco_conf = conf.clone();
-//   //     compress_qco(nums, conf)
-//   //   }
 //   //   CodecConfig::ZStd(level) => {
 //   //     let level = *level as i32;
 //   //     zstd::encode_all(raw_bytes, level).unwrap()

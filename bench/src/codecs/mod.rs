@@ -13,8 +13,12 @@ use crate::codecs::pco::PcoConfig;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
 use crate::{dtype_str, BenchStat, NumberLike, Precomputed, BASE_DIR};
+use crate::codecs::qco::QcoConfig;
+use crate::codecs::zstd::ZstdConfig;
 
 mod pco;
+mod qco;
+mod zstd;
 pub mod utils;
 
 // Unfortunately we can't make a Box<dyn this> because it has generic
@@ -51,7 +55,7 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
   fn compare_nums<T: NumberLike>(&self, recovered: &[T], original: &[T]) {
     assert_eq!(recovered.len(), original.len());
     for (i, (x, y)) in recovered.iter().zip(original.iter()).enumerate() {
-      assert_eq!(x, y, "at {}", i);
+      assert_eq!(x.to_unsigned(), y.to_unsigned(), "{} != {} at {}", x, y, i);
     }
   }
 
@@ -213,8 +217,8 @@ impl FromStr for CodecConfig {
 
     let mut codec: Box<dyn CodecSurface> = match name {
       "p" | "pco" | "pcodec" => Box::<PcoConfig>::default(),
-      // "q" | "qco" | "q_compress" => Box::new(QcoConfig::default()),
-      // "zstd" => Box::new(ZstdConfig::default()),
+      "q" | "qco" | "q_compress" => Box::<QcoConfig>::default(),
+      "zstd" => Box::<ZstdConfig>::default(),
       _ => return Err(anyhow!("unknown codec: {}", name)),
     };
 
@@ -235,7 +239,7 @@ impl Display for CodecConfig {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
-      "{}:{}",
+      "{}{}",
       self.inner.name(),
       self.inner.details(&self.confs)
     )
