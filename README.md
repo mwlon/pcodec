@@ -22,9 +22,7 @@ with high compression ratio and moderately fast speed.
 * chunked compression and streaming decompression
 
 **Data types:**
-  `i32`, `i64`,
-  `u32`, `u64`,
-  `f32`, `f64`
+`u32`, `u64`, `i32`, `i64`, `f32`, `f64`
 
 It is also possible to implement your own data type via `NumberLike` and (if
 necessary) `UnsignedLike` and `FloatLike`.
@@ -39,8 +37,8 @@ natively supported data types.
 
 ## Performance and Compression Ratio
 
-See [benchmarks.md](./bench/benchmarks.md) or run the benchmark suite via
-`cargo run --release --bin bench`.
+See [benchmarks.md](./bench/README.md) to run the benchmark suite
+or see its results.
 
 ## File Format
 

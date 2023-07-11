@@ -40,3 +40,7 @@ You can see the compressed files in
 Check `cargo run --release --bin bench -- --help` for information on how to
 run other codecs, configure codecs differently, only run specific datasets,
 etc.
+
+## Results
+
+Some simple results are in [benchmarks.md](./benchmarks.md).

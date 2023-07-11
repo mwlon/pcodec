@@ -1,4 +1,4 @@
-All figured reported here are calculated using a single thread on a
+All figures reported here are calculated using a single thread on a
 2.8GHz i5 CPU, operating on in-memory data, using Rust 1.70.
 Benchmarks were done by averaging 100 runs on a dataset of 1M numbers
 with `compression_level` 8.
