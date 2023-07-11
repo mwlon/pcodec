@@ -2,9 +2,9 @@
 #![allow(clippy::uninit_vec)]
 
 mod codecs;
+mod dtypes;
 pub mod num_vec;
 mod opt;
-mod dtypes;
 
 use std::fs;
 
@@ -19,8 +19,6 @@ use tabled::{Table, Tabled};
 use crate::codecs::CodecConfig;
 use crate::num_vec::NumVec;
 use opt::Opt;
-use pco::data_types::NumberLike as PNumberLike;
-use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order

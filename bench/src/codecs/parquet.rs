@@ -1,31 +1,30 @@
-use std::convert::TryInto;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use parquet::basic::{Compression, ZstdLevel};
-use parquet::file::properties::{WriterProperties, WriterPropertiesBuilder, WriterPropertiesPtr};
-use parquet::file::reader::{SerializedFileReader, SerializedPageReader};
-use parquet::file::writer::{SerializedFileWriter, SerializedPageWriter};
+use parquet::file::properties::WriterProperties;
+use parquet::file::reader::SerializedFileReader;
+use parquet::file::writer::SerializedFileWriter;
 use parquet::schema::parser::parse_message_type;
-use parquet::schema::types::{ColumnDescPtr, ColumnDescriptor, ColumnPath};
-use parquet::file::reader::{FileReader};
-use std::{fs::File, path::Path};
+
+use parquet::file::reader::FileReader;
+
 use parquet::column::reader::get_typed_column_reader;
 
-use crate::codecs::{CodecInternal, utils};
+use crate::codecs::CodecInternal;
 use crate::dtypes::Dtype;
 
-const ZSTD: &'static str = "zstd";
+const ZSTD: &str = "zstd";
 
 #[derive(Clone, Debug)]
 pub struct ParquetConfig {
-  compression: Compression
+  compression: Compression,
 }
 
 impl Default for ParquetConfig {
   fn default() -> Self {
     Self {
-      compression: Compression::UNCOMPRESSED
+      compression: Compression::UNCOMPRESSED,
     }
   }
 }
@@ -35,15 +34,15 @@ fn str_to_compression(s: &str) -> Result<Compression> {
     "uncompressed" => Compression::UNCOMPRESSED,
     "snappy" => Compression::SNAPPY,
     _ => {
-      if s.starts_with(ZSTD) {
-        let level = if s.len() > ZSTD.len() {
-          ZstdLevel::try_new(s[4..].to_string().parse::<i32>()?)?
-        } else {
+      if let Some(zstd_level_str) = s.strip_prefix(ZSTD) {
+        let level = if zstd_level_str.is_empty() {
           ZstdLevel::default()
+        } else {
+          ZstdLevel::try_new(zstd_level_str.parse::<i32>()?)?
         };
         Compression::ZSTD(level)
       } else {
-        return Err(anyhow!("unknown parquet codec {}", s))
+        return Err(anyhow!("unknown parquet codec {}", s));
       }
     }
   };
@@ -82,19 +81,28 @@ impl CodecInternal for ParquetConfig {
 
   fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
-    let message_type = format!("message schema {{ REQUIRED {} nums; }}", T::PARQUET_DTYPE_STR);
+    let message_type = format!(
+      "message schema {{ REQUIRED {} nums; }}",
+      T::PARQUET_DTYPE_STR
+    );
     let schema = Arc::new(parse_message_type(&message_type).unwrap());
     let mut writer = SerializedFileWriter::new(
       &mut res,
       schema,
-      Arc::new(WriterProperties::builder().set_compression(self.compression).build()
-      )
-    ).unwrap();
+      Arc::new(
+        WriterProperties::builder()
+          .set_compression(self.compression)
+          .build(),
+      ),
+    )
+    .unwrap();
     let mut row_group_writer = writer.next_row_group().unwrap();
     while let Some(mut col_writer) = row_group_writer.next_column().unwrap() {
       {
         let typed = col_writer.typed::<T::Parquet>();
-        typed.write_batch(T::slice_to_parquet(nums), None, None).unwrap();
+        typed
+          .write_batch(T::slice_to_parquet(nums), None, None)
+          .unwrap();
       }
       col_writer.close().unwrap()
     }
@@ -139,10 +147,11 @@ impl CodecInternal for ParquetConfig {
     }
     for i in 0..parquet_metadata.num_row_groups() {
       let row_group_reader = reader.get_row_group(i).unwrap();
-      let mut col_reader = get_typed_column_reader::<T::Parquet>(
-        row_group_reader.get_column_reader(0).unwrap()
-      );
-      col_reader.read_records(usize::MAX, None, None, &mut res).unwrap();
+      let mut col_reader =
+        get_typed_column_reader::<T::Parquet>(row_group_reader.get_column_reader(0).unwrap());
+      col_reader
+        .read_records(usize::MAX, None, None, &mut res)
+        .unwrap();
     }
     // let col_desc = ColumnDescPtr::new(ColumnDescriptor::new(
     //   T::parquet_type,

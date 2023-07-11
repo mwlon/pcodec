@@ -8,15 +8,15 @@ use anyhow::{anyhow, Result};
 
 use q_compress::data_types::TimestampMicros;
 
+use crate::codecs::parquet::ParquetConfig;
 use crate::codecs::pco::PcoConfig;
 use crate::codecs::qco::QcoConfig;
 use crate::codecs::snappy::SnappyConfig;
 use crate::codecs::zstd::ZstdConfig;
+use crate::dtypes::{dtype_str, Dtype};
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
-use crate::{BASE_DIR, BenchStat, Precomputed};
-use crate::codecs::parquet::ParquetConfig;
-use crate::dtypes::{dtype_str, Dtype};
+use crate::{BenchStat, Precomputed, BASE_DIR};
 
 mod parquet;
 mod pco;
