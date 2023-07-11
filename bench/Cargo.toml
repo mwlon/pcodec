@@ -9,8 +9,12 @@ name = "bench"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0.71"
+bytes = "1.1.0"
+clap = {version = "4.3.11", features = ["derive"]}
+parquet = {version = "43.0.0", features = ["snap", "zstd"], default-features=false}
 pco = {path = "../pco" }
 q_compress = {path = "../quantile-compression/q_compress" }
-structopt = "0.3.26"
+snap = "1.1.0"
 tabled = "0.12.2"
 zstd = "0.12"

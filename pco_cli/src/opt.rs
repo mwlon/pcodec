@@ -2,55 +2,56 @@ use std::path::PathBuf;
 
 use anyhow::anyhow;
 use anyhow::Result;
-use structopt::StructOpt;
+use clap::{Parser, Subcommand};
 
 use crate::dtype::DType;
 
-#[derive(Clone, Debug, StructOpt)]
-#[structopt {
-  name = "pcodec CLI",
-  about = "A command line tool to compress, decompress, and inspect .pco files",
-}]
+#[derive(Clone, Debug, Parser)]
+#[command(about = "compress, decompress, and inspect .pco files")]
+pub struct OptWrapper {
+  #[command(subcommand)]
+  pub opt: Opt,
+}
+
+#[derive(Subcommand, Clone, Debug)]
 pub enum Opt {
-  #[structopt(name = "compress")]
   Compress(CompressOpt),
-  #[structopt(name = "decompress")]
   Decompress(DecompressOpt),
-  #[structopt(name = "inspect")]
   Inspect(InspectOpt),
 }
 
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, Parser)]
+#[command(about = "compress from a different format into standalone .pco")]
 pub struct CompressOpt {
-  #[structopt(long = "csv")]
+  #[arg(long = "csv")]
   pub csv_path: Option<PathBuf>,
-  #[structopt(long = "parquet")]
+  #[arg(long = "parquet")]
   pub parquet_path: Option<PathBuf>,
 
-  #[structopt(long, default_value = "8")]
+  #[arg(long, default_value = "8")]
   pub level: usize,
-  #[structopt(long = "delta-order")]
+  #[arg(long = "delta-order")]
   pub delta_encoding_order: Option<usize>,
-  #[structopt(long)]
+  #[arg(long)]
   pub disable_gcds: bool,
-  #[structopt(long)]
+  #[arg(long)]
   pub dtype: Option<DType>,
-  #[structopt(long)]
+  #[arg(long)]
   pub col_name: Option<String>,
-  #[structopt(long)]
+  #[arg(long)]
   pub col_idx: Option<usize>,
-  #[structopt(long, default_value = "1000000")]
+  #[arg(long, default_value = "1000000")]
   pub chunk_size: usize,
-  #[structopt(long)]
+  #[arg(long)]
   pub overwrite: bool,
-  #[structopt(long = "csv-has-header")]
+  #[arg(long = "csv-has-header")]
   pub has_csv_header: bool,
-  #[structopt(
+  #[arg(
     long = "csv-timestamp-format",
     default_value = "%Y-%m-%dT%H:%M:%S%.f%z"
   )]
   pub timestamp_format: String,
-  #[structopt(long = "csv-delimiter", default_value = ",")]
+  #[arg(long = "csv-delimiter", default_value = ",")]
   pub delimiter: char,
 
   pub pco_path: PathBuf,
@@ -70,17 +71,19 @@ impl CompressOpt {
   }
 }
 
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, Parser)]
+#[command(about = "decompress from standalone .pco into stdout")]
 pub struct DecompressOpt {
-  #[structopt(long)]
+  #[arg(long)]
   pub limit: Option<usize>,
-  #[structopt(long, default_value = "%Y-%m-%dT%H:%M:%S%.f")]
+  #[arg(long, default_value = "%Y-%m-%dT%H:%M:%S%.f")]
   pub timestamp_format: String,
 
   pub pco_path: PathBuf,
 }
 
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Clone, Debug, Parser)]
+#[command(about = "print metadata about a standalone .pco file")]
 pub struct InspectOpt {
   pub path: PathBuf,
 }

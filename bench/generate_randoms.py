@@ -2,8 +2,6 @@
 # pip requirement: numpy, pyarrow
 
 import numpy as np
-import pyarrow as pa
-from pyarrow import parquet as pq
 from datetime import datetime
 import os
 
@@ -13,19 +11,7 @@ short_n = 3000
 base_dir = 'bench/data'
 
 os.makedirs(f'{base_dir}/txt', exist_ok=True)
-os.makedirs(f'{base_dir}/parquet', exist_ok=True)
-os.makedirs(f'{base_dir}/snappy_parquet', exist_ok=True)
-os.makedirs(f'{base_dir}/gzip_parquet', exist_ok=True)
-os.makedirs(f'{base_dir}/zstd_parquet', exist_ok=True)
 os.makedirs(f'{base_dir}/binary', exist_ok=True)
-
-def write_parquet_tables(arr, full_name):
-  print(f'writing parquet for {full_name}...')
-  table = pa.Table.from_pydict({'nums': arr})
-#   pq.write_table(table, f'{base_dir}/parquet/{full_name}.parquet', compression='NONE')
-#   pq.write_table(table, f'{base_dir}/snappy_parquet/{full_name}.snappy.parquet', compression='snappy')
-#   pq.write_table(table, f'{base_dir}/gzip_parquet/{full_name}.gzip.parquet', compression='gzip', compression_level=6)
-  pq.write_table(table, f'{base_dir}/zstd_parquet/{full_name}.zstd.parquet', compression='zstd', compression_level=3)
 
 def write_generic(strs, arr, full_name):
   joined = '\n'.join(strs)
@@ -33,7 +19,6 @@ def write_generic(strs, arr, full_name):
     f.write(joined)
   with open(f'{base_dir}/binary/{full_name}.bin', 'wb') as f:
     f.write(arr.tobytes())
-  write_parquet_tables(arr, full_name)
 
 def write_i64(arr, name):
   if arr.dtype != np.int64:

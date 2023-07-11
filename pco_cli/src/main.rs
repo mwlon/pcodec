@@ -1,7 +1,7 @@
 use anyhow::Result;
-use structopt::StructOpt;
+use clap::Parser;
 
-use crate::opt::Opt;
+use crate::opt::{Opt, OptWrapper};
 
 mod compress;
 mod compress_handler;
@@ -16,7 +16,7 @@ mod opt;
 mod utils;
 
 fn main() -> Result<()> {
-  let opt = Opt::from_args();
+  let opt = OptWrapper::parse().opt;
   match opt {
     Opt::Compress(compress_opt) => compress::compress(compress_opt)?,
     Opt::Decompress(decompress_opt) => decompress::decompress(decompress_opt)?,

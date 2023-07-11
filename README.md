@@ -2,7 +2,8 @@
 
 # Pcodec
 
-Pcodec (or pco) losslessly compresses and decompresses numerical sequences
+Pcodec (or pco, pronounced "pico") losslessly compresses and decompresses
+numerical sequences
 with high compression ratio and moderately fast speed.
 
 **Use cases:**
@@ -47,8 +48,7 @@ See [benchmarks.md](./bench/benchmarks.md) or run the benchmark suite via
 
 ## Etymology
 
-Pco should be pronounced "pico". The names pcodec and pco were chosen for these
-reasons:
+The names pcodec and pco were chosen for these reasons:
 * "Pico" suggests that it makes very small things.
 * Pco is reminiscent of qco, its preceding format.
 * Pco is reminiscent of PancakeDB (Pancake COmpressed). Though PancakeDB is now
@@ -57,6 +57,6 @@ reasons:
   search for.
 
 The names are used for these purposes:
-* pco => the library, data format, and command line tool
+* pco => the library and data format
 * pco_cli => the binary crate name
 * pcodec => the binary CLI and the repo
