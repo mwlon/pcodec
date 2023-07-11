@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.71"
+bytes = "1.1.0"
 clap = {version = "4.3.11", features = ["derive"]}
 parquet = {version = "43.0.0", features = ["snap", "zstd"], default-features=false}
 pco = {path = "../pco" }

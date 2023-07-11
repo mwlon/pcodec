@@ -299,6 +299,7 @@ name = "bench"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "clap",
  "parquet",
  "pco",

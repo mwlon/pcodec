@@ -15,6 +15,7 @@ use crate::codecs::zstd::ZstdConfig;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
 use crate::{BASE_DIR, BenchStat, Precomputed};
+use crate::codecs::parquet::ParquetConfig;
 use crate::dtypes::{dtype_str, Dtype};
 
 mod parquet;
@@ -230,6 +231,7 @@ impl FromStr for CodecConfig {
       "q" | "qco" | "q_compress" => Box::<QcoConfig>::default(),
       "zstd" => Box::<ZstdConfig>::default(),
       "snap" | "snappy" => Box::<SnappyConfig>::default(),
+      "parq" | "parquet" => Box::<ParquetConfig>::default(),
       _ => return Err(anyhow!("unknown codec: {}", name)),
     };
 
