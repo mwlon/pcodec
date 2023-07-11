@@ -1,5 +1,5 @@
 use crate::codecs::CodecInternal;
-use crate::NumberLike;
+use crate::dtypes::Dtype;
 use anyhow::{anyhow, Result};
 
 #[derive(Clone, Debug, Default)]
@@ -48,7 +48,7 @@ impl CodecInternal for QcoConfig {
     Ok(())
   }
 
-  fn compress<T: NumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
     let mut c_config = self.compressor_config.clone();
     if !self.use_fixed_delta {
       c_config.delta_encoding_order =
@@ -57,7 +57,7 @@ impl CodecInternal for QcoConfig {
     q_compress::standalone::Compressor::<T>::from_config(c_config).simple_compress(nums)
   }
 
-  fn decompress<T: NumberLike>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {
     q_compress::auto_decompress::<T>(bytes).expect("could not decompress")
   }
 }

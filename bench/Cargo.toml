@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.71"
 clap = {version = "4.3.11", features = ["derive"]}
+parquet = {version = "43.0.0", features = ["snap", "zstd"], default-features=false}
 pco = {path = "../pco" }
 q_compress = {path = "../quantile-compression/q_compress" }
 snap = "1.1.0"

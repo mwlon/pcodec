@@ -1,8 +1,8 @@
-use crate::NumberLike;
+use crate::dtypes::Dtype;
 use std::mem;
 
 // cursed ways to convert nums to bytes and back without doing work
-pub unsafe fn num_slice_to_bytes<T: NumberLike>(slice: &[T]) -> &[u8] {
+pub unsafe fn num_slice_to_bytes<T: Dtype>(slice: &[T]) -> &[u8] {
   let len = slice.len();
   let byte_len = len * (T::PHYSICAL_BITS / 8);
   &*std::ptr::slice_from_raw_parts(
@@ -11,7 +11,7 @@ pub unsafe fn num_slice_to_bytes<T: NumberLike>(slice: &[T]) -> &[u8] {
   )
 }
 
-pub unsafe fn num_slice_to_bytes_mut<T: NumberLike>(slice: &mut [T]) -> &mut [u8] {
+pub unsafe fn num_slice_to_bytes_mut<T: Dtype>(slice: &mut [T]) -> &mut [u8] {
   let len = slice.len();
   let byte_len = len * (T::PHYSICAL_BITS / 8);
   &mut *std::ptr::slice_from_raw_parts_mut(

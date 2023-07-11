@@ -1,5 +1,5 @@
 use crate::codecs::CodecInternal;
-use crate::NumberLike;
+use crate::dtypes::Dtype;
 use anyhow::{anyhow, Result};
 
 #[derive(Clone, Debug, Default)]
@@ -50,7 +50,7 @@ impl CodecInternal for PcoConfig {
     Ok(())
   }
 
-  fn compress<T: NumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
     let mut c_config = self.compressor_config.clone();
     let pco_nums = T::slice_to_pco(nums);
     if !self.use_fixed_delta {
@@ -60,7 +60,7 @@ impl CodecInternal for PcoConfig {
     pco::standalone::simple_compress(c_config, pco_nums)
   }
 
-  fn decompress<T: NumberLike>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {
     let v = pco::standalone::auto_decompress::<T::Pco>(bytes).expect("could not decompress");
     T::vec_from_pco(v)
   }

@@ -4,6 +4,7 @@
 mod codecs;
 pub mod num_vec;
 mod opt;
+mod dtypes;
 
 use std::fs;
 
@@ -23,37 +24,6 @@ use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
-
-fn dtype_str(dataset: &str) -> &str {
-  dataset.split('_').next().unwrap()
-}
-
-pub trait NumberLike: QNumberLike {
-  type Pco: PNumberLike;
-
-  fn slice_to_pco(slice: &[Self]) -> &[Self::Pco];
-  fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self>;
-}
-
-macro_rules! impl_pco_number_like {
-  ($t: ty, $pco: ty) => {
-    impl NumberLike for $t {
-      type Pco = $pco;
-
-      fn slice_to_pco(slice: &[$t]) -> &[Self::Pco] {
-        unsafe { std::mem::transmute(slice) }
-      }
-
-      fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self> {
-        unsafe { std::mem::transmute(v) }
-      }
-    }
-  };
-}
-
-impl_pco_number_like!(i64, i64);
-impl_pco_number_like!(f64, f64);
-impl_pco_number_like!(TimestampMicros, i64);
 
 #[derive(Clone, Default)]
 pub struct BenchStat {
@@ -125,7 +95,7 @@ pub struct Precomputed {
 
 fn handle(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   let dataset = basename_no_ext(path);
-  let dtype = dtype_str(&dataset);
+  let dtype = dtypes::dtype_str(&dataset);
 
   let mut fname = dataset.to_string();
   fname.push('_');

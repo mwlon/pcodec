@@ -300,6 +300,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap",
+ "parquet",
  "pco",
  "q_compress",
  "snap",

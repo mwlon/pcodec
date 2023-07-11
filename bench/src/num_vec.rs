@@ -1,4 +1,4 @@
-use crate::NumberLike;
+use crate::dtypes::Dtype;
 use q_compress::data_types::TimestampMicros;
 
 pub enum NumVec {
@@ -7,7 +7,7 @@ pub enum NumVec {
   Micros(Vec<TimestampMicros>),
 }
 
-fn cast_to_nums<T: NumberLike>(bytes: Vec<u8>) -> Vec<T> {
+fn cast_to_nums<T: Dtype>(bytes: Vec<u8>) -> Vec<T> {
   // Here we're assuming the bytes are in the right format for our data type.
   // For instance, chunks of 8 little-endian bytes on most platforms for
   // i64's.

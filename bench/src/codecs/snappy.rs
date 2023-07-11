@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use anyhow::{anyhow, Result};
 
 use crate::codecs::{utils, CodecInternal};
-use crate::NumberLike;
+use crate::dtypes::Dtype;
 
 #[derive(Clone, Debug, Default)]
 pub struct SnappyConfig {}
@@ -23,7 +23,7 @@ impl CodecInternal for SnappyConfig {
   }
 
   // we prefix with a u32 of the
-  fn compress<T: NumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
     res.extend((nums.len() as u32).to_le_bytes());
 
@@ -35,7 +35,7 @@ impl CodecInternal for SnappyConfig {
     res
   }
 
-  fn decompress<T: NumberLike>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {
     let len = u32::from_le_bytes(bytes[0..4].try_into().unwrap()) as usize;
     let mut res = Vec::<T>::with_capacity(len);
     let mut rdr = snap::read::FrameDecoder::new(&bytes[4..]);

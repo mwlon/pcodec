@@ -14,8 +14,10 @@ use crate::codecs::snappy::SnappyConfig;
 use crate::codecs::zstd::ZstdConfig;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
-use crate::{dtype_str, BenchStat, NumberLike, Precomputed, BASE_DIR};
+use crate::{BASE_DIR, BenchStat, Precomputed};
+use crate::dtypes::{dtype_str, Dtype};
 
+mod parquet;
 mod pco;
 mod qco;
 mod snappy;
@@ -31,8 +33,8 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
   fn get_conf(&self, key: &str) -> String;
   fn set_conf(&mut self, key: &str, value: String) -> Result<()>;
 
-  fn compress<T: NumberLike>(&self, nums: &[T]) -> Vec<u8>;
-  fn decompress<T: NumberLike>(&self, compressed: &[u8]) -> Vec<T>;
+  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8>;
+  fn decompress<T: Dtype>(&self, compressed: &[u8]) -> Vec<T>;
 
   // sad manual dynamic dispatch, but at least we don't need all combinations
   // of (dtype x codec)
@@ -53,7 +55,7 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
     }
   }
 
-  fn compare_nums<T: NumberLike>(&self, recovered: &[T], original: &[T]) {
+  fn compare_nums<T: Dtype>(&self, recovered: &[T], original: &[T]) {
     assert_eq!(recovered.len(), original.len());
     for (i, (x, y)) in recovered.iter().zip(original.iter()).enumerate() {
       assert_eq!(
