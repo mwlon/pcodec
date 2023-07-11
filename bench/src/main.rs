@@ -95,9 +95,12 @@ fn handle(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   let dataset = basename_no_ext(path);
   let dtype = dtypes::dtype_str(&dataset);
 
-  let mut fname = dataset.to_string();
-  fname.push('_');
-  fname.push_str(&config.details());
+  let fname = format!(
+    "{}{}.{}",
+    &dataset,
+    config.details(),
+    config.inner.name(),
+  );
   let raw_bytes = fs::read(path).expect("could not read");
   let num_vec = NumVec::new(dtype, raw_bytes);
   let precomputed = config

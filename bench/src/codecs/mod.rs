@@ -143,7 +143,7 @@ impl<C: CodecInternal> CodecSurface for C {
 
     // write to disk
     let output_dir = format!("{}/{}", BASE_DIR, self.name());
-    let output_path = format!("{}/{}.{}", output_dir, fname, self.name());
+    let output_path = format!("{}/{}", output_dir, fname);
 
     match fs::create_dir(&output_dir) {
       Ok(()) => (),
