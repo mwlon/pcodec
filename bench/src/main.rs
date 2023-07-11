@@ -1,13 +1,8 @@
-#![allow(clippy::useless_transmute)]
 #![allow(clippy::uninit_vec)]
 
-mod codecs;
-mod dtypes;
-pub mod num_vec;
-mod opt;
-
+use std::collections::HashMap;
 use std::fs;
-
+use std::ops::AddAssign;
 use std::path::Path;
 use std::time::Duration;
 
@@ -16,9 +11,15 @@ use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
+use opt::Opt;
+
 use crate::codecs::CodecConfig;
 use crate::num_vec::NumVec;
-use opt::Opt;
+
+mod codecs;
+mod dtypes;
+pub mod num_vec;
+mod opt;
 
 const BASE_DIR: &str = "bench/data";
 // if this delta order is specified, use a dataset-specific order
@@ -41,7 +42,7 @@ fn display_duration(duration: &Duration) -> String {
   format!("{:?}", duration)
 }
 
-#[derive(Tabled, Default)]
+#[derive(Clone, Default, Tabled)]
 struct PrintStat {
   pub dataset: String,
   pub codec: String,
@@ -50,6 +51,14 @@ struct PrintStat {
   #[tabled(display_with = "display_duration")]
   pub decompress_dt: Duration,
   pub compressed_size: usize,
+}
+
+impl AddAssign for PrintStat {
+  fn add_assign(&mut self, rhs: Self) {
+    self.compressed_size += rhs.compressed_size;
+    self.compress_dt += rhs.compress_dt;
+    self.decompress_dt += rhs.decompress_dt;
+  }
 }
 
 impl PrintStat {
@@ -119,11 +128,17 @@ fn handle(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
 
 fn print_stats(mut stats: Vec<PrintStat>) {
   let mut aggregate = PrintStat::default();
+  let mut aggregate_by_codec: HashMap<String, PrintStat> = HashMap::new();
   for stat in &stats {
-    aggregate.compressed_size += stat.compressed_size;
-    aggregate.compress_dt += stat.compress_dt;
-    aggregate.decompress_dt += stat.decompress_dt;
+    aggregate += stat.clone();
+    aggregate_by_codec.entry(stat.codec.clone())
+      .or_default()
+      .add_assign(stat.clone());
   }
+  stats.extend(aggregate_by_codec.into_iter().map(|(codec, mut stat)| {
+    stat.codec = codec;
+    stat
+  }));
   stats.push(aggregate);
   let table = Table::new(stats)
     .with(Style::rounded())

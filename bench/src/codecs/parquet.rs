@@ -2,14 +2,12 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use parquet::basic::{Compression, ZstdLevel};
+use parquet::column::reader::get_typed_column_reader;
 use parquet::file::properties::WriterProperties;
+use parquet::file::reader::FileReader;
 use parquet::file::reader::SerializedFileReader;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::schema::parser::parse_message_type;
-
-use parquet::file::reader::FileReader;
-
-use parquet::column::reader::get_typed_column_reader;
 
 use crate::codecs::CodecInternal;
 use crate::dtypes::Dtype;
@@ -109,24 +107,6 @@ impl CodecInternal for ParquetConfig {
     row_group_writer.close().unwrap();
     writer.close().unwrap();
 
-    // let col_desc = ColumnDescPtr::new(ColumnDescriptor::new(
-    //   T::parquet_type,
-    //   0,
-    //   0,
-    //   ColumnPath::new(vec!["nums".to_string()]),
-    // ));
-    // let writer_properties = WriterPropertiesPtr::new(WriterProperties::builder()
-    //   .set_compression(self.compression)
-    //   .build()
-    // );
-    // let page_writer = Box::new(SerializedPageWriter::new(&mut res));
-    // let mut col_writer = parquet::column::writer::get_column_writer(
-    //   col_desc,
-    //   writer_properties,
-    //   page_writer,
-    // );
-    // let mut col_writer = parquet::column::writer::get_typed_column_writer::<T::Parquet>(col_writer);
-    // col_writer.write_batch(nums, None, None).unwrap();
     res
   }
 
@@ -153,21 +133,7 @@ impl CodecInternal for ParquetConfig {
         .read_records(usize::MAX, None, None, &mut res)
         .unwrap();
     }
-    // let col_desc = ColumnDescPtr::new(ColumnDescriptor::new(
-    //   T::parquet_type,
-    //   0,
-    //   0,
-    //   ColumnPath::new(vec!["nums".to_string()]),
-    // ));
-    // let page_reader = Box::new(SerializedPageReader::new(
-    //
-    // ));
-    // let col_reader = parquet::column::reader::get_column_reader(
-    //   col_desc,
-    //   page_reader,
-    // );
-    // let mut col_reader = parquet::column::reader::get_typed_column_reader::<T::Parquet>(col_reader);
-    // col_reader.read_records(usize::MAX, None, None, &mut res).unwrap();
+
     T::vec_from_parquet(res)
   }
 }
