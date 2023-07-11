@@ -37,10 +37,19 @@ natively supported data types.
 
 [Use the Rust API](./pco/README.md)
 
-## Performance
+## Performance and Compression Ratio
 
 See [benchmarks.md](./bench/benchmarks.md) or run the benchmark suite via
 `cargo run --release --bin bench`.
+
+## File Format
+
+<img alt="pco file format diagram" src="./images/file_format.svg" />
+
+The core idea of pco is to represent numbers as approximate, entropy-coded bins
+paired with exact offsets into those bins.
+Depending on the mode, there may be 1 or 2 streams of these bin-offset
+pairings.
 
 ## Extra
 
