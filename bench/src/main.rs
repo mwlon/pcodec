@@ -131,14 +131,17 @@ fn print_stats(mut stats: Vec<PrintStat>) {
   let mut aggregate_by_codec: HashMap<String, PrintStat> = HashMap::new();
   for stat in &stats {
     aggregate += stat.clone();
-    aggregate_by_codec.entry(stat.codec.clone())
+    aggregate_by_codec
+      .entry(stat.codec.clone())
       .or_default()
       .add_assign(stat.clone());
   }
-  stats.extend(aggregate_by_codec.into_iter().map(|(codec, mut stat)| {
-    stat.codec = codec;
-    stat
-  }));
+  stats.extend(
+    aggregate_by_codec.into_iter().map(|(codec, mut stat)| {
+      stat.codec = codec;
+      stat
+    }),
+  );
   stats.push(aggregate);
   let table = Table::new(stats)
     .with(Style::rounded())
