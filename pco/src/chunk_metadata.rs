@@ -149,7 +149,7 @@ fn parse_bins<U: UnsignedLike>(
       _ => U::ONE,
     };
 
-    let mut bin = Bin {
+    let bin = Bin {
       weight,
       lower,
       offset_bits,
