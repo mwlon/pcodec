@@ -49,6 +49,8 @@ paired with exact offsets into those bins.
 Depending on the mode, there may be 1 or 2 streams of these bin-offset
 pairings.
 
+<img alt="pco compression and decompression steps" src="./images/processing.svg" />
+
 ## Extra
 
 [join the Discord](https://discord.gg/f6eRXgMP8w)
