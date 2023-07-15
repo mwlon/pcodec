@@ -134,7 +134,7 @@ pub struct InternalCompressorConfig {
 impl InternalCompressorConfig {
   pub fn from_config<T: NumberLike>(config: &CompressorConfig) -> PcoResult<Self> {
     let compression_level = config.compression_level;
-    if compression_level < 0 || compression_level > MAX_COMPRESSION_LEVEL {
+    if compression_level > MAX_COMPRESSION_LEVEL {
       return Err(PcoError::invalid_argument(format!(
         "compression level may not exceed {} (was {})",
         MAX_COMPRESSION_LEVEL, compression_level,
@@ -356,9 +356,10 @@ fn train_mode_and_infos<U: UnsignedLike>(
 }
 
 // returns the ANS final state after decomposing the unsigneds in reverse order
-fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize>(
+fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
   stream_configs: &mut [StreamConfig<U>],
   src: &mut StreamSrc<U>,
+  n_nontrivial_streams: usize,
 ) -> PcoResult<DecomposedSrc<U>> {
   let empty_decomposeds = |n_unsigneds| unsafe {
     let mut res = Vec::with_capacity(n_unsigneds);
@@ -367,8 +368,12 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usi
   };
   let mut decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS] =
     core::array::from_fn(|stream_idx| empty_decomposeds(src.stream(stream_idx).len()));
-  let mut ans_final_states = [0; MAX_N_STREAMS];
-  for stream_idx in 0..STREAMS {
+  let mut ans_final_states = core::array::from_fn(|stream_idx|
+    1 << stream_configs.get(stream_idx)
+      .map(|config| config.encoder.size_log())
+      .unwrap_or_default()
+  );
+  for stream_idx in 0..n_nontrivial_streams {
     let stream = src.stream(stream_idx);
     let StreamConfig { table, encoder, .. } = &mut stream_configs[stream_idx];
     for i in (0..stream.len()).rev() {
@@ -401,11 +406,9 @@ fn decompose_unsigneds<U: UnsignedLike>(
     needs_gcds,
     ..
   } = mid_chunk_info;
-  match (n_nontrivial_streams, needs_gcds) {
-    (0, false) => mode_decompose_unsigneds::<U, ClassicMode, 0>(stream_configs, src),
-    (1, false) => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
-    (1, true) => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
-    (2, false) => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
+  match needs_gcds {
+    false => mode_decompose_unsigneds::<U, ClassicMode>(stream_configs, src, *n_nontrivial_streams),
+    true => mode_decompose_unsigneds::<U, GcdMode>(stream_configs, src, *n_nontrivial_streams),
     _ => panic!("unknown streams; should be unreachable"),
   }
 }
