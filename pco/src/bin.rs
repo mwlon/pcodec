@@ -1,8 +1,7 @@
 use crate::ans::Token;
-use crate::chunk_metadata::DataPageStreamMetadata;
+
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
-use crate::{ChunkStreamMetadata, Mode};
 
 /// Part of [`ChunkStreamMetadata`][`crate::ChunkStreamMetadata`] representing
 /// a numerical range.
@@ -82,5 +81,5 @@ impl<U: UnsignedLike> From<&Bin<U>> for BinDecompressionInfo<U> {
 }
 
 pub(crate) fn bins_are_trivial<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
-  bins.len() == 0 || (bins.len() == 1 && bins[0].offset_bits == 0)
+  bins.is_empty() || (bins.len() == 1 && bins[0].offset_bits == 0)
 }

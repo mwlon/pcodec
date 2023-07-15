@@ -15,7 +15,11 @@ impl CodecInternal for PcoConfig {
   fn get_conf(&self, key: &str) -> String {
     match key {
       "level" => self.compressor_config.compression_level.to_string(),
-      "delta_order" => self.compressor_config.delta_encoding_order.map(|order| order.to_string()).unwrap_or("auto".to_string()),
+      "delta_order" => self
+        .compressor_config
+        .delta_encoding_order
+        .map(|order| order.to_string())
+        .unwrap_or("auto".to_string()),
       "use_gcds" => self.compressor_config.use_gcds.to_string(),
       "use_float_mult" => self.compressor_config.use_float_mult.to_string(),
       _ => panic!("bad conf"),

@@ -4,10 +4,10 @@ use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_words::PaddedBytes;
 use crate::body_decompressor::BodyDecompressor;
-use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata, DataPageStreamMetadata};
+use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
-use crate::delta_encoding::DeltaMoments;
+
 use crate::errors::{PcoError, PcoResult};
 use crate::Flags;
 
@@ -124,7 +124,12 @@ impl<T: NumberLike> State<T> {
         PcoError::corruption("compressed page size {} is less than data page metadata size")
       })?;
 
-    BodyDecompressor::new(n, compressed_body_size, chunk_meta, data_page_meta)
+    BodyDecompressor::new(
+      n,
+      compressed_body_size,
+      chunk_meta,
+      data_page_meta,
+    )
   }
 
   pub fn step(&self) -> Step {

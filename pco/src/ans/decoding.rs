@@ -4,7 +4,6 @@ use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 
-use crate::chunk_metadata::DataPageStreamMetadata;
 use crate::ChunkStreamMetadata;
 
 #[derive(Clone, Debug)]
@@ -49,7 +48,10 @@ impl Decoder {
     }
   }
 
-  pub fn from_stream_meta<U: UnsignedLike>(stream: &ChunkStreamMetadata<U>, final_state: usize) -> PcoResult<Self> {
+  pub fn from_stream_meta<U: UnsignedLike>(
+    stream: &ChunkStreamMetadata<U>,
+    final_state: usize,
+  ) -> PcoResult<Self> {
     let weights = stream.bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
     let spec = Spec::from_weights(stream.ans_size_log, weights)?;
     Ok(Self::new(&spec, final_state))

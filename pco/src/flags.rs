@@ -100,8 +100,6 @@ impl Flags {
   }
 
   pub(crate) fn from_config(_config: &CompressorConfig, use_wrapped_mode: bool) -> Self {
-    Flags {
-      use_wrapped_mode,
-    }
+    Flags { use_wrapped_mode }
   }
 }

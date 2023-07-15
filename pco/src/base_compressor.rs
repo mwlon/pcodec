@@ -15,8 +15,8 @@ use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::modes::{gcd, ConstMode, Mode};
 use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
-use crate::{auto, Flags};
 use crate::{ans, delta_encoding};
+use crate::{auto, Flags};
 use crate::{bin_optimization, float_mult_utils};
 
 /// All configurations available for a compressor.
@@ -144,8 +144,7 @@ impl InternalCompressorConfig {
       if order > MAX_DELTA_ENCODING_ORDER {
         return Err(PcoError::invalid_argument(format!(
           "delta encoding order may not exceed {} (was {})",
-          MAX_DELTA_ENCODING_ORDER,
-          order,
+          MAX_DELTA_ENCODING_ORDER, order,
         )));
       }
     }
@@ -368,11 +367,12 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
   };
   let mut decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS] =
     core::array::from_fn(|stream_idx| empty_decomposeds(src.stream(stream_idx).len()));
-  let mut ans_final_states = core::array::from_fn(|stream_idx|
-    1 << stream_configs.get(stream_idx)
+  let mut ans_final_states = core::array::from_fn(|stream_idx| {
+    1 << stream_configs
+      .get(stream_idx)
       .map(|config| config.encoder.size_log())
       .unwrap_or_default()
-  );
+  });
   for stream_idx in 0..n_nontrivial_streams {
     let stream = src.stream(stream_idx);
     let StreamConfig { table, encoder, .. } = &mut stream_configs[stream_idx];
@@ -406,10 +406,10 @@ fn decompose_unsigneds<U: UnsignedLike>(
     needs_gcds,
     ..
   } = mid_chunk_info;
-  match needs_gcds {
-    false => mode_decompose_unsigneds::<U, ClassicMode>(stream_configs, src, *n_nontrivial_streams),
-    true => mode_decompose_unsigneds::<U, GcdMode>(stream_configs, src, *n_nontrivial_streams),
-    _ => panic!("unknown streams; should be unreachable"),
+  if *needs_gcds {
+    mode_decompose_unsigneds::<U, GcdMode>(stream_configs, src, *n_nontrivial_streams)
+  } else {
+    mode_decompose_unsigneds::<U, ClassicMode>(stream_configs, src, *n_nontrivial_streams)
   }
 }
 

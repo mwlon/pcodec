@@ -9,7 +9,8 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T::Unsigned> 
     use_gcds: false,
     delta_encoding_order: Some(0),
     ..Default::default()
-  }).unwrap();
+  })
+  .unwrap();
   compressor.header().expect("header");
   let metadata = compressor.chunk(&nums).expect("chunk");
   compressor.footer().expect("footer");

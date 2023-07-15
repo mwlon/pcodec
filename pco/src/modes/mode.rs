@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use crate::Bin;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
