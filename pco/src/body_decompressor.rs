@@ -10,7 +10,7 @@ use crate::errors::PcoResult;
 use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
-use crate::{delta_encoding, float_mult_utils};
+use crate::{ChunkMetadata, delta_encoding, float_mult_utils};
 use crate::{num_decompressor, Mode};
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
@@ -40,16 +40,16 @@ fn join_streams<U: UnsignedLike>(mode: Mode<U>, dst: UnsignedDst<U>) {
 }
 
 impl<T: NumberLike> BodyDecompressor<T> {
-  pub(crate) fn new(data_page_meta: DataPageMetadata<T::Unsigned>) -> PcoResult<Self> {
+  pub(crate) fn new(n: usize, compressed_body_size: usize, chunk_meta: &ChunkMetadata<T::Unsigned>, data_page_meta: DataPageMetadata<T::Unsigned>) -> PcoResult<Self> {
     let delta_momentss = data_page_meta
       .streams
       .iter()
       .map(|stream| stream.delta_moments.clone())
       .collect();
-    let dyn_mode = data_page_meta.mode;
-    let num_decompressor = num_decompressor::new(data_page_meta)?;
+    let num_decompressor = num_decompressor::new(n, compressed_body_size, chunk_meta, data_page_meta)?;
     Ok(Self {
-      mode: dyn_mode,
+      // we don't store the whole ChunkMeta because it can get large due to bins
+      mode: chunk_meta.mode,
       num_decompressor,
       delta_momentss,
       secondary_stream: [T::Unsigned::default(); UNSIGNED_BATCH_SIZE],

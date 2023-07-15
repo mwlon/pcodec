@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use crate::Bin;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
@@ -59,16 +60,14 @@ impl<U: UnsignedLike> Mode<U> {
   pub(crate) fn n_streams(&self) -> usize {
     match self {
       Mode::Classic | Mode::Gcd => 1,
-      Mode::FloatMult { .. } => 2,
+      Mode::FloatMult(_) => 2,
     }
   }
 
   pub(crate) fn stream_delta_order(&self, stream_idx: usize, delta_order: usize) -> usize {
     match (self, stream_idx) {
-      (Mode::Classic, 0) => delta_order,
-      (Mode::Gcd, 0) => delta_order,
-      (Mode::FloatMult { .. }, 0) => delta_order,
-      (Mode::FloatMult { .. }, 1) => 0,
+      (Mode::Classic, 0) | (Mode::Gcd, 0) | (Mode::FloatMult(_), 0) => delta_order,
+      (Mode::FloatMult(_), 1) => 0,
       _ => panic!(
         "should be unreachable; unknown stream {:?}/{}",
         self, stream_idx

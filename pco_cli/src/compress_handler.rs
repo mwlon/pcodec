@@ -20,8 +20,6 @@ use crate::number_like_arrow::NumberLikeArrow;
 use crate::opt::CompressOpt;
 use crate::utils;
 
-const AUTO_DELTA_LIMIT: usize = 1000;
-
 pub trait CompressHandler {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()>;
 }
@@ -38,26 +36,11 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
     }
     let mut file = open_options.open(&opt.pco_path)?;
 
-    let delta_encoding_order = if let Some(order) = opt.delta_encoding_order {
-      order
-    } else {
-      println!(
-        "automatically choosing delta encoding order based on first nums (specify --delta-order to skip)",
-      );
-      let head_nums = head_nums::<P>(schema, opt)?;
-      let best_order = pco::auto_compressor_config(&head_nums, opt.level).delta_encoding_order;
-      println!(
-        "determined best delta encoding order: {}",
-        best_order
-      );
-      best_order
-    };
-
     let config = CompressorConfig::default()
       .with_compression_level(opt.level)
-      .with_delta_encoding_order(delta_encoding_order)
+      .with_delta_encoding_order(opt.delta_encoding_order)
       .with_use_gcds(!opt.disable_gcds);
-    let mut compressor = Compressor::<P::Num>::from_config(config);
+    let mut compressor = Compressor::<P::Num>::from_config(config)?;
 
     compressor.header()?;
 
@@ -192,19 +175,4 @@ fn write_chunk<T: NumberLike>(
   compressor.chunk(nums)?;
   file.write_all(&compressor.drain_bytes())?;
   Ok(())
-}
-
-fn head_nums<P: NumberLikeArrow>(schema: &Schema, opt: &CompressOpt) -> Result<Vec<P::Num>> {
-  let mut reader = new_column_reader::<P>(schema, opt)?;
-  let mut head_nums = Vec::with_capacity(AUTO_DELTA_LIMIT);
-  while let Some(batch_result) = reader.next_batch() {
-    head_nums.extend(batch_result?);
-    if head_nums.len() >= AUTO_DELTA_LIMIT {
-      break;
-    }
-  }
-  if head_nums.len() > AUTO_DELTA_LIMIT {
-    head_nums = head_nums[0..AUTO_DELTA_LIMIT].to_vec();
-  }
-  Ok(head_nums)
 }

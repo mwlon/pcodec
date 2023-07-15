@@ -7,7 +7,7 @@ use crate::CompressorConfig;
 #[test]
 fn test_errors_do_not_mutate_decompressor() {
   let nums = vec![1, 2, 3, 4, 5];
-  let compressed = simple_compress(CompressorConfig::default(), &nums);
+  let compressed = simple_compress(&nums, CompressorConfig::default()).unwrap();
   let mut decompressor = Decompressor::<i32>::default();
 
   // header shouldn't leave us in a dirty state

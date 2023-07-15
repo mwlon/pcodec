@@ -15,7 +15,7 @@ use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::modes::{gcd, ConstMode, Mode};
 use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
-use crate::Flags;
+use crate::{auto, Flags};
 use crate::{ans, delta_encoding};
 use crate::{bin_optimization, float_mult_utils};
 
@@ -39,7 +39,8 @@ pub struct CompressorConfig {
   /// * Level 12 can achieve a few % better compression than 8 with 4096
   /// bins but runs ~5x slower in many cases.
   pub compression_level: usize,
-  /// `delta_encoding_order` ranges from 0 to 7 inclusive (default 0).
+  /// `delta_encoding_order` ranges from 0 to 7 inclusive (defaults to
+  /// automatically detecting on each chunk).
   ///
   /// It is the number of times to apply delta encoding
   /// before compressing. For instance, say we have the numbers
@@ -56,10 +57,10 @@ pub struct CompressorConfig {
   /// * Higher-order delta encoding is good for time series that are very
   /// smooth, like temperature or light sensor readings.
   ///
-  /// Setting delta encoding order too high or low will hurt compression ratio.
-  /// If you're unsure, use
-  /// [`auto_compressor_config()`][crate::auto_compressor_config] to choose it.
-  pub delta_encoding_order: usize,
+  /// If you would like to automatically choose this once and reuse it for all
+  /// chunks,
+  /// [`auto_compressor_config()`][crate::auto_compressor_config] can help.
+  pub delta_encoding_order: Option<usize>,
   /// `use_gcds` improves compression ratio in cases where all
   /// numbers in a bin share a nontrivial Greatest Common Divisor
   /// (default true).
@@ -92,7 +93,7 @@ impl Default for CompressorConfig {
   fn default() -> Self {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
-      delta_encoding_order: 0,
+      delta_encoding_order: None,
       use_gcds: true,
       use_float_mult: true,
     }
@@ -107,7 +108,7 @@ impl CompressorConfig {
   }
 
   /// Sets [`delta_encoding_order`][CompressorConfig::delta_encoding_order].
-  pub fn with_delta_encoding_order(mut self, order: usize) -> Self {
+  pub fn with_delta_encoding_order(mut self, order: Option<usize>) -> Self {
     self.delta_encoding_order = order;
     self
   }
@@ -125,17 +126,36 @@ impl CompressorConfig {
 #[derive(Clone, Debug)]
 pub struct InternalCompressorConfig {
   pub compression_level: usize,
+  pub delta_order: Option<usize>,
   pub use_gcds: bool,
   pub use_float_mult: bool,
 }
 
 impl InternalCompressorConfig {
-  pub fn from_config<T: NumberLike>(config: &CompressorConfig) -> Self {
-    InternalCompressorConfig {
-      compression_level: config.compression_level,
+  pub fn from_config<T: NumberLike>(config: &CompressorConfig) -> PcoResult<Self> {
+    let compression_level = config.compression_level;
+    if compression_level < 0 || compression_level > MAX_COMPRESSION_LEVEL {
+      return Err(PcoError::invalid_argument(format!(
+        "compression level may not exceed {} (was {})",
+        MAX_COMPRESSION_LEVEL, compression_level,
+      )));
+    }
+    if let Some(order) = config.delta_encoding_order {
+      if order > MAX_DELTA_ENCODING_ORDER {
+        return Err(PcoError::invalid_argument(format!(
+          "delta encoding order may not exceed {} (was {})",
+          MAX_DELTA_ENCODING_ORDER,
+          order,
+        )));
+      }
+    }
+
+    Ok(InternalCompressorConfig {
+      compression_level,
+      delta_order: config.delta_encoding_order,
       use_gcds: config.use_gcds,
       use_float_mult: config.use_float_mult && T::IS_FLOAT,
-    }
+    })
   }
 }
 
@@ -297,12 +317,6 @@ fn train_mode_and_infos<U: UnsignedLike>(
     return Ok(TrainedBins::default());
   }
 
-  if comp_level > MAX_COMPRESSION_LEVEL {
-    return Err(PcoError::invalid_argument(format!(
-      "compression level may not exceed {} (was {})",
-      MAX_COMPRESSION_LEVEL, comp_level,
-    )));
-  }
   if n > MAX_ENTRIES {
     return Err(PcoError::invalid_argument(format!(
       "count may not exceed {} per chunk (was {})",
@@ -381,15 +395,18 @@ fn decompose_unsigneds<U: UnsignedLike>(
   mid_chunk_info: &mut MidChunkInfo<U>,
 ) -> PcoResult<DecomposedSrc<U>> {
   let MidChunkInfo {
-    mode: dyn_mode,
     stream_configs,
     src,
+    n_nontrivial_streams,
+    needs_gcds,
     ..
   } = mid_chunk_info;
-  match *dyn_mode {
-    Mode::Classic => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
-    Mode::Gcd => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
-    Mode::FloatMult { .. } => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
+  match (n_nontrivial_streams, needs_gcds) {
+    (0, false) => mode_decompose_unsigneds::<U, ClassicMode, 0>(stream_configs, src),
+    (1, false) => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
+    (1, true) => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
+    (2, false) => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
+    _ => panic!("unknown streams; should be unreachable"),
   }
 }
 
@@ -423,8 +440,11 @@ fn write_decomposeds<U: UnsignedLike, const STREAMS: usize>(
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
   stream_configs: Vec<StreamConfig<U>>,
-  mode: Mode<U>,
   page_sizes: Vec<usize>,
+  n_streams: usize,
+  n_nontrivial_streams: usize,
+  needs_gcds: bool,
+
   // mutable:
   src: StreamSrc<U>,
   page_idx: usize,
@@ -484,13 +504,13 @@ fn bins_from_compression_infos<U: UnsignedLike>(infos: &[BinCompressionInfo<U>])
 }
 
 impl<T: NumberLike> BaseCompressor<T> {
-  pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> Self {
-    Self {
-      internal_config: InternalCompressorConfig::from_config::<T>(&config),
+  pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> PcoResult<Self> {
+    Ok(Self {
+      internal_config: InternalCompressorConfig::from_config::<T>(&config)?,
       flags: Flags::from_config(&config, use_wrapped_mode),
       writer: BitWriter::default(),
       state: State::default(),
-    }
+    })
   }
 
   pub fn header(&mut self) -> PcoResult<()> {
@@ -562,10 +582,16 @@ impl<T: NumberLike> BaseCompressor<T> {
     let page_idxs = cumulative_sum(&page_sizes);
     let n_streams = naive_mode.n_streams();
 
+    let delta_order = if let Some(delta_order) = self.internal_config.delta_order {
+      delta_order
+    } else {
+      auto::auto_delta_encoding_order(nums, self.internal_config.compression_level)
+    };
+
     let mut stream_metas = Vec::with_capacity(n_streams);
     let mut stream_configs = Vec::with_capacity(n_streams);
     for stream_idx in 0..n_streams {
-      let delta_order = naive_mode.stream_delta_order(stream_idx, self.flags.delta_encoding_order);
+      let delta_order = naive_mode.stream_delta_order(stream_idx, delta_order);
       let delta_momentss = delta_encoding::nth_order_deltas(
         src.stream_mut(stream_idx),
         delta_order,
@@ -612,13 +638,18 @@ impl<T: NumberLike> BaseCompressor<T> {
       other => other,
     };
 
-    let meta = ChunkMetadata::new(n, optimized_mode, stream_metas);
+    let meta = ChunkMetadata::new(n, optimized_mode, delta_order, stream_metas);
     meta.write_to(&self.flags, &mut self.writer);
+
+    let n_streams = optimized_mode.n_streams();
+    let (needs_gcds, n_nontrivial_streams) = meta.necessary_gcd_and_n_streams();
 
     self.state = State::MidChunk(MidChunkInfo {
       stream_configs,
-      mode: optimized_mode,
       page_sizes,
+      n_streams,
+      n_nontrivial_streams,
+      needs_gcds,
       src,
       page_idx: 0,
     });
@@ -634,7 +665,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     let decomposeds = decompose_unsigneds(info)?;
 
-    for stream_idx in 0..info.mode.n_streams() {
+    for stream_idx in 0..info.n_streams {
       info
         .data_page_moments(stream_idx)
         .write_to(&mut self.writer);
@@ -649,7 +680,12 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     self.writer.finish_byte();
 
-    match info.mode.n_streams() {
+    match info.n_nontrivial_streams {
+      0 => write_decomposeds::<_, 0>(
+        decomposeds,
+        info.page_sizes[info.page_idx],
+        &mut self.writer,
+      ),
       1 => write_decomposeds::<_, 1>(
         decomposeds,
         info.page_sizes[info.page_idx],

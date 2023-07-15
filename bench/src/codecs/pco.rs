@@ -4,7 +4,6 @@ use anyhow::{anyhow, Result};
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {
-  use_fixed_delta: bool,
   compressor_config: pco::CompressorConfig,
 }
 
@@ -16,13 +15,7 @@ impl CodecInternal for PcoConfig {
   fn get_conf(&self, key: &str) -> String {
     match key {
       "level" => self.compressor_config.compression_level.to_string(),
-      "delta_order" => {
-        if self.use_fixed_delta {
-          self.compressor_config.delta_encoding_order.to_string()
-        } else {
-          "auto".to_string()
-        }
-      }
+      "delta_order" => self.compressor_config.delta_encoding_order.map(|order| order.to_string()).unwrap_or("auto".to_string()),
       "use_gcds" => self.compressor_config.use_gcds.to_string(),
       "use_float_mult" => self.compressor_config.use_float_mult.to_string(),
       _ => panic!("bad conf"),
@@ -34,9 +27,10 @@ impl CodecInternal for PcoConfig {
       "level" => self.compressor_config.compression_level = value.parse::<usize>().unwrap(),
       "delta_order" => {
         if let Ok(order) = value.parse::<usize>() {
-          self.compressor_config.delta_encoding_order = order;
-          self.use_fixed_delta = true;
-        } else if value.to_lowercase() != "auto" {
+          self.compressor_config.delta_encoding_order = Some(order);
+        } else if value.to_lowercase() == "auto" {
+          self.compressor_config.delta_encoding_order = None;
+        } else {
           return Err(anyhow!(
             "cannot parse delta order: {}",
             value
@@ -51,13 +45,9 @@ impl CodecInternal for PcoConfig {
   }
 
   fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
-    let mut c_config = self.compressor_config.clone();
+    let c_config = self.compressor_config.clone();
     let pco_nums = T::slice_to_pco(nums);
-    if !self.use_fixed_delta {
-      c_config.delta_encoding_order =
-        pco::auto_compressor_config(pco_nums, c_config.compression_level).delta_encoding_order;
-    }
-    pco::standalone::simple_compress(c_config, pco_nums)
+    pco::standalone::simple_compress(pco_nums, c_config).expect("invalid config")
   }
 
   fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {

@@ -7,8 +7,8 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::modes::Mode;
-use crate::Flags;
+use crate::modes::{gcd, Mode};
+use crate::{bin, Flags};
 
 /// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a stream
 /// interleaved into the compressed data.
@@ -47,32 +47,30 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
 
     write_bins(&self.bins, mode, self.ans_size_log, writer);
   }
+
 }
 
 #[derive(Clone, Debug)]
-pub struct DataPageStreamMetadata<'a, U: UnsignedLike> {
-  pub bins: &'a [Bin<U>],
+pub struct DataPageStreamMetadata<U: UnsignedLike> {
   pub delta_moments: DeltaMoments<U>,
-  pub ans_size_log: Bitlen,
   pub ans_final_state: usize,
 }
 
-impl<'a, U: UnsignedLike> DataPageStreamMetadata<'a, U> {
-  pub fn new(
-    chunk_stream_meta: &'a ChunkStreamMetadata<U>,
-    delta_moments: DeltaMoments<U>,
-    ans_final_state: usize,
-  ) -> Self {
-    Self {
-      bins: &chunk_stream_meta.bins,
-      delta_moments,
-      ans_size_log: chunk_stream_meta.ans_size_log,
-      ans_final_state,
-    }
+impl<U: UnsignedLike> DataPageStreamMetadata<U> {
+  pub fn write_to(&self, ans_size_log: Bitlen, writer: &mut BitWriter) {
+    self.delta_moments.write_to(writer);
+
+    // write the final ANS state, moving it down the range [0, table_size)
+    writer.write_usize(self.ans_final_state - (1 << ans_size_log), ans_size_log);
   }
 
-  pub fn is_trivial(&self) -> bool {
-    self.bins.len() == 0 || (self.bins.len() == 1 && self.bins[0].offset_bits == 0)
+  pub fn parse_from(reader: &mut BitReader, delta_order: usize, ans_size_log: Bitlen) -> PcoResult<Self> {
+    let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
+    let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
+    Ok(Self {
+      delta_moments,
+      ans_final_state,
+    })
   }
 }
 
@@ -97,6 +95,10 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   pub compressed_body_size: usize,
   /// The formula `pco` used to compress each number at a low level.
   pub mode: Mode<U>,
+  /// How many times delta encoding was applied during compression.
+  /// This is stored as 3 bits to express 0-7.
+  /// See [`CompressorConfig`][crate::CompressorConfig] for more details.
+  pub delta_encoding_order: usize,
   /// The interleaved streams needed by `pco` to compress/decompress the inputs
   /// to the formula used by `mode`.
   pub streams: Vec<ChunkStreamMetadata<U>>,
@@ -108,11 +110,29 @@ pub struct ChunkMetadata<U: UnsignedLike> {
 // chunk metadata parsing step (standalone mode) OR from the wrapping format
 // (wrapped mode).
 #[derive(Clone, Debug)]
-pub struct DataPageMetadata<'a, U: UnsignedLike> {
-  pub n: usize,
-  pub compressed_body_size: usize,
-  pub mode: Mode<U>,
-  pub streams: Vec<DataPageStreamMetadata<'a, U>>,
+pub struct DataPageMetadata<U: UnsignedLike> {
+  pub streams: Vec<DataPageStreamMetadata<U>>,
+}
+
+impl<U: UnsignedLike> DataPageMetadata<U> {
+  pub fn write_to(&self, chunk_meta: &ChunkMetadata<U>, writer: &mut BitWriter) {
+    for (stream_idx, stream_meta) in chunk_meta.streams.iter().enumerate() {
+      self.streams[stream_idx].write_to(stream_meta.ans_size_log, writer);
+    }
+    writer.finish_byte();
+  }
+
+  pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMetadata<U>) -> PcoResult<Self> {
+    let mut streams = Vec::with_capacity(chunk_meta.streams.len());
+    for (stream_idx, stream_meta) in chunk_meta.streams.iter().enumerate() {
+      streams.push(DataPageStreamMetadata::parse_from(reader, chunk_meta.stream_delta_order(stream_idx), stream_meta.ans_size_log)?);
+    }
+    reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
+
+    Ok(Self {
+      streams
+    })
+  }
 }
 
 fn parse_bins<U: UnsignedLike>(
@@ -190,11 +210,12 @@ fn write_bins<U: UnsignedLike>(
 }
 
 impl<U: UnsignedLike> ChunkMetadata<U> {
-  pub(crate) fn new(n: usize, mode: Mode<U>, streams: Vec<ChunkStreamMetadata<U>>) -> Self {
+  pub(crate) fn new(n: usize, mode: Mode<U>, delta_encoding_order: usize, streams: Vec<ChunkStreamMetadata<U>>) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
       mode,
+      delta_encoding_order,
       streams,
     }
   }
@@ -225,6 +246,8 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       ))),
     }?;
 
+    let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)?;
+
     let n_streams = mode.n_streams();
 
     let mut streams = Vec::with_capacity(n_streams);
@@ -240,6 +263,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       n,
       compressed_body_size,
       mode,
+      delta_encoding_order,
       streams,
     })
   }
@@ -263,6 +287,11 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       writer.write_diff(config.base.to_unsigned(), U::BITS);
     }
 
+    writer.write_usize(
+      self.delta_encoding_order,
+      BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
+    );
+
     for stream in &self.streams {
       stream.write_to(self.mode, writer);
     }
@@ -277,6 +306,36 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
     );
   }
+
+  pub(crate) fn necessary_gcd_and_n_streams(&self) -> (bool, usize) {
+    let primary_bins = &self.streams[0].bins;
+    match self.mode {
+      Mode::Classic | Mode::Gcd => {
+        if bin::bins_are_trivial(primary_bins) {
+          (false, 0)
+        } else {
+          let needs_gcd = gcd::use_gcd_arithmetic(primary_bins);
+          (needs_gcd, 1)
+        }
+      },
+      Mode::FloatMult(_) => {
+        let n_streams = if bin::bins_are_trivial(&self.streams[1].bins) {
+          if bin::bins_are_trivial(primary_bins) {
+            0
+          } else {
+            1
+          }
+        } else {
+          2
+        };
+        (false, n_streams)
+      }
+    }
+  }
+
+  pub(crate) fn stream_delta_order(&self, stream_idx: usize) -> usize {
+    self.mode.stream_delta_order(stream_idx, self.delta_encoding_order)
+  }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -286,3 +345,4 @@ pub enum DataPagingSpec {
   SinglePage,
   ExactPageSizes(Vec<usize>),
 }
+

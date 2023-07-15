@@ -123,7 +123,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
         };
         let show_as_float_int = matches!(m.mode, Mode::FloatMult { .. }) && stream_idx == 0;
         let show_as_delta = (matches!(m.mode, Mode::FloatMult { .. }) && stream_idx == 1)
-          || flags.delta_encoding_order > 0;
+          || m.delta_encoding_order > 0;
         println!(
           "stream: {} n_bins: {} ANS size log: {}",
           stream_name,

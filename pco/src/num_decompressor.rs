@@ -15,7 +15,7 @@ use crate::modes::gcd::GcdMode;
 use crate::modes::{ConstMode, gcd};
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
-use crate::{ans, Mode};
+use crate::{ans, ChunkMetadata, Mode};
 
 #[derive(Clone, Debug)]
 pub struct State<const STREAMS: usize> {
@@ -98,11 +98,23 @@ struct NumDecompressorImpl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usiz
   state: State<STREAMS>,
 }
 
+struct NumDecompressorInputs<'a, U: UnsignedLike> {
+  n: usize,
+  compressed_body_size: usize,
+  chunk_meta: &'a ChunkMetadata<U>,
+  data_page_meta: DataPageMetadata<U>,
+  max_bits_per_num_block: Bitlen,
+  initial_values_required: [Option<U>; MAX_N_STREAMS],
+}
+
 pub fn new<U: UnsignedLike>(
+  n: usize,
+  compressed_body_size: usize,
+  chunk_meta: &ChunkMetadata<U>,
   data_page_meta: DataPageMetadata<U>,
 ) -> PcoResult<Box<dyn NumDecompressor<U>>> {
   let mut max_bits_per_num_block = 0;
-  for stream in &data_page_meta.streams {
+  for stream in &chunk_meta.streams {
     max_bits_per_num_block += stream
       .bins
       .iter()
@@ -114,62 +126,34 @@ pub fn new<U: UnsignedLike>(
       .unwrap_or(Bitlen::MAX);
   }
 
-  let (needs_gcd, n_streams) = match data_page_meta.mode {
-    Mode::Classic | Mode::Gcd => {
-      let stream_meta = &data_page_meta.streams[0];
-      if stream_meta.is_trivial() {
-        (false, 0)
-      } else {
-        let needs_gcd = gcd::use_gcd_arithmetic(&data_page_meta.streams[0].bins);
-        (needs_gcd, 1)
-      }
-    },
-    Mode::FloatMult(_) => {
-      let n_streams = if data_page_meta.streams[1].is_trivial() {
-        if data_page_meta.streams[0].is_trivial() {
-          0
-        } else {
-          1
-        }
-      } else {
-        2
-      };
-      (false, n_streams)
-    }
-  };
+  let (needs_gcd, n_streams) = chunk_meta.necessary_gcd_and_n_streams();
+
   let mut initial_values_required = [None; MAX_N_STREAMS];
   for stream_idx in n_streams..MAX_N_STREAMS {
-    initial_values_required[stream_idx] = data_page_meta.streams.get(stream_idx)
+    initial_values_required[stream_idx] = chunk_meta.streams.get(stream_idx)
       .and_then(|stream_meta| stream_meta.bins.get(0))
       .map(|only_bin| only_bin.lower);
   }
+  let inputs = NumDecompressorInputs {
+    n,
+    compressed_body_size,
+    chunk_meta,
+    data_page_meta,
+    max_bits_per_num_block,
+    initial_values_required,
+  };
 
   let res: Box<dyn NumDecompressor<U>> = match (needs_gcd, n_streams) {
     (false, 0) => Box::new(
-      NumDecompressorImpl::<U, ClassicMode, 0>::new(
-        data_page_meta,
-        max_bits_per_num_block,
-        initial_values_required,
-      )?,
+      NumDecompressorImpl::<U, ClassicMode, 0>::new(inputs)?
     ),
     (false, 1) => Box::new(
-      NumDecompressorImpl::<U, ClassicMode, 1>::new(
-        data_page_meta,
-        max_bits_per_num_block,
-        initial_values_required,
-      )?,
+      NumDecompressorImpl::<U, ClassicMode, 1>::new(inputs)?
     ),
-    (true, 1) => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
-      data_page_meta,
-      max_bits_per_num_block,
-      initial_values_required,
-    )?),
+    (true, 1) => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(inputs)?
+    ),
     (false, 2) => Box::new(
-      NumDecompressorImpl::<U, ClassicMode, 2>::new(
-        data_page_meta,
-        max_bits_per_num_block,
-        initial_values_required,
-      )?,
+      NumDecompressorImpl::<U, ClassicMode, 2>::new(inputs)?
     ),
     _ => panic!("unknown decompression implementation; should be unreachable")
   };
@@ -232,35 +216,37 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
 
 impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
   fn new(
-    data_page_meta: DataPageMetadata<U>,
-    max_bits_per_num_block: Bitlen,
-    initial_values_required: [Option<U>; MAX_N_STREAMS],
+    inputs: NumDecompressorInputs<U>,
   ) -> PcoResult<Self> {
-    let DataPageMetadata {
+    let NumDecompressorInputs {
       n,
       compressed_body_size,
-      streams,
-      ..
-    } = data_page_meta;
-
+      chunk_meta,
+      data_page_meta,
+      max_bits_per_num_block,
+      initial_values_required,
+    } = inputs;
     let mut decoders: [MaybeUninit<ans::Decoder>; STREAMS] =
       unsafe { MaybeUninit::uninit().assume_init() };
-    for i in 0..STREAMS {
-      let stream = &streams[i];
 
-      let delta_order = stream.delta_moments.order();
-      if stream.bins.is_empty() && n > delta_order {
+    let delta_orders = data_page_meta.streams.iter().map(|stream| stream.delta_moments.order()).collect::<Vec<_>>();
+    for stream_idx in 0..STREAMS {
+      let chunk_stream = &chunk_meta.streams[stream_idx];
+      let page_stream = &data_page_meta.streams[stream_idx];
+
+      let delta_order = delta_orders[stream_idx];
+      if chunk_stream.bins.is_empty() && n > delta_order {
         return Err(PcoError::corruption(format!(
           "unable to decompress chunk with no bins and {} deltas",
           n - delta_order,
         )));
       }
 
-      decoders[i].write(ans::Decoder::from_stream_meta(stream)?);
+      decoders[stream_idx].write(ans::Decoder::from_stream_meta(chunk_stream, page_stream.ans_final_state)?);
     }
 
     let stream_configs = core::array::from_fn(|stream_idx| {
-      let stream = &streams[stream_idx];
+      let stream = &chunk_meta.streams[stream_idx];
       let infos = stream
         .bins
         .iter()
@@ -268,7 +254,7 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl
         .collect::<Vec<_>>();
       StreamConfig {
         infos,
-        delta_order: stream.delta_moments.order(),
+        delta_order: delta_orders[stream_idx],
       }
     });
 

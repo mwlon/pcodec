@@ -23,7 +23,7 @@ pub fn wrapped_compress<T: NumberLike>(
 ) -> PcoResult<Vec<u8>> {
   let mut res = Vec::new();
 
-  let mut compressor = Compressor::<T>::from_config(config);
+  let mut compressor = Compressor::<T>::from_config(config)?;
   compressor.header()?;
   let header = compressor.drain_bytes();
   res.extend(encode_usize(header.len()));

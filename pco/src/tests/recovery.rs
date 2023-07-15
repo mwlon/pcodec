@@ -221,10 +221,10 @@ fn assert_recovers_within_size<T: NumberLike>(
   );
   let config = CompressorConfig {
     compression_level,
-    delta_encoding_order,
+    delta_encoding_order: Some(delta_encoding_order),
     ..Default::default()
   };
-  let compressed = simple_compress(config, nums);
+  let compressed = simple_compress(nums, config)?;
   assert!(
     compressed.len() <= max_byte_size,
     "compressed size {} > {}; {}",

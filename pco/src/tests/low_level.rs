@@ -30,9 +30,9 @@ fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) -> PcoResult
   for delta_encoding_order in [0, 7] {
     let debug_info = format!("delta order={}", delta_encoding_order);
     let mut compressor = Compressor::<T>::from_config(CompressorConfig {
-      delta_encoding_order,
+      delta_encoding_order: Some(delta_encoding_order),
       ..Default::default()
-    });
+    }).unwrap();
     compressor.header()?;
     let mut metadatas = Vec::new();
     for nums in &chunks {

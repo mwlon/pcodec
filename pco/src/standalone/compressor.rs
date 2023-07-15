@@ -30,20 +30,24 @@ pub struct Compressor<T: NumberLike>(BaseCompressor<T>);
 
 impl<T: NumberLike> Default for Compressor<T> {
   fn default() -> Self {
-    Self::from_config(CompressorConfig::default())
+    Self::from_config(CompressorConfig::default()).unwrap()
   }
 }
 
 impl<T: NumberLike> Compressor<T> {
   /// Creates a new compressor, given a [`CompressorConfig`].
+  ///
   /// Internally, the compressor builds [`Flags`] as well as an internal
   /// configuration that doesn't show up in the output file.
   /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
-  pub fn from_config(config: CompressorConfig) -> Self {
-    Self(BaseCompressor::<T>::from_config(
+  ///
+  /// Will return an error if the compressor config is invalid.
+  pub fn from_config(config: CompressorConfig) -> PcoResult<Self> {
+    Ok(Self(BaseCompressor::<T>::from_config(
       config, false,
-    ))
+    )?))
   }
+
   /// Returns a reference to the compressor's flags.
   pub fn flags(&self) -> &Flags {
     &self.0.flags
