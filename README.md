@@ -39,7 +39,7 @@ or see its results.
 
 ## File Format
 
-<img alt="pco wrapped format diagram" src="./images/wrapped_format.svg" />
+<img alt="pco wrapped format diagram" title="pco wrapped format" src="./images/wrapped_format.svg" />
 
 The core idea of pco is to represent numbers as approximate, entropy-coded bins
 paired with exact offsets into those bins.
@@ -51,7 +51,7 @@ using data pages as the unit of interleaving.
 The standalone format supports only streaming decompression and seeking, but
 not nullability, multiple columns, random access, or other niceties.
 
-<img alt="pco compression and decompression steps" src="./images/processing.svg" />
+<img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
 
 ## Etymology
 
