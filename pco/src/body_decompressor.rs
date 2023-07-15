@@ -99,9 +99,17 @@ impl<T: NumberLike> BodyDecompressor<T> {
         }
       }
 
-      let progress = num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, &mut u_dst)?;
+      let progress = num_decompressor.decompress_unsigneds(
+        reader,
+        error_on_insufficient_data,
+        &mut u_dst,
+      )?;
 
-      for (stream_idx, delta_moments) in delta_momentss.iter_mut().take(self.mode.n_streams()).enumerate() {
+      for (stream_idx, delta_moments) in delta_momentss
+        .iter_mut()
+        .take(self.mode.n_streams())
+        .enumerate()
+      {
         delta_encoding::reconstruct_in_place(delta_moments, u_dst.stream(stream_idx));
       }
 
