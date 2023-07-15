@@ -23,7 +23,7 @@ with high compression ratio and moderately fast speed.
 
 It is also possible to implement your own data type via `NumberLike` and (if
 necessary) `UnsignedLike` and `FloatLike`.
-For smaller integers or timestamps, it is best to simply case to one of the
+For smaller integers or timestamps, it is best to simply cast to one of the
 natively supported data types.
 
 ## Get Started

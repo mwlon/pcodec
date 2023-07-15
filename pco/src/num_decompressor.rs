@@ -7,12 +7,12 @@ use std::mem::MaybeUninit;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
-use crate::constants::{Bitlen, DECOMPRESS_UNCHECKED_THRESHOLD, MAX_DELTA_ENCODING_ORDER};
+use crate::constants::{Bitlen, DECOMPRESS_UNCHECKED_THRESHOLD, MAX_DELTA_ENCODING_ORDER, MAX_N_STREAMS};
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
-use crate::modes::ConstMode;
+use crate::modes::{ConstMode, gcd};
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
 use crate::{ans, Mode};
@@ -65,6 +65,8 @@ impl<const STREAMS: usize> State<STREAMS> {
 pub trait NumDecompressor<U: UnsignedLike>: Debug {
   fn bits_remaining(&self) -> usize;
 
+  fn initial_value_required(&self, stream_idx: usize) -> Option<U>;
+
   fn decompress_unsigneds(
     &mut self,
     reader: &mut BitReader,
@@ -90,6 +92,7 @@ struct NumDecompressorImpl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usiz
   max_bits_per_num_block: Bitlen,
   stream_configs: [StreamConfig<U>; STREAMS],
   phantom: PhantomData<M>,
+  initial_values_required: [Option<U>; MAX_N_STREAMS],
 
   // mutable state
   state: State<STREAMS>,
@@ -110,17 +113,65 @@ pub fn new<U: UnsignedLike>(
       .max()
       .unwrap_or(Bitlen::MAX);
   }
-  let res: Box<dyn NumDecompressor<U>> = match data_page_meta.mode {
-    Mode::Classic => Box::new(
-      NumDecompressorImpl::<U, ClassicMode, 1>::new(data_page_meta, max_bits_per_num_block)?,
+
+  let (needs_gcd, n_streams) = match data_page_meta.mode {
+    Mode::Classic | Mode::Gcd => {
+      let stream_meta = &data_page_meta.streams[0];
+      if stream_meta.is_trivial() {
+        (false, 0)
+      } else {
+        let needs_gcd = gcd::use_gcd_arithmetic(&data_page_meta.streams[0].bins);
+        (needs_gcd, 1)
+      }
+    },
+    Mode::FloatMult(_) => {
+      let n_streams = if data_page_meta.streams[1].is_trivial() {
+        if data_page_meta.streams[0].is_trivial() {
+          0
+        } else {
+          1
+        }
+      } else {
+        2
+      };
+      (false, n_streams)
+    }
+  };
+  let mut initial_values_required = [None; MAX_N_STREAMS];
+  for stream_idx in n_streams..MAX_N_STREAMS {
+    initial_values_required[stream_idx] = data_page_meta.streams.get(stream_idx)
+      .and_then(|stream_meta| stream_meta.bins.get(0))
+      .map(|only_bin| only_bin.lower);
+  }
+
+  let res: Box<dyn NumDecompressor<U>> = match (needs_gcd, n_streams) {
+    (false, 0) => Box::new(
+      NumDecompressorImpl::<U, ClassicMode, 0>::new(
+        data_page_meta,
+        max_bits_per_num_block,
+        initial_values_required,
+      )?,
     ),
-    Mode::Gcd => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
+    (false, 1) => Box::new(
+      NumDecompressorImpl::<U, ClassicMode, 1>::new(
+        data_page_meta,
+        max_bits_per_num_block,
+        initial_values_required,
+      )?,
+    ),
+    (true, 1) => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
       data_page_meta,
       max_bits_per_num_block,
+      initial_values_required,
     )?),
-    Mode::FloatMult { .. } => Box::new(
-      NumDecompressorImpl::<U, ClassicMode, 2>::new(data_page_meta, max_bits_per_num_block)?,
+    (false, 2) => Box::new(
+      NumDecompressorImpl::<U, ClassicMode, 2>::new(
+        data_page_meta,
+        max_bits_per_num_block,
+        initial_values_required,
+      )?,
     ),
+    _ => panic!("unknown decompression implementation; should be unreachable")
   };
 
   Ok(res)
@@ -131,6 +182,10 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
 {
   fn bits_remaining(&self) -> usize {
     self.compressed_body_size * 8 - self.state.bits_processed
+  }
+
+  fn initial_value_required(&self, stream_idx: usize) -> Option<U> {
+    self.initial_values_required[stream_idx]
   }
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
@@ -176,7 +231,11 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
 }
 
 impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
-  fn new(data_page_meta: DataPageMetadata<U>, max_bits_per_num_block: Bitlen) -> PcoResult<Self> {
+  fn new(
+    data_page_meta: DataPageMetadata<U>,
+    max_bits_per_num_block: Bitlen,
+    initial_values_required: [Option<U>; MAX_N_STREAMS],
+  ) -> PcoResult<Self> {
     let DataPageMetadata {
       n,
       compressed_body_size,
@@ -218,6 +277,7 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl
       compressed_body_size,
       max_bits_per_num_block,
       stream_configs,
+      initial_values_required,
       phantom: PhantomData,
       state: State {
         n_processed: 0,

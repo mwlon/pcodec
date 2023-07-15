@@ -70,6 +70,10 @@ impl<'a, U: UnsignedLike> DataPageStreamMetadata<'a, U> {
       ans_final_state,
     }
   }
+
+  pub fn is_trivial(&self) -> bool {
+    self.bins.len() == 0 || (self.bins.len() == 1 && self.bins[0].offset_bits == 0)
+  }
 }
 
 /// The metadata of a pco chunk.

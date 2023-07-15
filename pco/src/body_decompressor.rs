@@ -52,7 +52,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
       mode: dyn_mode,
       num_decompressor,
       delta_momentss,
-      secondary_stream: [T::Unsigned::ZERO; UNSIGNED_BATCH_SIZE],
+      secondary_stream: [T::Unsigned::default(); UNSIGNED_BATCH_SIZE],
       phantom: PhantomData,
     })
   }
@@ -71,6 +71,13 @@ impl<T: NumberLike> BodyDecompressor<T> {
       delta_momentss,
       ..
     } = self;
+
+    if let Some(initial_value_required) = num_decompressor.initial_value_required(0) {
+      unsigneds_mut.fill(initial_value_required);
+    }
+    if let Some(initial_value_required) = num_decompressor.initial_value_required(1) {
+      self.secondary_stream.fill(initial_value_required);
+    }
 
     let progress = {
       let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
