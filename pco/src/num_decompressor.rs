@@ -73,7 +73,7 @@ pub trait NumDecompressor<U: UnsignedLike>: Debug {
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
-    dst: UnsignedDst<U>,
+    dst: &mut UnsignedDst<U>,
   ) -> PcoResult<Progress>;
 
   fn clone_inner(&self) -> Box<dyn NumDecompressor<U>>;
@@ -129,7 +129,7 @@ pub fn new<U: UnsignedLike>(
       .unwrap_or(Bitlen::MAX);
   }
 
-  let (needs_gcd, n_streams) = chunk_meta.necessary_gcd_and_n_streams();
+  let (needs_gcd, n_streams) = chunk_meta.nontrivial_gcd_and_n_streams();
 
   let mut initial_values_required = [None; MAX_N_STREAMS];
   for stream_idx in n_streams..MAX_N_STREAMS {
@@ -178,11 +178,11 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
     &mut self,
     reader: &mut BitReader,
     error_on_insufficient_data: bool,
-    mut dst: UnsignedDst<U>,
+    dst: &mut UnsignedDst<U>,
   ) -> PcoResult<Progress> {
     let initial_reader = reader.clone();
     let state_backup = self.state.backup();
-    let res = self.decompress_unsigneds_dirty(reader, error_on_insufficient_data, &mut dst);
+    let res = self.decompress_unsigneds_dirty(reader, error_on_insufficient_data, dst);
     match &res {
       Ok(progress) => {
         self.state.n_processed += progress.n_processed;

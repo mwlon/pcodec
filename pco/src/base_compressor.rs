@@ -645,7 +645,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     meta.write_to(&self.flags, &mut self.writer);
 
     let n_streams = optimized_mode.n_streams();
-    let (needs_gcds, n_nontrivial_streams) = meta.necessary_gcd_and_n_streams();
+    let (needs_gcds, n_nontrivial_streams) = meta.nontrivial_gcd_and_n_streams();
 
     self.state = State::MidChunk(MidChunkInfo {
       stream_configs,

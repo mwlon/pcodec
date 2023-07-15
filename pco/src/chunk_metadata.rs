@@ -317,7 +317,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     );
   }
 
-  pub(crate) fn necessary_gcd_and_n_streams(&self) -> (bool, usize) {
+  pub(crate) fn nontrivial_gcd_and_n_streams(&self) -> (bool, usize) {
     let primary_bins = &self.streams[0].bins;
     match self.mode {
       Mode::Classic | Mode::Gcd => {

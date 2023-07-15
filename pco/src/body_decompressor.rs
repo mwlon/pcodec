@@ -81,6 +81,7 @@ impl<T: NumberLike> BodyDecompressor<T> {
       delta_momentss,
       ..
     } = self;
+    let n_streams = self.mode.n_streams();
 
     if let Some(initial_value_required) = num_decompressor.initial_value_required(0) {
       unsigneds_mut.fill(initial_value_required);
@@ -90,18 +91,23 @@ impl<T: NumberLike> BodyDecompressor<T> {
     }
 
     let progress = {
-      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
-      num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dst)?
-    };
+      let mut u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
 
-    for delta_moments in delta_momentss.iter_mut().take(self.mode.n_streams()) {
-      delta_encoding::reconstruct_in_place(delta_moments, unsigneds_mut);
-    }
+      for stream_idx in 0..n_streams {
+        if let Some(initial_value) = num_decompressor.initial_value_required(stream_idx) {
+          u_dst.stream(stream_idx).fill(initial_value);
+        }
+      }
 
-    {
-      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
+      let progress = num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, &mut u_dst)?;
+
+      for (stream_idx, delta_moments) in delta_momentss.iter_mut().take(self.mode.n_streams()).enumerate() {
+        delta_encoding::reconstruct_in_place(delta_moments, u_dst.stream(stream_idx));
+      }
+
       join_streams(self.mode, u_dst);
-    }
+      progress
+    };
 
     unsigneds_to_nums_in_place::<T>(unsigneds_mut);
 
