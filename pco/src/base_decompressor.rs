@@ -4,10 +4,10 @@ use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_words::PaddedBytes;
 use crate::body_decompressor::BodyDecompressor;
-use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata, DataPageStreamMetadata};
+use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
-use crate::delta_encoding::DeltaMoments;
+
 use crate::errors::{PcoError, PcoResult};
 use crate::Flags;
 
@@ -112,42 +112,24 @@ impl<T: NumberLike> State<T> {
     n: usize,
     compressed_page_size: usize,
   ) -> PcoResult<BodyDecompressor<T>> {
-    let flags = self.flags.as_ref().unwrap();
     let chunk_meta = self.chunk_meta.as_ref().unwrap();
 
     let start_byte_idx = reader.aligned_byte_idx()?;
-
-    let mut streams = Vec::with_capacity(chunk_meta.streams.len());
-    for (stream_idx, chunk_stream_meta) in chunk_meta.streams.iter().enumerate() {
-      let delta_order = chunk_meta
-        .mode
-        .stream_delta_order(stream_idx, flags.delta_encoding_order);
-      let ans_size_log = chunk_stream_meta.ans_size_log;
-      let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
-      let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
-      streams.push(DataPageStreamMetadata::new(
-        chunk_stream_meta,
-        delta_moments,
-        ans_final_state,
-      ));
-    }
-
-    reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
+    let data_page_meta = DataPageMetadata::parse_from(reader, chunk_meta)?;
     let end_byte_idx = reader.aligned_byte_idx()?;
+
     let compressed_body_size = compressed_page_size
       .checked_sub(end_byte_idx - start_byte_idx)
       .ok_or_else(|| {
         PcoError::corruption("compressed page size {} is less than data page metadata size")
       })?;
 
-    let data_page_meta = DataPageMetadata {
-      compressed_body_size,
+    BodyDecompressor::new(
       n,
-      mode: chunk_meta.mode,
-      streams,
-    };
-
-    BodyDecompressor::new(data_page_meta)
+      compressed_body_size,
+      chunk_meta,
+      data_page_meta,
+    )
   }
 
   pub fn step(&self) -> Step {

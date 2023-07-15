@@ -3,7 +3,6 @@
 //! <https://github.com/mwlon/pcodec/tree/main/pco>.
 #![allow(clippy::uninit_vec)]
 
-pub use auto::auto_compressor_config;
 pub use base_compressor::CompressorConfig;
 pub use base_decompressor::DecompressorConfig;
 pub use bin::Bin;

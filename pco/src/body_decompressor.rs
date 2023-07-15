@@ -10,7 +10,7 @@ use crate::errors::PcoResult;
 use crate::num_decompressor::NumDecompressor;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
-use crate::{delta_encoding, float_mult_utils};
+use crate::{delta_encoding, float_mult_utils, ChunkMetadata};
 use crate::{num_decompressor, Mode};
 
 // BodyDecompressor wraps NumDecompressor and handles reconstruction from
@@ -40,19 +40,29 @@ fn join_streams<U: UnsignedLike>(mode: Mode<U>, dst: UnsignedDst<U>) {
 }
 
 impl<T: NumberLike> BodyDecompressor<T> {
-  pub(crate) fn new(data_page_meta: DataPageMetadata<T::Unsigned>) -> PcoResult<Self> {
+  pub(crate) fn new(
+    n: usize,
+    compressed_body_size: usize,
+    chunk_meta: &ChunkMetadata<T::Unsigned>,
+    data_page_meta: DataPageMetadata<T::Unsigned>,
+  ) -> PcoResult<Self> {
     let delta_momentss = data_page_meta
       .streams
       .iter()
       .map(|stream| stream.delta_moments.clone())
       .collect();
-    let dyn_mode = data_page_meta.mode;
-    let num_decompressor = num_decompressor::new(data_page_meta)?;
+    let num_decompressor = num_decompressor::new(
+      n,
+      compressed_body_size,
+      chunk_meta,
+      data_page_meta,
+    )?;
     Ok(Self {
-      mode: dyn_mode,
+      // we don't store the whole ChunkMeta because it can get large due to bins
+      mode: chunk_meta.mode,
       num_decompressor,
       delta_momentss,
-      secondary_stream: [T::Unsigned::ZERO; UNSIGNED_BATCH_SIZE],
+      secondary_stream: [T::Unsigned::default(); UNSIGNED_BATCH_SIZE],
       phantom: PhantomData,
     })
   }
@@ -71,20 +81,41 @@ impl<T: NumberLike> BodyDecompressor<T> {
       delta_momentss,
       ..
     } = self;
+    let n_streams = self.mode.n_streams();
+
+    if let Some(initial_value_required) = num_decompressor.initial_value_required(0) {
+      unsigneds_mut.fill(initial_value_required);
+    }
+    if let Some(initial_value_required) = num_decompressor.initial_value_required(1) {
+      self.secondary_stream.fill(initial_value_required);
+    }
 
     let progress = {
-      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
-      num_decompressor.decompress_unsigneds(reader, error_on_insufficient_data, u_dst)?
-    };
+      let mut u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
 
-    for delta_moments in delta_momentss.iter_mut().take(self.mode.n_streams()) {
-      delta_encoding::reconstruct_in_place(delta_moments, unsigneds_mut);
-    }
+      for stream_idx in 0..n_streams {
+        if let Some(initial_value) = num_decompressor.initial_value_required(stream_idx) {
+          u_dst.stream(stream_idx).fill(initial_value);
+        }
+      }
 
-    {
-      let u_dst = UnsignedDst::new(unsigneds_mut, &mut self.secondary_stream);
+      let progress = num_decompressor.decompress_unsigneds(
+        reader,
+        error_on_insufficient_data,
+        &mut u_dst,
+      )?;
+
+      for (stream_idx, delta_moments) in delta_momentss
+        .iter_mut()
+        .take(self.mode.n_streams())
+        .enumerate()
+      {
+        delta_encoding::reconstruct_in_place(delta_moments, u_dst.stream(stream_idx));
+      }
+
       join_streams(self.mode, u_dst);
-    }
+      progress
+    };
 
     unsigneds_to_nums_in_place::<T>(unsigneds_mut);
 

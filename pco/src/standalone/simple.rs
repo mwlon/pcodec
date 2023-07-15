@@ -9,10 +9,12 @@ const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
 /// Takes in a slice of numbers and an exact configuration and returns
 /// compressed bytes.
-pub fn simple_compress<T: NumberLike>(config: CompressorConfig, nums: &[T]) -> Vec<u8> {
+///
+/// Will return an error if the compressor config is invalid.
+pub fn simple_compress<T: NumberLike>(nums: &[T], config: CompressorConfig) -> PcoResult<Vec<u8>> {
   // The following unwraps are safe because the writer will be byte-aligned
   // after each step and ensure each chunk has appropriate size.
-  let mut compressor = Compressor::<T>::from_config(config);
+  let mut compressor = Compressor::<T>::from_config(config)?;
 
   compressor.header().unwrap();
 
@@ -25,11 +27,12 @@ pub fn simple_compress<T: NumberLike>(config: CompressorConfig, nums: &[T]) -> V
   }
 
   compressor.footer().unwrap();
-  compressor.drain_bytes()
+  Ok(compressor.drain_bytes())
 }
 
 /// Takes in compressed bytes and an exact configuration and returns a vector
 /// of numbers.
+///
 /// Will return an error if there are any compatibility, corruption,
 /// or insufficient data issues.
 pub fn simple_decompress<T: NumberLike>(
@@ -65,8 +68,11 @@ pub fn simple_decompress<T: NumberLike>(
 /// the compute cost.
 /// See [`CompressorConfig`] for information about compression levels.
 pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
-  let config = crate::auto_compressor_config(nums, compression_level);
-  simple_compress(config, nums)
+  let config = CompressorConfig {
+    compression_level,
+    ..Default::default()
+  };
+  simple_compress(nums, config).unwrap()
 }
 
 /// Automatically makes an educated guess for the best decompression

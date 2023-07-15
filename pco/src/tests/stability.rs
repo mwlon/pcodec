@@ -7,8 +7,10 @@ use crate::CompressorConfig;
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T::Unsigned> {
   let mut compressor = Compressor::from_config(CompressorConfig {
     use_gcds: false,
+    delta_encoding_order: Some(0),
     ..Default::default()
-  });
+  })
+  .unwrap();
   compressor.header().expect("header");
   let metadata = compressor.chunk(&nums).expect("chunk");
   compressor.footer().expect("footer");

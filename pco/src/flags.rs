@@ -5,7 +5,6 @@
 use crate::bit_reader::BitReader;
 use crate::bit_words::PaddedBytes;
 use crate::bit_writer::BitWriter;
-use crate::constants::{BITS_TO_ENCODE_DELTA_ENCODING_ORDER, MAX_DELTA_ENCODING_ORDER};
 use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::CompressorConfig;
 
@@ -23,12 +22,6 @@ use crate::CompressorConfig;
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Flags {
-  /// How many times delta encoding was applied during compression.
-  /// This is stored as 3 bits to express 0-7.
-  /// See [`CompressorConfig`][crate::CompressorConfig] for more details.
-  ///
-  /// Introduced in 0.0.0.
-  pub delta_encoding_order: usize,
   /// Whether to the data is part of a wrapping format.
   /// This causes `pco` to omit count and compressed size metadata
   /// and also break each chunk into finer data pages.
@@ -39,7 +32,6 @@ pub struct Flags {
 
 impl Flags {
   fn core_parse_from(flags: &mut Flags, reader: &mut BitReader) -> PcoResult<()> {
-    flags.delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)?;
     flags.use_wrapped_mode = reader.read_one()?;
 
     let compat_err =
@@ -63,7 +55,6 @@ impl Flags {
     let mut sub_reader = BitReader::from(&sub_bit_words);
 
     let mut flags = Flags {
-      delta_encoding_order: 0,
       use_wrapped_mode: false,
     };
     let parse_res = Self::core_parse_from(&mut flags, &mut sub_reader);
@@ -75,23 +66,14 @@ impl Flags {
   }
 
   pub(crate) fn write_to(&self, writer: &mut BitWriter) -> PcoResult<()> {
-    if self.delta_encoding_order > MAX_DELTA_ENCODING_ORDER {
-      return Err(PcoError::invalid_argument(format!(
-        "delta encoding order may not exceed {} (was {})",
-        MAX_DELTA_ENCODING_ORDER, self.delta_encoding_order,
-      )));
-    }
-
     let start_bit_idx = writer.bit_size();
     writer.write_aligned_byte(0)?; // to later be filled with # subsequent bytes
 
     let pre_byte_size = writer.byte_size();
 
-    writer.write_usize(
-      self.delta_encoding_order,
-      BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
-    );
+    // write each flags here
     writer.write_one(self.use_wrapped_mode);
+    // done writing each flag
 
     writer.finish_byte();
     let byte_len = writer.byte_size() - pre_byte_size;
@@ -117,10 +99,7 @@ impl Flags {
     }
   }
 
-  pub(crate) fn from_config(config: &CompressorConfig, use_wrapped_mode: bool) -> Self {
-    Flags {
-      delta_encoding_order: config.delta_encoding_order,
-      use_wrapped_mode,
-    }
+  pub(crate) fn from_config(_config: &CompressorConfig, use_wrapped_mode: bool) -> Self {
+    Flags { use_wrapped_mode }
   }
 }

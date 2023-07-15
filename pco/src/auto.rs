@@ -4,7 +4,13 @@ use crate::standalone::Compressor;
 use crate::CompressorConfig;
 use std::cmp::min;
 
-fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> usize {
+/// Automatically makes an educated guess for the best compression
+/// delta encoding order, based on `nums` and `compression_level`.
+///
+/// This has some compute cost by trying different configurations on a subset
+/// of the numbers to determine the most likely one to do well.
+/// See [`CompressorConfig`] for information about compression levels.
+pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> usize {
   let mut sampled_nums;
   let head_nums = if nums.len() < AUTO_DELTA_LIMIT {
     nums
@@ -31,7 +37,7 @@ fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize
     // so we don't need to waste compute here inferring GCD's just to
     // determine the best delta order.
     let config = CompressorConfig {
-      delta_encoding_order,
+      delta_encoding_order: Some(delta_encoding_order),
       compression_level: min(
         compression_level,
         MAX_AUTO_DELTA_COMPRESSION_LEVEL,
@@ -39,7 +45,7 @@ fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize
       use_gcds: false,
       use_float_mult: true,
     };
-    let mut compressor = Compressor::<T>::from_config(config);
+    let mut compressor = Compressor::<T>::from_config(config).unwrap();
     compressor.header().unwrap();
     compressor.chunk(head_nums).unwrap(); // only unreachable errors
     let size = compressor.byte_size();
@@ -53,24 +59,6 @@ fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize
     }
   }
   best_order
-}
-
-/// Automatically makes an educated guess for the best compression
-/// configuration, based on `nums` and `compression_level`.
-///
-/// This has some compute cost by trying different configurations on a subset
-/// of the numbers to determine the most likely one to do well.
-/// See [`CompressorConfig`] for information about compression levels.
-pub fn auto_compressor_config<T: NumberLike>(
-  nums: &[T],
-  compression_level: usize,
-) -> CompressorConfig {
-  let delta_encoding_order = auto_delta_encoding_order(nums, compression_level);
-  CompressorConfig {
-    compression_level,
-    delta_encoding_order,
-    ..Default::default()
-  }
 }
 
 #[cfg(test)]

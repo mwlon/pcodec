@@ -110,6 +110,14 @@ impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
     }
   }
 
+  pub fn stream(&mut self, stream_idx: usize) -> &mut [U] {
+    match stream_idx {
+      0 => self.primary_stream,
+      1 => self.stream1,
+      _ => panic!("invalid stream; should be unreachable"),
+    }
+  }
+
   pub fn n_processed(&self) -> usize {
     self.i
   }
