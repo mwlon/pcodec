@@ -6,12 +6,12 @@
 # Quantile Compression
 
 <div style="text-align:center">
-<img src="../res/bar_dollars_cents.svg" width="45%">
-<img src="../res/bar_lomax05.svg" width="45%">
+<img src="images/bar_dollars_cents.svg" width="45%">
+<img src="images/bar_lomax05.svg" width="45%">
 </div>
 <div style="text-align:center">
-<img src="../res/bar_normal_at_0.svg" width="45%">
-<img src="../res/bar_sparse.svg" width="45%">
+<img src="images/bar_normal_at_0.svg" width="45%">
+<img src="images/bar_sparse.svg" width="45%">
 </div>
 
 Quantile Compression losslessly compresses and decompresses numerical sequences
@@ -57,8 +57,8 @@ as compression level increases for a given dataset.
 Each point is annotated with the compression level used:
 
 <div style="text-align:center">
-<img src="../res/levels_total_cents.svg" width="45%">
-<img src="../res/levels_lomax05.svg" width="45%">
+<img src="images/levels_total_cents.svg" width="45%">
+<img src="images/levels_lomax05.svg" width="45%">
 </div>
 
 The Total Cents dataset is very intricate and still sees improvement for
@@ -92,7 +92,7 @@ if `2^-b ~= P(k)`.
 We can plot `Q(k) = 2^-b` to see how close quantile compression gets to the
 ideal in this example with `compression_level=3`:
 
-<img src="../res/distribution_approximation.svg">
+<img src="images/distribution_approximation.svg">
 
 The inefficiency of quantile compression in bits per number is the KL
 divergence from
@@ -100,7 +100,7 @@ the approximated distribution `Q` to the true distribution `P`.
 
 ## `.qco` Standalone File Format
 
-<img src="../res/file_format.svg">
+<img src="images/file_format.svg">
 
 Quantile-compressed files consist of a lightweight header,
 then chunks containing metadata and numerical data, finished by a magic

@@ -393,7 +393,7 @@ fn decompose_unsigneds<U: UnsignedLike>(
   }
 }
 
-fn trained_compress_body<U: UnsignedLike, const STREAMS: usize>(
+fn write_decomposeds<U: UnsignedLike, const STREAMS: usize>(
   mut src: DecomposedSrc<U>,
   page_size: usize,
   writer: &mut BitWriter,
@@ -627,48 +627,45 @@ impl<T: NumberLike> BaseCompressor<T> {
   }
 
   pub fn data_page_internal(&mut self) -> PcoResult<()> {
-    let has_pages_remaining = {
-      let info = match &mut self.state {
-        State::MidChunk(info) => Ok(info),
-        other => Err(other.wrong_step_err("data page")),
-      }?;
+    let info = match &mut self.state {
+      State::MidChunk(info) => Ok(info),
+      other => Err(other.wrong_step_err("data page")),
+    }?;
 
-      let decomposeds = decompose_unsigneds(info)?;
+    let decomposeds = decompose_unsigneds(info)?;
 
-      for stream_idx in 0..info.mode.n_streams() {
-        info
-          .data_page_moments(stream_idx)
-          .write_to(&mut self.writer);
+    for stream_idx in 0..info.mode.n_streams() {
+      info
+        .data_page_moments(stream_idx)
+        .write_to(&mut self.writer);
 
-        // write the final ANS state, moving it down the range [0, table_size)
-        let size_log = info.stream_configs[stream_idx].encoder.size_log();
-        let final_state = decomposeds.ans_final_state(stream_idx);
-        self
-          .writer
-          .write_usize(final_state - (1 << size_log), size_log);
-      }
+      // write the final ANS state, moving it down the range [0, table_size)
+      let size_log = info.stream_configs[stream_idx].encoder.size_log();
+      let final_state = decomposeds.ans_final_state(stream_idx);
+      self
+        .writer
+        .write_usize(final_state - (1 << size_log), size_log);
+    }
 
-      self.writer.finish_byte();
+    self.writer.finish_byte();
 
-      match info.mode.n_streams() {
-        1 => trained_compress_body::<_, 1>(
-          decomposeds,
-          info.page_sizes[info.page_idx],
-          &mut self.writer,
-        ),
-        2 => trained_compress_body::<_, 2>(
-          decomposeds,
-          info.page_sizes[info.page_idx],
-          &mut self.writer,
-        ),
-        _ => panic!("should be unreachable!"),
-      }?;
+    match info.mode.n_streams() {
+      1 => write_decomposeds::<_, 1>(
+        decomposeds,
+        info.page_sizes[info.page_idx],
+        &mut self.writer,
+      ),
+      2 => write_decomposeds::<_, 2>(
+        decomposeds,
+        info.page_sizes[info.page_idx],
+        &mut self.writer,
+      ),
+      _ => panic!("should be unreachable!"),
+    }?;
 
-      info.page_idx += 1;
-      info.page_idx < info.n_pages()
-    };
+    info.page_idx += 1;
 
-    if !has_pages_remaining {
+    if info.page_idx == info.n_pages() {
       self.state = State::StartOfChunk;
     }
 

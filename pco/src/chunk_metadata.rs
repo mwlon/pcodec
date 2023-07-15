@@ -21,14 +21,14 @@ use crate::Flags;
 /// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChunkStreamMetadata<U: UnsignedLike> {
-  /// How the numbers or deltas are encoded, depending on their numerical
-  /// range.
-  pub bins: Vec<Bin<U>>,
   /// The log2 of the number of the number of states in this chunk's tANS
   /// table.
   ///
   /// See <https://en.wikipedia.org/wiki/Asymmetric_numeral_systems>.
   pub ans_size_log: Bitlen,
+  /// How the numbers or deltas are encoded, depending on their numerical
+  /// range.
+  pub bins: Vec<Bin<U>>,
 }
 
 impl<U: UnsignedLike> ChunkStreamMetadata<U> {
@@ -144,23 +144,17 @@ fn parse_bins<U: UnsignedLike>(
       )));
     }
 
-    let mut bin = Bin {
+    let gcd = match mode {
+      Mode::Gcd if offset_bits != 0 => reader.read_uint(U::BITS)?,
+      _ => U::ONE,
+    };
+
+    let bin = Bin {
       weight,
       lower,
       offset_bits,
-      gcd: U::ONE,
+      gcd,
     };
-    match mode {
-      Mode::Classic => (),
-      Mode::Gcd => {
-        bin.gcd = if offset_bits == 0 {
-          U::ONE
-        } else {
-          reader.read_uint(U::BITS)?
-        };
-      }
-      Mode::FloatMult { .. } => (),
-    }
     bins.push(bin);
   }
   Ok(bins)
