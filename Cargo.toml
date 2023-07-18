@@ -1,0 +1,9 @@
+[workspace]
+
+members = [
+  "bench",
+  "pco",
+  "pco_cli",
+  "quantile-compression/ffi",
+  "quantile-compression/q_compress",
+]
