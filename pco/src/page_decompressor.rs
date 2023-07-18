@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use crate::batch_decompressor::BatchDecompressor;
 use crate::bit_reader::BitReader;
-use crate::chunk_metadata::DataPageMetadata;
+use crate::chunk_metadata::PageMetadata;
 use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
@@ -44,9 +44,9 @@ impl<T: NumberLike> PageDecompressor<T> {
     n: usize,
     compressed_body_size: usize,
     chunk_meta: &ChunkMetadata<T::Unsigned>,
-    data_page_meta: DataPageMetadata<T::Unsigned>,
+    page_meta: PageMetadata<T::Unsigned>,
   ) -> PcoResult<Self> {
-    let delta_momentss = data_page_meta
+    let delta_momentss = page_meta
       .streams
       .iter()
       .map(|stream| stream.delta_moments.clone())
@@ -55,7 +55,7 @@ impl<T: NumberLike> PageDecompressor<T> {
       n,
       compressed_body_size,
       chunk_meta,
-      data_page_meta,
+      page_meta,
     )?;
     Ok(Self {
       // we don't store the whole ChunkMeta because it can get large due to bins

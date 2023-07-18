@@ -101,7 +101,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// or runs out of data.
   pub fn skip_chunk_body(&mut self) -> PcoResult<()> {
     self.0.state.check_step_among(
-      &[Step::StartOfDataPage, Step::MidDataPage],
+      &[Step::StartOfPage, Step::MidPage],
       "skip chunk body",
     )?;
 
@@ -136,13 +136,13 @@ impl<T: NumberLike> Decompressor<T> {
     self
       .0
       .state
-      .check_step(Step::StartOfDataPage, "read chunk body")?;
+      .check_step(Step::StartOfPage, "read chunk body")?;
     let &ChunkMetadata {
       n,
       compressed_body_size,
       ..
     } = self.0.state.chunk_meta.as_ref().unwrap();
-    self.0.data_page_internal(n, compressed_body_size, dest)?;
+    self.0.page_internal(n, compressed_body_size, dest)?;
     self.0.state.chunk_meta = None;
     Ok(())
   }
@@ -205,7 +205,7 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
         Err(e) => Err(e),
       },
-      Step::StartOfDataPage => self.0.with_reader(|reader, state, config| {
+      Step::StartOfPage => self.0.with_reader(|reader, state, config| {
         let &ChunkMetadata {
           n,
           compressed_body_size,
@@ -223,7 +223,7 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         state.page_decompressor = Some(bd);
         Ok(apply_nums(state, dest, progress))
       }),
-      Step::MidDataPage => self.0.with_reader(|reader, state, config| {
+      Step::MidPage => self.0.with_reader(|reader, state, config| {
         let mut dest = vec![T::default(); config.numbers_limit_per_item];
         let progress = next_nums_dirty(
           reader,

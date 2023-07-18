@@ -56,23 +56,20 @@ fn first_order_deltas_in_place<U: UnsignedLike>(dest: &mut Vec<U>) {
 pub fn nth_order_deltas<U: UnsignedLike>(
   unsigneds: &mut Vec<U>,
   order: usize,
-  data_page_idxs: &[usize],
+  page_idxs: &[usize],
 ) -> Vec<DeltaMoments<U>> {
   if order == 0 {
-    return data_page_idxs
-      .iter()
-      .map(|_| DeltaMoments::default())
-      .collect();
+    return page_idxs.iter().map(|_| DeltaMoments::default()).collect();
   }
 
-  let mut data_page_moments = vec![Vec::with_capacity(order); data_page_idxs.len()];
+  let mut page_moments = vec![Vec::with_capacity(order); page_idxs.len()];
   for _ in 0..order {
-    for (page_idx, &i) in data_page_idxs.iter().enumerate() {
-      data_page_moments[page_idx].push(unsigneds.get(i).copied().unwrap_or(U::ZERO));
+    for (page_idx, &i) in page_idxs.iter().enumerate() {
+      page_moments[page_idx].push(unsigneds.get(i).copied().unwrap_or(U::ZERO));
     }
     first_order_deltas_in_place(unsigneds);
   }
-  let moments = data_page_moments
+  let moments = page_moments
     .into_iter()
     .map(DeltaMoments::new)
     .collect::<Vec<_>>();

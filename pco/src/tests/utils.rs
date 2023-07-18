@@ -44,7 +44,7 @@ pub fn wrapped_compress<T: NumberLike>(
     res.extend(meta);
 
     for size in sizes {
-      compressor.data_page()?;
+      compressor.page()?;
       let page = compressor.drain_bytes();
       res.extend(encode_usize(page.len()));
       res.extend(encode_usize(size));
@@ -88,7 +88,7 @@ pub fn wrapped_decompress<T: NumberLike>(
       res.reserve(size);
       unsafe { res.set_len(res.len() + size) };
       decompressor.write_all(&buf[..page_len]).unwrap();
-      decompressor.data_page(size, page_len, &mut res[i..])?;
+      decompressor.page(size, page_len, &mut res[i..])?;
       i += size;
       decompressor.free_compressed_memory();
       buf = &mut buf[page_len..];

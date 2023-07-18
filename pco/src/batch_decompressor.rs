@@ -6,7 +6,7 @@ use std::mem::MaybeUninit;
 
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::chunk_metadata::DataPageMetadata;
+use crate::chunk_metadata::PageMetadata;
 use crate::constants::{
   Bitlen, DECOMPRESS_UNCHECKED_THRESHOLD, MAX_DELTA_ENCODING_ORDER, MAX_N_STREAMS,
 };
@@ -102,7 +102,7 @@ struct BatchDecompressorInputs<'a, U: UnsignedLike> {
   n: usize,
   compressed_body_size: usize,
   chunk_meta: &'a ChunkMetadata<U>,
-  data_page_meta: DataPageMetadata<U>,
+  page_meta: PageMetadata<U>,
   max_bits_per_num_block: Bitlen,
   initial_values_required: [Option<U>; MAX_N_STREAMS],
 }
@@ -112,7 +112,7 @@ pub fn new<U: UnsignedLike>(
   n: usize,
   compressed_body_size: usize,
   chunk_meta: &ChunkMetadata<U>,
-  data_page_meta: DataPageMetadata<U>,
+  page_meta: PageMetadata<U>,
 ) -> PcoResult<Box<dyn BatchDecompressor<U>>> {
   let mut max_bits_per_num_block = 0;
   for stream in &chunk_meta.streams {
@@ -141,7 +141,7 @@ pub fn new<U: UnsignedLike>(
     n,
     compressed_body_size,
     chunk_meta,
-    data_page_meta,
+    page_meta,
     max_bits_per_num_block,
     initial_values_required,
   };
@@ -214,21 +214,21 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressorIm
       n,
       compressed_body_size,
       chunk_meta,
-      data_page_meta,
+      page_meta,
       max_bits_per_num_block,
       initial_values_required,
     } = inputs;
     let mut decoders: [MaybeUninit<ans::Decoder>; STREAMS] =
       unsafe { MaybeUninit::uninit().assume_init() };
 
-    let delta_orders = data_page_meta
+    let delta_orders = page_meta
       .streams
       .iter()
       .map(|stream| stream.delta_moments.order())
       .collect::<Vec<_>>();
     for stream_idx in 0..STREAMS {
       let chunk_stream = &chunk_meta.streams[stream_idx];
-      let page_stream = &data_page_meta.streams[stream_idx];
+      let page_stream = &page_meta.streams[stream_idx];
 
       let delta_order = delta_orders[stream_idx];
       if chunk_stream.bins.is_empty() && n > delta_order {

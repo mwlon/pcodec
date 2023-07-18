@@ -3,7 +3,7 @@ use std::io::Write;
 
 use crate::bit_reader::BitReader;
 use crate::bit_words::PaddedBytes;
-use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
+use crate::chunk_metadata::{ChunkMetadata, PageMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
 use crate::page_decompressor::PageDecompressor;
@@ -115,7 +115,7 @@ impl<T: NumberLike> State<T> {
     let chunk_meta = self.chunk_meta.as_ref().unwrap();
 
     let start_byte_idx = reader.aligned_byte_idx()?;
-    let data_page_meta = DataPageMetadata::parse_from(reader, chunk_meta)?;
+    let page_meta = PageMetadata::parse_from(reader, chunk_meta)?;
     let end_byte_idx = reader.aligned_byte_idx()?;
 
     let compressed_body_size = compressed_page_size
@@ -128,7 +128,7 @@ impl<T: NumberLike> State<T> {
       n,
       compressed_body_size,
       chunk_meta,
-      data_page_meta,
+      page_meta,
     )
   }
 
@@ -140,9 +140,9 @@ impl<T: NumberLike> State<T> {
     } else if self.chunk_meta.is_none() {
       Step::StartOfChunk
     } else if self.page_decompressor.is_none() {
-      Step::StartOfDataPage
+      Step::StartOfPage
     } else {
-      Step::MidDataPage
+      Step::MidPage
     }
   }
 }
@@ -151,8 +151,8 @@ impl<T: NumberLike> State<T> {
 pub enum Step {
   PreHeader,
   StartOfChunk,
-  StartOfDataPage,
-  MidDataPage,
+  StartOfPage,
+  MidPage,
   Terminated,
 }
 
@@ -161,8 +161,8 @@ impl Step {
     let step_str = match self {
       Step::PreHeader => "has not yet parsed header",
       Step::StartOfChunk => "is at the start of a chunk",
-      Step::StartOfDataPage => "is at the start of a data page",
-      Step::MidDataPage => "is mid-data-page",
+      Step::StartOfPage => "is at the start of a data page",
+      Step::MidPage => "is mid-data-page",
       Step::Terminated => "has already parsed the footer",
     };
     PcoError::invalid_argument(format!(
@@ -228,7 +228,7 @@ impl<T: NumberLike> BaseDecompressor<T> {
     })
   }
 
-  pub fn data_page_internal(
+  pub fn page_internal(
     &mut self,
     n: usize,
     compressed_page_size: usize,

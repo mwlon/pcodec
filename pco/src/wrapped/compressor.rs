@@ -74,8 +74,8 @@ impl<T: NumberLike> Compressor<T> {
   /// [`.chunk_metadata`][Self::chunk_metadata].
   /// Will return an error if the compressor is not at the start of a data
   /// page in the middle of a chunk.
-  pub fn data_page(&mut self) -> PcoResult<()> {
-    self.0.data_page_internal()
+  pub fn page(&mut self) -> PcoResult<()> {
+    self.0.page_internal()
   }
 
   /// Returns all bytes produced by the compressor so far that have not yet
