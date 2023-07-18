@@ -1,4 +1,4 @@
-use crate::chunk_metadata::DataPagingSpec;
+use crate::chunk_metadata::PagingSpec;
 use crate::errors::{PcoError, PcoResult};
 
 /// A specification for how many elements there will be in each of a chunk's
@@ -11,7 +11,7 @@ use crate::errors::{PcoError, PcoResult};
 /// reasons.
 #[derive(Clone, Debug, Default)]
 pub struct ChunkSpec {
-  data_paging_spec: DataPagingSpec,
+  paging_spec: PagingSpec,
 }
 
 impl ChunkSpec {
@@ -25,14 +25,14 @@ impl ChunkSpec {
   /// ```
   /// can only be used if the chunk actually contains 1+2+3=6 numbers.
   pub fn with_page_sizes(mut self, sizes: Vec<usize>) -> Self {
-    self.data_paging_spec = DataPagingSpec::ExactPageSizes(sizes);
+    self.paging_spec = PagingSpec::ExactPageSizes(sizes);
     self
   }
 
   pub(crate) fn page_sizes(&self, n: usize) -> PcoResult<Vec<usize>> {
-    let page_sizes = match &self.data_paging_spec {
-      DataPagingSpec::SinglePage => Ok(vec![n]),
-      DataPagingSpec::ExactPageSizes(sizes) => {
+    let page_sizes = match &self.paging_spec {
+      PagingSpec::SinglePage => Ok(vec![n]),
+      PagingSpec::ExactPageSizes(sizes) => {
         let sizes_n: usize = sizes.iter().sum();
         if sizes_n == n {
           Ok(sizes.clone())

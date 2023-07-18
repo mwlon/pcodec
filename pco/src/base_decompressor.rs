@@ -3,10 +3,10 @@ use std::io::Write;
 
 use crate::bit_reader::BitReader;
 use crate::bit_words::PaddedBytes;
-use crate::body_decompressor::BodyDecompressor;
-use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
+use crate::chunk_metadata::{ChunkMetadata, PageMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
+use crate::page_decompressor::PageDecompressor;
 
 use crate::errors::{PcoError, PcoResult};
 use crate::Flags;
@@ -33,7 +33,7 @@ pub struct State<T: NumberLike> {
   pub bit_idx: usize,
   pub flags: Option<Flags>,
   pub chunk_meta: Option<ChunkMetadata<T::Unsigned>>,
-  pub body_decompressor: Option<BodyDecompressor<T>>,
+  pub page_decompressor: Option<PageDecompressor<T>>,
   pub terminated: bool,
 }
 
@@ -91,14 +91,14 @@ impl<T: NumberLike> State<T> {
     ChunkMetadata::<T::Unsigned>::parse_from(reader, self.flags.as_ref().unwrap()).map(Some)
   }
 
-  pub fn new_body_decompressor(
+  pub fn new_page_decompressor(
     &self,
     reader: &mut BitReader,
     n: usize,
     compressed_page_size: usize,
-  ) -> PcoResult<BodyDecompressor<T>> {
+  ) -> PcoResult<PageDecompressor<T>> {
     let start_bit_idx = reader.bit_idx();
-    let res = self.new_body_decompressor_dirty(reader, n, compressed_page_size);
+    let res = self.new_page_decompressor_dirty(reader, n, compressed_page_size);
 
     if res.is_err() {
       reader.seek_to(start_bit_idx);
@@ -106,16 +106,16 @@ impl<T: NumberLike> State<T> {
     res
   }
 
-  fn new_body_decompressor_dirty(
+  fn new_page_decompressor_dirty(
     &self,
     reader: &mut BitReader,
     n: usize,
     compressed_page_size: usize,
-  ) -> PcoResult<BodyDecompressor<T>> {
+  ) -> PcoResult<PageDecompressor<T>> {
     let chunk_meta = self.chunk_meta.as_ref().unwrap();
 
     let start_byte_idx = reader.aligned_byte_idx()?;
-    let data_page_meta = DataPageMetadata::parse_from(reader, chunk_meta)?;
+    let page_meta = PageMetadata::parse_from(reader, chunk_meta)?;
     let end_byte_idx = reader.aligned_byte_idx()?;
 
     let compressed_body_size = compressed_page_size
@@ -124,11 +124,11 @@ impl<T: NumberLike> State<T> {
         PcoError::corruption("compressed page size {} is less than data page metadata size")
       })?;
 
-    BodyDecompressor::new(
+    PageDecompressor::new(
       n,
       compressed_body_size,
       chunk_meta,
-      data_page_meta,
+      page_meta,
     )
   }
 
@@ -139,10 +139,10 @@ impl<T: NumberLike> State<T> {
       Step::Terminated
     } else if self.chunk_meta.is_none() {
       Step::StartOfChunk
-    } else if self.body_decompressor.is_none() {
-      Step::StartOfDataPage
+    } else if self.page_decompressor.is_none() {
+      Step::StartOfPage
     } else {
-      Step::MidDataPage
+      Step::MidPage
     }
   }
 }
@@ -151,8 +151,8 @@ impl<T: NumberLike> State<T> {
 pub enum Step {
   PreHeader,
   StartOfChunk,
-  StartOfDataPage,
-  MidDataPage,
+  StartOfPage,
+  MidPage,
   Terminated,
 }
 
@@ -161,8 +161,8 @@ impl Step {
     let step_str = match self {
       Step::PreHeader => "has not yet parsed header",
       Step::StartOfChunk => "is at the start of a chunk",
-      Step::StartOfDataPage => "is at the start of a data page",
-      Step::MidDataPage => "is mid-data-page",
+      Step::StartOfPage => "is at the start of a data page",
+      Step::MidPage => "is mid-data-page",
       Step::Terminated => "has already parsed the footer",
     };
     PcoError::invalid_argument(format!(
@@ -228,18 +228,18 @@ impl<T: NumberLike> BaseDecompressor<T> {
     })
   }
 
-  pub fn data_page_internal(
+  pub fn page_internal(
     &mut self,
     n: usize,
     compressed_page_size: usize,
     dest: &mut [T],
   ) -> PcoResult<()> {
-    let old_bd = self.state.body_decompressor.clone();
+    let old_bd = self.state.page_decompressor.clone();
     self.with_reader(|reader, state, _| {
-      let mut bd = state.new_body_decompressor(reader, n, compressed_page_size)?;
+      let mut bd = state.new_page_decompressor(reader, n, compressed_page_size)?;
       let res = bd.decompress(reader, true, dest);
       // we need to roll back the body decompressor if this failed
-      state.body_decompressor = if res.is_ok() { None } else { old_bd };
+      state.page_decompressor = if res.is_ok() { None } else { old_bd };
       res?;
       Ok(())
     })

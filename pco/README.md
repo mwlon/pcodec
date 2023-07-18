@@ -31,8 +31,8 @@ fn main() {
 To run something right away, try
 [the benchmarks](../bench/README.md).
 
-For a lower-level standalone API that allows writing/reading one chunk at a time and
-extracting all metadata, see [the docs.rs documentation](https://docs.rs/pco/latest/pco/).
+For a lower-level standalone API that allows writing one chunk at a time /
+streaming reads, see [the docs.rs documentation](https://docs.rs/pco/latest/pco/).
 
 ## Usage as a Wrapped Format
 

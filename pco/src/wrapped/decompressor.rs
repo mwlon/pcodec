@@ -45,7 +45,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// reading all data pages from the preceding chunk.
   pub fn chunk_metadata(&mut self) -> PcoResult<ChunkMetadata<T::Unsigned>> {
     self.0.state.check_step_among(
-      &[Step::StartOfChunk, Step::StartOfDataPage, Step::MidDataPage],
+      &[Step::StartOfChunk, Step::StartOfPage, Step::MidPage],
       "read chunk metadata",
     )?;
 
@@ -53,7 +53,7 @@ impl<T: NumberLike> Decompressor<T> {
       let meta = ChunkMetadata::<T::Unsigned>::parse_from(reader, state.flags.as_ref().unwrap())?;
 
       state.chunk_meta = Some(meta.clone());
-      state.body_decompressor = None;
+      state.page_decompressor = None;
       Ok(meta)
     })
   }
@@ -65,14 +65,14 @@ impl<T: NumberLike> Decompressor<T> {
   ///
   /// This can be used regardless of whether the decompressor has finished
   /// reading the previous data page.
-  pub fn begin_data_page(&mut self, n: usize, compressed_page_size: usize) -> PcoResult<()> {
+  pub fn begin_page(&mut self, n: usize, compressed_page_size: usize) -> PcoResult<()> {
     self.0.state.check_step_among(
-      &[Step::StartOfDataPage, Step::MidDataPage],
+      &[Step::StartOfPage, Step::MidPage],
       "begin data page",
     )?;
     self.0.with_reader(|reader, state, _| {
-      state.body_decompressor =
-        Some(state.new_body_decompressor(reader, n, compressed_page_size)?);
+      state.page_decompressor =
+        Some(state.new_page_decompressor(reader, n, compressed_page_size)?);
       Ok(())
     })
   }
@@ -81,15 +81,12 @@ impl<T: NumberLike> Decompressor<T> {
   /// Will return an error if the decompressor is not in a data page,
   /// it runs out of data, or any corruptions are found.
   pub fn next_batch(&mut self, dest: &mut [T]) -> PcoResult<()> {
-    self
-      .0
-      .state
-      .check_step(Step::MidDataPage, "read next batch")?;
+    self.0.state.check_step(Step::MidPage, "read next batch")?;
     self.0.with_reader(|reader, state, _| {
-      let bd = state.body_decompressor.as_mut().unwrap();
+      let bd = state.page_decompressor.as_mut().unwrap();
       let batch_res = bd.decompress(reader, true, dest)?;
       if batch_res.finished_body {
-        state.body_decompressor = None;
+        state.page_decompressor = None;
       }
       Ok(())
     })
@@ -99,19 +96,14 @@ impl<T: NumberLike> Decompressor<T> {
   /// Will return an error if the decompressor is not in a chunk,
   /// it runs out of data, or any corruptions are found.
   ///
-  /// This is similar to calling [`.begin_data_page`][Self::begin_data_page] and then
+  /// This is similar to calling [`.begin_page`][Self::begin_page] and then
   /// [`.next_batch(usize::MAX)`][Self::next_batch].
-  pub fn data_page(
-    &mut self,
-    n: usize,
-    compressed_page_size: usize,
-    dest: &mut [T],
-  ) -> PcoResult<()> {
+  pub fn page(&mut self, n: usize, compressed_page_size: usize, dest: &mut [T]) -> PcoResult<()> {
     self.0.state.check_step_among(
-      &[Step::StartOfDataPage, Step::MidDataPage],
+      &[Step::StartOfPage, Step::MidPage],
       "data page",
     )?;
-    self.0.data_page_internal(n, compressed_page_size, dest)
+    self.0.page_internal(n, compressed_page_size, dest)
   }
 
   /// Frees memory used for storing compressed bytes the decompressor has
@@ -125,7 +117,7 @@ impl<T: NumberLike> Decompressor<T> {
   /// As an example, if you want to want to read the first 5 numbers from each
   /// data page, you might write each compressed data page to the decompressor,
   /// then repeatedly call
-  /// [`.begin_data_page`][Self::begin_data_page],
+  /// [`.begin_page`][Self::begin_page],
   /// [`.next_nums`][Self::next_batch], and
   /// this method.
   pub fn clear_compressed_bytes(&mut self) {

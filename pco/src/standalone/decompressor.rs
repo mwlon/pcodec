@@ -2,9 +2,9 @@ use std::io::Write;
 
 use crate::base_decompressor::{BaseDecompressor, State, Step};
 use crate::bit_reader::BitReader;
-use crate::body_decompressor::BodyDecompressor;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
+use crate::page_decompressor::PageDecompressor;
 use crate::progress::Progress;
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
 
@@ -101,11 +101,11 @@ impl<T: NumberLike> Decompressor<T> {
   /// or runs out of data.
   pub fn skip_chunk_body(&mut self) -> PcoResult<()> {
     self.0.state.check_step_among(
-      &[Step::StartOfDataPage, Step::MidDataPage],
+      &[Step::StartOfPage, Step::MidPage],
       "skip chunk body",
     )?;
 
-    let bits_remaining = match &self.0.state.body_decompressor {
+    let bits_remaining = match &self.0.state.page_decompressor {
       Some(bd) => bd.bits_remaining(),
       None => {
         let meta = self.0.state.chunk_meta.as_ref().unwrap();
@@ -117,7 +117,7 @@ impl<T: NumberLike> Decompressor<T> {
     if skipped_bit_idx <= self.0.words.total_bits() {
       self.0.state.bit_idx = skipped_bit_idx;
       self.0.state.chunk_meta = None;
-      self.0.state.body_decompressor = None;
+      self.0.state.page_decompressor = None;
       Ok(())
     } else {
       Err(PcoError::insufficient_data(format!(
@@ -136,13 +136,13 @@ impl<T: NumberLike> Decompressor<T> {
     self
       .0
       .state
-      .check_step(Step::StartOfDataPage, "read chunk body")?;
+      .check_step(Step::StartOfPage, "read chunk body")?;
     let &ChunkMetadata {
       n,
       compressed_body_size,
       ..
     } = self.0.state.chunk_meta.as_ref().unwrap();
-    self.0.data_page_internal(n, compressed_body_size, dest)?;
+    self.0.page_internal(n, compressed_body_size, dest)?;
     self.0.state.chunk_meta = None;
     Ok(())
   }
@@ -164,7 +164,7 @@ impl<T: NumberLike> Decompressor<T> {
 
 fn next_nums_dirty<T: NumberLike>(
   reader: &mut BitReader,
-  bd: &mut BodyDecompressor<T>,
+  bd: &mut PageDecompressor<T>,
   dest: &mut [T],
 ) -> PcoResult<Progress> {
   bd.decompress(reader, false, dest)
@@ -180,7 +180,7 @@ fn apply_nums<T: NumberLike>(
   } else {
     if progress.finished_body {
       state.chunk_meta = None;
-      state.body_decompressor = None;
+      state.page_decompressor = None;
     }
     Some(DecompressedItem::Numbers(
       dest[..progress.n_processed].to_vec(),
@@ -205,13 +205,13 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
         Err(e) => Err(e),
       },
-      Step::StartOfDataPage => self.0.with_reader(|reader, state, config| {
+      Step::StartOfPage => self.0.with_reader(|reader, state, config| {
         let &ChunkMetadata {
           n,
           compressed_body_size,
           ..
         } = state.chunk_meta.as_ref().unwrap();
-        let maybe_bd = state.new_body_decompressor(reader, n, compressed_body_size);
+        let maybe_bd = state.new_page_decompressor(reader, n, compressed_body_size);
         if let Err(e) = &maybe_bd {
           if matches!(e.kind, ErrorKind::InsufficientData) {
             return Ok(None);
@@ -220,14 +220,14 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         let mut bd = maybe_bd?;
         let mut dest = vec![T::default(); config.numbers_limit_per_item];
         let progress = next_nums_dirty(reader, &mut bd, &mut dest)?;
-        state.body_decompressor = Some(bd);
+        state.page_decompressor = Some(bd);
         Ok(apply_nums(state, dest, progress))
       }),
-      Step::MidDataPage => self.0.with_reader(|reader, state, config| {
+      Step::MidPage => self.0.with_reader(|reader, state, config| {
         let mut dest = vec![T::default(); config.numbers_limit_per_item];
         let progress = next_nums_dirty(
           reader,
-          state.body_decompressor.as_mut().unwrap(),
+          state.page_decompressor.as_mut().unwrap(),
           &mut dest,
         )?;
         Ok(apply_nums(state, dest, progress))

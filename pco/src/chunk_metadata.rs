@@ -50,18 +50,21 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
 }
 
 #[derive(Clone, Debug)]
-pub struct DataPageStreamMetadata<U: UnsignedLike> {
+pub struct PageStreamMetadata<U: UnsignedLike> {
   pub delta_moments: DeltaMoments<U>,
   pub ans_final_state: usize,
 }
 
-impl<U: UnsignedLike> DataPageStreamMetadata<U> {
-  // pub fn write_to(&self, ans_size_log: Bitlen, writer: &mut BitWriter) {
-  //   self.delta_moments.write_to(writer);
-  //
-  //   // write the final ANS state, moving it down the range [0, table_size)
-  //   writer.write_usize(self.ans_final_state - (1 << ans_size_log), ans_size_log);
-  // }
+impl<U: UnsignedLike> PageStreamMetadata<U> {
+  pub fn write_to(&self, ans_size_log: Bitlen, writer: &mut BitWriter) {
+    self.delta_moments.write_to(writer);
+
+    // write the final ANS state, moving it down the range [0, table_size)
+    writer.write_usize(
+      self.ans_final_state - (1 << ans_size_log),
+      ans_size_log,
+    );
+  }
 
   pub fn parse_from(
     reader: &mut BitReader,
@@ -113,22 +116,22 @@ pub struct ChunkMetadata<U: UnsignedLike> {
 // chunk metadata parsing step (standalone mode) OR from the wrapping format
 // (wrapped mode).
 #[derive(Clone, Debug)]
-pub struct DataPageMetadata<U: UnsignedLike> {
-  pub streams: Vec<DataPageStreamMetadata<U>>,
+pub struct PageMetadata<U: UnsignedLike> {
+  pub streams: Vec<PageStreamMetadata<U>>,
 }
 
-impl<U: UnsignedLike> DataPageMetadata<U> {
-  // pub fn write_to(&self, chunk_meta: &ChunkMetadata<U>, writer: &mut BitWriter) {
-  //   for (stream_idx, stream_meta) in chunk_meta.streams.iter().enumerate() {
-  //     self.streams[stream_idx].write_to(stream_meta.ans_size_log, writer);
-  //   }
-  //   writer.finish_byte();
-  // }
+impl<U: UnsignedLike> PageMetadata<U> {
+  pub fn write_to<I: Iterator<Item = Bitlen>>(&self, ans_size_logs: I, writer: &mut BitWriter) {
+    for (stream_idx, ans_size_log) in ans_size_logs.enumerate() {
+      self.streams[stream_idx].write_to(ans_size_log, writer);
+    }
+    writer.finish_byte();
+  }
 
   pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMetadata<U>) -> PcoResult<Self> {
     let mut streams = Vec::with_capacity(chunk_meta.streams.len());
     for (stream_idx, stream_meta) in chunk_meta.streams.iter().enumerate() {
-      streams.push(DataPageStreamMetadata::parse_from(
+      streams.push(PageStreamMetadata::parse_from(
         reader,
         chunk_meta.stream_delta_order(stream_idx),
         stream_meta.ans_size_log,
@@ -352,7 +355,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
 
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
-pub enum DataPagingSpec {
+pub enum PagingSpec {
   #[default]
   SinglePage,
   ExactPageSizes(Vec<usize>),
