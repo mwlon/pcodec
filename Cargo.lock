@@ -96,9 +96,9 @@ checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
 
 [[package]]
 name = "arrow"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2feeebd77b34b0bc88f224e06d01c27da4733997cc4789a4e056196656cdc59a"
+checksum = "022f3a3f389ac02a971427acafeab9b74c81c49ee5fb94fe781a2956cbca3aa6"
 dependencies = [
  "ahash",
  "arrow-arith",
@@ -116,9 +116,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-arith"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7173f5dc49c0ecb5135f52565af33afd3fdc9a12d13bd6f9973e8b96305e4b2e"
+checksum = "81b94d8e21d4d195fa371dba4d6684a7e3196ca5696278812e3ceefca9559a8f"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -131,9 +131,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-array"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63d7ea725f7d1f8bb2cffc53ef538557e95fc802e217d5be25122d402e22f3d0"
+checksum = "e09d42ecd482a864445ed95bf78fb159e37b4d879ca08405b247170fb331daf5"
 dependencies = [
  "ahash",
  "arrow-buffer",
@@ -143,13 +143,14 @@ dependencies = [
  "half",
  "hashbrown",
  "num",
+ "num-complex",
 ]
 
 [[package]]
 name = "arrow-buffer"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdbe439e077f484e5000b9e1d47b5e4c0d15f2b311a8f5bcc682553d5d67a722"
+checksum = "fe5044e672568feeb9e134a96781c8fdee3bce58df889f463517880d4992f751"
 dependencies = [
  "half",
  "num",
@@ -157,9 +158,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-cast"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93913cc14875770aa1eef5e310765e855effa352c094cb1c7c00607d0f37b4e1"
+checksum = "eac1141b252f3c4e240de118125fb2ece6a2e31d9740ec98a471feda35898e76"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -174,9 +175,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-csv"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef55b67c55ed877e6fe7b923121c19dae5e31ca70249ea2779a17b58fb0fbd9a"
+checksum = "13a5e99b4852cc8c85c2274093ba20f4f490266bdecd2fa7c3663c956a5089b5"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -193,9 +194,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-data"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4f4f4a3c54614126a71ab91f6631c9743eb4643d6e9318b74191da9dc6e028b"
+checksum = "425a65a08947ed20b54e66749e9a56ed5a1cb1366c001329470dff365dd8411a"
 dependencies = [
  "arrow-buffer",
  "arrow-schema",
@@ -205,9 +206,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-ipc"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d41a3659f984a524ef1c2981d43747b24d8eec78e2425267fcd0ef34ce71cd18"
+checksum = "db281245b30c8ac194ed048f1c9bd62ce3d3bfd9a955b6cfe90b554708820bce"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -219,9 +220,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-ord"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c68549a4284d9f8b39586afb8d5ff8158b8f0286353a4844deb1d11cf1ba1f26"
+checksum = "66226fbe71670fa7f95bd4734379a9b14096b4498ed48935d69b5d3c27f96a7f"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -234,9 +235,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-row"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a75a4a757afc301ce010adadff54d79d66140c4282ed3de565f6ccb716a5cf3"
+checksum = "7f41b69153013b7594edf4a1e6318d36ad539e0be66a7f62ae872f51dea507ac"
 dependencies = [
  "ahash",
  "arrow-array",
@@ -249,15 +250,15 @@ dependencies = [
 
 [[package]]
 name = "arrow-schema"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bebcb57eef570b15afbcf2d07d813eb476fde9f6dd69c81004d6476c197e87e"
+checksum = "dceed0efbaf304aaa296169c9eedde4e0ec90e0dc2010a88ea79ea6d86046ae9"
 
 [[package]]
 name = "arrow-select"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6e2943fa433a48921e914417173816af64eef61c0a3d448280e6c40a62df221"
+checksum = "a1640b6be81eddc789e0fa6c4c4c621411afa195146bda577a51de845b368573"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -268,9 +269,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-string"
-version = "43.0.0"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbc92ed638851774f6d7af1ad900b92bc1486746497511868b4298fcbcfa35af"
+checksum = "deb780faf7995b2f4f6273109520435262e10fbaba047ebcf13347770bd79d28"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -301,9 +302,8 @@ dependencies = [
  "anyhow",
  "bytes",
  "clap",
- "parquet",
+ "parquet 44.0.0",
  "pco",
- "pco_parquet",
  "q_compress",
  "snap",
  "tabled",
@@ -1038,9 +1038,28 @@ dependencies = [
 
 [[package]]
 name = "parquet"
-version = "43.0.0"
+version = "44.0.0"
+dependencies = [
+ "ahash",
+ "bytes",
+ "chrono",
+ "hashbrown",
+ "num",
+ "num-bigint",
+ "paste",
+ "pco",
+ "seq-macro",
+ "snap",
+ "thrift",
+ "twox-hash",
+ "zstd",
+]
+
+[[package]]
+name = "parquet"
+version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec7267a9607c3f955d4d0ac41b88a67cecc0d8d009173ad3da390699a6cb3750"
+checksum = "e5cbba4c2958e69fcf9cfc03d8cc49ff03d9d2041fcbf26d248637d314bce210"
 dependencies = [
  "ahash",
  "arrow-array",
@@ -1088,25 +1107,8 @@ dependencies = [
  "clap",
  "enum-iterator",
  "num-complex",
- "parquet",
+ "parquet 44.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pco",
-]
-
-[[package]]
-name = "pco_parquet"
-version = "44.0.0"
-dependencies = [
- "ahash",
- "bytes",
- "chrono",
- "hashbrown",
- "num",
- "num-bigint",
- "paste",
- "pco",
- "seq-macro",
- "thrift",
- "twox-hash",
 ]
 
 [[package]]

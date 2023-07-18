@@ -17,10 +17,10 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.71"
-arrow = {version = "43.0.0", features = ["csv"], default-features=false}
+arrow = {version = "44.0.0", features = ["csv"], default-features=false}
 clap = {version = "4.3.11", features = ["derive"]}
 num-complex = "0.4.3"
-parquet = {version = "43.0.0", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
+parquet = {version = "44.0.0", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
 pco = {version = "0.0.0-alpha.0", path = "../pco" }
 
 [dev-dependencies]
