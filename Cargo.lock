@@ -303,6 +303,7 @@ dependencies = [
  "clap",
  "parquet",
  "pco",
+ "pco_parquet",
  "q_compress",
  "snap",
  "tabled",
@@ -1089,6 +1090,23 @@ dependencies = [
  "num-complex",
  "parquet",
  "pco",
+]
+
+[[package]]
+name = "pco_parquet"
+version = "44.0.0"
+dependencies = [
+ "ahash",
+ "bytes",
+ "chrono",
+ "hashbrown",
+ "num",
+ "num-bigint",
+ "paste",
+ "pco",
+ "seq-macro",
+ "thrift",
+ "twox-hash",
 ]
 
 [[package]]
