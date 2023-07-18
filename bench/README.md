@@ -10,11 +10,11 @@ It supports
 ## Running
 
 TL;DR (`cd`'d into the repo):
-* `python bench/generate_randoms.py`
+* `python bench/generate_randoms.py` (with numpy installed)
 * `cargo run --release --bin bench`
 
 The script to generate the data uses python, so set up a python3
-environment with `numpy` and `pyarrow` installed.
+environment with `numpy` installed.
 In that environment, run
 `python bench/generate_randoms.py`.
 This will populate some human-readable data in `bench/data/txt/` and
