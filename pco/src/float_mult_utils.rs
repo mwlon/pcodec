@@ -6,7 +6,7 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding;
 use crate::unsigned_src_dst::{StreamSrc, UnsignedDst};
 
-// BodyDecompressor is already doing batching
+// PageDecompressor is already doing batching, so we don't need to here
 pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
   let (unsigneds, adjustments) = dst.decompose();
   delta_encoding::toggle_center_deltas_in_place(adjustments);

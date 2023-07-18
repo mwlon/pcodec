@@ -32,7 +32,7 @@ mod bit_reader;
 mod bit_words;
 mod bit_writer;
 mod bits;
-mod body_decompressor;
+mod page_decompressor;
 mod chunk_metadata;
 mod chunk_spec;
 mod compression_table;
@@ -41,7 +41,7 @@ mod delta_encoding;
 mod flags;
 mod float_mult_utils;
 mod modes;
-mod num_decompressor;
+mod batch_decompressor;
 mod progress;
 mod unsigned_src_dst;
 

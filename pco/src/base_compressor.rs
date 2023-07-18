@@ -3,7 +3,7 @@ use std::fmt::Debug;
 
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
-use crate::chunk_metadata::{ChunkMetadata, ChunkStreamMetadata};
+use crate::chunk_metadata::{ChunkMetadata, ChunkStreamMetadata, DataPageMetadata, DataPageStreamMetadata};
 use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -668,20 +668,22 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     let decomposeds = decompose_unsigneds(info)?;
 
+    let mut streams = Vec::with_capacity(info.n_streams);
     for stream_idx in 0..info.n_streams {
-      info
+      let delta_moments = info
         .data_page_moments(stream_idx)
-        .write_to(&mut self.writer);
+        .clone();
 
       // write the final ANS state, moving it down the range [0, table_size)
-      let size_log = info.stream_configs[stream_idx].encoder.size_log();
-      let final_state = decomposeds.ans_final_state(stream_idx);
-      self
-        .writer
-        .write_usize(final_state - (1 << size_log), size_log);
+      let ans_final_state = decomposeds.ans_final_state(stream_idx);
+      streams.push(DataPageStreamMetadata {
+        delta_moments,
+        ans_final_state
+      });
     }
-
-    self.writer.finish_byte();
+    let data_page_meta = DataPageMetadata { streams };
+    let ans_size_logs = info.stream_configs.iter().map(|config| config.encoder.size_log());
+    data_page_meta.write_to(ans_size_logs, &mut self.writer);
 
     match info.n_nontrivial_streams {
       0 => write_decomposeds::<_, 0>(

@@ -64,10 +64,8 @@ impl<const STREAMS: usize> State<STREAMS> {
   }
 }
 
-pub trait NumDecompressor<U: UnsignedLike>: Debug {
+pub trait BatchDecompressor<U: UnsignedLike>: Debug {
   fn bits_remaining(&self) -> usize;
-
-  fn initial_value_required(&self, stream_idx: usize) -> Option<U>;
 
   fn decompress_unsigneds(
     &mut self,
@@ -76,7 +74,7 @@ pub trait NumDecompressor<U: UnsignedLike>: Debug {
     dst: &mut UnsignedDst<U>,
   ) -> PcoResult<Progress>;
 
-  fn clone_inner(&self) -> Box<dyn NumDecompressor<U>>;
+  fn clone_inner(&self) -> Box<dyn BatchDecompressor<U>>;
 }
 
 #[derive(Clone, Debug)]
@@ -85,9 +83,9 @@ struct StreamConfig<U: UnsignedLike> {
   delta_order: usize, // only used to infer how many extra 0's are at the end
 }
 
-// NumDecompressor does the main work of decoding bytes into NumberLikes
+// BatchDecompressor does the main work of decoding bytes into UnsignedLikes
 #[derive(Clone, Debug)]
-struct NumDecompressorImpl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> {
+struct BatchDecompressorImpl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> {
   // known information about the chunk
   n: usize,
   compressed_body_size: usize,
@@ -100,7 +98,7 @@ struct NumDecompressorImpl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usiz
   state: State<STREAMS>,
 }
 
-struct NumDecompressorInputs<'a, U: UnsignedLike> {
+struct BatchDecompressorInputs<'a, U: UnsignedLike> {
   n: usize,
   compressed_body_size: usize,
   chunk_meta: &'a ChunkMetadata<U>,
@@ -115,7 +113,7 @@ pub fn new<U: UnsignedLike>(
   compressed_body_size: usize,
   chunk_meta: &ChunkMetadata<U>,
   data_page_meta: DataPageMetadata<U>,
-) -> PcoResult<Box<dyn NumDecompressor<U>>> {
+) -> PcoResult<Box<dyn BatchDecompressor<U>>> {
   let mut max_bits_per_num_block = 0;
   for stream in &chunk_meta.streams {
     max_bits_per_num_block += stream
@@ -139,7 +137,7 @@ pub fn new<U: UnsignedLike>(
       .and_then(|stream_meta| stream_meta.bins.get(0))
       .map(|only_bin| only_bin.lower);
   }
-  let inputs = NumDecompressorInputs {
+  let inputs = BatchDecompressorInputs {
     n,
     compressed_body_size,
     chunk_meta,
@@ -148,28 +146,24 @@ pub fn new<U: UnsignedLike>(
     initial_values_required,
   };
 
-  let res: Box<dyn NumDecompressor<U>> = match (needs_gcd, n_streams) {
-    (false, 0) => Box::new(NumDecompressorImpl::<U, ClassicMode, 0>::new(inputs)?),
-    (false, 1) => Box::new(NumDecompressorImpl::<U, ClassicMode, 1>::new(inputs)?),
-    (true, 1) => Box::new(NumDecompressorImpl::<U, GcdMode, 1>::new(
+  let res: Box<dyn BatchDecompressor<U>> = match (needs_gcd, n_streams) {
+    (false, 0) => Box::new(BatchDecompressorImpl::<U, ClassicMode, 0>::new(inputs)?),
+    (false, 1) => Box::new(BatchDecompressorImpl::<U, ClassicMode, 1>::new(inputs)?),
+    (true, 1) => Box::new(BatchDecompressorImpl::<U, GcdMode, 1>::new(
       inputs,
     )?),
-    (false, 2) => Box::new(NumDecompressorImpl::<U, ClassicMode, 2>::new(inputs)?),
+    (false, 2) => Box::new(BatchDecompressorImpl::<U, ClassicMode, 2>::new(inputs)?),
     _ => panic!("unknown decompression implementation; should be unreachable"),
   };
 
   Ok(res)
 }
 
-impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
-  for NumDecompressorImpl<U, M, STREAMS>
+impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressor<U>
+  for BatchDecompressorImpl<U, M, STREAMS>
 {
   fn bits_remaining(&self) -> usize {
     self.compressed_body_size * 8 - self.state.bits_processed
-  }
-
-  fn initial_value_required(&self, stream_idx: usize) -> Option<U> {
-    self.initial_values_required[stream_idx]
   }
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
@@ -209,14 +203,14 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressor<U>
     res
   }
 
-  fn clone_inner(&self) -> Box<dyn NumDecompressor<U>> {
+  fn clone_inner(&self) -> Box<dyn BatchDecompressor<U>> {
     Box::new(self.clone())
   }
 }
 
-impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl<U, M, STREAMS> {
-  fn new(inputs: NumDecompressorInputs<U>) -> PcoResult<Self> {
-    let NumDecompressorInputs {
+impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressorImpl<U, M, STREAMS> {
+  fn new(inputs: BatchDecompressorInputs<U>) -> PcoResult<Self> {
+    let BatchDecompressorInputs {
       n,
       compressed_body_size,
       chunk_meta,
@@ -335,6 +329,15 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl
     res
   }
 
+  fn fill_dst_if_needed(&self, dst: &mut UnsignedDst<U>) {
+    for (stream_idx, maybe_initial_value) in self.initial_values_required.iter().enumerate() {
+      if let Some(initial_value) = maybe_initial_value {
+        dst.stream(stream_idx).fill(*initial_value);
+      }
+    }
+  }
+
+
   #[inline(never)]
   fn decompress_unsigneds_dirty(
     &mut self,
@@ -354,6 +357,8 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl
         ..Default::default()
       });
     }
+
+    self.fill_dst_if_needed(dst);
 
     let mark_insufficient = |dst: &mut UnsignedDst<U>, e: PcoError| {
       if error_on_insufficient_data {
@@ -402,7 +407,7 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> NumDecompressorImpl
   }
 }
 
-impl<U: UnsignedLike> Clone for Box<dyn NumDecompressor<U>> {
+impl<U: UnsignedLike> Clone for Box<dyn BatchDecompressor<U>> {
   fn clone(&self) -> Self {
     self.clone_inner()
   }

@@ -60,17 +60,13 @@ impl Decoder {
   #[inline]
   pub fn unchecked_decode(&mut self, reader: &mut BitReader) -> Token {
     let node = &self.nodes[self.state - self.table_size];
-    let bits_read = reader.unchecked_read_uint::<usize>(node.bits_to_read);
-    let next_state = node.next_state_base + bits_read;
-    self.state = next_state;
+    self.state = node.next_state_base + reader.unchecked_read_uint::<usize>(node.bits_to_read);
     node.token
   }
 
   pub fn decode(&mut self, reader: &mut BitReader) -> PcoResult<Token> {
     let node = &self.nodes[self.state - self.table_size];
-    let bits_read = reader.read_small(node.bits_to_read)?;
-    let next_state = node.next_state_base + bits_read;
-    self.state = next_state;
+    self.state = node.next_state_base + reader.read_small(node.bits_to_read)?;
     Ok(node.token)
   }
 }

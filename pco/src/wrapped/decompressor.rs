@@ -53,7 +53,7 @@ impl<T: NumberLike> Decompressor<T> {
       let meta = ChunkMetadata::<T::Unsigned>::parse_from(reader, state.flags.as_ref().unwrap())?;
 
       state.chunk_meta = Some(meta.clone());
-      state.body_decompressor = None;
+      state.page_decompressor = None;
       Ok(meta)
     })
   }
@@ -71,8 +71,8 @@ impl<T: NumberLike> Decompressor<T> {
       "begin data page",
     )?;
     self.0.with_reader(|reader, state, _| {
-      state.body_decompressor =
-        Some(state.new_body_decompressor(reader, n, compressed_page_size)?);
+      state.page_decompressor =
+        Some(state.new_page_decompressor(reader, n, compressed_page_size)?);
       Ok(())
     })
   }
@@ -86,10 +86,10 @@ impl<T: NumberLike> Decompressor<T> {
       .state
       .check_step(Step::MidDataPage, "read next batch")?;
     self.0.with_reader(|reader, state, _| {
-      let bd = state.body_decompressor.as_mut().unwrap();
+      let bd = state.page_decompressor.as_mut().unwrap();
       let batch_res = bd.decompress(reader, true, dest)?;
       if batch_res.finished_body {
-        state.body_decompressor = None;
+        state.page_decompressor = None;
       }
       Ok(())
     })
