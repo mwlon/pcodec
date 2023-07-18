@@ -1,17 +1,17 @@
 use std::cmp::min;
 use std::marker::PhantomData;
 
+use crate::batch_decompressor::BatchDecompressor;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::DataPageMetadata;
 use crate::constants::UNSIGNED_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::PcoResult;
-use crate::batch_decompressor::BatchDecompressor;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
-use crate::{delta_encoding, float_mult_utils, ChunkMetadata};
 use crate::{batch_decompressor, Mode};
+use crate::{delta_encoding, float_mult_utils, ChunkMetadata};
 
 // PageDecompressor wraps BatchDecompressor and handles reconstruction from
 // delta encoding.
@@ -94,7 +94,8 @@ impl<T: NumberLike> PageDecompressor<T> {
       for (stream_idx, delta_moments) in delta_momentss
         .iter_mut()
         .take(self.mode.n_streams())
-        .enumerate() {
+        .enumerate()
+      {
         delta_encoding::reconstruct_in_place(delta_moments, u_dst.stream(stream_idx));
       }
 

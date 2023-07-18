@@ -60,7 +60,10 @@ impl<U: UnsignedLike> DataPageStreamMetadata<U> {
     self.delta_moments.write_to(writer);
 
     // write the final ANS state, moving it down the range [0, table_size)
-    writer.write_usize(self.ans_final_state - (1 << ans_size_log), ans_size_log);
+    writer.write_usize(
+      self.ans_final_state - (1 << ans_size_log),
+      ans_size_log,
+    );
   }
 
   pub fn parse_from(
@@ -118,7 +121,7 @@ pub struct DataPageMetadata<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> DataPageMetadata<U> {
-  pub fn write_to<I: Iterator<Item=Bitlen>>(&self, ans_size_logs: I, writer: &mut BitWriter) {
+  pub fn write_to<I: Iterator<Item = Bitlen>>(&self, ans_size_logs: I, writer: &mut BitWriter) {
     for (stream_idx, ans_size_log) in ans_size_logs.enumerate() {
       self.streams[stream_idx].write_to(ans_size_log, writer);
     }

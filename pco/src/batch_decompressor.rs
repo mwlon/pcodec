@@ -337,7 +337,6 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressorIm
     }
   }
 
-
   #[inline(never)]
   fn decompress_unsigneds_dirty(
     &mut self,

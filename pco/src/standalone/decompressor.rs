@@ -2,9 +2,9 @@ use std::io::Write;
 
 use crate::base_decompressor::{BaseDecompressor, State, Step};
 use crate::bit_reader::BitReader;
-use crate::page_decompressor::PageDecompressor;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
+use crate::page_decompressor::PageDecompressor;
 use crate::progress::Progress;
 use crate::{ChunkMetadata, DecompressorConfig, Flags};
 

@@ -3,10 +3,10 @@ use std::io::Write;
 
 use crate::bit_reader::BitReader;
 use crate::bit_words::PaddedBytes;
-use crate::page_decompressor::PageDecompressor;
 use crate::chunk_metadata::{ChunkMetadata, DataPageMetadata};
 use crate::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::data_types::NumberLike;
+use crate::page_decompressor::PageDecompressor;
 
 use crate::errors::{PcoError, PcoResult};
 use crate::Flags;
