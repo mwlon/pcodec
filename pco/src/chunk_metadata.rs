@@ -1,12 +1,13 @@
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::bits::bits_to_encode_offset_bits;
+
 use crate::constants::*;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
+use crate::lookback::Lookback;
 use crate::modes::{gcd, Mode};
 use crate::{bin, Flags};
 
@@ -29,14 +30,53 @@ pub struct ChunkStreamMetadata<U: UnsignedLike> {
   /// How the numbers or deltas are encoded, depending on their numerical
   /// range.
   pub bins: Vec<Bin<U>>,
+  pub lookbacks: Vec<Lookback>,
 }
 
 impl<U: UnsignedLike> ChunkStreamMetadata<U> {
   fn parse_from(reader: &mut BitReader, mode: Mode<U>) -> PcoResult<Self> {
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG)?;
-    let bins = parse_bins::<U>(reader, mode, ans_size_log)?;
+    let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
+    let n_lookbacks = reader.read_usize(BITS_TO_ENCODE_N_LOOKBACKS)?;
+    let n_entries = n_bins + n_lookbacks;
+    if 1 << ans_size_log < n_entries {
+      return Err(PcoError::corruption(format!(
+        "ANS size log ({}) is too small for number of bins and lookbacks ({})",
+        ans_size_log, n_entries,
+      )));
+    }
+    if n_bins == 0 && n_lookbacks > 0 {
+      return Err(PcoError::corruption(format!(
+        "No bins but {} lookbacks",
+        n_lookbacks,
+      )));
+    }
+    if n_entries == 1 && ans_size_log > 0 {
+      return Err(PcoError::corruption(format!(
+        "Only 1 bin but ANS size log is {} (should be 0)",
+        ans_size_log,
+      )));
+    }
 
-    Ok(Self { bins, ans_size_log })
+    let mut bins = Vec::with_capacity(n_bins);
+    for _ in 0..n_bins {
+      bins.push(Bin::<U>::parse_from(
+        reader,
+        mode,
+        ans_size_log,
+      )?);
+    }
+
+    let mut lookbacks = Vec::with_capacity(n_lookbacks);
+    for _ in 0..n_lookbacks {
+      lookbacks.push(Lookback::parse_from(reader, ans_size_log)?);
+    }
+
+    Ok(Self {
+      bins,
+      ans_size_log,
+      lookbacks,
+    })
   }
 
   fn write_to(&self, mode: Mode<U>, writer: &mut BitWriter) {
@@ -45,7 +85,19 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
       BITS_TO_ENCODE_ANS_SIZE_LOG,
     );
 
-    write_bins(&self.bins, mode, self.ans_size_log, writer);
+    writer.write_usize(self.bins.len(), BITS_TO_ENCODE_N_BINS);
+    writer.write_usize(
+      self.lookbacks.len(),
+      BITS_TO_ENCODE_N_LOOKBACKS,
+    );
+
+    for bin in &self.bins {
+      bin.write_to(mode, self.ans_size_log, writer);
+    }
+
+    for lookback in &self.lookbacks {
+      lookback.write_to(self.ans_size_log, writer);
+    }
   }
 }
 
@@ -140,80 +192,6 @@ impl<U: UnsignedLike> PageMetadata<U> {
     reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
 
     Ok(Self { streams })
-  }
-}
-
-fn parse_bins<U: UnsignedLike>(
-  reader: &mut BitReader,
-  mode: Mode<U>,
-  ans_size_log: Bitlen,
-) -> PcoResult<Vec<Bin<U>>> {
-  let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
-  let mut bins = Vec::with_capacity(n_bins);
-  let offset_bits_bits = bits_to_encode_offset_bits::<U>();
-  if 1 << ans_size_log < n_bins {
-    return Err(PcoError::corruption(format!(
-      "ANS size log ({}) is too small for number of bins ({})",
-      ans_size_log, n_bins,
-    )));
-  }
-  if n_bins == 1 && ans_size_log > 0 {
-    return Err(PcoError::corruption(format!(
-      "Only 1 bin but ANS size log is {} (should be 0)",
-      ans_size_log,
-    )));
-  }
-  for _ in 0..n_bins {
-    let weight = reader.read_usize(ans_size_log)? + 1;
-    let lower = reader.read_uint::<U>(U::BITS)?;
-
-    let offset_bits = reader.read_bitlen(offset_bits_bits)?;
-    if offset_bits > U::BITS {
-      return Err(PcoError::corruption(format!(
-        "offset bits of {} exceeds data type of {} bits",
-        offset_bits,
-        U::BITS,
-      )));
-    }
-
-    let gcd = match mode {
-      Mode::Gcd if offset_bits != 0 => reader.read_uint(U::BITS)?,
-      _ => U::ONE,
-    };
-
-    let bin = Bin {
-      weight,
-      lower,
-      offset_bits,
-      gcd,
-    };
-    bins.push(bin);
-  }
-  Ok(bins)
-}
-
-fn write_bins<U: UnsignedLike>(
-  bins: &[Bin<U>],
-  mode: Mode<U>,
-  ans_size_log: Bitlen,
-  writer: &mut BitWriter,
-) {
-  writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
-  let offset_bits_bits = bits_to_encode_offset_bits::<U>();
-  for bin in bins {
-    writer.write_usize(bin.weight - 1, ans_size_log);
-    writer.write_diff(bin.lower, U::BITS);
-    writer.write_bitlen(bin.offset_bits, offset_bits_bits);
-
-    match mode {
-      Mode::Classic => (),
-      Mode::Gcd => {
-        if bin.offset_bits > 0 {
-          writer.write_diff(bin.gcd, U::BITS);
-        }
-      }
-      Mode::FloatMult { .. } => (),
-    }
   }
 }
 

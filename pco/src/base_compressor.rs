@@ -621,6 +621,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
       stream_metas.push(ChunkStreamMetadata {
         bins,
+        lookbacks: vec![],
         ans_size_log: trained.ans_size_log,
       });
       stream_configs.push(StreamConfig {

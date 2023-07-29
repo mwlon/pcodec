@@ -4,7 +4,7 @@ This generates a wide variety of common distributions,
 compresses them, decompresses them, and makes sure
 all the data came back bitwise identical.
 It supports
-* multiple codecs (pco, q_compress, zstd)
+* multiple codecs (pco, q_compress, zstd, parquet)
 * multiple data types
 
 ## Running

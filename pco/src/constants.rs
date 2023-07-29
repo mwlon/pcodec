@@ -9,11 +9,13 @@ pub const MAGIC_TERMINATION_BYTE: u8 = 46; // .
 
 // bit lengths
 pub const BITS_TO_ENCODE_ANS_SIZE_LOG: Bitlen = 4;
+pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
 pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: Bitlen = 3;
+pub const BITS_TO_ENCODE_LOOKBACK: Bitlen = 10;
 pub const BITS_TO_ENCODE_MODE: Bitlen = 4;
 pub const BITS_TO_ENCODE_N_ENTRIES: Bitlen = 24;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
-pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
+pub const BITS_TO_ENCODE_N_LOOKBACKS: Bitlen = 6;
 
 // performance tuning parameters
 pub const DECOMPRESS_UNCHECKED_THRESHOLD: usize = 32;

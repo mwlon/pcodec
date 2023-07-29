@@ -1,7 +1,12 @@
 use crate::ans::Token;
+use crate::bit_reader::BitReader;
+use crate::bit_writer::BitWriter;
+use crate::bits::bits_to_encode_offset_bits;
 
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
+use crate::errors::{PcoError, PcoResult};
+use crate::Mode;
 
 /// Part of [`ChunkStreamMetadata`][`crate::ChunkStreamMetadata`] representing
 /// a numerical range.
@@ -18,6 +23,57 @@ pub struct Bin<U: UnsignedLike> {
   /// The greatest common divisor of all numbers belonging to this bin
   /// (in the data type's corresponding unsigned integer).
   pub gcd: U,
+}
+
+impl<U: UnsignedLike> Bin<U> {
+  pub(crate) fn write_to(&self, mode: Mode<U>, ans_size_log: Bitlen, writer: &mut BitWriter) {
+    writer.write_usize(self.weight - 1, ans_size_log);
+    writer.write_diff(self.lower, U::BITS);
+    writer.write_bitlen(
+      self.offset_bits,
+      bits_to_encode_offset_bits::<U>(),
+    );
+
+    match mode {
+      Mode::Classic => (),
+      Mode::Gcd => {
+        if self.offset_bits > 0 {
+          writer.write_diff(self.gcd, U::BITS);
+        }
+      }
+      Mode::FloatMult { .. } => (),
+    }
+  }
+
+  pub(crate) fn parse_from(
+    reader: &mut BitReader,
+    mode: Mode<U>,
+    ans_size_log: Bitlen,
+  ) -> PcoResult<Self> {
+    let weight = reader.read_usize(ans_size_log)? + 1;
+    let lower = reader.read_uint::<U>(U::BITS)?;
+
+    let offset_bits = reader.read_bitlen(bits_to_encode_offset_bits::<U>())?;
+    if offset_bits > U::BITS {
+      return Err(PcoError::corruption(format!(
+        "offset bits of {} exceeds data type of {} bits",
+        offset_bits,
+        U::BITS,
+      )));
+    }
+
+    let gcd = match mode {
+      Mode::Gcd if offset_bits != 0 => reader.read_uint(U::BITS)?,
+      _ => U::ONE,
+    };
+
+    Ok(Bin {
+      weight,
+      lower,
+      offset_bits,
+      gcd,
+    })
+  }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -40,6 +40,7 @@ mod constants;
 mod delta_encoding;
 mod flags;
 mod float_mult_utils;
+mod lookback;
 mod modes;
 mod page_decompressor;
 mod progress;
