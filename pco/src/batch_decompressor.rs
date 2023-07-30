@@ -283,21 +283,26 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressorIm
     })
   }
 
+  #[inline]
+  fn bin_idx(&self, n_processed: usize, token: Token, stream_idx: usize) -> Token {
+    let config = &self.stream_configs[stream_idx];
+    let n_bins = config.infos.len() as Token;
+    if token < n_bins {
+      token
+    } else {
+      let lookback = config.lookbacks[(token - n_bins) as usize];
+      self.state.past_bin_idxs[n_processed.wrapping_sub(lookback as usize) % MAX_LOOKBACK]
+        [stream_idx]
+    }
+  }
+
   fn unchecked_decompress_num_block(&mut self, reader: &mut BitReader, dst: &mut UnsignedDst<U>) {
     let n_processed = self.state.n_processed + dst.n_processed();
     for stream_idx in 0..STREAMS {
       let token = self.state.ans_decoders[stream_idx].unchecked_decode(reader);
-      let config = &self.stream_configs[stream_idx];
-      let n_bins = config.infos.len() as Token;
-      let bin_idx = if token < n_bins {
-        token
-      } else {
-        let lookback = config.lookbacks[(token - n_bins) as usize];
-        self.state.past_bin_idxs[n_processed.wrapping_sub(lookback as usize) % MAX_LOOKBACK]
-          [stream_idx]
-      };
+      let bin_idx = self.bin_idx(n_processed, token, stream_idx);
       self.state.past_bin_idxs[n_processed % MAX_LOOKBACK][stream_idx] = bin_idx;
-      let bin = &config.infos[bin_idx as usize];
+      let bin = &self.stream_configs[stream_idx].infos[bin_idx as usize];
       let u = M::unchecked_decompress_unsigned(bin, reader);
       dst.write(stream_idx, u);
     }
@@ -326,15 +331,8 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressorIm
     for stream_idx in 0..STREAMS {
       let config = &self.stream_configs[stream_idx];
       if n_processed + config.delta_order < self.n {
-        let n_bins = config.infos.len() as Token;
         let token = self.state.ans_decoders[stream_idx].decode(reader)?;
-        let bin_idx = if token < n_bins {
-          token
-        } else {
-          let lookback = config.lookbacks[(token - n_bins) as usize];
-          self.state.past_bin_idxs[n_processed.wrapping_sub(lookback as usize) % MAX_LOOKBACK]
-            [stream_idx]
-        };
+        let bin_idx = self.bin_idx(n_processed, token, stream_idx);
         self.state.past_bin_idxs[n_processed % MAX_LOOKBACK][stream_idx] = bin_idx;
         let bin = &config.infos[bin_idx as usize];
         let u = M::decompress_unsigned(bin, reader)?;
