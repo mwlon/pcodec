@@ -52,7 +52,12 @@ impl Decoder {
     stream: &ChunkStreamMetadata<U>,
     final_state: usize,
   ) -> PcoResult<Self> {
-    let weights = stream.bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
+    let weights = stream
+      .bins
+      .iter()
+      .map(|bin| bin.weight)
+      .chain(stream.lookbacks.iter().map(|lookback| lookback.weight))
+      .collect::<Vec<_>>();
     let spec = Spec::from_weights(stream.ans_size_log, weights)?;
     Ok(Self::new(&spec, final_state))
   }

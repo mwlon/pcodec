@@ -7,7 +7,7 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::lookback::Lookback;
+use crate::lookback::LookbackMetadata;
 use crate::modes::{gcd, Mode};
 use crate::{bin, Flags};
 
@@ -30,7 +30,7 @@ pub struct ChunkStreamMetadata<U: UnsignedLike> {
   /// How the numbers or deltas are encoded, depending on their numerical
   /// range.
   pub bins: Vec<Bin<U>>,
-  pub lookbacks: Vec<Lookback>,
+  pub lookbacks: Vec<LookbackMetadata>,
 }
 
 impl<U: UnsignedLike> ChunkStreamMetadata<U> {
@@ -69,7 +69,10 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
 
     let mut lookbacks = Vec::with_capacity(n_lookbacks);
     for _ in 0..n_lookbacks {
-      lookbacks.push(Lookback::parse_from(reader, ans_size_log)?);
+      lookbacks.push(LookbackMetadata::parse_from(
+        reader,
+        ans_size_log,
+      )?);
     }
 
     Ok(Self {

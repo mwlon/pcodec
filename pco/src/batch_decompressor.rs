@@ -4,14 +4,16 @@ use std::marker::PhantomData;
 
 use std::mem::MaybeUninit;
 
+use crate::ans::Token;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::PageMetadata;
 use crate::constants::{
-  Bitlen, DECOMPRESS_UNCHECKED_THRESHOLD, MAX_DELTA_ENCODING_ORDER, MAX_N_STREAMS,
+  Bitlen, DECOMPRESS_UNCHECKED_THRESHOLD, MAX_DELTA_ENCODING_ORDER, MAX_LOOKBACK, MAX_N_STREAMS,
 };
 use crate::data_types::UnsignedLike;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
+use crate::lookback::Lookback;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::GcdMode;
 use crate::modes::ConstMode;
@@ -24,6 +26,7 @@ pub struct State<const STREAMS: usize> {
   n_processed: usize,
   bits_processed: usize,
   ans_decoders: [ans::Decoder; STREAMS],
+  past_bin_idxs: [[u32; STREAMS]; MAX_LOOKBACK],
 }
 
 struct Backup<const STREAMS: usize> {
@@ -80,6 +83,7 @@ pub trait BatchDecompressor<U: UnsignedLike>: Debug {
 #[derive(Clone, Debug)]
 struct StreamConfig<U: UnsignedLike> {
   infos: Vec<BinDecompressionInfo<U>>,
+  lookbacks: Vec<Lookback>,
   delta_order: usize, // only used to infer how many extra 0's are at the end
 }
 
@@ -251,8 +255,14 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressorIm
         .iter()
         .map(BinDecompressionInfo::from)
         .collect::<Vec<_>>();
+      let lookbacks = stream
+        .lookbacks
+        .iter()
+        .map(|meta| meta.lookback)
+        .collect::<Vec<_>>();
       StreamConfig {
         infos,
+        lookbacks,
         delta_order: delta_orders[stream_idx],
       }
     });
@@ -268,14 +278,26 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressorIm
         n_processed: 0,
         bits_processed: 0,
         ans_decoders: decoders.map(|decoder| unsafe { MaybeUninit::assume_init(decoder) }),
+        past_bin_idxs: [[0; STREAMS]; MAX_LOOKBACK],
       },
     })
   }
 
   fn unchecked_decompress_num_block(&mut self, reader: &mut BitReader, dst: &mut UnsignedDst<U>) {
+    let n_processed = self.state.n_processed + dst.n_processed();
     for stream_idx in 0..STREAMS {
       let token = self.state.ans_decoders[stream_idx].unchecked_decode(reader);
-      let bin = &self.stream_configs[stream_idx].infos[token as usize];
+      let config = &self.stream_configs[stream_idx];
+      let n_bins = config.infos.len() as Token;
+      let bin_idx = if token < n_bins {
+        token
+      } else {
+        let lookback = config.lookbacks[(token - n_bins) as usize];
+        self.state.past_bin_idxs[n_processed.wrapping_sub(lookback as usize) % MAX_LOOKBACK]
+          [stream_idx]
+      };
+      self.state.past_bin_idxs[n_processed % MAX_LOOKBACK][stream_idx] = bin_idx;
+      let bin = &config.infos[bin_idx as usize];
       let u = M::unchecked_decompress_unsigned(bin, reader);
       dst.write(stream_idx, u);
     }
@@ -300,11 +322,21 @@ impl<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize> BatchDecompressorIm
     reader: &mut BitReader,
     dst: &mut UnsignedDst<U>,
   ) -> PcoResult<()> {
+    let n_processed = self.state.n_processed + dst.n_processed();
     for stream_idx in 0..STREAMS {
       let config = &self.stream_configs[stream_idx];
-      if dst.n_processed() + config.delta_order < self.n - self.state.n_processed {
+      if n_processed + config.delta_order < self.n {
+        let n_bins = config.infos.len() as Token;
         let token = self.state.ans_decoders[stream_idx].decode(reader)?;
-        let bin = &config.infos[token as usize];
+        let bin_idx = if token < n_bins {
+          token
+        } else {
+          let lookback = config.lookbacks[(token - n_bins) as usize];
+          self.state.past_bin_idxs[n_processed.wrapping_sub(lookback as usize) % MAX_LOOKBACK]
+            [stream_idx]
+        };
+        self.state.past_bin_idxs[n_processed % MAX_LOOKBACK][stream_idx] = bin_idx;
+        let bin = &config.infos[bin_idx as usize];
         let u = M::decompress_unsigned(bin, reader)?;
         dst.write(stream_idx, u);
       }
