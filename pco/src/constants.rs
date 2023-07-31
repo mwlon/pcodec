@@ -33,7 +33,7 @@ pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
 pub const AUTO_DELTA_LIMIT: usize = 1100;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
 pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
-pub const MAX_ENTRIES: usize = (1 << 24) - 1;
+pub const MAX_ENTRIES: usize = (1 << BITS_TO_ENCODE_N_ENTRIES) - 1;
 pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 
 // defaults
