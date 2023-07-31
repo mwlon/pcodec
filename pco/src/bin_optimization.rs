@@ -2,7 +2,7 @@ use crate::ans::Token;
 use crate::bin::BinCompressionInfo;
 use crate::bits;
 use crate::bits::avg_depth_bits;
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 use crate::modes::ConstMode;
 
@@ -10,7 +10,7 @@ fn bin_bit_cost<U: UnsignedLike, M: ConstMode<U>>(
   base_meta_cost: f64,
   lower: U,
   upper: U,
-  count: usize,
+  count: Weight,
   n: usize,
   mode: M,
   acc: &M::BinOptAccumulator,
@@ -108,18 +108,24 @@ mod tests {
   use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
   use crate::bits;
+  use crate::constants::Weight;
   use crate::modes::gcd::GcdMode;
 
   fn basic_gcd_optimize(bins: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {
     optimize_bins(bins, 0, GcdMode, 100)
   }
 
-  fn make_gcd_bin_info(weight: usize, lower: u32, upper: u32, gcd: u32) -> BinCompressionInfo<u32> {
+  fn make_gcd_bin_info(
+    weight: Weight,
+    lower: u32,
+    upper: u32,
+    gcd: u32,
+  ) -> BinCompressionInfo<u32> {
     expected_gcd_bin_info(weight, lower, upper, gcd, 0)
   }
 
   fn expected_gcd_bin_info(
-    weight: usize,
+    weight: Weight,
     lower: u32,
     upper: u32,
     gcd: u32,

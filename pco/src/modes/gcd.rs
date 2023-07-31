@@ -1,5 +1,6 @@
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
+use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::modes::ConstMode;
@@ -37,7 +38,7 @@ impl<U: UnsignedLike> ConstMode<U> for GcdMode {
     }
   }
 
-  fn bin_cost(&self, lower: U, upper: U, count: usize, acc: &Self::BinOptAccumulator) -> f64 {
+  fn bin_cost(&self, lower: U, upper: U, count: Weight, acc: &Self::BinOptAccumulator) -> f64 {
     // best approximation of GCD metadata bit cost we can do without knowing
     // what's going on in the other bins
     let bin_gcd = acc.gcd.unwrap_or(U::ONE);
@@ -47,7 +48,7 @@ impl<U: UnsignedLike> ConstMode<U> for GcdMode {
       0.0
     };
     let offset_cost = bits::bits_to_encode_offset((upper - lower) / bin_gcd);
-    gcd_meta_cost + (offset_cost as usize * count) as f64
+    gcd_meta_cost + (offset_cost as u64 * count as u64) as f64
   }
 
   fn fill_optimized_compression_info(

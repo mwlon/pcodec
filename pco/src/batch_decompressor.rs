@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use std::mem::MaybeUninit;
 
+use crate::ans::AnsState;
 use crate::ans::Token;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
@@ -32,15 +33,15 @@ pub struct State<const STREAMS: usize> {
 struct Backup<const STREAMS: usize> {
   n_processed: usize,
   bits_processed: usize,
-  ans_decoder_backups: [usize; STREAMS],
+  ans_decoder_backups: [AnsState; STREAMS],
 }
 
-fn decoder_states<const STREAMS: usize>(decoders: &[ans::Decoder; STREAMS]) -> [usize; STREAMS] {
+fn decoder_states<const STREAMS: usize>(decoders: &[ans::Decoder; STREAMS]) -> [AnsState; STREAMS] {
   core::array::from_fn(|stream_idx| decoders[stream_idx].state)
 }
 
 fn recover_decoders<const STREAMS: usize>(
-  backups: [usize; STREAMS],
+  backups: [AnsState; STREAMS],
   decoders: &mut [ans::Decoder; STREAMS],
 ) {
   for stream_idx in 0..STREAMS {
@@ -124,7 +125,7 @@ pub fn new<U: UnsignedLike>(
       .bins
       .iter()
       .map(|bin| {
-        let max_ans_bits = stream.ans_size_log - bin.weight.ilog2();
+        let max_ans_bits = stream.ans_size_log - bin.weight.ilog2() as Bitlen;
         max_ans_bits + bin.offset_bits
       })
       .max()

@@ -3,7 +3,7 @@ use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::Mode;
@@ -15,7 +15,7 @@ use crate::Mode;
 pub struct Bin<U: UnsignedLike> {
   /// The number of occurrences of this bin in the asymmetric numeral system
   /// table.
-  pub weight: usize,
+  pub weight: Weight,
   /// The lower bound for this bin's numerical range.
   pub lower: U,
   /// The log of the size of this bin's (inclusive) numerical range.
@@ -27,7 +27,7 @@ pub struct Bin<U: UnsignedLike> {
 
 impl<U: UnsignedLike> Bin<U> {
   pub(crate) fn write_to(&self, mode: Mode<U>, ans_size_log: Bitlen, writer: &mut BitWriter) {
-    writer.write_usize(self.weight - 1, ans_size_log);
+    writer.write_diff(self.weight - 1, ans_size_log);
     writer.write_diff(self.lower, U::BITS);
     writer.write_bitlen(
       self.offset_bits,
@@ -50,7 +50,7 @@ impl<U: UnsignedLike> Bin<U> {
     mode: Mode<U>,
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
-    let weight = reader.read_usize(ans_size_log)? + 1;
+    let weight = reader.read_uint::<Weight>(ans_size_log)? + 1;
     let lower = reader.read_uint::<U>(U::BITS)?;
 
     let offset_bits = reader.read_bitlen(bits_to_encode_offset_bits::<U>())?;
@@ -78,7 +78,7 @@ impl<U: UnsignedLike> Bin<U> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BinCompressionInfo<U: UnsignedLike> {
-  pub weight: usize,
+  pub weight: Weight,
   pub lower: U,
   pub upper: U,
   pub offset_bits: Bitlen,

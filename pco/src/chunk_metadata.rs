@@ -1,3 +1,4 @@
+use crate::ans::AnsState;
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -107,7 +108,7 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
 #[derive(Clone, Debug)]
 pub struct PageStreamMetadata<U: UnsignedLike> {
   pub delta_moments: DeltaMoments<U>,
-  pub ans_final_state: usize,
+  pub ans_final_state: AnsState,
 }
 
 impl<U: UnsignedLike> PageStreamMetadata<U> {
@@ -115,7 +116,7 @@ impl<U: UnsignedLike> PageStreamMetadata<U> {
     self.delta_moments.write_to(writer);
 
     // write the final ANS state, moving it down the range [0, table_size)
-    writer.write_usize(
+    writer.write_diff(
       self.ans_final_state - (1 << ans_size_log),
       ans_size_log,
     );
@@ -127,7 +128,7 @@ impl<U: UnsignedLike> PageStreamMetadata<U> {
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
     let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
-    let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
+    let ans_final_state = (1 << ans_size_log) + reader.read_uint::<AnsState>(ans_size_log)?;
     Ok(Self {
       delta_moments,
       ans_final_state,

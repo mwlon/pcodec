@@ -1,16 +1,22 @@
 pub use decoding::Decoder;
 pub use encoding::quantize_weights;
 pub use encoding::Encoder;
-pub use spec::Token;
 
 mod decoding;
 mod encoding;
 mod spec;
 
+// must be u16 or larger (though u32+ may become a requirement in the future)
+// should not be exposed in public API
+pub(crate) type AnsState = u32;
+// must be u16 or larger
+// should not be exposed in public API
+pub(crate) type Token = u32;
+
 #[cfg(test)]
 mod tests {
-  use crate::ans::spec::{Spec, Token};
-  use crate::ans::{Decoder, Encoder};
+  use crate::ans::spec::Spec;
+  use crate::ans::{Decoder, Encoder, Token};
   use crate::bit_reader::BitReader;
   use crate::bit_words::PaddedBytes;
   use crate::bit_writer::BitWriter;
@@ -24,7 +30,7 @@ mod tests {
     }
     let mut writer = BitWriter::default();
     for (word, bitlen) in to_write.into_iter().rev() {
-      writer.write_usize(word, bitlen);
+      writer.write_diff(word, bitlen);
     }
     let final_state = encoder.state();
 
