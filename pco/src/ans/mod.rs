@@ -11,7 +11,7 @@ pub(crate) type Token = u32;
 
 #[cfg(test)]
 mod tests {
-  use crate::ans::spec::{Spec};
+  use crate::ans::spec::Spec;
   use crate::ans::{Decoder, Encoder, Token};
   use crate::bit_reader::BitReader;
   use crate::bit_words::PaddedBytes;

@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use std::mem::MaybeUninit;
 
+use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::PageMetadata;
@@ -18,7 +19,6 @@ use crate::modes::ConstMode;
 use crate::progress::Progress;
 use crate::unsigned_src_dst::UnsignedDst;
 use crate::{ans, ChunkMetadata};
-use crate::ans::AnsState;
 
 #[derive(Clone, Debug)]
 pub struct State<const STREAMS: usize> {

@@ -1,3 +1,4 @@
+use crate::ans::AnsState;
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -9,7 +10,6 @@ use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::{gcd, Mode};
 use crate::{bin, Flags};
-use crate::ans::AnsState;
 
 /// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a stream
 /// interleaved into the compressed data.

@@ -115,7 +115,12 @@ mod tests {
     optimize_bins(bins, 0, GcdMode, 100)
   }
 
-  fn make_gcd_bin_info(weight: Weight, lower: u32, upper: u32, gcd: u32) -> BinCompressionInfo<u32> {
+  fn make_gcd_bin_info(
+    weight: Weight,
+    lower: u32,
+    upper: u32,
+    gcd: u32,
+  ) -> BinCompressionInfo<u32> {
     expected_gcd_bin_info(weight, lower, upper, gcd, 0)
   }
 

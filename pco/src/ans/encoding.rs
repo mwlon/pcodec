@@ -1,6 +1,6 @@
 use std::cmp::max;
 
-use crate::ans::spec::{Spec};
+use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;

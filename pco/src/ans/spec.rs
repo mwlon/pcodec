@@ -1,5 +1,5 @@
 use crate::ans::Token;
-use crate::constants::{Bitlen, Weight, WORD_BITLEN};
+use crate::constants::{Bitlen, Weight};
 use crate::errors::{PcoError, PcoResult};
 
 // Here and in encoding/decoding, state is between [0, table_size)
