@@ -1,3 +1,4 @@
+use crate::ans::AnsState;
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -52,7 +53,7 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
 #[derive(Clone, Debug)]
 pub struct PageStreamMetadata<U: UnsignedLike> {
   pub delta_moments: DeltaMoments<U>,
-  pub ans_final_state: usize,
+  pub ans_final_state: AnsState,
 }
 
 impl<U: UnsignedLike> PageStreamMetadata<U> {
@@ -60,7 +61,7 @@ impl<U: UnsignedLike> PageStreamMetadata<U> {
     self.delta_moments.write_to(writer);
 
     // write the final ANS state, moving it down the range [0, table_size)
-    writer.write_usize(
+    writer.write_diff(
       self.ans_final_state - (1 << ans_size_log),
       ans_size_log,
     );
@@ -72,7 +73,7 @@ impl<U: UnsignedLike> PageStreamMetadata<U> {
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
     let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
-    let ans_final_state = (1 << ans_size_log) + reader.read_usize(ans_size_log)?;
+    let ans_final_state = (1 << ans_size_log) + reader.read_uint::<AnsState>(ans_size_log)?;
     Ok(Self {
       delta_moments,
       ans_final_state,
@@ -164,7 +165,7 @@ fn parse_bins<U: UnsignedLike>(
     )));
   }
   for _ in 0..n_bins {
-    let weight = reader.read_usize(ans_size_log)? + 1;
+    let weight = reader.read_uint::<Weight>(ans_size_log)? + 1;
     let lower = reader.read_uint::<U>(U::BITS)?;
 
     let offset_bits = reader.read_bitlen(offset_bits_bits)?;
@@ -201,7 +202,7 @@ fn write_bins<U: UnsignedLike>(
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for bin in bins {
-    writer.write_usize(bin.weight - 1, ans_size_log);
+    writer.write_diff(bin.weight - 1, ans_size_log);
     writer.write_diff(bin.lower, U::BITS);
     writer.write_bitlen(bin.offset_bits, offset_bits_bits);
 

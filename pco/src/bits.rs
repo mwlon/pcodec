@@ -1,11 +1,11 @@
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
 // The true Huffman cost of course depends on the tree. We can statistically
 // model this cost and get slightly different bumpy log formulas,
 // but I haven't found
 // anything that beats a simple log. Plus it's computationally cheap.
-pub fn avg_depth_bits(weight: usize, total_weight: usize) -> f64 {
+pub fn avg_depth_bits(weight: Weight, total_weight: usize) -> f64 {
   (total_weight as f64 / weight as f64).log2()
 }
 

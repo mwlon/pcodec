@@ -1,6 +1,10 @@
-// Doing bit reads/writes/shifts with u32 is more performant than u64.
-// This type could also be u8 or u16.
-pub type Bitlen = u32;
+// must be u8 or larger
+// u64+ seems less performant
+// exposed in public API
+pub(crate) type Bitlen = u32;
+// must be u32 or larger
+// exposed in public API
+pub(crate) type Weight = u32;
 
 // magic identification bytes
 pub const MAGIC_HEADER: [u8; 4] = [112, 99, 111, 33]; // ascii for pco!
@@ -29,7 +33,7 @@ pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
 pub const AUTO_DELTA_LIMIT: usize = 1100;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
 pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
-pub const MAX_ENTRIES: usize = (1 << 24) - 1;
+pub const MAX_ENTRIES: usize = (1 << BITS_TO_ENCODE_N_ENTRIES) - 1;
 pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 
 // defaults

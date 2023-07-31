@@ -1,6 +1,6 @@
 use crate::ans::Token;
 
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
 /// Part of [`ChunkStreamMetadata`][`crate::ChunkStreamMetadata`] representing
@@ -10,7 +10,7 @@ use crate::data_types::UnsignedLike;
 pub struct Bin<U: UnsignedLike> {
   /// The number of occurrences of this bin in the asymmetric numeral system
   /// table.
-  pub weight: usize,
+  pub weight: Weight,
   /// The lower bound for this bin's numerical range.
   pub lower: U,
   /// The log of the size of this bin's (inclusive) numerical range.
@@ -22,7 +22,7 @@ pub struct Bin<U: UnsignedLike> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BinCompressionInfo<U: UnsignedLike> {
-  pub weight: usize,
+  pub weight: Weight,
   pub lower: U,
   pub upper: U,
   pub offset_bits: Bitlen,

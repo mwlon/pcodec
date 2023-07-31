@@ -5,8 +5,9 @@ import numpy as np
 from datetime import datetime
 import os
 
+mini_n = 3000
 n = 1000000
-short_n = 3000
+max_n = 2 ** 24 - 1
 
 base_dir = 'bench/data'
 
@@ -14,6 +15,7 @@ os.makedirs(f'{base_dir}/txt', exist_ok=True)
 os.makedirs(f'{base_dir}/binary', exist_ok=True)
 
 def write_generic(strs, arr, full_name):
+  print(f'writing {full_name}...')
   joined = '\n'.join(strs)
   with open(f'{base_dir}/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
@@ -56,13 +58,16 @@ def fixed_median_lomax(a, median):
   return np.random.pareto(a=a, size=n) / unscaled_median * median
 np.random.seed(0)
 lomax05 = fixed_median_lomax(0.5, 1000)
-write_i64(lomax05, 'lomax05_long')
-write_i64(lomax05[:short_n], 'lomax05_short')
+write_i64(lomax05, 'lomax05_reg')
+write_i64(lomax05[:mini_n], 'lomax05_mini')
 np.random.seed(0)
 write_i64(fixed_median_lomax(2.5, 1000), 'lomax25')
 
 np.random.seed(0)
-write_i64(np.random.randint(-2**63, 2**63, size=n), 'uniform')
+uniform = np.random.randint(-2**63, 2**63, size=max_n)
+write_i64(uniform[:n], 'uniform_reg')
+# disable the following by default because it's kinda a waste of disk:
+# write_i64(uniform, 'uniform_xl')
 
 write_i64(np.repeat(77777, n), 'constant')
 
@@ -175,5 +180,5 @@ diablo = np.array(diablo[:n]).astype(np.float64)
 diablo /= 100.0
 machine_eps = 1.0E-52
 diablo *= np.random.uniform(1 - 2 * machine_eps, 1 + 3 * machine_eps, size=n)
-write_f64(diablo, 'diablo_long')
-write_f64(diablo[:short_n], 'diablo_short')
+write_f64(diablo, 'diablo_reg')
+write_f64(diablo[:mini_n], 'diablo_mini')
