@@ -2,7 +2,7 @@ use crate::ans::Token;
 use crate::bin::BinCompressionInfo;
 use crate::bits;
 use crate::bits::avg_depth_bits;
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 use crate::modes::ConstMode;
 
@@ -10,7 +10,7 @@ fn bin_bit_cost<U: UnsignedLike, M: ConstMode<U>>(
   base_meta_cost: f64,
   lower: U,
   upper: U,
-  count: usize,
+  count: Weight,
   n: usize,
   mode: M,
   acc: &M::BinOptAccumulator,
@@ -62,7 +62,7 @@ pub fn optimize_bins<U: UnsignedLike, M: ConstMode<U>>(
           base_meta_cost,
           lower,
           upper,
-          (cum_count_i - cum_count[j]) as usize,
+          cum_count_i - cum_count[j],
           n,
           mode,
           &acc,

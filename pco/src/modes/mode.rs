@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
 use crate::bit_reader::BitReader;
+use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::float_mult_utils::FloatMultConfig;
@@ -12,7 +13,7 @@ pub trait ConstMode<U: UnsignedLike>: Copy + Debug + 'static {
   // BIN OPTIMIZATION
   type BinOptAccumulator: Default;
   fn combine_bin_opt_acc(bin: &BinCompressionInfo<U>, acc: &mut Self::BinOptAccumulator);
-  fn bin_cost(&self, lower: U, upper: U, count: usize, acc: &Self::BinOptAccumulator) -> f64;
+  fn bin_cost(&self, lower: U, upper: U, count: Weight, acc: &Self::BinOptAccumulator) -> f64;
   fn fill_optimized_compression_info(
     &self,
     acc: Self::BinOptAccumulator,
