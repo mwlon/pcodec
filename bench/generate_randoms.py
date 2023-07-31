@@ -9,7 +9,6 @@ mini_n = 3000
 n = 1000000
 max_n = 2 ** 24 - 1
 
-
 base_dir = 'bench/data'
 
 os.makedirs(f'{base_dir}/txt', exist_ok=True)
