@@ -1,10 +1,11 @@
+use crate::ans::AnsState;
 use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, MAX_N_STREAMS};
 use crate::data_types::UnsignedLike;
 
 #[derive(Clone, Debug)]
 pub struct Decomposed<U: UnsignedLike> {
-  pub ans_word: usize,
+  pub ans_word: AnsState,
   pub ans_bits: Bitlen,
   pub offset: U,
   pub offset_bits: Bitlen,
@@ -12,7 +13,7 @@ pub struct Decomposed<U: UnsignedLike> {
 
 impl<U: UnsignedLike> Decomposed<U> {
   pub fn write_to(&self, writer: &mut BitWriter) {
-    writer.write_usize(self.ans_word, self.ans_bits);
+    writer.write_diff(self.ans_word, self.ans_bits);
     writer.write_diff(self.offset, self.offset_bits);
   }
 }
@@ -39,14 +40,14 @@ impl<U: UnsignedLike> StreamSrc<U> {
 #[derive(Clone, Debug)]
 pub struct DecomposedSrc<U: UnsignedLike> {
   decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS],
-  ans_final_states: [usize; MAX_N_STREAMS],
+  ans_final_states: [AnsState; MAX_N_STREAMS],
   i: usize,
 }
 
 impl<U: UnsignedLike> DecomposedSrc<U> {
   pub fn new(
     decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS],
-    ans_final_states: [usize; MAX_N_STREAMS],
+    ans_final_states: [AnsState; MAX_N_STREAMS],
   ) -> Self {
     Self {
       decomposeds,
@@ -68,7 +69,7 @@ impl<U: UnsignedLike> DecomposedSrc<U> {
     self.i += 1;
   }
 
-  pub fn ans_final_state(&self, stream_idx: usize) -> usize {
+  pub fn ans_final_state(&self, stream_idx: usize) -> AnsState {
     self.ans_final_states[stream_idx]
   }
 

@@ -1,29 +1,30 @@
 use std::cmp::max;
 
-use crate::ans::spec::{Spec, Token};
-use crate::constants::Bitlen;
+use crate::ans::spec::{Spec};
+use crate::ans::{AnsState, Token};
+use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::Bin;
 
 #[derive(Clone, Debug)]
 struct TokenInfo {
-  renorm_bit_cutoff: usize,
+  renorm_bit_cutoff: AnsState,
   min_renorm_bits: Bitlen,
-  next_states: Vec<usize>,
+  next_states: Vec<AnsState>,
 }
 
 impl TokenInfo {
-  fn next_state_for(&self, x_s: usize) -> usize {
-    self.next_states[x_s - self.next_states.len()]
+  fn next_state_for(&self, x_s: AnsState) -> AnsState {
+    self.next_states[x_s as usize - self.next_states.len()]
   }
 }
 
 #[derive(Clone, Debug)]
 pub struct Encoder {
   token_infos: Vec<TokenInfo>,
-  state: usize,
   size_log: Bitlen,
+  state: AnsState, // in range from [l, 2l) depending on last token weight
 }
 
 impl Encoder {
@@ -46,12 +47,12 @@ impl Encoder {
         // to find the min renormalization bits (4 - 2 = 2).
         // Finally we choose the cutoff as 2 * 3 * 2 ^ renorm_bits = 24.
         let max_x_s = 2 * weight - 1;
-        let min_renorm_bits = spec.size_log - max_x_s.ilog2();
-        let renorm_bit_cutoff = 2 * weight * (1 << min_renorm_bits);
+        let min_renorm_bits = spec.size_log - max_x_s.ilog2() as Bitlen;
+        let renorm_bit_cutoff = (2 * weight * (1 << min_renorm_bits)) as AnsState;
         TokenInfo {
           renorm_bit_cutoff,
           min_renorm_bits,
-          next_states: Vec::with_capacity(weight),
+          next_states: Vec::with_capacity(weight as usize),
         }
       })
       .collect::<Vec<_>>();
@@ -59,37 +60,37 @@ impl Encoder {
     for (state_idx, &token) in spec.state_tokens.iter().enumerate() {
       token_infos[token as usize]
         .next_states
-        .push(table_size + state_idx);
+        .push((table_size + state_idx) as AnsState);
     }
 
     Self {
       // We choose the initial state from [table_size, 2 * table_size)
       // to be the minimum as this tends to require fewer bits to encode
       // the first token.
-      state: table_size,
+      state: table_size as AnsState,
       token_infos,
       size_log: spec.size_log,
     }
   }
 
-  // Returns the number of bits to write and the value of those bits.
+  // Returns the value to write and how many bits it has.
   // The value of those bits may contain larger significant bits that must be
   // ignored.
   // We don't write to a BitWriter directly because ANS operates in a LIFO
   // manner. We need to write these in reverse order.
-  pub fn encode(&mut self, token: Token) -> (usize, Bitlen) {
+  pub fn encode(&mut self, token: Token) -> (AnsState, Bitlen) {
     let token_info = &self.token_infos[token as usize];
     let renorm_bits = if self.state >= token_info.renorm_bit_cutoff {
       token_info.min_renorm_bits + 1
     } else {
       token_info.min_renorm_bits
     };
-    let word = self.state;
+    let value = self.state;
     self.state = token_info.next_state_for(self.state >> renorm_bits);
-    (word, renorm_bits)
+    (value, renorm_bits)
   }
 
-  pub fn state(&self) -> usize {
+  pub fn state(&self) -> AnsState {
     self.state
   }
 
@@ -99,7 +100,7 @@ impl Encoder {
 }
 
 // given size_log, quantize the counts
-fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -> Vec<usize> {
+fn quantize_weights_to(counts: &[Weight], total_count: usize, size_log: Bitlen) -> Vec<Weight> {
   if size_log == 0 {
     return vec![1];
   }
@@ -123,7 +124,7 @@ fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -
     surplus[idx] = counts[idx] as f32 * multiplier - 1.0;
     total_surplus += surplus[idx];
   }
-  let target_surplus = target_weight_sum - counts.len();
+  let target_surplus = target_weight_sum - counts.len() as Weight;
   let surplus_mult = target_surplus as f32 / total_surplus;
 
   let mut float_weights = vec![1.0; counts.len()];
@@ -133,9 +134,9 @@ fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -
 
   let mut weights = float_weights
     .iter()
-    .map(|&weight| weight.round() as usize)
+    .map(|&weight| weight.round() as Weight)
     .collect::<Vec<_>>();
-  let mut weight_sum = weights.iter().sum::<usize>();
+  let mut weight_sum = weights.iter().sum::<Weight>();
 
   let mut i = 0;
   while weight_sum > target_weight_sum {
@@ -159,19 +160,19 @@ fn quantize_weights_to(counts: &[usize], total_count: usize, size_log: Bitlen) -
 
 // choose both size_log and weights
 pub fn quantize_weights(
-  counts: Vec<usize>,
+  counts: Vec<Weight>,
   total_count: usize,
   max_size_log: Bitlen,
-) -> (Bitlen, Vec<usize>) {
+) -> (Bitlen, Vec<Weight>) {
   if counts.len() == 1 {
     return (0, vec![1]);
   }
 
-  let min_size_log = usize::BITS - (counts.len() - 1).leading_zeros();
+  let min_size_log = (usize::BITS - (counts.len() - 1).leading_zeros()) as Bitlen;
   let mut size_log = max(min_size_log, max_size_log);
   let mut weights = quantize_weights_to(&counts, total_count, size_log);
 
-  let power_of_2 = weights.iter().map(|&w| w.trailing_zeros()).min().unwrap();
+  let power_of_2 = weights.iter().map(|&w| w.trailing_zeros()).min().unwrap() as Bitlen;
   size_log -= power_of_2;
   for weight in &mut weights {
     *weight >>= power_of_2;

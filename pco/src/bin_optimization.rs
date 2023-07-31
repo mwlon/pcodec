@@ -62,7 +62,7 @@ pub fn optimize_bins<U: UnsignedLike, M: ConstMode<U>>(
           base_meta_cost,
           lower,
           upper,
-          cum_count_i - cum_count[j],
+          (cum_count_i - cum_count[j]) as usize,
           n,
           mode,
           &acc,
@@ -108,18 +108,19 @@ mod tests {
   use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
   use crate::bits;
+  use crate::constants::Weight;
   use crate::modes::gcd::GcdMode;
 
   fn basic_gcd_optimize(bins: Vec<BinCompressionInfo<u32>>) -> Vec<BinCompressionInfo<u32>> {
     optimize_bins(bins, 0, GcdMode, 100)
   }
 
-  fn make_gcd_bin_info(weight: usize, lower: u32, upper: u32, gcd: u32) -> BinCompressionInfo<u32> {
+  fn make_gcd_bin_info(weight: Weight, lower: u32, upper: u32, gcd: u32) -> BinCompressionInfo<u32> {
     expected_gcd_bin_info(weight, lower, upper, gcd, 0)
   }
 
   fn expected_gcd_bin_info(
-    weight: usize,
+    weight: Weight,
     lower: u32,
     upper: u32,
     gcd: u32,

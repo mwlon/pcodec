@@ -175,7 +175,7 @@ impl<'a> BitReader<'a> {
   }
 
   // returns (bits read, idx)
-  pub fn read_small(&mut self, n: Bitlen) -> PcoResult<usize> {
+  pub fn read_small(&mut self, n: Bitlen) -> PcoResult<u32> {
     self.insufficient_data_check("read_small", n)?;
     Ok(self.unchecked_read_small(n))
   }
@@ -222,7 +222,7 @@ impl<'a> BitReader<'a> {
   }
 
   #[inline]
-  pub fn unchecked_read_small(&mut self, n: Bitlen) -> usize {
+  pub fn unchecked_read_small(&mut self, n: Bitlen) -> u32 {
     if n == 0 {
       return 0;
     }
@@ -230,9 +230,9 @@ impl<'a> BitReader<'a> {
     let (i, j) = self.idxs();
     // Shockingly, combining this line with the last slows things down.
     // Pipelining?
-    let res = self.unchecked_word(i) >> j;
+    let res = <u32 as ReadableUint>::from_word(self.unchecked_word(i) >> j);
     self.bit_idx += n as usize;
-    res & (usize::MAX >> (WORD_BITLEN - n))
+    res & (u32::MAX >> (32 - n))
   }
 
   // Seek to the end of the byte.
@@ -288,7 +288,7 @@ mod tests {
       bit_reader.unchecked_read_uint::<u64>(2),
       2_u64
     );
-    assert_eq!(bit_reader.unchecked_read_small(3), 1_usize);
+    assert_eq!(bit_reader.unchecked_read_small(3), 1_u32);
     //leaves 1 bit left over
     Ok(())
   }

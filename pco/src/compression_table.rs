@@ -1,8 +1,11 @@
 use crate::bin::BinCompressionInfo;
+use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
 use crate::errors::{PcoError, PcoResult};
 
-const TARGET_BRANCHING_FACTOR: usize = 16; // chosen for performance
+// this isn't really the same type of quantity as weight,
+// but it needs to have the same data type
+const TARGET_BRANCHING_FACTOR: Weight = 16; // chosen for performance
 
 #[derive(Debug, Clone)]
 pub struct CompressionTableItem<U: UnsignedLike> {
@@ -31,7 +34,7 @@ impl<U: UnsignedLike> CompressionTable<U> {
       return CompressionTable::Leaf(bins[0]);
     }
 
-    let total_count: usize = bins.iter().map(|p| p.weight).sum();
+    let total_count: Weight = bins.iter().map(|p| p.weight).sum();
 
     let mut last_idx = 0;
     let mut idx = 0;

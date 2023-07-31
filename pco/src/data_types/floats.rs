@@ -8,7 +8,7 @@ use crate::data_types::{FloatLike, NumberLike};
 macro_rules! impl_float_number {
   ($t: ty, $unsigned: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
     impl FloatLike for $t {
-      const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS - 1;
+      const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
       const GREATEST_PRECISE_INT: Self = (1_u64 << Self::MANTISSA_DIGITS) as Self;
       const ZERO: Self = 0.0;
       const ONE: Self = 1.0;

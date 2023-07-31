@@ -216,7 +216,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     }
 
     let bin = BinCompressionInfo {
-      weight: count,
+      weight: count as Weight,
       lower,
       upper,
       gcd: bin_gcd,

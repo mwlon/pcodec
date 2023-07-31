@@ -1,6 +1,7 @@
-// Doing bit reads/writes/shifts with u32 is more performant than u64.
+// Doing bit reads/writes/shifts with u32 seems to be more performant than u64.
 // This type could also be u8 or u16.
-pub type Bitlen = u32;
+pub(crate) type Bitlen = u32;
+pub(crate) type Weight = u32;
 
 // magic identification bytes
 pub const MAGIC_HEADER: [u8; 4] = [112, 99, 111, 33]; // ascii for pco!
