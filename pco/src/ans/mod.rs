@@ -6,7 +6,11 @@ mod decoding;
 mod encoding;
 mod spec;
 
+// must be u16 or larger (though u32+ may become a requirement in the future)
+// should not be exposed in public API
 pub(crate) type AnsState = u32;
+// must be u16 or larger
+// should not be exposed in public API
 pub(crate) type Token = u32;
 
 #[cfg(test)]

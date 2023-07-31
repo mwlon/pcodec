@@ -1,6 +1,9 @@
-// Doing bit reads/writes/shifts with u32 seems to be more performant than u64.
-// This type could also be u8 or u16.
+// must be u8 or larger
+// u64+ seems less performant
+// exposed in public API
 pub(crate) type Bitlen = u32;
+// must be u32 or larger
+// exposed in public API
 pub(crate) type Weight = u32;
 
 // magic identification bytes

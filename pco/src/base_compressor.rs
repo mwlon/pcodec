@@ -59,7 +59,7 @@ pub struct CompressorConfig {
   ///
   /// If you would like to automatically choose this once and reuse it for all
   /// chunks,
-  /// [`auto_compressor_config()`][crate::auto_compressor_config] can help.
+  /// [`auto_compressor_config()`][crate::auto_delta_encoding_order] can help.
   pub delta_encoding_order: Option<usize>,
   /// `use_gcds` improves compression ratio in cases where all
   /// numbers in a bin share a nontrivial Greatest Common Divisor
