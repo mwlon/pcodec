@@ -26,6 +26,7 @@ use crate::{bin_optimization, float_mult_utils};
 /// Others, like `compression_level`, affect compression but are not explicitly
 /// stored in the output.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct CompressorConfig {
   /// `compression_level` ranges from 0 to 12 inclusive (default 8).
   ///
