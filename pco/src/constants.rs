@@ -22,7 +22,7 @@ pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
 // performance tuning parameters
 pub const DECOMPRESS_UNCHECKED_THRESHOLD: usize = 32;
 pub const DECOMPRESS_BYTE_PADDING: usize = BYTES_PER_WORD + DECOMPRESS_UNCHECKED_THRESHOLD * 8;
-pub const UNSIGNED_BATCH_SIZE: usize = 512;
+// pub const UNSIGNED_BATCH_SIZE: usize = 512;
 
 // native architecture info
 pub const WORD_SIZE: usize = usize::BITS as usize;
@@ -41,6 +41,7 @@ pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 
 // other
 pub const MAX_N_STREAMS: usize = 2;
+pub const FULL_BATCH_SIZE: usize = 1024;
 
 #[cfg(test)]
 mod tests {

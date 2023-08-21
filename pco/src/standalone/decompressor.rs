@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::io::Write;
 
 use crate::base_decompressor::{BaseDecompressor, State, Step};
@@ -6,7 +7,7 @@ use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::page_decompressor::PageDecompressor;
 use crate::progress::Progress;
-use crate::{ChunkMetadata, DecompressorConfig, Flags};
+use crate::{ChunkMetadata, constants, DecompressorConfig, Flags};
 
 /// Converts .pco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
@@ -164,10 +165,11 @@ impl<T: NumberLike> Decompressor<T> {
 
 fn next_nums_dirty<T: NumberLike>(
   reader: &mut BitReader,
-  bd: &mut PageDecompressor<T>,
-  dest: &mut [T],
-) -> PcoResult<Progress> {
-  bd.decompress(reader, false, dest)
+  pd: &mut PageDecompressor<T>,
+) -> PcoResult<(Progress, Vec<T>)> {
+  let mut dest = vec![T::default(); min(constants::FULL_BATCH_SIZE, pd.)];
+  let progress = pd.decompress(reader, false, &mut dest)?;
+  Ok((progress, dest))
 }
 
 fn apply_nums<T: NumberLike>(
@@ -217,18 +219,15 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
             return Ok(None);
           }
         }
-        let mut bd = maybe_bd?;
-        let mut dest = vec![T::default(); config.numbers_limit_per_item];
-        let progress = next_nums_dirty(reader, &mut bd, &mut dest)?;
-        state.page_decompressor = Some(bd);
+        let mut pd = maybe_bd?;
+        let (progress, dest) = next_nums_dirty(reader, &mut pd)?;
+        state.page_decompressor = Some(pd);
         Ok(apply_nums(state, dest, progress))
       }),
       Step::MidPage => self.0.with_reader(|reader, state, config| {
-        let mut dest = vec![T::default(); config.numbers_limit_per_item];
-        let progress = next_nums_dirty(
+        let (progress, dest) = next_nums_dirty(
           reader,
           state.page_decompressor.as_mut().unwrap(),
-          &mut dest,
         )?;
         Ok(apply_nums(state, dest, progress))
       }),

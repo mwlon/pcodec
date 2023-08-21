@@ -14,17 +14,11 @@ use crate::Flags;
 /// All configurations available for a Decompressor.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct DecompressorConfig {
-  /// The maximum number of numbers to decode at a time when streaming through
-  /// the decompressor as an iterator.
-  pub numbers_limit_per_item: usize,
-}
+pub struct DecompressorConfig {}
 
 impl Default for DecompressorConfig {
   fn default() -> Self {
-    Self {
-      numbers_limit_per_item: 100000,
-    }
+    Self {}
   }
 }
 
@@ -234,12 +228,12 @@ impl<T: NumberLike> BaseDecompressor<T> {
     compressed_page_size: usize,
     dest: &mut [T],
   ) -> PcoResult<()> {
-    let old_bd = self.state.page_decompressor.clone();
+    let old_pd = self.state.page_decompressor.clone();
     self.with_reader(|reader, state, _| {
-      let mut bd = state.new_page_decompressor(reader, n, compressed_page_size)?;
-      let res = bd.decompress(reader, true, dest);
+      let mut pd = state.new_page_decompressor(reader, n, compressed_page_size)?;
+      let res = pd.decompress(reader, true, dest);
       // we need to roll back the body decompressor if this failed
-      state.page_decompressor = if res.is_ok() { None } else { old_bd };
+      state.page_decompressor = if res.is_ok() { None } else { old_pd };
       res?;
       Ok(())
     })

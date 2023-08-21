@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use crate::batch_decompressor::BatchDecompressor;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::PageMetadata;
-use crate::constants::UNSIGNED_BATCH_SIZE;
+use crate::constants::{FULL_BATCH_SIZE, UNSIGNED_BATCH_SIZE};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta_encoding::DeltaMoments;
 use crate::errors::PcoResult;
@@ -20,7 +20,7 @@ pub struct PageDecompressor<T: NumberLike> {
   mode: Mode<T::Unsigned>,
   batch_decompressor: Box<dyn BatchDecompressor<T::Unsigned>>,
   delta_momentss: Vec<DeltaMoments<T::Unsigned>>, // one per stream
-  secondary_stream: [T::Unsigned; UNSIGNED_BATCH_SIZE],
+  secondary_stream: [T::Unsigned; FULL_BATCH_SIZE],
   phantom: PhantomData<T>,
 }
 
@@ -130,5 +130,9 @@ impl<T: NumberLike> PageDecompressor<T> {
 
   pub fn bits_remaining(&self) -> usize {
     self.batch_decompressor.bits_remaining()
+  }
+
+  pub fn n_remaining(&self) -> usize {
+    self.batch_decompressor.n_remaining()
   }
 }

@@ -15,7 +15,7 @@ use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::modes::{gcd, ConstMode, Mode};
 use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
-use crate::{ans, delta_encoding};
+use crate::{ans, bits, delta_encoding};
 use crate::{auto, Flags};
 use crate::{bin_optimization, float_mult_utils};
 
@@ -355,46 +355,96 @@ fn train_mode_and_infos<U: UnsignedLike>(
   })
 }
 
-// returns the ANS final state after decomposing the unsigneds in reverse order
-fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
+fn calc_decomposed_batch_end_idxs(stream_lens: &[usize]) -> Vec<usize> {
+  let mut res = Vec::new();
+  let mut batch_end_idx = 0;
+  let mut decomposed_batch_end_idx = 0;
+  loop {
+    let mut done = true;
+    for &l in stream_lens {
+      let batch_size = min(l.saturating_sub(batch_end_idx), FULL_BATCH_SIZE);
+      if batch_size > 0 {
+        done = false;
+        decomposed_batch_end_idx += batch_size;
+      }
+    }
+    batch_end_idx += FULL_BATCH_SIZE;
+
+    if done {
+      break;
+    }
+
+    res.push(decomposed_batch_end_idx);
+  }
+  res
+}
+
+fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize>(
   stream_configs: &mut [StreamConfig<U>],
   src: &mut StreamSrc<U>,
-  n_nontrivial_streams: usize,
 ) -> PcoResult<DecomposedSrc<U>> {
-  let empty_decomposeds = |n_unsigneds| unsafe {
-    let mut res = Vec::with_capacity(n_unsigneds);
-    res.set_len(n_unsigneds);
+  let stream_lens = src.lens();
+  let page_size = *stream_lens.iter().max().unwrap();
+  let batch_end_idxs = calc_decomposed_batch_end_idxs(&stream_lens);
+  let n_decomposeds: usize = stream_lens.iter().sum();
+
+  let empty_decomposeds = |n| unsafe {
+    let mut res = Vec::with_capacity(n);
+    res.set_len(n);
     res
   };
-  let mut decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS] =
-    core::array::from_fn(|stream_idx| empty_decomposeds(src.stream(stream_idx).len()));
+  // let mut decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS] =
+  //   core::array::from_fn(|stream_idx| empty_decomposeds(src.stream(stream_idx).len()));
+  let mut decomposed_ans = empty_decomposeds(n_decomposeds);
+  let mut decomposed_offsets = empty_decomposeds(n_decomposeds);
   let mut ans_final_states = core::array::from_fn(|stream_idx| {
     1 << stream_configs
       .get(stream_idx)
       .map(|config| config.encoder.size_log())
       .unwrap_or_default()
   });
-  for stream_idx in 0..n_nontrivial_streams {
-    let stream = src.stream(stream_idx);
-    let StreamConfig { table, encoder, .. } = &mut stream_configs[stream_idx];
-    for i in (0..stream.len()).rev() {
+
+  let max_safe_idx = page_size.saturating_sub(MAX_DELTA_ENCODING_ORDER);
+
+  for i in (max_safe_idx..page_size).rev() {
+    for stream_idx in 0..STREAMS {
+      let stream = src.stream(stream_idx);
+      let StreamConfig { table, encoder, .. } = &mut stream_configs[stream_idx];
+      if i < stream.len() {
+        let u = stream[i];
+        let info = table.search(u)?;
+        let (ans_word, ans_bits) = encoder.encode(info.token);
+        decomposed_ans[i] = Decomposed { val: ans_word, n_bits: ans_bits };
+        let offset = M::calc_offset(u, info);
+        decomposed_offsets[i] = Decomposed { val: offset, n_bits: info.offset_bits };
+      }
+    }
+  }
+
+  for i in (0..max_safe_idx).rev() {
+    for stream_idx in 0..STREAMS {
+      let stream = src.stream(stream_idx);
+      let StreamConfig { table, encoder, .. } = &mut stream_configs[stream_idx];
       let u = stream[i];
       let info = table.search(u)?;
       let (ans_word, ans_bits) = encoder.encode(info.token);
+      decomposed_ans[i] = Decomposed { val: ans_word, n_bits: ans_bits };
       let offset = M::calc_offset(u, info);
-      decomposeds[stream_idx][i] = Decomposed {
-        ans_word,
-        ans_bits,
-        offset,
-        offset_bits: info.offset_bits,
-      };
+      decomposed_offsets[i] = Decomposed { val: offset, n_bits: info.offset_bits };
     }
+  }
+
+  for stream_idx in 0..STREAMS {
+    let StreamConfig { encoder, .. } = &mut stream_configs[stream_idx];
     ans_final_states[stream_idx] = encoder.state();
   }
-  Ok(DecomposedSrc::new(
-    decomposeds,
+
+  Ok(DecomposedSrc {
+    decomposed_ans,
+    decomposed_offsets,
+    batch_end_idxs,
     ans_final_states,
-  ))
+  })
 }
 
 fn decompose_unsigneds<U: UnsignedLike>(
@@ -407,33 +457,33 @@ fn decompose_unsigneds<U: UnsignedLike>(
     needs_gcds,
     ..
   } = mid_chunk_info;
-  if *needs_gcds {
-    mode_decompose_unsigneds::<U, GcdMode>(stream_configs, src, *n_nontrivial_streams)
-  } else {
-    mode_decompose_unsigneds::<U, ClassicMode>(stream_configs, src, *n_nontrivial_streams)
+  match (*n_nontrivial_streams, *needs_gcds) {
+    (0, _) => Ok(DecomposedSrc {
+      decomposed_ans: vec![],
+      decomposed_offsets: vec![],
+      batch_end_idxs: vec![],
+      ans_final_states: [1, 1],
+    }),
+    (1, false) => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
+    (1, true) => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
+    (2, false) => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
+    _ => panic!("unknown (n_streams, mode) combo during compression; should be unreachable")
   }
 }
 
-fn write_decomposeds<U: UnsignedLike, const STREAMS: usize>(
-  mut src: DecomposedSrc<U>,
-  page_size: usize,
+fn write_decomposeds<U: UnsignedLike>(
+  src: DecomposedSrc<U>,
   writer: &mut BitWriter,
 ) -> PcoResult<()> {
-  let max_safe_idx = page_size.saturating_sub(MAX_DELTA_ENCODING_ORDER);
-  while src.n_processed() < max_safe_idx {
-    for stream_idx in 0..STREAMS {
-      src.decomposed(stream_idx).write_to(writer);
+  let mut batch_start = 0;
+  for &batch_end in &src.batch_end_idxs {
+    for decomposed in &src.decomposed_ans[batch_start..batch_end] {
+      writer.write_diff(decomposed.val, decomposed.n_bits);
     }
-    src.incr();
-  }
-
-  while src.n_processed() < page_size {
-    for stream_idx in 0..STREAMS {
-      if src.n_processed() < src.stream_len(stream_idx) {
-        src.decomposed(stream_idx).write_to(writer);
-      }
+    for decomposed in &src.decomposed_offsets[batch_start..batch_end] {
+      writer.write_diff(decomposed.val, decomposed.n_bits);
     }
-    src.incr();
+    batch_start = batch_end;
   }
 
   writer.finish_byte();
@@ -687,24 +737,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       .map(|config| config.encoder.size_log());
     page_meta.write_to(ans_size_logs, &mut self.writer);
 
-    match info.n_nontrivial_streams {
-      0 => write_decomposeds::<_, 0>(
-        decomposeds,
-        info.page_sizes[info.page_idx],
-        &mut self.writer,
-      ),
-      1 => write_decomposeds::<_, 1>(
-        decomposeds,
-        info.page_sizes[info.page_idx],
-        &mut self.writer,
-      ),
-      2 => write_decomposeds::<_, 2>(
-        decomposeds,
-        info.page_sizes[info.page_idx],
-        &mut self.writer,
-      ),
-      _ => panic!("should be unreachable!"),
-    }?;
+    write_decomposeds(decomposeds, &mut self.writer)?;
 
     info.page_idx += 1;
 

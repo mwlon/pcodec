@@ -1,21 +1,13 @@
 use crate::ans::AnsState;
+use crate::bit_reader::ReadableUint;
 use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, MAX_N_STREAMS};
 use crate::data_types::UnsignedLike;
 
 #[derive(Clone, Debug)]
-pub struct Decomposed<U: UnsignedLike> {
-  pub ans_word: AnsState,
-  pub ans_bits: Bitlen,
-  pub offset: U,
-  pub offset_bits: Bitlen,
-}
-
-impl<U: UnsignedLike> Decomposed<U> {
-  pub fn write_to(&self, writer: &mut BitWriter) {
-    writer.write_diff(self.ans_word, self.ans_bits);
-    writer.write_diff(self.offset, self.offset_bits);
-  }
+pub struct Decomposed<U: ReadableUint> {
+  pub val: U,
+  pub n_bits: Bitlen,
 }
 
 #[derive(Clone, Debug)]
@@ -35,46 +27,24 @@ impl<U: UnsignedLike> StreamSrc<U> {
   pub fn stream_mut(&mut self, stream_idx: usize) -> &mut Vec<U> {
     &mut self.streams[stream_idx]
   }
+
+  pub fn lens(&self) -> [usize; MAX_N_STREAMS] {
+    self.streams.map(|stream| stream.len())
+  }
 }
 
 #[derive(Clone, Debug)]
 pub struct DecomposedSrc<U: UnsignedLike> {
-  decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS],
-  ans_final_states: [AnsState; MAX_N_STREAMS],
-  i: usize,
+  // decomposed_ans and decomposed_offsets should have the same length
+  pub decomposed_ans: Vec<Decomposed<AnsState>>,
+  pub decomposed_offsets: Vec<Decomposed<U>>,
+  pub batch_end_idxs: Vec<usize>,
+  pub ans_final_states: [AnsState; MAX_N_STREAMS],
 }
 
 impl<U: UnsignedLike> DecomposedSrc<U> {
-  pub fn new(
-    decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS],
-    ans_final_states: [AnsState; MAX_N_STREAMS],
-  ) -> Self {
-    Self {
-      decomposeds,
-      ans_final_states,
-      i: 0,
-    }
-  }
-
-  #[inline]
-  pub fn decomposed(&self, stream_idx: usize) -> &Decomposed<U> {
-    &self.decomposeds[stream_idx][self.i]
-  }
-
-  pub fn n_processed(&self) -> usize {
-    self.i
-  }
-
-  pub fn incr(&mut self) {
-    self.i += 1;
-  }
-
-  pub fn ans_final_state(&self, stream_idx: usize) -> AnsState {
-    self.ans_final_states[stream_idx]
-  }
-
-  pub fn stream_len(&self, stream_idx: usize) -> usize {
-    self.decomposeds[stream_idx].len()
+  pub fn len(&self) -> usize {
+    self.decomposed_ans.len()
   }
 }
 
