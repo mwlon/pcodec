@@ -1,6 +1,6 @@
 use crate::ans::AnsState;
-use crate::bit_reader::ReadableUint;
-use crate::bit_writer::BitWriter;
+
+
 use crate::constants::{Bitlen, MAX_N_LATENTS};
 use crate::data_types::UnsignedLike;
 

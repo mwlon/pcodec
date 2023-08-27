@@ -7,7 +7,7 @@ use crate::chunk_metadata::PageMetadata;
 use crate::constants::{FULL_BATCH_SIZE};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
-use crate::errors::{ErrorKind, PcoError, PcoResult};
+use crate::errors::{PcoError, PcoResult};
 use crate::progress::Progress;
 use crate::{latent_batch_decompressor, Mode};
 use crate::{delta, float_mult_utils, ChunkMetadata};

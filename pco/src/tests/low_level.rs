@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::base_decompressor::DecompressorConfig;
+
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{Compressor, DecompressedItem, Decompressor};

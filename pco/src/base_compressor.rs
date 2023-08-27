@@ -15,7 +15,7 @@ use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::modes::{gcd, ConstMode, Mode};
 use crate::unsigned_src_dst::{DecomposedLatents, DecomposedSrc, LatentSrc};
-use crate::{ans, bits, delta};
+use crate::{ans, delta};
 use crate::{auto, Flags};
 use crate::{bin_optimization, float_mult_utils};
 use crate::ans::AnsState;
@@ -409,13 +409,14 @@ fn decompose_unsigneds<U: UnsignedLike>(
     latent_configs,
     src,
     needs_gcds,
+    n_nontrivial_latents,
     ..
   } = mid_chunk_info;
 
   if *needs_gcds {
-    mode_decompose_unsigneds::<U, GcdMode>(latent_configs, src)
+    mode_decompose_unsigneds::<U, GcdMode>(&mut latent_configs[..*n_nontrivial_latents], src)
   } else {
-    mode_decompose_unsigneds::<U, ClassicMode>(latent_configs, src)
+    mode_decompose_unsigneds::<U, ClassicMode>(&mut latent_configs[..*n_nontrivial_latents], src)
   }
 }
 
@@ -679,7 +680,10 @@ impl<T: NumberLike> BaseCompressor<T> {
       let delta_moments = info.page_moments(latent_idx).clone();
 
       // write the final ANS state, moving it down the range [0, table_size)
-      let ans_final_state = decomposeds.decomposed_latents[latent_idx].ans_final_state;
+      let ans_final_state = decomposeds.decomposed_latents
+        .get(latent_idx)
+        .map(|decomposed| decomposed.ans_final_state)
+        .unwrap_or(1 as AnsState);
       latent_metas.push(PageLatentMetadata {
         delta_moments,
         ans_final_state,

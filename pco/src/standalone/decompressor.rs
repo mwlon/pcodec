@@ -207,7 +207,7 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
         Err(e) => Err(e),
       },
-      Step::StartOfPage => self.0.with_reader(|reader, state, config| {
+      Step::StartOfPage => self.0.with_reader(|reader, state, _config| {
         let &ChunkMetadata {
           n,
           compressed_body_size,
@@ -224,7 +224,7 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         state.page_decompressor = Some(pd);
         Ok(apply_nums(state, dest, progress))
       }),
-      Step::MidPage => self.0.with_reader(|reader, state, config| {
+      Step::MidPage => self.0.with_reader(|reader, state, _config| {
         let (progress, dest) = next_nums(
           reader,
           state.page_decompressor.as_mut().unwrap(),
