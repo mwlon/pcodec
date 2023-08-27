@@ -1,9 +1,6 @@
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::ops::{
-  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, RemAssign, Shl, Shr, Sub,
-  SubAssign,
-};
+use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, MulAssign, RemAssign, Shl, Shr, Sub, SubAssign};
 
 use crate::constants::Bitlen;
 
@@ -11,12 +8,10 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-/// Trait for data types that behave like floats.
+/// *unstable API* Trait for data types that behave like floats.
 ///
 /// This is used internally for compressing and decompressing with
 /// [`FloatMultMode`][`crate::Mode::FloatMult`].
-///
-/// API stability of `FloatLike` is not guaranteed!
 pub trait FloatLike:
   Add<Output = Self>
   + AddAssign
@@ -53,7 +48,7 @@ pub trait FloatLike:
   fn min(a: Self, b: Self) -> Self;
 }
 
-/// Trait for data types that behave like unsigned integers.
+/// *unstable API* Trait for data types that behave like unsigned integers.
 ///
 /// This is used extensively in `pco` to guarantee that bitwise
 /// operations like `>>` and `|=` are available and that certain properties
@@ -61,8 +56,6 @@ pub trait FloatLike:
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
 /// Metadata stores numbers as their unsigned representations.
-///
-/// API stability of `UnsignedLike` is not guaranteed!
 pub trait UnsignedLike:
   Add<Output = Self>
   + BitAnd<Output = Self>
@@ -72,6 +65,7 @@ pub trait UnsignedLike:
   + Div<Output = Self>
   + Hash
   + Mul<Output = Self>
+  + MulAssign
   + NumberLike<Unsigned = Self>
   + Ord
   + PartialOrd
@@ -133,7 +127,7 @@ pub trait UnsignedLike:
   fn from_float_bits(float: Self::Float) -> Self;
 }
 
-/// Trait for data types supported for compression/decompression.
+/// *unstable API* Trait for data types supported for compression/decompression.
 ///
 /// If you have a new data type you would like to add to the library or
 /// implement as custom in your own, these are the questions you need to
@@ -144,8 +138,6 @@ pub trait UnsignedLike:
 /// in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
 /// wouldn't preserve ordering and would cause pco to fail. In this example,
 /// one needs to flip the sign bit and, if negative, the rest of the bits.
-///
-/// API stability of `NumberLike` is not guaranteed!
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// A number from 0-255 that corresponds to the number's data type.
   ///

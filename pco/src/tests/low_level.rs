@@ -6,6 +6,7 @@ use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{Compressor, DecompressedItem, Decompressor};
 use crate::CompressorConfig;
 
+// TODO this test is pretty lame now that we do batching
 #[test]
 fn test_low_level_short() -> PcoResult<()> {
   let nums = vec![vec![0], vec![10, 11], vec![20, 21, 22]];
@@ -43,10 +44,7 @@ fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) -> PcoResult
 
     let bytes = compressor.drain_bytes();
 
-    let mut decompressor = Decompressor::<T>::from_config(DecompressorConfig {
-      numbers_limit_per_item: 2,
-      ..Default::default()
-    });
+    let mut decompressor = Decompressor::<T>::default();
     decompressor.write_all(&bytes).unwrap();
     let flags = decompressor.header()?;
     assert_eq!(&flags, compressor.flags(), "{}", debug_info);

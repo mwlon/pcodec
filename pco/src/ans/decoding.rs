@@ -5,7 +5,7 @@ use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 
-use crate::ChunkStreamMetadata;
+use crate::ChunkLatentMetadata;
 
 #[derive(Clone, Debug)]
 struct Node {
@@ -49,12 +49,12 @@ impl Decoder {
     }
   }
 
-  pub fn from_stream_meta<U: UnsignedLike>(
-    stream: &ChunkStreamMetadata<U>,
+  pub fn from_latent_meta<U: UnsignedLike>(
+    latent_meta: &ChunkLatentMetadata<U>,
     final_state: AnsState,
   ) -> PcoResult<Self> {
-    let weights = stream.bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
-    let spec = Spec::from_weights(stream.ans_size_log, weights)?;
+    let weights = latent_meta.bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
+    let spec = Spec::from_weights(latent_meta.ans_size_log, weights)?;
     Ok(Self::new(&spec, final_state))
   }
 

@@ -163,12 +163,12 @@ impl<T: NumberLike> Decompressor<T> {
   }
 }
 
-fn next_nums_dirty<T: NumberLike>(
+fn next_nums<T: NumberLike>(
   reader: &mut BitReader,
   pd: &mut PageDecompressor<T>,
 ) -> PcoResult<(Progress, Vec<T>)> {
-  let mut dest = vec![T::default(); min(constants::FULL_BATCH_SIZE, pd.)];
-  let progress = pd.decompress(reader, false, &mut dest)?;
+  let mut dest = vec![T::default(); min(constants::FULL_BATCH_SIZE, pd.n_remaining())];
+  let progress = pd.decompress(reader, &mut dest)?;
   Ok((progress, dest))
 }
 
@@ -180,7 +180,7 @@ fn apply_nums<T: NumberLike>(
   if progress.n_processed == 0 {
     None
   } else {
-    if progress.finished_body {
+    if progress.finished_page {
       state.chunk_meta = None;
       state.page_decompressor = None;
     }
@@ -213,19 +213,19 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
           compressed_body_size,
           ..
         } = state.chunk_meta.as_ref().unwrap();
-        let maybe_bd = state.new_page_decompressor(reader, n, compressed_body_size);
-        if let Err(e) = &maybe_bd {
+        let maybe_pd = state.new_page_decompressor(reader, n, compressed_body_size);
+        if let Err(e) = &maybe_pd {
           if matches!(e.kind, ErrorKind::InsufficientData) {
             return Ok(None);
           }
         }
-        let mut pd = maybe_bd?;
-        let (progress, dest) = next_nums_dirty(reader, &mut pd)?;
+        let mut pd = maybe_pd?;
+        let (progress, dest) = next_nums(reader, &mut pd)?;
         state.page_decompressor = Some(pd);
         Ok(apply_nums(state, dest, progress))
       }),
       Step::MidPage => self.0.with_reader(|reader, state, config| {
-        let (progress, dest) = next_nums_dirty(
+        let (progress, dest) = next_nums(
           reader,
           state.page_decompressor.as_mut().unwrap(),
         )?;

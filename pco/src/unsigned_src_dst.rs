@@ -1,111 +1,47 @@
 use crate::ans::AnsState;
 use crate::bit_reader::ReadableUint;
 use crate::bit_writer::BitWriter;
-use crate::constants::{Bitlen, MAX_N_STREAMS};
+use crate::constants::{Bitlen, MAX_N_LATENTS};
 use crate::data_types::UnsignedLike;
 
 #[derive(Clone, Debug)]
-pub struct Decomposed<U: ReadableUint> {
-  pub val: U,
-  pub n_bits: Bitlen,
+pub struct LatentSrc<U: UnsignedLike> {
+  pub page_n: usize,
+  latents: [Vec<U>; MAX_N_LATENTS],
 }
+
+impl<U: UnsignedLike> LatentSrc<U> {
+  pub fn new(page_n: usize, latents: [Vec<U>; MAX_N_LATENTS]) -> Self {
+    Self { page_n, latents }
+  }
+
+  pub fn latents(&self, latent_idx: usize) -> &[U] {
+    &self.latents[latent_idx]
+  }
+
+  pub fn latents_mut(&mut self, stream_idx: usize) -> &mut Vec<U> {
+    &mut self.latents[stream_idx]
+  }
+}
+
+// #[derive(Clone, Debug)]
+// pub struct Decomposed<U: ReadableUint> {
+//   pub val: U,
+//   pub n_bits: Bitlen,
+// }
 
 #[derive(Clone, Debug)]
-pub struct StreamSrc<U: UnsignedLike> {
-  streams: [Vec<U>; MAX_N_STREAMS],
-}
-
-impl<U: UnsignedLike> StreamSrc<U> {
-  pub fn new(streams: [Vec<U>; MAX_N_STREAMS]) -> Self {
-    Self { streams }
-  }
-
-  pub fn stream(&self, stream_idx: usize) -> &[U] {
-    &self.streams[stream_idx]
-  }
-
-  pub fn stream_mut(&mut self, stream_idx: usize) -> &mut Vec<U> {
-    &mut self.streams[stream_idx]
-  }
-
-  pub fn lens(&self) -> [usize; MAX_N_STREAMS] {
-    self.streams.map(|stream| stream.len())
-  }
+pub struct DecomposedLatents<U: UnsignedLike> {
+  // anss and offsets should have the same length
+  pub ans_vals: Vec<AnsState>,
+  pub ans_bits: Vec<Bitlen>,
+  pub offsets: Vec<U>,
+  pub offset_bits: Vec<Bitlen>,
+  pub ans_final_state: AnsState,
 }
 
 #[derive(Clone, Debug)]
 pub struct DecomposedSrc<U: UnsignedLike> {
-  // decomposed_ans and decomposed_offsets should have the same length
-  pub decomposed_ans: Vec<Decomposed<AnsState>>,
-  pub decomposed_offsets: Vec<Decomposed<U>>,
-  pub batch_end_idxs: Vec<usize>,
-  pub ans_final_states: [AnsState; MAX_N_STREAMS],
-}
-
-impl<U: UnsignedLike> DecomposedSrc<U> {
-  pub fn len(&self) -> usize {
-    self.decomposed_ans.len()
-  }
-}
-
-// mutable destination for unsigneds and associated information to be written
-// Each stream interleaved in the data writes to a corresponding stream here.
-// It would be nicer to have a single data member for all the streams, but
-// that's not possible because the primary stream may be provided by the user
-// for performance reasons (and is therefore in a different memory location).
-pub struct UnsignedDst<'a, U: UnsignedLike> {
-  primary_stream: &'a mut [U],
-  stream1: &'a mut [U],
-  len: usize,
-  i: usize,
-}
-
-impl<'a, U: UnsignedLike> UnsignedDst<'a, U> {
-  pub fn new(primary_stream: &'a mut [U], stream1: &'a mut [U]) -> Self {
-    let len = primary_stream.len();
-    assert!(stream1.len() >= len);
-    Self {
-      primary_stream,
-      stream1,
-      len,
-      i: 0,
-    }
-  }
-
-  #[inline]
-  pub fn write(&mut self, stream_idx: usize, u: U) {
-    match stream_idx {
-      0 => self.primary_stream[self.i] = u,
-      1 => self.stream1[self.i] = u,
-      _ => panic!("invalid stream; should be unreachable"),
-    }
-  }
-
-  pub fn stream(&mut self, stream_idx: usize) -> &mut [U] {
-    match stream_idx {
-      0 => self.primary_stream,
-      1 => self.stream1,
-      _ => panic!("invalid stream; should be unreachable"),
-    }
-  }
-
-  pub fn n_processed(&self) -> usize {
-    self.i
-  }
-
-  pub fn incr(&mut self) {
-    self.i += 1;
-  }
-
-  pub fn len(&self) -> usize {
-    self.len
-  }
-
-  pub fn remaining(&self) -> usize {
-    self.len - self.i
-  }
-
-  pub fn decompose(self) -> (&'a mut [U], &'a mut [U]) {
-    (self.primary_stream, self.stream1)
-  }
+  pub page_n: usize,
+  pub decomposed_latents: Vec<DecomposedLatents<U>>, // one per latent variable
 }

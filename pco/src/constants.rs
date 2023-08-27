@@ -40,8 +40,8 @@ pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 
 // other
-pub const MAX_N_STREAMS: usize = 2;
-pub const FULL_BATCH_SIZE: usize = 1024;
+pub const MAX_N_LATENTS: usize = 2;
+pub const FULL_BATCH_SIZE: usize = 256;
 
 #[cfg(test)]
 mod tests {

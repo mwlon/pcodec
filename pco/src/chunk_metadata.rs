@@ -5,7 +5,7 @@ use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-use crate::delta_encoding::DeltaMoments;
+use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::{gcd, Mode};
@@ -21,7 +21,7 @@ use crate::{bin, Flags};
 ///
 /// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ChunkStreamMetadata<U: UnsignedLike> {
+pub struct ChunkLatentMetadata<U: UnsignedLike> {
   /// The log2 of the number of the number of states in this chunk's tANS
   /// table.
   ///
@@ -32,7 +32,7 @@ pub struct ChunkStreamMetadata<U: UnsignedLike> {
   pub bins: Vec<Bin<U>>,
 }
 
-impl<U: UnsignedLike> ChunkStreamMetadata<U> {
+impl<U: UnsignedLike> ChunkLatentMetadata<U> {
   fn parse_from(reader: &mut BitReader, mode: Mode<U>) -> PcoResult<Self> {
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG)?;
     let bins = parse_bins::<U>(reader, mode, ans_size_log)?;
@@ -51,12 +51,12 @@ impl<U: UnsignedLike> ChunkStreamMetadata<U> {
 }
 
 #[derive(Clone, Debug)]
-pub struct PageStreamMetadata<U: UnsignedLike> {
+pub struct PageLatentMetadata<U: UnsignedLike> {
   pub delta_moments: DeltaMoments<U>,
   pub ans_final_state: AnsState,
 }
 
-impl<U: UnsignedLike> PageStreamMetadata<U> {
+impl<U: UnsignedLike> PageLatentMetadata<U> {
   pub fn write_to(&self, ans_size_log: Bitlen, writer: &mut BitWriter) {
     self.delta_moments.write_to(writer);
 
@@ -108,7 +108,7 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   pub delta_encoding_order: usize,
   /// The interleaved streams needed by `pco` to compress/decompress the inputs
   /// to the formula used by `mode`.
-  pub streams: Vec<ChunkStreamMetadata<U>>,
+  pub latents: Vec<ChunkLatentMetadata<U>>,
 }
 
 // Data page metadata is slightly semantically different from chunk metadata,
@@ -118,29 +118,29 @@ pub struct ChunkMetadata<U: UnsignedLike> {
 // (wrapped mode).
 #[derive(Clone, Debug)]
 pub struct PageMetadata<U: UnsignedLike> {
-  pub streams: Vec<PageStreamMetadata<U>>,
+  pub latents: Vec<PageLatentMetadata<U>>,
 }
 
 impl<U: UnsignedLike> PageMetadata<U> {
   pub fn write_to<I: Iterator<Item = Bitlen>>(&self, ans_size_logs: I, writer: &mut BitWriter) {
-    for (stream_idx, ans_size_log) in ans_size_logs.enumerate() {
-      self.streams[stream_idx].write_to(ans_size_log, writer);
+    for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
+      self.latents[latent_idx].write_to(ans_size_log, writer);
     }
     writer.finish_byte();
   }
 
   pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMetadata<U>) -> PcoResult<Self> {
-    let mut streams = Vec::with_capacity(chunk_meta.streams.len());
-    for (stream_idx, stream_meta) in chunk_meta.streams.iter().enumerate() {
-      streams.push(PageStreamMetadata::parse_from(
+    let mut latents = Vec::with_capacity(chunk_meta.latents.len());
+    for (latent_idx, latent_meta) in chunk_meta.latents.iter().enumerate() {
+      latents.push(PageLatentMetadata::parse_from(
         reader,
-        chunk_meta.stream_delta_order(stream_idx),
-        stream_meta.ans_size_log,
+        chunk_meta.latent_delta_order(latent_idx),
+        latent_meta.ans_size_log,
       )?);
     }
     reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
 
-    Ok(Self { streams })
+    Ok(Self { latents })
   }
 }
 
@@ -223,14 +223,14 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     n: usize,
     mode: Mode<U>,
     delta_encoding_order: usize,
-    streams: Vec<ChunkStreamMetadata<U>>,
+    latents: Vec<ChunkLatentMetadata<U>>,
   ) -> Self {
     ChunkMetadata {
       n,
       compressed_body_size: 0,
       mode,
       delta_encoding_order,
-      streams,
+      latents,
     }
   }
 
@@ -262,11 +262,11 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
 
     let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)?;
 
-    let n_streams = mode.n_streams();
+    let n_latents = mode.n_latents();
 
-    let mut streams = Vec::with_capacity(n_streams);
-    for _ in 0..n_streams {
-      streams.push(ChunkStreamMetadata::parse_from(
+    let mut latents = Vec::with_capacity(n_latents);
+    for _ in 0..n_latents {
+      latents.push(ChunkLatentMetadata::parse_from(
         reader, mode,
       )?)
     }
@@ -278,7 +278,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       compressed_body_size,
       mode,
       delta_encoding_order,
-      streams,
+      latents,
     })
   }
 
@@ -306,8 +306,8 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
     );
 
-    for stream in &self.streams {
-      stream.write_to(self.mode, writer);
+    for latents in &self.latents {
+      latents.write_to(self.mode, writer);
     }
 
     writer.finish_byte();
@@ -321,8 +321,8 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     );
   }
 
-  pub(crate) fn nontrivial_gcd_and_n_streams(&self) -> (bool, usize) {
-    let primary_bins = &self.streams[0].bins;
+  pub(crate) fn nontrivial_gcd_and_n_latents(&self) -> (bool, usize) {
+    let primary_bins = &self.latents[0].bins;
     match self.mode {
       Mode::Classic | Mode::Gcd => {
         if bin::bins_are_trivial(primary_bins) {
@@ -333,7 +333,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
         }
       }
       Mode::FloatMult(_) => {
-        let n_streams = if bin::bins_are_trivial(&self.streams[1].bins) {
+        let n_latents = if bin::bins_are_trivial(&self.latents[1].bins) {
           if bin::bins_are_trivial(primary_bins) {
             0
           } else {
@@ -342,15 +342,15 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
         } else {
           2
         };
-        (false, n_streams)
+        (false, n_latents)
       }
     }
   }
 
-  pub(crate) fn stream_delta_order(&self, stream_idx: usize) -> usize {
+  pub(crate) fn latent_delta_order(&self, latent_idx: usize) -> usize {
     self
       .mode
-      .stream_delta_order(stream_idx, self.delta_encoding_order)
+      .latent_delta_order(latent_idx, self.delta_encoding_order)
   }
 }
 

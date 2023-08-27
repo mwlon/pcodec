@@ -113,7 +113,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
         "\nchunk: {} n: {} mode: {:?}",
         i, m.n, m.mode
       );
-      for (stream_idx, stream) in m.streams.iter().enumerate() {
+      for (stream_idx, stream) in m.latents.iter().enumerate() {
         let stream_name = match (m.mode, stream_idx) {
           (Mode::Classic, 0) => "primary".to_string(),
           (Mode::Gcd, 0) => "primary".to_string(),

@@ -3,21 +3,22 @@ use std::fmt::Debug;
 
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
-use crate::chunk_metadata::{ChunkMetadata, ChunkStreamMetadata, PageMetadata, PageStreamMetadata};
+use crate::chunk_metadata::{ChunkMetadata, ChunkLatentMetadata, PageMetadata, PageLatentMetadata};
 use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::delta_encoding::DeltaMoments;
+use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::modes::{gcd, ConstMode, Mode};
-use crate::unsigned_src_dst::{Decomposed, DecomposedSrc, StreamSrc};
-use crate::{ans, bits, delta_encoding};
+use crate::unsigned_src_dst::{DecomposedLatents, DecomposedSrc, LatentSrc};
+use crate::{ans, bits, delta};
 use crate::{auto, Flags};
 use crate::{bin_optimization, float_mult_utils};
+use crate::ans::AnsState;
 
 /// All configurations available for a compressor.
 ///
@@ -355,13 +356,13 @@ fn train_mode_and_infos<U: UnsignedLike>(
   })
 }
 
-fn calc_decomposed_batch_end_idxs(stream_lens: &[usize]) -> Vec<usize> {
+fn calc_decomposed_batch_end_idxs(latent_lens: &[usize]) -> Vec<usize> {
   let mut res = Vec::new();
   let mut batch_end_idx = 0;
   let mut decomposed_batch_end_idx = 0;
   loop {
     let mut done = true;
-    for &l in stream_lens {
+    for &l in latent_lens {
       let batch_size = min(l.saturating_sub(batch_end_idx), FULL_BATCH_SIZE);
       if batch_size > 0 {
         done = false;
@@ -379,95 +380,66 @@ fn calc_decomposed_batch_end_idxs(stream_lens: &[usize]) -> Vec<usize> {
   res
 }
 
-fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>, const STREAMS: usize>(
-  stream_configs: &mut [StreamConfig<U>],
-  src: &mut StreamSrc<U>,
-) -> PcoResult<DecomposedSrc<U>> {
-  let stream_lens = src.lens();
-  let page_size = *stream_lens.iter().max().unwrap();
-  let batch_end_idxs = calc_decomposed_batch_end_idxs(&stream_lens);
-  let n_decomposeds: usize = stream_lens.iter().sum();
-
-  let empty_decomposeds = |n| unsafe {
+fn empty_vec<T>(n: usize) -> Vec<T> {
+  unsafe {
     let mut res = Vec::with_capacity(n);
     res.set_len(n);
     res
-  };
-  // let mut decomposeds: [Vec<Decomposed<U>>; MAX_N_STREAMS] =
-  //   core::array::from_fn(|stream_idx| empty_decomposeds(src.stream(stream_idx).len()));
-  let mut decomposed_ans = empty_decomposeds(n_decomposeds);
-  let mut decomposed_offsets = empty_decomposeds(n_decomposeds);
-  let mut ans_final_states = core::array::from_fn(|stream_idx| {
-    1 << stream_configs
-      .get(stream_idx)
-      .map(|config| config.encoder.size_log())
-      .unwrap_or_default()
-  });
-
-  let max_safe_idx = page_size.saturating_sub(MAX_DELTA_ENCODING_ORDER);
-
-  for i in (max_safe_idx..page_size).rev() {
-    for stream_idx in 0..STREAMS {
-      let stream = src.stream(stream_idx);
-      let StreamConfig { table, encoder, .. } = &mut stream_configs[stream_idx];
-      if i < stream.len() {
-        let u = stream[i];
-        let info = table.search(u)?;
-        let (ans_word, ans_bits) = encoder.encode(info.token);
-        decomposed_ans[i] = Decomposed { val: ans_word, n_bits: ans_bits };
-        let offset = M::calc_offset(u, info);
-        decomposed_offsets[i] = Decomposed { val: offset, n_bits: info.offset_bits };
-      }
-    }
   }
+}
 
-  for i in (0..max_safe_idx).rev() {
-    for stream_idx in 0..STREAMS {
-      let stream = src.stream(stream_idx);
-      let StreamConfig { table, encoder, .. } = &mut stream_configs[stream_idx];
-      let u = stream[i];
+fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
+  latent_configs: &mut [LatentConfig<U>],
+  src: &mut LatentSrc<U>,
+) -> PcoResult<DecomposedSrc<U>> {
+  let empty_decomposed_latents = |n, ans_size_log| unsafe {
+    let ans_final_state = (1 as AnsState) << ans_size_log;
+    DecomposedLatents {
+      ans_vals: empty_vec(n),
+      ans_bits: empty_vec(n),
+      offsets: empty_vec(n),
+      offset_bits: empty_vec(n),
+      ans_final_state,
+    }
+  };
+
+  let mut res = DecomposedSrc {
+    page_n: src.page_n,
+    decomposed_latents: Vec::with_capacity(MAX_N_LATENTS),
+  };
+  for (latent_idx, config) in latent_configs.iter_mut().enumerate() {
+    let latents = src.latents(latent_idx);
+    let LatentConfig { table, encoder, .. } = config;
+    let mut decomposed_latents = empty_decomposed_latents(latents.len(), encoder.size_log());
+    for (i, &u) in latents.iter().enumerate().rev() {
       let info = table.search(u)?;
       let (ans_word, ans_bits) = encoder.encode(info.token);
-      decomposed_ans[i] = Decomposed { val: ans_word, n_bits: ans_bits };
-      let offset = M::calc_offset(u, info);
-      decomposed_offsets[i] = Decomposed { val: offset, n_bits: info.offset_bits };
+      decomposed_latents.ans_vals[i] = ans_word;
+      decomposed_latents.ans_bits[i] = ans_bits;
+      decomposed_latents.offsets[i] = M::calc_offset(u, info); // TODO experiment with SIMD?
+      decomposed_latents.offset_bits[i] = info.offset_bits;
     }
+    decomposed_latents.ans_final_state = encoder.state();
+    res.decomposed_latents.push(decomposed_latents);
   }
 
-  for stream_idx in 0..STREAMS {
-    let StreamConfig { encoder, .. } = &mut stream_configs[stream_idx];
-    ans_final_states[stream_idx] = encoder.state();
-  }
-
-  Ok(DecomposedSrc {
-    decomposed_ans,
-    decomposed_offsets,
-    batch_end_idxs,
-    ans_final_states,
-  })
+  Ok(res)
 }
 
 fn decompose_unsigneds<U: UnsignedLike>(
   mid_chunk_info: &mut MidChunkInfo<U>,
 ) -> PcoResult<DecomposedSrc<U>> {
   let MidChunkInfo {
-    stream_configs,
+    latent_configs,
     src,
-    n_nontrivial_streams,
     needs_gcds,
     ..
   } = mid_chunk_info;
-  match (*n_nontrivial_streams, *needs_gcds) {
-    (0, _) => Ok(DecomposedSrc {
-      decomposed_ans: vec![],
-      decomposed_offsets: vec![],
-      batch_end_idxs: vec![],
-      ans_final_states: [1, 1],
-    }),
-    (1, false) => mode_decompose_unsigneds::<U, ClassicMode, 1>(stream_configs, src),
-    (1, true) => mode_decompose_unsigneds::<U, GcdMode, 1>(stream_configs, src),
-    (2, false) => mode_decompose_unsigneds::<U, ClassicMode, 2>(stream_configs, src),
-    _ => panic!("unknown (n_streams, mode) combo during compression; should be unreachable")
+
+  if *needs_gcds {
+    mode_decompose_unsigneds::<U, GcdMode>(latent_configs, src)
+  } else {
+    mode_decompose_unsigneds::<U, ClassicMode>(latent_configs, src)
   }
 }
 
@@ -476,12 +448,19 @@ fn write_decomposeds<U: UnsignedLike>(
   writer: &mut BitWriter,
 ) -> PcoResult<()> {
   let mut batch_start = 0;
-  for &batch_end in &src.batch_end_idxs {
-    for decomposed in &src.decomposed_ans[batch_start..batch_end] {
-      writer.write_diff(decomposed.val, decomposed.n_bits);
-    }
-    for decomposed in &src.decomposed_offsets[batch_start..batch_end] {
-      writer.write_diff(decomposed.val, decomposed.n_bits);
+  while batch_start < src.page_n {
+    let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_n);
+    for decomposed in &src.decomposed_latents {
+      let latent_batch_end = min(batch_end, decomposed.ans_vals.len());
+      assert!(decomposed.ans_bits.len() >= latent_batch_end);
+      assert!(decomposed.offsets.len() >= latent_batch_end);
+      assert!(decomposed.offset_bits.len() >= latent_batch_end);
+      for i in batch_start..latent_batch_end {
+        writer.write_diff(decomposed.ans_vals[i], decomposed.ans_bits[i]);
+      }
+      for i in batch_start..latent_batch_end {
+        writer.write_diff(decomposed.offsets[i], decomposed.offset_bits[i]);
+      }
     }
     batch_start = batch_end;
   }
@@ -493,20 +472,20 @@ fn write_decomposeds<U: UnsignedLike>(
 #[derive(Clone, Debug)]
 pub struct MidChunkInfo<U: UnsignedLike> {
   // immutable:
-  stream_configs: Vec<StreamConfig<U>>,
+  latent_configs: Vec<LatentConfig<U>>,
   page_sizes: Vec<usize>,
-  n_streams: usize,
-  n_nontrivial_streams: usize,
+  n_latents: usize,
+  n_nontrivial_latents: usize,
   needs_gcds: bool,
 
   // mutable:
-  src: StreamSrc<U>,
+  src: LatentSrc<U>,
   page_idx: usize,
 }
 
 impl<U: UnsignedLike> MidChunkInfo<U> {
-  fn page_moments(&self, stream_idx: usize) -> &DeltaMoments<U> {
-    &self.stream_configs[stream_idx].delta_momentss[self.page_idx]
+  fn page_moments(&self, latent_idx: usize) -> &DeltaMoments<U> {
+    &self.latent_configs[latent_idx].delta_momentss[self.page_idx]
   }
 
   fn n_pages(&self) -> usize {
@@ -539,7 +518,7 @@ impl<U: UnsignedLike> State<U> {
 }
 
 #[derive(Clone, Debug)]
-struct StreamConfig<U: UnsignedLike> {
+struct LatentConfig<U: UnsignedLike> {
   table: CompressionTable<U>,
   delta_momentss: Vec<DeltaMoments<U>>,
   encoder: ans::Encoder,
@@ -596,13 +575,13 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
   }
 
-  fn split_streams(&self, naive_mode: Mode<T::Unsigned>, nums: &[T]) -> StreamSrc<T::Unsigned> {
+  fn split_latents(&self, naive_mode: Mode<T::Unsigned>, nums: &[T]) -> LatentSrc<T::Unsigned> {
     match naive_mode {
       Mode::Classic | Mode::Gcd => {
-        StreamSrc::new([nums.iter().map(|x| x.to_unsigned()).collect(), vec![]])
+        LatentSrc::new(nums.len(), [nums.iter().map(|x| x.to_unsigned()).collect(), vec![]])
       }
       Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
-        float_mult_utils::split_streams(nums, base, inv_base)
+        float_mult_utils::split_latents(nums, base, inv_base)
       }
     }
   }
@@ -632,9 +611,9 @@ impl<T: NumberLike> BaseCompressor<T> {
     }
 
     let naive_mode = self.choose_naive_mode(nums);
-    let mut src = self.split_streams(naive_mode, nums);
+    let mut src = self.split_latents(naive_mode, nums);
     let page_idxs = cumulative_sum(&page_sizes);
-    let n_streams = naive_mode.n_streams();
+    let n_latents = naive_mode.n_latents();
 
     let delta_order = if let Some(delta_order) = self.internal_config.delta_order {
       delta_order
@@ -642,25 +621,25 @@ impl<T: NumberLike> BaseCompressor<T> {
       auto::auto_delta_encoding_order(nums, self.internal_config.compression_level)
     };
 
-    let mut stream_metas = Vec::with_capacity(n_streams);
-    let mut stream_configs = Vec::with_capacity(n_streams);
-    for stream_idx in 0..n_streams {
-      let delta_order = naive_mode.stream_delta_order(stream_idx, delta_order);
-      let delta_momentss = delta_encoding::nth_order_deltas(
-        src.stream_mut(stream_idx),
+    let mut latent_metas = Vec::with_capacity(n_latents);
+    let mut latent_configs = Vec::with_capacity(n_latents);
+    for latent_idx in 0..n_latents {
+      let delta_order = naive_mode.latent_delta_order(latent_idx, delta_order);
+      let delta_momentss = delta::encode_in_place(
+        src.latents_mut(latent_idx),
         delta_order,
         &page_idxs,
       );
 
-      // secondary streams should be compressed faster
-      let comp_level = if stream_idx == 0 {
+      // secondary latents should be compressed faster
+      let comp_level = if latent_idx == 0 {
         self.internal_config.compression_level
       } else {
         min(self.internal_config.compression_level, 5)
       };
 
       let trained = train_mode_and_infos(
-        src.stream(stream_idx).to_vec(),
+        src.latents(latent_idx).to_vec(),
         comp_level,
         naive_mode,
         n,
@@ -670,11 +649,11 @@ impl<T: NumberLike> BaseCompressor<T> {
       let table = CompressionTable::from(trained.infos);
       let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
 
-      stream_metas.push(ChunkStreamMetadata {
+      latent_metas.push(ChunkLatentMetadata {
         bins,
         ans_size_log: trained.ans_size_log,
       });
-      stream_configs.push(StreamConfig {
+      latent_configs.push(LatentConfig {
         table,
         delta_momentss,
         encoder,
@@ -683,7 +662,7 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     let optimized_mode = match naive_mode {
       Mode::Gcd => {
-        if stream_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
+        if latent_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
           Mode::Gcd
         } else {
           Mode::Classic
@@ -692,17 +671,17 @@ impl<T: NumberLike> BaseCompressor<T> {
       other => other,
     };
 
-    let meta = ChunkMetadata::new(n, optimized_mode, delta_order, stream_metas);
+    let meta = ChunkMetadata::new(n, optimized_mode, delta_order, latent_metas);
     meta.write_to(&self.flags, &mut self.writer);
 
-    let n_streams = optimized_mode.n_streams();
-    let (needs_gcds, n_nontrivial_streams) = meta.nontrivial_gcd_and_n_streams();
+    let n_latents = optimized_mode.n_latents();
+    let (needs_gcds, n_nontrivial_latents) = meta.nontrivial_gcd_and_n_latents();
 
     self.state = State::MidChunk(MidChunkInfo {
-      stream_configs,
+      latent_configs,
       page_sizes,
-      n_streams,
-      n_nontrivial_streams,
+      n_latents,
+      n_nontrivial_latents,
       needs_gcds,
       src,
       page_idx: 0,
@@ -719,20 +698,20 @@ impl<T: NumberLike> BaseCompressor<T> {
 
     let decomposeds = decompose_unsigneds(info)?;
 
-    let mut streams = Vec::with_capacity(info.n_streams);
-    for stream_idx in 0..info.n_streams {
-      let delta_moments = info.page_moments(stream_idx).clone();
+    let mut latent_metas = Vec::with_capacity(info.n_latents);
+    for latent_idx in 0..info.n_latents {
+      let delta_moments = info.page_moments(latent_idx).clone();
 
       // write the final ANS state, moving it down the range [0, table_size)
-      let ans_final_state = decomposeds.ans_final_state(stream_idx);
-      streams.push(PageStreamMetadata {
+      let ans_final_state = decomposeds.decomposed_latents[latent_idx].ans_final_state;
+      latent_metas.push(PageLatentMetadata {
         delta_moments,
         ans_final_state,
       });
     }
-    let page_meta = PageMetadata { streams };
+    let page_meta = PageMetadata { latents: latent_metas };
     let ans_size_logs = info
-      .stream_configs
+      .latent_configs
       .iter()
       .map(|config| config.encoder.size_log());
     page_meta.write_to(ans_size_logs, &mut self.writer);

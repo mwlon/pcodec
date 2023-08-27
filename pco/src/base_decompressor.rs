@@ -231,7 +231,7 @@ impl<T: NumberLike> BaseDecompressor<T> {
     let old_pd = self.state.page_decompressor.clone();
     self.with_reader(|reader, state, _| {
       let mut pd = state.new_page_decompressor(reader, n, compressed_page_size)?;
-      let res = pd.decompress(reader, true, dest);
+      let res = pd.decompress(reader, dest);
       // we need to roll back the body decompressor if this failed
       state.page_decompressor = if res.is_ok() { None } else { old_pd };
       res?;

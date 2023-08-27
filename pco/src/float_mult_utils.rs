@@ -1,15 +1,16 @@
 use std::cmp::{max, min};
 use std::collections::HashMap;
 
-use crate::constants::{Bitlen, UNSIGNED_BATCH_SIZE};
+use crate::constants::{Bitlen};
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-use crate::delta_encoding;
-use crate::unsigned_src_dst::{StreamSrc, UnsignedDst};
+use crate::delta;
+use crate::unsigned_src_dst::{LatentSrc};
+
+const ARITH_CHUNK_SIZE: usize = 512;
 
 // PageDecompressor is already doing batching, so we don't need to here
-pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
-  let (unsigneds, adjustments) = dst.decompose();
-  delta_encoding::toggle_center_deltas_in_place(adjustments);
+pub fn join_latents<U: UnsignedLike>(base: U::Float, unsigneds: &mut [U], adjustments: &mut [U]) {
+  delta::toggle_center_in_place(adjustments);
   for i in 0..unsigneds.len() {
     let unadjusted = unsigneds[i].to_int_float() * base;
     unsigneds[i] = unadjusted.to_unsigned().wrapping_add(adjustments[i])
@@ -17,11 +18,11 @@ pub fn join_streams<U: UnsignedLike>(base: U::Float, dst: UnsignedDst<U>) {
 }
 
 // compressor doesn't batch, so we do that ourselves for efficiency
-pub fn split_streams<T: NumberLike>(
+pub fn split_latents<T: NumberLike>(
   nums: &[T],
   base: <T::Unsigned as UnsignedLike>::Float,
   inv_base: <T::Unsigned as UnsignedLike>::Float,
-) -> StreamSrc<T::Unsigned> {
+) -> LatentSrc<T::Unsigned> {
   let nums = T::assert_float(nums);
   let n = nums.len();
   let uninit_vec = || unsafe {
@@ -31,9 +32,9 @@ pub fn split_streams<T: NumberLike>(
   };
   let mut unsigneds = uninit_vec();
   let mut adjustments = uninit_vec();
-  let mut mults = [<T::Unsigned as UnsignedLike>::Float::ZERO; UNSIGNED_BATCH_SIZE];
+  let mut mults = [<T::Unsigned as UnsignedLike>::Float::ZERO; ARITH_CHUNK_SIZE];
   let mut base_i = 0;
-  for chunk in nums.chunks(UNSIGNED_BATCH_SIZE) {
+  for chunk in nums.chunks(ARITH_CHUNK_SIZE) {
     for i in 0..chunk.len() {
       mults[i] = (chunk[i] * inv_base).round();
     }
@@ -45,10 +46,10 @@ pub fn split_streams<T: NumberLike>(
         .to_unsigned()
         .wrapping_sub((mults[i] * base).to_unsigned());
     }
-    delta_encoding::toggle_center_deltas_in_place(&mut adjustments[base_i..base_i + chunk.len()]);
-    base_i += UNSIGNED_BATCH_SIZE;
+    delta::toggle_center_in_place(&mut adjustments[base_i..base_i + chunk.len()]);
+    base_i += ARITH_CHUNK_SIZE;
   }
-  StreamSrc::new([unsigneds, adjustments])
+  LatentSrc::new(nums.len(), [unsigneds, adjustments])
 }
 
 const MIN_SAMPLE: usize = 10;
@@ -255,7 +256,7 @@ fn has_enough_infrequent_ints<U: UnsignedLike>(inv_gcd: U::Float, sample: &[U::F
   (infrequent_mult_weight_estimate as f64 / sample.len() as f64) > INFREQUENT_MULT_WEIGHT_THRESH
 }
 
-// TODO there is redundant work between this and split_streams
+// TODO there is redundant work between this and split_latents
 fn uses_few_enough_adj_bits<U: UnsignedLike>(inv_base: U::Float, nums: &[U::Float]) -> bool {
   let base = inv_base.inv();
   let total_uncompressed_size = nums.len() * U::BITS as usize;
