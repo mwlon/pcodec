@@ -74,11 +74,4 @@ impl<U: UnsignedLike> Mode<U> {
       ),
     }
   }
-
-  pub(crate) fn use_gcds(&self) -> bool {
-    match self {
-      Mode::Classic | Mode::FloatMult(_) => false,
-      Mode::Gcd => true,
-    }
-  }
 }

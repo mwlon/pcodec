@@ -356,30 +356,6 @@ fn train_mode_and_infos<U: UnsignedLike>(
   })
 }
 
-fn calc_decomposed_batch_end_idxs(latent_lens: &[usize]) -> Vec<usize> {
-  let mut res = Vec::new();
-  let mut batch_end_idx = 0;
-  let mut decomposed_batch_end_idx = 0;
-  loop {
-    let mut done = true;
-    for &l in latent_lens {
-      let batch_size = min(l.saturating_sub(batch_end_idx), FULL_BATCH_SIZE);
-      if batch_size > 0 {
-        done = false;
-        decomposed_batch_end_idx += batch_size;
-      }
-    }
-    batch_end_idx += FULL_BATCH_SIZE;
-
-    if done {
-      break;
-    }
-
-    res.push(decomposed_batch_end_idx);
-  }
-  res
-}
-
 fn empty_vec<T>(n: usize) -> Vec<T> {
   unsafe {
     let mut res = Vec::with_capacity(n);
@@ -392,7 +368,7 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
   latent_configs: &mut [LatentConfig<U>],
   src: &mut LatentSrc<U>,
 ) -> PcoResult<DecomposedSrc<U>> {
-  let empty_decomposed_latents = |n, ans_size_log| unsafe {
+  let empty_decomposed_latents = |n, ans_size_log| {
     let ans_final_state = (1 as AnsState) << ans_size_log;
     DecomposedLatents {
       ans_vals: empty_vec(n),

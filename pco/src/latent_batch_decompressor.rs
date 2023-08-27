@@ -82,6 +82,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     })
   }
 
+  #[inline(never)]
   fn unchecked_decompress_ans(&mut self, reader: &mut BitReader, infos: &mut [BinDecompressionInfo<U>], batch_size: usize) {
     assert!(batch_size <= infos.len());
     for i in 0..batch_size {
@@ -89,6 +90,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     }
   }
 
+  #[inline(never)]
   fn decompress_ans(&mut self, reader: &mut BitReader, infos: &mut [BinDecompressionInfo<U>], batch_size: usize) -> PcoResult<()> {
     for i in 0..batch_size {
       infos[i] = self.infos[self.state.ans_decoder.decode(reader)? as usize];
@@ -96,6 +98,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     Ok(())
   }
 
+  #[inline(never)]
   fn unchecked_decompress_offsets(&mut self, reader: &mut BitReader, infos: &[BinDecompressionInfo<U>], dst: &mut [U]) {
     assert!(dst.len() <= infos.len());
     for i in 0..dst.len() {
@@ -103,6 +106,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     }
   }
 
+  #[inline(never)]
   fn decompress_offsets(&mut self, reader: &mut BitReader, infos: &[BinDecompressionInfo<U>], dst: &mut [U]) -> PcoResult<()> {
     for i in 0..dst.len() {
       dst[i] = reader.read_uint::<U>(infos[i].offset_bits)?;
@@ -110,12 +114,14 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     Ok(())
   }
 
+  #[inline(never)]
   fn multiply_by_gcds(&self, infos: &[BinDecompressionInfo<U>], dst: &mut [U]) {
     for i in 0..dst.len() {
       dst[i] *= infos[i].gcd;
     }
   }
 
+  #[inline(never)]
   fn add_offsets(&self, infos: &[BinDecompressionInfo<U>], dst: &mut [U]) {
     for i in 0..dst.len() {
       dst[i] = dst[i].wrapping_add(infos[i].lower)
