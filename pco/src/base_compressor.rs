@@ -1,9 +1,10 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
+use crate::ans::AnsState;
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
-use crate::chunk_metadata::{ChunkMetadata, ChunkLatentMetadata, PageMetadata, PageLatentMetadata};
+use crate::chunk_metadata::{ChunkLatentMetadata, ChunkMetadata, PageLatentMetadata, PageMetadata};
 use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -18,7 +19,6 @@ use crate::unsigned_src_dst::{DecomposedLatents, DecomposedSrc, LatentSrc};
 use crate::{ans, delta};
 use crate::{auto, Flags};
 use crate::{bin_optimization, float_mult_utils};
-use crate::ans::AnsState;
 
 /// All configurations available for a compressor.
 ///
@@ -414,9 +414,15 @@ fn decompose_unsigneds<U: UnsignedLike>(
   } = mid_chunk_info;
 
   if *needs_gcds {
-    mode_decompose_unsigneds::<U, GcdMode>(&mut latent_configs[..*n_nontrivial_latents], src)
+    mode_decompose_unsigneds::<U, GcdMode>(
+      &mut latent_configs[..*n_nontrivial_latents],
+      src,
+    )
   } else {
-    mode_decompose_unsigneds::<U, ClassicMode>(&mut latent_configs[..*n_nontrivial_latents], src)
+    mode_decompose_unsigneds::<U, ClassicMode>(
+      &mut latent_configs[..*n_nontrivial_latents],
+      src,
+    )
   }
 }
 
@@ -433,10 +439,16 @@ fn write_decomposeds<U: UnsignedLike>(
       assert!(decomposed.offsets.len() >= latent_batch_end);
       assert!(decomposed.offset_bits.len() >= latent_batch_end);
       for i in batch_start..latent_batch_end {
-        writer.write_diff(decomposed.ans_vals[i], decomposed.ans_bits[i]);
+        writer.write_diff(
+          decomposed.ans_vals[i],
+          decomposed.ans_bits[i],
+        );
       }
       for i in batch_start..latent_batch_end {
-        writer.write_diff(decomposed.offsets[i], decomposed.offset_bits[i]);
+        writer.write_diff(
+          decomposed.offsets[i],
+          decomposed.offset_bits[i],
+        );
       }
     }
     batch_start = batch_end;
@@ -554,9 +566,10 @@ impl<T: NumberLike> BaseCompressor<T> {
 
   fn split_latents(&self, naive_mode: Mode<T::Unsigned>, nums: &[T]) -> LatentSrc<T::Unsigned> {
     match naive_mode {
-      Mode::Classic | Mode::Gcd => {
-        LatentSrc::new(nums.len(), [nums.iter().map(|x| x.to_unsigned()).collect(), vec![]])
-      }
+      Mode::Classic | Mode::Gcd => LatentSrc::new(
+        nums.len(),
+        [nums.iter().map(|x| x.to_unsigned()).collect(), vec![]],
+      ),
       Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
         float_mult_utils::split_latents(nums, base, inv_base)
       }
@@ -680,7 +693,8 @@ impl<T: NumberLike> BaseCompressor<T> {
       let delta_moments = info.page_moments(latent_idx).clone();
 
       // write the final ANS state, moving it down the range [0, table_size)
-      let ans_final_state = decomposeds.decomposed_latents
+      let ans_final_state = decomposeds
+        .decomposed_latents
         .get(latent_idx)
         .map(|decomposed| decomposed.ans_final_state)
         .unwrap_or(1 as AnsState);
@@ -689,7 +703,9 @@ impl<T: NumberLike> BaseCompressor<T> {
         ans_final_state,
       });
     }
-    let page_meta = PageMetadata { latents: latent_metas };
+    let page_meta = PageMetadata {
+      latents: latent_metas,
+    };
     let ans_size_logs = info
       .latent_configs
       .iter()

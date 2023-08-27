@@ -6,7 +6,7 @@ use rand::Rng;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{DecompressedItem, Decompressor};
-use crate::{DEFAULT_COMPRESSION_LEVEL};
+use crate::DEFAULT_COMPRESSION_LEVEL;
 
 struct State<T: NumberLike> {
   decompressor: Decompressor<T>,

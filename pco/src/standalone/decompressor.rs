@@ -7,7 +7,7 @@ use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::page_decompressor::PageDecompressor;
 use crate::progress::Progress;
-use crate::{ChunkMetadata, constants, DecompressorConfig, Flags};
+use crate::{constants, ChunkMetadata, DecompressorConfig, Flags};
 
 /// Converts .pco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.

@@ -53,7 +53,11 @@ impl Decoder {
     latent_meta: &ChunkLatentMetadata<U>,
     final_state: AnsState,
   ) -> PcoResult<Self> {
-    let weights = latent_meta.bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
+    let weights = latent_meta
+      .bins
+      .iter()
+      .map(|bin| bin.weight)
+      .collect::<Vec<_>>();
     let spec = Spec::from_weights(latent_meta.ans_size_log, weights)?;
     Ok(Self::new(&spec, final_state))
   }

@@ -12,15 +12,9 @@ use crate::errors::{PcoError, PcoResult};
 use crate::Flags;
 
 /// All configurations available for a Decompressor.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct DecompressorConfig {}
-
-impl Default for DecompressorConfig {
-  fn default() -> Self {
-    Self {}
-  }
-}
 
 #[derive(Clone, Debug, Default)]
 pub struct State<T: NumberLike> {

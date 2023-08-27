@@ -1,21 +1,13 @@
-
 use std::fmt::Debug;
 
-
-
-
-use crate::{ans, ChunkLatentMetadata};
 use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::chunk_metadata::{PageLatentMetadata};
+use crate::chunk_metadata::PageLatentMetadata;
 use crate::constants::{Bitlen, FULL_BATCH_SIZE};
 use crate::data_types::UnsignedLike;
-use crate::errors::{PcoResult};
-
-
-
-
+use crate::errors::PcoResult;
+use crate::{ans, ChunkLatentMetadata};
 
 #[derive(Clone, Debug)]
 struct State {
@@ -59,16 +51,33 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     needs_gcd: bool,
     is_trivial: bool,
   ) -> PcoResult<Self> {
-    let max_bits_per_ans = chunk_latent_meta.ans_size_log - chunk_latent_meta.bins.iter().map(|bin|
-    bin.weight.ilog2() as Bitlen).max().unwrap_or_default();
-    let max_bits_per_offset = chunk_latent_meta.bins.iter().map(|bin| bin.offset_bits).max().unwrap_or(Bitlen::MAX);
-    let infos = chunk_latent_meta.bins.iter().map(BinDecompressionInfo::from).collect::<Vec<_>>();
+    let max_bits_per_ans = chunk_latent_meta.ans_size_log
+      - chunk_latent_meta
+        .bins
+        .iter()
+        .map(|bin| bin.weight.ilog2() as Bitlen)
+        .max()
+        .unwrap_or_default();
+    let max_bits_per_offset = chunk_latent_meta
+      .bins
+      .iter()
+      .map(|bin| bin.offset_bits)
+      .max()
+      .unwrap_or(Bitlen::MAX);
+    let infos = chunk_latent_meta
+      .bins
+      .iter()
+      .map(BinDecompressionInfo::from)
+      .collect::<Vec<_>>();
     let maybe_constant_value = if is_trivial {
       chunk_latent_meta.bins.first().map(|bin| bin.lower)
     } else {
       None
     };
-    let ans_decoder = ans::Decoder::from_latent_meta(chunk_latent_meta, page_latent_meta.ans_final_state)?;
+    let ans_decoder = ans::Decoder::from_latent_meta(
+      chunk_latent_meta,
+      page_latent_meta.ans_final_state,
+    )?;
 
     Ok(Self {
       max_bits_per_ans,
@@ -76,30 +85,43 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       infos,
       maybe_constant_value,
       needs_gcd,
-      state: State {
-        ans_decoder,
-      }
+      state: State { ans_decoder },
     })
   }
 
   #[inline(never)]
-  fn unchecked_decompress_ans(&mut self, reader: &mut BitReader, infos: &mut [BinDecompressionInfo<U>], batch_size: usize) {
+  fn unchecked_decompress_ans(
+    &mut self,
+    reader: &mut BitReader,
+    infos: &mut [BinDecompressionInfo<U>],
+    batch_size: usize,
+  ) {
     assert!(batch_size <= infos.len());
-    for i in 0..batch_size {
-      infos[i] = self.infos[self.state.ans_decoder.unchecked_decode(reader) as usize];
+    for info in infos.iter_mut().take(batch_size) {
+      *info = self.infos[self.state.ans_decoder.unchecked_decode(reader) as usize];
     }
   }
 
   #[inline(never)]
-  fn decompress_ans(&mut self, reader: &mut BitReader, infos: &mut [BinDecompressionInfo<U>], batch_size: usize) -> PcoResult<()> {
-    for i in 0..batch_size {
-      infos[i] = self.infos[self.state.ans_decoder.decode(reader)? as usize];
+  fn decompress_ans(
+    &mut self,
+    reader: &mut BitReader,
+    infos: &mut [BinDecompressionInfo<U>],
+    batch_size: usize,
+  ) -> PcoResult<()> {
+    for info in infos.iter_mut().take(batch_size) {
+      *info = self.infos[self.state.ans_decoder.decode(reader)? as usize];
     }
     Ok(())
   }
 
   #[inline(never)]
-  fn unchecked_decompress_offsets(&mut self, reader: &mut BitReader, infos: &[BinDecompressionInfo<U>], dst: &mut [U]) {
+  fn unchecked_decompress_offsets(
+    &mut self,
+    reader: &mut BitReader,
+    infos: &[BinDecompressionInfo<U>],
+    dst: &mut [U],
+  ) {
     assert!(dst.len() <= infos.len());
     for i in 0..dst.len() {
       dst[i] = reader.unchecked_read_uint::<U>(infos[i].offset_bits);
@@ -107,7 +129,12 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   }
 
   #[inline(never)]
-  fn decompress_offsets(&mut self, reader: &mut BitReader, infos: &[BinDecompressionInfo<U>], dst: &mut [U]) -> PcoResult<()> {
+  fn decompress_offsets(
+    &mut self,
+    reader: &mut BitReader,
+    infos: &[BinDecompressionInfo<U>],
+    dst: &mut [U],
+  ) -> PcoResult<()> {
     for i in 0..dst.len() {
       dst[i] = reader.read_uint::<U>(infos[i].offset_bits)?;
     }

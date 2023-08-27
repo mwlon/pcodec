@@ -1,6 +1,5 @@
 use crate::ans::AnsState;
 
-
 use crate::constants::{Bitlen, MAX_N_LATENTS};
 use crate::data_types::UnsignedLike;
 

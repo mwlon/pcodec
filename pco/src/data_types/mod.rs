@@ -1,6 +1,9 @@
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, MulAssign, RemAssign, Shl, Shr, Sub, SubAssign};
+use std::ops::{
+  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, MulAssign, RemAssign, Shl,
+  Shr, Sub, SubAssign,
+};
 
 use crate::constants::Bitlen;
 

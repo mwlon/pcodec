@@ -1,16 +1,16 @@
 use std::cmp::min;
 use std::marker::PhantomData;
 
-use crate::latent_batch_decompressor::{LatentBatchDecompressor};
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::PageMetadata;
-use crate::constants::{FULL_BATCH_SIZE};
+use crate::constants::FULL_BATCH_SIZE;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
+use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::progress::Progress;
-use crate::{latent_batch_decompressor, Mode};
 use crate::{delta, float_mult_utils, ChunkMetadata};
+use crate::{latent_batch_decompressor, Mode};
 
 #[derive(Clone, Debug)]
 pub struct State<U: UnsignedLike> {
@@ -35,7 +35,11 @@ impl<U: UnsignedLike> State<U> {
     Backup {
       n_processed: self.n_processed,
       n_bits_processed: self.n_bits_processed,
-      latent_batch_backups: self.latent_batch_decompressors.iter().map(|lbd| lbd.backup()).collect::<Vec<_>>(),
+      latent_batch_backups: self
+        .latent_batch_decompressors
+        .iter()
+        .map(|lbd| lbd.backup())
+        .collect::<Vec<_>>(),
       delta_momentss: self.delta_momentss.clone(),
     }
   }
@@ -43,9 +47,13 @@ impl<U: UnsignedLike> State<U> {
   fn recover(&mut self, backup: Backup<U>) {
     self.n_processed = backup.n_processed;
     self.n_bits_processed = backup.n_bits_processed;
-    self.latent_batch_decompressors.iter_mut().zip(backup.latent_batch_backups.into_iter()).for_each(|(lbd, lbd_backup)| {
-      lbd.recover(lbd_backup);
-    });
+    self
+      .latent_batch_decompressors
+      .iter_mut()
+      .zip(backup.latent_batch_backups.into_iter())
+      .for_each(|(lbd, lbd_backup)| {
+        lbd.recover(lbd_backup);
+      });
     self.delta_momentss = backup.delta_momentss;
   }
 }
@@ -168,10 +176,22 @@ impl<T: NumberLike> PageDecompressor<T> {
     let n_latents = latent_batch_decompressors.len();
 
     if n_latents >= 1 {
-      decompress_latents_w_delta(reader, &mut delta_momentss[0], &mut latent_batch_decompressors[0], primary_latents, n - *n_processed)?;
+      decompress_latents_w_delta(
+        reader,
+        &mut delta_momentss[0],
+        &mut latent_batch_decompressors[0],
+        primary_latents,
+        n - *n_processed,
+      )?;
     }
     if n_latents >= 2 {
-      decompress_latents_w_delta(reader, &mut delta_momentss[1], &mut latent_batch_decompressors[1], secondary_latents, n - *n_processed)?;
+      decompress_latents_w_delta(
+        reader,
+        &mut delta_momentss[1],
+        &mut latent_batch_decompressors[1],
+        secondary_latents,
+        n - *n_processed,
+      )?;
     }
 
     join_latents(mode, primary_latents, secondary_latents);
@@ -186,14 +206,12 @@ impl<T: NumberLike> PageDecompressor<T> {
     if *n_processed >= n && *n_bits_processed != n_bits {
       return Err(PcoError::corruption(format!(
         "Expected {} bits in data page but read {} by the end",
-        n_bits,
-        *n_bits_processed,
+        n_bits, *n_bits_processed,
       )));
     } else if *n_bits_processed > n_bits {
       return Err(PcoError::corruption(format!(
         "Expected {} bits in data page but read {} before reaching the end",
-        n_bits,
-        *n_bits_processed,
+        n_bits, *n_bits_processed,
       )));
     }
 
@@ -202,11 +220,7 @@ impl<T: NumberLike> PageDecompressor<T> {
 
   // If this returns an error, this and reader will be unchanged, but num_dst
   // might be modified.
-  pub fn decompress(
-    &mut self,
-    reader: &mut BitReader,
-    num_dst: &mut [T],
-  ) -> PcoResult<Progress> {
+  pub fn decompress(&mut self, reader: &mut BitReader, num_dst: &mut [T]) -> PcoResult<Progress> {
     if num_dst.len() % FULL_BATCH_SIZE != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or exceed the length of numbers remaining ({}) (was {})",
