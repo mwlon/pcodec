@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::ans::AnsState;
+use crate::ans::{AnsState, Token};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::PageLatentMetadata;
@@ -11,6 +11,7 @@ use crate::{ans, ChunkLatentMetadata};
 
 #[derive(Clone, Debug)]
 struct State {
+  token_scratch: [Token; FULL_BATCH_SIZE], // needs no backup
   ans_decoder: ans::Decoder,
 }
 
@@ -21,12 +22,12 @@ pub struct Backup {
 impl State {
   fn backup(&self) -> Backup {
     Backup {
-      ans_decoder_backup: self.ans_decoder.state,
+      ans_decoder_backup: self.ans_decoder.state(),
     }
   }
 
   fn recover(&mut self, backup: Backup) {
-    self.ans_decoder.state = backup.ans_decoder_backup;
+    self.ans_decoder.recover(backup.ans_decoder_backup);
   }
 }
 
@@ -85,20 +86,33 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       infos,
       maybe_constant_value,
       needs_gcd,
-      state: State { ans_decoder },
+      state: State {
+        ans_decoder,
+        token_scratch: [0; FULL_BATCH_SIZE],
+      },
     })
   }
 
   #[inline(never)]
-  fn unchecked_decompress_ans(
+  fn unchecked_decompress_ans_tokens(
     &mut self,
     reader: &mut BitReader,
-    infos: &mut [BinDecompressionInfo<U>],
     batch_size: usize,
   ) {
-    assert!(batch_size <= infos.len());
-    for info in infos.iter_mut().take(batch_size) {
-      *info = self.infos[self.state.ans_decoder.unchecked_decode(reader) as usize];
+    assert!(batch_size <= FULL_BATCH_SIZE);
+    for token in self.state.token_scratch.iter_mut().take(batch_size) {
+      *token = self.state.ans_decoder.unchecked_decode(reader);
+    }
+  }
+
+  #[inline(never)]
+  fn lookup(
+    &mut self,
+    infos: &mut [BinDecompressionInfo<U>],
+  ) {
+    assert!(self.state.token_scratch.len() >= infos.len());
+    for i in 0..infos.len() {
+      infos[i] = self.infos[self.state.token_scratch[i] as usize];
     }
   }
 
@@ -107,9 +121,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     &mut self,
     reader: &mut BitReader,
     infos: &mut [BinDecompressionInfo<U>],
-    batch_size: usize,
   ) -> PcoResult<()> {
-    for info in infos.iter_mut().take(batch_size) {
+    for info in infos.iter_mut() {
       *info = self.infos[self.state.ans_decoder.decode(reader)? as usize];
     }
     Ok(())
@@ -179,9 +192,10 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     assert!(dst.len() <= bin_infos.len());
     // as long as there's enough compressed data available, we don't need checked operations
     if self.max_bits_per_ans as usize * batch_size <= reader.bits_remaining() {
-      self.unchecked_decompress_ans(reader, &mut bin_infos, batch_size);
+      self.unchecked_decompress_ans_tokens(reader, batch_size);
+      self.lookup(&mut bin_infos);
     } else {
-      self.decompress_ans(reader, &mut bin_infos, batch_size)?;
+      self.decompress_ans(reader, &mut bin_infos)?;
     }
 
     if self.max_bits_per_offset as usize * batch_size <= reader.bits_remaining() {

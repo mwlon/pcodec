@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::fmt::{Debug, Display};
 use std::ops::*;
 
@@ -62,44 +63,44 @@ impl<U: UnsignedLike> ReadableUint for U {
 // is byte-aligned; e.g. `bit_idx % 8 == 0`.
 #[derive(Clone)]
 pub struct BitReader<'a> {
-  // word = words[i], but must be carefully used and maintained:
-  // * whenever i changes, we need to update word as well
-  // * if we've reached the end of words, word will be 0, so be sure we're not exceeding bounds
+  // immutable
   bytes: &'a [u8],
-  // ptr: *const u8,
-  bit_idx: usize,
   total_bits: usize,
+  // mutable
+  loaded_byte_idx: usize,
+  bits_past_ptr: Bitlen,
+  buffer: usize,
 }
 
 impl<'a> From<&'a PaddedBytes> for BitReader<'a> {
   fn from(bit_words: &'a PaddedBytes) -> Self {
     BitReader {
       bytes: &bit_words.bytes,
-      // ptr: bit_words.bytes.as_ptr(),
-      bit_idx: 0,
       total_bits: bit_words.total_bits(),
+      loaded_byte_idx: 0,
+      bits_past_ptr: 0,
+      buffer: 0,
     }
   }
 }
 
 impl<'a> BitReader<'a> {
   // Returns the reader's current byte index. Will return an error if the
-  // reader is at
-  // a misaligned position.
+  // reader is at a misaligned position.
   pub fn aligned_byte_idx(&self) -> PcoResult<usize> {
-    let (i, j) = self.idxs();
-    if j == 0 {
-      Ok(i)
+    if self.bits_past_ptr % 8 == 0 {
+      Ok(self.loaded_byte_idx + (self.bits_past_ptr / 8) as usize)
     } else {
       Err(PcoError::invalid_argument(format!(
-        "cannot get aligned byte index on misaligned bit reader at bit {}",
-        self.bit_idx
+        "cannot get aligned byte index on misaligned bit reader (byte {} + {} bits)",
+        self.loaded_byte_idx,
+        self.bits_past_ptr,
       )))
     }
   }
 
   pub fn bit_idx(&self) -> usize {
-    self.bit_idx
+    self.loaded_byte_idx * 8 + self.bits_past_ptr as usize
   }
 
   // Returns the number of bits between the reader's current position and
@@ -127,10 +128,32 @@ impl<'a> BitReader<'a> {
     }
   }
 
+  #[inline]
+  fn refill(&mut self) {
+    self.loaded_byte_idx += (self.bits_past_ptr / 8) as usize;
+    self.buffer = {
+      // we can do this because BitWords made sure to pad self.bytes
+      let raw_bytes = unsafe { *(self.bytes.as_ptr().add(self.loaded_byte_idx) as *const [u8; BYTES_PER_WORD]) };
+      usize::from_le_bytes(raw_bytes)
+    };
+    self.bits_past_ptr = self.bits_past_ptr % 8;
+  }
+
+  #[inline]
+  fn consume(&mut self, n: Bitlen) {
+    self.bits_past_ptr += n;
+  }
+
+  #[inline]
+  fn consume_big(&mut self, n: usize) {
+    let bit_idx = self.bit_idx() + n;
+    self.seek_to(bit_idx);
+  }
+
   // Returns the next `n` bytes. Will return an error if
   // there are not enough bytes remaining in the reader or the reader is
   // misaligned.
-  pub fn read_aligned_bytes(&mut self, n: usize) -> PcoResult<Vec<u8>> {
+  pub fn read_aligned_bytes(&mut self, n: usize) -> PcoResult<&'a [u8]> {
     let byte_idx = self.aligned_byte_idx()?;
     let new_byte_idx = byte_idx + n;
     let byte_size = self.byte_size();
@@ -140,8 +163,8 @@ impl<'a> BitReader<'a> {
         n, byte_idx, byte_size,
       )))
     } else {
-      self.seek(n * 8);
-      Ok(self.bytes[byte_idx..new_byte_idx].to_vec())
+      self.consume_big(n * 8);
+      Ok(&self.bytes[byte_idx..new_byte_idx])
     }
   }
 
@@ -154,7 +177,6 @@ impl<'a> BitReader<'a> {
 
   pub fn read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> PcoResult<U> {
     self.insufficient_data_check("read_uint", n)?;
-
     Ok(self.unchecked_read_uint::<U>(n))
   }
 
@@ -166,33 +188,17 @@ impl<'a> BitReader<'a> {
     self.read_uint::<Bitlen>(n)
   }
 
-  #[inline]
-  fn idxs(&self) -> (usize, Bitlen) {
-    (
-      self.bit_idx >> 3,
-      (self.bit_idx & 7) as Bitlen,
-    )
-  }
-
-  // returns (bits read, idx)
-  pub fn read_small(&mut self, n: Bitlen) -> PcoResult<u32> {
+  pub fn read_small(&mut self, n: Bitlen) -> PcoResult<usize> {
     self.insufficient_data_check("read_small", n)?;
     Ok(self.unchecked_read_small(n))
-  }
-
-  #[inline]
-  fn unchecked_word(&self, i: usize) -> usize {
-    // we can do this because BitWords made sure to pad self.bytes
-    let raw_bytes = unsafe { *(self.bytes.as_ptr().add(i) as *const [u8; BYTES_PER_WORD]) };
-    usize::from_le_bytes(raw_bytes)
   }
 
   // Returns the next bit. Will panic if we have reached the end of the
   // reader. This tends to be much faster than `read_one()`.
   pub fn unchecked_read_one(&mut self) -> bool {
-    let (i, j) = self.idxs();
-    let res = (self.bytes[i] & (1 << j)) > 0;
-    self.bit_idx += 1;
+    self.refill();
+    let res = self.bytes[self.loaded_byte_idx] & (1 << self.bits_past_ptr) > 0;
+    self.consume(1);
     res
   }
 
@@ -201,9 +207,11 @@ impl<'a> BitReader<'a> {
       return U::ZERO;
     }
 
-    let (mut i, j) = self.idxs();
-    let mut res = U::from_word(self.unchecked_word(i) >> j);
-    let mut processed = WORD_BITLEN - j;
+    self.refill();
+
+    let mut res = U::from_word(self.buffer >> self.bits_past_ptr);
+    let mut processed = WORD_BITLEN - self.bits_past_ptr;
+    self.consume(min(processed, n));
 
     // This for loop looks redundant/slow, as if it could just be a while
     // loop, but its bounds get evaluated at compile time and it actually
@@ -212,40 +220,37 @@ impl<'a> BitReader<'a> {
       if processed >= n {
         break;
       }
-      i += BYTES_PER_WORD;
-      res |= U::from_word(self.unchecked_word(i)) << processed;
+      self.refill();
+      res |= U::from_word(self.buffer) << processed;
+      self.consume(min(WORD_BITLEN, n - processed));
       processed += WORD_BITLEN;
     }
 
-    self.bit_idx += n as usize;
     res & (U::MAX >> (U::BITS - n))
   }
 
   #[inline]
-  pub fn unchecked_read_small(&mut self, n: Bitlen) -> u32 {
-    if n == 0 {
-      return 0;
-    }
+  pub fn unchecked_read_small(&mut self, n: Bitlen) -> usize {
+    // if n == 0 {
+    //   return 0;
+    // }
 
-    let (i, j) = self.idxs();
-    // Shockingly, combining this line with the last slows things down.
-    // Pipelining?
-    let res = <u32 as ReadableUint>::from_word(self.unchecked_word(i) >> j);
-    self.bit_idx += n as usize;
-    res & (u32::MAX >> (32 - n))
+    self.refill();
+    let unmasked = <usize as ReadableUint>::from_word(self.buffer >> self.bits_past_ptr);
+    self.consume(n);
+    unmasked & (usize::MAX >> (WORD_BITLEN - n))
   }
 
   // Seek to the end of the byte.
   // Used to skip to the next metadata or body section of the file, since they
   // always start byte-aligned.
   pub fn drain_empty_byte(&mut self, message: &str) -> PcoResult<()> {
-    let (i, j) = self.idxs();
-    if j != 0 {
-      if (self.bytes[i] >> j) > 0 {
+    self.refill();
+    if self.bits_past_ptr != 0 {
+      if (self.bytes[self.loaded_byte_idx] >> self.bits_past_ptr) > 0 {
         return Err(PcoError::corruption(message));
       }
-      let new_bit_idx = 8 * bits::ceil_div(self.bit_idx, 8);
-      self.bit_idx = new_bit_idx;
+      self.consume(8 - self.bits_past_ptr);
     }
     Ok(())
   }
@@ -253,15 +258,9 @@ impl<'a> BitReader<'a> {
   // Sets the bit reader's current position to the specified bit index.
   // Will NOT check whether the resulting position is in bounds or not.
   pub fn seek_to(&mut self, bit_idx: usize) {
-    self.bit_idx = bit_idx;
-  }
-
-  // Skips forward `n` bits. Will NOT check whether
-  // the resulting position is in bounds or not.
-  //
-  // Wraps [`seek_to`][BitReader::seek_to].
-  pub fn seek(&mut self, n: usize) {
-    self.seek_to(self.bit_idx() + n);
+    self.loaded_byte_idx = bit_idx / 8;
+    self.bits_past_ptr = (bit_idx % 8) as Bitlen;
+    self.refill();
   }
 }
 
@@ -281,14 +280,20 @@ mod tests {
     let words = PaddedBytes::from(&bytes);
     let mut bit_reader = BitReader::from(&words);
     assert_eq!(bit_reader.read_aligned_bytes(1)?, vec![0x9a],);
+    assert_eq!(bit_reader.bit_idx(), 8);
     assert!(!bit_reader.unchecked_read_one());
+    assert_eq!(bit_reader.bit_idx(), 9);
     assert!(bit_reader.read_one()?);
-    bit_reader.seek(3);
+    assert_eq!(bit_reader.bit_idx(), 10);
+    bit_reader.unchecked_read_uint::<u64>(3); // skip 3 bits
+    assert_eq!(bit_reader.bit_idx(), 13);
     assert_eq!(
       bit_reader.unchecked_read_uint::<u64>(2),
       2_u64
     );
+    assert_eq!(bit_reader.bit_idx(), 15);
     assert_eq!(bit_reader.unchecked_read_small(3), 1_u32);
+    assert_eq!(bit_reader.bit_idx(), 18);
     //leaves 1 bit left over
     Ok(())
   }

@@ -10,7 +10,7 @@ use crate::ChunkLatentMetadata;
 #[derive(Clone, Debug)]
 struct Node {
   token: Token,
-  next_state_base: AnsState,
+  next_state_idx_base: usize,
   bits_to_read: Bitlen,
 }
 
@@ -18,7 +18,7 @@ struct Node {
 pub struct Decoder {
   table_size: usize,
   nodes: Vec<Node>,
-  pub state: AnsState,
+  state_idx: usize,
 }
 
 impl Decoder {
@@ -36,7 +36,7 @@ impl Decoder {
       }
       nodes.push(Node {
         token,
-        next_state_base,
+        next_state_idx_base: next_state_base as usize - table_size,
         bits_to_read,
       });
       token_x_s[token as usize] += 1;
@@ -45,7 +45,7 @@ impl Decoder {
     Self {
       table_size,
       nodes,
-      state: final_state,
+      state_idx: final_state as usize - table_size,
     }
   }
 
@@ -64,14 +64,22 @@ impl Decoder {
 
   #[inline]
   pub fn unchecked_decode(&mut self, reader: &mut BitReader) -> Token {
-    let node = &self.nodes[self.state as usize - self.table_size];
-    self.state = node.next_state_base + reader.unchecked_read_small(node.bits_to_read) as AnsState;
+    let node = &self.nodes[self.state_idx];
+    self.state_idx = node.next_state_idx_base + reader.unchecked_read_small(node.bits_to_read);
     node.token
   }
 
   pub fn decode(&mut self, reader: &mut BitReader) -> PcoResult<Token> {
-    let node = &self.nodes[self.state as usize - self.table_size];
-    self.state = node.next_state_base + reader.read_small(node.bits_to_read)? as AnsState;
+    let node = &self.nodes[self.state_idx];
+    self.state_idx = node.next_state_idx_base + reader.read_small(node.bits_to_read)?;
     Ok(node.token)
+  }
+
+  pub fn state(&self) -> AnsState {
+    (self.state_idx + self.table_size) as AnsState
+  }
+
+  pub fn recover(&mut self, state: AnsState) {
+    self.state_idx = state as usize - self.table_size;
   }
 }
