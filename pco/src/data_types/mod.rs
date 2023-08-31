@@ -61,6 +61,7 @@ pub trait FloatLike:
 /// Metadata stores numbers as their unsigned representations.
 pub trait UnsignedLike:
   Add<Output = Self>
+  + AddAssign
   + BitAnd<Output = Self>
   + BitOr<Output = Self>
   + BitAndAssign
