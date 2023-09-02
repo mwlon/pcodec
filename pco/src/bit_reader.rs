@@ -67,9 +67,9 @@ pub struct BitReader<'a> {
   bytes: &'a [u8],
   total_bits: usize,
   // mutable
-  loaded_byte_idx: usize,
-  bits_past_ptr: Bitlen,
-  buffer: usize,
+  pub loaded_byte_idx: usize,
+  pub bits_past_ptr: Bitlen,
+  // buffer: usize,
 }
 
 impl<'a> From<&'a PaddedBytes> for BitReader<'a> {
@@ -79,7 +79,7 @@ impl<'a> From<&'a PaddedBytes> for BitReader<'a> {
       total_bits: bit_words.total_bits(),
       loaded_byte_idx: 0,
       bits_past_ptr: 0,
-      buffer: 0,
+      // buffer: 0,
     }
   }
 }
@@ -129,16 +129,21 @@ impl<'a> BitReader<'a> {
   }
 
   #[inline]
-  fn unchecked_word(&self, byte_idx: usize) -> usize {
+  pub fn unchecked_word_at(&self, byte_idx: usize) -> usize {
     // we can do this because BitWords made sure to pad self.bytes
     let raw_bytes = unsafe { *(self.bytes.as_ptr().add(byte_idx) as *const [u8; BYTES_PER_WORD]) };
     usize::from_le_bytes(raw_bytes)
   }
 
   #[inline]
+  fn unchecked_word(&self) -> usize {
+    self.unchecked_word_at(self.loaded_byte_idx)
+  }
+
+  #[inline]
   fn refill(&mut self) {
     self.loaded_byte_idx += (self.bits_past_ptr / 8) as usize;
-    self.buffer = self.unchecked_word(self.loaded_byte_idx);
+    // self.buffer = self.unchecked_word_at(self.loaded_byte_idx);
     self.bits_past_ptr = self.bits_past_ptr % 8;
   }
 
@@ -217,7 +222,7 @@ impl<'a> BitReader<'a> {
 
     self.refill();
 
-    let mut res = U::from_word(self.buffer >> self.bits_past_ptr);
+    let mut res = U::from_word(self.unchecked_word() >> self.bits_past_ptr);
     let mut processed = WORD_BITLEN - self.bits_past_ptr;
     self.consume(min(processed, n));
 
@@ -229,7 +234,7 @@ impl<'a> BitReader<'a> {
         break;
       }
       self.refill();
-      res |= U::from_word(self.buffer) << processed;
+      res |= U::from_word(self.unchecked_word()) << processed;
       self.consume(min(WORD_BITLEN, n - processed));
       processed += WORD_BITLEN;
     }
@@ -245,7 +250,7 @@ impl<'a> BitReader<'a> {
     let mut i = pos / 8;
     let j = (pos as Bitlen) % 8;
 
-    let mut res = U::from_word(self.unchecked_word(i) >> j);
+    let mut res = U::from_word(self.unchecked_word_at(i) >> j);
     let mut processed = WORD_BITLEN - j;
     i += if j == 0 { BYTES_PER_WORD } else { BYTES_PER_WORD - 1};
 
@@ -256,7 +261,7 @@ impl<'a> BitReader<'a> {
       if processed >= n {
         break;
       }
-      res |= U::from_word(self.unchecked_word(i)) << processed;
+      res |= U::from_word(self.unchecked_word_at(i)) << processed;
       processed += WORD_BITLEN;
       i += BYTES_PER_WORD;
     }
@@ -267,9 +272,10 @@ impl<'a> BitReader<'a> {
   #[inline]
   pub fn unchecked_read_small(&mut self, n: Bitlen) -> usize {
     self.refill();
-    let unmasked = <usize as ReadableUint>::from_word(self.buffer >> self.bits_past_ptr);
+    let unmasked = <usize as ReadableUint>::from_word(self.unchecked_word() >> self.bits_past_ptr);
     self.consume(n);
-    unmasked & ((1 << n) - 1)
+    // unmasked & ((1 << n) - 1)
+    unmasked & (usize::MAX >> (WORD_BITLEN - n))
   }
 
   // Seek to the end of the byte.

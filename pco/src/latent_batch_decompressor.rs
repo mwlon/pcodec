@@ -4,7 +4,7 @@ use crate::ans::{AnsState, Token};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::PageLatentMetadata;
-use crate::constants::{Bitlen, FULL_BATCH_SIZE};
+use crate::constants::{Bitlen, FULL_BATCH_SIZE, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::{ans, ChunkLatentMetadata};
@@ -54,11 +54,11 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   ) -> PcoResult<Self> {
     let max_bits_per_ans = chunk_latent_meta.ans_size_log
       - chunk_latent_meta
-        .bins
-        .iter()
-        .map(|bin| bin.weight.ilog2() as Bitlen)
-        .max()
-        .unwrap_or_default();
+      .bins
+      .iter()
+      .map(|bin| bin.weight.ilog2() as Bitlen)
+      .max()
+      .unwrap_or_default();
     let max_bits_per_offset = chunk_latent_meta
       .bins
       .iter()
@@ -93,113 +93,132 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     })
   }
 
+  #[inline(never)]
+  fn unchecked_decompress_ans_tokens(
+    &mut self,
+    reader: &mut BitReader,
+  ) {
+    let mut byte_idx = reader.loaded_byte_idx;
+    let mut bit_idx = reader.bits_past_ptr;
+    let mut state_idx = self.state.ans_decoder.state_idx;
+    for i in (0..FULL_BATCH_SIZE).step_by(4) {
+      byte_idx += bit_idx as usize / 8;
+      bit_idx %= 8;
+      let word = reader.unchecked_word_at(byte_idx);
+      for j in i..i + 4 {
+        let node = unsafe { self.state.ans_decoder.nodes.get_unchecked(state_idx) };
+        unsafe { *self.state.token_scratch.get_unchecked_mut(j) = node.token; }
+        let state_offset = (word >> bit_idx) & ((1 << node.bits_to_read) - 1);
+        bit_idx += node.bits_to_read;
+        state_idx = node.next_state_idx_base + state_offset;
+      }
+    }
+    reader.loaded_byte_idx = byte_idx;
+    reader.bits_past_ptr = bit_idx;
+    self.state.ans_decoder.state_idx = state_idx;
+    // for i in 0..batch_size {
+    //   unsafe { *self.state.token_scratch.get_unchecked_mut(i) = self.state.ans_decoder.unchecked_decode(reader); }
+    // }
+    // for token in self.state.token_scratch.iter_mut().take(batch_size) {
+    //   *token = self.state.ans_decoder.unchecked_decode(reader);
+    // }
+  }
+
+  #[inline(never)]
+  fn lookup(
+    &mut self,
+    infos: &mut [BinDecompressionInfo<U>],
+  ) {
+    assert!(self.state.token_scratch.len() >= infos.len());
+    for (i, info) in infos.iter_mut().enumerate() {
+      *info = self.infos[self.state.token_scratch[i] as usize];
+    }
+  }
+
   // #[inline(never)]
-  // fn unchecked_decompress_ans_tokens(
+  // fn unchecked_decompress_ans(
   //   &mut self,
   //   reader: &mut BitReader,
-  //   batch_size: usize,
+  //   dst: &mut[U],
+  //   bit_idx_dst: &mut[(Bitlen, Bitlen)],
+  //   // gcds: &mut[U],
   // ) {
-  //   assert!(batch_size <= FULL_BATCH_SIZE);
-  //   for token in self.state.token_scratch.iter_mut().take(batch_size) {
-  //     *token = self.state.ans_decoder.unchecked_decode(reader);
+  //   let mut bit_idx = 0;
+  //   for (x, offset_len) in dst.iter_mut().zip(bit_idx_dst.iter_mut()) {
+  //     let info = &self.infos[self.state.ans_decoder.unchecked_decode(reader) as usize];
+  //     *x = info.lower;
+  //     *offset_len = (bit_idx, info.offset_bits);
+  //     bit_idx += info.offset_bits;
   //   }
   // }
 
-  // #[inline(never)]
-  // fn lookup(
-  //   &mut self,
-  //   infos: &mut [BinDecompressionInfo<U>],
-  // ) {
-  //   assert!(self.state.token_scratch.len() >= infos.len());
-  //   for (i, info) in infos.iter_mut().enumerate() {
-  //     *info = self.infos[self.state.token_scratch[i] as usize];
-  //   }
-  // }
-  //
-  #[inline(never)]
-  fn unchecked_decompress_ans(
-    &mut self,
-    reader: &mut BitReader,
-    dst: &mut[U],
-    bit_idx_dst: &mut[(Bitlen, Bitlen)],
-    // gcds: &mut[U],
-  ) {
-    let mut bit_idx = 0;
-    for (x, offset_len) in dst.iter_mut().zip(bit_idx_dst.iter_mut()) {
-      let info = &self.infos[self.state.ans_decoder.unchecked_decode(reader) as usize];
-      *x = info.lower;
-      *offset_len = (bit_idx, info.offset_bits);
-      bit_idx += info.offset_bits;
-    }
-  }
-
-  #[inline(never)]
-  fn decompress_ans(
-    &mut self,
-    reader: &mut BitReader,
-    dst: &mut[U],
-    bit_offset_lens: &mut[(Bitlen, Bitlen)],
-    // gcds: &mut[U],
-  ) -> PcoResult<()> {
-    let mut bit_idx = 0;
-    for (x, offset_len) in dst.iter_mut().zip(bit_offset_lens.iter_mut()) {
-      let info = &self.infos[self.state.ans_decoder.decode(reader)? as usize];
-      *x = info.lower;
-      *offset_len = (bit_idx, info.offset_bits);
-      bit_idx += info.offset_bits;
-    }
-    Ok(())
-  }
   // #[inline(never)]
   // fn decompress_ans(
   //   &mut self,
   //   reader: &mut BitReader,
-  //   infos: &mut [BinDecompressionInfo<U>],
+  //   dst: &mut[U],
+  //   bit_offset_lens: &mut[(Bitlen, Bitlen)],
+  //   // gcds: &mut[U],
   // ) -> PcoResult<()> {
-  //   for info in infos.iter_mut() {
-  //     *info = self.infos[self.state.ans_decoder.decode(reader)? as usize];
+  //   let mut bit_idx = 0;
+  //   for (x, offset_len) in dst.iter_mut().zip(bit_offset_lens.iter_mut()) {
+  //     let info = &self.infos[self.state.ans_decoder.decode(reader)? as usize];
+  //     *x = info.lower;
+  //     *offset_len = (bit_idx, info.offset_bits);
+  //     bit_idx += info.offset_bits;
   //   }
   //   Ok(())
   // }
+  #[inline(never)]
+  fn decompress_ans(
+    &mut self,
+    reader: &mut BitReader,
+    infos: &mut [BinDecompressionInfo<U>],
+  ) -> PcoResult<()> {
+    for info in infos.iter_mut() {
+      *info = self.infos[self.state.ans_decoder.decode(reader)? as usize];
+    }
+    Ok(())
+  }
 
   #[inline(never)]
   fn unchecked_decompress_offsets(
     &mut self,
     reader: &mut BitReader,
-    bit_offset_lens: &[(Bitlen, Bitlen)],
-    // infos: &[BinDecompressionInfo<U>],
+    // bit_offset_lens: &[(Bitlen, Bitlen)],
+    infos: &[BinDecompressionInfo<U>],
     dst: &mut [U],
   ) {
-    assert_eq!(bit_offset_lens.len(), dst.len());
-    let base_bit_idx = reader.bit_idx();
-    for (&(bit_offset, bit_len), x) in bit_offset_lens.iter().zip(dst.iter_mut()) {
-      *x += reader.unchecked_peek_uint(base_bit_idx + bit_offset as usize, bit_len);
-    }
-    let &(final_bit_offset, final_bit_len) = bit_offset_lens.last().unwrap();
-    reader.seek_to(base_bit_idx + (final_bit_offset + final_bit_len) as usize);
-    // assert!(dst.len() <= infos.len());
-    // for i in 0..dst.len() {
-    //   dst[i] = reader.unchecked_read_uint::<U>(infos[i].offset_bits);
+    // assert_eq!(bit_offset_lens.len(), dst.len());
+    // let base_bit_idx = reader.bit_idx();
+    // for (&(bit_offset, bit_len), x) in bit_offset_lens.iter().zip(dst.iter_mut()) {
+    //   *x += reader.unchecked_peek_uint(base_bit_idx + bit_offset as usize, bit_len);
     // }
+    // let &(final_bit_offset, final_bit_len) = bit_offset_lens.last().unwrap();
+    // reader.seek_to(base_bit_idx + (final_bit_offset + final_bit_len) as usize);
+    assert!(dst.len() <= infos.len());
+    for i in 0..dst.len() {
+      dst[i] = reader.unchecked_read_uint::<U>(infos[i].offset_bits);
+    }
   }
 
   #[inline(never)]
   fn decompress_offsets(
     &mut self,
     reader: &mut BitReader,
-    bit_offset_lens: &[(Bitlen, Bitlen)],
-    // infos: &[BinDecompressionInfo<U>],
+    // bit_offset_lens: &[(Bitlen, Bitlen)],
+    infos: &[BinDecompressionInfo<U>],
     dst: &mut [U],
   ) -> PcoResult<()> {
-    // for i in 0..dst.len() {
-    //   dst[i] = reader.read_uint::<U>(infos[i].offset_bits)?;
-    // }
-    let base_bit_idx = reader.bit_idx();
-    for (&(bit_offset, bit_len), x) in bit_offset_lens.iter().zip(dst.iter_mut()) {
-      *x += reader.peek_uint(base_bit_idx + bit_offset as usize, bit_len)?;
+    for i in 0..dst.len() {
+      dst[i] = reader.read_uint::<U>(infos[i].offset_bits)?;
     }
-    let &(final_bit_offset, final_bit_len) = bit_offset_lens.last().unwrap();
-    reader.seek_to(base_bit_idx + (final_bit_offset + final_bit_len) as usize);
+    // let base_bit_idx = reader.bit_idx();
+    // for (&(bit_offset, bit_len), x) in bit_offset_lens.iter().zip(dst.iter_mut()) {
+    //   *x += reader.peek_uint(base_bit_idx + bit_offset as usize, bit_len)?;
+    // }
+    // let &(final_bit_offset, final_bit_len) = bit_offset_lens.last().unwrap();
+    // reader.seek_to(base_bit_idx + (final_bit_offset + final_bit_len) as usize);
     Ok(())
   }
 
@@ -233,37 +252,40 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let batch_size = dst.len();
     assert!(batch_size <= FULL_BATCH_SIZE);
 
-    // let mut bin_infos: Vec<BinDecompressionInfo<U>> = unsafe {
-    //   let mut v = Vec::with_capacity(batch_size);
-    //   v.set_len(batch_size);
-    //   v
-    // };
-    // assert!(dst.len() <= bin_infos.len());
-    let mut bit_idxs = unsafe {
+    let mut bin_infos: Vec<BinDecompressionInfo<U>> = unsafe {
       let mut v = Vec::with_capacity(batch_size);
       v.set_len(batch_size);
       v
     };
+    assert!(dst.len() <= bin_infos.len());
+    // let mut bit_idxs = unsafe {
+    //   let mut v = Vec::with_capacity(batch_size);
+    //   v.set_len(batch_size);
+    //   v
+    // };
     // as long as there's enough compressed data available, we don't need checked operations
-    if self.max_bits_per_ans as usize * batch_size <= reader.bits_remaining() {
-      self.unchecked_decompress_ans(reader, dst, &mut bit_idxs);
-      // self.unchecked_decompress_ans_tokens(reader, batch_size);
-      // self.lookup(&mut bin_infos);
+    if batch_size == FULL_BATCH_SIZE && self.max_bits_per_ans as usize * FULL_BATCH_SIZE <= reader.bits_remaining() {
+      // self.unchecked_decompress_ans(reader, dst, &mut bit_idxs);
+      self.unchecked_decompress_ans_tokens(reader);
+      self.lookup(&mut bin_infos);
     } else {
-      self.decompress_ans(reader, dst, &mut bit_idxs)?;
+      // self.decompress_ans(reader, dst, &mut bit_idxs)?;
+      self.decompress_ans(reader, &mut bin_infos)?;
     }
 
     if self.max_bits_per_offset as usize * batch_size <= reader.bits_remaining() {
-      self.unchecked_decompress_offsets(reader, &bit_idxs, dst);
+      // self.unchecked_decompress_offsets(reader, &bit_idxs, dst);
+      self.unchecked_decompress_offsets(reader, &bin_infos, dst);
     } else {
-      self.decompress_offsets(reader, &bit_idxs, dst)?;
+      // self.decompress_offsets(reader, &bit_idxs, dst)?;
+      self.decompress_offsets(reader, &bin_infos, dst)?;
     }
 
-    // if self.needs_gcd {
-    //   self.multiply_by_gcds(&bin_infos, dst);
-    // }
-    //
-    // self.add_offsets(&bin_infos, dst);
+    if self.needs_gcd {
+      self.multiply_by_gcds(&bin_infos, dst);
+    }
+
+    self.add_offsets(&bin_infos, dst);
 
     Ok(())
   }

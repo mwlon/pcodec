@@ -8,17 +8,19 @@ use crate::errors::PcoResult;
 use crate::ChunkLatentMetadata;
 
 #[derive(Clone, Debug)]
-struct Node {
-  token: Token,
-  next_state_idx_base: usize,
-  bits_to_read: Bitlen,
+pub struct Node {
+  pub token: Token,
+  pub next_state_idx_base: usize,
+  pub bits_to_read: Bitlen,
 }
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
+  // immutable
   table_size: usize,
-  nodes: Vec<Node>,
-  state_idx: usize,
+  pub nodes: Vec<Node>,
+  // mutable
+  pub state_idx: usize,
 }
 
 impl Decoder {
@@ -62,12 +64,12 @@ impl Decoder {
     Ok(Self::new(&spec, final_state))
   }
 
-  #[inline]
-  pub fn unchecked_decode(&mut self, reader: &mut BitReader) -> Token {
-    let node = &self.nodes[self.state_idx];
-    self.state_idx = node.next_state_idx_base + reader.unchecked_read_small(node.bits_to_read);
-    node.token
-  }
+  // #[inline]
+  // pub fn unchecked_decode(&mut self, reader: &mut BitReader) -> Token {
+  //   let node = unsafe { self.nodes.get_unchecked(self.state_idx) };
+  //   self.state_idx = node.next_state_idx_base + reader.unchecked_read_small(node.bits_to_read);
+  //   node.token
+  // }
 
   pub fn decode(&mut self, reader: &mut BitReader) -> PcoResult<Token> {
     let node = &self.nodes[self.state_idx];
