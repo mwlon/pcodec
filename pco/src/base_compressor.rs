@@ -367,7 +367,7 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
   latent_configs: &mut [LatentConfig<U>],
   src: &mut LatentSrc<U>,
 ) -> PcoResult<DecomposedSrc<U>> {
-  let empty_decomposed_latents = |n, _ans_size_log| {
+  let empty_decomposed_latents = |n| {
     let ans_final_state_idxs = [0; ANS_INTERLEAVING];
     DecomposedLatents {
       ans_vals: empty_vec(n),
@@ -380,13 +380,13 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
 
   let mut res = DecomposedSrc {
     page_n: src.page_n,
-    decomposed_latents: Vec::with_capacity(MAX_N_LATENTS),
+    decomposed_latents: Vec::new(),
   };
   for (latent_idx, config) in latent_configs.iter_mut().enumerate() {
-    let latents = src.latents(latent_idx);
+    let latents = &src.latents[latent_idx];
     let LatentConfig { table, encoder, .. } = config;
     let mut states = [encoder.default_state(); ANS_INTERLEAVING];
-    let mut decomposed_latents = empty_decomposed_latents(latents.len(), encoder.size_log());
+    let mut decomposed_latents = empty_decomposed_latents(latents.len());
     for (i, &u) in latents.iter().enumerate().rev() {
       let info = table.search(u)?;
       let j = i % ANS_INTERLEAVING;
@@ -433,6 +433,7 @@ fn write_decomposeds<U: UnsignedLike>(
   src: DecomposedSrc<U>,
   writer: &mut BitWriter,
 ) -> PcoResult<()> {
+  // TODO make this more SIMD like LatentBatchDecompressor::unchecked_decompress_offsets
   let mut batch_start = 0;
   while batch_start < src.page_n {
     let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_n);
@@ -571,7 +572,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     match naive_mode {
       Mode::Classic | Mode::Gcd => LatentSrc::new(
         nums.len(),
-        [nums.iter().map(|x| x.to_unsigned()).collect(), vec![]],
+        vec![nums.iter().map(|x| x.to_unsigned()).collect()],
       ),
       Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
         float_mult_utils::split_latents(nums, base, inv_base)
@@ -619,7 +620,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     for latent_idx in 0..n_latents {
       let delta_order = naive_mode.latent_delta_order(latent_idx, delta_order);
       let delta_momentss = delta::encode_in_place(
-        src.latents_mut(latent_idx),
+        &mut src.latents[latent_idx],
         delta_order,
         &page_idxs,
       );
@@ -632,7 +633,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       };
 
       let trained = train_mode_and_infos(
-        src.latents(latent_idx).to_vec(),
+        src.latents[latent_idx].to_vec(),
         comp_level,
         naive_mode,
         n,

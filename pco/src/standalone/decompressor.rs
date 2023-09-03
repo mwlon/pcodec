@@ -232,16 +232,17 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
           Some((progress, dest)) => {
             state.page_decompressor = Some(pd);
             Ok(apply_nums(state, dest, progress))
-          },
-          None => Ok(None)
+          }
+          None => Ok(None),
         }
       }),
       Step::MidPage => self.0.with_reader(|reader, state, _config| {
-        match next_nums(reader, state.page_decompressor.as_mut().unwrap())? {
-          Some((progress, dest)) => {
-            Ok(apply_nums(state, dest, progress))
-          },
-          None => Ok(None)
+        match next_nums(
+          reader,
+          state.page_decompressor.as_mut().unwrap(),
+        )? {
+          Some((progress, dest)) => Ok(apply_nums(state, dest, progress)),
+          None => Ok(None),
         }
       }),
       Step::Terminated => Ok(None),

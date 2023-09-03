@@ -49,7 +49,7 @@ pub fn split_latents<T: NumberLike>(
     delta::toggle_center_in_place(&mut adjustments[base_i..base_i + chunk.len()]);
     base_i += ARITH_CHUNK_SIZE;
   }
-  LatentSrc::new(nums.len(), [unsigneds, adjustments])
+  LatentSrc::new(nums.len(), vec![unsigneds, adjustments])
 }
 
 const MIN_SAMPLE: usize = 10;

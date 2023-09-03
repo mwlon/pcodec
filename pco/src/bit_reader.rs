@@ -9,6 +9,8 @@ use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
 use crate::errors::{PcoError, PcoResult};
 
+// TODO now that we're doing batching, this whole module is a bit schizophrenic
+// and could be simplified.
 pub trait ReadableUint:
   Add<Output = Self>
   + BitAnd<Output = Self>

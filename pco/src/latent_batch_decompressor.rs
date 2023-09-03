@@ -231,7 +231,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       return Ok(());
     }
 
-    assert!(dst.len() <= FULL_BATCH_SIZE);
     let batch_size = dst.len();
     assert!(batch_size <= FULL_BATCH_SIZE);
 

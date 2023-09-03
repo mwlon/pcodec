@@ -40,7 +40,6 @@ pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 
 // other
-pub const MAX_N_LATENTS: usize = 2;
 pub const FULL_BATCH_SIZE: usize = 256;
 pub const ANS_INTERLEAVING: usize = 4;
 
