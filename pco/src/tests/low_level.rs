@@ -5,7 +5,6 @@ use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{Compressor, DecompressedItem, Decompressor};
 use crate::CompressorConfig;
 
-// TODO this test is pretty lame now that we do batching
 #[test]
 fn test_low_level_short() -> PcoResult<()> {
   let nums = vec![vec![0], vec![10, 11], vec![20, 21, 22]];
@@ -14,7 +13,7 @@ fn test_low_level_short() -> PcoResult<()> {
 
 #[test]
 fn test_low_level_long() -> PcoResult<()> {
-  let nums = vec![(0..100).collect::<Vec<_>>()];
+  let nums = vec![(0..777).collect::<Vec<_>>()];
   assert_lowest_level_behavior(nums)
 }
 

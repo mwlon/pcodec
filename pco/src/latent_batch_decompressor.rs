@@ -76,7 +76,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
         .bins
         .iter()
         .map(|bin| bin.weight.ilog2() as Bitlen)
-        .max()
+        .min()
         .unwrap_or_default();
     let max_bits_per_offset = chunk_latent_meta
       .bins
@@ -235,17 +235,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let batch_size = dst.len();
     assert!(batch_size <= FULL_BATCH_SIZE);
 
-    // let mut bin_infos: Vec<BinDecompressionInfo<U>> = unsafe {
-    //   let mut v = Vec::with_capacity(batch_size);
-    //   v.set_len(batch_size);
-    //   v
-    // };
-    // assert!(dst.len() <= bin_infos.len());
-    // let mut bit_idxs = unsafe {
-    //   let mut v = Vec::with_capacity(batch_size);
-    //   v.set_len(batch_size);
-    //   v
-    // };
     // as long as there's enough compressed data available, we don't need checked operations
     let is_full_batch = batch_size == FULL_BATCH_SIZE;
     if is_full_batch && self.max_bits_per_ans as usize * FULL_BATCH_SIZE <= reader.bits_remaining()
