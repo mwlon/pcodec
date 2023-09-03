@@ -1,7 +1,9 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
+use std::mem;
+use std::mem::MaybeUninit;
 
-use crate::ans::AnsState;
+use crate::ans::{AnsState, Encoder};
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::{ChunkLatentMetadata, ChunkMetadata, PageLatentMetadata, PageMetadata};
@@ -369,13 +371,13 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
   src: &mut LatentSrc<U>,
 ) -> PcoResult<DecomposedSrc<U>> {
   let empty_decomposed_latents = |n, ans_size_log| {
-    let ans_final_state = (1 as AnsState) << ans_size_log;
+    let ans_final_state_idxs = [0; ANS_INTERLEAVING];
     DecomposedLatents {
       ans_vals: empty_vec(n),
       ans_bits: empty_vec(n),
       offsets: empty_vec(n),
       offset_bits: empty_vec(n),
-      ans_final_state,
+      ans_final_state_idxs,
     }
   };
 
@@ -385,17 +387,17 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
   };
   for (latent_idx, config) in latent_configs.iter_mut().enumerate() {
     let latents = src.latents(latent_idx);
-    let LatentConfig { table, encoder, .. } = config;
-    let mut decomposed_latents = empty_decomposed_latents(latents.len(), encoder.size_log());
+    let LatentConfig { table, encoders, .. } = config;
+    let mut decomposed_latents = empty_decomposed_latents(latents.len(), encoders[0].size_log());
     for (i, &u) in latents.iter().enumerate().rev() {
       let info = table.search(u)?;
-      let (ans_word, ans_bits) = encoder.encode(info.token);
+      let (ans_word, ans_bits) = encoders[i % ANS_INTERLEAVING].encode(info.token);
       decomposed_latents.ans_vals[i] = ans_word;
       decomposed_latents.ans_bits[i] = ans_bits;
       decomposed_latents.offsets[i] = M::calc_offset(u, info); // TODO experiment with SIMD?
       decomposed_latents.offset_bits[i] = info.offset_bits;
     }
-    decomposed_latents.ans_final_state = encoder.state();
+    decomposed_latents.ans_final_state_idxs = encoders.clone().map(|encoder| encoder.state());
     res.decomposed_latents.push(decomposed_latents);
   }
 
@@ -510,7 +512,7 @@ impl<U: UnsignedLike> State<U> {
 struct LatentConfig<U: UnsignedLike> {
   table: CompressionTable<U>,
   delta_momentss: Vec<DeltaMoments<U>>,
-  encoder: ans::Encoder,
+  encoders: [ans::Encoder; ANS_INTERLEAVING],
 }
 
 #[derive(Clone, Debug)]
@@ -637,7 +639,11 @@ impl<T: NumberLike> BaseCompressor<T> {
       let bins = bins_from_compression_infos(&trained.infos);
 
       let table = CompressionTable::from(trained.infos);
-      let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
+      let mut encoders: [MaybeUninit<Encoder>; ANS_INTERLEAVING] = unsafe { MaybeUninit::uninit().assume_init() };
+      for encoder in encoders.iter_mut() {
+        encoder.write(Encoder::from_bins(trained.ans_size_log, &bins)?);
+      }
+      let encoders = unsafe {mem::transmute::<_, [Encoder; ANS_INTERLEAVING]>(encoders)};
 
       latent_metas.push(ChunkLatentMetadata {
         bins,
@@ -646,7 +652,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       latent_configs.push(LatentConfig {
         table,
         delta_momentss,
-        encoder,
+        encoders,
       });
     }
 
@@ -693,14 +699,14 @@ impl<T: NumberLike> BaseCompressor<T> {
       let delta_moments = info.page_moments(latent_idx).clone();
 
       // write the final ANS state, moving it down the range [0, table_size)
-      let ans_final_state = decomposeds
+      let ans_final_state_idxs = decomposeds
         .decomposed_latents
         .get(latent_idx)
-        .map(|decomposed| decomposed.ans_final_state)
-        .unwrap_or(1 as AnsState);
+        .map(|decomposed| decomposed.ans_final_state_idxs)
+        .unwrap_or([0; ANS_INTERLEAVING]);
       latent_metas.push(PageLatentMetadata {
         delta_moments,
-        ans_final_state,
+        ans_final_state_idxs,
       });
     }
     let page_meta = PageMetadata {
@@ -709,7 +715,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     let ans_size_logs = info
       .latent_configs
       .iter()
-      .map(|config| config.encoder.size_log());
+      .map(|config| config.encoders[0].size_log());
     page_meta.write_to(ans_size_logs, &mut self.writer);
 
     write_decomposeds(decomposeds, &mut self.writer)?;

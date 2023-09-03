@@ -53,7 +53,7 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
 #[derive(Clone, Debug)]
 pub struct PageLatentMetadata<U: UnsignedLike> {
   pub delta_moments: DeltaMoments<U>,
-  pub ans_final_state: AnsState,
+  pub ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
 impl<U: UnsignedLike> PageLatentMetadata<U> {
@@ -61,10 +61,12 @@ impl<U: UnsignedLike> PageLatentMetadata<U> {
     self.delta_moments.write_to(writer);
 
     // write the final ANS state, moving it down the range [0, table_size)
-    writer.write_diff(
-      self.ans_final_state - (1 << ans_size_log),
-      ans_size_log,
-    );
+    for state_idx in self.ans_final_state_idxs {
+      writer.write_diff(
+        state_idx,
+        ans_size_log,
+      );
+    }
   }
 
   pub fn parse_from(
@@ -73,10 +75,13 @@ impl<U: UnsignedLike> PageLatentMetadata<U> {
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
     let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
-    let ans_final_state = (1 << ans_size_log) + reader.read_uint::<AnsState>(ans_size_log)?;
+    let mut ans_final_state_idxs = [0; ANS_INTERLEAVING];
+    for i in 0..ANS_INTERLEAVING {
+      ans_final_state_idxs[i] = reader.read_uint::<AnsState>(ans_size_log)?;
+    }
     Ok(Self {
       delta_moments,
-      ans_final_state,
+      ans_final_state_idxs,
     })
   }
 }

@@ -16,15 +16,12 @@ pub struct Node {
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
-  // immutable
   table_size: usize,
-  pub nodes: Vec<Node>,
-  // mutable
-  pub state_idx: usize,
+  nodes: Vec<Node>,
 }
 
 impl Decoder {
-  pub fn new(spec: &Spec, final_state: AnsState) -> Self {
+  pub fn new(spec: &Spec) -> Self {
     let table_size = spec.table_size();
     let mut nodes = Vec::with_capacity(table_size);
     // x_s from Jarek Duda's paper
@@ -47,13 +44,11 @@ impl Decoder {
     Self {
       table_size,
       nodes,
-      state_idx: final_state as usize - table_size,
     }
   }
 
   pub fn from_latent_meta<U: UnsignedLike>(
     latent_meta: &ChunkLatentMetadata<U>,
-    final_state: AnsState,
   ) -> PcoResult<Self> {
     let weights = latent_meta
       .bins
@@ -61,7 +56,12 @@ impl Decoder {
       .map(|bin| bin.weight)
       .collect::<Vec<_>>();
     let spec = Spec::from_weights(latent_meta.ans_size_log, weights)?;
-    Ok(Self::new(&spec, final_state))
+    Ok(Self::new(&spec))
+  }
+
+  #[inline]
+  pub fn get_node(&self, state_idx: usize) -> &Node {
+    unsafe { self.nodes.get_unchecked(state_idx) }
   }
 
   // #[inline]
@@ -71,17 +71,17 @@ impl Decoder {
   //   node.token
   // }
 
-  pub fn decode(&mut self, reader: &mut BitReader) -> PcoResult<Token> {
-    let node = &self.nodes[self.state_idx];
-    self.state_idx = node.next_state_idx_base + reader.read_small(node.bits_to_read)?;
-    Ok(node.token)
-  }
+  // pub fn decode(&mut self, reader: &mut BitReader) -> PcoResult<Token> {
+  //   let node = &self.nodes[self.state_idx];
+  //   self.state_idx = node.next_state_idx_base + reader.read_small(node.bits_to_read)?;
+  //   Ok(node.token)
+  // }
 
-  pub fn state(&self) -> AnsState {
-    (self.state_idx + self.table_size) as AnsState
-  }
-
-  pub fn recover(&mut self, state: AnsState) {
-    self.state_idx = state as usize - self.table_size;
-  }
+  // pub fn state_idx(&self) -> AnsState {
+  //   self.state_idx as AnsState
+  // }
+  //
+  // pub fn recover(&mut self, state_idx: AnsState) {
+  //   self.state_idx = state_idx as usize;
+  // }
 }

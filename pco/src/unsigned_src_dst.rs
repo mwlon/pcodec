@@ -1,6 +1,6 @@
 use crate::ans::AnsState;
 
-use crate::constants::{Bitlen, MAX_N_LATENTS};
+use crate::constants::{ANS_INTERLEAVING, Bitlen, MAX_N_LATENTS};
 use crate::data_types::UnsignedLike;
 
 #[derive(Clone, Debug)]
@@ -36,7 +36,7 @@ pub struct DecomposedLatents<U: UnsignedLike> {
   pub ans_bits: Vec<Bitlen>,
   pub offsets: Vec<U>,
   pub offset_bits: Vec<Bitlen>,
-  pub ans_final_state: AnsState,
+  pub ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
 #[derive(Clone, Debug)]
