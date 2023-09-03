@@ -1,7 +1,7 @@
+use crate::ans::AnsState;
 use std::cmp::min;
 use std::fmt::{Debug, Display};
 use std::ops::*;
-use crate::ans::AnsState;
 
 use crate::bit_words::PaddedBytes;
 use crate::bits;
@@ -98,8 +98,7 @@ impl<'a> BitReader<'a> {
     } else {
       Err(PcoError::invalid_argument(format!(
         "cannot get aligned byte index on misaligned bit reader (byte {} + {} bits)",
-        self.loaded_byte_idx,
-        self.bits_past_ptr,
+        self.loaded_byte_idx, self.bits_past_ptr,
       )))
     }
   }
@@ -245,7 +244,8 @@ impl<'a> BitReader<'a> {
   #[inline]
   pub fn unchecked_read_small(&mut self, n: Bitlen) -> AnsState {
     self.refill();
-    let unmasked = <AnsState as ReadableUint>::from_word(self.unchecked_word() >> self.bits_past_ptr);
+    let unmasked =
+      <AnsState as ReadableUint>::from_word(self.unchecked_word() >> self.bits_past_ptr);
     self.consume(n);
     unmasked & ((1 << n) - 1)
   }

@@ -1,9 +1,6 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
 
-
-
-
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::{ChunkLatentMetadata, ChunkMetadata, PageLatentMetadata, PageMetadata};

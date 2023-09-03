@@ -62,10 +62,7 @@ impl<U: UnsignedLike> PageLatentMetadata<U> {
 
     // write the final ANS state, moving it down the range [0, table_size)
     for state_idx in self.ans_final_state_idxs {
-      writer.write_diff(
-        state_idx,
-        ans_size_log,
-      );
+      writer.write_diff(state_idx, ans_size_log);
     }
   }
 

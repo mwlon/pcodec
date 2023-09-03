@@ -1,6 +1,6 @@
 use crate::ans::AnsState;
 
-use crate::constants::{ANS_INTERLEAVING, Bitlen, MAX_N_LATENTS};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, MAX_N_LATENTS};
 use crate::data_types::UnsignedLike;
 
 #[derive(Clone, Debug)]

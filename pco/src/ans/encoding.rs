@@ -83,7 +83,10 @@ impl Encoder {
     } else {
       token_info.min_renorm_bits
     };
-    (token_info.next_state_for(state >> renorm_bits), renorm_bits)
+    (
+      token_info.next_state_for(state >> renorm_bits),
+      renorm_bits,
+    )
   }
 
   pub fn size_log(&self) -> Bitlen {

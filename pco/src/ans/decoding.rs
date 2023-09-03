@@ -1,7 +1,7 @@
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
 
-use crate::constants::{Bitlen};
+use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 
@@ -40,9 +40,7 @@ impl Decoder {
       token_x_s[token as usize] += 1;
     }
 
-    Self {
-      nodes,
-    }
+    Self { nodes }
   }
 
   pub fn from_latent_meta<U: UnsignedLike>(
