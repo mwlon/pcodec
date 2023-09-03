@@ -24,7 +24,6 @@ impl TokenInfo {
 pub struct Encoder {
   token_infos: Vec<TokenInfo>,
   size_log: Bitlen,
-  state: AnsState, // in range from [l, 2l) depending on last token weight
 }
 
 impl Encoder {
@@ -67,35 +66,32 @@ impl Encoder {
       // We choose the initial state from [table_size, 2 * table_size)
       // to be the minimum as this tends to require fewer bits to encode
       // the first token.
-      state: table_size as AnsState,
       token_infos,
       size_log: spec.size_log,
     }
   }
 
-  // Returns the value to write and how many bits it has.
+  // Returns the new state, and how many bits of the existing state to write.
   // The value of those bits may contain larger significant bits that must be
   // ignored.
   // We don't write to a BitWriter directly because ANS operates in a LIFO
   // manner. We need to write these in reverse order.
-  pub fn encode(&mut self, token: Token) -> (AnsState, Bitlen) {
+  pub fn encode(&self, state: AnsState, token: Token) -> (AnsState, Bitlen) {
     let token_info = &self.token_infos[token as usize];
-    let renorm_bits = if self.state >= token_info.renorm_bit_cutoff {
+    let renorm_bits = if state >= token_info.renorm_bit_cutoff {
       token_info.min_renorm_bits + 1
     } else {
       token_info.min_renorm_bits
     };
-    let value = self.state;
-    self.state = token_info.next_state_for(self.state >> renorm_bits);
-    (value, renorm_bits)
-  }
-
-  pub fn state(&self) -> AnsState {
-    self.state
+    (token_info.next_state_for(state >> renorm_bits), renorm_bits)
   }
 
   pub fn size_log(&self) -> Bitlen {
     self.size_log
+  }
+
+  pub fn default_state(&self) -> AnsState {
+    1 << self.size_log
   }
 }
 

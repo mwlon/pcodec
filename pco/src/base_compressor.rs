@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::mem;
 use std::mem::MaybeUninit;
 
-use crate::ans::{AnsState, Encoder};
+use crate::ans::{AnsState};
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::{ChunkLatentMetadata, ChunkMetadata, PageLatentMetadata, PageMetadata};
@@ -377,7 +377,7 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
       ans_bits: empty_vec(n),
       offsets: empty_vec(n),
       offset_bits: empty_vec(n),
-      ans_final_state_idxs,
+      ans_final_states: ans_final_state_idxs,
     }
   };
 
@@ -387,17 +387,21 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
   };
   for (latent_idx, config) in latent_configs.iter_mut().enumerate() {
     let latents = src.latents(latent_idx);
-    let LatentConfig { table, encoders, .. } = config;
-    let mut decomposed_latents = empty_decomposed_latents(latents.len(), encoders[0].size_log());
+    let LatentConfig { table, encoder, .. } = config;
+    let mut states = [encoder.default_state(); ANS_INTERLEAVING];
+    let mut decomposed_latents = empty_decomposed_latents(latents.len(), encoder.size_log());
     for (i, &u) in latents.iter().enumerate().rev() {
       let info = table.search(u)?;
-      let (ans_word, ans_bits) = encoders[i % ANS_INTERLEAVING].encode(info.token);
-      decomposed_latents.ans_vals[i] = ans_word;
+      let j = i % ANS_INTERLEAVING;
+      let state = states[j];
+      let (new_state, ans_bits) = encoder.encode(state, info.token);
+      decomposed_latents.ans_vals[i] = state;
       decomposed_latents.ans_bits[i] = ans_bits;
       decomposed_latents.offsets[i] = M::calc_offset(u, info); // TODO experiment with SIMD?
       decomposed_latents.offset_bits[i] = info.offset_bits;
+      states[j] = new_state;
     }
-    decomposed_latents.ans_final_state_idxs = encoders.clone().map(|encoder| encoder.state());
+    decomposed_latents.ans_final_states = states;
     res.decomposed_latents.push(decomposed_latents);
   }
 
@@ -512,7 +516,7 @@ impl<U: UnsignedLike> State<U> {
 struct LatentConfig<U: UnsignedLike> {
   table: CompressionTable<U>,
   delta_momentss: Vec<DeltaMoments<U>>,
-  encoders: [ans::Encoder; ANS_INTERLEAVING],
+  encoder: ans::Encoder,
 }
 
 #[derive(Clone, Debug)]
@@ -639,11 +643,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       let bins = bins_from_compression_infos(&trained.infos);
 
       let table = CompressionTable::from(trained.infos);
-      let mut encoders: [MaybeUninit<Encoder>; ANS_INTERLEAVING] = unsafe { MaybeUninit::uninit().assume_init() };
-      for encoder in encoders.iter_mut() {
-        encoder.write(Encoder::from_bins(trained.ans_size_log, &bins)?);
-      }
-      let encoders = unsafe {mem::transmute::<_, [Encoder; ANS_INTERLEAVING]>(encoders)};
+      let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
 
       latent_metas.push(ChunkLatentMetadata {
         bins,
@@ -652,7 +652,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       latent_configs.push(LatentConfig {
         table,
         delta_momentss,
-        encoders,
+        encoder,
       });
     }
 
@@ -702,7 +702,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       let ans_final_state_idxs = decomposeds
         .decomposed_latents
         .get(latent_idx)
-        .map(|decomposed| decomposed.ans_final_state_idxs)
+        .map(|decomposed| decomposed.ans_final_states)
         .unwrap_or([0; ANS_INTERLEAVING]);
       latent_metas.push(PageLatentMetadata {
         delta_moments,
@@ -715,7 +715,7 @@ impl<T: NumberLike> BaseCompressor<T> {
     let ans_size_logs = info
       .latent_configs
       .iter()
-      .map(|config| config.encoders[0].size_log());
+      .map(|config| config.encoder.size_log());
     page_meta.write_to(ans_size_logs, &mut self.writer);
 
     write_decomposeds(decomposeds, &mut self.writer)?;

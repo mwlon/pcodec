@@ -1,6 +1,7 @@
 use std::cmp::min;
 use std::fmt::{Debug, Display};
 use std::ops::*;
+use crate::ans::AnsState;
 
 use crate::bit_words::PaddedBytes;
 use crate::bits;
@@ -19,8 +20,10 @@ pub trait ReadableUint:
   + Display
   + Shl<Bitlen, Output = Self>
   + Shr<Bitlen, Output = Self>
+  + Sub<Output = Self>
 {
   const ZERO: Self;
+  const ONE: Self;
   const MAX: Self;
   const BITS: Bitlen;
   const MAX_EXTRA_WORDS: Bitlen = (Self::BITS + 6) / WORD_BITLEN;
@@ -30,6 +33,7 @@ pub trait ReadableUint:
 
 impl ReadableUint for usize {
   const ZERO: Self = 0;
+  const ONE: Self = 1;
   const MAX: Self = usize::MAX;
   const BITS: Bitlen = WORD_BITLEN;
 
@@ -41,6 +45,7 @@ impl ReadableUint for usize {
 
 impl<U: UnsignedLike> ReadableUint for U {
   const ZERO: Self = <Self as UnsignedLike>::ZERO;
+  const ONE: Self = <Self as UnsignedLike>::ONE;
   const MAX: Self = <Self as UnsignedLike>::MAX;
   const BITS: Bitlen = <Self as UnsignedLike>::BITS;
 
@@ -201,7 +206,7 @@ impl<'a> BitReader<'a> {
     self.read_uint::<Bitlen>(n)
   }
 
-  pub fn read_small(&mut self, n: Bitlen) -> PcoResult<usize> {
+  pub fn read_small(&mut self, n: Bitlen) -> PcoResult<AnsState> {
     self.insufficient_data_check("read_small", n)?;
     Ok(self.unchecked_read_small(n))
   }
@@ -270,9 +275,9 @@ impl<'a> BitReader<'a> {
   }
 
   #[inline]
-  pub fn unchecked_read_small(&mut self, n: Bitlen) -> usize {
+  pub fn unchecked_read_small(&mut self, n: Bitlen) -> AnsState {
     self.refill();
-    let unmasked = <usize as ReadableUint>::from_word(self.unchecked_word() >> self.bits_past_ptr);
+    let unmasked = <AnsState as ReadableUint>::from_word(self.unchecked_word() >> self.bits_past_ptr);
     self.consume(n);
     unmasked & ((1 << n) - 1)
   }

@@ -20,36 +20,45 @@ mod tests {
   use crate::bit_reader::BitReader;
   use crate::bit_words::PaddedBytes;
   use crate::bit_writer::BitWriter;
+  use crate::errors::PcoResult;
 
-  fn assert_recovers(spec: &Spec, tokens: Vec<Token>, expected_byte_len: usize) {
+  fn assert_recovers(spec: &Spec, tokens: Vec<Token>, expected_byte_len: usize) -> PcoResult<()> {
     // ENCODE
-    let mut encoder = Encoder::new(spec);
+    let encoder = Encoder::new(spec);
+    let mut state = encoder.default_state();
     let mut to_write = Vec::new();
     for &token in tokens.iter().rev() {
-      to_write.push(encoder.encode(token));
+      let (new_state, bitlen) = encoder.encode(state, token);
+      to_write.push((state, bitlen));
+      state = new_state;
     }
     let mut writer = BitWriter::default();
     for (word, bitlen) in to_write.into_iter().rev() {
       writer.write_diff(word, bitlen);
     }
-    let final_state = encoder.state();
+    let final_state = state;
+    let table_size = 1 << encoder.size_log();
 
     // DECODE
-    let mut decoder = Decoder::new(spec);
+    let decoder = Decoder::new(spec);
     let bytes = writer.drain_bytes();
     assert_eq!(bytes.len(), expected_byte_len);
     let bit_words = PaddedBytes::from(bytes);
     let mut reader = BitReader::from(&bit_words);
     let mut decoded = Vec::new();
-    for _i in 0..tokens.len() {
-      decoded.push(decoder.unchecked_decode(&mut reader));
+    let mut state_idx = final_state - table_size;
+    for _ in 0..tokens.len() {
+      let node = decoder.get_node(state_idx);
+      decoded.push(node.token);
+      state_idx = node.next_state_idx_base + reader.read_small(node.bits_to_read)?;
     }
 
     assert_eq!(decoded, tokens);
+    Ok(())
   }
 
   #[test]
-  fn ans_encoder_decoder() {
+  fn ans_encoder_decoder() -> PcoResult<()> {
     let spec = Spec {
       size_log: 3,
       state_tokens: vec![0, 1, 2, 0, 1, 2, 0, 1],
@@ -62,7 +71,7 @@ mod tests {
     let tokens = vec![2, 0, 1, 1, 1, 0, 0, 1, 2];
 
     // 9 of these tokens makes ~15 bits or ~2 bytes
-    assert_recovers(&spec, tokens, 2);
+    assert_recovers(&spec, tokens, 2)?;
 
     let mut tokens = Vec::new();
     for _ in 0..200 {
@@ -71,11 +80,12 @@ mod tests {
       tokens.push(2);
     }
     // With 200 each of A, B, C, we should have about 986 / 8 = 123 bytes
-    assert_recovers(&spec, tokens, 125);
+    assert_recovers(&spec, tokens, 125)?;
+    Ok(())
   }
 
   #[test]
-  fn ans_encoder_decoder_sparse() {
+  fn ans_encoder_decoder_sparse() -> PcoResult<()> {
     let spec = Spec {
       size_log: 3,
       state_tokens: vec![0, 0, 0, 0, 0, 0, 0, 1],
@@ -93,6 +103,7 @@ mod tests {
     // each B should cost log2(8) = 3 bits
     // total cost should be about (700 * 0.19 + 100 * 3) / 8 = 55 bytes
     // vs. total cost of huffman would be 1 * 800 / 8 = 100 bytes
-    assert_recovers(&spec, tokens, 50);
+    assert_recovers(&spec, tokens, 50)?;
+    Ok(())
   }
 }

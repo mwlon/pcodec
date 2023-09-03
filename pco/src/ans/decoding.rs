@@ -1,7 +1,7 @@
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
 use crate::bit_reader::BitReader;
-use crate::constants::Bitlen;
+use crate::constants::{ANS_INTERLEAVING, Bitlen};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 
@@ -10,7 +10,7 @@ use crate::ChunkLatentMetadata;
 #[derive(Clone, Debug)]
 pub struct Node {
   pub token: Token,
-  pub next_state_idx_base: usize,
+  pub next_state_idx_base: AnsState,
   pub bits_to_read: Bitlen,
 }
 
@@ -34,7 +34,7 @@ impl Decoder {
       }
       nodes.push(Node {
         token,
-        next_state_idx_base: next_state_base as usize - table_size,
+        next_state_idx_base: next_state_base - table_size as AnsState,
         bits_to_read,
       });
       token_x_s[token as usize] += 1;
@@ -58,28 +58,7 @@ impl Decoder {
   }
 
   #[inline]
-  pub fn get_node(&self, state_idx: usize) -> &Node {
-    unsafe { self.nodes.get_unchecked(state_idx) }
+  pub fn get_node(&self, state_idx: AnsState) -> &Node {
+    unsafe { self.nodes.get_unchecked(state_idx as usize) }
   }
-
-  // #[inline]
-  // pub fn unchecked_decode(&mut self, reader: &mut BitReader) -> Token {
-  //   let node = unsafe { self.nodes.get_unchecked(self.state_idx) };
-  //   self.state_idx = node.next_state_idx_base + reader.unchecked_read_small(node.bits_to_read);
-  //   node.token
-  // }
-
-  // pub fn decode(&mut self, reader: &mut BitReader) -> PcoResult<Token> {
-  //   let node = &self.nodes[self.state_idx];
-  //   self.state_idx = node.next_state_idx_base + reader.read_small(node.bits_to_read)?;
-  //   Ok(node.token)
-  // }
-
-  // pub fn state_idx(&self) -> AnsState {
-  //   self.state_idx as AnsState
-  // }
-  //
-  // pub fn recover(&mut self, state_idx: AnsState) {
-  //   self.state_idx = state_idx as usize;
-  // }
 }

@@ -36,7 +36,7 @@ pub struct DecomposedLatents<U: UnsignedLike> {
   pub ans_bits: Vec<Bitlen>,
   pub offsets: Vec<U>,
   pub offset_bits: Vec<Bitlen>,
-  pub ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
+  pub ans_final_states: [AnsState; ANS_INTERLEAVING],
 }
 
 #[derive(Clone, Debug)]
