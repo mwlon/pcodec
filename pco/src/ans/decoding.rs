@@ -1,7 +1,7 @@
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
-use crate::bit_reader::BitReader;
-use crate::constants::{ANS_INTERLEAVING, Bitlen};
+
+use crate::constants::{Bitlen};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 

@@ -76,8 +76,8 @@ impl<U: UnsignedLike> PageLatentMetadata<U> {
   ) -> PcoResult<Self> {
     let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
     let mut ans_final_state_idxs = [0; ANS_INTERLEAVING];
-    for i in 0..ANS_INTERLEAVING {
-      ans_final_state_idxs[i] = reader.read_uint::<AnsState>(ans_size_log)?;
+    for state in &mut ans_final_state_idxs {
+      *state = reader.read_uint::<AnsState>(ans_size_log)?;
     }
     Ok(Self {
       delta_moments,

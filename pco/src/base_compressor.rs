@@ -1,9 +1,9 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
-use std::mem;
-use std::mem::MaybeUninit;
 
-use crate::ans::{AnsState};
+
+
+
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
 use crate::chunk_metadata::{ChunkLatentMetadata, ChunkMetadata, PageLatentMetadata, PageMetadata};
@@ -370,7 +370,7 @@ fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
   latent_configs: &mut [LatentConfig<U>],
   src: &mut LatentSrc<U>,
 ) -> PcoResult<DecomposedSrc<U>> {
-  let empty_decomposed_latents = |n, ans_size_log| {
+  let empty_decomposed_latents = |n, _ans_size_log| {
     let ans_final_state_idxs = [0; ANS_INTERLEAVING];
     DecomposedLatents {
       ans_vals: empty_vec(n),

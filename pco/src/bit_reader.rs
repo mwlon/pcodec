@@ -149,7 +149,7 @@ impl<'a> BitReader<'a> {
   fn refill(&mut self) {
     self.loaded_byte_idx += (self.bits_past_ptr / 8) as usize;
     // self.buffer = self.unchecked_word_at(self.loaded_byte_idx);
-    self.bits_past_ptr = self.bits_past_ptr % 8;
+    self.bits_past_ptr %= 8;
   }
 
   #[inline]
@@ -191,11 +191,6 @@ impl<'a> BitReader<'a> {
   pub fn read_uint<U: ReadableUint>(&mut self, n: Bitlen) -> PcoResult<U> {
     self.insufficient_data_check("read_uint", n)?;
     Ok(self.unchecked_read_uint::<U>(n))
-  }
-
-  pub fn peek_uint<U: ReadableUint>(&self, bit_idx: usize, n: Bitlen) -> PcoResult<U> {
-    self.insufficient_data_check("peek_uint", n)?;
-    Ok(self.unchecked_peek_uint::<U>(bit_idx, n))
   }
 
   pub fn read_usize(&mut self, n: Bitlen) -> PcoResult<usize> {
@@ -242,33 +237,6 @@ impl<'a> BitReader<'a> {
       res |= U::from_word(self.unchecked_word()) << processed;
       self.consume(min(WORD_BITLEN, n - processed));
       processed += WORD_BITLEN;
-    }
-
-    res & (U::MAX >> (U::BITS - n))
-  }
-
-  pub fn unchecked_peek_uint<U: ReadableUint>(&self, pos: usize, n: Bitlen) -> U {
-    if n == 0 {
-      return U::ZERO;
-    }
-
-    let mut i = pos / 8;
-    let j = (pos as Bitlen) % 8;
-
-    let mut res = U::from_word(self.unchecked_word_at(i) >> j);
-    let mut processed = WORD_BITLEN - j;
-    i += if j == 0 { BYTES_PER_WORD } else { BYTES_PER_WORD - 1};
-
-    // This for loop looks redundant/slow, as if it could just be a while
-    // loop, but its bounds get evaluated at compile time and it actually
-    // speeds this up.
-    for _ in 0..U::MAX_EXTRA_WORDS {
-      if processed >= n {
-        break;
-      }
-      res |= U::from_word(self.unchecked_word_at(i)) << processed;
-      processed += WORD_BITLEN;
-      i += BYTES_PER_WORD;
     }
 
     res & (U::MAX >> (U::BITS - n))

@@ -1,9 +1,9 @@
 use std::cmp::min;
 use std::fmt::Debug;
-use std::mem;
-use std::mem::MaybeUninit;
 
-use crate::ans::{AnsState, Token};
+
+
+use crate::ans::{AnsState};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::PageLatentMetadata;
@@ -29,7 +29,7 @@ pub struct Backup {
 impl<U: UnsignedLike> State<U> {
   fn backup(&self) -> Backup {
     Backup {
-      state_idxs: self.state_idxs.clone(),
+      state_idxs: self.state_idxs,
     }
   }
 
@@ -113,11 +113,12 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
         offset_bits_scratch: [0; FULL_BATCH_SIZE],
         gcds_scratch: [U::ONE; FULL_BATCH_SIZE],
         lowers_scratch: [U::ZERO; FULL_BATCH_SIZE],
-        state_idxs: page_latent_meta.ans_final_state_idxs.clone()
+        state_idxs: page_latent_meta.ans_final_state_idxs,
       },
     })
   }
 
+  #[allow(clippy::needless_range_loop)]
   #[inline(never)]
   fn unchecked_decompress_ans_tokens(
     &mut self,
@@ -126,7 +127,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let mut byte_idx = reader.loaded_byte_idx;
     let mut bit_idx = reader.bits_past_ptr;
     let mut offset_bit_idx = 0;
-    let mut state_idxs = self.state.state_idxs.clone();
+    let mut state_idxs = self.state.state_idxs;
     for base_i in (0..FULL_BATCH_SIZE).step_by(4) {
       byte_idx += bit_idx as usize / 8;
       bit_idx %= 8;
@@ -153,7 +154,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     reader: &mut BitReader,
     batch_size: usize,
   ) -> PcoResult<()> {
-    let mut state_idxs = self.state.state_idxs.clone();
+    let mut state_idxs = self.state.state_idxs;
     let mut offset_bit_idx = 0;
     for i in 0..batch_size {
       let j = i % 4;
@@ -168,6 +169,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     Ok(())
   }
 
+  #[allow(clippy::needless_range_loop)]
   #[inline(never)]
   fn unchecked_decompress_offsets<const MAX_EXTRA_WORDS: usize>(
     &mut self,
