@@ -35,7 +35,7 @@ mod tests {
     let final_state = encoder.state();
 
     // DECODE
-    let mut decoder = Decoder::new(spec, final_state);
+    let mut decoder = Decoder::new(spec);
     let bytes = writer.drain_bytes();
     assert_eq!(bytes.len(), expected_byte_len);
     let bit_words = PaddedBytes::from(bytes);

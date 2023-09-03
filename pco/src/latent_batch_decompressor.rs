@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::fmt::Debug;
 use std::mem;
 use std::mem::MaybeUninit;
@@ -6,7 +7,7 @@ use crate::ans::{AnsState, Token};
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::PageLatentMetadata;
-use crate::constants::{ANS_INTERLEAVING, Bitlen, FULL_BATCH_SIZE, WORD_BITLEN};
+use crate::constants::{ANS_INTERLEAVING, Bitlen, BYTES_PER_WORD, FULL_BATCH_SIZE, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::{ans, ChunkLatentMetadata};
@@ -53,6 +54,7 @@ pub struct LatentBatchDecompressor<U: UnsignedLike> {
   // known information about the latent latent in this chunk
   max_bits_per_ans: Bitlen,
   max_bits_per_offset: Bitlen,
+  extra_words_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
   maybe_constant_value: Option<U>,
   needs_gcd: bool,
@@ -82,6 +84,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       .map(|bin| bin.offset_bits)
       .max()
       .unwrap_or(Bitlen::MAX);
+    let extra_words_per_offset = ((max_bits_per_offset + 7) / WORD_BITLEN) as usize;
     let infos = chunk_latent_meta
       .bins
       .iter()
@@ -100,6 +103,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     Ok(Self {
       max_bits_per_ans,
       max_bits_per_offset,
+      extra_words_per_offset,
       infos,
       maybe_constant_value,
       needs_gcd,
@@ -216,59 +220,30 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   }
 
   #[inline(never)]
-  fn unchecked_decompress_offsets(
+  fn unchecked_decompress_offsets<const MAX_EXTRA_WORDS: usize>(
     &mut self,
     reader: &mut BitReader,
     dst: &mut [U],
   ) {
-    // TODO handle multi-word offsets
     let base_bit_idx = reader.bit_idx();
     for i in 0..FULL_BATCH_SIZE {
+      let offset_bits = self.state.offset_bits_scratch[i];
       let bit_idx = base_bit_idx + self.state.offset_bit_idxs_scratch[i];
-      let byte_idx = bit_idx / 8;
-      let bits_past_byte = bit_idx % 8;
-      let mut word = reader.unchecked_word_at(byte_idx);
-      word >>= bits_past_byte;
-      word &= (1 << self.state.offset_bits_scratch[i]) - 1;
-      dst[i] = U::from_word(word);
+      let bits_past_byte = bit_idx as Bitlen % 8;
+      let mut byte_idx = bit_idx / 8;
+      let mut res = U::from_word(reader.unchecked_word_at(byte_idx) >> bits_past_byte);
+      let mut processed = min(offset_bits, WORD_BITLEN - 8 - bits_past_byte);
+      byte_idx += BYTES_PER_WORD - 1;
+
+      for _ in 0..MAX_EXTRA_WORDS {
+        res |= U::from_word(reader.unchecked_word_at(byte_idx)) << processed;
+        processed = min(offset_bits, processed + WORD_BITLEN);
+        byte_idx += BYTES_PER_WORD;
+      }
+
+      dst[i] = if offset_bits == U::PHYSICAL_BITS as Bitlen { res } else { res & ((U::ONE << offset_bits) - U::ONE) };
     }
-    // const NANOBATCH_SIZE: usize = 4;
-    // for (dst, (bit_idxs, offset_bits)) in dst.chunks_exact_mut(NANOBATCH_SIZE).zip(self.state.offset_bit_idxs_scratch.chunks_exact_mut(NANOBATCH_SIZE).zip(self.state.offset_bits_scratch.chunks_exact(NANOBATCH_SIZE))) {
-    //   for bit_idx in bit_idxs {
-    //     *bit_idx += base_bit_idx;
-    //   }
-    //   let bits_past_byte = bit_idxs.iter().map(|&bit_idx| bit_idx as Bitlen % 8).collect::<Vec<Bitlen>>();
-    //   let byte_idxs = {
-    //     for bit_idx in bit_idxs {
-    //       *bit_idx /= 8;
-    //     }
-    //     bit_idxs
-    //   };
-    //   let mut words = byte_idxs.iter().map(|&byte_idx| reader.unchecked_word_at(byte_idx)).collect::<[usize; NANOBATCH_SIZE]>();
-    //   for (word, &bits_past_byte) in words.iter_mut().zip(bits_past_byte.iter()) {
-    //     *word >>= bits_past_byte;
-    //   }
-    //   for (word, &offset_bits) in words.iter_mut().zip(self.state.offset_bits_scratch.iter()) {
-    //     *word &= (1 << offset_bits) - 1
-    //   }
-    //   for (&word, x_dst) in words.iter().zip(dst.iter_mut()) {
-    //     *x_dst = U::from_word(word);
-    //   }
-    // }
-    // println!("seek to ")
-    // reader.seek_to(self.state.offset_bit_idxs_scratch[FULL_BATCH_SIZE - 1] + self.state.offset_bits_scratch[FULL_BATCH_SIZE - 1] as usize)
     reader.seek_to(base_bit_idx + self.state.offset_bit_idxs_scratch[FULL_BATCH_SIZE - 1] + self.state.offset_bits_scratch[FULL_BATCH_SIZE - 1] as usize)
-    // assert_eq!(bit_offset_lens.len(), dst.len());
-    // let base_bit_idx = reader.bit_idx();
-    // for (&(bit_offset, bit_len), x) in bit_offset_lens.iter().zip(dst.iter_mut()) {
-    //   *x += reader.unchecked_peek_uint(base_bit_idx + bit_offset as usize, bit_len);
-    // }
-    // let &(final_bit_offset, final_bit_len) = bit_offset_lens.last().unwrap();
-    // reader.seek_to(base_bit_idx + (final_bit_offset + final_bit_len) as usize);
-    // assert!(dst.len() <= infos.len());
-    // for i in 0..dst.len() {
-    //   dst[i] = reader.unchecked_read_uint::<U>(infos[i].offset_bits);
-    // }
   }
 
   #[inline(never)]
@@ -277,15 +252,9 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     reader: &mut BitReader,
     dst: &mut [U],
   ) -> PcoResult<()> {
-    for i in 0..dst.len() {
-      dst[i] = reader.read_uint::<U>(self.state.offset_bits_scratch[i])?;
+    for (i, x_dst) in dst.iter_mut().enumerate() {
+      *x_dst = reader.read_uint::<U>(self.state.offset_bits_scratch[i])?;
     }
-    // let base_bit_idx = reader.bit_idx();
-    // for (&(bit_offset, bit_len), x) in bit_offset_lens.iter().zip(dst.iter_mut()) {
-    //   *x += reader.peek_uint(base_bit_idx + bit_offset as usize, bit_len)?;
-    // }
-    // let &(final_bit_offset, final_bit_len) = bit_offset_lens.last().unwrap();
-    // reader.seek_to(base_bit_idx + (final_bit_offset + final_bit_len) as usize);
     Ok(())
   }
 
@@ -331,21 +300,21 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     //   v
     // };
     // as long as there's enough compressed data available, we don't need checked operations
-    if batch_size == FULL_BATCH_SIZE && self.max_bits_per_ans as usize * FULL_BATCH_SIZE <= reader.bits_remaining() {
-      // self.unchecked_decompress_ans(reader, dst, &mut bit_idxs);
+    let is_full_batch = batch_size == FULL_BATCH_SIZE;
+    if is_full_batch && self.max_bits_per_ans as usize * FULL_BATCH_SIZE <= reader.bits_remaining() {
       self.unchecked_decompress_ans_tokens(reader);
-      // self.lookup(&mut bin_infos);
     } else {
-      // self.decompress_ans(reader, dst, &mut bit_idxs)?;
       self.decompress_ans(reader, batch_size)?;
-      // self.lookup(&mut bin_infos);
     }
 
-    if self.max_bits_per_offset as usize * batch_size <= reader.bits_remaining() {
-      // self.unchecked_decompress_offsets(reader, &bit_idxs, dst);
-      self.unchecked_decompress_offsets(reader, dst);
+    if is_full_batch && self.max_bits_per_offset as usize * FULL_BATCH_SIZE <= reader.bits_remaining() {
+      match self.extra_words_per_offset {
+        0 => self.unchecked_decompress_offsets::<0>(reader, dst),
+        1 => self.unchecked_decompress_offsets::<1>(reader, dst),
+        2 => self.unchecked_decompress_offsets::<2>(reader, dst),
+        _ => panic!("invalid extra words per offset; a bug in pcodec"),
+      }
     } else {
-      // self.decompress_offsets(reader, &bit_idxs, dst)?;
       self.decompress_offsets(reader, dst)?;
     }
 

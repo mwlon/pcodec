@@ -20,8 +20,8 @@ pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
 pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
 
 // performance tuning parameters
-pub const DECOMPRESS_UNCHECKED_THRESHOLD: usize = 32;
-pub const DECOMPRESS_BYTE_PADDING: usize = BYTES_PER_WORD + DECOMPRESS_UNCHECKED_THRESHOLD * 8;
+const WORDS_PER_OFFSET_UPPER_BOUND: usize = 5;
+pub const DECOMPRESS_BYTE_PADDING: usize = BYTES_PER_WORD * WORDS_PER_OFFSET_UPPER_BOUND;
 // pub const UNSIGNED_BATCH_SIZE: usize = 512;
 
 // native architecture info

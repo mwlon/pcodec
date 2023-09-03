@@ -274,8 +274,7 @@ impl<'a> BitReader<'a> {
     self.refill();
     let unmasked = <usize as ReadableUint>::from_word(self.unchecked_word() >> self.bits_past_ptr);
     self.consume(n);
-    // unmasked & ((1 << n) - 1)
-    unmasked & (usize::MAX >> (WORD_BITLEN - n))
+    unmasked & ((1 << n) - 1)
   }
 
   // Seek to the end of the byte.

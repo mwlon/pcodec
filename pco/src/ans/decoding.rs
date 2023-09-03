@@ -16,7 +16,6 @@ pub struct Node {
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
-  table_size: usize,
   nodes: Vec<Node>,
 }
 
@@ -42,7 +41,6 @@ impl Decoder {
     }
 
     Self {
-      table_size,
       nodes,
     }
   }
