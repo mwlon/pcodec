@@ -19,6 +19,31 @@ pub trait Dtype: QNumberLike {
   fn vec_from_parquet(v: Vec<<Self::Parquet as parq::DataType>::T>) -> Vec<Self>;
 }
 
+// This is technically not correct for parquet.
+// Parquet only has signed ints; here we just transmute between them.
+impl Dtype for u32 {
+  type Pco = u32;
+  type Parquet = parq::Int32Type;
+
+  const PARQUET_DTYPE_STR: &'static str = "INT32";
+
+  fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {
+    unsafe { mem::transmute(slice) }
+  }
+
+  fn slice_to_pco(slice: &[Self]) -> &[Self::Pco] {
+    slice
+  }
+
+  fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self> {
+    v
+  }
+
+  fn vec_from_parquet(v: Vec<i32>) -> Vec<Self> {
+    unsafe { mem::transmute(v) }
+  }
+}
+
 impl Dtype for i64 {
   type Pco = i64;
   type Parquet = parq::Int64Type;
@@ -37,7 +62,7 @@ impl Dtype for i64 {
     v
   }
 
-  fn vec_from_parquet(v: Vec<Self::Pco>) -> Vec<Self> {
+  fn vec_from_parquet(v: Vec<Self>) -> Vec<Self> {
     v
   }
 }
@@ -60,7 +85,7 @@ impl Dtype for f64 {
     v
   }
 
-  fn vec_from_parquet(v: Vec<Self::Pco>) -> Vec<Self> {
+  fn vec_from_parquet(v: Vec<Self>) -> Vec<Self> {
     v
   }
 }
@@ -83,7 +108,7 @@ impl Dtype for TimestampMicros {
     unsafe { mem::transmute(v) }
   }
 
-  fn vec_from_parquet(v: Vec<Self::Pco>) -> Vec<Self> {
+  fn vec_from_parquet(v: Vec<i64>) -> Vec<Self> {
     unsafe { mem::transmute(v) }
   }
 }

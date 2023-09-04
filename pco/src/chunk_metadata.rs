@@ -11,11 +11,11 @@ use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::{gcd, Mode};
 use crate::{bin, Flags};
 
-/// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a stream
-/// interleaved into the compressed data.
+/// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a latent
+/// variable interleaved into the compressed data.
 ///
 /// For instance, with
-/// [classic mode][crate::Mode::Classic], there is a single stream
+/// [classic mode][crate::Mode::Classic], there is a single latent
 /// corresponding to the actual numbers' (or deltas') bins and offsets
 /// relative to those bins.
 ///

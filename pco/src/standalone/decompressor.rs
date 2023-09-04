@@ -15,7 +15,7 @@ use crate::{constants, ChunkMetadata, DecompressorConfig, Flags};
 /// Most `Decompressor` methods leave its state unchanged if they return an
 /// error.
 ///
-/// You can use the standalone decompressor at a chunk or streaming level.
+/// You can use the standalone decompressor at a chunk or batch level.
 /// ```
 /// use std::io::Write;
 /// use pco::standalone::{DecompressedItem, Decompressor};
@@ -33,7 +33,7 @@ use crate::{constants, ChunkMetadata, DecompressorConfig, Flags};
 ///   let chunk_0_nums = decompressor.chunk_body(&mut dest).expect("chunk body");
 /// }
 ///
-/// // STREAMING DECOMPRESS
+/// // DECOMPRESS BY BATCH
 /// let mut decompressor = Decompressor::<i32>::default();
 /// decompressor.write_all(&my_bytes).unwrap();
 /// for item in &mut decompressor {
