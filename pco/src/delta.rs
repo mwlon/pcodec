@@ -35,14 +35,14 @@ impl<U: UnsignedLike> DeltaMoments<U> {
 // Without this, deltas in (say) [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].
 #[inline(never)]
-pub fn toggle_center_deltas_in_place<U: UnsignedLike>(dest: &mut [U]) {
+pub fn toggle_center_in_place<U: UnsignedLike>(dest: &mut [U]) {
   for u in dest.iter_mut() {
     *u = u.wrapping_add(U::MID);
   }
 }
 
 #[inline(never)]
-fn first_order_deltas_in_place<U: UnsignedLike>(dest: &mut Vec<U>) {
+fn first_order_encode_in_place<U: UnsignedLike>(dest: &mut Vec<U>) {
   if dest.is_empty() {
     return;
   }
@@ -53,7 +53,7 @@ fn first_order_deltas_in_place<U: UnsignedLike>(dest: &mut Vec<U>) {
   dest.truncate(dest.len() - 1);
 }
 
-pub fn nth_order_deltas<U: UnsignedLike>(
+pub fn encode_in_place<U: UnsignedLike>(
   unsigneds: &mut Vec<U>,
   order: usize,
   page_idxs: &[usize],
@@ -67,17 +67,17 @@ pub fn nth_order_deltas<U: UnsignedLike>(
     for (page_idx, &i) in page_idxs.iter().enumerate() {
       page_moments[page_idx].push(unsigneds.get(i).copied().unwrap_or(U::ZERO));
     }
-    first_order_deltas_in_place(unsigneds);
+    first_order_encode_in_place(unsigneds);
   }
   let moments = page_moments
     .into_iter()
     .map(DeltaMoments::new)
     .collect::<Vec<_>>();
-  toggle_center_deltas_in_place(unsigneds);
+  toggle_center_in_place(unsigneds);
   moments
 }
 
-fn first_order_reconstruct_in_place<U: UnsignedLike>(moment: &mut U, dest: &mut [U]) {
+fn first_order_decode_in_place<U: UnsignedLike>(moment: &mut U, dest: &mut [U]) {
   for delta in dest.iter_mut() {
     let tmp = *delta;
     *delta = *moment;
@@ -85,14 +85,14 @@ fn first_order_reconstruct_in_place<U: UnsignedLike>(moment: &mut U, dest: &mut 
   }
 }
 
-pub fn reconstruct_in_place<U: UnsignedLike>(delta_moments: &mut DeltaMoments<U>, dest: &mut [U]) {
+pub fn decode_in_place<U: UnsignedLike>(delta_moments: &mut DeltaMoments<U>, dest: &mut [U]) {
   if delta_moments.order() == 0 {
     return;
   }
 
-  toggle_center_deltas_in_place(dest);
+  toggle_center_in_place(dest);
   for moment in delta_moments.moments.iter_mut().rev() {
-    first_order_reconstruct_in_place(moment, dest);
+    first_order_decode_in_place(moment, dest);
   }
 }
 
@@ -106,7 +106,7 @@ mod tests {
     let mut deltas = orig_unsigneds.to_vec();
     let order = 2;
     let zero_delta = u32::MID;
-    let mut momentss = nth_order_deltas(&mut deltas, order, &[0, 3]);
+    let mut momentss = encode_in_place(&mut deltas, order, &[0, 3]);
 
     // add back some padding we lose during compression
     assert_eq!(deltas.len(), orig_unsigneds.len() - order);
@@ -114,11 +114,11 @@ mod tests {
       deltas.push(zero_delta);
     }
 
-    reconstruct_in_place::<u32>(&mut momentss[0], &mut deltas[..3]);
+    decode_in_place::<u32>(&mut momentss[0], &mut deltas[..3]);
     assert_eq!(&deltas[..3], &orig_unsigneds[..3]);
     assert_eq!(momentss[0], momentss[1]);
 
-    reconstruct_in_place::<u32>(&mut momentss[1], &mut deltas[3..]);
+    decode_in_place::<u32>(&mut momentss[1], &mut deltas[3..]);
     assert_eq!(&deltas[3..], &orig_unsigneds[3..]);
   }
 }

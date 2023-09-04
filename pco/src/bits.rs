@@ -1,5 +1,15 @@
+use crate::bit_reader::ReadableUint;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
+
+#[inline]
+pub fn lowest_bits<U: ReadableUint>(word: U, n: Bitlen) -> U {
+  if n >= U::BITS {
+    word
+  } else {
+    word & ((U::ONE << n) - U::ONE)
+  }
+}
 
 // The true Huffman cost of course depends on the tree. We can statistically
 // model this cost and get slightly different bumpy log formulas,
