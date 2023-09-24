@@ -44,6 +44,7 @@ pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: u
       ),
       use_gcds: false,
       use_float_mult: true,
+      use_lookback: true,
     };
     let mut compressor = Compressor::<T>::from_config(config).unwrap();
     compressor.header().unwrap();

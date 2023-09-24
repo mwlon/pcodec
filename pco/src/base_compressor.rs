@@ -88,6 +88,8 @@ pub struct CompressorConfig {
   /// may reduce compression speed somewhat even when it isn't helpful.
   /// However, the compression ratio improvements tend to be quite large.
   pub use_float_mult: bool,
+  // TODO
+  pub use_lookback: bool,
 }
 
 impl Default for CompressorConfig {
@@ -97,6 +99,7 @@ impl Default for CompressorConfig {
       delta_encoding_order: None,
       use_gcds: true,
       use_float_mult: true,
+      use_lookback: true,
     }
   }
 }
@@ -117,6 +120,18 @@ impl CompressorConfig {
   /// Sets [`use_gcds`][CompressorConfig::use_gcds].
   pub fn with_use_gcds(mut self, use_gcds: bool) -> Self {
     self.use_gcds = use_gcds;
+    self
+  }
+
+  /// Sets [`use_float_mult`][CompressorConfig::use_float_mult].
+  pub fn with_float_mult(mut self, use_float_mult: bool) -> Self {
+    self.use_float_mult = use_float_mult;
+    self
+  }
+
+  /// Sets [`use_lookback`][CompressorConfig::use_lookback].
+  pub fn with_use_lookback(mut self, use_lookback: bool) -> Self {
+    self.use_lookback = use_lookback;
     self
   }
 }
