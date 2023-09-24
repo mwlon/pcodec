@@ -4,7 +4,7 @@ This generates a wide variety of common distributions,
 compresses them, decompresses them, and makes sure
 all the data came back bitwise identical.
 It supports
-* multiple codecs (pco, q_compress, zstd, parquet)
+* multiple codecs (pco, q\_compress, zstd, parquet)
 * multiple data types
 
 ## Running
@@ -44,9 +44,10 @@ etc.
 ## Results
 
 All figures reported here are calculated using a single thread on a
-2.8GHz i5 CPU, operating on in-memory data, using Rust 1.70.
-Benchmarks were done by averaging 100 runs on a dataset of 1M numbers
-with `compression_level` 8.
+2.8GHz i5 CPU, operating on in-memory data, using Rust 1.70 with instruction
+sets BMI1 and BMI2 enabled.
+Benchmarks were done by taking the median of 100 runs on a dataset of 1M
+numbers with `compression_level` 8.
 
 Speeds are reported in count of numbers compressed or decompressed
 per second with 2 significant figures.
@@ -54,11 +55,11 @@ Compression ratio is reported with 3 significant figures.
 
 | dataset            | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
 |--------------------|---------------------------------|-----------------------------------|-------------------|
-| `f64_decimal`      | 10                              | 63                                | 4.67              |
-| `f64_slow_cosine`  | 13                              | 91                                | 4.35              |
-| `i64_lomax05_long` | 14                              | 140                               | 4.62              |
-| `i64_sparse`       | 36                              | 220                               | 792               |
-| `micros_millis`    | 11                              | 120                               | 2.08              |
+| `f64_decimal`      | 12                              | 92                                | 4.67              |
+| `f64_slow_cosine`  | 15                              | 120                               | 4.35              |
+| `i64_lomax05_reg`  | 16                              | 190                               | 4.62              |
+| `i64_sparse`       | 46                              | 210                               | 792               |
+| `micros_millis`    | 12                              | 160                               | 2.08              |
 
 `i64` and `f64` are each 8 bytes, so these speeds are in the ballpark of 1GB/s.
 For reference, on the same hardware and heavy-tail integers dataset, ZStandard

@@ -1,28 +1,26 @@
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
-use crate::bit_reader::BitReader;
+
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 
-use crate::ChunkStreamMetadata;
+use crate::ChunkLatentMetadata;
 
 #[derive(Clone, Debug)]
-struct Node {
-  token: Token,
-  next_state_base: AnsState,
-  bits_to_read: Bitlen,
+pub struct Node {
+  pub token: Token,
+  pub next_state_idx_base: AnsState,
+  pub bits_to_read: Bitlen,
 }
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
-  table_size: usize,
   nodes: Vec<Node>,
-  pub state: AnsState,
 }
 
 impl Decoder {
-  pub fn new(spec: &Spec, final_state: AnsState) -> Self {
+  pub fn new(spec: &Spec) -> Self {
     let table_size = spec.table_size();
     let mut nodes = Vec::with_capacity(table_size);
     // x_s from Jarek Duda's paper
@@ -36,43 +34,30 @@ impl Decoder {
       }
       nodes.push(Node {
         token,
-        next_state_base,
+        next_state_idx_base: next_state_base - table_size as AnsState,
         bits_to_read,
       });
       token_x_s[token as usize] += 1;
     }
 
-    Self {
-      table_size,
-      nodes,
-      state: final_state,
-    }
+    Self { nodes }
   }
 
-  pub fn from_stream_meta<U: UnsignedLike>(
-    stream: &ChunkStreamMetadata<U>,
-    final_state: AnsState,
+  pub fn from_latent_meta<U: UnsignedLike>(
+    latent_meta: &ChunkLatentMetadata<U>,
   ) -> PcoResult<Self> {
-    let weights = stream
+    let weights = latent_meta
       .bins
       .iter()
       .map(|bin| bin.weight)
-      .chain(stream.lookbacks.iter().map(|lookback| lookback.weight))
+      .chain(latent_meta.lookbacks.iter().map(|lookback| lookback.weight))
       .collect::<Vec<_>>();
-    let spec = Spec::from_weights(stream.ans_size_log, weights)?;
-    Ok(Self::new(&spec, final_state))
+    let spec = Spec::from_weights(latent_meta.ans_size_log, weights)?;
+    Ok(Self::new(&spec))
   }
 
   #[inline]
-  pub fn unchecked_decode(&mut self, reader: &mut BitReader) -> Token {
-    let node = &self.nodes[self.state as usize - self.table_size];
-    self.state = node.next_state_base + reader.unchecked_read_small(node.bits_to_read) as AnsState;
-    node.token
-  }
-
-  pub fn decode(&mut self, reader: &mut BitReader) -> PcoResult<Token> {
-    let node = &self.nodes[self.state as usize - self.table_size];
-    self.state = node.next_state_base + reader.read_small(node.bits_to_read)? as AnsState;
-    Ok(node.token)
+  pub fn get_node(&self, state_idx: AnsState) -> &Node {
+    unsafe { self.nodes.get_unchecked(state_idx as usize) }
   }
 }

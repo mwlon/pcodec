@@ -1,6 +1,5 @@
 use std::io::Write;
 
-use crate::base_decompressor::DecompressorConfig;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{Compressor, DecompressedItem, Decompressor};
@@ -14,7 +13,7 @@ fn test_low_level_short() -> PcoResult<()> {
 
 #[test]
 fn test_low_level_long() -> PcoResult<()> {
-  let nums = vec![(0..100).collect::<Vec<_>>()];
+  let nums = vec![(0..777).collect::<Vec<_>>()];
   assert_lowest_level_behavior(nums)
 }
 
@@ -43,10 +42,7 @@ fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) -> PcoResult
 
     let bytes = compressor.drain_bytes();
 
-    let mut decompressor = Decompressor::<T>::from_config(DecompressorConfig {
-      numbers_limit_per_item: 2,
-      ..Default::default()
-    });
+    let mut decompressor = Decompressor::<T>::default();
     decompressor.write_all(&bytes).unwrap();
     let flags = decompressor.header()?;
     assert_eq!(&flags, compressor.flags(), "{}", debug_info);

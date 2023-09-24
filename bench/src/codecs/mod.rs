@@ -41,6 +41,7 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
   // of (dtype x codec)
   fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
     match num_vec {
+      NumVec::U32(nums) => self.compress(nums),
       NumVec::I64(nums) => self.compress(nums),
       NumVec::F64(nums) => self.compress(nums),
       NumVec::Micros(nums) => self.compress(nums),
@@ -49,6 +50,7 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
 
   fn decompress_dynamic(&self, dtype: &str, compressed: &[u8]) -> NumVec {
     match dtype {
+      "u32" => NumVec::U32(self.decompress::<u32>(compressed)),
       "i64" => NumVec::I64(self.decompress::<i64>(compressed)),
       "f64" => NumVec::F64(self.decompress::<f64>(compressed)),
       "micros" => NumVec::Micros(self.decompress::<TimestampMicros>(compressed)),
@@ -72,6 +74,7 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
 
   fn compare_nums_dynamic(&self, recovered: &NumVec, original: &NumVec) {
     match (recovered, original) {
+      (NumVec::U32(x), NumVec::U32(y)) => self.compare_nums(x, y),
       (NumVec::I64(x), NumVec::I64(y)) => self.compare_nums(x, y),
       (NumVec::F64(x), NumVec::F64(y)) => self.compare_nums(x, y),
       (NumVec::Micros(x), NumVec::Micros(y)) => self.compare_nums(x, y),

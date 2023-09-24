@@ -1,6 +1,6 @@
 # `pco`
 
-**⚠️ Both the API and the data format are unstable for the 0.0.0-alpha.*
+**⚠️ Both the API and the data format are unstable for the 0.0.0-alpha.\*
 releases. Do not depend on pco for long-term storage yet. ⚠️**
 
 ## Usage as a Standalone Format
@@ -62,7 +62,7 @@ implementations are insufficient)
 
 Each chunk has a metadata section containing
 * the total count of numbers in the chunk,
-* the ranges for the chunk and count of numbers in each range,
+* the bins for the chunk and relative frequency of each bin,
 * and the size in bytes of the compressed body.
 
 Using the compressed body size, it is easy to seek through the whole file

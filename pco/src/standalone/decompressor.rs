@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::io::Write;
 
 use crate::base_decompressor::{BaseDecompressor, State, Step};
@@ -6,7 +7,7 @@ use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
 use crate::page_decompressor::PageDecompressor;
 use crate::progress::Progress;
-use crate::{ChunkMetadata, DecompressorConfig, Flags};
+use crate::{constants, ChunkMetadata, DecompressorConfig, Flags};
 
 /// Converts .pco compressed bytes into [`Flags`],
 /// [`ChunkMetadata`], and vectors of numbers.
@@ -14,7 +15,7 @@ use crate::{ChunkMetadata, DecompressorConfig, Flags};
 /// Most `Decompressor` methods leave its state unchanged if they return an
 /// error.
 ///
-/// You can use the standalone decompressor at a chunk or streaming level.
+/// You can use the standalone decompressor at a chunk or batch level.
 /// ```
 /// use std::io::Write;
 /// use pco::standalone::{DecompressedItem, Decompressor};
@@ -32,7 +33,7 @@ use crate::{ChunkMetadata, DecompressorConfig, Flags};
 ///   let chunk_0_nums = decompressor.chunk_body(&mut dest).expect("chunk body");
 /// }
 ///
-/// // STREAMING DECOMPRESS
+/// // DECOMPRESS BY BATCH
 /// let mut decompressor = Decompressor::<i32>::default();
 /// decompressor.write_all(&my_bytes).unwrap();
 /// for item in &mut decompressor {
@@ -162,12 +163,21 @@ impl<T: NumberLike> Decompressor<T> {
   }
 }
 
-fn next_nums_dirty<T: NumberLike>(
+fn next_nums<T: NumberLike>(
   reader: &mut BitReader,
-  bd: &mut PageDecompressor<T>,
-  dest: &mut [T],
-) -> PcoResult<Progress> {
-  bd.decompress(reader, false, dest)
+  pd: &mut PageDecompressor<T>,
+) -> PcoResult<Option<(Progress, Vec<T>)>> {
+  let mut dest = vec![T::default(); min(constants::FULL_BATCH_SIZE, pd.n_remaining())];
+  match pd.decompress(reader, &mut dest) {
+    Ok(progress) => Ok(Some((progress, dest))),
+    Err(e) => {
+      if matches!(e.kind, ErrorKind::InsufficientData) {
+        Ok(None)
+      } else {
+        Err(e)
+      }
+    }
+  }
 }
 
 fn apply_nums<T: NumberLike>(
@@ -178,7 +188,7 @@ fn apply_nums<T: NumberLike>(
   if progress.n_processed == 0 {
     None
   } else {
-    if progress.finished_body {
+    if progress.finished_page {
       state.chunk_meta = None;
       state.page_decompressor = None;
     }
@@ -205,32 +215,35 @@ impl<T: NumberLike> Iterator for &mut Decompressor<T> {
         Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(None),
         Err(e) => Err(e),
       },
-      Step::StartOfPage => self.0.with_reader(|reader, state, config| {
+      Step::StartOfPage => self.0.with_reader(|reader, state, _config| {
         let &ChunkMetadata {
           n,
           compressed_body_size,
           ..
         } = state.chunk_meta.as_ref().unwrap();
-        let maybe_bd = state.new_page_decompressor(reader, n, compressed_body_size);
-        if let Err(e) = &maybe_bd {
+        let maybe_pd = state.new_page_decompressor(reader, n, compressed_body_size);
+        if let Err(e) = &maybe_pd {
           if matches!(e.kind, ErrorKind::InsufficientData) {
             return Ok(None);
           }
         }
-        let mut bd = maybe_bd?;
-        let mut dest = vec![T::default(); config.numbers_limit_per_item];
-        let progress = next_nums_dirty(reader, &mut bd, &mut dest)?;
-        state.page_decompressor = Some(bd);
-        Ok(apply_nums(state, dest, progress))
+        let mut pd = maybe_pd?;
+        match next_nums(reader, &mut pd)? {
+          Some((progress, dest)) => {
+            state.page_decompressor = Some(pd);
+            Ok(apply_nums(state, dest, progress))
+          }
+          None => Ok(None),
+        }
       }),
-      Step::MidPage => self.0.with_reader(|reader, state, config| {
-        let mut dest = vec![T::default(); config.numbers_limit_per_item];
-        let progress = next_nums_dirty(
+      Step::MidPage => self.0.with_reader(|reader, state, _config| {
+        match next_nums(
           reader,
           state.page_decompressor.as_mut().unwrap(),
-          &mut dest,
-        )?;
-        Ok(apply_nums(state, dest, progress))
+        )? {
+          Some((progress, dest)) => Ok(apply_nums(state, dest, progress)),
+          None => Ok(None),
+        }
       }),
       Step::Terminated => Ok(None),
     };

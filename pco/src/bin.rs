@@ -8,7 +8,7 @@ use crate::data_types::UnsignedLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::Mode;
 
-/// Part of [`ChunkStreamMetadata`][`crate::ChunkStreamMetadata`] representing
+/// Part of [`ChunkLatentMetadata`][`crate::ChunkLatentMetadata`] representing
 /// a numerical range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -122,16 +122,16 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BinDecompressionInfo<U: UnsignedLike> {
   pub lower: U,
-  pub offset_bits: Bitlen,
   pub gcd: U,
+  pub offset_bits: Bitlen,
 }
 
 impl<U: UnsignedLike> From<&Bin<U>> for BinDecompressionInfo<U> {
   fn from(bin: &Bin<U>) -> Self {
     Self {
       lower: bin.lower,
-      offset_bits: bin.offset_bits,
       gcd: bin.gcd,
+      offset_bits: bin.offset_bits,
     }
   }
 }

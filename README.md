@@ -46,10 +46,19 @@ paired with exact offsets into those bins.
 Depending on the mode, there may be up to 2 streams of these bin-offset
 pairings.
 
-Pco is mainly meant to be wrapped into another format for production use cases,
-using data pages as the unit of interleaving.
-The standalone format supports only streaming decompression and seeking, but
-not nullability, multiple columns, random access, or other niceties.
+Pco is mainly meant to be wrapped into another format for production use cases.
+It has a hierarchy of multiple batches per page; multiple pages per chunk; and
+multiple chunks per file.
+
+|          | unit of ___                     | recommended size    |
+|----------|---------------------------------|---------------------|
+| chunk    | compression                     | \>20k numbers       |
+| page     | interleaving w/ wrapping format | \>1k numbers        |
+| batch    | decompression                   | 256 numbers (fixed) |
+
+The standalone format is essentially a minimal implementation of a wrapped format.
+It supports batched decompression and seeking, but not nullability, multiple
+columns, random access, or other niceties.
 
 <img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
 

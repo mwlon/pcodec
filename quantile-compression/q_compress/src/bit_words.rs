@@ -16,6 +16,7 @@ pub struct BitWords {
 }
 
 // returns the final number of bits after extending by the bytes
+#[inline(never)]
 fn extend<B: AsRef<[u8]>>(words: &mut Vec<usize>, initial_bits: usize, bytes_wrapper: B) -> usize {
   let bytes = bytes_wrapper.as_ref();
   let total_bits = initial_bits + 8 * bytes.len();

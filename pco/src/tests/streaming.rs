@@ -6,7 +6,7 @@ use rand::Rng;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{DecompressedItem, Decompressor};
-use crate::{DecompressorConfig, DEFAULT_COMPRESSION_LEVEL};
+use crate::DEFAULT_COMPRESSION_LEVEL;
 
 struct State<T: NumberLike> {
   decompressor: Decompressor<T>,
@@ -17,10 +17,7 @@ struct State<T: NumberLike> {
 impl<T: NumberLike> Default for State<T> {
   fn default() -> Self {
     Self {
-      decompressor: Decompressor::from_config(DecompressorConfig {
-        numbers_limit_per_item: 100,
-        ..Default::default()
-      }),
+      decompressor: Decompressor::default(),
       nums: Vec::new(),
     }
   }
