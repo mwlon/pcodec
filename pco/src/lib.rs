@@ -40,6 +40,7 @@ mod constants;
 mod delta;
 mod flags;
 mod float_mult_utils;
+mod latent_batch_dissector;
 mod latent_batch_decompressor;
 mod modes;
 mod page_decompressor;

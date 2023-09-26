@@ -16,7 +16,7 @@ impl<U: UnsignedLike> LatentSrc<U> {
 }
 
 #[derive(Clone, Debug)]
-pub struct DecomposedLatents<U: UnsignedLike> {
+pub struct DissectedLatents<U: UnsignedLike> {
   // anss and offsets should have the same length
   pub ans_vals: Vec<AnsState>,
   pub ans_bits: Vec<Bitlen>,
@@ -26,7 +26,7 @@ pub struct DecomposedLatents<U: UnsignedLike> {
 }
 
 #[derive(Clone, Debug)]
-pub struct DecomposedSrc<U: UnsignedLike> {
+pub struct DissectedSrc<U: UnsignedLike> {
   pub page_n: usize,
-  pub decomposed_latents: Vec<DecomposedLatents<U>>, // one per latent variable
+  pub dissected_latents: Vec<DissectedLatents<U>>, // one per latent variable
 }

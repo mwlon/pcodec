@@ -1,9 +1,6 @@
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::ops::{
-  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, Mul, MulAssign, RemAssign, Shl,
-  Shr, Sub, SubAssign,
-};
+use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, DivAssign, Mul, MulAssign, RemAssign, Shl, Shr, Sub, SubAssign};
 
 use crate::constants::Bitlen;
 
@@ -67,6 +64,7 @@ pub trait UnsignedLike:
   + BitAndAssign
   + BitOrAssign
   + Div<Output = Self>
+  + DivAssign
   + Hash
   + Mul<Output = Self>
   + MulAssign

@@ -12,10 +12,12 @@ use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::{ans, bits, ChunkLatentMetadata};
 
+const MAX_ANS_SYMBOLS_PER_WORD: usize = 4;
+
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
   // scratch needs no backup
-  offset_bit_idxs_scratch: [usize; FULL_BATCH_SIZE],
+  offset_bits_csum_scratch: [usize; FULL_BATCH_SIZE],
   offset_bits_scratch: [Bitlen; FULL_BATCH_SIZE],
   lowers_scratch: [U; FULL_BATCH_SIZE],
   gcds_scratch: [U; FULL_BATCH_SIZE],
@@ -40,7 +42,7 @@ impl<U: UnsignedLike> State<U> {
   #[inline]
   fn set_scratch(&mut self, i: usize, offset_bit_idx: usize, info: &BinDecompressionInfo<U>) {
     unsafe {
-      *self.offset_bit_idxs_scratch.get_unchecked_mut(i) = offset_bit_idx;
+      *self.offset_bits_csum_scratch.get_unchecked_mut(i) = offset_bit_idx;
       *self.offset_bits_scratch.get_unchecked_mut(i) = info.offset_bits;
       *self.lowers_scratch.get_unchecked_mut(i) = info.lower;
       *self.gcds_scratch.get_unchecked_mut(i) = info.gcd;
@@ -106,7 +108,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       needs_gcd,
       decoder,
       state: State {
-        offset_bit_idxs_scratch: [0; FULL_BATCH_SIZE],
+        offset_bits_csum_scratch: [0; FULL_BATCH_SIZE],
         offset_bits_scratch: [0; FULL_BATCH_SIZE],
         gcds_scratch: [U::ONE; FULL_BATCH_SIZE],
         lowers_scratch: [U::ZERO; FULL_BATCH_SIZE],
@@ -122,11 +124,12 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let mut bit_idx = reader.bits_past_ptr;
     let mut offset_bit_idx = 0;
     let mut state_idxs = self.state.state_idxs;
-    for base_i in (0..FULL_BATCH_SIZE).step_by(4) {
+    for base_i in (0..FULL_BATCH_SIZE).step_by(MAX_ANS_SYMBOLS_PER_WORD) {
       byte_idx += bit_idx as usize / 8;
       bit_idx %= 8;
       let word = reader.unchecked_word_at(byte_idx);
-      for j in 0..4 {
+      // TODO this doesn't work on 32 bits or if MAX_ANS_SYMBOLS_PER_WORD != ANS_INTERLEAVING
+      for j in 0..MAX_ANS_SYMBOLS_PER_WORD {
         let i = base_i + j;
         let node = self.decoder.get_node(state_idxs[j]);
         let state_offset = (word >> bit_idx) as AnsState & ((1 << node.bits_to_read) - 1);
@@ -147,7 +150,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let mut state_idxs = self.state.state_idxs;
     let mut offset_bit_idx = 0;
     for i in 0..batch_size {
-      let j = i % 4;
+      let j = i % ANS_INTERLEAVING;
       let node = self.decoder.get_node(state_idxs[j]);
       let state_offset = reader.read_small(node.bits_to_read)?;
       let info = &self.infos[node.token as usize];
@@ -169,7 +172,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let base_bit_idx = reader.bit_idx();
     for i in 0..FULL_BATCH_SIZE {
       let offset_bits = self.state.offset_bits_scratch[i];
-      let bit_idx = base_bit_idx + self.state.offset_bit_idxs_scratch[i];
+      let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
       let bits_past_byte = bit_idx as Bitlen % 8;
       let mut byte_idx = bit_idx / 8;
       let mut res = U::from_word(reader.unchecked_word_at(byte_idx) >> bits_past_byte);
@@ -186,7 +189,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     }
     reader.seek_to(
       base_bit_idx
-        + self.state.offset_bit_idxs_scratch[FULL_BATCH_SIZE - 1]
+        + self.state.offset_bits_csum_scratch[FULL_BATCH_SIZE - 1]
         + self.state.offset_bits_scratch[FULL_BATCH_SIZE - 1] as usize,
     )
   }

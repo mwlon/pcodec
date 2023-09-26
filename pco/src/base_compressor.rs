@@ -1,5 +1,6 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
+use std::ops::Index;
 
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
@@ -14,10 +15,12 @@ use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::modes::{gcd, ConstMode, Mode};
-use crate::unsigned_src_dst::{DecomposedLatents, DecomposedSrc, LatentSrc};
+use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
 use crate::{ans, delta};
 use crate::{auto, Flags};
 use crate::{bin_optimization, float_mult_utils};
+use crate::ans::AnsState;
+use crate::latent_batch_dissector::LatentBatchDissector;
 
 /// All configurations available for a compressor.
 ///
@@ -363,51 +366,9 @@ fn empty_vec<T>(n: usize) -> Vec<T> {
   }
 }
 
-fn mode_decompose_unsigneds<U: UnsignedLike, M: ConstMode<U>>(
-  latent_configs: &mut [LatentConfig<U>],
-  src: &mut LatentSrc<U>,
-) -> PcoResult<DecomposedSrc<U>> {
-  let empty_decomposed_latents = |n| {
-    let ans_final_state_idxs = [0; ANS_INTERLEAVING];
-    DecomposedLatents {
-      ans_vals: empty_vec(n),
-      ans_bits: empty_vec(n),
-      offsets: empty_vec(n),
-      offset_bits: empty_vec(n),
-      ans_final_states: ans_final_state_idxs,
-    }
-  };
-
-  let mut res = DecomposedSrc {
-    page_n: src.page_n,
-    decomposed_latents: Vec::new(),
-  };
-  for (latent_idx, config) in latent_configs.iter_mut().enumerate() {
-    let latents = &src.latents[latent_idx];
-    let LatentConfig { table, encoder, .. } = config;
-    let mut states = [encoder.default_state(); ANS_INTERLEAVING];
-    let mut decomposed_latents = empty_decomposed_latents(latents.len());
-    for (i, &u) in latents.iter().enumerate().rev() {
-      let info = table.search(u)?;
-      let j = i % ANS_INTERLEAVING;
-      let state = states[j];
-      let (new_state, ans_bits) = encoder.encode(state, info.token);
-      decomposed_latents.ans_vals[i] = state;
-      decomposed_latents.ans_bits[i] = ans_bits;
-      decomposed_latents.offsets[i] = M::calc_offset(u, info); // TODO experiment with SIMD?
-      decomposed_latents.offset_bits[i] = info.offset_bits;
-      states[j] = new_state;
-    }
-    decomposed_latents.ans_final_states = states;
-    res.decomposed_latents.push(decomposed_latents);
-  }
-
-  Ok(res)
-}
-
-fn decompose_unsigneds<U: UnsignedLike>(
-  mid_chunk_info: &mut MidChunkInfo<U>,
-) -> PcoResult<DecomposedSrc<U>> {
+fn dissect_unsigneds<U: UnsignedLike>(
+  mid_chunk_info: &MidChunkInfo<U>,
+) -> PcoResult<DissectedSrc<U>> {
   let MidChunkInfo {
     latent_configs,
     src,
@@ -416,42 +377,66 @@ fn decompose_unsigneds<U: UnsignedLike>(
     ..
   } = mid_chunk_info;
 
-  if *needs_gcds {
-    mode_decompose_unsigneds::<U, GcdMode>(
-      &mut latent_configs[..*n_nontrivial_latents],
-      src,
-    )
-  } else {
-    mode_decompose_unsigneds::<U, ClassicMode>(
-      &mut latent_configs[..*n_nontrivial_latents],
-      src,
-    )
+  let uninit_dissected_latents = |n, ans_default_state| {
+    let ans_final_states = [ans_default_state; ANS_INTERLEAVING];
+    DissectedLatents {
+      ans_vals: empty_vec(n),
+      ans_bits: empty_vec(n),
+      offsets: empty_vec(n),
+      offset_bits: empty_vec(n),
+      ans_final_states,
+    }
+  };
+
+  let mut res = DissectedSrc {
+    page_n: src.page_n,
+    dissected_latents: Vec::new(),
+  };
+
+  for (latent_idx, config) in latent_configs.iter().take(*n_nontrivial_latents).enumerate() {
+    let latents = &src.latents[latent_idx];
+    let LatentConfig { table, encoder, .. } = config;
+    let mut dissected_latents = uninit_dissected_latents(latents.len(), encoder.default_state());
+
+    // we go through in reverse for ANS!
+    let mut lbd = LatentBatchDissector::new(*needs_gcds, table, encoder);
+    for (batch_idx, batch) in latents.chunks(FULL_BATCH_SIZE).enumerate().rev() {
+      let base_i = batch_idx * FULL_BATCH_SIZE;
+      lbd.analyze_latent_batch(
+        batch,
+        base_i,
+        &mut dissected_latents,
+      )
+    }
+    res.dissected_latents.push(dissected_latents);
   }
+
+  Ok(res)
 }
 
-fn write_decomposeds<U: UnsignedLike>(
-  src: DecomposedSrc<U>,
+fn write_dissecteds<U: UnsignedLike>(
+  src: DissectedSrc<U>,
   writer: &mut BitWriter,
 ) -> PcoResult<()> {
   // TODO make this more SIMD like LatentBatchDecompressor::unchecked_decompress_offsets
   let mut batch_start = 0;
   while batch_start < src.page_n {
     let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_n);
-    for decomposed in &src.decomposed_latents {
-      let latent_batch_end = min(batch_end, decomposed.ans_vals.len());
-      assert!(decomposed.ans_bits.len() >= latent_batch_end);
-      assert!(decomposed.offsets.len() >= latent_batch_end);
-      assert!(decomposed.offset_bits.len() >= latent_batch_end);
+    for dissected in &src.dissected_latents {
+      let latent_batch_end = min(batch_end, dissected.ans_vals.len());
+      assert!(dissected.ans_bits.len() >= latent_batch_end);
+      assert!(dissected.offsets.len() >= latent_batch_end);
+      assert!(dissected.offset_bits.len() >= latent_batch_end);
       for i in batch_start..latent_batch_end {
         writer.write_diff(
-          decomposed.ans_vals[i],
-          decomposed.ans_bits[i],
+          dissected.ans_vals[i],
+          dissected.ans_bits[i],
         );
       }
       for i in batch_start..latent_batch_end {
         writer.write_diff(
-          decomposed.offsets[i],
-          decomposed.offset_bits[i],
+          dissected.offsets[i],
+          dissected.offset_bits[i],
         );
       }
     }
@@ -513,8 +498,8 @@ impl<U: UnsignedLike> State<U> {
 #[derive(Clone, Debug)]
 struct LatentConfig<U: UnsignedLike> {
   table: CompressionTable<U>,
-  delta_momentss: Vec<DeltaMoments<U>>,
   encoder: ans::Encoder,
+  delta_momentss: Vec<DeltaMoments<U>>,
 }
 
 #[derive(Clone, Debug)]
@@ -690,17 +675,17 @@ impl<T: NumberLike> BaseCompressor<T> {
       other => Err(other.wrong_step_err("data page")),
     }?;
 
-    let decomposeds = decompose_unsigneds(info)?;
+    let dissected_src = dissect_unsigneds(info)?;
 
     let mut latent_metas = Vec::with_capacity(info.n_latents);
     for latent_idx in 0..info.n_latents {
       let delta_moments = info.page_moments(latent_idx).clone();
 
       // write the final ANS state, moving it down the range [0, table_size)
-      let ans_final_state_idxs = decomposeds
-        .decomposed_latents
+      let ans_final_state_idxs = dissected_src
+        .dissected_latents
         .get(latent_idx)
-        .map(|decomposed| decomposed.ans_final_states)
+        .map(|dissected| dissected.ans_final_states)
         .unwrap_or([0; ANS_INTERLEAVING]);
       latent_metas.push(PageLatentMetadata {
         delta_moments,
@@ -716,7 +701,7 @@ impl<T: NumberLike> BaseCompressor<T> {
       .map(|config| config.encoder.size_log());
     page_meta.write_to(ans_size_logs, &mut self.writer);
 
-    write_decomposeds(decomposeds, &mut self.writer)?;
+    write_dissecteds(dissected_src, &mut self.writer)?;
 
     info.page_idx += 1;
 
