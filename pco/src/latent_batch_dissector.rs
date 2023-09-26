@@ -1,7 +1,6 @@
 use std::cmp::min;
 use crate::ans;
 use crate::ans::{AnsState, Token};
-use crate::bin::BinCompressionInfo;
 use crate::compression_table::CompressionTable;
 use crate::constants::{ANS_INTERLEAVING, Bitlen, FULL_BATCH_SIZE};
 use crate::data_types::UnsignedLike;
@@ -31,6 +30,7 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     }
   }
 
+  #[inline(never)]
   fn binary_search(&self, latents: &[U]) -> [usize; FULL_BATCH_SIZE] {
     let mut search_idxs = [0; FULL_BATCH_SIZE];
 
@@ -39,9 +39,8 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
       let bisection_idx = 1 << (self.table.search_size_log - 1 - depth);
       for (&latent, search_idx) in latents.iter().zip(search_idxs.iter_mut()) {
         let candidate_idx = *search_idx + bisection_idx;
-        if latent >= self.table.search_lowers[candidate_idx] {
-          *search_idx = candidate_idx;
-        }
+        let value = unsafe { *self.table.search_lowers.get_unchecked(candidate_idx) };
+        *search_idx += ((latent >= value) as usize) * bisection_idx;
       }
     }
 
@@ -51,6 +50,7 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     search_idxs
   }
 
+  #[inline(never)]
   fn dissect_bins(&mut self, search_idxs: &[usize], dst_offset_bits: &mut [Bitlen]) {
     for (i, &search_idx) in search_idxs.iter().enumerate() {
       let info = &self.table.infos[search_idx];
@@ -61,18 +61,21 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     }
   }
 
+  #[inline(never)]
   fn set_offsets(&self, latents: &[U], offsets: &mut [U]) {
     for (offset, (&latent, &lower)) in offsets.iter_mut().zip(latents.iter().zip(self.lower_scratch.iter())) {
       *offset = latent - lower;
     }
   }
 
+  #[inline(never)]
   fn divide_by_gcds(&self, offsets: &mut [U]) {
     for (offset, &gcd) in offsets.iter_mut().zip(self.gcd_scratch.iter()) {
       *offset /= gcd;
     }
   }
 
+  #[inline(never)]
   fn encode_ans_in_reverse(&self, ans_vals: &mut [AnsState], ans_bits: &mut [Bitlen], ans_final_states: &mut [AnsState; ANS_INTERLEAVING]) {
     let final_base_i = (ans_vals.len() / ANS_INTERLEAVING) * ANS_INTERLEAVING;
     let final_j = ans_vals.len() % ANS_INTERLEAVING;

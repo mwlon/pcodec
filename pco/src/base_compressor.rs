@@ -1,6 +1,5 @@
 use std::cmp::{max, min};
 use std::fmt::Debug;
-use std::ops::Index;
 
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
@@ -14,12 +13,11 @@ use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
-use crate::modes::{gcd, ConstMode, Mode};
+use crate::modes::{gcd, Mode};
 use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
 use crate::{ans, delta};
 use crate::{auto, Flags};
 use crate::{bin_optimization, float_mult_utils};
-use crate::ans::AnsState;
 use crate::latent_batch_dissector::LatentBatchDissector;
 
 /// All configurations available for a compressor.

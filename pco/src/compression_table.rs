@@ -1,7 +1,5 @@
 use crate::bin::BinCompressionInfo;
-use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
-use crate::errors::{PcoError, PcoResult};
 
 #[derive(Debug, Clone)]
 pub struct CompressionTable<U: UnsignedLike> {
