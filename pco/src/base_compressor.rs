@@ -11,6 +11,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
+use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::modes::{gcd, Mode};
@@ -18,7 +19,6 @@ use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
 use crate::{ans, delta};
 use crate::{auto, Flags};
 use crate::{bin_optimization, float_mult_utils};
-use crate::latent_batch_dissector::LatentBatchDissector;
 
 /// All configurations available for a compressor.
 ///
@@ -356,7 +356,7 @@ fn train_mode_and_infos<U: UnsignedLike>(
   })
 }
 
-fn empty_vec<T>(n: usize) -> Vec<T> {
+fn uninit_vec<T>(n: usize) -> Vec<T> {
   unsafe {
     let mut res = Vec::with_capacity(n);
     res.set_len(n);
@@ -378,10 +378,10 @@ fn dissect_unsigneds<U: UnsignedLike>(
   let uninit_dissected_latents = |n, ans_default_state| {
     let ans_final_states = [ans_default_state; ANS_INTERLEAVING];
     DissectedLatents {
-      ans_vals: empty_vec(n),
-      ans_bits: empty_vec(n),
-      offsets: empty_vec(n),
-      offset_bits: empty_vec(n),
+      ans_vals: uninit_vec(n),
+      ans_bits: uninit_vec(n),
+      offsets: uninit_vec(n),
+      offset_bits: uninit_vec(n),
       ans_final_states,
     }
   };
@@ -391,7 +391,11 @@ fn dissect_unsigneds<U: UnsignedLike>(
     dissected_latents: Vec::new(),
   };
 
-  for (latent_idx, config) in latent_configs.iter().take(*n_nontrivial_latents).enumerate() {
+  for (latent_idx, config) in latent_configs
+    .iter()
+    .take(*n_nontrivial_latents)
+    .enumerate()
+  {
     let latents = &src.latents[latent_idx];
     let LatentConfig { table, encoder, .. } = config;
     let mut dissected_latents = uninit_dissected_latents(latents.len(), encoder.default_state());
@@ -400,11 +404,7 @@ fn dissect_unsigneds<U: UnsignedLike>(
     let mut lbd = LatentBatchDissector::new(*needs_gcds, table, encoder);
     for (batch_idx, batch) in latents.chunks(FULL_BATCH_SIZE).enumerate().rev() {
       let base_i = batch_idx * FULL_BATCH_SIZE;
-      lbd.analyze_latent_batch(
-        batch,
-        base_i,
-        &mut dissected_latents,
-      )
+      lbd.dissect_latent_batch(batch, base_i, &mut dissected_latents)
     }
     res.dissected_latents.push(dissected_latents);
   }
@@ -421,17 +421,23 @@ fn write_dissecteds<U: UnsignedLike>(
   while batch_start < src.page_n {
     let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_n);
     for dissected in &src.dissected_latents {
-      for (&val, &bits) in dissected.ans_vals.iter().zip(dissected.ans_bits.iter()).skip(batch_start).take(FULL_BATCH_SIZE) {
-        writer.write_diff(
-          val,
-          bits,
-        );
+      for (&val, &bits) in dissected
+        .ans_vals
+        .iter()
+        .zip(dissected.ans_bits.iter())
+        .skip(batch_start)
+        .take(FULL_BATCH_SIZE)
+      {
+        writer.write_diff(val, bits);
       }
-      for (&offset, &bits) in dissected.offsets.iter().zip(dissected.offset_bits.iter()).skip(batch_start).take(FULL_BATCH_SIZE) {
-        writer.write_diff(
-          offset,
-          bits,
-        );
+      for (&offset, &bits) in dissected
+        .offsets
+        .iter()
+        .zip(dissected.offset_bits.iter())
+        .skip(batch_start)
+        .take(FULL_BATCH_SIZE)
+      {
+        writer.write_diff(offset, bits);
       }
     }
     batch_start = batch_end;

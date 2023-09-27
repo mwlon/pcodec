@@ -1,10 +1,10 @@
-use std::cmp::min;
 use crate::ans;
 use crate::ans::{AnsState, Token};
 use crate::compression_table::CompressionTable;
-use crate::constants::{ANS_INTERLEAVING, Bitlen, FULL_BATCH_SIZE};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::unsigned_src_dst::DissectedLatents;
+use std::cmp::min;
 
 pub struct LatentBatchDissector<'a, U: UnsignedLike> {
   // immutable
@@ -45,7 +45,9 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     }
 
     let max_idx = self.table.infos.len().saturating_sub(1);
-    search_idxs.iter_mut().for_each(|search_idx| *search_idx = min(*search_idx, max_idx));
+    search_idxs
+      .iter_mut()
+      .for_each(|search_idx| *search_idx = min(*search_idx, max_idx));
 
     search_idxs
   }
@@ -63,7 +65,10 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
 
   #[inline(never)]
   fn set_offsets(&self, latents: &[U], offsets: &mut [U]) {
-    for (offset, (&latent, &lower)) in offsets.iter_mut().zip(latents.iter().zip(self.lower_scratch.iter())) {
+    for (offset, (&latent, &lower)) in offsets
+      .iter_mut()
+      .zip(latents.iter().zip(self.lower_scratch.iter()))
+    {
       *offset = latent - lower;
     }
   }
@@ -76,14 +81,21 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
   }
 
   #[inline(never)]
-  fn encode_ans_in_reverse(&self, ans_vals: &mut [AnsState], ans_bits: &mut [Bitlen], ans_final_states: &mut [AnsState; ANS_INTERLEAVING]) {
+  fn encode_ans_in_reverse(
+    &self,
+    ans_vals: &mut [AnsState],
+    ans_bits: &mut [Bitlen],
+    ans_final_states: &mut [AnsState; ANS_INTERLEAVING],
+  ) {
     let final_base_i = (ans_vals.len() / ANS_INTERLEAVING) * ANS_INTERLEAVING;
     let final_j = ans_vals.len() % ANS_INTERLEAVING;
 
     // first get the jagged part out of the way
     for j in (0..final_j).rev() {
       let i = final_base_i + j;
-      let (new_state, bitlen) = self.encoder.encode(ans_final_states[j], self.token_scratch[i]);
+      let (new_state, bitlen) = self
+        .encoder
+        .encode(ans_final_states[j], self.token_scratch[i]);
       ans_vals[i] = ans_final_states[j];
       ans_bits[i] = bitlen;
       ans_final_states[j] = new_state;
@@ -93,7 +105,9 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     for base_i in (0..final_base_i).step_by(ANS_INTERLEAVING).rev() {
       for j in (0..ANS_INTERLEAVING).rev() {
         let i = base_i + j;
-        let (new_state, bitlen) = self.encoder.encode(ans_final_states[j], self.token_scratch[i]);
+        let (new_state, bitlen) = self
+          .encoder
+          .encode(ans_final_states[j], self.token_scratch[i]);
         ans_vals[i] = ans_final_states[j];
         ans_bits[i] = bitlen;
         ans_final_states[j] = new_state;
@@ -101,7 +115,12 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     }
   }
 
-  pub fn analyze_latent_batch(&mut self, latents: &[U], base_i: usize, dst: &mut DissectedLatents<U>) {
+  pub fn dissect_latent_batch(
+    &mut self,
+    latents: &[U],
+    base_i: usize,
+    dst: &mut DissectedLatents<U>,
+  ) {
     let DissectedLatents {
       ans_vals,
       ans_bits,
@@ -114,7 +133,10 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
 
     let end_i = min(base_i + FULL_BATCH_SIZE, ans_vals.len());
 
-    self.dissect_bins(&search_idxs[..latents.len()], &mut offset_bits[base_i..end_i]);
+    self.dissect_bins(
+      &search_idxs[..latents.len()],
+      &mut offset_bits[base_i..end_i],
+    );
 
     self.set_offsets(latents, &mut offsets[base_i..end_i]);
 
@@ -122,6 +144,10 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
       self.divide_by_gcds(&mut offsets[base_i..end_i]);
     }
 
-    self.encode_ans_in_reverse(&mut ans_vals[base_i..end_i], &mut ans_bits[base_i..end_i], ans_final_states);
+    self.encode_ans_in_reverse(
+      &mut ans_vals[base_i..end_i],
+      &mut ans_bits[base_i..end_i],
+      ans_final_states,
+    );
   }
 }

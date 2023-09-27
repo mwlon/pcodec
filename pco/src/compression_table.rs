@@ -5,7 +5,7 @@ use crate::data_types::UnsignedLike;
 pub struct CompressionTable<U: UnsignedLike> {
   pub search_size_log: usize,
   pub search_lowers: Vec<U>,
-  pub infos: Vec<BinCompressionInfo<U>>
+  pub infos: Vec<BinCompressionInfo<U>>,
 }
 
 impl<U: UnsignedLike> From<Vec<BinCompressionInfo<U>>> for CompressionTable<U> {
