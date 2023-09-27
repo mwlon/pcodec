@@ -421,20 +421,16 @@ fn write_dissecteds<U: UnsignedLike>(
   while batch_start < src.page_n {
     let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_n);
     for dissected in &src.dissected_latents {
-      let latent_batch_end = min(batch_end, dissected.ans_vals.len());
-      assert!(dissected.ans_bits.len() >= latent_batch_end);
-      assert!(dissected.offsets.len() >= latent_batch_end);
-      assert!(dissected.offset_bits.len() >= latent_batch_end);
-      for i in batch_start..latent_batch_end {
+      for (&val, &bits) in dissected.ans_vals.iter().zip(dissected.ans_bits.iter()).skip(batch_start).take(FULL_BATCH_SIZE) {
         writer.write_diff(
-          dissected.ans_vals[i],
-          dissected.ans_bits[i],
+          val,
+          bits,
         );
       }
-      for i in batch_start..latent_batch_end {
+      for (&offset, &bits) in dissected.offsets.iter().zip(dissected.offset_bits.iter()).skip(batch_start).take(FULL_BATCH_SIZE) {
         writer.write_diff(
-          dissected.offsets[i],
-          dissected.offset_bits[i],
+          offset,
+          bits,
         );
       }
     }
