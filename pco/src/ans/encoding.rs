@@ -15,6 +15,7 @@ struct TokenInfo {
 }
 
 impl TokenInfo {
+  #[inline]
   fn next_state_for(&self, x_s: AnsState) -> AnsState {
     self.next_states[x_s as usize - self.next_states.len()]
   }
@@ -76,6 +77,7 @@ impl Encoder {
   // ignored.
   // We don't write to a BitWriter directly because ANS operates in a LIFO
   // manner. We need to write these in reverse order.
+  #[inline]
   pub fn encode(&self, state: AnsState, token: Token) -> (AnsState, Bitlen) {
     let token_info = &self.token_infos[token as usize];
     let renorm_bits = if state >= token_info.renorm_bit_cutoff {
