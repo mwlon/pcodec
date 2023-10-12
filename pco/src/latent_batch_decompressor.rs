@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::chunk_metadata::PageLatentMetadata;
+use crate::page_metadata::PageLatentMetadata;
 use crate::constants::{
   Bitlen, ANS_INTERLEAVING, BYTES_PER_WORD, FULL_BATCH_SIZE, WORD_BITLEN, WORD_SIZE,
 };

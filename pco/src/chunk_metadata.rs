@@ -9,7 +9,7 @@ use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::{gcd, Mode};
-use crate::{bin, Flags};
+use crate::{bin, FormatVersion};
 
 /// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a latent
 /// variable interleaved into the compressed data.
@@ -50,39 +50,6 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
   }
 }
 
-#[derive(Clone, Debug)]
-pub struct PageLatentMetadata<U: UnsignedLike> {
-  pub delta_moments: DeltaMoments<U>,
-  pub ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
-}
-
-impl<U: UnsignedLike> PageLatentMetadata<U> {
-  pub fn write_to(&self, ans_size_log: Bitlen, writer: &mut BitWriter) {
-    self.delta_moments.write_to(writer);
-
-    // write the final ANS state, moving it down the range [0, table_size)
-    for state_idx in self.ans_final_state_idxs {
-      writer.write_diff(state_idx, ans_size_log);
-    }
-  }
-
-  pub fn parse_from(
-    reader: &mut BitReader,
-    delta_order: usize,
-    ans_size_log: Bitlen,
-  ) -> PcoResult<Self> {
-    let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
-    let mut ans_final_state_idxs = [0; ANS_INTERLEAVING];
-    for state in &mut ans_final_state_idxs {
-      *state = reader.read_uint::<AnsState>(ans_size_log)?;
-    }
-    Ok(Self {
-      delta_moments,
-      ans_final_state_idxs,
-    })
-  }
-}
-
 /// The metadata of a pco chunk.
 ///
 /// One can also create a rough histogram (or a histogram of deltas, if
@@ -95,13 +62,6 @@ impl<U: UnsignedLike> PageLatentMetadata<U> {
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ChunkMetadata<U: UnsignedLike> {
-  /// The count of numbers in the chunk.
-  /// Not available in wrapped mode.
-  pub n: usize,
-  /// The compressed byte length of the body that immediately follow this chunk
-  /// metadata section.
-  /// Not available in wrapped mode.
-  pub compressed_body_size: usize,
   /// The formula `pco` used to compress each number at a low level.
   pub mode: Mode<U>,
   /// How many times delta encoding was applied during compression.
@@ -111,39 +71,6 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   /// The interleaved streams needed by `pco` to compress/decompress the inputs
   /// to the formula used by `mode`.
   pub latents: Vec<ChunkLatentMetadata<U>>,
-}
-
-// Data page metadata is slightly semantically different from chunk metadata,
-// so it gets its own type.
-// Importantly, `n` and `compressed_body_size` might come from either the
-// chunk metadata parsing step (standalone mode) OR from the wrapping format
-// (wrapped mode).
-#[derive(Clone, Debug)]
-pub struct PageMetadata<U: UnsignedLike> {
-  pub latents: Vec<PageLatentMetadata<U>>,
-}
-
-impl<U: UnsignedLike> PageMetadata<U> {
-  pub fn write_to<I: Iterator<Item = Bitlen>>(&self, ans_size_logs: I, writer: &mut BitWriter) {
-    for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
-      self.latents[latent_idx].write_to(ans_size_log, writer);
-    }
-    writer.finish_byte();
-  }
-
-  pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMetadata<U>) -> PcoResult<Self> {
-    let mut latents = Vec::with_capacity(chunk_meta.latents.len());
-    for (latent_idx, latent_meta) in chunk_meta.latents.iter().enumerate() {
-      latents.push(PageLatentMetadata::parse_from(
-        reader,
-        chunk_meta.latent_delta_order(latent_idx),
-        latent_meta.ans_size_log,
-      )?);
-    }
-    reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
-
-    Ok(Self { latents })
-  }
 }
 
 fn parse_bins<U: UnsignedLike>(
@@ -222,30 +149,18 @@ fn write_bins<U: UnsignedLike>(
 
 impl<U: UnsignedLike> ChunkMetadata<U> {
   pub(crate) fn new(
-    n: usize,
     mode: Mode<U>,
     delta_encoding_order: usize,
     latents: Vec<ChunkLatentMetadata<U>>,
   ) -> Self {
     ChunkMetadata {
-      n,
-      compressed_body_size: 0,
       mode,
       delta_encoding_order,
       latents,
     }
   }
 
-  pub(crate) fn parse_from(reader: &mut BitReader, flags: &Flags) -> PcoResult<Self> {
-    let (n, compressed_body_size) = if flags.use_wrapped_mode {
-      (0, 0)
-    } else {
-      (
-        reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)?,
-        reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?,
-      )
-    };
-
+  pub(crate) fn parse_from(reader: &mut BitReader, _flags: &FormatVersion) -> PcoResult<Self> {
     let mode = match reader.read_usize(BITS_TO_ENCODE_MODE)? {
       0 => Ok(Mode::Classic),
       1 => Ok(Mode::Gcd),
@@ -276,23 +191,13 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;
 
     Ok(Self {
-      n,
-      compressed_body_size,
       mode,
       delta_encoding_order,
       latents,
     })
   }
 
-  pub(crate) fn write_to(&self, flags: &Flags, writer: &mut BitWriter) {
-    if !flags.use_wrapped_mode {
-      writer.write_usize(self.n, BITS_TO_ENCODE_N_ENTRIES);
-      writer.write_usize(
-        self.compressed_body_size,
-        BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
-      );
-    }
-
+  pub(crate) fn write_to(&self, _flags: &FormatVersion, writer: &mut BitWriter) {
     let mode_value = match self.mode {
       Mode::Classic => 0,
       Mode::Gcd => 1,
@@ -315,14 +220,16 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     writer.finish_byte();
   }
 
-  pub(crate) fn update_write_compressed_body_size(&self, writer: &mut BitWriter, bit_idx: usize) {
-    writer.overwrite_usize(
-      bit_idx + BITS_TO_ENCODE_N_ENTRIES as usize + 8,
-      self.compressed_body_size,
-      BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
-    );
-  }
+  // pub(crate) fn update_write_compressed_body_size(&self, writer: &mut BitWriter, bit_idx: usize) {
+  //   writer.overwrite_usize(
+  //     bit_idx + BITS_TO_ENCODE_N_ENTRIES as usize + 8,
+  //     self.compressed_body_size,
+  //     BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
+  //   );
+  // }
+  //
 
+  // TODO treat every latent var differently instead of having n_nontrivial_latents
   pub(crate) fn nontrivial_gcd_and_n_latents(&self) -> (bool, usize) {
     let primary_bins = &self.latents[0].bins;
     match self.mode {

@@ -3,7 +3,8 @@ use std::io::Write;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{Compressor, Decompressor};
-use crate::{bits, CompressorConfig, DecompressorConfig};
+use crate::{bits, CompressorConfig};
+use crate::standalone::decompressor::FileDecompressor;
 
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
@@ -36,22 +37,23 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: CompressorConfig) -> P
 /// Will return an error if there are any compatibility, corruption,
 /// or insufficient data issues.
 pub fn simple_decompress<T: NumberLike>(
-  config: DecompressorConfig,
   bytes: &[u8],
 ) -> PcoResult<Vec<T>> {
   // cloning/extending by a single chunk's numbers can slow down by 2%
   // so we just take ownership of the first chunk's numbers instead
-  let mut decompressor = Decompressor::<T>::from_config(config);
-  decompressor.write_all(bytes).unwrap();
+  let (file_decompressor, mut bytes) = FileDecompressor::new(bytes)?;
+
   let mut res = Vec::new();
   let mut n = 0;
-  decompressor.header()?;
-  while let Some(meta) = decompressor.chunk_metadata()? {
+  while let (Some(mut chunk_decompressor), rest) = file_decompressor.chunk_decompressor(bytes)? {
+    let meta = chunk_decompressor.metadata();
     res.reserve(meta.n);
     unsafe {
       res.set_len(n + meta.n);
     }
-    decompressor.chunk_body(&mut res[n..])?;
+    let (progress, rest) = chunk_decompressor.decompress(rest, &mut res[n..])?;
+    assert!(progress.finished_page);
+    bytes = rest;
     n += meta.n;
   }
   Ok(res)

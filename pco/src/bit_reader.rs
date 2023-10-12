@@ -91,12 +91,27 @@ impl<'a> From<&'a PaddedBytes> for BitReader<'a> {
   }
 }
 
+impl<'a> From<&'a [u8]> for BitReader<'a> {
+  fn from(bytes: &'a [u8]) -> Self {
+    BitReader {
+      bytes: &bytes,
+      total_bits: bytes.len() * 8,
+      loaded_byte_idx: 0,
+      bits_past_ptr: 0,
+    }
+  }
+}
+
 impl<'a> BitReader<'a> {
+  fn byte_idx(&self) -> usize {
+    self.loaded_byte_idx + (self.bits_past_ptr / 8) as usize
+  }
+
   // Returns the reader's current byte index. Will return an error if the
   // reader is at a misaligned position.
   pub fn aligned_byte_idx(&self) -> PcoResult<usize> {
     if self.bits_past_ptr % 8 == 0 {
-      Ok(self.loaded_byte_idx + (self.bits_past_ptr / 8) as usize)
+      Ok(self.byte_idx())
     } else {
       Err(PcoError::invalid_argument(format!(
         "cannot get aligned byte index on misaligned bit reader (byte {} + {} bits)",
@@ -272,6 +287,10 @@ impl<'a> BitReader<'a> {
     self.loaded_byte_idx = bit_idx / 8;
     self.bits_past_ptr = (bit_idx % 8) as Bitlen;
     self.refill();
+  }
+
+  pub fn rest(&self) -> &'a [u8] {
+    &self.bytes[self.byte_idx()..]
   }
 }
 

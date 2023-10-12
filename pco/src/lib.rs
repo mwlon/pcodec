@@ -5,11 +5,11 @@
 
 pub use auto::auto_delta_encoding_order;
 pub use base_compressor::CompressorConfig;
-pub use base_decompressor::DecompressorConfig;
+pub use wrapped::file_decompressor::DecompressorConfig;
 pub use bin::Bin;
 pub use chunk_metadata::{ChunkLatentMetadata, ChunkMetadata};
 pub use constants::DEFAULT_COMPRESSION_LEVEL;
-pub use flags::Flags;
+pub use flags::FormatVersion;
 pub use modes::Mode;
 
 #[doc = include_str!("../README.md")]
@@ -26,7 +26,6 @@ pub mod wrapped;
 mod ans;
 mod auto;
 mod base_compressor;
-mod base_decompressor;
 mod bin;
 mod bin_optimization;
 mod bit_reader;
@@ -43,9 +42,9 @@ mod float_mult_utils;
 mod latent_batch_decompressor;
 mod latent_batch_dissector;
 mod modes;
-mod page_decompressor;
 mod progress;
 mod unsigned_src_dst;
 
 #[cfg(test)]
 mod tests;
+mod page_metadata;

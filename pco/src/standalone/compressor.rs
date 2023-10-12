@@ -1,9 +1,9 @@
 use crate::base_compressor::{BaseCompressor, State};
 use crate::chunk_spec::ChunkSpec;
-use crate::constants::MAGIC_TERMINATION_BYTE;
+use crate::standalone::constants::MAGIC_TERMINATION_BYTE;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::{ChunkMetadata, CompressorConfig, Flags};
+use crate::{ChunkMetadata, CompressorConfig, FormatVersion};
 
 /// Converts vectors of numbers into compressed bytes in .pco format.
 ///
@@ -37,7 +37,7 @@ impl<T: NumberLike> Default for Compressor<T> {
 impl<T: NumberLike> Compressor<T> {
   /// Creates a new compressor, given a [`CompressorConfig`].
   ///
-  /// Internally, the compressor builds [`Flags`] as well as an internal
+  /// Internally, the compressor builds [`FormatVersion`] as well as an internal
   /// configuration that doesn't show up in the output file.
   /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
   ///
@@ -49,7 +49,7 @@ impl<T: NumberLike> Compressor<T> {
   }
 
   /// Returns a reference to the compressor's flags.
-  pub fn flags(&self) -> &Flags {
+  pub fn flags(&self) -> &FormatVersion {
     &self.0.flags
   }
 

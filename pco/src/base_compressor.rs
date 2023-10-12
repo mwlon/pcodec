@@ -3,7 +3,7 @@ use std::fmt::Debug;
 
 use crate::bin::{Bin, BinCompressionInfo};
 use crate::bit_writer::BitWriter;
-use crate::chunk_metadata::{ChunkLatentMetadata, ChunkMetadata, PageLatentMetadata, PageMetadata};
+use crate::chunk_metadata::{ChunkLatentMetadata, ChunkMetadata};
 use crate::chunk_spec::ChunkSpec;
 use crate::compression_table::CompressionTable;
 use crate::constants::*;
@@ -13,12 +13,14 @@ use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::modes::classic::ClassicMode;
-use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
+use crate::modes::gcd::{GcdMode, use_gcd_arithmetic};
 use crate::modes::{gcd, Mode};
 use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
 use crate::{ans, delta};
-use crate::{auto, Flags};
+use crate::{auto, FormatVersion};
 use crate::{bin_optimization, float_mult_utils};
+use crate::page_metadata::{PageLatentMetadata, PageMetadata};
+use crate::standalone::constants::{MAGIC_CHUNK_BYTE, MAGIC_HEADER};
 
 /// All configurations available for a compressor.
 ///
@@ -505,7 +507,7 @@ struct LatentConfig<U: UnsignedLike> {
 #[derive(Clone, Debug)]
 pub struct BaseCompressor<T: NumberLike> {
   internal_config: InternalCompressorConfig,
-  pub flags: Flags,
+  pub flags: FormatVersion,
   pub writer: BitWriter,
   pub state: State<T::Unsigned>,
 }
@@ -518,7 +520,7 @@ impl<T: NumberLike> BaseCompressor<T> {
   pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> PcoResult<Self> {
     Ok(Self {
       internal_config: InternalCompressorConfig::from_config::<T>(&config)?,
-      flags: Flags::from_config(&config, use_wrapped_mode),
+      flags: FormatVersion::from_config(&config, use_wrapped_mode),
       writer: BitWriter::default(),
       state: State::default(),
     })
