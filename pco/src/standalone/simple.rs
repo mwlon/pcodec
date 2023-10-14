@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::standalone::{Compressor, Decompressor};
+use crate::standalone::Compressor;
 use crate::{bits, CompressorConfig};
 use crate::standalone::decompressor::FileDecompressor;
 
@@ -41,20 +41,11 @@ pub fn simple_decompress<T: NumberLike>(
 ) -> PcoResult<Vec<T>> {
   // cloning/extending by a single chunk's numbers can slow down by 2%
   // so we just take ownership of the first chunk's numbers instead
-  let (file_decompressor, mut bytes) = FileDecompressor::new(bytes)?;
+  let (file_decompressor, mut data) = FileDecompressor::new(bytes)?;
 
   let mut res = Vec::new();
-  let mut n = 0;
-  while let (Some(mut chunk_decompressor), rest) = file_decompressor.chunk_decompressor(bytes)? {
-    let meta = chunk_decompressor.metadata();
-    res.reserve(meta.n);
-    unsafe {
-      res.set_len(n + meta.n);
-    }
-    let (progress, rest) = chunk_decompressor.decompress(rest, &mut res[n..])?;
-    assert!(progress.finished_page);
-    bytes = rest;
-    n += meta.n;
+  while let (Some(mut chunk_decompressor), rest) = file_decompressor.chunk_decompressor(data)? {
+    data = chunk_decompressor.decompress_remaining_extend(rest, &mut res)?;
   }
   Ok(res)
 }
@@ -84,5 +75,5 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 /// There are currently no relevant fields in the decompression configuration,
 /// so there is no compute downside to using this function.
 pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> PcoResult<Vec<T>> {
-  simple_decompress(DecompressorConfig::default(), bytes)
+  simple_decompress(bytes)
 }

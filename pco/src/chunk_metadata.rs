@@ -9,7 +9,8 @@ use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::{gcd, Mode};
-use crate::{bin, FormatVersion};
+use crate::{bin};
+use crate::format_version::FormatVersion;
 
 /// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a latent
 /// variable interleaved into the compressed data.

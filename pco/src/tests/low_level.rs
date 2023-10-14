@@ -2,8 +2,9 @@ use std::io::Write;
 
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
-use crate::standalone::{Compressor, DecompressedItem, Decompressor};
+use crate::standalone::{Compressor, FileDecompressor};
 use crate::CompressorConfig;
+use crate::constants::{CURRENT_FORMAT_VERSION, FULL_BATCH_SIZE};
 
 #[test]
 fn test_low_level_short() -> PcoResult<()> {
@@ -42,53 +43,26 @@ fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) -> PcoResult
 
     let bytes = compressor.drain_bytes();
 
-    let mut decompressor = Decompressor::<T>::default();
-    decompressor.write_all(&bytes).unwrap();
-    let flags = decompressor.header()?;
-    assert_eq!(&flags, compressor.flags(), "{}", debug_info);
+    let (fd, mut bytes) = FileDecompressor::new(&bytes)?;
+    assert_eq!(fd.format_version(), CURRENT_FORMAT_VERSION, "{}", debug_info);
+
     let mut chunk_idx = 0;
-    let mut chunk_nums = Vec::<T>::new();
-    let mut terminated = false;
-    for maybe_item in &mut decompressor {
-      let item = maybe_item?;
-      match item {
-        DecompressedItem::Flags(_) => panic!("already read flags"),
-        DecompressedItem::ChunkMetadata(meta) => {
-          assert!(!terminated);
-          assert_eq!(&meta, &metadatas[chunk_idx]);
-          if chunk_idx > 0 {
-            assert_eq!(&chunk_nums, &chunks[chunk_idx - 1]);
-            chunk_nums = Vec::new();
-          }
-          chunk_idx += 1;
-        }
-        DecompressedItem::Numbers(nums) => {
-          assert!(!terminated);
-          chunk_nums.extend(&nums);
-        }
-        DecompressedItem::Footer => {
-          assert!(!terminated);
-          terminated = true;
+    let mut buffer = vec![T::default(); FULL_BATCH_SIZE];
+    while let (Some(mut chunk_decompressor), rest) = fd.chunk_decompressor(bytes)? {
+      let mut chunk_nums = Vec::<T>::new();
+      bytes = rest;
+      loop {
+        let (progress, rest) = chunk_decompressor.decompress(bytes, &mut buffer)?;
+        chunk_nums.extend(&buffer[..progress.n_processed]);
+        bytes = rest;
+        if progress.finished_page {
+          break;
         }
       }
-    }
-    assert_eq!(
-      &chunk_nums,
-      chunks.last().unwrap(),
-      "{}",
-      debug_info
-    );
+      assert_eq!(&chunk_nums, &chunks[chunk_idx]);
 
-    let terminated_err = decompressor.chunk_metadata().unwrap_err();
-    assert!(
-      matches!(
-        terminated_err.kind,
-        ErrorKind::InvalidArgument
-      ),
-      "{}",
-      debug_info
-    );
-    assert!(terminated, "{}", debug_info);
+      chunk_idx += 1;
+    }
   }
   Ok(())
 }

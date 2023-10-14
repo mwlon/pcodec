@@ -1,16 +1,12 @@
 use std::fmt::Debug;
-use std::io::{Bytes, Read, Write};
 
 use crate::bit_reader::BitReader;
-use crate::bit_words::PaddedBytes;
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
 use crate::chunk_metadata::ChunkMetadata;
 use crate::data_types::NumberLike;
-use crate::page_decompressor::PageDecompressor;
 
 use crate::errors::{PcoError, PcoResult};
-use crate::FormatVersion;
-use crate::page_metadata::PageMetadata;
+use crate::format_version::FormatVersion;
 
 // #[derive(Clone, Debug, Default)]
 // pub struct State<T: NumberLike> {
@@ -156,7 +152,7 @@ use crate::page_metadata::PageMetadata;
 //   }
 // }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct FileDecompressor {
   format_version: FormatVersion,
@@ -182,8 +178,8 @@ impl FileDecompressor {
     Ok((Self { format_version }, reader.rest()))
   }
 
-  pub fn format_version(&self) -> u32 {
-    self.format_version.0 as u32
+  pub fn format_version(&self) -> u8 {
+    self.format_version.0
   }
 
   pub fn chunk_decompressor<T: NumberLike>(&self, bytes: &[u8]) -> PcoResult<(ChunkDecompressor<T>, &[u8])> {

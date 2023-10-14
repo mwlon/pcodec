@@ -1,6 +1,6 @@
 use std::io::Read;
 use crate::bit_reader::BitReader;
-use crate::data_types::NumberLike;
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{PcoError, PcoResult};
 use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_BODY_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::{ChunkMetadata, wrapped};
@@ -24,7 +24,7 @@ impl FileDecompressor {
     Ok((Self(inner), rest))
   }
 
-  pub fn format_version(&self) -> u32 {
+  pub fn format_version(&self) -> u8 {
     self.0.format_version()
   }
 
@@ -72,7 +72,15 @@ pub struct ChunkDecompressor<T: NumberLike> {
 
 impl<T: NumberLike> ChunkDecompressor<T> {
   pub fn metadata(&self) -> &ChunkMetadata<T::Unsigned> {
-    &self.meta
+    &self.inner_cd.meta
+  }
+
+  pub fn n(&self) -> usize {
+    self.n
+  }
+
+  pub fn compressed_body_size(&self) -> usize {
+    self.compressed_body_size
   }
 
   pub fn decompress(&mut self, bytes: &[u8], dst: &mut [T]) -> PcoResult<(Progress, &[u8])> {
@@ -81,13 +89,13 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     self.n_processed += progress.n_processed;
     self.n_bytes_processed += bytes.len() - rest.len();
 
-    if *self.n_processed >= self.n && *self.n_bytes_processed != self.compressed_body_size {
+    if self.n_processed >= self.n && self.n_bytes_processed != self.compressed_body_size {
       return Err(PcoError::corruption(format!(
         "Expected {} bytes in data page but read {} by the end",
         self.compressed_body_size,
         self.n_bytes_processed,
       )));
-    } else if *self.n_bytes_processed > self.compressed_body_size {
+    } else if self.n_bytes_processed > self.compressed_body_size {
       return Err(PcoError::corruption(format!(
         "Expected {} bytes in data page but read {} before reaching the end",
         self.compressed_body_size,
@@ -96,6 +104,19 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     }
 
     Ok((progress, rest))
+  }
+
+  // a helper for some internal things
+  pub(crate) fn decompress_remaining_extend(&mut self, bytes: &[u8], dst: &mut Vec<T>) -> PcoResult<&[u8]> {
+    let initial_len = dst.len();
+    let remaining = self.n - self.n_processed;
+    dst.reserve(remaining);
+    unsafe {
+      dst.set_len(initial_len + remaining);
+    }
+    let (progress, rest) = self.decompress(bytes, &mut dst[initial_len..])?;
+    assert!(progress.finished_page);
+    Ok(rest)
   }
 }
 
