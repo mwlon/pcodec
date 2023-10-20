@@ -1,6 +1,7 @@
+use std::cmp::min;
 use crate::ans::AnsState;
 use crate::bin::Bin;
-use crate::bit_reader::BitReader;
+use crate::bit_reader::{BitReader};
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
@@ -33,10 +34,63 @@ pub struct ChunkLatentMetadata<U: UnsignedLike> {
   pub bins: Vec<Bin<U>>,
 }
 
+fn parse_bin_batch<U: UnsignedLike>(reader: &mut BitReader, mode: Mode<U>, batch_size: usize, dst: &mut Vec<Bin<U>>) -> PcoResult<()> {
+  reader.ensure_padded(DEFAULT_PADDING_BYTES);
+
+  let offset_bits_bits = bits_to_encode_offset_bits::<U>();
+  for _ in 0..batch_size {
+    let weight = reader.read_uint::<Weight>(ans_size_log) + 1;
+    let lower = reader.read_uint::<U>(U::BITS);
+
+    let offset_bits = reader.read_bitlen(offset_bits_bits);
+    if offset_bits > U::BITS {
+      return Err(PcoError::corruption(format!(
+        "offset bits of {} exceeds data type of {} bits",
+        offset_bits,
+        U::BITS,
+      )));
+    }
+
+    let gcd = match mode {
+      Mode::Gcd if offset_bits != 0 => reader.read_uint(U::BITS),
+      _ => U::ONE,
+    };
+
+    dst.push(Bin {
+      weight,
+      lower,
+      offset_bits,
+      gcd,
+    });
+  }
+
+  Ok(())
+}
+
 impl<U: UnsignedLike> ChunkLatentMetadata<U> {
   fn parse_from(reader: &mut BitReader, mode: Mode<U>) -> PcoResult<Self> {
-    let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG)?;
-    let bins = parse_bins::<U>(reader, mode, ans_size_log)?;
+    reader.ensure_padded(DEFAULT_PADDING_BYTES);
+    let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
+
+    let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS);
+    if 1 << ans_size_log < n_bins {
+      return Err(PcoError::corruption(format!(
+        "ANS size log ({}) is too small for number of bins ({})",
+        ans_size_log, n_bins,
+      )));
+    }
+    if n_bins == 1 && ans_size_log > 0 {
+      return Err(PcoError::corruption(format!(
+        "Only 1 bin but ANS size log is {} (should be 0)",
+        ans_size_log,
+      )));
+    }
+
+    let mut bins = Vec::with_capacity(n_bins);
+    while bins.len() < n_bins {
+      let batch_size = min(n_bins - bins.len(), FULL_BIN_BATCH_SIZE);
+      parse_bin_batch(reader, mode, batch_size, &mut bins)?;
+    }
 
     Ok(Self { bins, ans_size_log })
   }
@@ -72,55 +126,6 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   /// The interleaved streams needed by `pco` to compress/decompress the inputs
   /// to the formula used by `mode`.
   pub latents: Vec<ChunkLatentMetadata<U>>,
-}
-
-fn parse_bins<U: UnsignedLike>(
-  reader: &mut BitReader,
-  mode: Mode<U>,
-  ans_size_log: Bitlen,
-) -> PcoResult<Vec<Bin<U>>> {
-  let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS)?;
-  let mut bins = Vec::with_capacity(n_bins);
-  let offset_bits_bits = bits_to_encode_offset_bits::<U>();
-  if 1 << ans_size_log < n_bins {
-    return Err(PcoError::corruption(format!(
-      "ANS size log ({}) is too small for number of bins ({})",
-      ans_size_log, n_bins,
-    )));
-  }
-  if n_bins == 1 && ans_size_log > 0 {
-    return Err(PcoError::corruption(format!(
-      "Only 1 bin but ANS size log is {} (should be 0)",
-      ans_size_log,
-    )));
-  }
-  for _ in 0..n_bins {
-    let weight = reader.read_uint::<Weight>(ans_size_log)? + 1;
-    let lower = reader.read_uint::<U>(U::BITS)?;
-
-    let offset_bits = reader.read_bitlen(offset_bits_bits)?;
-    if offset_bits > U::BITS {
-      return Err(PcoError::corruption(format!(
-        "offset bits of {} exceeds data type of {} bits",
-        offset_bits,
-        U::BITS,
-      )));
-    }
-
-    let gcd = match mode {
-      Mode::Gcd if offset_bits != 0 => reader.read_uint(U::BITS)?,
-      _ => U::ONE,
-    };
-
-    let bin = Bin {
-      weight,
-      lower,
-      offset_bits,
-      gcd,
-    };
-    bins.push(bin);
-  }
-  Ok(bins)
 }
 
 fn write_bins<U: UnsignedLike>(
@@ -162,11 +167,12 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
   }
 
   pub(crate) fn parse_from(reader: &mut BitReader, _flags: &FormatVersion) -> PcoResult<Self> {
-    let mode = match reader.read_usize(BITS_TO_ENCODE_MODE)? {
+    reader.ensure_padded(DEFAULT_PADDING_BYTES);
+    let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
       0 => Ok(Mode::Classic),
       1 => Ok(Mode::Gcd),
       2 => {
-        let base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS)?);
+        let base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS));
         Ok(Mode::FloatMult(FloatMultConfig {
           base,
           inv_base: base.inv(),
@@ -178,7 +184,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       ))),
     }?;
 
-    let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)?;
+    let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
 
     let n_latents = mode.n_latents();
 

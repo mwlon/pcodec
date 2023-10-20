@@ -1,7 +1,7 @@
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::standalone::Compressor;
-use crate::CompressorConfig;
+use crate::compressor_config::CompressorConfig;
 use std::cmp::min;
 
 /// Automatically makes an educated guess for the best compression

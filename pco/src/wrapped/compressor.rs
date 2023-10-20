@@ -1,8 +1,9 @@
-use crate::base_compressor::BaseCompressor;
+use crate::wrapped::chunk_compressor::BaseCompressor;
 use crate::chunk_spec::ChunkSpec;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::{ChunkMetadata, CompressorConfig, Flags};
+use crate::ChunkMetadata;
+use crate::compressor_config::CompressorConfig;
 
 /// Converts vectors of numbers into compressed bytes for use in a wrapping
 /// columnar data format.

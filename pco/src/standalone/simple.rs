@@ -3,7 +3,8 @@ use std::io::Write;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::Compressor;
-use crate::{bits, CompressorConfig};
+use crate::bits;
+use crate::compressor_config::CompressorConfig;
 use crate::standalone::decompressor::FileDecompressor;
 
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;

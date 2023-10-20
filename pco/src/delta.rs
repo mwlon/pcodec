@@ -16,7 +16,7 @@ impl<U: UnsignedLike> DeltaMoments<U> {
   pub fn parse_from(reader: &mut BitReader, order: usize) -> PcoResult<Self> {
     let mut moments = Vec::new();
     for _ in 0..order {
-      moments.push(reader.read_uint::<U>(U::BITS)?);
+      moments.push(reader.read_uint::<U>(U::BITS));
     }
     Ok(DeltaMoments { moments })
   }

@@ -19,13 +19,6 @@ pub trait ConstMode<U: UnsignedLike>: Copy + Debug + 'static {
     acc: Self::BinOptAccumulator,
     bin: &mut BinCompressionInfo<U>,
   );
-
-  // COMPRESSION
-  fn calc_offset(u: U, bin: &BinCompressionInfo<U>) -> U;
-
-  // DECOMPRESSION
-  fn unchecked_decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U;
-  fn decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> PcoResult<U>;
 }
 
 // Dynamic modes. Logic should go here if it isn't called in hot loops.

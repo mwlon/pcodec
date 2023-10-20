@@ -3,7 +3,7 @@ use rand::Rng;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{auto_decompress, simple_compress, Compressor};
-use crate::CompressorConfig;
+use crate::compressor_config::CompressorConfig;
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {

@@ -1,8 +1,9 @@
 use std::fmt::Debug;
 
-use crate::bit_reader::BitReader;
+use crate::bit_reader::{BitReader};
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
 use crate::chunk_metadata::ChunkMetadata;
+use crate::constants::MINIMAL_PADDING_BYTES;
 use crate::data_types::NumberLike;
 
 use crate::errors::{PcoError, PcoResult};
@@ -156,25 +157,14 @@ use crate::format_version::FormatVersion;
 #[non_exhaustive]
 pub struct FileDecompressor {
   format_version: FormatVersion,
-  // pub words: PaddedBytes,
-  // pub state: State<T>,
 }
 
-// impl<T: NumberLike> Write for FileDecompressor<T> {
-//   fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-//     self.words.extend_bytes(buf);
-//     Ok(buf.len())
-//   }
-//
-//   fn flush(&mut self) -> std::io::Result<()> {
-//     Ok(())
-//   }
-// }
-
 impl FileDecompressor {
-  pub fn new(bytes: &[u8]) -> PcoResult<(Self, &[u8])> {
-    let mut reader = BitReader::from(bytes);
+  pub fn new(src: &[u8]) -> PcoResult<(Self, &[u8])> {
+    let mut reader = BitReader::from(src);
+    reader.ensure_padded(1);
     let format_version = FormatVersion::parse_from(&mut reader)?;
+    reader.check_in_bounds()?;
     Ok((Self { format_version }, reader.rest()))
   }
 

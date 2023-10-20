@@ -2,11 +2,11 @@
 // of the compressed data.
 // New flags may be added in over time in a backward-compatible way.
 
+use std::io::Write;
 use crate::bit_reader::BitReader;
-use crate::bit_words::PaddedBytes;
 use crate::bit_writer::BitWriter;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
-use crate::CompressorConfig;
+use crate::compressor_config::CompressorConfig;
 use crate::constants::CURRENT_FORMAT_VERSION;
 
 /// The configuration stored in a pco header.
@@ -20,7 +20,7 @@ use crate::constants::CURRENT_FORMAT_VERSION;
 /// internally by `Compressor::from_config`.
 /// However, in some circumstances you may want to inspect flags during
 /// decompression.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FormatVersion(pub u8);
 
 impl FormatVersion {
@@ -53,7 +53,7 @@ impl FormatVersion {
 
   pub(crate) fn write_to(&self, writer: &mut BitWriter) -> PcoResult<()> {
     // in the future, we may want to allow the user to encode with their choice of a recent version
-    writer.write_aligned_byte(CURRENT_FORMAT_VERSION as u8)?;
+    dst.write(&[self.0])?;
     // let start_bit_idx = writer.bit_size();
     // writer.write_aligned_byte(0)?; // to later be filled with # subsequent bytes
     //

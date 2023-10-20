@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{Compressor, FileDecompressor};
-use crate::CompressorConfig;
+use crate::compressor_config::CompressorConfig;
 use crate::constants::{CURRENT_FORMAT_VERSION, FULL_BATCH_SIZE};
 
 #[test]

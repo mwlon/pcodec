@@ -13,7 +13,7 @@ use parquet::arrow::ProjectionMask;
 
 use pco::data_types::NumberLike;
 use pco::standalone::Compressor;
-use pco::CompressorConfig;
+use pco::compressor_config::CompressorConfig;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;

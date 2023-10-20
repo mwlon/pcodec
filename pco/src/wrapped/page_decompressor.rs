@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
 use crate::page_metadata::PageMetadata;
-use crate::constants::FULL_BATCH_SIZE;
+use crate::constants::{DEFAULT_PADDING_BYTES, FULL_BATCH_SIZE};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
@@ -201,10 +201,11 @@ impl<T: NumberLike> PageDecompressor<T> {
     let mut reader = BitReader::from(bytes);
     if num_dst.len() % FULL_BATCH_SIZE != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
-        "num_dst's length must either be a multiple of {} or exceed the length of numbers remaining ({}) (was {})",
+        "num_dst's length must either be a multiple of {} or be\
+         at least the length of numbers remaining ({} < {})",
         FULL_BATCH_SIZE,
-        self.n_remaining(),
         num_dst.len(),
+        self.n_remaining(),
       )));
     }
     let n_to_process = min(num_dst.len(), self.n_remaining());
@@ -227,9 +228,9 @@ impl<T: NumberLike> PageDecompressor<T> {
     }
 
     let progress = Progress {
-        n_processed,
-        finished_page: self.n_remaining() == 0,
-      };
+      n_processed,
+      finished_page: self.n_remaining() == 0,
+    };
 
     Ok((progress, reader.rest()))
   }

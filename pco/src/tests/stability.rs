@@ -2,7 +2,7 @@ use crate::chunk_metadata::ChunkMetadata;
 use crate::data_types::NumberLike;
 use crate::errors::ErrorKind;
 use crate::standalone::{auto_decompress, Compressor};
-use crate::CompressorConfig;
+use crate::compressor_config::CompressorConfig;
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T::Unsigned> {
   let mut compressor = Compressor::from_config(CompressorConfig {

@@ -44,8 +44,8 @@ impl FileDecompressor {
       )));
     }
 
-    let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES)? + 1;
-    let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE)?;
+    let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1;
+    let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
     let bytes = &bytes[reader.aligned_byte_idx()?..];
     let (inner_cd, bytes) = self.0.chunk_decompressor::<T>(bytes)?;
     let (inner_pd, bytes) = inner_cd.page_decompressor(n, bytes)?;

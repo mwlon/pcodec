@@ -2,7 +2,7 @@ use crate::ans::AnsState;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::ChunkMetadata;
-use crate::constants::{ANS_INTERLEAVING, Bitlen};
+use crate::constants::{ANS_INTERLEAVING, Bitlen, MINIMAL_PADDING_BYTES};
 use crate::data_types::UnsignedLike;
 use crate::delta::DeltaMoments;
 use crate::errors::PcoResult;
@@ -28,10 +28,11 @@ impl<U: UnsignedLike> PageLatentMetadata<U> {
     delta_order: usize,
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
+    reader.ensure_padded(MINIMAL_PADDING_BYTES);
     let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
     let mut ans_final_state_idxs = [0; ANS_INTERLEAVING];
     for state in &mut ans_final_state_idxs {
-      *state = reader.read_uint::<AnsState>(ans_size_log)?;
+      *state = reader.read_uint::<AnsState>(ans_size_log);
     }
     Ok(Self {
       delta_moments,

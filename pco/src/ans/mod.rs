@@ -18,7 +18,6 @@ mod tests {
   use crate::ans::spec::Spec;
   use crate::ans::{Decoder, Encoder, Token};
   use crate::bit_reader::BitReader;
-  use crate::bit_words::PaddedBytes;
   use crate::bit_writer::BitWriter;
   use crate::errors::PcoResult;
 
@@ -43,14 +42,13 @@ mod tests {
     let decoder = Decoder::new(spec);
     let bytes = writer.drain_bytes();
     assert_eq!(bytes.len(), expected_byte_len);
-    let bit_words = PaddedBytes::from(bytes);
-    let mut reader = BitReader::from(&bit_words);
+    let mut reader = BitReader::from(&bytes);
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;
     for _ in 0..tokens.len() {
       let node = decoder.get_node(state_idx);
       decoded.push(node.token);
-      state_idx = node.next_state_idx_base + reader.read_small(node.bits_to_read)?;
+      state_idx = node.next_state_idx_base + reader.read_small(node.bits_to_read);
     }
 
     assert_eq!(decoded, tokens);

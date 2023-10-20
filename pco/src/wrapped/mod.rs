@@ -5,7 +5,8 @@ pub use crate::chunk_spec::ChunkSpec;
 pub use file_decompressor::FileDecompressor;
 pub use page_decompressor::PageDecompressor;
 
+mod chunk_compressor;
 mod chunk_decompressor;
-mod compressor;
+mod file_compressor;
 mod file_decompressor;
 mod page_decompressor;

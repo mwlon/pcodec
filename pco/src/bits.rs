@@ -1,9 +1,9 @@
-use crate::bit_reader::ReadableUint;
+use crate::read_write_uint::ReadWriteUint;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
 #[inline]
-pub fn lowest_bits<U: ReadableUint>(word: U, n: Bitlen) -> U {
+pub fn lowest_bits<U: ReadWriteUint>(word: U, n: Bitlen) -> U {
   if n >= U::BITS {
     word
   } else {
@@ -19,6 +19,7 @@ pub fn avg_depth_bits(weight: Weight, total_weight: usize) -> f64 {
   (total_weight as f64 / weight as f64).log2()
 }
 
+// TODO upgrade to rust 1.73 and delete this
 pub const fn ceil_div(x: usize, divisor: usize) -> usize {
   (x + divisor - 1) / divisor
 }

@@ -1,9 +1,10 @@
-use crate::base_compressor::{BaseCompressor, State};
 use crate::chunk_spec::ChunkSpec;
 use crate::standalone::constants::MAGIC_TERMINATION_BYTE;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::{ChunkMetadata, CompressorConfig, FormatVersion};
+use crate::ChunkMetadata;
+use crate::compressor_config::CompressorConfig;
+use crate::wrapped::chunk_compressor::{ChunkCompressor, State};
 
 /// Converts vectors of numbers into compressed bytes in .pco format.
 ///
@@ -26,7 +27,7 @@ use crate::{ChunkMetadata, CompressorConfig, FormatVersion};
 /// Note that in practice we would need larger chunks than this to
 /// achieve good compression, preferably containing 2k-10M numbers.
 #[derive(Clone, Debug)]
-pub struct Compressor<T: NumberLike>(BaseCompressor<T>);
+pub struct Compressor<T: NumberLike>(ChunkCompressor<T>);
 
 impl<T: NumberLike> Default for Compressor<T> {
   fn default() -> Self {
@@ -43,14 +44,14 @@ impl<T: NumberLike> Compressor<T> {
   ///
   /// Will return an error if the compressor config is invalid.
   pub fn from_config(config: CompressorConfig) -> PcoResult<Self> {
-    Ok(Self(BaseCompressor::<T>::from_config(
+    Ok(Self(ChunkCompressor::<T>::from_config(
       config, false,
     )?))
   }
 
   /// Returns a reference to the compressor's flags.
   pub fn flags(&self) -> &FormatVersion {
-    &self.0.flags
+    &self.0.format_version
   }
 
   /// Writes out a header using the compressor's data type and flags.
