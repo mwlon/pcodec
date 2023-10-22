@@ -38,13 +38,14 @@ mod tests {
     for (word, bitlen) in to_write.into_iter().rev() {
       writer.write_uint(word, bitlen);
     }
-    drop(writer);
+    writer.finish_byte();
+    let consumed = writer.bytes_consumed()?;
     let final_state = state;
     let table_size = 1 << encoder.size_log();
 
     // DECODE
     let decoder = Decoder::new(spec);
-    assert_eq!(bytes.len(), expected_byte_len);
+    assert_eq!(consumed, expected_byte_len);
     let mut reader = BitReader::new(&bytes, &extension);
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;
