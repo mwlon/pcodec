@@ -30,7 +30,7 @@ impl FileCompressor {
     writer.rest()
   }
 
-  pub fn chunk_compressor<T: NumberLike>(&self, nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<T>> {
+  pub fn chunk_compressor<T: NumberLike>(&self, nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<U>> {
     ChunkCompressor::new(nums, config)
   }
 }
