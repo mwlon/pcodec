@@ -2,7 +2,6 @@ use std::io::Write;
 
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::standalone::Compressor;
 use crate::bits;
 use crate::chunk_config::ChunkConfig;
 use crate::standalone::compressor::FileCompressor;
@@ -36,8 +35,9 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
   };
 
   zero_pad(&mut bytes, file_compressor.footer_size_hint().saturating_sub(zeros_remaining));
-  file_compressor.write_footer(&mut bytes)?;
+  zeros_remaining = file_compressor.write_footer(&mut bytes)?.len();
 
+  bytes.truncate(bytes.len() - zeros_remaining);
   Ok(bytes)
 }
 

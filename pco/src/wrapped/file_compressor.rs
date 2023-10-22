@@ -6,6 +6,7 @@ use crate::constants::CURRENT_FORMAT_VERSION;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::format_version::FormatVersion;
+use crate::wrapped::chunk_compressor;
 use crate::wrapped::chunk_compressor::ChunkCompressor;
 
 pub struct FileCompressor {
@@ -30,7 +31,7 @@ impl FileCompressor {
     writer.rest()
   }
 
-  pub fn chunk_compressor<T: NumberLike>(&self, nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<U>> {
-    ChunkCompressor::new(nums, config)
+  pub fn chunk_compressor<T: NumberLike>(&self, nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+    chunk_compressor::new(nums, config)
   }
 }

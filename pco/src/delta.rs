@@ -23,7 +23,7 @@ impl<U: UnsignedLike> DeltaMoments<U> {
 
   pub fn write_to(&self, writer: &mut BitWriter) {
     for &moment in &self.moments {
-      writer.write_diff(moment, U::BITS);
+      writer.write_uint(moment, U::BITS);
     }
   }
 

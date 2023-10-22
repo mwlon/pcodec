@@ -1,8 +1,9 @@
-use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
+use crate::constants::{AUTO_DELTA_LIMIT, DEFAULT_MAX_PAGE_SIZE, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
-use crate::standalone::Compressor;
-use crate::chunk_config::ChunkConfig;
+use crate::chunk_config::{ChunkConfig, PagingSpec};
 use std::cmp::min;
+use crate::errors::PcoResult;
+use crate::wrapped::FileCompressor;
 
 /// Automatically makes an educated guess for the best compression
 /// delta encoding order, based on `nums` and `compression_level`.
@@ -10,7 +11,7 @@ use std::cmp::min;
 /// This has some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
 /// See [`ChunkConfig`] for information about compression levels.
-pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> usize {
+pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> PcoResult<usize> {
   let mut sampled_nums;
   let head_nums = if nums.len() < AUTO_DELTA_LIMIT {
     nums
@@ -44,11 +45,16 @@ pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: u
       ),
       use_gcds: false,
       use_float_mult: true,
+      paging_spec: PagingSpec::default(),
     };
-    let mut compressor = Compressor::<T>::from_config(config).unwrap();
-    compressor.header().unwrap();
-    compressor.chunk(head_nums).unwrap(); // only unreachable errors
-    let size = compressor.byte_size();
+    let fc = FileCompressor::new();
+    let cc = fc.chunk_compressor(head_nums, &config)?;
+    let size_estimate = cc.chunk_meta_size_hint() + cc.page_size_hint(0);
+    let mut res = vec![0; size_estimate];
+    let dst = &mut res;
+    let dst = cc.write_chunk_meta(dst)?;
+    let dst = cc.write_page(0, dst)?;
+    let size = size_estimate - dst.len();
 
     if size < best_size {
       best_order = delta_encoding_order;
@@ -58,7 +64,8 @@ pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: u
       break;
     }
   }
-  best_order
+
+  Ok(best_order)
 }
 
 #[cfg(test)]
@@ -78,13 +85,13 @@ mod tests {
       linear_trend.push(i);
       quadratic_trend.push(i * i);
     }
-    assert_eq!(auto_delta_encoding_order(&no_trend, 3), 0);
+    assert_eq!(auto_delta_encoding_order(&no_trend, 3).unwrap(), 0);
     assert_eq!(
-      auto_delta_encoding_order(&linear_trend, 3),
+      auto_delta_encoding_order(&linear_trend, 3).unwrap(),
       1
     );
     assert_eq!(
-      auto_delta_encoding_order(&quadratic_trend, 3),
+      auto_delta_encoding_order(&quadratic_trend, 3).unwrap(),
       2
     );
   }
@@ -94,6 +101,6 @@ mod tests {
     let mut nums = Vec::with_capacity(2000);
     nums.resize(1000, 77);
     nums.resize(2000, 78);
-    assert_eq!(auto_delta_encoding_order(&nums, 3), 1);
+    assert_eq!(auto_delta_encoding_order(&nums, 3).unwrap(), 1);
   }
 }

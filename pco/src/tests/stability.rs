@@ -1,7 +1,7 @@
 use crate::chunk_metadata::ChunkMetadata;
 use crate::data_types::NumberLike;
 use crate::errors::ErrorKind;
-use crate::standalone::{auto_decompress, Compressor};
+use crate::standalone::{auto_decompress};
 use crate::chunk_config::ChunkConfig;
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T::Unsigned> {

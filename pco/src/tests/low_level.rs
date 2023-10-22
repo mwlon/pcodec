@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
-use crate::standalone::{Compressor, FileDecompressor};
+use crate::standalone::{FileDecompressor};
 use crate::chunk_config::ChunkConfig;
 use crate::constants::{CURRENT_FORMAT_VERSION, FULL_BATCH_SIZE};
 

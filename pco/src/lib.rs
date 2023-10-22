@@ -23,7 +23,6 @@ pub mod wrapped;
 
 mod ans;
 mod auto;
-mod base_compressor;
 mod bin;
 mod bin_optimization;
 mod bit_reader;

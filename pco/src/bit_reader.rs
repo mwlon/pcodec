@@ -10,25 +10,25 @@ use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
 
 #[inline]
-pub fn unchecked_word_at(src: &[u8], byte_idx: usize) -> usize {
+pub fn word_at(src: &[u8], byte_idx: usize) -> usize {
   let raw_bytes = unsafe { *(src.as_ptr().add(byte_idx) as *const [u8; BYTES_PER_WORD]) };
   usize::from_le_bytes(raw_bytes)
 }
 
 #[inline]
-pub fn unchecked_read_uint<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
+pub fn read_uint<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
   src: &[u8],
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
   n: Bitlen,
 ) -> U {
-  let mut res = U::from_word(unchecked_word_at(src, byte_idx) >> bits_past_byte);
+  let mut res = U::from_word(word_at(src, byte_idx) >> bits_past_byte);
   // TODO do I need this (WORD_BITLEN - 8) and (BYTES_PER_WORD - 1)?
   let mut processed = min(n, WORD_BITLEN - 8 - bits_past_byte);
   byte_idx += BYTES_PER_WORD - 1;
 
   for _ in 0..MAX_EXTRA_WORDS {
-    res |= U::from_word(unchecked_word_at(src, byte_idx)) << processed;
+    res |= U::from_word(word_at(src, byte_idx)) << processed;
     processed = min(n, processed + WORD_BITLEN);
     byte_idx += BYTES_PER_WORD;
   }
@@ -176,8 +176,8 @@ impl<'a> BitReader<'a> {
   // }
   //
   #[inline]
-  fn unchecked_word(&self) -> usize {
-    unchecked_word_at(self.current_stream, self.stale_byte_idx)
+  fn word(&self) -> usize {
+    word_at(self.current_stream, self.stale_byte_idx)
   }
 
   #[inline]
@@ -209,9 +209,9 @@ impl<'a> BitReader<'a> {
   pub fn read_uint<U: ReadWriteUint>(&mut self, n: Bitlen) -> U {
     self.refill();
     let res = match U::MAX_EXTRA_WORDS {
-      0 => unchecked_read_uint::<U, 0>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
-      1 => unchecked_read_uint::<U, 1>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
-      2 => unchecked_read_uint::<U, 2>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
+      0 => read_uint::<U, 0>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
+      1 => read_uint::<U, 1>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
+      2 => read_uint::<U, 2>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
       _ => panic!("[BitReader] data type too large (extra words {} > 2)", U::MAX_EXTRA_WORDS),
     };
     self.consume(n);
@@ -221,7 +221,7 @@ impl<'a> BitReader<'a> {
   #[inline]
   pub fn read_small(&mut self, n: Bitlen) -> AnsState {
     self.refill();
-    let res = unchecked_read_uint::<AnsState, 0>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n);
+    let res = read_uint::<AnsState, 0>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n);
     self.consume(n);
     res
   }

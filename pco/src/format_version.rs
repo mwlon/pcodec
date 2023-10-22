@@ -35,45 +35,10 @@ impl FormatVersion {
     }
 
     Ok(Self(version))
-    // let n_bytes = reader.read_aligned_bytes(1)?[0] as usize;
-    // let bytes = reader.read_aligned_bytes(n_bytes)?;
-    // let sub_bit_words = PaddedBytes::from(bytes);
-    // let mut sub_reader = BitReader::from(&sub_bit_words);
-    //
-    // let mut flags = FormatVersion {
-    //   use_wrapped_mode: false,
-    // };
-    // let parse_res = Self::core_parse_from(&mut flags, &mut sub_reader);
-    // match parse_res {
-    //   Ok(()) => Ok(flags),
-    //   Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => Ok(flags),
-    //   Err(e) => Err(e),
-    // }
   }
 
   pub(crate) fn write_to(&self, writer: &mut BitWriter) -> PcoResult<()> {
     // in the future, we may want to allow the user to encode with their choice of a recent version
-    dst.write(&[self.0])?;
-    // let start_bit_idx = writer.bit_size();
-    // writer.write_aligned_byte(0)?; // to later be filled with # subsequent bytes
-    //
-    // let pre_byte_size = writer.byte_size();
-    //
-    // // write each flags here
-    // writer.write_one(self.use_wrapped_mode);
-    // // done writing each flag
-    //
-    // writer.finish_byte();
-    // let byte_len = writer.byte_size() - pre_byte_size;
-    //
-    // if byte_len > u8::MAX as usize {
-    //   return Err(PcoError::invalid_argument(
-    //     "cannot write flags of more than 255 bytes",
-    //   ));
-    // }
-    //
-    // writer.overwrite_usize(start_bit_idx, byte_len, 8);
-    //
-    Ok(())
+    writer.write_aligned_bytes(&[self.0])
   }
 }

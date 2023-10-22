@@ -49,7 +49,7 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
   }
 }
 
-fn parse_bin_batch<U: UnsignedLike>(reader: &mut BitReader, mode: Mode<U>, batch_size: usize, dst: &mut Vec<Bin<U>>) -> PcoResult<()> {
+fn parse_bin_batch<U: UnsignedLike>(reader: &mut BitReader, mode: Mode<U>, ans_size_log: Bitlen, batch_size: usize, dst: &mut Vec<Bin<U>>) -> PcoResult<()> {
   reader.ensure_padded(DEFAULT_PADDING_BYTES);
 
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
@@ -104,7 +104,7 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
     let mut bins = Vec::with_capacity(n_bins);
     while bins.len() < n_bins {
       let batch_size = min(n_bins - bins.len(), FULL_BIN_BATCH_SIZE);
-      parse_bin_batch(reader, mode, batch_size, &mut bins)?;
+      parse_bin_batch(reader, mode, ans_size_log, batch_size, &mut bins)?;
     }
 
     Ok(Self { bins, ans_size_log })
@@ -152,15 +152,15 @@ fn write_bins<U: UnsignedLike>(
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for bin in bins {
-    writer.write_diff(bin.weight - 1, ans_size_log);
-    writer.write_diff(bin.lower, U::BITS);
+    writer.write_uint(bin.weight - 1, ans_size_log);
+    writer.write_uint(bin.lower, U::BITS);
     writer.write_bitlen(bin.offset_bits, offset_bits_bits);
 
     match mode {
       Mode::Classic => (),
       Mode::Gcd => {
         if bin.offset_bits > 0 {
-          writer.write_diff(bin.gcd, U::BITS);
+          writer.write_uint(bin.gcd, U::BITS);
         }
       }
       Mode::FloatMult { .. } => (),
@@ -227,7 +227,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
     if let Mode::FloatMult(config) = self.mode {
-      writer.write_diff(config.base.to_unsigned(), U::BITS);
+      writer.write_uint(config.base.to_unsigned(), U::BITS);
     }
 
     writer.write_usize(

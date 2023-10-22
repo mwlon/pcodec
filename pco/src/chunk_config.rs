@@ -135,7 +135,7 @@ impl PagingSpec {
         res
       },
       PagingSpec::ExactPageSizes(sizes) => sizes.to_vec(),
-    }?;
+    };
 
     let sizes_n: usize = page_sizes.iter().sum();
     if sizes_n != n {

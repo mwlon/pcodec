@@ -4,7 +4,6 @@ use crate::compression_table::CompressionTable;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::{ans, Bin, bin_optimization, ChunkLatentMetadata, ChunkMetadata, ChunkConfig, delta, float_mult_utils, FULL_BATCH_SIZE, Mode, bit_writer, bits};
 use crate::bit_writer::BitWriter;
-use crate::chunk_spec::ChunkSpec;
 use crate::constants::{ANS_INTERLEAVING, Bitlen, DEFAULT_PADDING_BYTES, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, Weight};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
@@ -275,7 +274,7 @@ fn write_dissecteds<U: UnsignedLike>(
         .skip(batch_start)
         .take(FULL_BATCH_SIZE)
       {
-        writer.write_diff(val, bits);
+        writer.write_uint(val, bits);
       }
       for (&offset, &bits) in dissected
         .offsets
@@ -284,7 +283,7 @@ fn write_dissecteds<U: UnsignedLike>(
         .skip(batch_start)
         .take(FULL_BATCH_SIZE)
       {
-        writer.write_diff(offset, bits);
+        writer.write_uint(offset, bits);
       }
     }
     batch_start = batch_end;
@@ -368,7 +367,7 @@ pub(crate) fn new<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<
   let delta_order = if let Some(delta_order) = config.delta_encoding_order {
     delta_order
   } else {
-    crate::auto_delta_encoding_order(nums, config.compression_level)
+    crate::auto_delta_encoding_order(nums, config.compression_level)?
   };
 
   let mut latent_metas = Vec::with_capacity(n_latents);
@@ -440,8 +439,8 @@ pub(crate) fn new<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<
 }
 
 impl<U: UnsignedLike> ChunkCompressor<U> {
-  fn page_moments(&self, latent_idx: usize) -> &DeltaMoments<U> {
-    &self.latent_configs[latent_idx].delta_momentss[self.page_idx]
+  fn page_moments(&self, page_idx: usize, latent_idx: usize) -> &DeltaMoments<U> {
+    &self.latent_configs[latent_idx].delta_momentss[page_idx]
   }
 
   pub fn page_sizes(&self) -> &[usize] {
@@ -456,7 +455,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     let mut bytes = 32;
     let bytes_per_num = U::BITS / 8;
     for latent_meta in &self.meta.latents {
-      bytes += latent_meta.bins.len() * (4 + 2 * bytes_per_num)
+      bytes += latent_meta.bins.len() * (4 + 2 * bytes_per_num as usize)
     }
     bytes
   }
@@ -471,7 +470,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   fn dissect_unsigneds(
     &self,
   ) -> PcoResult<DissectedSrc<U>> {
-    let TrainedInfo {
+    let Self {
       latent_configs,
       src,
       needs_gcds,
@@ -543,7 +542,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
     let mut latent_metas = Vec::with_capacity(self.n_latents);
     for latent_idx in 0..self.n_latents {
-      let delta_moments = self.page_moments(latent_idx).clone();
+      let delta_moments = self.page_moments(page_idx, latent_idx).clone();
 
       let ans_final_state_idxs = dissected_src
         .dissected_latents
