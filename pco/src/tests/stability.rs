@@ -1,20 +1,25 @@
 use crate::chunk_metadata::ChunkMetadata;
 use crate::data_types::NumberLike;
-use crate::errors::ErrorKind;
-use crate::standalone::{auto_decompress};
+use crate::errors::{ErrorKind, PcoResult};
+use crate::standalone::{auto_decompress, FileCompressor, simple_compress};
 use crate::chunk_config::ChunkConfig;
 
-fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T::Unsigned> {
-  let mut compressor = Compressor::from_config(ChunkConfig {
+fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMetadata<T::Unsigned>> {
+  let fc = FileCompressor::new();
+  let config = ChunkConfig {
     use_gcds: false,
     delta_encoding_order: Some(0),
     ..Default::default()
-  })
-  .unwrap();
-  compressor.header().expect("header");
-  let metadata = compressor.chunk(&nums).expect("chunk");
-  compressor.footer().expect("footer");
-  let compressed = compressor.drain_bytes();
+  };
+  let cc = fc.chunk_compressor(&nums, &config)?;
+  let metadata = cc.chunk_meta().clone();
+  let mut compressed = vec![0; fc.header_size_hint() + cc.chunk_size_hint() + fc.footer_size_hint()];
+  let dst = &mut compressed;
+  let dst = fc.write_header(dst)?;
+  let dst = cc.write_chunk(dst)?;
+  let dst = fc.write_footer(dst)?;
+  let dst_len = dst.len();
+  compressed.truncate(compressed.len() - dst_len);
 
   for i in 0..compressed.len() - 1 {
     match auto_decompress::<T>(&compressed[0..i]) {
@@ -27,11 +32,11 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> ChunkMetadata<T::Unsigned> 
     }
   }
 
-  metadata
+  Ok(metadata)
 }
 
 #[test]
-fn test_insufficient_data_short_bins() {
+fn test_insufficient_data_short_bins() -> PcoResult<()> {
   let mut nums = Vec::new();
   for _ in 0..50 {
     nums.push(0);
@@ -40,33 +45,36 @@ fn test_insufficient_data_short_bins() {
     nums.push(1000);
   }
 
-  let metadata = assert_panic_safe(nums);
+  let metadata = assert_panic_safe(nums)?;
   assert_eq!(metadata.latents.len(), 1);
   assert_eq!(metadata.latents[0].bins.len(), 2);
+  Ok(())
 }
 
 #[test]
-fn test_insufficient_data_sparse() {
+fn test_insufficient_data_sparse() -> PcoResult<()> {
   let mut nums = vec![0];
   for _ in 0..(1 << 16) + 1 {
     nums.push(1);
   }
 
-  let metadata = assert_panic_safe(nums);
+  let metadata = assert_panic_safe(nums)?;
   assert_eq!(metadata.latents.len(), 1);
   assert_eq!(metadata.latents[0].bins.len(), 2);
+  Ok(())
 }
 
 #[test]
-fn test_insufficient_data_long_offsets() {
+fn test_insufficient_data_long_offsets() -> PcoResult<()> {
   let n = 1000;
   let mut nums = Vec::new();
   for i in 0..n {
     nums.push((u64::MAX / n) * i);
   }
 
-  let metadata = assert_panic_safe(nums);
+  let metadata = assert_panic_safe(nums)?;
   assert_eq!(metadata.latents.len(), 1);
   assert_eq!(metadata.latents[0].bins.len(), 1);
   assert_eq!(metadata.latents[0].bins[0].offset_bits, 64);
+  Ok(())
 }

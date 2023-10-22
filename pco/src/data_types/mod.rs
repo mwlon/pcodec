@@ -137,7 +137,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// 1 through 6 are used, so 7 would be a good choice for another
   /// `pco` data type implementation, and 255 would be a good choice for a
   /// custom data type.
-  const HEADER_BYTE: u8;
+  const DTYPE_BYTE: u8;
   /// The number of bits in the number's uncompressed representation.
   /// This must match the number of bytes in the `to_bytes` and `from_bytes`
   /// implementations.

@@ -9,11 +9,6 @@ use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
 use crate::bit_reader::word_at;
 
-pub fn make_extension_for(dst: &mut [u8], padding: usize) -> Vec<u8> {
-  let len = padding + min(dst.len(), padding);
-  vec![0; len]
-}
-
 #[inline]
 pub fn write_word_to(word: usize, byte_idx: usize, dst: &mut [u8]) {
   unsafe {
@@ -42,14 +37,15 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
   }
 }
 
+// Maybe I should rewrite this in a way that's generic to both BitReader and BitWriter
 pub struct BitWriter<'a> {
-  pub current_stream: &'a mut [u8],
+  pub current_stream: &'a mut [u8], // either dst or extension
   other_stream: &'a mut [u8],
   current_is_dst: bool, // as opposed to extension
-  padding: usize,
-  skipped: usize,
-  pub stale_byte_idx: usize,
-  pub bits_past_byte: Bitlen,
+  padding: usize, // in extension
+  skipped: usize, // in extension
+  pub stale_byte_idx: usize, // in current stream
+  pub bits_past_byte: Bitlen, // in current stream
 }
 
 impl<'a> BitWriter<'a> {
@@ -118,7 +114,8 @@ impl<'a> BitWriter<'a> {
     Ok(())
   }
 
-  fn ensure_padding(&mut self, required_padding: usize) -> PcoResult<()> {
+  // TODO start using this
+  pub fn ensure_padded(&mut self, required_padding: usize) -> PcoResult<()> {
     self.check_in_bounds()?;
 
     let byte_idx = self.byte_idx();
@@ -198,15 +195,20 @@ impl<'a> BitWriter<'a> {
     self.bits_past_byte = 0;
   }
 
-  pub fn rest(self) -> PcoResult<&'a mut [u8]> {
+  pub fn bytes_consumed(self) -> PcoResult<usize> {
     self.check_in_bounds()?;
 
-    let byte_idx = self.byte_idx();
-    if self.current_is_dst {
-      Ok(&mut self.current_stream[byte_idx..])
-    } else {
-      Ok(&mut self.other_stream[byte_idx + self.skipped..])
+    if self.bits_past_byte % 8 != 0 {
+      panic!("dangling bits remain; this is likely a bug in pco");
     }
+
+    let byte_idx = self.byte_idx();
+    let res = if self.current_is_dst {
+      byte_idx
+    } else {
+      byte_idx + self.skipped
+    };
+    Ok(res)
   }
 }
 

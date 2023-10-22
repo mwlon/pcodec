@@ -3,15 +3,17 @@ use crate::bit_reader::BitReader;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::{PcoError, PcoResult};
 use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_BODY_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
-use crate::{ChunkMetadata, wrapped};
+use crate::{bit_reader, ChunkMetadata, wrapped};
+use crate::constants::MINIMAL_PADDING_BYTES;
 use crate::page_metadata::PageMetadata;
 use crate::progress::Progress;
 
 pub struct FileDecompressor(wrapped::FileDecompressor);
 
 impl FileDecompressor {
-  pub fn new(bytes: &[u8]) -> PcoResult<(Self, &[u8])> {
-    let mut reader = BitReader::from(bytes);
+  pub fn new(src: &[u8]) -> PcoResult<(Self, &[u8])> {
+    let extension = [];
+    let mut reader = BitReader::new(src, &extension);
     let header = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
     if header != MAGIC_HEADER {
       return Err(PcoError::corruption(format!(
@@ -19,8 +21,9 @@ impl FileDecompressor {
         MAGIC_HEADER, header,
       )));
     }
+    let consumed = reader.bytes_consumed()?;
 
-    let (inner, rest) = wrapped::FileDecompressor::new(&bytes[MAGIC_HEADER.len()..])?;
+    let (inner, rest) = wrapped::FileDecompressor::new(&src[consumed..])?;
     Ok((Self(inner), rest))
   }
 
@@ -28,27 +31,31 @@ impl FileDecompressor {
     self.0.format_version()
   }
 
-  pub fn chunk_decompressor<T: NumberLike>(&self, bytes: &[u8]) -> PcoResult<(Option<ChunkDecompressor<T>>, &[u8])> {
-    let mut reader = BitReader::from(bytes);
+  pub fn chunk_decompressor<'a, T: NumberLike>(&self, src: &'a [u8]) -> PcoResult<(Option<ChunkDecompressor<T>>, &'a [u8])> {
+    let extension = bit_reader::make_extension_for(src, MINIMAL_PADDING_BYTES);
+    let mut reader = BitReader::new(src, &extension);
     let dtype_or_termination_byte = reader.read_aligned_bytes(1)?[0];
 
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
-      return Ok((None, reader.rest()))
+      let consumed = reader.bytes_consumed()?;
+      return Ok((None, &src[consumed..]))
     }
 
-    if dtype_or_termination_byte != T::HEADER_BYTE {
+    if dtype_or_termination_byte != T::DTYPE_BYTE {
       return Err(PcoError::corruption(format!(
         "data type byte does not match {:?}; instead found {:?}",
-        T::HEADER_BYTE,
+        T::DTYPE_BYTE,
         dtype_or_termination_byte,
       )));
     }
 
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1;
     let compressed_body_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_BODY_SIZE);
-    let bytes = &bytes[reader.aligned_byte_idx()?..];
-    let (inner_cd, bytes) = self.0.chunk_decompressor::<T>(bytes)?;
-    let (inner_pd, bytes) = inner_cd.page_decompressor(n, bytes)?;
+    reader.drain_empty_byte("expected empty bits at end of standalone chunk preamble")?;
+    let consumed = reader.bytes_consumed()?;
+    let src = &src[consumed..];
+    let (inner_cd, src) = self.0.chunk_decompressor::<T>(src)?;
+    let (inner_pd, src) = inner_cd.page_decompressor(n, src)?;
     let res = ChunkDecompressor {
       inner_cd,
       inner_pd,
@@ -57,7 +64,7 @@ impl FileDecompressor {
       compressed_body_size,
       n_bytes_processed: 0,
     };
-    Ok((Some(res), bytes))
+    Ok((Some(res), src))
   }
 }
 
@@ -83,7 +90,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     self.compressed_body_size
   }
 
-  pub fn decompress(&mut self, bytes: &[u8], dst: &mut [T]) -> PcoResult<(Progress, &[u8])> {
+  pub fn decompress<'a>(&mut self, bytes: &'a [u8], dst: &mut [T]) -> PcoResult<(Progress, &'a [u8])> {
     let (progress, rest) = self.inner_pd.decompress(bytes, dst)?;
 
     self.n_processed += progress.n_processed;
@@ -107,7 +114,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   }
 
   // a helper for some internal things
-  pub(crate) fn decompress_remaining_extend(&mut self, bytes: &[u8], dst: &mut Vec<T>) -> PcoResult<&[u8]> {
+  pub(crate) fn decompress_remaining_extend<'a>(&mut self, bytes: &'a [u8], dst: &mut Vec<T>) -> PcoResult<&'a [u8]> {
     let initial_len = dst.len();
     let remaining = self.n - self.n_processed;
     dst.reserve(remaining);

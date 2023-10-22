@@ -1,6 +1,7 @@
 use crate::ans::AnsState;
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::fmt::{Debug, Display};
+use std::mem;
 use std::ops::*;
 
 use crate::bits;
@@ -9,6 +10,16 @@ use crate::data_types::UnsignedLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
 
+pub fn make_extension_for(slice: &[u8], padding: usize) -> Vec<u8> {
+  let shared = min(slice.len(), padding);
+  let len = shared + padding;
+  let mut res = vec![0; len];
+  // This copy isn't necessary for BitWriter, which also uses this.
+  // Not sure this will ever be a performance issue though.
+  res[..shared].copy_from_slice(&slice[slice.len() - shared..]);
+  res
+}
+
 #[inline]
 pub fn word_at(src: &[u8], byte_idx: usize) -> usize {
   let raw_bytes = unsafe { *(src.as_ptr().add(byte_idx) as *const [u8; BYTES_PER_WORD]) };
@@ -16,14 +27,14 @@ pub fn word_at(src: &[u8], byte_idx: usize) -> usize {
 }
 
 #[inline]
-pub fn read_uint<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
+pub fn read_uint<U: ReadWriteUint, const MAX_EXTRA_WORDS: usize>(
   src: &[u8],
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
   n: Bitlen,
 ) -> U {
   let mut res = U::from_word(word_at(src, byte_idx) >> bits_past_byte);
-  // TODO do I need this (WORD_BITLEN - 8) and (BYTES_PER_WORD - 1)?
+  // TODO can I read up the end of the word instead of end - 8?
   let mut processed = min(n, WORD_BITLEN - 8 - bits_past_byte);
   byte_idx += BYTES_PER_WORD - 1;
 
@@ -36,123 +47,91 @@ pub fn read_uint<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
   bits::lowest_bits(res, n)
 }
 
-struct Extension {
-  data: Vec<u8>,
-  padding: usize,
-  skipped: usize,
-}
-
 pub struct BitReader<'a> {
-  // immutable
-  src: &'a [u8],
-  // mutable
-  extension: Option<Extension>,
-  current_stream_skipped: usize,
   pub current_stream: &'a [u8], // either src or extension
+  other_stream: &'a [u8],
+  current_is_src: bool, // as opposed to extension
+  padding: usize, // in extension
+  skipped: usize, // in extension
   pub stale_byte_idx: usize, // in current stream
   pub bits_past_byte: Bitlen, // in current stream
 }
 
-impl<'a> From<&'a [u8]> for BitReader<'a> {
-  fn from(src: &'a [u8]) -> Self {
-    BitReader {
-      src,
-      extension: None,
-      current_stream_skipped: 0,
+impl<'a> BitReader<'a> {
+  pub fn new(src: &'a [u8], extension: &'a [u8]) -> Self {
+    // we assume extension has len min(src.len(), padding) + padding
+    // where the first min(src.len(), padding) overlap with src
+    let padding = max(extension.len() / 2, extension.len().saturating_sub(src.len()));
+    let skipped = src.len().saturating_sub(padding);
+    Self {
       current_stream: src,
+      other_stream: extension,
+      padding,
+      skipped,
       stale_byte_idx: 0,
-      bits_past_byte: 0
+      bits_past_byte: 0,
+      current_is_src: true,
     }
   }
-}
 
-impl<'a> BitReader<'a> {
-  pub fn current_stream_bit_idx(&self) -> usize {
+  pub fn bit_idx(&self) -> usize {
     self.stale_byte_idx * 8 + self.bits_past_byte as usize
   }
 
-  pub fn src_bit_idx(&self) -> usize {
-    self.current_stream_skipped * 8 + self.current_stream_bit_idx()
+  fn byte_idx(&self) -> usize {
+    self.bit_idx() / 8
   }
 
-  fn switch_stream(&mut self, new_extension: Option<Extension>) {
-    let old_skipped = self.current_stream_skipped;
-    let new_skipped = new_extension.map_or(0, |ext| ext.skipped);
-    self.stale_byte_idx = (self.stale_byte_idx + old_skipped) - new_skipped;
-    self.current_stream_skipped = new_skipped;
-    if new_extension.is_some() {
-      self.current_stream = &new_extension.as_ref().unwrap().data;
-      self.extension = new_extension;
+  fn src_bit_idx(&self) -> usize {
+    let bit_idx = self.bit_idx();
+    if self.current_is_src {
+      bit_idx
     } else {
-      self.current_stream = self.src;
+      bit_idx + self.skipped * 8
     }
   }
 
-  pub fn ensure_padded(&mut self, required_padding: usize) {
-    let src_bit_idx = self.src_bit_idx();
-    if bits::ceil_div(src_bit_idx, 8) + required_padding <= self.src.len() {
-      self.switch_stream(None)
+  fn src_bit_size(&self) -> usize {
+    let byte_size = if self.current_is_src {
+      self.current_stream.len()
     } else {
-      if self.extension.iter().all(|extension| extension.padding < required_padding) {
-        // we need to create or grow the extension
-        let skipped = src_bit_idx / 8;
-        let copy_bytes = self.src.len() - skipped;
-        let mut data = vec![0; copy_bytes + required_padding];
-        data[..copy_bytes].copy_from_slice(&self.src[skipped..]);
-        let extension = Some(Extension {
-          data,
-          padding: required_padding,
-          skipped,
-        });
-        self.switch_stream(extension);
-      }
+      self.other_stream.len()
+    };
+    byte_size * 8
+  }
+
+  fn switch_to_extension(&mut self) {
+    assert!(self.current_is_src);
+    self.stale_byte_idx -= self.skipped;
+    self.current_is_src = false;
+    mem::swap(&mut self.current_stream, &mut self.other_stream);
+  }
+
+  pub fn ensure_padded(&mut self, required_padding: usize) -> PcoResult<()> {
+    self.check_in_bounds()?;
+
+    let byte_idx = self.byte_idx();
+    if byte_idx + required_padding < self.current_stream.len() {
+      return Ok(())
     }
-  }
 
-  fn src_byte_idx(&self) -> usize {
-    self.current_stream_skipped + self.stale_byte_idx + (self.bits_past_byte / 8) as usize
-  }
+    // see if we can switch to the other stream
+    if self.current_is_src && byte_idx + required_padding > self.other_stream.len() + self.padding {
+      self.switch_to_extension();
+      return Ok(())
+    }
 
-  pub fn rest(&self) -> &'a [u8] {
-    &self.src[self.src_byte_idx()..]
+    Err(PcoError::insufficient_data(
+      "insufficient padding; this is likely either a bug in pco or a result of\
+      using too large a custom data type",
+    ))
   }
-// }
-//
-// #[derive(Clone)]
-// pub struct BitReader<'a> {
-//   // immutable
-//   pub src: &'a [u8],
-//   pub initial_bit_idx: usize,
-//   // mutable
-//   pub byte_idx: usize,
-//   pub bits_past_byte: Bitlen,
-// }
-
-// impl<'a> From<&'a [u8]> for BitReader<'a> {
-//   fn from(src: &'a [u8]) -> Self {
-//     BitReader {
-//       src,
-//       byte_idx: 0,
-//       bits_past_byte: 0,
-//     }
-//   }
-// }
-//
-// impl<'a> BitReader<'a> {
-//   pub fn new(src: &'a [u8], bit_idx: usize) -> Self {
-//     BitReader {
-//       src,
-//       initial_bit_idx: bit_idx,
-//       byte_idx: bit_idx / 8,
-//       bits_past_byte: (bit_idx % 8) as Bitlen,
-//     }
-//   }
 
   // Returns the reader's current byte index. Will return an error if the
   // reader is at a misaligned position.
-  pub fn aligned_byte_idx(&self) -> PcoResult<usize> {
+  fn aligned_byte_idx(&self) -> PcoResult<usize> {
     if self.bits_past_byte % 8 == 0 {
-      Ok(self.stale_byte_idx + self.bits_past_byte as usize / 8)
+      Ok(self.byte_idx())
     } else {
       Err(PcoError::invalid_argument(format!(
         "cannot get aligned byte index on misaligned bit reader (byte {} + {} bits)",
@@ -161,20 +140,6 @@ impl<'a> BitReader<'a> {
     }
   }
 
-  // fn insufficient_data_check(&self, name: &str, n: Bitlen) -> PcoResult<()> {
-  //   let bit_idx = self.bit_idx();
-  //   if bit_idx + n as usize > self.total_bits {
-  //     Err(PcoError::insufficient_data_recipe(
-  //       name,
-  //       n,
-  //       bit_idx,
-  //       self.total_bits,
-  //     ))
-  //   } else {
-  //     Ok(())
-  //   }
-  // }
-  //
   #[inline]
   fn word(&self) -> usize {
     word_at(self.current_stream, self.stale_byte_idx)
@@ -228,12 +193,12 @@ impl<'a> BitReader<'a> {
 
   pub fn check_in_bounds(&self) -> PcoResult<()> {
     let src_bit_idx = self.src_bit_idx();
-    let bit_len = self.src.len() * 8;
-    if src_bit_idx > bit_len {
+    let src_size = self.src_bit_size();
+    if src_bit_idx > src_size {
       return Err(PcoError::insufficient_data(format!(
-        "reached bit idx {} / {}",
+        "out of bounds at bit {} / {}",
         src_bit_idx,
-        bit_len,
+        src_size,
       )));
     }
     Ok(())
@@ -252,6 +217,20 @@ impl<'a> BitReader<'a> {
       self.consume(8 - self.bits_past_byte);
     }
     Ok(())
+  }
+
+  pub fn bits_consumed(self) -> PcoResult<usize> {
+    self.check_in_bounds()?;
+
+    Ok(self.src_bit_idx())
+  }
+
+  pub fn bytes_consumed(self) -> PcoResult<usize> {
+    if self.bits_past_byte % 8 != 0 {
+      panic!("dangling bits remain; this is likely a bug in pco");
+    }
+
+    Ok(self.bits_consumed()? / 8)
   }
 }
 

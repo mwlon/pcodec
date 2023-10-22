@@ -5,7 +5,7 @@ use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::page_metadata::PageLatentMetadata;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, BYTES_PER_WORD, FULL_BATCH_SIZE, WORD_BITLEN, WORD_SIZE, DEFAULT_PADDING_BYTES};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, BYTES_PER_WORD, FULL_BATCH_SIZE, WORD_BITLEN, WORD_SIZE, DEFAULT_PADDING_BYTES, LATENT_BATCH_PADDING};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::{ans, bit_reader, bits, ChunkLatentMetadata};
@@ -134,14 +134,14 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     reader: &mut BitReader,
     dst: &mut [U],
   ) {
-    let base_bit_idx = reader.current_stream_bit_idx();
+    let base_bit_idx = reader.bit_idx();
     let stream = reader.current_stream;
     for i in 0..FULL_BATCH_SIZE {
       let offset_bits = self.state.offset_bits_scratch[i];
       let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      dst[i] = bit_reader::read_uint(stream, byte_idx, bits_past_byte, offset_bits);
+      dst[i] = bit_reader::read_uint::<U, MAX_EXTRA_WORDS>(stream, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
         + self.state.offset_bits_csum_scratch[FULL_BATCH_SIZE - 1]
@@ -184,7 +184,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
     let batch_size = dst.len();
     assert!(batch_size <= FULL_BATCH_SIZE);
-    reader.ensure_padded(DEFAULT_PADDING_BYTES);
+    reader.ensure_padded(LATENT_BATCH_PADDING)?;
 
     self.decompress_ans_tokens(reader);
 

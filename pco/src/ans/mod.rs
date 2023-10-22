@@ -31,18 +31,21 @@ mod tests {
       to_write.push((state, bitlen));
       state = new_state;
     }
-    let mut writer = BitWriter::default();
+
+    let mut bytes = vec![0; 100];
+    let mut extension = vec![];
+    let mut writer = BitWriter::new(&mut bytes, &mut extension);
     for (word, bitlen) in to_write.into_iter().rev() {
-      writer.write_diff(word, bitlen);
+      writer.write_uint(word, bitlen);
     }
+    drop(writer);
     let final_state = state;
     let table_size = 1 << encoder.size_log();
 
     // DECODE
     let decoder = Decoder::new(spec);
-    let bytes = writer.drain_bytes();
     assert_eq!(bytes.len(), expected_byte_len);
-    let mut reader = BitReader::from(&bytes);
+    let mut reader = BitReader::new(&bytes, &extension);
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;
     for _ in 0..tokens.len() {

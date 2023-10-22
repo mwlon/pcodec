@@ -3,13 +3,13 @@ use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
 use crate::page_metadata::PageMetadata;
-use crate::constants::{DEFAULT_PADDING_BYTES, FULL_BATCH_SIZE};
+use crate::constants::{LATENT_BATCH_PADDING, DEFAULT_PADDING_BYTES, FULL_BATCH_SIZE};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::progress::Progress;
-use crate::{delta, float_mult_utils, ChunkMetadata};
+use crate::{delta, float_mult_utils, ChunkMetadata, bit_reader};
 use crate::{latent_batch_decompressor, Mode};
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
 
@@ -197,8 +197,7 @@ impl<T: NumberLike> PageDecompressor<T> {
   }
 
   // If this returns an error, num_dst might be modified.
-  pub fn decompress(&mut self, bytes: &[u8], num_dst: &mut [T]) -> PcoResult<(Progress, &[u8])> {
-    let mut reader = BitReader::from(bytes);
+  pub fn decompress<'a>(&mut self, src: &'a [u8], num_dst: &mut [T]) -> PcoResult<(Progress, &'a [u8])> {
     if num_dst.len() % FULL_BATCH_SIZE != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be\
@@ -208,6 +207,10 @@ impl<T: NumberLike> PageDecompressor<T> {
         self.n_remaining(),
       )));
     }
+
+    let extension = bit_reader::make_extension_for(src, LATENT_BATCH_PADDING);
+    let mut reader = BitReader::new(src, &extension);
+
     let n_to_process = min(num_dst.len(), self.n_remaining());
     let backup = self.state.backup();
 
@@ -232,7 +235,8 @@ impl<T: NumberLike> PageDecompressor<T> {
       finished_page: self.n_remaining() == 0,
     };
 
-    Ok((progress, reader.rest()))
+    let consumed = reader.bytes_consumed()?;
+    Ok((progress, &src[consumed..]))
   }
 
   pub fn n_remaining(&self) -> usize {

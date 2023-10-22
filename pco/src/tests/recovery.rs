@@ -115,7 +115,8 @@ fn test_multi_chunk() -> PcoResult<()> {
   let dst = fc.chunk_compressor(&[1, 2, 3], &config)?.write_chunk(dst)?;
   let dst = fc.chunk_compressor(&[11, 12, 13], &config)?.write_chunk(dst)?;
   let dst = fc.write_footer(dst)?;
-  bytes.truncate(bytes.len() - dst.len());
+  let dst_len = dst.len();
+  bytes.truncate(bytes.len() - dst_len);
 
   let res = auto_decompress::<i64>(&bytes)?;
   assert_eq!(res, vec![1, 2, 3, 11, 12, 13], "multi chunk");

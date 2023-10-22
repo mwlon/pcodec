@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 use crate::bin::BinCompressionInfo;
 use crate::compression_table::CompressionTable;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::{ans, Bin, bin_optimization, ChunkLatentMetadata, ChunkMetadata, ChunkConfig, delta, float_mult_utils, FULL_BATCH_SIZE, Mode, bit_writer, bits};
+use crate::{ans, Bin, bin_optimization, bit_reader, bit_writer, bits, ChunkConfig, ChunkLatentMetadata, ChunkMetadata, delta, float_mult_utils, FULL_BATCH_SIZE, Mode};
 use crate::bit_writer::BitWriter;
 use crate::constants::{ANS_INTERLEAVING, Bitlen, DEFAULT_PADDING_BYTES, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, Weight};
 use crate::delta::DeltaMoments;
@@ -460,11 +460,12 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bytes
   }
 
-  pub fn write_chunk_meta(&self, dst: &mut [u8]) -> PcoResult<&mut [u8]> {
-    let mut extension = bit_writer::make_extension_for(dst, DEFAULT_PADDING_BYTES);
+  pub fn write_chunk_meta<'a>(&self, dst: &'a mut [u8]) -> PcoResult<&'a mut [u8]> {
+    let mut extension = bit_reader::make_extension_for(dst, DEFAULT_PADDING_BYTES);
     let mut writer = BitWriter::new(dst, &mut extension);
     self.meta.write_to(&mut writer);
-    writer.rest()
+    let consumed = writer.bytes_consumed()?;
+    Ok(&mut dst[consumed..])
   }
 
   fn dissect_unsigneds(
@@ -526,7 +527,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bits::ceil_div(bit_size, 8)
   }
 
-  pub fn write_page(&self, page_idx: usize, dst: &mut [u8]) -> PcoResult<&mut [u8]> {
+  pub fn write_page<'a>(&self, page_idx: usize, dst: &'a mut [u8]) -> PcoResult<&'a mut [u8]> {
     if page_idx >= self.page_sizes.len() {
       return Err(PcoError::invalid_argument(format!(
         "page idx exceeds num pages ({} >= {})",
@@ -535,7 +536,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
       )));
     }
 
-    let mut extension = bit_writer::make_extension_for(dst, DEFAULT_PADDING_BYTES);
+    let mut extension = bit_reader::make_extension_for(dst, DEFAULT_PADDING_BYTES);
     let mut writer = BitWriter::new(dst, &mut extension);
 
     let dissected_src = self.dissect_unsigneds()?;
@@ -565,7 +566,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
     write_dissecteds(dissected_src, &mut writer)?;
 
-    writer.rest()
+    let consumed = writer.bytes_consumed()?;
+    Ok(&mut dst[consumed..])
   }
 }
 

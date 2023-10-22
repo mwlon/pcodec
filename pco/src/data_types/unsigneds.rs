@@ -93,7 +93,7 @@ impl_unsigned!(u64, f64, i64);
 macro_rules! impl_unsigned_number {
   ($t: ty, $signed: ty, $float: ty, $header_byte: expr) => {
     impl NumberLike for $t {
-      const HEADER_BYTE: u8 = $header_byte;
+      const DTYPE_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = Self::BITS as usize;
 
       type Unsigned = Self;

@@ -1,6 +1,6 @@
 use std::io;
 use std::io::Write;
-use crate::{bit_writer, ChunkConfig};
+use crate::{bit_reader, bit_writer, ChunkConfig};
 use crate::bit_writer::BitWriter;
 use crate::constants::CURRENT_FORMAT_VERSION;
 use crate::data_types::NumberLike;
@@ -24,11 +24,12 @@ impl FileCompressor {
     1
   }
 
-  pub fn write_header(&self, dst: &mut [u8]) -> PcoResult<&mut [u8]> {
-    let mut extension = bit_writer::make_extension_for(dst, 0);
+  pub fn write_header<'a>(&self, dst: &'a mut [u8]) -> PcoResult<&'a mut [u8]> {
+    let mut extension = bit_reader::make_extension_for(dst, 0);
     let mut writer = BitWriter::new(dst, &mut extension);
     self.format_version.write_to(&mut writer)?;
-    writer.rest()
+    let consumed = writer.bytes_consumed()?;
+    Ok(&mut dst[consumed..])
   }
 
   pub fn chunk_compressor<T: NumberLike>(&self, nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<T::Unsigned>> {

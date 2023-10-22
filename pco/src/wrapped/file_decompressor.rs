@@ -1,9 +1,10 @@
 use std::fmt::Debug;
+use crate::bit_reader;
 
 use crate::bit_reader::{BitReader};
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
 use crate::chunk_metadata::ChunkMetadata;
-use crate::constants::MINIMAL_PADDING_BYTES;
+use crate::constants::{DEFAULT_PADDING_BYTES, MINIMAL_PADDING_BYTES};
 use crate::data_types::NumberLike;
 
 use crate::errors::{PcoError, PcoResult};
@@ -161,22 +162,24 @@ pub struct FileDecompressor {
 
 impl FileDecompressor {
   pub fn new(src: &[u8]) -> PcoResult<(Self, &[u8])> {
-    let mut reader = BitReader::from(src);
-    reader.ensure_padded(1);
+    let extension = [];
+    let mut reader = BitReader::new(src, &extension);
     let format_version = FormatVersion::parse_from(&mut reader)?;
-    reader.check_in_bounds()?;
-    Ok((Self { format_version }, reader.rest()))
+    let consumed = reader.bytes_consumed()?;
+    Ok((Self { format_version }, &src[consumed..]))
   }
 
   pub fn format_version(&self) -> u8 {
     self.format_version.0
   }
 
-  pub fn chunk_decompressor<T: NumberLike>(&self, bytes: &[u8]) -> PcoResult<(ChunkDecompressor<T>, &[u8])> {
-    let mut reader = BitReader::from(bytes);
+  pub fn chunk_decompressor<'a, T: NumberLike>(&self, src: &'a [u8]) -> PcoResult<(ChunkDecompressor<T>, &'a [u8])> {
+    let extension = bit_reader::make_extension_for(src, DEFAULT_PADDING_BYTES);
+    let mut reader = BitReader::new(src, &extension);
     let chunk_meta = ChunkMetadata::<T::Unsigned>::parse_from(&mut reader, &self.format_version)?;
     let cd = ChunkDecompressor::from(chunk_meta);
-    Ok((cd, reader.rest()))
+    let consumed = reader.bytes_consumed()?;
+    Ok((cd, &src[consumed..]))
   }
   // pub fn from_config(config: DecompressorConfig) -> Self {
   //   Self {
