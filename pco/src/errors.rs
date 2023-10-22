@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use crate::constants::Bitlen;
+
 
 /// The different kinds of errors the library can return.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

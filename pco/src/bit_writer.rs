@@ -4,7 +4,6 @@ use std::mem;
 use crate::bit_reader::word_at;
 use crate::bits;
 use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
-use crate::data_types::UnsignedLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
 

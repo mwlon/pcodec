@@ -1,4 +1,3 @@
-use crate::ans::AnsState;
 use std::cmp::{max, min};
 
 use std::mem;
@@ -145,11 +144,6 @@ impl<'a> BitReader<'a> {
   }
 
   #[inline]
-  fn word(&self) -> usize {
-    word_at(self.current_stream, self.stale_byte_idx)
-  }
-
-  #[inline]
   fn refill(&mut self) {
     self.stale_byte_idx += (self.bits_past_byte / 8) as usize;
     self.bits_past_byte %= 8;
@@ -205,18 +199,19 @@ impl<'a> BitReader<'a> {
     res
   }
 
-  #[inline]
-  pub fn read_small(&mut self, n: Bitlen) -> AnsState {
-    self.refill();
-    let res = read_uint::<AnsState, 0>(
-      self.current_stream,
-      self.stale_byte_idx,
-      self.bits_past_byte,
-      n,
-    );
-    self.consume(n);
-    res
-  }
+  // TODO should this be used?
+  // #[inline]
+  // pub fn read_small(&mut self, n: Bitlen) -> AnsState {
+  //   self.refill();
+  //   let res = read_uint::<AnsState, 0>(
+  //     self.current_stream,
+  //     self.stale_byte_idx,
+  //     self.bits_past_byte,
+  //     n,
+  //   );
+  //   self.consume(n);
+  //   res
+  // }
 
   pub fn check_in_bounds(&self) -> PcoResult<()> {
     let src_bit_idx = self.src_bit_idx();

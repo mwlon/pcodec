@@ -128,13 +128,13 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
     Ok(Self { bins, ans_size_log })
   }
 
-  fn write_to(&self, mode: Mode<U>, writer: &mut BitWriter) {
+  fn write_to(&self, mode: Mode<U>, writer: &mut BitWriter) -> PcoResult<()> {
     writer.write_bitlen(
       self.ans_size_log,
       BITS_TO_ENCODE_ANS_SIZE_LOG,
     );
 
-    write_bins(&self.bins, mode, self.ans_size_log, writer);
+    write_bins(&self.bins, mode, self.ans_size_log, writer)
   }
 }
 
@@ -166,24 +166,28 @@ fn write_bins<U: UnsignedLike>(
   mode: Mode<U>,
   ans_size_log: Bitlen,
   writer: &mut BitWriter,
-) {
+) -> PcoResult<()> {
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
-  for bin in bins {
-    writer.write_uint(bin.weight - 1, ans_size_log);
-    writer.write_uint(bin.lower, U::BITS);
-    writer.write_bitlen(bin.offset_bits, offset_bits_bits);
+  for bin_batch in bins.chunks(FULL_BIN_BATCH_SIZE) {
+    writer.ensure_padded(BIN_BATCH_PADDING)?;
+    for bin in bin_batch {
+      writer.write_uint(bin.weight - 1, ans_size_log);
+      writer.write_uint(bin.lower, U::BITS);
+      writer.write_bitlen(bin.offset_bits, offset_bits_bits);
 
-    match mode {
-      Mode::Classic => (),
-      Mode::Gcd => {
-        if bin.offset_bits > 0 {
-          writer.write_uint(bin.gcd, U::BITS);
+      match mode {
+        Mode::Classic => (),
+        Mode::Gcd => {
+          if bin.offset_bits > 0 {
+            writer.write_uint(bin.gcd, U::BITS);
+          }
         }
+        Mode::FloatMult { .. } => (),
       }
-      Mode::FloatMult { .. } => (),
     }
   }
+  Ok(())
 }
 
 impl<U: UnsignedLike> ChunkMetadata<U> {
@@ -200,7 +204,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
   }
 
   pub(crate) fn parse_from(reader: &mut BitReader, _flags: &FormatVersion) -> PcoResult<Self> {
-    reader.ensure_padded(DEFAULT_PADDING_BYTES);
+    reader.ensure_padded(DEFAULT_PADDING_BYTES)?; // TODO
     let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
       0 => Ok(Mode::Classic),
       1 => Ok(Mode::Gcd),
@@ -237,7 +241,9 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     })
   }
 
-  pub(crate) fn write_to(&self, writer: &mut BitWriter) {
+  pub(crate) fn write_to(&self, writer: &mut BitWriter) -> PcoResult<()> {
+    writer.ensure_padded(BIN_BATCH_PADDING)?;
+
     let mode_value = match self.mode {
       Mode::Classic => 0,
       Mode::Gcd => 1,
@@ -254,10 +260,11 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     );
 
     for latents in &self.latents {
-      latents.write_to(self.mode, writer);
+      latents.write_to(self.mode, writer)?;
     }
 
     writer.finish_byte();
+    Ok(())
   }
 
   // pub(crate) fn update_write_compressed_body_size(&self, writer: &mut BitWriter, bit_idx: usize) {

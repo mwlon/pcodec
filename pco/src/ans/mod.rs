@@ -16,7 +16,7 @@ pub(crate) type Token = u16;
 #[cfg(test)]
 mod tests {
   use crate::ans::spec::Spec;
-  use crate::ans::{Decoder, Encoder, Token};
+  use crate::ans::{AnsState, Decoder, Encoder, Token};
   use crate::bit_reader::BitReader;
   use crate::bit_writer::BitWriter;
   use crate::errors::PcoResult;
@@ -52,7 +52,7 @@ mod tests {
     for _ in 0..tokens.len() {
       let node = decoder.get_node(state_idx);
       decoded.push(node.token);
-      state_idx = node.next_state_idx_base + reader.read_small(node.bits_to_read);
+      state_idx = node.next_state_idx_base + reader.read_uint::<AnsState>(node.bits_to_read);
     }
 
     assert_eq!(decoded, tokens);

@@ -43,8 +43,7 @@ fn test_errors_do_not_mutate_decompressor() {
   let mut rec_nums = Vec::new();
   for i in 0..data.len() + 1 {
     match chunk_decompressor.decompress_remaining_extend(&data[..i], &mut rec_nums) {
-      Ok(rest) => {
-        data = rest;
+      Ok(_) => {
         break;
       }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),

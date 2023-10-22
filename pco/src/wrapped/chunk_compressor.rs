@@ -1,10 +1,7 @@
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
 use crate::compression_table::CompressionTable;
-use crate::constants::{
-  Bitlen, Weight, ANS_INTERLEAVING, DEFAULT_PADDING_BYTES, MAX_COMPRESSION_LEVEL,
-  MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES,
-};
+use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING, DEFAULT_PADDING_BYTES, MAX_ENTRIES, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
@@ -316,10 +313,32 @@ fn split_latents<T: NumberLike>(
   }
 }
 
+fn validate_config(config: &ChunkConfig) -> PcoResult<()> {
+  let compression_level = config.compression_level;
+  if compression_level > MAX_COMPRESSION_LEVEL {
+    return Err(PcoError::invalid_argument(format!(
+      "compression level may not exceed {} (was {})",
+      MAX_COMPRESSION_LEVEL, compression_level,
+    )));
+  }
+
+  if let Some(order) = config.delta_encoding_order {
+    if order > MAX_DELTA_ENCODING_ORDER {
+      return Err(PcoError::invalid_argument(format!(
+        "delta encoding order may not exceed {} (was {})",
+        MAX_DELTA_ENCODING_ORDER, order,
+      )));
+    }
+  }
+
+  Ok(())
+}
+
 pub(crate) fn new<T: NumberLike>(
   nums: &[T],
   config: &ChunkConfig,
 ) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+  validate_config(config)?;
   if nums.is_empty() {
     return Err(PcoError::invalid_argument(
       "cannot compress empty chunk",
@@ -328,10 +347,6 @@ pub(crate) fn new<T: NumberLike>(
 
   let n = nums.len();
   let page_sizes = config.paging_spec.page_sizes(nums.len())?;
-
-  // if !self.format_version.use_wrapped_mode {
-  //   self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
-  // }
 
   let naive_mode = choose_naive_mode(nums, config);
   let mut src = split_latents(naive_mode, nums);
@@ -441,7 +456,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   pub fn write_chunk_meta<'a>(&self, dst: &'a mut [u8]) -> PcoResult<&'a mut [u8]> {
     let mut extension = bit_reader::make_extension_for(dst, DEFAULT_PADDING_BYTES);
     let mut writer = BitWriter::new(dst, &mut extension);
-    self.meta.write_to(&mut writer);
+    self.meta.write_to(&mut writer)?;
     let consumed = writer.bytes_consumed()?;
     Ok(&mut dst[consumed..])
   }
