@@ -1,58 +1,26 @@
-use std::cmp::{max, min};
 use crate::bin::BinCompressionInfo;
-use crate::compression_table::CompressionTable;
-use crate::data_types::{NumberLike, UnsignedLike};
-use crate::{ans, Bin, bin_optimization, bit_reader, bit_writer, bits, ChunkConfig, ChunkLatentMetadata, ChunkMetadata, delta, float_mult_utils, FULL_BATCH_SIZE, Mode};
 use crate::bit_writer::BitWriter;
-use crate::constants::{ANS_INTERLEAVING, Bitlen, DEFAULT_PADDING_BYTES, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, Weight};
+use crate::compression_table::CompressionTable;
+use crate::constants::{
+  Bitlen, Weight, ANS_INTERLEAVING, DEFAULT_PADDING_BYTES, MAX_COMPRESSION_LEVEL,
+  MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES,
+};
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::format_version::FormatVersion;
+use crate::{
+  ans, bin_optimization, bit_reader, bits, delta, float_mult_utils, Bin, ChunkConfig,
+  ChunkLatentMetadata, ChunkMetadata, Mode, FULL_BATCH_SIZE,
+};
+use std::cmp::{max, min};
+
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd;
-use crate::modes::gcd::{GcdMode, use_gcd_arithmetic};
+use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::page_metadata::{PageLatentMetadata, PageMetadata};
 use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
-
-// InternalCompressorConfig captures all settings that don't belong in flags
-// i.e. these don't get written to the resulting bytes and aren't needed for
-// decoding
-#[derive(Clone, Debug)]
-pub struct InternalCompressorConfig {
-  pub compression_level: usize,
-  pub delta_order: Option<usize>,
-  pub use_gcds: bool,
-  pub use_float_mult: bool,
-}
-
-impl InternalCompressorConfig {
-  pub fn from_config<T: NumberLike>(config: &ChunkConfig) -> PcoResult<Self> {
-    let compression_level = config.compression_level;
-    if compression_level > MAX_COMPRESSION_LEVEL {
-      return Err(PcoError::invalid_argument(format!(
-        "compression level may not exceed {} (was {})",
-        MAX_COMPRESSION_LEVEL, compression_level,
-      )));
-    }
-    if let Some(order) = config.delta_encoding_order {
-      if order > MAX_DELTA_ENCODING_ORDER {
-        return Err(PcoError::invalid_argument(format!(
-          "delta encoding order may not exceed {} (was {})",
-          MAX_DELTA_ENCODING_ORDER, order,
-        )));
-      }
-    }
-
-    Ok(InternalCompressorConfig {
-      compression_level,
-      delta_order: config.delta_encoding_order,
-      use_gcds: config.use_gcds,
-      use_float_mult: config.use_float_mult && T::IS_FLOAT,
-    })
-  }
-}
 
 fn cumulative_sum(sizes: &[usize]) -> Vec<usize> {
   // there has got to be a better way to write this
@@ -333,7 +301,10 @@ fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T:
   }
 }
 
-fn split_latents<T: NumberLike>(naive_mode: Mode<T::Unsigned>, nums: &[T]) -> LatentSrc<T::Unsigned> {
+fn split_latents<T: NumberLike>(
+  naive_mode: Mode<T::Unsigned>,
+  nums: &[T],
+) -> LatentSrc<T::Unsigned> {
   match naive_mode {
     Mode::Classic | Mode::Gcd => LatentSrc::new(
       nums.len(),
@@ -345,7 +316,10 @@ fn split_latents<T: NumberLike>(naive_mode: Mode<T::Unsigned>, nums: &[T]) -> La
   }
 }
 
-pub(crate) fn new<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+pub(crate) fn new<T: NumberLike>(
+  nums: &[T],
+  config: &ChunkConfig,
+) -> PcoResult<ChunkCompressor<T::Unsigned>> {
   if nums.is_empty() {
     return Err(PcoError::invalid_argument(
       "cannot compress empty chunk",
@@ -421,7 +395,11 @@ pub(crate) fn new<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<
   };
 
   let meta = ChunkMetadata::new(optimized_mode, delta_order, latent_metas);
-  let max_bits_per_latent = meta.latents.iter().map(|latent_meta| latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset()).collect::<Vec<_>>();
+  let max_bits_per_latent = meta
+    .latents
+    .iter()
+    .map(|latent_meta| latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset())
+    .collect::<Vec<_>>();
 
   let n_latents = optimized_mode.n_latents();
   let (needs_gcds, n_nontrivial_latents) = meta.nontrivial_gcd_and_n_latents();
@@ -468,9 +446,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     Ok(&mut dst[consumed..])
   }
 
-  fn dissect_unsigneds(
-    &self,
-  ) -> PcoResult<DissectedSrc<U>> {
+  fn dissect_unsigneds(&self) -> PcoResult<DissectedSrc<U>> {
     let Self {
       latent_configs,
       src,
@@ -520,7 +496,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     let page_size = self.page_sizes[page_idx];
     let mut bit_size = 0;
     for (latent_idx, latent_var) in self.meta.latents.iter().enumerate() {
-      let meta_bit_size = self.meta.delta_encoding_order * U::BITS as usize + ANS_INTERLEAVING * latent_var.ans_size_log as usize;
+      let meta_bit_size = self.meta.delta_encoding_order * U::BITS as usize
+        + ANS_INTERLEAVING * latent_var.ans_size_log as usize;
       let nums_bit_size = page_size * self.max_bits_per_latent[latent_idx] as usize;
       bit_size += meta_bit_size + nums_bit_size;
     }

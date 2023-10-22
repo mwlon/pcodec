@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
-use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
-use crate::bit_reader::BitReader;
+use crate::bin::BinCompressionInfo;
+
 use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
-use crate::errors::PcoResult;
+
 use crate::float_mult_utils::FloatMultConfig;
 
 // Static, compile-time modes. Logic should go here if it's called in hot

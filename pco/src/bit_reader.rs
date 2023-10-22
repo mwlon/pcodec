@@ -1,12 +1,10 @@
 use crate::ans::AnsState;
 use std::cmp::{max, min};
-use std::fmt::{Debug, Display};
+
 use std::mem;
-use std::ops::*;
 
 use crate::bits;
 use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
-use crate::data_types::UnsignedLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
 
@@ -50,10 +48,10 @@ pub fn read_uint<U: ReadWriteUint, const MAX_EXTRA_WORDS: usize>(
 pub struct BitReader<'a> {
   pub current_stream: &'a [u8], // either src or extension
   other_stream: &'a [u8],
-  current_is_src: bool, // as opposed to extension
-  padding: usize, // in extension
-  skipped: usize, // in extension
-  pub stale_byte_idx: usize, // in current stream
+  current_is_src: bool,       // as opposed to extension
+  padding: usize,             // in extension
+  skipped: usize,             // in extension
+  pub stale_byte_idx: usize,  // in current stream
   pub bits_past_byte: Bitlen, // in current stream
 }
 
@@ -61,7 +59,10 @@ impl<'a> BitReader<'a> {
   pub fn new(src: &'a [u8], extension: &'a [u8]) -> Self {
     // we assume extension has len min(src.len(), padding) + padding
     // where the first min(src.len(), padding) overlap with src
-    let padding = max(extension.len() / 2, extension.len().saturating_sub(src.len()));
+    let padding = max(
+      extension.len() / 2,
+      extension.len().saturating_sub(src.len()),
+    );
     let skipped = src.len().saturating_sub(padding);
     Self {
       current_stream: src,
@@ -104,7 +105,10 @@ impl<'a> BitReader<'a> {
     assert!(self.current_is_src);
     self.stale_byte_idx -= self.skipped;
     self.current_is_src = false;
-    mem::swap(&mut self.current_stream, &mut self.other_stream);
+    mem::swap(
+      &mut self.current_stream,
+      &mut self.other_stream,
+    );
   }
 
   pub fn ensure_padded(&mut self, required_padding: usize) -> PcoResult<()> {
@@ -112,13 +116,13 @@ impl<'a> BitReader<'a> {
 
     let byte_idx = self.byte_idx();
     if byte_idx + required_padding < self.current_stream.len() {
-      return Ok(())
+      return Ok(());
     }
 
     // see if we can switch to the other stream
     if self.current_is_src && byte_idx + required_padding > self.other_stream.len() + self.padding {
       self.switch_to_extension();
-      return Ok(())
+      return Ok(());
     }
 
     Err(PcoError::insufficient_data(
@@ -168,16 +172,34 @@ impl<'a> BitReader<'a> {
   }
 
   pub fn read_bitlen(&mut self, n: Bitlen) -> Bitlen {
-    self.read_bitlen(n)
+    self.read_uint(n)
   }
 
   pub fn read_uint<U: ReadWriteUint>(&mut self, n: Bitlen) -> U {
     self.refill();
     let res = match U::MAX_EXTRA_WORDS {
-      0 => read_uint::<U, 0>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
-      1 => read_uint::<U, 1>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
-      2 => read_uint::<U, 2>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
-      _ => panic!("[BitReader] data type too large (extra words {} > 2)", U::MAX_EXTRA_WORDS),
+      0 => read_uint::<U, 0>(
+        self.current_stream,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+      ),
+      1 => read_uint::<U, 1>(
+        self.current_stream,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+      ),
+      2 => read_uint::<U, 2>(
+        self.current_stream,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+      ),
+      _ => panic!(
+        "[BitReader] data type too large (extra words {} > 2)",
+        U::MAX_EXTRA_WORDS
+      ),
     };
     self.consume(n);
     res
@@ -186,7 +208,12 @@ impl<'a> BitReader<'a> {
   #[inline]
   pub fn read_small(&mut self, n: Bitlen) -> AnsState {
     self.refill();
-    let res = read_uint::<AnsState, 0>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n);
+    let res = read_uint::<AnsState, 0>(
+      self.current_stream,
+      self.stale_byte_idx,
+      self.bits_past_byte,
+      n,
+    );
     self.consume(n);
     res
   }
@@ -197,8 +224,7 @@ impl<'a> BitReader<'a> {
     if src_bit_idx > src_size {
       return Err(PcoError::insufficient_data(format!(
         "out of bounds at bit {} / {}",
-        src_bit_idx,
-        src_size,
+        src_bit_idx, src_size,
       )));
     }
     Ok(())

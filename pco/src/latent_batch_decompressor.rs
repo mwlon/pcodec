@@ -1,14 +1,15 @@
-use std::cmp::min;
 use std::fmt::Debug;
 
 use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::page_metadata::PageLatentMetadata;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, BYTES_PER_WORD, FULL_BATCH_SIZE, WORD_BITLEN, WORD_SIZE, DEFAULT_PADDING_BYTES, LATENT_BATCH_PADDING};
+use crate::constants::{
+  Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, LATENT_BATCH_PADDING, WORD_BITLEN, WORD_SIZE,
+};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
-use crate::{ans, bit_reader, bits, ChunkLatentMetadata};
+use crate::page_metadata::PageLatentMetadata;
+use crate::{ans, bit_reader, ChunkLatentMetadata};
 
 const MAX_ANS_SYMBOLS_PER_WORD: usize = 4;
 
@@ -69,7 +70,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     needs_gcd: bool,
     is_trivial: bool,
   ) -> PcoResult<Self> {
-    let extra_words_per_offset = ((chunk_latent_meta.max_bits_per_offset().saturating_add(7)) / WORD_BITLEN) as usize;
+    let extra_words_per_offset =
+      ((chunk_latent_meta.max_bits_per_offset().saturating_add(7)) / WORD_BITLEN) as usize;
     let infos = chunk_latent_meta
       .bins
       .iter()
@@ -141,11 +143,12 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      dst[i] = bit_reader::read_uint::<U, MAX_EXTRA_WORDS>(stream, byte_idx, bits_past_byte, offset_bits);
+      dst[i] =
+        bit_reader::read_uint::<U, MAX_EXTRA_WORDS>(stream, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
-        + self.state.offset_bits_csum_scratch[FULL_BATCH_SIZE - 1]
-        + self.state.offset_bits_scratch[FULL_BATCH_SIZE - 1] as usize;
+      + self.state.offset_bits_csum_scratch[FULL_BATCH_SIZE - 1]
+      + self.state.offset_bits_scratch[FULL_BATCH_SIZE - 1] as usize;
     reader.stale_byte_idx = final_bit_idx / 8;
     reader.bits_past_byte = final_bit_idx as Bitlen % 8;
   }
@@ -194,7 +197,10 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       0 => self.decompress_offsets::<0>(reader, dst),
       1 => self.decompress_offsets::<1>(reader, dst),
       2 => self.decompress_offsets::<2>(reader, dst),
-      _ => panic!("[LatentBatchDecompressor] data type too large (extra words {} > 2)", self.extra_words_per_offset),
+      _ => panic!(
+        "[LatentBatchDecompressor] data type too large (extra words {} > 2)",
+        self.extra_words_per_offset
+      ),
     }
 
     if self.needs_gcd {

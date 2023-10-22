@@ -1,9 +1,9 @@
-use crate::errors::PcoResult;
-use crate::{bit_reader, bit_writer, ChunkConfig, ChunkMetadata, wrapped};
 use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
 use crate::data_types::{NumberLike, UnsignedLike};
+use crate::errors::PcoResult;
 use crate::standalone::constants::{MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
+use crate::{bit_reader, wrapped, ChunkConfig, ChunkMetadata};
 
 pub struct FileCompressor(wrapped::FileCompressor);
 
@@ -20,17 +20,21 @@ impl FileCompressor {
     let mut extension = bit_reader::make_extension_for(dst, 0);
     let mut writer = BitWriter::new(dst, &mut extension);
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
-    let mut consumed = writer.bytes_consumed()?;
+    let consumed = writer.bytes_consumed()?;
     self.0.write_header(&mut dst[consumed..])
   }
 
-  pub fn chunk_compressor<T: NumberLike>(&self, nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+  pub fn chunk_compressor<T: NumberLike>(
+    &self,
+    nums: &[T],
+    config: &ChunkConfig,
+  ) -> PcoResult<ChunkCompressor<T::Unsigned>> {
     let mut config = config.clone();
     config.paging_spec = PagingSpec::ExactPageSizes(vec![nums.len()]);
 
     Ok(ChunkCompressor {
       inner: self.0.chunk_compressor(nums, &config)?,
-      dtype_byte: T::DTYPE_BYTE
+      dtype_byte: T::DTYPE_BYTE,
     })
   }
 

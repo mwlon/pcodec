@@ -1,6 +1,3 @@
-use std::io;
-use std::io::Write;
-use crate::{bit_reader, bit_writer, ChunkConfig};
 use crate::bit_writer::BitWriter;
 use crate::constants::CURRENT_FORMAT_VERSION;
 use crate::data_types::NumberLike;
@@ -8,6 +5,7 @@ use crate::errors::PcoResult;
 use crate::format_version::FormatVersion;
 use crate::wrapped::chunk_compressor;
 use crate::wrapped::chunk_compressor::ChunkCompressor;
+use crate::{bit_reader, ChunkConfig};
 
 pub struct FileCompressor {
   format_version: FormatVersion,
@@ -32,7 +30,11 @@ impl FileCompressor {
     Ok(&mut dst[consumed..])
   }
 
-  pub fn chunk_compressor<T: NumberLike>(&self, nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+  pub fn chunk_compressor<T: NumberLike>(
+    &self,
+    nums: &[T],
+    config: &ChunkConfig,
+  ) -> PcoResult<ChunkCompressor<T::Unsigned>> {
     chunk_compressor::new(nums, config)
   }
 }

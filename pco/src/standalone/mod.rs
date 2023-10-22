@@ -1,5 +1,5 @@
-pub use compressor::{FileCompressor, ChunkCompressor};
-pub use decompressor::{FileDecompressor, ChunkDecompressor};
+pub use compressor::{ChunkCompressor, FileCompressor};
+pub use decompressor::{ChunkDecompressor, FileDecompressor};
 pub use simple::{auto_compress, auto_decompress, simple_compress};
 
 mod compressor;

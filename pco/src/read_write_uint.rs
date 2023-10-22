@@ -1,7 +1,7 @@
-use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Shl, Shr, Sub};
-use std::fmt::{Debug, Display};
 use crate::constants::{Bitlen, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
+use std::fmt::{Debug, Display};
+use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Shl, Shr, Sub};
 
 pub trait ReadWriteUint:
   Add<Output = Self>

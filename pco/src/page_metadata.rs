@@ -1,11 +1,11 @@
 use crate::ans::AnsState;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::ChunkMetadata;
-use crate::constants::{ANS_INTERLEAVING, Bitlen, MINIMAL_PADDING_BYTES, PAGE_LATENT_META_PADDING};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, PAGE_LATENT_META_PADDING};
 use crate::data_types::UnsignedLike;
 use crate::delta::DeltaMoments;
 use crate::errors::PcoResult;
+use crate::ChunkMetadata;
 
 #[derive(Clone, Debug)]
 pub struct PageLatentMetadata<U: UnsignedLike> {

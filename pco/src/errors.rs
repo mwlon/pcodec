@@ -51,18 +51,6 @@ impl PcoError {
     Self::new(ErrorKind::InsufficientData, message)
   }
 
-  pub(crate) fn insufficient_data_recipe(
-    name: &str,
-    bits_to_read: Bitlen,
-    bit_idx: usize,
-    total_bits: usize,
-  ) -> Self {
-    Self::insufficient_data(format!(
-      "{}: cannot read {} bits at bit idx {} out of {}",
-      name, bits_to_read, bit_idx, total_bits,
-    ))
-  }
-
   pub(crate) fn invalid_argument<S: AsRef<str>>(message: S) -> Self {
     Self::new(ErrorKind::InvalidArgument, message)
   }

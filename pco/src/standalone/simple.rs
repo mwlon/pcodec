@@ -1,9 +1,7 @@
-use std::io::Write;
-
-use crate::data_types::NumberLike;
-use crate::errors::PcoResult;
 use crate::bits;
 use crate::chunk_config::ChunkConfig;
+use crate::data_types::NumberLike;
+use crate::errors::PcoResult;
 use crate::standalone::compressor::FileCompressor;
 use crate::standalone::decompressor::FileDecompressor;
 
@@ -23,18 +21,31 @@ fn zero_pad(bytes: &mut Vec<u8>, additional: usize) {
 pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
   let mut bytes = Vec::new();
   let file_compressor = FileCompressor::new();
-  zero_pad(&mut bytes, file_compressor.header_size_hint());
+  zero_pad(
+    &mut bytes,
+    file_compressor.header_size_hint(),
+  );
   let mut zeros_remaining = file_compressor.write_header(&mut bytes)?.len();
 
   let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
   let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
   for chunk in nums.chunks(n_per_chunk) {
     let chunk_compressor = file_compressor.chunk_compressor(chunk, &config)?;
-    zero_pad(&mut bytes, chunk_compressor.chunk_size_hint().saturating_sub(zeros_remaining));
+    zero_pad(
+      &mut bytes,
+      chunk_compressor
+        .chunk_size_hint()
+        .saturating_sub(zeros_remaining),
+    );
     zeros_remaining = chunk_compressor.write_chunk(&mut bytes)?.len();
-  };
+  }
 
-  zero_pad(&mut bytes, file_compressor.footer_size_hint().saturating_sub(zeros_remaining));
+  zero_pad(
+    &mut bytes,
+    file_compressor
+      .footer_size_hint()
+      .saturating_sub(zeros_remaining),
+  );
   zeros_remaining = file_compressor.write_footer(&mut bytes)?.len();
 
   bytes.truncate(bytes.len() - zeros_remaining);
@@ -46,9 +57,7 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
 ///
 /// Will return an error if there are any compatibility, corruption,
 /// or insufficient data issues.
-fn simple_decompress<T: NumberLike>(
-  bytes: &[u8],
-) -> PcoResult<Vec<T>> {
+fn simple_decompress<T: NumberLike>(bytes: &[u8]) -> PcoResult<Vec<T>> {
   let (file_decompressor, mut data) = FileDecompressor::new(bytes)?;
 
   let mut res = Vec::new();

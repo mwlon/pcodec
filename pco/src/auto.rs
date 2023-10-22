@@ -1,9 +1,9 @@
-use crate::constants::{AUTO_DELTA_LIMIT, DEFAULT_MAX_PAGE_SIZE, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
-use crate::data_types::NumberLike;
 use crate::chunk_config::{ChunkConfig, PagingSpec};
-use std::cmp::min;
+use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
+use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::wrapped::FileCompressor;
+use std::cmp::min;
 
 /// Automatically makes an educated guess for the best compression
 /// delta encoding order, based on `nums` and `compression_level`.
@@ -11,7 +11,10 @@ use crate::wrapped::FileCompressor;
 /// This has some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
 /// See [`ChunkConfig`] for information about compression levels.
-pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> PcoResult<usize> {
+pub fn auto_delta_encoding_order<T: NumberLike>(
+  nums: &[T],
+  compression_level: usize,
+) -> PcoResult<usize> {
   let mut sampled_nums;
   let head_nums = if nums.len() < AUTO_DELTA_LIMIT {
     nums
@@ -85,7 +88,10 @@ mod tests {
       linear_trend.push(i);
       quadratic_trend.push(i * i);
     }
-    assert_eq!(auto_delta_encoding_order(&no_trend, 3).unwrap(), 0);
+    assert_eq!(
+      auto_delta_encoding_order(&no_trend, 3).unwrap(),
+      0
+    );
     assert_eq!(
       auto_delta_encoding_order(&linear_trend, 3).unwrap(),
       1
@@ -101,6 +107,9 @@ mod tests {
     let mut nums = Vec::with_capacity(2000);
     nums.resize(1000, 77);
     nums.resize(2000, 78);
-    assert_eq!(auto_delta_encoding_order(&nums, 3).unwrap(), 1);
+    assert_eq!(
+      auto_delta_encoding_order(&nums, 3).unwrap(),
+      1
+    );
   }
 }

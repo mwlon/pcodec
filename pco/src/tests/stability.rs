@@ -1,8 +1,8 @@
+use crate::chunk_config::ChunkConfig;
 use crate::chunk_metadata::ChunkMetadata;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
-use crate::standalone::{auto_decompress, FileCompressor, simple_compress};
-use crate::chunk_config::ChunkConfig;
+use crate::standalone::{auto_decompress, FileCompressor};
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMetadata<T::Unsigned>> {
   let fc = FileCompressor::new();
@@ -13,7 +13,8 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMetadata<T::
   };
   let cc = fc.chunk_compressor(&nums, &config)?;
   let metadata = cc.chunk_meta().clone();
-  let mut compressed = vec![0; fc.header_size_hint() + cc.chunk_size_hint() + fc.footer_size_hint()];
+  let mut compressed =
+    vec![0; fc.header_size_hint() + cc.chunk_size_hint() + fc.footer_size_hint()];
   let dst = &mut compressed;
   let dst = fc.write_header(dst)?;
   let dst = cc.write_chunk(dst)?;

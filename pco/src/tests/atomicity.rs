@@ -1,8 +1,6 @@
-use std::io::Write;
-
 use crate::errors::ErrorKind;
-use crate::standalone::{FileDecompressor, simple_compress};
-use crate::standalone;
+use crate::standalone::{simple_compress, FileDecompressor};
+
 use crate::chunk_config::ChunkConfig;
 
 #[test]
@@ -19,7 +17,7 @@ fn test_errors_do_not_mutate_decompressor() {
         file_decompressor = Some(fd);
         data = rest;
         break;
-      },
+      }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
       Err(e) => panic!("{}", e),
     }
@@ -34,7 +32,7 @@ fn test_errors_do_not_mutate_decompressor() {
         chunk_decompressor = Some(cd.unwrap());
         data = rest;
         break;
-      },
+      }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
       Err(e) => panic!("{}", e),
     };

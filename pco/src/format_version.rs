@@ -2,11 +2,10 @@
 // of the compressed data.
 // New flags may be added in over time in a backward-compatible way.
 
-use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::errors::{ErrorKind, PcoError, PcoResult};
-use crate::chunk_config::ChunkConfig;
+use crate::errors::{PcoError, PcoResult};
+
 use crate::constants::CURRENT_FORMAT_VERSION;
 
 /// The configuration stored in a pco header.
@@ -29,9 +28,8 @@ impl FormatVersion {
     if version > CURRENT_FORMAT_VERSION {
       return Err(PcoError::compatibility(format!(
         "file's format version ({}) exceeds max supported ({}); consider upgrading pco",
-        version,
-        CURRENT_FORMAT_VERSION,
-      )))
+        version, CURRENT_FORMAT_VERSION,
+      )));
     }
 
     Ok(Self(version))

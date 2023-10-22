@@ -2,16 +2,16 @@ use std::cmp::min;
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
-use crate::page_metadata::PageMetadata;
-use crate::constants::{LATENT_BATCH_PADDING, DEFAULT_PADDING_BYTES, FULL_BATCH_SIZE};
+use crate::constants::{FULL_BATCH_SIZE, LATENT_BATCH_PADDING};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
+use crate::page_metadata::PageMetadata;
 use crate::progress::Progress;
-use crate::{delta, float_mult_utils, ChunkMetadata, bit_reader};
-use crate::{latent_batch_decompressor, Mode};
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
+use crate::{bit_reader, delta, float_mult_utils};
+use crate::{latent_batch_decompressor, Mode};
 
 #[derive(Clone, Debug)]
 pub struct State<U: UnsignedLike> {
@@ -197,7 +197,11 @@ impl<T: NumberLike> PageDecompressor<T> {
   }
 
   // If this returns an error, num_dst might be modified.
-  pub fn decompress<'a>(&mut self, src: &'a [u8], num_dst: &mut [T]) -> PcoResult<(Progress, &'a [u8])> {
+  pub fn decompress<'a>(
+    &mut self,
+    src: &'a [u8],
+    num_dst: &mut [T],
+  ) -> PcoResult<(Progress, &'a [u8])> {
     if num_dst.len() % FULL_BATCH_SIZE != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be\

@@ -1,8 +1,8 @@
-use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
-use crate::bit_reader::BitReader;
+use crate::bin::BinCompressionInfo;
+
 use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
-use crate::errors::PcoResult;
+
 use crate::modes::ConstMode;
 use crate::{bits, Bin};
 

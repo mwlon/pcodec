@@ -1,6 +1,6 @@
 use crate::constants::DEFAULT_MAX_PAGE_SIZE;
-use crate::{bits, DEFAULT_COMPRESSION_LEVEL};
 use crate::errors::{PcoError, PcoResult};
+use crate::{bits, DEFAULT_COMPRESSION_LEVEL};
 
 /// All configurations available for a compressor.
 ///
@@ -133,7 +133,7 @@ impl PagingSpec {
           start = end;
         }
         res
-      },
+      }
       PagingSpec::ExactPageSizes(sizes) => sizes.to_vec(),
     };
 

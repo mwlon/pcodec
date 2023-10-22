@@ -1,13 +1,13 @@
-use std::fmt::Debug;
 use crate::bit_reader;
+use std::fmt::Debug;
 
-use crate::bit_reader::{BitReader};
-use crate::wrapped::chunk_decompressor::ChunkDecompressor;
+use crate::bit_reader::BitReader;
 use crate::chunk_metadata::ChunkMetadata;
-use crate::constants::{DEFAULT_PADDING_BYTES, MINIMAL_PADDING_BYTES};
+use crate::constants::DEFAULT_PADDING_BYTES;
 use crate::data_types::NumberLike;
+use crate::wrapped::chunk_decompressor::ChunkDecompressor;
 
-use crate::errors::{PcoError, PcoResult};
+use crate::errors::PcoResult;
 use crate::format_version::FormatVersion;
 
 // #[derive(Clone, Debug, Default)]
@@ -173,7 +173,10 @@ impl FileDecompressor {
     self.format_version.0
   }
 
-  pub fn chunk_decompressor<'a, T: NumberLike>(&self, src: &'a [u8]) -> PcoResult<(ChunkDecompressor<T>, &'a [u8])> {
+  pub fn chunk_decompressor<'a, T: NumberLike>(
+    &self,
+    src: &'a [u8],
+  ) -> PcoResult<(ChunkDecompressor<T>, &'a [u8])> {
     let extension = bit_reader::make_extension_for(src, DEFAULT_PADDING_BYTES);
     let mut reader = BitReader::new(src, &extension);
     let chunk_meta = ChunkMetadata::<T::Unsigned>::parse_from(&mut reader, &self.format_version)?;

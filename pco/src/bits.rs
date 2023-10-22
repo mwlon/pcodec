@@ -1,6 +1,6 @@
-use crate::read_write_uint::ReadWriteUint;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
+use crate::read_write_uint::ReadWriteUint;
 
 #[inline]
 pub fn lowest_bits<U: ReadWriteUint>(word: U, n: Bitlen) -> U {

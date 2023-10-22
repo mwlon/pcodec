@@ -1,11 +1,13 @@
-use std::io::Read;
 use crate::bit_reader::BitReader;
-use crate::data_types::{NumberLike, UnsignedLike};
-use crate::errors::{PcoError, PcoResult};
-use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_BODY_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
-use crate::{bit_reader, ChunkMetadata, wrapped};
 use crate::constants::MINIMAL_PADDING_BYTES;
-use crate::page_metadata::PageMetadata;
+use crate::data_types::NumberLike;
+use crate::errors::{PcoError, PcoResult};
+use crate::standalone::constants::{
+  BITS_TO_ENCODE_COMPRESSED_BODY_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER,
+  MAGIC_TERMINATION_BYTE,
+};
+use crate::{bit_reader, wrapped, ChunkMetadata};
+
 use crate::progress::Progress;
 
 pub struct FileDecompressor(wrapped::FileDecompressor);
@@ -31,14 +33,17 @@ impl FileDecompressor {
     self.0.format_version()
   }
 
-  pub fn chunk_decompressor<'a, T: NumberLike>(&self, src: &'a [u8]) -> PcoResult<(Option<ChunkDecompressor<T>>, &'a [u8])> {
+  pub fn chunk_decompressor<'a, T: NumberLike>(
+    &self,
+    src: &'a [u8],
+  ) -> PcoResult<(Option<ChunkDecompressor<T>>, &'a [u8])> {
     let extension = bit_reader::make_extension_for(src, MINIMAL_PADDING_BYTES);
     let mut reader = BitReader::new(src, &extension);
     let dtype_or_termination_byte = reader.read_aligned_bytes(1)?[0];
 
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
       let consumed = reader.bytes_consumed()?;
-      return Ok((None, &src[consumed..]))
+      return Ok((None, &src[consumed..]));
     }
 
     if dtype_or_termination_byte != T::DTYPE_BYTE {
@@ -90,7 +95,11 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     self.compressed_body_size
   }
 
-  pub fn decompress<'a>(&mut self, bytes: &'a [u8], dst: &mut [T]) -> PcoResult<(Progress, &'a [u8])> {
+  pub fn decompress<'a>(
+    &mut self,
+    bytes: &'a [u8],
+    dst: &mut [T],
+  ) -> PcoResult<(Progress, &'a [u8])> {
     let (progress, rest) = self.inner_pd.decompress(bytes, dst)?;
 
     self.n_processed += progress.n_processed;
@@ -99,14 +108,12 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     if self.n_processed >= self.n && self.n_bytes_processed != self.compressed_body_size {
       return Err(PcoError::corruption(format!(
         "Expected {} bytes in data page but read {} by the end",
-        self.compressed_body_size,
-        self.n_bytes_processed,
+        self.compressed_body_size, self.n_bytes_processed,
       )));
     } else if self.n_bytes_processed > self.compressed_body_size {
       return Err(PcoError::corruption(format!(
         "Expected {} bytes in data page but read {} before reaching the end",
-        self.compressed_body_size,
-        self.n_bytes_processed,
+        self.compressed_body_size, self.n_bytes_processed,
       )));
     }
 
@@ -114,7 +121,11 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   }
 
   // a helper for some internal things
-  pub(crate) fn decompress_remaining_extend<'a>(&mut self, bytes: &'a [u8], dst: &mut Vec<T>) -> PcoResult<&'a [u8]> {
+  pub(crate) fn decompress_remaining_extend<'a>(
+    &mut self,
+    bytes: &'a [u8],
+    dst: &mut Vec<T>,
+  ) -> PcoResult<&'a [u8]> {
     let initial_len = dst.len();
     let remaining = self.n - self.n_processed;
     dst.reserve(remaining);
@@ -126,7 +137,6 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     Ok(rest)
   }
 }
-
 
 // use std::cmp::min;
 // use std::io::Write;

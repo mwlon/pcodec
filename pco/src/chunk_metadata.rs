@@ -1,17 +1,17 @@
 use std::cmp::min;
-use crate::ans::AnsState;
+
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-use crate::delta::DeltaMoments;
+
+use crate::bin;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::modes::{gcd, Mode};
-use crate::bin;
 use crate::format_version::FormatVersion;
+use crate::modes::{gcd, Mode};
 
 /// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a latent
 /// variable interleaved into the compressed data.
@@ -45,12 +45,24 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
   }
 
   pub(crate) fn max_bits_per_ans(&self) -> Bitlen {
-    self.ans_size_log - self.bins.iter().map(|bin| bin.weight.ilog2() as Bitlen).min().unwrap_or(0)
+    self.ans_size_log
+      - self
+        .bins
+        .iter()
+        .map(|bin| bin.weight.ilog2() as Bitlen)
+        .min()
+        .unwrap_or(0)
   }
 }
 
-fn parse_bin_batch<U: UnsignedLike>(reader: &mut BitReader, mode: Mode<U>, ans_size_log: Bitlen, batch_size: usize, dst: &mut Vec<Bin<U>>) -> PcoResult<()> {
-  reader.ensure_padded(DEFAULT_PADDING_BYTES);
+fn parse_bin_batch<U: UnsignedLike>(
+  reader: &mut BitReader,
+  mode: Mode<U>,
+  ans_size_log: Bitlen,
+  batch_size: usize,
+  dst: &mut Vec<Bin<U>>,
+) -> PcoResult<()> {
+  reader.ensure_padded(DEFAULT_PADDING_BYTES)?; // TODO
 
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for _ in 0..batch_size {
@@ -84,7 +96,7 @@ fn parse_bin_batch<U: UnsignedLike>(reader: &mut BitReader, mode: Mode<U>, ans_s
 
 impl<U: UnsignedLike> ChunkLatentMetadata<U> {
   fn parse_from(reader: &mut BitReader, mode: Mode<U>) -> PcoResult<Self> {
-    reader.ensure_padded(DEFAULT_PADDING_BYTES);
+    reader.ensure_padded(DEFAULT_PADDING_BYTES)?; // TODO
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
 
     let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS);
@@ -104,7 +116,13 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
     let mut bins = Vec::with_capacity(n_bins);
     while bins.len() < n_bins {
       let batch_size = min(n_bins - bins.len(), FULL_BIN_BATCH_SIZE);
-      parse_bin_batch(reader, mode, ans_size_log, batch_size, &mut bins)?;
+      parse_bin_batch(
+        reader,
+        mode,
+        ans_size_log,
+        batch_size,
+        &mut bins,
+      )?;
     }
 
     Ok(Self { bins, ans_size_log })

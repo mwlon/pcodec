@@ -1,18 +1,17 @@
-use std::cell::{Ref, RefCell, RefMut};
 use std::cmp::{max, min};
 use std::mem;
 
+use crate::bit_reader::word_at;
 use crate::bits;
-use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN, WORD_SIZE};
+use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
-use crate::bit_reader::word_at;
 
 #[inline]
 pub fn write_word_to(word: usize, byte_idx: usize, dst: &mut [u8]) {
   unsafe {
-    let target = (dst.as_mut_ptr().add(byte_idx) as *mut [u8; BYTES_PER_WORD]);
+    let target = dst.as_mut_ptr().add(byte_idx) as *mut [u8; BYTES_PER_WORD];
     *target = word.to_le_bytes();
   };
 }
@@ -41,10 +40,10 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
 pub struct BitWriter<'a> {
   pub current_stream: &'a mut [u8], // either dst or extension
   other_stream: &'a mut [u8],
-  current_is_dst: bool, // as opposed to extension
-  padding: usize, // in extension
-  skipped: usize, // in extension
-  pub stale_byte_idx: usize, // in current stream
+  current_is_dst: bool,       // as opposed to extension
+  padding: usize,             // in extension
+  skipped: usize,             // in extension
+  pub stale_byte_idx: usize,  // in current stream
   pub bits_past_byte: Bitlen, // in current stream
 }
 
@@ -52,7 +51,10 @@ impl<'a> BitWriter<'a> {
   pub fn new(dst: &'a mut [u8], extension: &'a mut [u8]) -> Self {
     // we assume extension has len min(dst.len(), padding) + padding
     // where the first min(dst.len(), padding) overlap with dst
-    let padding = max(extension.len() / 2, extension.len().saturating_sub(dst.len()));
+    let padding = max(
+      extension.len() / 2,
+      extension.len().saturating_sub(dst.len()),
+    );
     let skipped = dst.len().saturating_sub(padding);
     Self {
       current_stream: dst,
@@ -86,7 +88,10 @@ impl<'a> BitWriter<'a> {
     assert!(self.current_is_dst);
     self.stale_byte_idx -= self.skipped;
     self.current_is_dst = false;
-    mem::swap(&mut self.current_stream, &mut self.other_stream);
+    mem::swap(
+      &mut self.current_stream,
+      &mut self.other_stream,
+    );
   }
 
   fn dst_byte_size(&self) -> usize {
@@ -107,8 +112,7 @@ impl<'a> BitWriter<'a> {
     if dst_bit_idx > dst_size {
       return Err(PcoError::insufficient_data(format!(
         "out of bounds at bit {} / {}",
-        dst_bit_idx,
-        dst_size,
+        dst_bit_idx, dst_size,
       )));
     }
     Ok(())
@@ -120,13 +124,13 @@ impl<'a> BitWriter<'a> {
 
     let byte_idx = self.byte_idx();
     if byte_idx + required_padding < self.current_stream.len() {
-      return Ok(())
+      return Ok(());
     }
 
     // see if we can switch to the other stream
     if self.current_is_dst && byte_idx + required_padding > self.other_stream.len() + self.padding {
       self.switch_to_extension();
-      return Ok(())
+      return Ok(());
     }
 
     Err(PcoError::insufficient_data(
@@ -157,7 +161,7 @@ impl<'a> BitWriter<'a> {
           bytes.len(),
           self.dst_byte_idx(),
           self.dst_byte_size(),
-        )))
+        )));
       }
       self.current_stream[self.stale_byte_idx..end].clone_from_slice(bytes);
       self.stale_byte_idx = end;
@@ -174,10 +178,31 @@ impl<'a> BitWriter<'a> {
   pub fn write_uint<U: ReadWriteUint>(&mut self, x: U, n: Bitlen) {
     self.refill();
     match U::MAX_EXTRA_WORDS {
-      0 => write_uint_to::<U, 0>(x, self.stale_byte_idx, self.bits_past_byte, n, self.current_stream),
-      1 => write_uint_to::<U, 1>(x, self.stale_byte_idx, self.bits_past_byte, n, self.current_stream),
-      2 => write_uint_to::<U, 2>(x, self.stale_byte_idx, self.bits_past_byte, n, self.current_stream),
-      _ => panic!("[BitWriter] data type too large (extra words {} > 2)", U::MAX_EXTRA_WORDS),
+      0 => write_uint_to::<U, 0>(
+        x,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+        self.current_stream,
+      ),
+      1 => write_uint_to::<U, 1>(
+        x,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+        self.current_stream,
+      ),
+      2 => write_uint_to::<U, 2>(
+        x,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+        self.current_stream,
+      ),
+      _ => panic!(
+        "[BitWriter] data type too large (extra words {} > 2)",
+        U::MAX_EXTRA_WORDS
+      ),
     }
     self.consume(n);
   }
@@ -218,7 +243,11 @@ impl<'a> Drop for BitWriter<'a> {
       return;
     }
 
-    for (dst_byte, extension_byte) in self.current_stream.iter_mut().zip(self.other_stream.iter_mut().skip(self.skipped)) {
+    for (dst_byte, extension_byte) in self
+      .current_stream
+      .iter_mut()
+      .zip(self.other_stream.iter_mut().skip(self.skipped))
+    {
       *dst_byte |= *extension_byte;
     }
   }
