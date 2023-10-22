@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {
-  compressor_config: pco::CompressorConfig,
+  compressor_config: pco::ChunkConfig,
 }
 
 impl CodecInternal for PcoConfig {

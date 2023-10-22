@@ -94,27 +94,8 @@ pub trait UnsignedLike:
 
   fn leading_zeros(self) -> Bitlen;
 
-  /// Shifts the unsigned integer right and returns its lowest bits as a
-  /// `usize`.
-  /// For example,
-  /// ```
-  /// use pco::data_types::UnsignedLike;
-  /// assert_eq!(6_u32.rshift_word(1), 3_usize);
-  /// ```
-  ///
-  /// Used for some bit arithmetic operations during compression.
-  fn rshift_word(self, shift: Bitlen) -> usize;
-
-  /// Shifts the unsigned integer left and returns its lowest bits as a
-  /// `usize`.
-  /// For example,
-  /// ```
-  /// use pco::data_types::UnsignedLike;
-  /// assert_eq!(6_u32.lshift_word(1), 12_usize);
-  /// ```
-  ///
-  /// Used for some bit arithmetic operations during compression.
-  fn lshift_word(self, shift: Bitlen) -> usize;
+  /// Converts the unsigned integer to a usize, truncating higher bits if necessary.
+  fn to_usize(self) -> usize;
 
   fn wrapping_add(self, other: Self) -> Self;
   fn wrapping_sub(self, other: Self) -> Self;

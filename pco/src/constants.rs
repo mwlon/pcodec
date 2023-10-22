@@ -36,6 +36,7 @@ pub const MAX_SUPPORTED_PRECISION: Bitlen = 128;
 
 // defaults
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
+pub const DEFAULT_MAX_PAGE_SIZE: usize = 1000000;
 
 // other
 pub const FULL_BIN_BATCH_SIZE: usize = 128;

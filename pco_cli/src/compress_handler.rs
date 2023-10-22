@@ -13,7 +13,7 @@ use parquet::arrow::ProjectionMask;
 
 use pco::data_types::NumberLike;
 use pco::standalone::Compressor;
-use pco::compressor_config::CompressorConfig;
+use pco::chunk_config::ChunkConfig;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -36,7 +36,7 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
     }
     let mut file = open_options.open(&opt.pco_path)?;
 
-    let config = CompressorConfig::default()
+    let config = ChunkConfig::default()
       .with_compression_level(opt.level)
       .with_delta_encoding_order(opt.delta_encoding_order)
       .with_use_gcds(!opt.disable_gcds);

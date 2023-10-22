@@ -1,7 +1,7 @@
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::standalone::Compressor;
-use crate::compressor_config::CompressorConfig;
+use crate::chunk_config::ChunkConfig;
 use std::cmp::min;
 
 /// Automatically makes an educated guess for the best compression
@@ -9,7 +9,7 @@ use std::cmp::min;
 ///
 /// This has some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
-/// See [`CompressorConfig`] for information about compression levels.
+/// See [`ChunkConfig`] for information about compression levels.
 pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: usize) -> usize {
   let mut sampled_nums;
   let head_nums = if nums.len() < AUTO_DELTA_LIMIT {
@@ -36,7 +36,7 @@ pub fn auto_delta_encoding_order<T: NumberLike>(nums: &[T], compression_level: u
     // Taking deltas of a large dataset won't change the GCD,
     // so we don't need to waste compute here inferring GCD's just to
     // determine the best delta order.
-    let config = CompressorConfig {
+    let config = ChunkConfig {
       delta_encoding_order: Some(delta_encoding_order),
       compression_level: min(
         compression_level,

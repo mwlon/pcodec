@@ -3,7 +3,7 @@ use rand::Rng;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{auto_decompress, simple_compress, Compressor};
-use crate::compressor_config::CompressorConfig;
+use crate::chunk_config::ChunkConfig;
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
@@ -219,7 +219,7 @@ fn assert_recovers_within_size<T: NumberLike>(
     "name={} delta_encoding_order={}",
     name, delta_encoding_order,
   );
-  let config = CompressorConfig {
+  let config = ChunkConfig {
     compression_level,
     delta_encoding_order: Some(delta_encoding_order),
     ..Default::default()

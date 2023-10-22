@@ -1,4 +1,6 @@
-use crate::DEFAULT_COMPRESSION_LEVEL;
+use crate::constants::DEFAULT_MAX_PAGE_SIZE;
+use crate::{bits, DEFAULT_COMPRESSION_LEVEL};
+use crate::errors::{PcoError, PcoResult};
 
 /// All configurations available for a compressor.
 ///
@@ -8,7 +10,7 @@ use crate::DEFAULT_COMPRESSION_LEVEL;
 /// stored in the output.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub struct CompressorConfig {
+pub struct ChunkConfig {
   /// `compression_level` ranges from 0 to 12 inclusive (default 8).
   ///
   /// The compressor uses up to 2^`compression_level` bins.
@@ -69,20 +71,23 @@ pub struct CompressorConfig {
   /// may reduce compression speed somewhat even when it isn't helpful.
   /// However, the compression ratio improvements tend to be quite large.
   pub use_float_mult: bool,
+  // TODO
+  pub paging_spec: PagingSpec,
 }
 
-impl Default for CompressorConfig {
+impl Default for ChunkConfig {
   fn default() -> Self {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: None,
       use_gcds: true,
       use_float_mult: true,
+      paging_spec: Default::default(),
     }
   }
 }
 
-impl CompressorConfig {
+impl ChunkConfig {
   /// Sets [`compression_level`][CompressorConfig::compression_level].
   pub fn with_compression_level(mut self, level: usize) -> Self {
     self.compression_level = level;
@@ -99,5 +104,55 @@ impl CompressorConfig {
   pub fn with_use_gcds(mut self, use_gcds: bool) -> Self {
     self.use_gcds = use_gcds;
     self
+  }
+}
+
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub enum PagingSpec {
+  EqualPagesUpTo(usize),
+  ExactPageSizes(Vec<usize>),
+}
+
+impl Default for PagingSpec {
+  fn default() -> Self {
+    Self::EqualPagesUpTo(DEFAULT_MAX_PAGE_SIZE)
+  }
+}
+
+impl PagingSpec {
+  pub(crate) fn page_sizes(&self, n: usize) -> PcoResult<Vec<usize>> {
+    let page_sizes = match self {
+      PagingSpec::EqualPagesUpTo(max_size) => {
+        let n_pages = bits::ceil_div(n, *max_size);
+        let mut res = Vec::new();
+        let mut start = 0;
+        for i in 0..n_pages {
+          let end = ((i + 1) * n) / n_pages;
+          res.push(end - start);
+          start = end;
+        }
+        res
+      },
+      PagingSpec::ExactPageSizes(sizes) => sizes.to_vec(),
+    }?;
+
+    let sizes_n: usize = page_sizes.iter().sum();
+    if sizes_n != n {
+      return Err(PcoError::invalid_argument(format!(
+        "paging spec suggests {} numbers but {} were given",
+        sizes_n, n,
+      )));
+    }
+
+    for &size in &page_sizes {
+      if size == 0 {
+        return Err(PcoError::invalid_argument(
+          "cannot write data page of 0 numbers",
+        ));
+      }
+    }
+
+    Ok(page_sizes)
   }
 }

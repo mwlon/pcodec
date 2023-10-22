@@ -19,5 +19,5 @@ use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
 use crate::{ans, delta};
 use crate::auto;
 use crate::{bin_optimization, float_mult_utils};
-use crate::compressor_config::CompressorConfig;
+use crate::chunk_config::ChunkConfig;
 use crate::page_metadata::{PageLatentMetadata, PageMetadata};

@@ -1,7 +1,7 @@
 use std::cmp::min;
 use crate::ans::AnsState;
 use crate::bin::Bin;
-use crate::bit_reader::{BitReader};
+use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
@@ -10,7 +10,7 @@ use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::modes::{gcd, Mode};
-use crate::{bin};
+use crate::bin;
 use crate::format_version::FormatVersion;
 
 /// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a latent
@@ -32,6 +32,21 @@ pub struct ChunkLatentMetadata<U: UnsignedLike> {
   /// How the numbers or deltas are encoded, depending on their numerical
   /// range.
   pub bins: Vec<Bin<U>>,
+}
+
+impl<U: UnsignedLike> ChunkLatentMetadata<U> {
+  pub(crate) fn max_bits_per_offset(&self) -> Bitlen {
+    self
+      .bins
+      .iter()
+      .map(|bin| bin.offset_bits)
+      .max()
+      .unwrap_or(Bitlen::MAX)
+  }
+
+  pub(crate) fn max_bits_per_ans(&self) -> Bitlen {
+    self.ans_size_log - self.bins.iter().map(|bin| bin.weight.ilog2() as Bitlen).min().unwrap_or(0)
+  }
 }
 
 fn parse_bin_batch<U: UnsignedLike>(reader: &mut BitReader, mode: Mode<U>, batch_size: usize, dst: &mut Vec<Bin<U>>) -> PcoResult<()> {
@@ -204,7 +219,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     })
   }
 
-  pub(crate) fn write_to(&self, _flags: &FormatVersion, writer: &mut BitWriter) {
+  pub(crate) fn write_to(&self, writer: &mut BitWriter) {
     let mode_value = match self.mode {
       Mode::Classic => 0,
       Mode::Gcd => 1,
@@ -268,12 +283,4 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       .mode
       .latent_delta_order(latent_idx, self.delta_encoding_order)
   }
-}
-
-#[derive(Clone, Debug, Default)]
-#[non_exhaustive]
-pub enum PagingSpec {
-  #[default]
-  SinglePage,
-  ExactPageSizes(Vec<usize>),
 }

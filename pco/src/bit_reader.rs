@@ -23,6 +23,7 @@ pub fn unchecked_read_uint<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
   n: Bitlen,
 ) -> U {
   let mut res = U::from_word(unchecked_word_at(src, byte_idx) >> bits_past_byte);
+  // TODO do I need this (WORD_BITLEN - 8) and (BYTES_PER_WORD - 1)?
   let mut processed = min(n, WORD_BITLEN - 8 - bits_past_byte);
   byte_idx += BYTES_PER_WORD - 1;
 
@@ -190,16 +191,10 @@ impl<'a> BitReader<'a> {
     self.bits_past_byte += n;
   }
 
-  #[inline]
-  fn consume_big(&mut self, n: usize) {
-    let bit_idx = self.src_bit_idx() + n;
-    self.seek_to(bit_idx);
-  }
-
   pub fn read_aligned_bytes(&mut self, n: usize) -> PcoResult<&'a [u8]> {
     let byte_idx = self.aligned_byte_idx()?;
     let new_byte_idx = byte_idx + n;
-    self.consume_big(n * 8);
+    self.stale_byte_idx = new_byte_idx;
     Ok(&self.current_stream[byte_idx..new_byte_idx])
   }
 
@@ -217,7 +212,7 @@ impl<'a> BitReader<'a> {
       0 => unchecked_read_uint::<U, 0>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
       1 => unchecked_read_uint::<U, 1>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
       2 => unchecked_read_uint::<U, 2>(self.current_stream, self.stale_byte_idx, self.bits_past_byte, n),
-      _ => panic!("data type is too large"),
+      _ => panic!("[BitReader] data type too large (extra words {} > 2)", U::MAX_EXTRA_WORDS),
     };
     self.consume(n);
     res
@@ -257,13 +252,6 @@ impl<'a> BitReader<'a> {
       self.consume(8 - self.bits_past_byte);
     }
     Ok(())
-  }
-
-  // Sets the bit reader's current position to the specified bit index.
-  // Will NOT check whether the resulting position is in bounds or not.
-  pub fn seek_to(&mut self, bit_idx: usize) {
-    self.stale_byte_idx = bit_idx / 8 - self.current_stream_skipped;
-    self.bits_past_byte = (bit_idx % 8) as Bitlen;
   }
 }
 

@@ -23,13 +23,8 @@ macro_rules! impl_unsigned {
       }
 
       #[inline]
-      fn rshift_word(self, shift: Bitlen) -> usize {
-        (self >> shift) as usize
-      }
-
-      #[inline]
-      fn lshift_word(self, shift: Bitlen) -> usize {
-        (self as usize) << shift
+      fn to_usize(self) -> usize {
+        self as usize
       }
 
       #[inline]

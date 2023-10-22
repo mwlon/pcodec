@@ -24,14 +24,6 @@ pub const fn ceil_div(x: usize, divisor: usize) -> usize {
   (x + divisor - 1) / divisor
 }
 
-pub fn words_to_bytes(words: &[usize]) -> Vec<u8> {
-  // We can't just transmute because many machines are little-endian.
-  words
-    .iter()
-    .flat_map(|w| w.to_le_bytes())
-    .collect::<Vec<_>>()
-}
-
 pub fn bits_to_encode_offset<U: UnsignedLike>(max_offset: U) -> Bitlen {
   U::BITS - max_offset.leading_zeros()
 }

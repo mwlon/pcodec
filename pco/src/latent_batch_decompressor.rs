@@ -69,20 +69,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     needs_gcd: bool,
     is_trivial: bool,
   ) -> PcoResult<Self> {
-    // let max_bits_per_ans = chunk_latent_meta.ans_size_log
-    //   - chunk_latent_meta
-    //   .bins
-    //   .iter()
-    //   .map(|bin| bin.weight.ilog2() as Bitlen)
-    //   .min()
-    //   .unwrap_or_default();
-    let max_bits_per_offset = chunk_latent_meta
-      .bins
-      .iter()
-      .map(|bin| bin.offset_bits)
-      .max()
-      .unwrap_or(Bitlen::MAX);
-    let extra_words_per_offset = ((max_bits_per_offset.saturating_add(7)) / WORD_BITLEN) as usize;
+    let extra_words_per_offset = ((chunk_latent_meta.max_bits_per_offset().saturating_add(7)) / WORD_BITLEN) as usize;
     let infos = chunk_latent_meta
       .bins
       .iter()
@@ -207,7 +194,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       0 => self.decompress_offsets::<0>(reader, dst),
       1 => self.decompress_offsets::<1>(reader, dst),
       2 => self.decompress_offsets::<2>(reader, dst),
-      _ => panic!("invalid extra words per offset; a bug in pcodec"),
+      _ => panic!("[LatentBatchDecompressor] data type too large (extra words {} > 2)", self.extra_words_per_offset),
     }
 
     if self.needs_gcd {

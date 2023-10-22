@@ -3,12 +3,12 @@ use std::io::Write;
 use crate::errors::ErrorKind;
 use crate::standalone::{FileDecompressor, simple_compress};
 use crate::standalone;
-use crate::compressor_config::CompressorConfig;
+use crate::chunk_config::ChunkConfig;
 
 #[test]
 fn test_errors_do_not_mutate_decompressor() {
   let nums = vec![1, 2, 3, 4, 5];
-  let compressed = simple_compress(&nums, CompressorConfig::default()).unwrap();
+  let compressed = simple_compress(&nums, ChunkConfig::default()).unwrap();
   let mut data = &compressed[..];
   let mut file_decompressor = None;
 

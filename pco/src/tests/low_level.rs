@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{Compressor, FileDecompressor};
-use crate::compressor_config::CompressorConfig;
+use crate::chunk_config::ChunkConfig;
 use crate::constants::{CURRENT_FORMAT_VERSION, FULL_BATCH_SIZE};
 
 #[test]
@@ -29,7 +29,7 @@ fn test_low_level_sparse() -> PcoResult<()> {
 fn assert_lowest_level_behavior<T: NumberLike>(chunks: Vec<Vec<T>>) -> PcoResult<()> {
   for delta_encoding_order in [0, 7] {
     let debug_info = format!("delta order={}", delta_encoding_order);
-    let mut compressor = Compressor::<T>::from_config(CompressorConfig {
+    let mut compressor = Compressor::<T>::from_config(ChunkConfig {
       delta_encoding_order: Some(delta_encoding_order),
       ..Default::default()
     })

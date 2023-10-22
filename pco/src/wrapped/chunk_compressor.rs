@@ -2,10 +2,10 @@ use std::cmp::{max, min};
 use crate::bin::BinCompressionInfo;
 use crate::compression_table::CompressionTable;
 use crate::data_types::{NumberLike, UnsignedLike};
-use crate::{ans, Bin, bin_optimization, ChunkLatentMetadata, ChunkMetadata, CompressorConfig, delta, float_mult_utils, FULL_BATCH_SIZE, Mode};
+use crate::{ans, Bin, bin_optimization, ChunkLatentMetadata, ChunkMetadata, ChunkConfig, delta, float_mult_utils, FULL_BATCH_SIZE, Mode, bit_writer, bits};
 use crate::bit_writer::BitWriter;
 use crate::chunk_spec::ChunkSpec;
-use crate::constants::{ANS_INTERLEAVING, Bitlen, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, Weight};
+use crate::constants::{ANS_INTERLEAVING, Bitlen, DEFAULT_PADDING_BYTES, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, Weight};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
@@ -29,7 +29,7 @@ pub struct InternalCompressorConfig {
 }
 
 impl InternalCompressorConfig {
-  pub fn from_config<T: NumberLike>(config: &CompressorConfig) -> PcoResult<Self> {
+  pub fn from_config<T: NumberLike>(config: &ChunkConfig) -> PcoResult<Self> {
     let compression_level = config.compression_level;
     if compression_level > MAX_COMPRESSION_LEVEL {
       return Err(PcoError::invalid_argument(format!(
@@ -259,62 +259,14 @@ fn uninit_vec<T>(n: usize) -> Vec<T> {
   }
 }
 
-fn dissect_unsigneds<U: UnsignedLike>(
-  mid_chunk_info: &MidChunkInfo<U>,
-) -> PcoResult<DissectedSrc<U>> {
-  let MidChunkInfo {
-    latent_configs,
-    src,
-    needs_gcds,
-    n_nontrivial_latents,
-    ..
-  } = mid_chunk_info;
-
-  let uninit_dissected_latents = |n, ans_default_state| {
-    let ans_final_states = [ans_default_state; ANS_INTERLEAVING];
-    DissectedLatents {
-      ans_vals: uninit_vec(n),
-      ans_bits: uninit_vec(n),
-      offsets: uninit_vec(n),
-      offset_bits: uninit_vec(n),
-      ans_final_states,
-    }
-  };
-
-  let mut res = DissectedSrc {
-    page_n: src.page_n,
-    dissected_latents: Vec::new(),
-  };
-
-  for (latent_idx, config) in latent_configs
-    .iter()
-    .take(*n_nontrivial_latents)
-    .enumerate()
-  {
-    let latents = &src.latents[latent_idx];
-    let LatentConfig { table, encoder, .. } = config;
-    let mut dissected_latents = uninit_dissected_latents(latents.len(), encoder.default_state());
-
-    // we go through in reverse for ANS!
-    let mut lbd = LatentBatchDissector::new(*needs_gcds, table, encoder);
-    for (batch_idx, batch) in latents.chunks(FULL_BATCH_SIZE).enumerate().rev() {
-      let base_i = batch_idx * FULL_BATCH_SIZE;
-      lbd.dissect_latent_batch(batch, base_i, &mut dissected_latents)
-    }
-    res.dissected_latents.push(dissected_latents);
-  }
-
-  Ok(res)
-}
-
 fn write_dissecteds<U: UnsignedLike>(
   src: DissectedSrc<U>,
   writer: &mut BitWriter,
 ) -> PcoResult<()> {
   // TODO make this more SIMD like LatentBatchDecompressor::unchecked_decompress_offsets
   let mut batch_start = 0;
-  while batch_start < src.page_n {
-    let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_n);
+  while batch_start < src.page_size {
+    let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_size);
     for dissected in &src.dissected_latents {
       for (&val, &bits) in dissected
         .ans_vals
@@ -343,240 +295,256 @@ fn write_dissecteds<U: UnsignedLike>(
 }
 
 #[derive(Clone, Debug)]
-pub struct MidChunkInfo<U: UnsignedLike> {
-  // immutable:
+struct LatentConfig<U: UnsignedLike> {
+  table: CompressionTable<U>,
+  encoder: ans::Encoder,
+  delta_momentss: Vec<DeltaMoments<U>>, // one per page
+}
+
+#[derive(Clone, Debug)]
+pub struct ChunkCompressor<U: UnsignedLike> {
+  meta: ChunkMetadata<U>,
   latent_configs: Vec<LatentConfig<U>>,
   page_sizes: Vec<usize>,
   n_latents: usize,
   n_nontrivial_latents: usize,
   needs_gcds: bool,
-
-  // mutable:
   src: LatentSrc<U>,
-  page_idx: usize,
-}
-
-impl<U: UnsignedLike> MidChunkInfo<U> {
-  fn page_moments(&self, latent_idx: usize) -> &DeltaMoments<U> {
-    &self.latent_configs[latent_idx].delta_momentss[self.page_idx]
-  }
-
-  fn n_pages(&self) -> usize {
-    self.page_sizes.len()
-  }
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum State<U: UnsignedLike> {
-  #[default]
-  PreHeader,
-  StartOfChunk,
-  MidChunk(MidChunkInfo<U>),
-  Terminated,
-}
-
-impl<U: UnsignedLike> State<U> {
-  pub fn wrong_step_err(&self, description: &str) -> PcoError {
-    let step_str = match self {
-      State::PreHeader => "has not yet written header",
-      State::StartOfChunk => "is at the start of a chunk",
-      State::MidChunk(_) => "is mid-chunk",
-      State::Terminated => "has already written the footer",
-    };
-    PcoError::invalid_argument(format!(
-      "attempted to write {} when compressor {}",
-      description, step_str,
-    ))
-  }
-}
-
-#[derive(Clone, Debug)]
-struct LatentConfig<U: UnsignedLike> {
-  table: CompressionTable<U>,
-  encoder: ans::Encoder,
-  delta_momentss: Vec<DeltaMoments<U>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ChunkCompressor<T: NumberLike> {
-  internal_config: InternalCompressorConfig,
-  pub format_version: FormatVersion,
-  pub writer: BitWriter,
-  pub state: State<T::Unsigned>,
+  max_bits_per_latent: Vec<Bitlen>, // one per latent var
 }
 
 fn bins_from_compression_infos<U: UnsignedLike>(infos: &[BinCompressionInfo<U>]) -> Vec<Bin<U>> {
   infos.iter().cloned().map(Bin::from).collect()
 }
 
-impl<T: NumberLike> ChunkCompressor<T> {
-  pub fn from_config(config: CompressorConfig, use_wrapped_mode: bool) -> PcoResult<Self> {
-    Ok(Self {
-      internal_config: InternalCompressorConfig::from_config::<T>(&config)?,
-      format_version: FormatVersion::from_config(&config, use_wrapped_mode),
-      writer: BitWriter::default(),
-      state: State::default(),
-    })
+fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T::Unsigned> {
+  // * Use float mult if enabled and an appropriate base is found
+  // * Otherwise, use GCD if enabled
+  // * Otherwise, use Classic
+  if config.use_float_mult {
+    if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
+      return Mode::FloatMult(config);
+    }
   }
 
-  pub fn header(&mut self) -> PcoResult<()> {
-    if !matches!(self.state, State::PreHeader) {
-      return Err(self.state.wrong_step_err("header"));
-    }
+  if config.use_gcds {
+    Mode::Gcd
+  } else {
+    Mode::Classic
+  }
+}
 
-    self.writer.write_aligned_bytes(&MAGIC_HEADER)?;
-    self.writer.write_aligned_byte(T::HEADER_BYTE)?;
-    self.format_version.write_to(&mut self.writer)?;
-    self.state = State::StartOfChunk;
-    Ok(())
+fn split_latents<T: NumberLike>(naive_mode: Mode<T::Unsigned>, nums: &[T]) -> LatentSrc<T::Unsigned> {
+  match naive_mode {
+    Mode::Classic | Mode::Gcd => LatentSrc::new(
+      nums.len(),
+      vec![nums.iter().map(|x| x.to_unsigned()).collect()],
+    ),
+    Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
+      float_mult_utils::split_latents(nums, base, inv_base)
+    }
+  }
+}
+
+pub(crate) fn new<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+  if nums.is_empty() {
+    return Err(PcoError::invalid_argument(
+      "cannot compress empty chunk",
+    ));
   }
 
-  fn choose_naive_mode(&self, nums: &[T]) -> Mode<T::Unsigned> {
-    // * Use float mult if enabled and an appropriate base is found
-    // * Otherwise, use GCD if enabled
-    // * Otherwise, use Classic
-    if self.internal_config.use_float_mult {
-      if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
-        return Mode::FloatMult(config);
-      }
-    }
+  let n = nums.len();
+  let page_sizes = config.paging_spec.page_sizes(nums.len())?;
 
-    if self.internal_config.use_gcds {
-      Mode::Gcd
+  // if !self.format_version.use_wrapped_mode {
+  //   self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
+  // }
+
+  let naive_mode = choose_naive_mode(nums, config);
+  let mut src = split_latents(naive_mode, nums);
+  let page_idxs = cumulative_sum(&page_sizes);
+  let n_latents = naive_mode.n_latents();
+
+  let delta_order = if let Some(delta_order) = config.delta_encoding_order {
+    delta_order
+  } else {
+    crate::auto_delta_encoding_order(nums, config.compression_level)
+  };
+
+  let mut latent_metas = Vec::with_capacity(n_latents);
+  let mut latent_configs = Vec::with_capacity(n_latents);
+  for latent_idx in 0..n_latents {
+    let delta_order = naive_mode.latent_delta_order(latent_idx, delta_order);
+    let delta_momentss = delta::encode_in_place(
+      &mut src.latents[latent_idx],
+      delta_order,
+      &page_idxs,
+    );
+
+    // secondary latents should be compressed faster
+    let comp_level = if latent_idx == 0 {
+      config.compression_level
     } else {
-      Mode::Classic
-    }
-  }
-
-  fn split_latents(&self, naive_mode: Mode<T::Unsigned>, nums: &[T]) -> LatentSrc<T::Unsigned> {
-    match naive_mode {
-      Mode::Classic | Mode::Gcd => LatentSrc::new(
-        nums.len(),
-        vec![nums.iter().map(|x| x.to_unsigned()).collect()],
-      ),
-      Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
-        float_mult_utils::split_latents(nums, base, inv_base)
-      }
-    }
-  }
-
-  // This function actually does much of the work of compressing the whole
-  // chunk. We defer as much work as we can to writing the data pages though.
-  pub fn chunk_metadata_internal(
-    &mut self,
-    nums: &[T],
-    spec: &ChunkSpec,
-  ) -> PcoResult<ChunkMetadata<T::Unsigned>> {
-    if !matches!(self.state, State::StartOfChunk) {
-      return Err(self.state.wrong_step_err("chunk metadata"));
-    }
-
-    if nums.is_empty() {
-      return Err(PcoError::invalid_argument(
-        "cannot compress empty chunk",
-      ));
-    }
-
-    let n = nums.len();
-    let page_sizes = spec.page_sizes(nums.len())?;
-
-    if !self.format_version.use_wrapped_mode {
-      self.writer.write_aligned_byte(MAGIC_CHUNK_BYTE)?;
-    }
-
-    let naive_mode = self.choose_naive_mode(nums);
-    let mut src = self.split_latents(naive_mode, nums);
-    let page_idxs = cumulative_sum(&page_sizes);
-    let n_latents = naive_mode.n_latents();
-
-    let delta_order = if let Some(delta_order) = self.internal_config.delta_order {
-      delta_order
-    } else {
-      crate::auto_delta_encoding_order(nums, self.internal_config.compression_level)
+      min(config.compression_level, 5)
     };
 
-    let mut latent_metas = Vec::with_capacity(n_latents);
-    let mut latent_configs = Vec::with_capacity(n_latents);
-    for latent_idx in 0..n_latents {
-      let delta_order = naive_mode.latent_delta_order(latent_idx, delta_order);
-      let delta_momentss = delta::encode_in_place(
-        &mut src.latents[latent_idx],
-        delta_order,
-        &page_idxs,
-      );
+    let trained = train_mode_and_infos(
+      src.latents[latent_idx].to_vec(),
+      comp_level,
+      naive_mode,
+      n,
+    )?;
+    let bins = bins_from_compression_infos(&trained.infos);
 
-      // secondary latents should be compressed faster
-      let comp_level = if latent_idx == 0 {
-        self.internal_config.compression_level
-      } else {
-        min(self.internal_config.compression_level, 5)
-      };
+    let table = CompressionTable::from(trained.infos);
+    let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
 
-      let trained = train_mode_and_infos(
-        src.latents[latent_idx].to_vec(),
-        comp_level,
-        naive_mode,
-        n,
-      )?;
-      let bins = bins_from_compression_infos(&trained.infos);
-
-      let table = CompressionTable::from(trained.infos);
-      let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
-
-      latent_metas.push(ChunkLatentMetadata {
-        bins,
-        ans_size_log: trained.ans_size_log,
-      });
-      latent_configs.push(LatentConfig {
-        table,
-        delta_momentss,
-        encoder,
-      });
-    }
-
-    let optimized_mode = match naive_mode {
-      Mode::Gcd => {
-        if latent_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
-          Mode::Gcd
-        } else {
-          Mode::Classic
-        }
-      }
-      other => other,
-    };
-
-    let meta = ChunkMetadata::new(n, optimized_mode, delta_order, latent_metas);
-    meta.write_to(&self.format_version, &mut self.writer);
-
-    let n_latents = optimized_mode.n_latents();
-    let (needs_gcds, n_nontrivial_latents) = meta.nontrivial_gcd_and_n_latents();
-
-    self.state = State::MidChunk(MidChunkInfo {
-      latent_configs,
-      page_sizes,
-      n_latents,
-      n_nontrivial_latents,
-      needs_gcds,
-      src,
-      page_idx: 0,
+    latent_metas.push(ChunkLatentMetadata {
+      bins,
+      ans_size_log: trained.ans_size_log,
     });
-
-    Ok(meta)
+    latent_configs.push(LatentConfig {
+      table,
+      delta_momentss,
+      encoder,
+    });
   }
 
-  pub fn page_internal(&mut self) -> PcoResult<()> {
-    let info = match &mut self.state {
-      State::MidChunk(info) => Ok(info),
-      other => Err(other.wrong_step_err("data page")),
-    }?;
+  let optimized_mode = match naive_mode {
+    Mode::Gcd => {
+      if latent_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
+        Mode::Gcd
+      } else {
+        Mode::Classic
+      }
+    }
+    other => other,
+  };
 
-    let dissected_src = dissect_unsigneds(info)?;
+  let meta = ChunkMetadata::new(optimized_mode, delta_order, latent_metas);
+  let max_bits_per_latent = meta.latents.iter().map(|latent_meta| latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset()).collect::<Vec<_>>();
 
-    let mut latent_metas = Vec::with_capacity(info.n_latents);
-    for latent_idx in 0..info.n_latents {
-      let delta_moments = info.page_moments(latent_idx).clone();
+  let n_latents = optimized_mode.n_latents();
+  let (needs_gcds, n_nontrivial_latents) = meta.nontrivial_gcd_and_n_latents();
 
-      // write the final ANS state, moving it down the range [0, table_size)
+  Ok(ChunkCompressor {
+    meta,
+    latent_configs,
+    page_sizes,
+    n_latents,
+    n_nontrivial_latents,
+    needs_gcds,
+    src,
+    max_bits_per_latent,
+  })
+}
+
+impl<U: UnsignedLike> ChunkCompressor<U> {
+  fn page_moments(&self, latent_idx: usize) -> &DeltaMoments<U> {
+    &self.latent_configs[latent_idx].delta_momentss[self.page_idx]
+  }
+
+  pub fn page_sizes(&self) -> &[usize] {
+    &self.page_sizes
+  }
+
+  pub fn chunk_meta(&self) -> &ChunkMetadata<U> {
+    &self.meta
+  }
+
+  pub fn chunk_meta_size_hint(&self) -> usize {
+    let mut bytes = 32;
+    let bytes_per_num = U::BITS / 8;
+    for latent_meta in &self.meta.latents {
+      bytes += latent_meta.bins.len() * (4 + 2 * bytes_per_num)
+    }
+    bytes
+  }
+
+  pub fn write_chunk_meta(&self, dst: &mut [u8]) -> PcoResult<&mut [u8]> {
+    let mut extension = bit_writer::make_extension_for(dst, DEFAULT_PADDING_BYTES);
+    let mut writer = BitWriter::new(dst, &mut extension);
+    self.meta.write_to(&mut writer);
+    writer.rest()
+  }
+
+  fn dissect_unsigneds(
+    &self,
+  ) -> PcoResult<DissectedSrc<U>> {
+    let TrainedInfo {
+      latent_configs,
+      src,
+      needs_gcds,
+      n_nontrivial_latents,
+      ..
+    } = self;
+
+    let uninit_dissected_latents = |n, ans_default_state| {
+      let ans_final_states = [ans_default_state; ANS_INTERLEAVING];
+      DissectedLatents {
+        ans_vals: uninit_vec(n),
+        ans_bits: uninit_vec(n),
+        offsets: uninit_vec(n),
+        offset_bits: uninit_vec(n),
+        ans_final_states,
+      }
+    };
+
+    let mut res = DissectedSrc {
+      page_size: src.page_n,
+      dissected_latents: Vec::new(),
+    };
+
+    for (latent_idx, config) in latent_configs
+      .iter()
+      .take(*n_nontrivial_latents)
+      .enumerate()
+    {
+      let latents = &src.latents[latent_idx];
+      let LatentConfig { table, encoder, .. } = config;
+      let mut dissected_latents = uninit_dissected_latents(latents.len(), encoder.default_state());
+
+      // we go through in reverse for ANS!
+      let mut lbd = LatentBatchDissector::new(*needs_gcds, table, encoder);
+      for (batch_idx, batch) in latents.chunks(FULL_BATCH_SIZE).enumerate().rev() {
+        let base_i = batch_idx * FULL_BATCH_SIZE;
+        lbd.dissect_latent_batch(batch, base_i, &mut dissected_latents)
+      }
+      res.dissected_latents.push(dissected_latents);
+    }
+
+    Ok(res)
+  }
+
+  pub fn page_size_hint(&self, page_idx: usize) -> usize {
+    let page_size = self.page_sizes[page_idx];
+    let mut bit_size = 0;
+    for (latent_idx, latent_var) in self.meta.latents.iter().enumerate() {
+      let meta_bit_size = self.meta.delta_encoding_order * U::BITS as usize + ANS_INTERLEAVING * latent_var.ans_size_log as usize;
+      let nums_bit_size = page_size * self.max_bits_per_latent[latent_idx] as usize;
+      bit_size += meta_bit_size + nums_bit_size;
+    }
+    bits::ceil_div(bit_size, 8)
+  }
+
+  pub fn write_page(&self, page_idx: usize, dst: &mut [u8]) -> PcoResult<&mut [u8]> {
+    if page_idx >= self.page_sizes.len() {
+      return Err(PcoError::invalid_argument(format!(
+        "page idx exceeds num pages ({} >= {})",
+        page_idx,
+        self.page_sizes.len(),
+      )));
+    }
+
+    let mut extension = bit_writer::make_extension_for(dst, DEFAULT_PADDING_BYTES);
+    let mut writer = BitWriter::new(dst, &mut extension);
+
+    let dissected_src = self.dissect_unsigneds()?;
+
+    let mut latent_metas = Vec::with_capacity(self.n_latents);
+    for latent_idx in 0..self.n_latents {
+      let delta_moments = self.page_moments(latent_idx).clone();
+
       let ans_final_state_idxs = dissected_src
         .dissected_latents
         .get(latent_idx)
@@ -590,21 +558,15 @@ impl<T: NumberLike> ChunkCompressor<T> {
     let page_meta = PageMetadata {
       latents: latent_metas,
     };
-    let ans_size_logs = info
+    let ans_size_logs = self
       .latent_configs
       .iter()
       .map(|config| config.encoder.size_log());
-    page_meta.write_to(ans_size_logs, &mut self.writer);
+    page_meta.write_to(ans_size_logs, &mut writer);
 
-    write_dissecteds(dissected_src, &mut self.writer)?;
+    write_dissecteds(dissected_src, &mut writer)?;
 
-    info.page_idx += 1;
-
-    if info.page_idx == info.n_pages() {
-      self.state = State::StartOfChunk;
-    }
-
-    Ok(())
+    writer.rest()
   }
 }
 

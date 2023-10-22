@@ -4,7 +4,7 @@
 #![allow(clippy::uninit_vec)]
 
 pub use auto::auto_delta_encoding_order;
-pub use compressor_config::CompressorConfig;
+pub use chunk_config::ChunkConfig;
 pub use bin::Bin;
 pub use chunk_metadata::{ChunkLatentMetadata, ChunkMetadata};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, FULL_BATCH_SIZE};
@@ -30,7 +30,6 @@ mod bit_reader;
 mod bit_writer;
 mod bits;
 mod chunk_metadata;
-mod chunk_spec;
 mod compression_table;
 mod constants;
 mod delta;
@@ -45,5 +44,5 @@ mod unsigned_src_dst;
 #[cfg(test)]
 mod tests;
 mod page_metadata;
-mod compressor_config;
+mod chunk_config;
 mod read_write_uint;

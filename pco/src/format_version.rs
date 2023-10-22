@@ -6,7 +6,7 @@ use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::errors::{ErrorKind, PcoError, PcoResult};
-use crate::compressor_config::CompressorConfig;
+use crate::chunk_config::ChunkConfig;
 use crate::constants::CURRENT_FORMAT_VERSION;
 
 /// The configuration stored in a pco header.
@@ -20,7 +20,7 @@ use crate::constants::CURRENT_FORMAT_VERSION;
 /// internally by `Compressor::from_config`.
 /// However, in some circumstances you may want to inspect flags during
 /// decompression.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FormatVersion(pub u8);
 
 impl FormatVersion {

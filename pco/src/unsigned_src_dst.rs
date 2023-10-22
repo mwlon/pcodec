@@ -27,6 +27,6 @@ pub struct DissectedLatents<U: UnsignedLike> {
 
 #[derive(Clone, Debug)]
 pub struct DissectedSrc<U: UnsignedLike> {
-  pub page_n: usize,
+  pub page_size: usize,
   pub dissected_latents: Vec<DissectedLatents<U>>, // one per latent variable
 }
