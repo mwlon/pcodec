@@ -285,7 +285,7 @@ fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T:
   // * Use float mult if enabled and an appropriate base is found
   // * Otherwise, use GCD if enabled
   // * Otherwise, use Classic
-  if config.use_float_mult {
+  if config.use_float_mult && T::IS_FLOAT {
     if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
       return Mode::FloatMult(config);
     }

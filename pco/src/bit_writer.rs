@@ -74,6 +74,11 @@ impl<'a> BitWriter<'a> {
     }
   }
 
+  pub fn aligned_dst_byte_idx(&self) -> PcoResult<usize> {
+    self.check_aligned()?;
+    Ok(self.dst_byte_idx())
+  }
+
   fn dst_byte_idx(&self) -> usize {
     self.dst_bit_idx() / 8
   }
@@ -146,29 +151,34 @@ impl<'a> BitWriter<'a> {
     self.bits_past_byte += n;
   }
 
-  pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> PcoResult<()> {
-    if self.bits_past_byte % 8 == 0 {
-      self.refill();
-
-      let end = bytes.len() + self.stale_byte_idx;
-      if end > self.current_stream.len() {
-        return Err(PcoError::insufficient_data(format!(
-          "cannot write {} more bytes with at byte {}/{}",
-          bytes.len(),
-          self.dst_byte_idx(),
-          self.dst_byte_size(),
-        )));
-      }
-      self.current_stream[self.stale_byte_idx..end].clone_from_slice(bytes);
-      self.stale_byte_idx = end;
-
-      Ok(())
-    } else {
-      Err(PcoError::invalid_argument(format!(
-        "cannot write aligned bytes to unaligned writer (bit idx {})",
+  fn check_aligned(&self) -> PcoResult<()> {
+    if self.bits_past_byte % 8 != 0 {
+      return Err(PcoError::invalid_argument(format!(
+        "cannot write aligned bytes to unaligned writer ({} bits past byte)",
         self.bits_past_byte,
-      )))
+      )));
     }
+
+    Ok(())
+  }
+
+  pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> PcoResult<()> {
+    self.check_aligned()?;
+    self.refill();
+
+    let end = bytes.len() + self.stale_byte_idx;
+    if end > self.current_stream.len() {
+      return Err(PcoError::insufficient_data(format!(
+        "cannot write {} more bytes with at byte {}/{}",
+        bytes.len(),
+        self.dst_byte_idx(),
+        self.dst_byte_size(),
+      )));
+    }
+    self.current_stream[self.stale_byte_idx..end].clone_from_slice(bytes);
+    self.stale_byte_idx = end;
+
+    Ok(())
   }
 
   pub fn write_uint<U: ReadWriteUint>(&mut self, x: U, n: Bitlen) {
