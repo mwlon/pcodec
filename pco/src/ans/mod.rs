@@ -32,7 +32,7 @@ mod tests {
       state = new_state;
     }
 
-    let mut bytes = vec![0; 100];
+    let mut bytes = vec![0; 200];
     let mut extension = vec![];
     let mut writer = BitWriter::new(&mut bytes, &mut extension);
     for (word, bitlen) in to_write.into_iter().rev() {

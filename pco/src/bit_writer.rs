@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use std::cmp::{max};
 use std::mem;
 
 use crate::bit_reader::word_at;
@@ -23,14 +23,15 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
   n: Bitlen,
   dst: &mut [u8],
 ) {
+  let x = bits::lowest_bits(x, n);
   let word = word_at(dst, byte_idx) | (x.to_usize() << bits_past_byte);
   write_word_to(word, byte_idx, dst);
-  let mut processed = min(n, WORD_BITLEN - 8 - bits_past_byte);
+  let mut processed = WORD_BITLEN - 8 - bits_past_byte;
   byte_idx += BYTES_PER_WORD - 1;
 
   for _ in 0..MAX_EXTRA_WORDS {
     write_word_to((x >> processed).to_usize(), byte_idx, dst);
-    processed = min(n, processed + WORD_BITLEN);
+    processed += WORD_BITLEN;
     byte_idx += BYTES_PER_WORD;
   }
 }
@@ -264,24 +265,24 @@ mod tests {
     let mut writer = BitWriter::new(&mut dst, &mut ext);
     writer.write_uint::<u32>((1 << 9) + (1 << 8) + 1, 9);
     // 10000000 1
-    writer.write_uint::<u32>((1 << 16) + (1 << 5) + 1, 17);
-    // 10000000 11000010 00000000 01
+    writer.write_uint::<u32>((1 << 16) + (1 << 5), 17);
+    // 10000000 10000010 00000000 01
     writer.write_uint::<u32>(1 << 1, 17);
-    // 10000000 11000010 00000000 01010000 00000000
+    // 10000000 10000010 00000000 01010000 00000000
     // 000
     writer.write_uint::<u32>(1 << 1, 13);
-    // 10000000 11000010 00000000 01010000 00000000
+    // 10000000 10000010 00000000 01010000 00000000
     // 00001000 00000000
     writer.ensure_padded(4)?;
     writer.write_uint::<u32>((1 << 23) + (1 << 15), 24);
-    // 10000000 11000010 00000000 01010000 00000000
+    // 10000000 10000010 00000000 01010000 00000000
     // 00001000 00000000 00000000 00000001 00000001
 
     let consumed = writer.bytes_consumed().unwrap();
     assert_eq!(consumed, 10);
     assert_eq!(
       dst,
-      vec![1, 67, 0, 10, 0, 16, 0, 0, 128, 128, 0],
+      vec![1, 65, 0, 10, 0, 16, 0, 0, 128, 128, 0],
     );
     Ok(())
   }
