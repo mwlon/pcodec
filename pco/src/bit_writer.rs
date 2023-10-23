@@ -40,7 +40,6 @@ pub struct BitWriter<'a> {
   pub current_stream: &'a mut [u8], // either dst or extension
   other_stream: &'a mut [u8],
   current_is_dst: bool,       // as opposed to extension
-  padding: usize,             // in extension
   skipped: usize,             // in extension
   pub stale_byte_idx: usize,  // in current stream
   pub bits_past_byte: Bitlen, // in current stream
@@ -58,16 +57,11 @@ impl<'a> BitWriter<'a> {
     Self {
       current_stream: dst,
       other_stream: extension,
-      padding,
       skipped,
       stale_byte_idx: 0,
       bits_past_byte: 0,
       current_is_dst: true,
     }
-  }
-
-  fn byte_idx(&self) -> usize {
-    self.stale_byte_idx + (self.bits_past_byte / 8) as usize
   }
 
   fn dst_bit_idx(&self) -> usize {
@@ -85,6 +79,7 @@ impl<'a> BitWriter<'a> {
 
   fn switch_to_extension(&mut self) {
     assert!(self.current_is_dst);
+    assert!(self.bits_past_byte < 8);
     self.stale_byte_idx -= self.skipped;
     self.current_is_dst = false;
     mem::swap(
@@ -121,13 +116,14 @@ impl<'a> BitWriter<'a> {
   pub fn ensure_padded(&mut self, required_padding: usize) -> PcoResult<()> {
     self.check_in_bounds()?;
 
-    let byte_idx = self.byte_idx();
+    self.refill();
+    let byte_idx = self.stale_byte_idx;
     if byte_idx + required_padding < self.current_stream.len() {
       return Ok(());
     }
 
     // see if we can switch to the other stream
-    if self.current_is_dst && byte_idx + required_padding > self.other_stream.len() + self.padding {
+    if self.current_is_dst && byte_idx + required_padding < self.other_stream.len() + self.skipped {
       self.switch_to_extension();
       return Ok(());
     }
@@ -219,14 +215,15 @@ impl<'a> BitWriter<'a> {
     self.bits_past_byte = 0;
   }
 
-  pub fn bytes_consumed(self) -> PcoResult<usize> {
+  pub fn bytes_consumed(mut self) -> PcoResult<usize> {
     self.check_in_bounds()?;
+    self.refill();
 
-    if self.bits_past_byte % 8 != 0 {
+    if self.bits_past_byte != 0 {
       panic!("dangling bits remain; this is likely a bug in pco");
     }
 
-    let byte_idx = self.byte_idx();
+    let byte_idx = self.stale_byte_idx;
     let res = if self.current_is_dst {
       byte_idx
     } else {
@@ -242,89 +239,61 @@ impl<'a> Drop for BitWriter<'a> {
       return;
     }
 
-    for (dst_byte, extension_byte) in self
-      .current_stream
+    for (dst_byte, ext_byte) in self
+      .other_stream
       .iter_mut()
-      .zip(self.other_stream.iter_mut().skip(self.skipped))
+      .skip(self.skipped)
+      .zip(self.current_stream.iter())
     {
-      *dst_byte |= *extension_byte;
+      *dst_byte |= *ext_byte;
     }
   }
 }
 
-// #[cfg(test)]
-// mod tests {
-//   use super::BitWriter;
-//
-//   // I find little endian confusing, hence all the comments.
-//   // All the bytes are written backwards, e.g. 00000001 = 2^7
-//
-//   #[test]
-//   fn test_write_bigger_num() {
-//     let mut writer = BitWriter::default();
-//     writer.write_diff(31_u32, 4);
-//     // 1111
-//     writer.write_usize(27, 4);
-//     // 11111101
-//     let bytes = writer.drain_bytes();
-//     assert_eq!(bytes, vec![191]);
-//   }
-//
-//   #[test]
-//   fn test_long_diff_writes() {
-//     let mut writer = BitWriter::default();
-//     writer.write_usize((1 << 9) + (1 << 8) + 1, 9);
-//     // 10000000 1
-//     writer.write_usize((1 << 16) + (1 << 5) + 1, 17);
-//     // 10000000 11000010 00000000 01
-//     writer.write_usize(1 << 1, 17);
-//     // 10000000 11000010 00000000 01010000 00000000
-//     // 000
-//     writer.write_usize(1 << 1, 13);
-//     // 10000000 11000010 00000000 01010000 00000000
-//     // 00001000 00000000
-//     writer.write_usize((1 << 23) + (1 << 15), 24);
-//     // 10000000 11000010 00000000 01010000 00000000
-//     // 00001000 00000000 00000000 00000001 00000001
-//
-//     let bytes = writer.drain_bytes();
-//     assert_eq!(
-//       bytes,
-//       // vec![128, 192, 8, 64, 0, 64, 2, 128, 128, 0],
-//       vec![1, 67, 0, 10, 0, 16, 0, 0, 128, 128],
-//     )
-//   }
-//
-//   #[test]
-//   fn test_various_writes() {
-//     let mut writer = BitWriter::default();
-//     writer.write_one(true);
-//     writer.write_one(false);
-//     // 10
-//     writer.write_usize(33, 8);
-//     // 10100001 00
-//     writer.finish_byte();
-//     // 10100001 00000000
-//     writer.write_aligned_byte(123).expect("misaligned");
-//     // 10100001 00000000 11011110
-//     writer.write_diff(1964_u32, 12);
-//     // 10100001 00000000 11011110 00110101 1110
-//     writer.write_usize(5, 4);
-//     // 10100001 00000000 11011110 00110101 11101010
-//     writer.write_usize(5, 4);
-//     // 10100001 00000000 11011110 00110101 11101010
-//     // 10100000
-//
-//     let bytes = writer.drain_bytes();
-//     assert_eq!(bytes, vec![133, 0, 123, 172, 87, 5],);
-//   }
-//
-//   #[test]
-//   fn test_assign_usize() {
-//     let mut writer = BitWriter::default();
-//     writer.write_usize(0, 24);
-//     writer.write_usize_at(9, 129, 9);
-//     let bytes = writer.drain_bytes();
-//     assert_eq!(bytes, vec![0, 2, 1],);
-//   }
-// }
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  // I find little endian confusing, hence all the comments.
+  // All the bytes in comments are written backwards,
+  // e.g. 00000001 = 2^7
+
+  #[test]
+  fn test_long_uint_writes() -> PcoResult<()> {
+    let (mut dst, mut ext) = (vec![0; 11], vec![0; 10]);
+    let mut writer = BitWriter::new(&mut dst, &mut ext);
+    writer.write_uint::<u32>((1 << 9) + (1 << 8) + 1, 9);
+    // 10000000 1
+    writer.write_uint::<u32>((1 << 16) + (1 << 5) + 1, 17);
+    // 10000000 11000010 00000000 01
+    writer.write_uint::<u32>(1 << 1, 17);
+    // 10000000 11000010 00000000 01010000 00000000
+    // 000
+    writer.write_uint::<u32>(1 << 1, 13);
+    // 10000000 11000010 00000000 01010000 00000000
+    // 00001000 00000000
+    writer.ensure_padded(4)?;
+    writer.write_uint::<u32>((1 << 23) + (1 << 15), 24);
+    // 10000000 11000010 00000000 01010000 00000000
+    // 00001000 00000000 00000000 00000001 00000001
+
+    let consumed = writer.bytes_consumed().unwrap();
+    assert_eq!(consumed, 10);
+    assert_eq!(
+      dst,
+      vec![1, 67, 0, 10, 0, 16, 0, 0, 128, 128, 0],
+    );
+    Ok(())
+  }
+
+  // #[test]
+  // fn test_write_at() {
+  //   let (mut dst, mut ext) = (vec![0; 10], vec![0; 10]);
+  //   let mut writer = BitWriter::new(&mut dst, &mut ext);
+  //   writer.write_usize(0, 24);
+  //   writer.write_usize_at(9, 129, 9);
+  //   drop(writer);
+  //
+  //   assert_eq!(dst, vec![0, 2, 1]);
+  // }
+}

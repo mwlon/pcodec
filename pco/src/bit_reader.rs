@@ -48,7 +48,6 @@ pub struct BitReader<'a> {
   pub current_stream: &'a [u8], // either src or extension
   other_stream: &'a [u8],
   current_is_src: bool,       // as opposed to extension
-  padding: usize,             // in extension
   skipped: usize,             // in extension
   pub stale_byte_idx: usize,  // in current stream
   pub bits_past_byte: Bitlen, // in current stream
@@ -66,7 +65,6 @@ impl<'a> BitReader<'a> {
     Self {
       current_stream: src,
       other_stream: extension,
-      padding,
       skipped,
       stale_byte_idx: 0,
       bits_past_byte: 0,
@@ -119,7 +117,7 @@ impl<'a> BitReader<'a> {
     }
 
     // see if we can switch to the other stream
-    if self.current_is_src && byte_idx + required_padding > self.other_stream.len() + self.padding {
+    if self.current_is_src && byte_idx + required_padding < self.other_stream.len() + self.skipped {
       self.switch_to_extension();
       return Ok(());
     }
@@ -255,52 +253,33 @@ impl<'a> BitReader<'a> {
   }
 }
 
-// #[cfg(test)]
-// mod tests {
-//   use crate::bit_writer::BitWriter;
-//   use crate::constants::WORD_BITLEN;
-//   use crate::errors::PcoResult;
-//
-//   use super::BitReader;
-//
-//   #[test]
-//   fn test_bit_reader() -> PcoResult<()> {
-//     // bits: 1001 1010  1101 0110  1011 0100
-//     let bytes = vec![0x9a, 0xd6, 0xb4];
-//     let words = PaddedBytes::from(&bytes);
-//     let mut bit_reader = BitReader::from(&words);
-//     assert_eq!(bit_reader.read_aligned_bytes(1)?, vec![0x9a],);
-//     assert_eq!(bit_reader.bit_idx(), 8);
-//     bit_reader.seek_to(10);
-//     assert_eq!(bit_reader.bit_idx(), 10);
-//     bit_reader.read_uint::<u64>(3); // skip 3 bits
-//     assert_eq!(bit_reader.bit_idx(), 13);
-//     assert_eq!(
-//       bit_reader.read_uint::<u64>(2),
-//       2_u64
-//     );
-//     assert_eq!(bit_reader.bit_idx(), 15);
-//     assert_eq!(bit_reader.read_small(3), 1_u32);
-//     assert_eq!(bit_reader.bit_idx(), 18);
-//     //leaves 1 bit left over
-//     Ok(())
-//   }
-//
-//   #[test]
-//   fn test_writer_reader() -> PcoResult<()> {
-//     let mut writer = BitWriter::default();
-//     for i in 1..WORD_BITLEN + 1 {
-//       writer.write_usize(i as usize, i)?;
-//     }
-//     let bytes = writer.drain_bytes();
-//     let words = PaddedBytes::from(&bytes);
-//     let mut usize_reader = BitReader::from(&words);
-//     for i in 1..WORD_BITLEN + 1 {
-//       assert_eq!(
-//         usize_reader.read_uint::<usize>(i),
-//         i as usize
-//       );
-//     }
-//     Ok(())
-//   }
-// }
+#[cfg(test)]
+mod tests {
+  use crate::errors::PcoResult;
+
+  use super::*;
+
+  // I find little endian confusing, hence all the comments.
+  // All the bytes in comments are written backwards,
+  // e.g. 00000001 = 2^7
+
+  #[test]
+  fn test_bit_reader() -> PcoResult<()> {
+    // 10010001 01100100 00000000 11111111 10000010
+    let src = vec![137, 38, 0, 255, 65];
+    let ext = make_extension_for(&src, 4);
+    assert_eq!(ext, vec![38, 0, 255, 65, 0, 0, 0, 0]);
+    let mut reader = BitReader::new(&src, &ext);
+
+    assert_eq!(reader.read_bitlen(4), 9);
+    assert!(reader.read_aligned_bytes(1).is_err());
+    assert_eq!(reader.read_bitlen(4), 8);
+    assert_eq!(reader.read_aligned_bytes(1)?, vec![38]);
+    reader.ensure_padded(4)?;
+    assert_eq!(reader.read_usize(15), 255 + 65 * 256);
+    reader.drain_empty_byte("should be empty")?;
+    let consumed = reader.bytes_consumed()?;
+    assert_eq!(consumed, 5);
+    Ok(())
+  }
+}
