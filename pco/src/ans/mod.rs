@@ -40,12 +40,12 @@ mod tests {
     }
     writer.finish_byte();
     let consumed = writer.bytes_consumed()?;
+    assert_eq!(consumed, expected_byte_len);
     let final_state = state;
     let table_size = 1 << encoder.size_log();
 
     // DECODE
     let decoder = Decoder::new(spec);
-    assert_eq!(consumed, expected_byte_len);
     let mut reader = BitReader::new(&bytes, &extension);
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;
