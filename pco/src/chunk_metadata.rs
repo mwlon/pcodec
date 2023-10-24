@@ -41,7 +41,7 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
       .iter()
       .map(|bin| bin.offset_bits)
       .max()
-      .unwrap_or(Bitlen::MAX)
+      .unwrap_or_default()
   }
 
   pub(crate) fn max_bits_per_ans(&self) -> Bitlen {
@@ -51,7 +51,7 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
         .iter()
         .map(|bin| bin.weight.ilog2() as Bitlen)
         .min()
-        .unwrap_or(0)
+        .unwrap_or_default()
   }
 }
 

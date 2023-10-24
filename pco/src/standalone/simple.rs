@@ -7,7 +7,8 @@ use crate::standalone::decompressor::FileDecompressor;
 
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
-fn zero_pad(bytes: &mut Vec<u8>, additional: usize) {
+fn zero_pad_to(bytes: &mut Vec<u8>, total: usize) {
+  let additional = total.saturating_sub(bytes.len());
   bytes.reserve(additional);
   for _ in 0..additional {
     bytes.push(0);
@@ -19,37 +20,33 @@ fn zero_pad(bytes: &mut Vec<u8>, additional: usize) {
 ///
 /// Will return an error if the compressor config is invalid.
 pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
-  let mut bytes = Vec::new();
+  let mut dst = Vec::new();
   let file_compressor = FileCompressor::new();
-  zero_pad(
-    &mut bytes,
+  zero_pad_to(
+    &mut dst,
     file_compressor.header_size_hint(),
   );
-  let mut zeros_remaining = file_compressor.write_header(&mut bytes)?.len();
+  let mut consumed = file_compressor.write_header(&mut dst)?;
 
   let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
   let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
   for chunk in nums.chunks(n_per_chunk) {
     let chunk_compressor = file_compressor.chunk_compressor(chunk, &config)?;
-    zero_pad(
-      &mut bytes,
-      chunk_compressor
-        .chunk_size_hint()
-        .saturating_sub(zeros_remaining),
+    zero_pad_to(
+      &mut dst,
+      consumed + chunk_compressor.chunk_size_hint()
     );
-    zeros_remaining = chunk_compressor.write_chunk(&mut bytes)?.len();
+    consumed += chunk_compressor.write_chunk(&mut dst[consumed..])?;
   }
 
-  zero_pad(
-    &mut bytes,
-    file_compressor
-      .footer_size_hint()
-      .saturating_sub(zeros_remaining),
+  zero_pad_to(
+    &mut dst,
+    consumed + file_compressor.footer_size_hint()
   );
-  zeros_remaining = file_compressor.write_footer(&mut bytes)?.len();
+  consumed += file_compressor.write_footer(&mut dst[consumed..])?;
 
-  bytes.truncate(bytes.len() - zeros_remaining);
-  Ok(bytes)
+  dst.truncate(consumed);
+  Ok(dst)
 }
 
 /// Takes in compressed bytes and an exact configuration and returns a vector
@@ -57,12 +54,13 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
 ///
 /// Will return an error if there are any compatibility, corruption,
 /// or insufficient data issues.
-fn simple_decompress<T: NumberLike>(bytes: &[u8]) -> PcoResult<Vec<T>> {
-  let (file_decompressor, mut data) = FileDecompressor::new(bytes)?;
+fn simple_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
+  let (file_decompressor, mut consumed) = FileDecompressor::new(src)?;
 
   let mut res = Vec::new();
-  while let (Some(mut chunk_decompressor), rest) = file_decompressor.chunk_decompressor(data)? {
-    data = chunk_decompressor.decompress_remaining_extend(rest, &mut res)?;
+  while let (Some(mut chunk_decompressor), additional) = file_decompressor.chunk_decompressor(&src[consumed..])? {
+    consumed += additional;
+    consumed += chunk_decompressor.decompress_remaining_extend(&src[consumed..], &mut res)?;
   }
   Ok(res)
 }

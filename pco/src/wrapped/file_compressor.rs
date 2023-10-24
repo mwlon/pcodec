@@ -22,12 +22,11 @@ impl FileCompressor {
     1
   }
 
-  pub fn write_header<'a>(&self, dst: &'a mut [u8]) -> PcoResult<&'a mut [u8]> {
+  pub fn write_header(&self, dst: &mut [u8]) -> PcoResult<usize> {
     let mut extension = bit_reader::make_extension_for(dst, 0);
     let mut writer = BitWriter::new(dst, &mut extension);
     self.format_version.write_to(&mut writer)?;
-    let consumed = writer.bytes_consumed()?;
-    Ok(&mut dst[consumed..])
+    writer.bytes_consumed()
   }
 
   pub fn chunk_compressor<T: NumberLike>(

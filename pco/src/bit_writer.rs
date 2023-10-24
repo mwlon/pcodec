@@ -111,7 +111,7 @@ impl<'a> BitWriter<'a> {
     let dst_size = self.dst_bit_size();
     if dst_bit_idx > dst_size {
       return Err(PcoError::insufficient_data(format!(
-        "out of bounds at bit {} / {}",
+        "[BitWriter] out of bounds at bit {} / {}",
         dst_bit_idx, dst_size,
       )));
     }
@@ -135,8 +135,8 @@ impl<'a> BitWriter<'a> {
     }
 
     Err(PcoError::insufficient_data(
-      "insufficient padding; this is likely either a bug in pco or a result of\
-      using too large a custom data type",
+      "[BitWriter] insufficient padding; this is likely either a bug in pco or \
+      a result of using too large a custom data type",
     ))
   }
 

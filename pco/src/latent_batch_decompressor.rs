@@ -105,27 +105,27 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   fn decompress_ans_tokens(&mut self, reader: &mut BitReader) {
     let stream = reader.current_stream;
     let mut stale_byte_idx = reader.stale_byte_idx;
-    let mut bit_idx = reader.bits_past_byte;
+    let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
     let mut state_idxs = self.state.state_idxs;
     for base_i in (0..FULL_BATCH_SIZE).step_by(MAX_ANS_SYMBOLS_PER_WORD) {
-      stale_byte_idx += bit_idx as usize / 8;
-      bit_idx %= 8;
+      stale_byte_idx += bits_past_byte as usize / 8;
+      bits_past_byte %= 8;
       let word = bit_reader::word_at(stream, stale_byte_idx);
       // TODO this doesn't work on 32 bits or if MAX_ANS_SYMBOLS_PER_WORD != ANS_INTERLEAVING
       for j in 0..MAX_ANS_SYMBOLS_PER_WORD {
         let i = base_i + j;
         let node = self.decoder.get_node(state_idxs[j]);
-        let state_offset = (word >> bit_idx) as AnsState & ((1 << node.bits_to_read) - 1);
+        let state_offset = (word >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
         let info = unsafe { self.infos.get_unchecked(node.token as usize) };
         self.state.set_scratch(i, offset_bit_idx, info);
-        bit_idx += node.bits_to_read;
+        bits_past_byte += node.bits_to_read;
         offset_bit_idx += info.offset_bits as usize;
         state_idxs[j] = node.next_state_idx_base + state_offset;
       }
     }
     reader.stale_byte_idx = stale_byte_idx;
-    reader.bits_past_byte = bit_idx;
+    reader.bits_past_byte = bits_past_byte;
     self.state.state_idxs = state_idxs;
   }
 
@@ -138,17 +138,17 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   ) {
     let base_bit_idx = reader.bit_idx();
     let stream = reader.current_stream;
-    for i in 0..FULL_BATCH_SIZE {
+    for i in 0..dst.len() {
       let offset_bits = self.state.offset_bits_scratch[i];
       let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
       dst[i] =
-        bit_reader::read_uint::<U, MAX_EXTRA_WORDS>(stream, byte_idx, bits_past_byte, offset_bits);
+        bit_reader::read_uint_at::<U, MAX_EXTRA_WORDS>(stream, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
-      + self.state.offset_bits_csum_scratch[FULL_BATCH_SIZE - 1]
-      + self.state.offset_bits_scratch[FULL_BATCH_SIZE - 1] as usize;
+      + self.state.offset_bits_csum_scratch[dst.len() - 1]
+      + self.state.offset_bits_scratch[dst.len() - 1] as usize;
     reader.stale_byte_idx = final_bit_idx / 8;
     reader.bits_past_byte = final_bit_idx as Bitlen % 8;
   }
@@ -180,6 +180,10 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     reader: &mut BitReader,
     dst: &mut [U],
   ) -> PcoResult<()> {
+    if dst.is_empty() {
+      return Ok(())
+    }
+
     if let Some(const_value) = self.maybe_constant_value {
       dst.fill(const_value);
       return Ok(());

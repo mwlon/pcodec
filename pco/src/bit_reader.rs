@@ -24,7 +24,7 @@ pub fn word_at(src: &[u8], byte_idx: usize) -> usize {
 }
 
 #[inline]
-pub fn read_uint<U: ReadWriteUint, const MAX_EXTRA_WORDS: usize>(
+pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_WORDS: usize>(
   src: &[u8],
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
@@ -123,8 +123,8 @@ impl<'a> BitReader<'a> {
     }
 
     Err(PcoError::insufficient_data(
-      "insufficient padding; this is likely either a bug in pco or a result of\
-      using too large a custom data type",
+      "[BitReader] insufficient padding; this is likely either a bug in pco or \
+      a result of using too large a custom data type",
     ))
   }
 
@@ -170,19 +170,19 @@ impl<'a> BitReader<'a> {
   pub fn read_uint<U: ReadWriteUint>(&mut self, n: Bitlen) -> U {
     self.refill();
     let res = match U::MAX_EXTRA_WORDS {
-      0 => read_uint::<U, 0>(
+      0 => read_uint_at::<U, 0>(
         self.current_stream,
         self.stale_byte_idx,
         self.bits_past_byte,
         n,
       ),
-      1 => read_uint::<U, 1>(
+      1 => read_uint_at::<U, 1>(
         self.current_stream,
         self.stale_byte_idx,
         self.bits_past_byte,
         n,
       ),
-      2 => read_uint::<U, 2>(
+      2 => read_uint_at::<U, 2>(
         self.current_stream,
         self.stale_byte_idx,
         self.bits_past_byte,
@@ -216,7 +216,7 @@ impl<'a> BitReader<'a> {
     let src_size = self.src_bit_size();
     if src_bit_idx > src_size {
       return Err(PcoError::insufficient_data(format!(
-        "out of bounds at bit {} / {}",
+        "[BitReader] out of bounds at bit {} / {}",
         src_bit_idx, src_size,
       )));
     }

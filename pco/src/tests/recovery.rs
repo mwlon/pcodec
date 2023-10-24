@@ -109,18 +109,16 @@ fn test_f64_codec() -> PcoResult<()> {
 fn test_multi_chunk() -> PcoResult<()> {
   let config = ChunkConfig::default();
   let fc = FileCompressor::new();
-  let mut bytes = vec![0; 300];
-  let dst = &mut bytes;
-  let dst = fc.write_header(dst)?;
-  let dst = fc.chunk_compressor(&[1, 2, 3], &config)?.write_chunk(dst)?;
-  let dst = fc
+  let mut compressed = vec![0; 300];
+  let mut consumed = fc.write_header(&mut compressed)?;
+  consumed += fc.chunk_compressor(&[1, 2, 3], &config)?.write_chunk(&mut compressed[consumed..])?;
+  consumed += fc
     .chunk_compressor(&[11, 12, 13], &config)?
-    .write_chunk(dst)?;
-  let dst = fc.write_footer(dst)?;
-  let dst_len = dst.len();
-  bytes.truncate(bytes.len() - dst_len);
+    .write_chunk(&mut compressed[consumed..])?;
+  consumed += fc.write_footer(&mut compressed[consumed..])?;
+  compressed.truncate(consumed);
 
-  let res = auto_decompress::<i64>(&bytes)?;
+  let res = auto_decompress::<i64>(&compressed)?;
   assert_eq!(res, vec![1, 2, 3, 11, 12, 13], "multi chunk");
   Ok(())
 }

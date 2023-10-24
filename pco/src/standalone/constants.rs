@@ -4,7 +4,7 @@ use crate::constants::Bitlen;
 pub const MAGIC_HEADER: [u8; 4] = [112, 99, 111, 33];
 pub const MAGIC_TERMINATION_BYTE: u8 = 0;
 pub const BITS_TO_ENCODE_N_ENTRIES: Bitlen = 24;
-pub const BITS_TO_ENCODE_COMPRESSED_BODY_SIZE: Bitlen = 32;
+pub const BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE: Bitlen = 32;
 
 #[cfg(test)]
 mod tests {

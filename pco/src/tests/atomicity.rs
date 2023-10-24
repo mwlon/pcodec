@@ -13,9 +13,9 @@ fn test_errors_do_not_mutate_decompressor() {
   // header shouldn't leave us in a dirty state
   for i in 0..data.len() + 1 {
     match FileDecompressor::new(&data[..i]) {
-      Ok((fd, rest)) => {
+      Ok((fd, additional)) => {
         file_decompressor = Some(fd);
-        data = rest;
+        data = &data[additional..];
         break;
       }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
@@ -28,9 +28,9 @@ fn test_errors_do_not_mutate_decompressor() {
   let mut chunk_decompressor = None;
   for i in 0..data.len() + 1 {
     match file_decompressor.chunk_decompressor::<i32>(&data[..i]) {
-      Ok((cd, rest)) => {
+      Ok((cd, additional)) => {
         chunk_decompressor = Some(cd.unwrap());
-        data = rest;
+        data = &data[additional..];
         break;
       }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),

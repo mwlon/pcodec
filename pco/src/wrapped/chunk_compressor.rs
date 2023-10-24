@@ -177,13 +177,6 @@ fn train_mode_and_infos<U: UnsignedLike>(
     return Ok(TrainedBins::default());
   }
 
-  if n > MAX_ENTRIES {
-    return Err(PcoError::invalid_argument(format!(
-      "count may not exceed {} per chunk (was {})",
-      MAX_ENTRIES, n,
-    )));
-  }
-
   let n_unsigneds = unsigneds.len();
   let (unoptimized_mode, unoptimized_bins) = {
     let mut sorted = unsigneds;
@@ -334,18 +327,30 @@ fn validate_config(config: &ChunkConfig) -> PcoResult<()> {
   Ok(())
 }
 
+fn validate_chunk_size(n: usize) -> PcoResult<()> {
+  if n == 0 {
+    return Err(PcoError::invalid_argument(
+      "cannot compress empty chunk",
+    ));
+  }
+  if n > MAX_ENTRIES {
+    return Err(PcoError::invalid_argument(format!(
+      "count may not exceed {} per chunk (was {})",
+      MAX_ENTRIES, n,
+    )));
+  }
+
+  Ok(())
+}
+
 pub(crate) fn new<T: NumberLike>(
   nums: &[T],
   config: &ChunkConfig,
 ) -> PcoResult<ChunkCompressor<T::Unsigned>> {
   validate_config(config)?;
-  if nums.is_empty() {
-    return Err(PcoError::invalid_argument(
-      "cannot compress empty chunk",
-    ));
-  }
-
   let n = nums.len();
+  validate_chunk_size(n)?;
+
   let page_sizes = config.paging_spec.page_sizes(nums.len())?;
 
   let naive_mode = choose_naive_mode(nums, config);
@@ -453,12 +458,11 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bytes
   }
 
-  pub fn write_chunk_meta<'a>(&self, dst: &'a mut [u8]) -> PcoResult<&'a mut [u8]> {
+  pub fn write_chunk_meta(&self, dst: &mut [u8]) -> PcoResult<usize> {
     let mut extension = bit_reader::make_extension_for(dst, DEFAULT_PADDING_BYTES);
     let mut writer = BitWriter::new(dst, &mut extension);
     self.meta.write_to(&mut writer)?;
-    let consumed = writer.bytes_consumed()?;
-    Ok(&mut dst[consumed..])
+    writer.bytes_consumed()
   }
 
   fn dissect_unsigneds(&self) -> PcoResult<DissectedSrc<U>> {
@@ -519,7 +523,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bits::ceil_div(bit_size, 8)
   }
 
-  pub fn write_page<'a>(&self, page_idx: usize, dst: &'a mut [u8]) -> PcoResult<&'a mut [u8]> {
+  pub fn write_page(&self, page_idx: usize, dst: &mut [u8]) -> PcoResult<usize> {
     if page_idx >= self.page_sizes.len() {
       return Err(PcoError::invalid_argument(format!(
         "page idx exceeds num pages ({} >= {})",
@@ -558,8 +562,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
     write_dissecteds(dissected_src, &mut writer)?;
 
-    let consumed = writer.bytes_consumed()?;
-    Ok(&mut dst[consumed..])
+    writer.bytes_consumed()
   }
 }
 

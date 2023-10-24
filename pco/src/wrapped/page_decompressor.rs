@@ -197,14 +197,14 @@ impl<T: NumberLike> PageDecompressor<T> {
   }
 
   // If this returns an error, num_dst might be modified.
-  pub fn decompress<'a>(
+  pub fn decompress(
     &mut self,
-    src: &'a [u8],
+    src: &[u8],
     num_dst: &mut [T],
-  ) -> PcoResult<(Progress, &'a [u8])> {
+  ) -> PcoResult<(Progress, usize)> {
     if num_dst.len() % FULL_BATCH_SIZE != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
-        "num_dst's length must either be a multiple of {} or be\
+        "num_dst's length must either be a multiple of {} or be \
          at least the length of numbers remaining ({} < {})",
         FULL_BATCH_SIZE,
         num_dst.len(),
@@ -239,8 +239,7 @@ impl<T: NumberLike> PageDecompressor<T> {
       finished_page: self.n_remaining() == 0,
     };
 
-    let consumed = reader.bytes_consumed()?;
-    Ok((progress, &src[consumed..]))
+    Ok((progress, reader.bytes_consumed()?))
   }
 
   pub fn n_remaining(&self) -> usize {
