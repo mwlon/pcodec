@@ -135,7 +135,11 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     unsafe {
       dst.set_len(initial_len + remaining);
     }
-    let (progress, consumed) = self.decompress(bytes, &mut dst[initial_len..])?;
+    let result = self.decompress(bytes, &mut dst[initial_len..]);
+    if result.is_err() {
+      dst.truncate(initial_len);
+    }
+    let (progress, consumed) = result?;
     assert!(progress.finished_page);
     Ok(consumed)
   }

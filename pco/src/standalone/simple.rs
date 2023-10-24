@@ -29,14 +29,16 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
   let mut consumed = file_compressor.write_header(&mut dst)?;
 
   let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
-  let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
-  for chunk in nums.chunks(n_per_chunk) {
-    let chunk_compressor = file_compressor.chunk_compressor(chunk, &config)?;
-    zero_pad_to(
-      &mut dst,
-      consumed + chunk_compressor.chunk_size_hint()
-    );
-    consumed += chunk_compressor.write_chunk(&mut dst[consumed..])?;
+  if n_chunks > 0 {
+    let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
+    for chunk in nums.chunks(n_per_chunk) {
+      let chunk_compressor = file_compressor.chunk_compressor(chunk, &config)?;
+      zero_pad_to(
+        &mut dst,
+        consumed + chunk_compressor.chunk_size_hint()
+      );
+      consumed += chunk_compressor.write_chunk(&mut dst[consumed..])?;
+    }
   }
 
   zero_pad_to(
