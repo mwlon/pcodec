@@ -6,11 +6,9 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::{
-  ans, bin_optimization, bit_reader, bits, delta, float_mult_utils, Bin, ChunkConfig,
-  ChunkLatentMetadata, ChunkMetadata, Mode, FULL_BATCH_SIZE,
-};
+use crate::{ans, bin_optimization, bit_reader, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentMetadata, ChunkMetadata, Mode, FULL_BATCH_SIZE, io};
 use std::cmp::{max, min};
+use std::io::Write;
 
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::modes::classic::ClassicMode;
@@ -458,11 +456,20 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bytes
   }
 
-  pub fn write_chunk_meta(&self, dst: &mut [u8]) -> PcoResult<usize> {
+  pub fn write_chunk_meta_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
     let mut extension = bit_reader::make_extension_for(dst, DEFAULT_PADDING_BYTES);
     let mut writer = BitWriter::new(dst, &mut extension);
     self.meta.write_to(&mut writer)?;
     writer.bytes_consumed()
+  }
+
+  pub fn write_chunk_meta<W: Write>(&self, dst: W) -> PcoResult<()> {
+    let mut buf = vec![0; self.chunk_meta_size_hint()];
+    io::write_all(
+      self.write_chunk_meta_sliced(&mut buf)?,
+      buf,
+      dst
+    )
   }
 
   fn dissect_unsigneds(&self) -> PcoResult<DissectedSrc<U>> {
@@ -523,7 +530,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bits::ceil_div(bit_size, 8)
   }
 
-  pub fn write_page(&self, page_idx: usize, dst: &mut [u8]) -> PcoResult<usize> {
+  pub fn write_page_sliced(&self, page_idx: usize, dst: &mut [u8]) -> PcoResult<usize> {
     if page_idx >= self.page_sizes.len() {
       return Err(PcoError::invalid_argument(format!(
         "page idx exceeds num pages ({} >= {})",
@@ -563,6 +570,15 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     write_dissecteds(dissected_src, &mut writer)?;
 
     writer.bytes_consumed()
+  }
+
+  pub fn write_page<W: Write>(&self, page_idx: usize, dst: W) -> PcoResult<()> {
+    let mut buf = vec![0; self.page_size_hint(page_idx)];
+    io::write_all(
+      self.write_page_sliced(page_idx, &mut buf)?,
+      buf,
+      dst
+    )
   }
 }
 

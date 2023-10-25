@@ -12,8 +12,8 @@ use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchR
 use parquet::arrow::ProjectionMask;
 
 use pco::data_types::NumberLike;
-use pco::standalone::Compressor;
-use pco::chunk_config::ChunkConfig;
+use pco::standalone::FileCompressor;
+use pco::ChunkConfig;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -40,30 +40,31 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
       .with_compression_level(opt.level)
       .with_delta_encoding_order(opt.delta_encoding_order)
       .with_use_gcds(!opt.disable_gcds);
-    let mut compressor = Compressor::<P::Num>::from_config(config)?;
-
-    compressor.header()?;
+    let fc = FileCompressor::default();
+    fc.write_header(&file)?;
 
     let mut reader = new_column_reader::<P>(schema, opt)?;
-    let mut num_buffer = Vec::new();
+    let mut num_buffer = Vec::<P::Num>::new();
     while let Some(batch_result) = reader.next_batch() {
       let batch = batch_result?;
       num_buffer.extend(&batch);
       if num_buffer.len() >= opt.chunk_size {
-        write_chunk(
-          &mut compressor,
+        fc.chunk_compressor(
           &num_buffer[..opt.chunk_size],
-          &mut file,
-        )?;
+          &config,
+        )?.write_chunk(&file)?;
+        // this could be made more efficient
         num_buffer = num_buffer[opt.chunk_size..].to_vec();
       }
     }
     if !num_buffer.is_empty() {
-      write_chunk(&mut compressor, &num_buffer, &mut file)?;
+      fc.chunk_compressor(
+        &num_buffer,
+        &config,
+      )?.write_chunk(&file)?;
     }
 
-    compressor.footer()?;
-    file.write_all(&compressor.drain_bytes())?;
+    fc.write_footer(&file)?;
     Ok(())
   }
 }
@@ -165,14 +166,4 @@ impl<P: NumberLikeArrow> ColumnReader<P> for CsvColumnReader<P> {
   fn col_idx(&self) -> usize {
     self.col_idx
   }
-}
-
-fn write_chunk<T: NumberLike>(
-  compressor: &mut Compressor<T>,
-  nums: &[T],
-  file: &mut File,
-) -> Result<()> {
-  compressor.chunk(nums)?;
-  file.write_all(&compressor.drain_bytes())?;
-  Ok(())
 }

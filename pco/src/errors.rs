@@ -1,8 +1,6 @@
 use std::error::Error;
-use std::fmt;
+use std::{fmt, io};
 use std::fmt::{Display, Formatter};
-
-
 
 /// The different kinds of errors the library can return.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,12 +20,17 @@ pub enum ErrorKind {
   /// `InvalidArgument` errors usually occur during compression, indicating
   /// the parameters provided to a function were invalid.
   InvalidArgument,
+  /// `Io` errors are propagated from `Read` or `Write`
+  /// implementations passed to pco. The `io_error_kind` field will be
+  /// populated in this case.
+  Io,
 }
 
 /// The error type used in results for all `pco` functionality.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PcoError {
   pub kind: ErrorKind,
+  pub io_error_kind: Option<io::ErrorKind>,
   pub message: String,
 }
 
@@ -35,6 +38,7 @@ impl PcoError {
   pub(crate) fn new<S: AsRef<str>>(kind: ErrorKind, message: S) -> Self {
     PcoError {
       kind,
+      io_error_kind: None,
       message: message.as_ref().to_string(),
     }
   }
@@ -63,6 +67,16 @@ impl Display for PcoError {
       "pco {:?} error: {}",
       self.kind, &self.message
     )
+  }
+}
+
+impl From<io::Error> for PcoError {
+  fn from(err: io::Error) -> Self {
+    PcoError {
+      kind: ErrorKind::Io,
+      io_error_kind: Some(err.kind()),
+      message: format!("{}", err)
+    }
   }
 }
 

@@ -24,7 +24,7 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
     &mut dst,
     file_compressor.header_size_hint(),
   );
-  let mut consumed = file_compressor.write_header(&mut dst)?;
+  let mut consumed = file_compressor.write_header_sliced(&mut dst)?;
 
   let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
   if n_chunks > 0 {
@@ -35,7 +35,7 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
         &mut dst,
         consumed + chunk_compressor.chunk_size_hint()
       );
-      consumed += chunk_compressor.write_chunk(&mut dst[consumed..])?;
+      consumed += chunk_compressor.write_chunk_sliced(&mut dst[consumed..])?;
     }
   }
 
@@ -43,7 +43,7 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
     &mut dst,
     consumed + file_compressor.footer_size_hint()
   );
-  consumed += file_compressor.write_footer(&mut dst[consumed..])?;
+  consumed += file_compressor.write_footer_sliced(&mut dst[consumed..])?;
 
   dst.truncate(consumed);
   Ok(dst)

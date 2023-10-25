@@ -45,3 +45,4 @@ mod page_metadata;
 mod read_write_uint;
 #[cfg(test)]
 mod tests;
+mod io;

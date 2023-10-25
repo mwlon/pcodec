@@ -1,9 +1,10 @@
+use std::io::Write;
 use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::PcoResult;
 use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
-use crate::{bit_reader, wrapped, ChunkConfig, ChunkMetadata, bit_writer};
+use crate::{bit_reader, wrapped, ChunkConfig, ChunkMetadata, bit_writer, io};
 use crate::constants::MINIMAL_PADDING_BYTES;
 
 #[derive(Clone, Debug, Default)]
@@ -14,13 +15,18 @@ impl FileCompressor {
     MAGIC_HEADER.len() + self.0.header_size_hint()
   }
 
-  pub fn write_header(&self, dst: &mut [u8]) -> PcoResult<usize> {
+  pub fn write_header_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
     let mut extension = bit_reader::make_extension_for(dst, 0);
     let mut writer = BitWriter::new(dst, &mut extension);
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
     let mut consumed = writer.bytes_consumed()?;
-    consumed += self.0.write_header(&mut dst[consumed..])?;
+    consumed += self.0.write_header_sliced(&mut dst[consumed..])?;
     Ok(consumed)
+  }
+
+  pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<()> {
+    let mut buf = vec![0; self.header_size_hint()];
+    io::write_all( self.write_header_sliced(&mut buf)?, buf, dst)
   }
 
   pub fn chunk_compressor<T: NumberLike>(
@@ -41,11 +47,16 @@ impl FileCompressor {
     1
   }
 
-  pub fn write_footer(&self, dst: &mut [u8]) -> PcoResult<usize> {
+  pub fn write_footer_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
     let mut extension = bit_reader::make_extension_for(dst, 0);
     let mut writer = BitWriter::new(dst, &mut extension);
     writer.write_aligned_bytes(&[MAGIC_TERMINATION_BYTE])?;
     writer.bytes_consumed()
+  }
+
+  pub fn write_footer<W: Write>(&self, dst: W) -> PcoResult<()> {
+    let mut buf = vec![0; self.footer_size_hint()];
+    io::write_all( self.write_footer_sliced(&mut buf)?, buf, dst)
   }
 }
 
@@ -63,7 +74,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     1 + self.inner.chunk_meta_size_hint() + self.inner.page_size_hint(0)
   }
 
-  pub fn write_chunk(&self, dst: &mut [u8]) -> PcoResult<usize> {
+  pub fn write_chunk_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
     let mut ext = bit_reader::make_extension_for(dst, MINIMAL_PADDING_BYTES);
     let mut writer = BitWriter::new(dst, &mut ext);
     writer.ensure_padded(MINIMAL_PADDING_BYTES)?;
@@ -73,15 +84,20 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     writer.write_usize(0, BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE); // to be filled in later
 
     let mut consumed = writer.bytes_consumed()?;
-    consumed += self.inner.write_chunk_meta(&mut dst[consumed..])?;
+    consumed += self.inner.write_chunk_meta_sliced(&mut dst[consumed..])?;
 
     let pre_page_consumed = consumed;
-    consumed += self.inner.write_page(0, &mut dst[consumed..])?;
+    consumed += self.inner.write_page_sliced(0, &mut dst[consumed..])?;
 
     // go back and fill in the compressed page size we omitted before
     ext.fill(0);
     let page_size = consumed - pre_page_consumed;
     bit_writer::write_uint_to::<_, 0>(page_size, byte_idx_to_write_page_size, 0, BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, dst);
     Ok(consumed)
+  }
+
+  pub fn write_chunk<W: Write>(&self, dst: W) -> PcoResult<()> {
+    let mut buf = vec![0; self.chunk_size_hint()];
+    io::write_all(self.write_chunk_sliced(&mut buf)?, buf, dst)
   }
 }
