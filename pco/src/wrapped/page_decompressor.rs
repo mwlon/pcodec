@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
-use crate::constants::{FULL_BATCH_SIZE, LATENT_BATCH_PADDING};
+use crate::constants::{Bitlen, FULL_BATCH_SIZE, LATENT_BATCH_PADDING};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
@@ -21,12 +21,14 @@ pub struct State<U: UnsignedLike> {
   // Secondary latents is technically mutable, but it doesn't really matter
   // since we overwrite it on every call.
   secondary_latents: [U; FULL_BATCH_SIZE],
+  bits_past_byte: Bitlen, // in [0, 8), only used to start a batch
 }
 
 pub struct Backup<U: UnsignedLike> {
   n_processed: usize,
   latent_batch_backups: Vec<latent_batch_decompressor::Backup>,
   delta_momentss: Vec<DeltaMoments<U>>,
+  bits_past_byte: Bitlen,
 }
 
 impl<U: UnsignedLike> State<U> {
@@ -39,6 +41,7 @@ impl<U: UnsignedLike> State<U> {
         .map(|lbd| lbd.backup())
         .collect::<Vec<_>>(),
       delta_momentss: self.delta_momentss.clone(),
+      bits_past_byte: self.bits_past_byte,
     }
   }
 
@@ -52,6 +55,7 @@ impl<U: UnsignedLike> State<U> {
         lbd.recover(lbd_backup);
       });
     self.delta_momentss = backup.delta_momentss;
+    self.bits_past_byte = backup.bits_past_byte;
   }
 }
 
@@ -141,6 +145,7 @@ impl<T: NumberLike> PageDecompressor<T> {
         latent_batch_decompressors,
         delta_momentss,
         secondary_latents: [T::Unsigned::default(); FULL_BATCH_SIZE],
+        bits_past_byte: 0,
       },
     })
   }
@@ -214,6 +219,7 @@ impl<T: NumberLike> PageDecompressor<T> {
 
     let extension = bit_reader::make_extension_for(src, LATENT_BATCH_PADDING);
     let mut reader = BitReader::new(src, &extension);
+    reader.bits_past_byte = self.state.bits_past_byte;
 
     let n_to_process = min(num_dst.len(), self.n_remaining());
     let backup = self.state.backup();
@@ -238,6 +244,7 @@ impl<T: NumberLike> PageDecompressor<T> {
       n_processed,
       finished_page: self.n_remaining() == 0,
     };
+    self.state.bits_past_byte = reader.bits_past_byte % 8;
 
     Ok((progress, reader.bytes_consumed()?))
   }

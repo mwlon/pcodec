@@ -102,7 +102,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
   #[allow(clippy::needless_range_loop)]
   #[inline(never)]
-  fn decompress_ans_tokens(&mut self, reader: &mut BitReader) {
+  fn decompress_full_ans_tokens(&mut self, reader: &mut BitReader) {
     let stream = reader.current_stream;
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
@@ -124,6 +124,33 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
         state_idxs[j] = node.next_state_idx_base + state_offset;
       }
     }
+
+    reader.stale_byte_idx = stale_byte_idx;
+    reader.bits_past_byte = bits_past_byte;
+    self.state.state_idxs = state_idxs;
+  }
+
+  #[inline(never)]
+  fn decompress_ans_tokens(&mut self, reader: &mut BitReader, batch_size: usize) {
+    let stream = reader.current_stream;
+    let mut stale_byte_idx = reader.stale_byte_idx;
+    let mut bits_past_byte = reader.bits_past_byte;
+    let mut offset_bit_idx = 0;
+    let mut state_idxs = self.state.state_idxs;
+    for i in 0..batch_size {
+      let j = i % 4;
+      stale_byte_idx += bits_past_byte as usize / 8;
+      bits_past_byte %= 8;
+      let word = bit_reader::word_at(stream, stale_byte_idx);
+      let node = self.decoder.get_node(state_idxs[j]);
+      let state_offset = (word >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
+      let info = &self.infos[node.token as usize];
+      self.state.set_scratch(i, offset_bit_idx, info);
+      bits_past_byte += node.bits_to_read;
+      offset_bit_idx += info.offset_bits as usize;
+      state_idxs[j] = node.next_state_idx_base + state_offset;
+    }
+
     reader.stale_byte_idx = stale_byte_idx;
     reader.bits_past_byte = bits_past_byte;
     self.state.state_idxs = state_idxs;
@@ -193,7 +220,11 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     assert!(batch_size <= FULL_BATCH_SIZE);
     reader.ensure_padded(LATENT_BATCH_PADDING)?;
 
-    self.decompress_ans_tokens(reader);
+    if batch_size == FULL_BATCH_SIZE {
+      self.decompress_full_ans_tokens(reader);
+    } else {
+      self.decompress_ans_tokens(reader, batch_size);
+    }
 
     // this assertion saves some unnecessary specializations in the compiled assembly
     assert!(self.extra_words_per_offset <= (U::PHYSICAL_BITS + 8) / WORD_SIZE);

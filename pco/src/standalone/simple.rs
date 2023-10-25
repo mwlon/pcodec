@@ -1,3 +1,4 @@
+use std::cmp::max;
 use crate::bits;
 use crate::chunk_config::ChunkConfig;
 use crate::data_types::NumberLike;
@@ -8,11 +9,8 @@ use crate::standalone::decompressor::FileDecompressor;
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
 fn zero_pad_to(bytes: &mut Vec<u8>, total: usize) {
-  let additional = total.saturating_sub(bytes.len());
-  bytes.reserve(additional);
-  for _ in 0..additional {
-    bytes.push(0);
-  }
+  let new_len = max(bytes.len(), total);
+  bytes.resize(new_len, 0);
 }
 
 /// Takes in a slice of numbers and an exact configuration and returns
