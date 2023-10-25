@@ -5,7 +5,7 @@ use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{auto_decompress, FileCompressor};
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMetadata<T::Unsigned>> {
-  let fc = FileCompressor::new();
+  let fc = FileCompressor::default();
   let config = ChunkConfig {
     use_gcds: false,
     delta_encoding_order: Some(0),

@@ -6,13 +6,10 @@ use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_
 use crate::{bit_reader, wrapped, ChunkConfig, ChunkMetadata, bit_writer};
 use crate::constants::MINIMAL_PADDING_BYTES;
 
+#[derive(Clone, Debug, Default)]
 pub struct FileCompressor(wrapped::FileCompressor);
 
 impl FileCompressor {
-  pub fn new() -> Self {
-    Self(wrapped::FileCompressor::new())
-  }
-
   pub fn header_size_hint(&self) -> usize {
     MAGIC_HEADER.len() + self.0.header_size_hint()
   }

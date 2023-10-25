@@ -108,7 +108,7 @@ fn test_f64_codec() -> PcoResult<()> {
 #[test]
 fn test_multi_chunk() -> PcoResult<()> {
   let config = ChunkConfig::default();
-  let fc = FileCompressor::new();
+  let fc = FileCompressor::default();
   let mut compressed = vec![0; 300];
   let mut consumed = fc.write_header(&mut compressed)?;
   consumed += fc.chunk_compressor(&[1_i64, 2, 3], &config)?.write_chunk(&mut compressed[consumed..])?;

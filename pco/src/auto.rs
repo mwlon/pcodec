@@ -50,7 +50,7 @@ pub fn auto_delta_encoding_order<T: NumberLike>(
       use_float_mult: true,
       paging_spec: PagingSpec::default(),
     };
-    let fc = FileCompressor::new();
+    let fc = FileCompressor::default();
     let cc = fc.chunk_compressor(head_nums, &config)?;
     let size_estimate = cc.chunk_meta_size_hint() + cc.page_size_hint(0);
     let mut dst = vec![0; size_estimate];

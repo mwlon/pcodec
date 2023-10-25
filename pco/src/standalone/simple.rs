@@ -19,7 +19,7 @@ fn zero_pad_to(bytes: &mut Vec<u8>, total: usize) {
 /// Will return an error if the compressor config is invalid.
 pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
   let mut dst = Vec::new();
-  let file_compressor = FileCompressor::new();
+  let file_compressor = FileCompressor::default();
   zero_pad_to(
     &mut dst,
     file_compressor.header_size_hint(),
@@ -30,7 +30,7 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
   if n_chunks > 0 {
     let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
     for chunk in nums.chunks(n_per_chunk) {
-      let chunk_compressor = file_compressor.chunk_compressor(chunk, &config)?;
+      let chunk_compressor = file_compressor.chunk_compressor(chunk, config)?;
       zero_pad_to(
         &mut dst,
         consumed + chunk_compressor.chunk_size_hint()

@@ -1,5 +1,4 @@
 use crate::bit_writer::BitWriter;
-use crate::constants::CURRENT_FORMAT_VERSION;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::format_version::FormatVersion;
@@ -7,17 +6,12 @@ use crate::wrapped::chunk_compressor;
 use crate::wrapped::chunk_compressor::ChunkCompressor;
 use crate::{bit_reader, ChunkConfig};
 
+#[derive(Clone, Debug, Default)]
 pub struct FileCompressor {
   format_version: FormatVersion,
 }
 
 impl FileCompressor {
-  pub fn new() -> Self {
-    Self {
-      format_version: FormatVersion(CURRENT_FORMAT_VERSION),
-    }
-  }
-
   pub fn header_size_hint(&self) -> usize {
     1
   }
