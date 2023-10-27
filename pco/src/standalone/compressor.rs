@@ -3,9 +3,8 @@ use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::PcoResult;
-use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
+use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, STANDALONE_CHUNK_PREAMBLE_PADDING, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 use crate::{bit_reader, wrapped, ChunkConfig, ChunkMetadata, bit_writer, io};
-use crate::constants::MINIMAL_PADDING_BYTES;
 
 #[derive(Clone, Debug, Default)]
 pub struct FileCompressor(wrapped::FileCompressor);
@@ -16,7 +15,7 @@ impl FileCompressor {
   }
 
   pub fn write_header_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut extension = bit_reader::make_extension_for(dst, 0);
+    let mut extension = bit_reader::make_extension_for(dst, MAGIC_HEADER.len());
     let mut writer = BitWriter::new(dst, &mut extension);
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
     let mut consumed = writer.bytes_consumed()?;
@@ -75,9 +74,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   }
 
   pub fn write_chunk_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut ext = bit_reader::make_extension_for(dst, MINIMAL_PADDING_BYTES);
+    let mut ext = bit_reader::make_extension_for(dst, STANDALONE_CHUNK_PREAMBLE_PADDING);
     let mut writer = BitWriter::new(dst, &mut ext);
-    writer.ensure_padded(MINIMAL_PADDING_BYTES)?;
     writer.write_aligned_bytes(&[self.dtype_byte])?;
     writer.write_usize(self.inner.page_sizes()[0] - 1, BITS_TO_ENCODE_N_ENTRIES);
     let byte_idx_to_write_page_size = writer.aligned_dst_byte_idx()?;
@@ -90,7 +88,6 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     consumed += self.inner.write_page_sliced(0, &mut dst[consumed..])?;
 
     // go back and fill in the compressed page size we omitted before
-    ext.fill(0);
     let page_size = consumed - pre_page_consumed;
     bit_writer::write_uint_to::<_, 0>(page_size, byte_idx_to_write_page_size, 0, BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, dst);
     Ok(consumed)

@@ -229,6 +229,7 @@ fn assert_recovers_within_size<T: NumberLike>(
     ..Default::default()
   };
   let compressed = simple_compress(nums, &config)?;
+  println!("{:?}", compressed);
   assert!(
     compressed.len() <= max_byte_size,
     "compressed size {} > {}; {}",

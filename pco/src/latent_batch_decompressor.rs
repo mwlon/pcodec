@@ -4,7 +4,7 @@ use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{
-  Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, LATENT_BATCH_PADDING, WORD_BITLEN, WORD_SIZE,
+  Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, PAGE_PADDING, WORD_BITLEN, WORD_SIZE,
 };
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
@@ -218,7 +218,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
     let batch_size = dst.len();
     assert!(batch_size <= FULL_BATCH_SIZE);
-    reader.ensure_padded(LATENT_BATCH_PADDING)?;
+    reader.ensure_padded(PAGE_PADDING)?;
 
     if batch_size == FULL_BATCH_SIZE {
       self.decompress_full_ans_tokens(reader);

@@ -18,15 +18,17 @@ pub const BITS_TO_ENCODE_MODE: Bitlen = 4;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
 
 // padding
-pub const FULL_BIN_BATCH_SIZE: usize = 128;
-const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + BYTES_PER_WORD + 1;
-pub const MINIMAL_PADDING_BYTES: usize = 1 << 6;
-pub const BIN_BATCH_PADDING: usize = FULL_BIN_BATCH_SIZE * (4 + 2 * MAX_SUPPORTED_PRECISION_BYTES) + OVERSHOOT_PADDING;
+pub const HEADER_PADDING: usize = 1;
+pub const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + BYTES_PER_WORD + 1;
+// Chunk meta padding is enough for one full batch of bins; this should also
+// generously cover the data needed to read the other parts of chunk meta.
+pub const CHUNK_META_PADDING: usize = FULL_BIN_BATCH_SIZE * (4 + 2 * MAX_SUPPORTED_PRECISION_BYTES) + OVERSHOOT_PADDING;
 pub const PAGE_LATENT_META_PADDING: usize =
   MAX_DELTA_ENCODING_ORDER * MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES + OVERSHOOT_PADDING;
-pub const LATENT_BATCH_PADDING: usize =
+// Page padding is enough for one full batch of latents; this should also
+// generously cover the data needed to read the page meta.
+pub const PAGE_PADDING: usize =
   FULL_BATCH_SIZE * (MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES) + OVERSHOOT_PADDING;
-pub const DEFAULT_PADDING_BYTES: usize = 1 << 13;
 
 // native architecture info
 pub const WORD_SIZE: usize = usize::BITS as usize;
@@ -51,6 +53,7 @@ pub const DEFAULT_MAX_PAGE_SIZE: usize = 1000000;
 // important parts of the format specification
 pub const ANS_INTERLEAVING: usize = 4;
 pub const FULL_BATCH_SIZE: usize = 256;
+pub const FULL_BIN_BATCH_SIZE: usize = 128;
 
 #[cfg(test)]
 mod tests {
@@ -70,17 +73,5 @@ mod tests {
       BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
       MAX_DELTA_ENCODING_ORDER,
     );
-  }
-
-  #[test]
-  fn test_bin_batch_fits_in_default_padding() {
-    let max_bytes_per_bin = 2 * MAX_SUPPORTED_PRECISION as usize / 8 + 4;
-    assert!(FULL_BIN_BATCH_SIZE * max_bytes_per_bin < DEFAULT_PADDING_BYTES);
-  }
-
-  #[test]
-  fn test_batch_fits_in_default_padding() {
-    let max_bytes_per_num = MAX_SUPPORTED_PRECISION as usize / 8 + 2;
-    assert!(FULL_BATCH_SIZE * max_bytes_per_num < DEFAULT_PADDING_BYTES);
   }
 }

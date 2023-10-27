@@ -1,7 +1,7 @@
 use crate::ans::AnsState;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, PAGE_LATENT_META_PADDING};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, PAGE_LATENT_META_PADDING, PAGE_PADDING};
 use crate::data_types::UnsignedLike;
 use crate::delta::DeltaMoments;
 use crate::errors::PcoResult;
@@ -52,11 +52,13 @@ pub struct PageMetadata<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> PageMetadata<U> {
-  pub fn write_to<I: Iterator<Item = Bitlen>>(&self, ans_size_logs: I, writer: &mut BitWriter) {
+  pub fn write_to<I: Iterator<Item = Bitlen>>(&self, ans_size_logs: I, writer: &mut BitWriter) -> PcoResult<()> {
+    writer.ensure_padded(PAGE_PADDING)?;
     for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
       self.latents[latent_idx].write_to(ans_size_log, writer);
     }
     writer.finish_byte();
+    Ok(())
   }
 
   pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMetadata<U>) -> PcoResult<Self> {

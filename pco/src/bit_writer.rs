@@ -50,18 +50,29 @@ impl<'a> BitWriter<'a> {
   pub fn new(dst: &'a mut [u8], extension: &'a mut [u8]) -> Self {
     // we assume extension has len min(dst.len(), padding) + padding
     // where the first min(dst.len(), padding) overlap with dst
-    let padding = max(
-      extension.len() / 2,
-      extension.len().saturating_sub(dst.len()),
-    );
-    let skipped = dst.len().saturating_sub(padding);
-    Self {
-      current_stream: dst,
-      other_stream: extension,
-      skipped,
-      stale_byte_idx: 0,
-      bits_past_byte: 0,
-      current_is_dst: true,
+
+    if extension.len() > 2 * dst.len() {
+      // dst doesn't have enough padding even at the start
+      Self {
+        current_stream: extension,
+        other_stream: dst,
+        skipped: 0,
+        stale_byte_idx: 0,
+        bits_past_byte: 0,
+        current_is_dst: false,
+      }
+    } else {
+      let padding = extension.len() / 2;
+      let skipped = dst.len() - padding;
+
+      Self {
+        current_stream: dst,
+        other_stream: extension,
+        skipped,
+        stale_byte_idx: 0,
+        bits_past_byte: 0,
+        current_is_dst: true,
+      }
     }
   }
 
@@ -83,7 +94,7 @@ impl<'a> BitWriter<'a> {
     self.dst_bit_idx() / 8
   }
 
-  fn switch_to_extension(&mut self) {
+  fn switch_to_extension_if_necessary(&mut self) {
     assert!(self.current_is_dst);
     assert!(self.bits_past_byte < 8);
     self.stale_byte_idx -= self.skipped;
@@ -118,7 +129,6 @@ impl<'a> BitWriter<'a> {
     Ok(())
   }
 
-  // TODO start using this
   pub fn ensure_padded(&mut self, required_padding: usize) -> PcoResult<()> {
     self.check_in_bounds()?;
 
@@ -130,7 +140,7 @@ impl<'a> BitWriter<'a> {
 
     // see if we can switch to the other stream
     if self.current_is_dst && byte_idx + required_padding < self.other_stream.len() + self.skipped {
-      self.switch_to_extension();
+      self.switch_to_extension_if_necessary();
       return Ok(());
     }
 
@@ -167,14 +177,6 @@ impl<'a> BitWriter<'a> {
     self.refill();
 
     let end = bytes.len() + self.stale_byte_idx;
-    if end > self.current_stream.len() {
-      return Err(PcoError::insufficient_data(format!(
-        "cannot write {} more bytes with at byte {}/{}",
-        bytes.len(),
-        self.dst_byte_idx(),
-        self.dst_byte_size(),
-      )));
-    }
     self.current_stream[self.stale_byte_idx..end].clone_from_slice(bytes);
     self.stale_byte_idx = end;
 

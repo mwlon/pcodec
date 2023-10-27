@@ -6,6 +6,7 @@ use crate::format_version::FormatVersion;
 use crate::wrapped::chunk_compressor;
 use crate::wrapped::chunk_compressor::ChunkCompressor;
 use crate::{bit_reader, ChunkConfig, io};
+use crate::constants::HEADER_PADDING;
 
 #[derive(Clone, Debug, Default)]
 pub struct FileCompressor {
@@ -18,7 +19,7 @@ impl FileCompressor {
   }
 
   pub fn write_header_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut extension = bit_reader::make_extension_for(dst, 0);
+    let mut extension = bit_reader::make_extension_for(dst, HEADER_PADDING);
     let mut writer = BitWriter::new(dst, &mut extension);
     self.format_version.write_to(&mut writer)?;
     writer.bytes_consumed()

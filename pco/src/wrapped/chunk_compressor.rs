@@ -1,7 +1,7 @@
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
 use crate::compression_table::CompressionTable;
-use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING, DEFAULT_PADDING_BYTES, MAX_ENTRIES, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER};
+use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING, MAX_ENTRIES, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, CHUNK_META_PADDING, PAGE_PADDING};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
@@ -223,6 +223,7 @@ fn write_dissecteds<U: UnsignedLike>(
   while batch_start < src.page_size {
     let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_size);
     for dissected in &src.dissected_latents {
+      writer.ensure_padded(PAGE_PADDING)?;
       for (&val, &bits) in dissected
         .ans_vals
         .iter()
@@ -457,7 +458,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   }
 
   pub fn write_chunk_meta_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut extension = bit_reader::make_extension_for(dst, DEFAULT_PADDING_BYTES);
+    let mut extension = bit_reader::make_extension_for(dst, CHUNK_META_PADDING);
     let mut writer = BitWriter::new(dst, &mut extension);
     self.meta.write_to(&mut writer)?;
     writer.bytes_consumed()
@@ -539,7 +540,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
       )));
     }
 
-    let mut extension = bit_reader::make_extension_for(dst, DEFAULT_PADDING_BYTES);
+    let mut extension = bit_reader::make_extension_for(dst, PAGE_PADDING);
     let mut writer = BitWriter::new(dst, &mut extension);
 
     let dissected_src = self.dissect_unsigneds()?;
@@ -565,7 +566,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
       .latent_configs
       .iter()
       .map(|config| config.encoder.size_log());
-    page_meta.write_to(ans_size_logs, &mut writer);
+
+    page_meta.write_to(ans_size_logs, &mut writer)?;
 
     write_dissecteds(dissected_src, &mut writer)?;
 

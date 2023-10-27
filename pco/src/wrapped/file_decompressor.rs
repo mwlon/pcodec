@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::bit_reader;
 use crate::bit_reader::BitReader;
 use crate::chunk_metadata::ChunkMetadata;
-use crate::constants::DEFAULT_PADDING_BYTES;
+use crate::constants::{CHUNK_META_PADDING, HEADER_PADDING};
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::format_version::FormatVersion;
@@ -17,7 +17,7 @@ pub struct FileDecompressor {
 
 impl FileDecompressor {
   pub fn new(src: &[u8]) -> PcoResult<(Self, usize)> {
-    let extension = [];
+    let extension = bit_reader::make_extension_for(src, HEADER_PADDING);
     let mut reader = BitReader::new(src, &extension);
     let format_version = FormatVersion::parse_from(&mut reader)?;
     Ok((Self { format_version }, reader.bytes_consumed()?))
@@ -31,7 +31,7 @@ impl FileDecompressor {
     &self,
     src: &[u8],
   ) -> PcoResult<(ChunkDecompressor<T>, usize)> {
-    let extension = bit_reader::make_extension_for(src, DEFAULT_PADDING_BYTES);
+    let extension = bit_reader::make_extension_for(src, CHUNK_META_PADDING);
     let mut reader = BitReader::new(src, &extension);
     let chunk_meta = ChunkMetadata::<T::Unsigned>::parse_from(&mut reader, &self.format_version)?;
     let cd = ChunkDecompressor::from(chunk_meta);

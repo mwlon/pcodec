@@ -1,22 +1,18 @@
 use crate::{bit_reader, ChunkMetadata, wrapped};
 use crate::bit_reader::BitReader;
-use crate::constants::MINIMAL_PADDING_BYTES;
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::progress::Progress;
-use crate::standalone::constants::{
-  BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER,
-  MAGIC_TERMINATION_BYTE,
-};
+use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, STANDALONE_CHUNK_PREAMBLE_PADDING, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
 
 pub struct FileDecompressor(wrapped::FileDecompressor);
 
 impl FileDecompressor {
   pub fn new(src: &[u8]) -> PcoResult<(Self, usize)> {
-    let extension = [];
+    let extension = bit_reader::make_extension_for(src, MAGIC_HEADER.len());
     let mut reader = BitReader::new(src, &extension);
-    reader.ensure_padded(MAGIC_HEADER.len())?;
     let header = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
+    reader.check_in_bounds()?;
     if header != MAGIC_HEADER {
       return Err(PcoError::corruption(format!(
         "magic header does not match {:?}; instead found {:?}",
@@ -37,9 +33,8 @@ impl FileDecompressor {
     &self,
     src: &[u8],
   ) -> PcoResult<(Option<ChunkDecompressor<T>>, usize)> {
-    let extension = bit_reader::make_extension_for(src, MINIMAL_PADDING_BYTES);
+    let extension = bit_reader::make_extension_for(src, STANDALONE_CHUNK_PREAMBLE_PADDING);
     let mut reader = BitReader::new(src, &extension);
-    reader.ensure_padded(MINIMAL_PADDING_BYTES)?;
     let dtype_or_termination_byte = reader.read_aligned_bytes(1)?[0];
 
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {

@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
-use crate::constants::{Bitlen, FULL_BATCH_SIZE, LATENT_BATCH_PADDING};
+use crate::constants::{Bitlen, FULL_BATCH_SIZE, PAGE_PADDING};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
@@ -217,7 +217,7 @@ impl<T: NumberLike> PageDecompressor<T> {
       )));
     }
 
-    let extension = bit_reader::make_extension_for(src, LATENT_BATCH_PADDING);
+    let extension = bit_reader::make_extension_for(src, PAGE_PADDING);
     let mut reader = BitReader::new(src, &extension);
     reader.bits_past_byte = self.state.bits_past_byte;
 

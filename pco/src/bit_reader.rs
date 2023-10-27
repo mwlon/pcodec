@@ -57,18 +57,29 @@ impl<'a> BitReader<'a> {
   pub fn new(src: &'a [u8], extension: &'a [u8]) -> Self {
     // we assume extension has len min(src.len(), padding) + padding
     // where the first min(src.len(), padding) overlap with src
-    let padding = max(
-      extension.len() / 2,
-      extension.len().saturating_sub(src.len()),
-    );
-    let skipped = src.len().saturating_sub(padding);
-    Self {
-      current_stream: src,
-      other_stream: extension,
-      skipped,
-      stale_byte_idx: 0,
-      bits_past_byte: 0,
-      current_is_src: true,
+
+    if extension.len() > 2 * src.len() {
+      // src doesn't have enough padding even at the start
+      Self {
+        current_stream: extension,
+        other_stream: src,
+        skipped: 0,
+        stale_byte_idx: 0,
+        bits_past_byte: 0,
+        current_is_src: false,
+      }
+    } else {
+      let padding = extension.len() / 2;
+      let skipped = src.len() - padding;
+
+      Self {
+        current_stream: src,
+        other_stream: extension,
+        skipped,
+        stale_byte_idx: 0,
+        bits_past_byte: 0,
+        current_is_src: true,
+      }
     }
   }
 
@@ -110,8 +121,9 @@ impl<'a> BitReader<'a> {
 
   pub fn ensure_padded(&mut self, required_padding: usize) -> PcoResult<()> {
     self.check_in_bounds()?;
+    self.refill();
 
-    let byte_idx = self.byte_idx();
+    let byte_idx = self.stale_byte_idx;
     if byte_idx + required_padding < self.current_stream.len() {
       return Ok(());
     }
