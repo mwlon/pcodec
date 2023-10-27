@@ -21,16 +21,14 @@ pub enum ErrorKind {
   /// the parameters provided to a function were invalid.
   InvalidArgument,
   /// `Io` errors are propagated from `Read` or `Write`
-  /// implementations passed to pco. The `io_error_kind` field will be
-  /// populated in this case.
-  Io,
+  /// implementations passed to pco.
+  Io(io::ErrorKind),
 }
 
 /// The error type used in results for all `pco` functionality.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PcoError {
   pub kind: ErrorKind,
-  pub io_error_kind: Option<io::ErrorKind>,
   pub message: String,
 }
 
@@ -38,7 +36,6 @@ impl PcoError {
   pub(crate) fn new<S: AsRef<str>>(kind: ErrorKind, message: S) -> Self {
     PcoError {
       kind,
-      io_error_kind: None,
       message: message.as_ref().to_string(),
     }
   }
@@ -73,8 +70,7 @@ impl Display for PcoError {
 impl From<io::Error> for PcoError {
   fn from(err: io::Error) -> Self {
     PcoError {
-      kind: ErrorKind::Io,
-      io_error_kind: Some(err.kind()),
+      kind: ErrorKind::Io(err.kind()),
       message: format!("{}", err),
     }
   }

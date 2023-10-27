@@ -5,6 +5,7 @@ use crate::errors::PcoResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DeltaMoments<U: UnsignedLike> {
+  // length = delta encoding order
   pub moments: Vec<U>,
 }
 

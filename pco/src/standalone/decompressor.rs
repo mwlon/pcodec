@@ -97,7 +97,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   }
 
   pub fn decompress(&mut self, src: &[u8], dst: &mut [T]) -> PcoResult<(Progress, usize)> {
-    let (progress, consumed) = self.inner_pd.decompress(src, dst)?;
+    let (progress, consumed) = self.inner_pd.decompress_sliced(src, dst)?;
 
     self.n_processed += progress.n_processed;
     self.n_bytes_processed += consumed;

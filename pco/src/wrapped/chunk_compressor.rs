@@ -581,6 +581,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   }
 
   pub fn write_page<W: Write>(&self, page_idx: usize, dst: W) -> PcoResult<()> {
+    // TODO make this buffer instead of accumulating everything,
+    // just for performance/memory purposes
     let mut buf = vec![0; self.page_size_hint(page_idx)];
     io::write_all(
       self.write_page_sliced(page_idx, &mut buf)?,
