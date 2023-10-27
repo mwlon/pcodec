@@ -4,9 +4,8 @@
 
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::errors::{PcoError, PcoResult};
-
 use crate::constants::CURRENT_FORMAT_VERSION;
+use crate::errors::{PcoError, PcoResult};
 
 /// The configuration stored in a pco header.
 ///

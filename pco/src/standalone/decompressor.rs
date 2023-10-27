@@ -1,9 +1,12 @@
-use crate::{bit_reader, ChunkMetadata, wrapped};
 use crate::bit_reader::BitReader;
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::progress::Progress;
-use crate::standalone::constants::{BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, STANDALONE_CHUNK_PREAMBLE_PADDING, MAGIC_HEADER, MAGIC_TERMINATION_BYTE};
+use crate::standalone::constants::{
+  BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER,
+  MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
+};
+use crate::{bit_reader, wrapped, ChunkMetadata};
 
 pub struct FileDecompressor(wrapped::FileDecompressor);
 
@@ -93,11 +96,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     self.compressed_page_size
   }
 
-  pub fn decompress(
-    &mut self,
-    src: &[u8],
-    dst: &mut [T],
-  ) -> PcoResult<(Progress, usize)> {
+  pub fn decompress(&mut self, src: &[u8], dst: &mut [T]) -> PcoResult<(Progress, usize)> {
     let (progress, consumed) = self.inner_pd.decompress(src, dst)?;
 
     self.n_processed += progress.n_processed;

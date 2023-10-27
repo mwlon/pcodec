@@ -1,10 +1,8 @@
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
-
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
-
 use crate::ChunkLatentMetadata;
 
 #[derive(Clone, Debug)]

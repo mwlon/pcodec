@@ -1,12 +1,13 @@
 use std::io::Write;
+
 use crate::bit_writer::BitWriter;
+use crate::constants::HEADER_PADDING;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::format_version::FormatVersion;
 use crate::wrapped::chunk_compressor;
 use crate::wrapped::chunk_compressor::ChunkCompressor;
-use crate::{bit_reader, ChunkConfig, io};
-use crate::constants::HEADER_PADDING;
+use crate::{bit_reader, io, ChunkConfig};
 
 #[derive(Clone, Debug, Default)]
 pub struct FileCompressor {
@@ -27,11 +28,7 @@ impl FileCompressor {
 
   pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<()> {
     let mut buf = vec![0; self.header_size_hint()];
-    io::write_all(
-      self.write_header_sliced(&mut buf)?,
-      buf,
-      dst
-    )
+    io::write_all(self.write_header_sliced(&mut buf)?, buf, dst)
   }
 
   pub fn chunk_compressor<T: NumberLike>(

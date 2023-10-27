@@ -1,5 +1,4 @@
 use crate::ans::Token;
-
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 

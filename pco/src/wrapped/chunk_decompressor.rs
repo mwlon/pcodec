@@ -21,11 +21,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     &self.meta
   }
 
-  pub fn page_decompressor(
-    &self,
-    n: usize,
-    src: &[u8],
-  ) -> PcoResult<(PageDecompressor<T>, usize)> {
+  pub fn page_decompressor(&self, n: usize, src: &[u8]) -> PcoResult<(PageDecompressor<T>, usize)> {
     let extension = bit_reader::make_extension_for(src, PAGE_LATENT_META_PADDING);
     let mut reader = BitReader::new(src, &extension);
     let page_meta = PageMetadata::<T::Unsigned>::parse_from(&mut reader, &self.meta)?;

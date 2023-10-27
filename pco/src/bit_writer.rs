@@ -1,4 +1,4 @@
-use std::cmp::{max};
+use std::cmp::max;
 use std::mem;
 
 use crate::bit_reader::word_at;

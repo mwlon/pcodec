@@ -20,7 +20,10 @@ impl FileDecompressor {
     let extension = bit_reader::make_extension_for(src, HEADER_PADDING);
     let mut reader = BitReader::new(src, &extension);
     let format_version = FormatVersion::parse_from(&mut reader)?;
-    Ok((Self { format_version }, reader.bytes_consumed()?))
+    Ok((
+      Self { format_version },
+      reader.bytes_consumed()?,
+    ))
   }
 
   pub fn format_version(&self) -> u8 {

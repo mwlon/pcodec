@@ -202,11 +202,7 @@ impl<T: NumberLike> PageDecompressor<T> {
   }
 
   // If this returns an error, num_dst might be modified.
-  pub fn decompress(
-    &mut self,
-    src: &[u8],
-    num_dst: &mut [T],
-  ) -> PcoResult<(Progress, usize)> {
+  pub fn decompress(&mut self, src: &[u8], num_dst: &mut [T]) -> PcoResult<(Progress, usize)> {
     if num_dst.len() % FULL_BATCH_SIZE != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be \

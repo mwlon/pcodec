@@ -1,9 +1,7 @@
 use crate::bin::BinCompressionInfo;
-
 use crate::bits;
 use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
-
 use crate::modes::ConstMode;
 
 // formula: bin lower + offset

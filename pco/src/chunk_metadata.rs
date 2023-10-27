@@ -1,13 +1,12 @@
 use std::cmp::min;
 
+use crate::bin;
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-
-use crate::bin;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::format_version::FormatVersion;

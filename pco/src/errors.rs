@@ -1,6 +1,6 @@
 use std::error::Error;
-use std::{fmt, io};
 use std::fmt::{Display, Formatter};
+use std::{fmt, io};
 
 /// The different kinds of errors the library can return.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,7 +75,7 @@ impl From<io::Error> for PcoError {
     PcoError {
       kind: ErrorKind::Io,
       io_error_kind: Some(err.kind()),
-      message: format!("{}", err)
+      message: format!("{}", err),
     }
   }
 }

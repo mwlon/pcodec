@@ -1,7 +1,6 @@
+use crate::chunk_config::ChunkConfig;
 use crate::errors::ErrorKind;
 use crate::standalone::{simple_compress, FileDecompressor};
-
-use crate::chunk_config::ChunkConfig;
 
 #[test]
 fn test_errors_do_not_mutate_decompressor() {

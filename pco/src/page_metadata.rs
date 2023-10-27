@@ -52,7 +52,11 @@ pub struct PageMetadata<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> PageMetadata<U> {
-  pub fn write_to<I: Iterator<Item = Bitlen>>(&self, ans_size_logs: I, writer: &mut BitWriter) -> PcoResult<()> {
+  pub fn write_to<I: Iterator<Item = Bitlen>>(
+    &self,
+    ans_size_logs: I,
+    writer: &mut BitWriter,
+  ) -> PcoResult<()> {
     writer.ensure_padded(PAGE_PADDING)?;
     for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
       self.latents[latent_idx].write_to(ans_size_log, writer);

@@ -1,10 +1,11 @@
+use std::cmp::min;
+
 use crate::ans;
 use crate::ans::{AnsState, Token};
 use crate::compression_table::CompressionTable;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::unsigned_src_dst::DissectedLatents;
-use std::cmp::min;
 
 pub struct LatentBatchDissector<'a, U: UnsignedLike> {
   // immutable

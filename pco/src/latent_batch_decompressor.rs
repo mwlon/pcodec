@@ -170,8 +170,12 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      dst[i] =
-        bit_reader::read_uint_at::<U, MAX_EXTRA_WORDS>(stream, byte_idx, bits_past_byte, offset_bits);
+      dst[i] = bit_reader::read_uint_at::<U, MAX_EXTRA_WORDS>(
+        stream,
+        byte_idx,
+        bits_past_byte,
+        offset_bits,
+      );
     }
     let final_bit_idx = base_bit_idx
       + self.state.offset_bits_csum_scratch[dst.len() - 1]
@@ -208,7 +212,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     dst: &mut [U],
   ) -> PcoResult<()> {
     if dst.is_empty() {
-      return Ok(())
+      return Ok(());
     }
 
     if let Some(const_value) = self.maybe_constant_value {

@@ -1,21 +1,27 @@
+use std::cmp::{max, min};
+use std::io::Write;
+
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
 use crate::compression_table::CompressionTable;
-use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING, MAX_ENTRIES, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, CHUNK_META_PADDING, PAGE_PADDING};
+use crate::constants::{
+  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, MAX_COMPRESSION_LEVEL,
+  MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
+};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::{ans, bin_optimization, bit_reader, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentMetadata, ChunkMetadata, Mode, FULL_BATCH_SIZE, io};
-use std::cmp::{max, min};
-use std::io::Write;
-
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::page_metadata::{PageLatentMetadata, PageMetadata};
 use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
+use crate::{
+  ans, bin_optimization, bit_reader, bits, delta, float_mult_utils, io, Bin, ChunkConfig,
+  ChunkLatentMetadata, ChunkMetadata, Mode, FULL_BATCH_SIZE,
+};
 
 fn cumulative_sum(sizes: &[usize]) -> Vec<usize> {
   // there has got to be a better way to write this
@@ -469,7 +475,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     io::write_all(
       self.write_chunk_meta_sliced(&mut buf)?,
       buf,
-      dst
+      dst,
     )
   }
 
@@ -579,7 +585,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     io::write_all(
       self.write_page_sliced(page_idx, &mut buf)?,
       buf,
-      dst
+      dst,
     )
   }
 }

@@ -1,5 +1,4 @@
 use crate::ans::AnsState;
-
 use crate::constants::{Bitlen, ANS_INTERLEAVING};
 use crate::data_types::UnsignedLike;
 

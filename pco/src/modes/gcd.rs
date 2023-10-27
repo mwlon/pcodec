@@ -1,8 +1,6 @@
 use crate::bin::BinCompressionInfo;
-
 use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
-
 use crate::modes::ConstMode;
 use crate::{bits, Bin};
 
