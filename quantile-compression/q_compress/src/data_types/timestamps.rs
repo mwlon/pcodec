@@ -10,10 +10,10 @@ const BILLION_I64: i64 = 1_000_000_000;
 macro_rules! impl_timestamp {
   ($t: ident, $parts_per_sec: expr, $header_byte: expr, $precision: expr) => {
     #[doc = concat!(
-          "A ",
-          $precision,
-          "-precise, timezone-naive, 64-bit timestamp."
-        )]
+      "A ",
+      $precision,
+      "-precise, timezone-naive, 64-bit timestamp."
+    )]
     ///
     /// All `q_compress` 64-bit timestamps use a single signed 64 bit integer
     /// for the number of units since 1970.
