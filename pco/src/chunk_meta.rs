@@ -96,7 +96,7 @@ fn parse_bin_batch<U: UnsignedLike>(
 
 impl<U: UnsignedLike> ChunkLatentMeta<U> {
   fn parse_from(reader: &mut BitReader, mode: Mode<U>) -> PcoResult<Self> {
-    reader.ensure_padded(CHUNK_META_PADDING)?; // TODO
+    reader.ensure_padded(CHUNK_META_PADDING)?;
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
 
     let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS);
@@ -196,7 +196,7 @@ impl<U: UnsignedLike> ChunkMeta<U> {
   }
 
   pub(crate) fn parse_from(reader: &mut BitReader, _version: &FormatVersion) -> PcoResult<Self> {
-    reader.ensure_padded(CHUNK_META_PADDING)?; // TODO
+    reader.ensure_padded(CHUNK_META_PADDING)?;
     let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
       0 => Ok(Mode::Classic),
       1 => Ok(Mode::Gcd),
@@ -256,15 +256,6 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     writer.flush()?;
     Ok(())
   }
-
-  // pub(crate) fn update_write_compressed_body_size(&self, writer: &mut BitWriter, bit_idx: usize) {
-  //   writer.overwrite_usize(
-  //     bit_idx + BITS_TO_ENCODE_N_ENTRIES as usize + 8,
-  //     self.compressed_body_size,
-  //     BITS_TO_ENCODE_COMPRESSED_BODY_SIZE,
-  //   );
-  // }
-  //
 
   // TODO treat every latent var differently instead of having n_nontrivial_latents
   pub(crate) fn nontrivial_gcd_and_n_latents(&self) -> (bool, usize) {

@@ -1,5 +1,3 @@
-// pub use compressor::Compressor;
-
 pub use chunk_compressor::ChunkCompressor;
 pub use chunk_decompressor::ChunkDecompressor;
 pub use file_compressor::FileCompressor;

@@ -197,15 +197,4 @@ mod tests {
     );
     Ok(())
   }
-
-  // #[test]
-  // fn test_write_at() {
-  //   let (mut dst, mut ext) = (vec![0; 10], vec![0; 10]);
-  //   let mut writer = BitWriter::new(&mut dst, &mut ext);
-  //   writer.write_usize(0, 24);
-  //   writer.write_usize_at(9, 129, 9);
-  //   drop(writer);
-  //
-  //   assert_eq!(dst, vec![0, 2, 1]);
-  // }
 }

@@ -21,6 +21,10 @@ pub mod standalone;
 /// for compressing/decompressing as part of an outer, wrapping format
 pub mod wrapped;
 
+// TODO namings to consolidate:
+// * src, dst, compressed, bytes
+// * n, size, count
+
 mod ans;
 mod auto;
 mod bin;
