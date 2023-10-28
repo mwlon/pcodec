@@ -28,6 +28,7 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
   n: Bitlen,
   dst: &mut [u8],
 ) {
+  // See bit_reader for an explanation of why this is fast and how it works.
   let x = bits::lowest_bits(x, n);
   let word = word_at(dst, byte_idx) | (x.to_usize() << bits_past_byte);
   write_word_to(word, byte_idx, dst);

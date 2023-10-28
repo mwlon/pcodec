@@ -4,6 +4,17 @@ use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Shl, Shr, Sub};
 use crate::constants::{Bitlen, WORD_BITLEN};
 use crate::data_types::UnsignedLike;
 
+pub const fn calc_max_extra_words(precision: Bitlen) -> usize {
+  // See bit_reader::read_uint_at for an explanation of these thresholds.
+  if precision <= 57 {
+    0
+  } else if precision <= 113 {
+    1
+  } else {
+    2
+  }
+}
+
 pub trait ReadWriteUint:
   Add<Output = Self>
   + BitAnd<Output = Self>
@@ -20,7 +31,7 @@ pub trait ReadWriteUint:
   const ZERO: Self;
   const ONE: Self;
   const BITS: Bitlen;
-  const MAX_EXTRA_WORDS: Bitlen = (Self::BITS + 6) / WORD_BITLEN;
+  const MAX_EXTRA_WORDS: usize = calc_max_extra_words(Self::BITS);
 
   fn from_word(word: usize) -> Self;
   fn to_usize(self) -> usize;

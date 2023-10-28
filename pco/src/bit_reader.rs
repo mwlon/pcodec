@@ -29,14 +29,35 @@ pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_WORDS: usize>(
   bits_past_byte: Bitlen,
   n: Bitlen,
 ) -> U {
+  // Q: Why is this fast?
+  // A: The 0..MAX_EXTRA_WORDS can be unrolled at compile time and interact
+  //    freely with an outer loop, allowing really fast SIMD stuff.
+  //
+  // Q: Why does this work?
+  // A: We set MAX_EXTRA_WORDS so that e.g. on 64 bit architectures,
+  //    0  to 57  bit reads -> 0 extra words
+  //    58 to 113 bit reads -> 1 extra words
+  //    113 to 128 bit reads -> 2 extra words
+  //    During the 1st word (prior to the loop), we read all bytes from the
+  //    current word. Due to our bit packing, up to the first 7 of these may
+  //    be useless, so we can read up to (64 - 7) = 57 bits safely from a
+  //    single word. We right shift by only up to 7 bits, which is safe.
+  //
+  //    For the 2nd word, we skip only 7 bytes forward. This will overlap with
+  //    the 1st word by 1 byte, which seems useless, but allows us to avoid one
+  //    nasty case: left shifting by U::BITS (a panic). This could happen e.g.
+  //    with 64-bit reads when we start out byte-aligned (bits_past_byte=0).
+  //
+  //    For the 3rd word and onward, we skip 8 bytes forward. Due to how we
+  //    handled the 2nd word, the most we'll every need to shift by is
+  //    precision - 8, which is safe.
   let mut res = U::from_word(word_at(src, byte_idx) >> bits_past_byte);
-  // TODO can I read up the end of the word instead of end - 8?
   let mut processed = min(n, WORD_BITLEN - 8 - bits_past_byte);
   byte_idx += BYTES_PER_WORD - 1;
 
   for _ in 0..MAX_EXTRA_WORDS {
     res |= U::from_word(word_at(src, byte_idx)) << processed;
-    processed = min(n, processed + WORD_BITLEN);
+    processed += WORD_BITLEN;
     byte_idx += BYTES_PER_WORD;
   }
 

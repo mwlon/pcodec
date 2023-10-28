@@ -4,12 +4,12 @@ use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{
-  Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, PAGE_PADDING, WORD_BITLEN, WORD_SIZE,
+  Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, PAGE_PADDING, WORD_SIZE,
 };
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::page_metadata::PageLatentMetadata;
-use crate::{ans, bit_reader, ChunkLatentMetadata};
+use crate::{ans, bit_reader, ChunkLatentMetadata, read_write_uint};
 
 const MAX_ANS_SYMBOLS_PER_WORD: usize = 4;
 
@@ -71,7 +71,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     is_trivial: bool,
   ) -> PcoResult<Self> {
     let extra_words_per_offset =
-      ((chunk_latent_meta.max_bits_per_offset().saturating_add(7)) / WORD_BITLEN) as usize;
+      read_write_uint::calc_max_extra_words(chunk_latent_meta.max_bits_per_offset());
     let infos = chunk_latent_meta
       .bins
       .iter()
