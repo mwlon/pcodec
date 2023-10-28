@@ -1,9 +1,9 @@
 use rand::Rng;
 
+use crate::chunk_config::ChunkConfig;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::standalone::{auto_decompress, simple_compress, Compressor};
-use crate::CompressorConfig;
+use crate::standalone::{auto_decompress, simple_compress, FileCompressor};
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
@@ -107,14 +107,17 @@ fn test_f64_codec() -> PcoResult<()> {
 
 #[test]
 fn test_multi_chunk() -> PcoResult<()> {
-  let mut compressor = Compressor::<i64>::default();
-  compressor.header()?;
-  compressor.chunk(&[1, 2, 3])?;
-  compressor.chunk(&[11, 12, 13])?;
-  compressor.footer()?;
-  let bytes = compressor.drain_bytes();
+  let config = ChunkConfig::default();
+  let fc = FileCompressor::default();
+  let mut compressed = Vec::new();
+  fc.write_header(&mut compressed)?;
+  fc.chunk_compressor(&[1_i64, 2, 3], &config)?
+    .write_chunk(&mut compressed)?;
+  fc.chunk_compressor(&[11_i64, 12, 13], &config)?
+    .write_chunk(&mut compressed)?;
+  fc.write_footer(&mut compressed)?;
 
-  let res = auto_decompress::<i64>(&bytes)?;
+  let res = auto_decompress::<i64>(&compressed)?;
   assert_eq!(res, vec![1, 2, 3, 11, 12, 13], "multi chunk");
   Ok(())
 }
@@ -219,12 +222,12 @@ fn assert_recovers_within_size<T: NumberLike>(
     "name={} delta_encoding_order={}",
     name, delta_encoding_order,
   );
-  let config = CompressorConfig {
+  let config = ChunkConfig {
     compression_level,
     delta_encoding_order: Some(delta_encoding_order),
     ..Default::default()
   };
-  let compressed = simple_compress(nums, config)?;
+  let compressed = simple_compress(nums, &config)?;
   assert!(
     compressed.len() <= max_byte_size,
     "compressed size {} > {}; {}",

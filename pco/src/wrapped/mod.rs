@@ -1,7 +1,11 @@
-pub use compressor::Compressor;
-pub use decompressor::Decompressor;
+pub use chunk_compressor::ChunkCompressor;
+pub use chunk_decompressor::ChunkDecompressor;
+pub use file_compressor::FileCompressor;
+pub use file_decompressor::FileDecompressor;
+pub use page_decompressor::PageDecompressor;
 
-pub use crate::chunk_spec::ChunkSpec;
-
-mod compressor;
-mod decompressor;
+mod chunk_compressor;
+mod chunk_decompressor;
+mod file_compressor;
+mod file_decompressor;
+mod page_decompressor;

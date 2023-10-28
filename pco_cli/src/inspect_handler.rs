@@ -1,9 +1,7 @@
-use std::io::Write;
-
 use anyhow::Result;
 
 use pco::data_types::{NumberLike, UnsignedLike};
-use pco::standalone::Decompressor;
+use pco::standalone::FileDecompressor;
 use pco::{Bin, Mode};
 
 use crate::handlers::HandlerImpl;
@@ -50,33 +48,43 @@ fn print_bins<T: NumberLike>(
 impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()> {
     println!("inspecting {:?}", opt.path);
-    let mut decompressor = Decompressor::<P::Num>::default();
-    decompressor.write_all(bytes).unwrap();
+    let (fd, mut consumed) = FileDecompressor::new(bytes)?;
 
-    let flags = decompressor.header()?;
+    let version = fd.format_version();
     println!("=================\n");
     println!(
       "data type: {}",
       utils::dtype_name::<P::Num>()
     );
-    println!("flags: {:?}", flags);
-    let header_size = decompressor.bit_idx() / 8;
-    let mut metadata_size = 0;
+    println!("format version: {}", version,);
+    let header_size = consumed;
 
-    let mut metadatas = Vec::new();
-    let mut start_bit_idx = decompressor.bit_idx();
-    while let Some(meta) = decompressor.chunk_metadata()? {
-      let bit_idx = decompressor.bit_idx();
-      metadata_size += (bit_idx - start_bit_idx) / 8;
+    let mut meta_size = 0;
+    let mut page_size = 0;
+    let mut footer_size = 0;
+    let mut chunk_ns = Vec::new();
+    let mut metas = Vec::new();
+    let mut void = Vec::new();
+    loop {
+      let (maybe_cd, additional) = fd.chunk_decompressor::<P::Num>(&bytes[consumed..])?;
+      consumed += additional;
+      if let Some(mut cd) = maybe_cd {
+        meta_size += additional;
+        chunk_ns.push(cd.n());
+        metas.push(cd.meta().clone());
 
-      decompressor.skip_chunk_body()?;
-      metadatas.push(meta);
-      start_bit_idx = decompressor.bit_idx();
+        void.resize(cd.n(), P::Num::default());
+        let (_, additional) = cd.decompress(&bytes[consumed..], &mut void)?;
+        consumed += additional;
+        page_size += additional;
+      } else {
+        footer_size += additional;
+        break;
+      }
     }
-    let compressed_size = decompressor.bit_idx() / 8;
 
-    println!("number of chunks: {}", metadatas.len());
-    let total_n: usize = metadatas.iter().map(|m| m.n).sum();
+    println!("number of chunks: {}", metas.len());
+    let total_n: usize = chunk_ns.iter().sum();
     println!("total n: {}", total_n);
     let uncompressed_size = P::Num::PHYSICAL_BITS / 8 * total_n;
     println!(
@@ -85,45 +93,38 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     );
     println!(
       "compressed byte size: {} (ratio: {})",
-      compressed_size,
-      uncompressed_size as f64 / compressed_size as f64,
+      consumed,
+      uncompressed_size as f64 / consumed as f64,
     );
     println!("{}header size: {}", INDENT, header_size);
     println!(
       "{}chunk metadata size: {}",
-      INDENT, metadata_size
+      INDENT, meta_size
     );
-    println!(
-      "{}chunk body size: {}",
-      INDENT,
-      metadatas
-        .iter()
-        .map(|m| m.compressed_body_size)
-        .sum::<usize>()
-    );
-    println!("{}footer size: 1", INDENT);
+    println!("{}page size: {}", INDENT, page_size,);
+    println!("{}footer size: {}", INDENT, footer_size);
     println!(
       "{}unknown trailing bytes: {}",
       INDENT,
-      bytes.len() - compressed_size
+      bytes.len() - consumed
     );
 
-    for (i, m) in metadatas.iter().enumerate() {
+    for (i, meta) in metas.iter().enumerate() {
       println!(
         "\nchunk: {} n: {} delta order: {} mode: {:?}",
-        i, m.n, m.delta_encoding_order, m.mode,
+        i, chunk_ns[i], meta.delta_encoding_order, meta.mode,
       );
-      for (latent_idx, latent) in m.latents.iter().enumerate() {
-        let latent_name = match (m.mode, latent_idx) {
+      for (latent_idx, latent) in meta.latents.iter().enumerate() {
+        let latent_name = match (meta.mode, latent_idx) {
           (Mode::Classic, 0) => "primary".to_string(),
           (Mode::Gcd, 0) => "primary".to_string(),
           (Mode::FloatMult(config), 0) => format!("multiplier [x{}]", config.base),
           (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
-          _ => panic!("unknown latent: {:?}/{}", m.mode, latent_idx),
+          _ => panic!("unknown latent: {:?}/{}", meta.mode, latent_idx),
         };
-        let show_as_float_int = matches!(m.mode, Mode::FloatMult { .. }) && latent_idx == 0;
-        let show_as_delta = (matches!(m.mode, Mode::FloatMult { .. }) && latent_idx == 1)
-          || m.delta_encoding_order > 0;
+        let show_as_float_int = matches!(meta.mode, Mode::FloatMult { .. }) && latent_idx == 0;
+        let show_as_delta = (matches!(meta.mode, Mode::FloatMult { .. }) && latent_idx == 1)
+          || meta.delta_encoding_order > 0;
         println!(
           "latent: {} n_bins: {} ANS size log: {}",
           latent_name,

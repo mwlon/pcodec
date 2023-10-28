@@ -76,6 +76,7 @@ impl CompressOpt {
 pub struct DecompressOpt {
   #[arg(long)]
   pub limit: Option<usize>,
+  // TODO either make this do something or remove it
   #[arg(long, default_value = "%Y-%m-%dT%H:%M:%S%.f")]
   pub timestamp_format: String,
 

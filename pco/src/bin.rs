@@ -1,9 +1,8 @@
 use crate::ans::Token;
-
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
-/// Part of [`ChunkLatentMetadata`][`crate::ChunkLatentMetadata`] representing
+/// Part of [`ChunkLatentMeta`][`crate::ChunkLatentMeta`] representing
 /// a numerical range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]

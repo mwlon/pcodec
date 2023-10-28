@@ -1,8 +1,6 @@
 use std::error::Error;
-use std::fmt;
 use std::fmt::{Display, Formatter};
-
-use crate::constants::Bitlen;
+use std::{fmt, io};
 
 /// The different kinds of errors the library can return.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,6 +20,9 @@ pub enum ErrorKind {
   /// `InvalidArgument` errors usually occur during compression, indicating
   /// the parameters provided to a function were invalid.
   InvalidArgument,
+  /// `Io` errors are propagated from `Read` or `Write`
+  /// implementations passed to pco.
+  Io(io::ErrorKind),
 }
 
 /// The error type used in results for all `pco` functionality.
@@ -51,18 +52,6 @@ impl PcoError {
     Self::new(ErrorKind::InsufficientData, message)
   }
 
-  pub(crate) fn insufficient_data_recipe(
-    name: &str,
-    bits_to_read: Bitlen,
-    bit_idx: usize,
-    total_bits: usize,
-  ) -> Self {
-    Self::insufficient_data(format!(
-      "{}: cannot read {} bits at bit idx {} out of {}",
-      name, bits_to_read, bit_idx, total_bits,
-    ))
-  }
-
   pub(crate) fn invalid_argument<S: AsRef<str>>(message: S) -> Self {
     Self::new(ErrorKind::InvalidArgument, message)
   }
@@ -75,6 +64,15 @@ impl Display for PcoError {
       "pco {:?} error: {}",
       self.kind, &self.message
     )
+  }
+}
+
+impl From<io::Error> for PcoError {
+  fn from(err: io::Error) -> Self {
+    PcoError {
+      kind: ErrorKind::Io(err.kind()),
+      message: format!("{}", err),
+    }
   }
 }
 

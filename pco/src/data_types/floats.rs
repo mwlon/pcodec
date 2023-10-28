@@ -61,7 +61,7 @@ macro_rules! impl_float_number {
     }
 
     impl NumberLike for $t {
-      const HEADER_BYTE: u8 = $header_byte;
+      const DTYPE_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = $bits;
       const IS_FLOAT: bool = true;
 

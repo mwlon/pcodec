@@ -1,50 +1,53 @@
-use std::io::Write;
-
+use crate::chunk_config::ChunkConfig;
 use crate::errors::ErrorKind;
-use crate::standalone::{simple_compress, Decompressor};
-use crate::CompressorConfig;
+use crate::standalone::{simple_compress, FileDecompressor};
 
 #[test]
 fn test_errors_do_not_mutate_decompressor() {
   let nums = vec![1, 2, 3, 4, 5];
-  let compressed = simple_compress(&nums, CompressorConfig::default()).unwrap();
-  let mut decompressor = Decompressor::<i32>::default();
+  let compressed = simple_compress(&nums, &ChunkConfig::default()).unwrap();
+  let mut data = &compressed[..];
+  let mut file_decompressor = None;
 
   // header shouldn't leave us in a dirty state
-  let mut i = 0;
-  while i < compressed.len() + 1 {
-    match decompressor.header() {
-      Ok(_) => break,
+  for i in 0..data.len() + 1 {
+    match FileDecompressor::new(&data[..i]) {
+      Ok((fd, additional)) => {
+        file_decompressor = Some(fd);
+        data = &data[additional..];
+        break;
+      }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
       Err(e) => panic!("{}", e),
-    };
-    decompressor.write_all(&compressed[i..i + 1]).unwrap();
-    i += 1;
+    }
   }
+  let file_decompressor = file_decompressor.unwrap();
 
   // chunk metadata shouldn't leave us in a dirty state
-  while i < compressed.len() + 1 {
-    match decompressor.chunk_metadata() {
-      Ok(_) => break,
+  let mut chunk_decompressor = None;
+  for i in 0..data.len() + 1 {
+    match file_decompressor.chunk_decompressor::<i32>(&data[..i]) {
+      Ok((cd, additional)) => {
+        chunk_decompressor = Some(cd.unwrap());
+        data = &data[additional..];
+        break;
+      }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
       Err(e) => panic!("{}", e),
     };
-    decompressor.write_all(&compressed[i..i + 1]).unwrap();
-    i += 1;
   }
+  let mut chunk_decompressor = chunk_decompressor.unwrap();
 
   // reading the chunk shouldn't leave us in a dirty state
-  let mut rec_nums = vec![0; nums.len()];
-  while i < compressed.len() + 1 {
-    match decompressor.chunk_body(&mut rec_nums) {
+  let mut rec_nums = Vec::new();
+  for i in 0..data.len() + 1 {
+    match chunk_decompressor.decompress_remaining_extend(&data[..i], &mut rec_nums) {
       Ok(_) => {
         break;
       }
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
       Err(e) => panic!("{}", e),
     };
-    decompressor.write_all(&compressed[i..i + 1]).unwrap();
-    i += 1;
   }
 
   assert_eq!(rec_nums, nums);

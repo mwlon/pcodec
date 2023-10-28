@@ -1,9 +1,9 @@
-use std::io::Write;
-
+use crate::bits;
+use crate::chunk_config::ChunkConfig;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::standalone::{Compressor, Decompressor};
-use crate::{bits, CompressorConfig, DecompressorConfig};
+use crate::standalone::compressor::FileCompressor;
+use crate::standalone::decompressor::FileDecompressor;
 
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
@@ -11,50 +11,23 @@ const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 /// compressed bytes.
 ///
 /// Will return an error if the compressor config is invalid.
-pub fn simple_compress<T: NumberLike>(nums: &[T], config: CompressorConfig) -> PcoResult<Vec<u8>> {
-  // The following unwraps are safe because the writer will be byte-aligned
-  // after each step and ensure each chunk has appropriate size.
-  let mut compressor = Compressor::<T>::from_config(config)?;
+pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
+  let mut dst = Vec::new();
+  let file_compressor = FileCompressor::default();
+  file_compressor.write_header(&mut dst)?;
 
-  compressor.header().unwrap();
-
-  if !nums.is_empty() {
-    let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
+  let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
+  if n_chunks > 0 {
     let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
-    nums.chunks(n_per_chunk).for_each(|chunk| {
-      compressor.chunk(chunk).unwrap();
-    });
-  }
-
-  compressor.footer().unwrap();
-  Ok(compressor.drain_bytes())
-}
-
-/// Takes in compressed bytes and an exact configuration and returns a vector
-/// of numbers.
-///
-/// Will return an error if there are any compatibility, corruption,
-/// or insufficient data issues.
-pub fn simple_decompress<T: NumberLike>(
-  config: DecompressorConfig,
-  bytes: &[u8],
-) -> PcoResult<Vec<T>> {
-  // cloning/extending by a single chunk's numbers can slow down by 2%
-  // so we just take ownership of the first chunk's numbers instead
-  let mut decompressor = Decompressor::<T>::from_config(config);
-  decompressor.write_all(bytes).unwrap();
-  let mut res = Vec::new();
-  let mut n = 0;
-  decompressor.header()?;
-  while let Some(meta) = decompressor.chunk_metadata()? {
-    res.reserve(meta.n);
-    unsafe {
-      res.set_len(n + meta.n);
+    for chunk in nums.chunks(n_per_chunk) {
+      let chunk_compressor = file_compressor.chunk_compressor(chunk, config)?;
+      dst.reserve(chunk_compressor.chunk_size_hint());
+      chunk_compressor.write_chunk(&mut dst)?;
     }
-    decompressor.chunk_body(&mut res[n..])?;
-    n += meta.n;
   }
-  Ok(res)
+
+  file_compressor.write_footer(&mut dst)?;
+  Ok(dst)
 }
 
 /// Automatically makes an educated guess for the best compression
@@ -64,23 +37,30 @@ pub fn simple_decompress<T: NumberLike>(
 /// This adds some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
 /// If you know what configuration you want ahead of time (namely delta
-/// encoding order), you can use [`Compressor::from_config`] instead to spare
+/// encoding order), you can use [`simple_compress`] instead to spare
 /// the compute cost.
-/// See [`CompressorConfig`] for information about compression levels.
+/// See [`ChunkConfig`] for information about compression levels.
 pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
-  let config = CompressorConfig {
+  let config = ChunkConfig {
     compression_level,
     ..Default::default()
   };
-  simple_compress(nums, config).unwrap()
+  simple_compress(nums, &config).unwrap()
 }
 
-/// Automatically makes an educated guess for the best decompression
-/// configuration, then uses [`simple_decompress`] to decompress .pco bytes
-/// into numbers.
+/// Takes in compressed bytes and returns a vector of numbers.
 ///
-/// There are currently no relevant fields in the decompression configuration,
-/// so there is no compute downside to using this function.
-pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> PcoResult<Vec<T>> {
-  simple_decompress(DecompressorConfig::default(), bytes)
+/// Will return an error if there are any compatibility, corruption,
+/// or insufficient data issues.
+pub fn auto_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
+  let (file_decompressor, mut consumed) = FileDecompressor::new(src)?;
+
+  let mut res = Vec::new();
+  while let (Some(mut chunk_decompressor), additional) =
+    file_decompressor.chunk_decompressor(&src[consumed..])?
+  {
+    consumed += additional;
+    consumed += chunk_decompressor.decompress_remaining_extend(&src[consumed..], &mut res)?;
+  }
+  Ok(res)
 }

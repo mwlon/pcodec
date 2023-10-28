@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {
-  compressor_config: pco::CompressorConfig,
+  compressor_config: pco::ChunkConfig,
 }
 
 impl CodecInternal for PcoConfig {
@@ -49,9 +49,8 @@ impl CodecInternal for PcoConfig {
   }
 
   fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
-    let c_config = self.compressor_config.clone();
     let pco_nums = T::slice_to_pco(nums);
-    pco::standalone::simple_compress(pco_nums, c_config).expect("invalid config")
+    pco::standalone::simple_compress(pco_nums, &self.compressor_config).expect("invalid config")
   }
 
   fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {

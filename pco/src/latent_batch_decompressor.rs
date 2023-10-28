@@ -1,16 +1,13 @@
-use std::cmp::min;
 use std::fmt::Debug;
 
 use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::chunk_metadata::PageLatentMetadata;
-use crate::constants::{
-  Bitlen, ANS_INTERLEAVING, BYTES_PER_WORD, FULL_BATCH_SIZE, WORD_BITLEN, WORD_SIZE,
-};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, PAGE_PADDING, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
-use crate::{ans, bits, ChunkLatentMetadata};
+use crate::page_meta::PageLatentMeta;
+use crate::{ans, bit_reader, read_write_uint, ChunkLatentMeta};
 
 const MAX_ANS_SYMBOLS_PER_WORD: usize = 4;
 
@@ -54,8 +51,6 @@ impl<U: UnsignedLike> State<U> {
 #[derive(Clone, Debug)]
 pub struct LatentBatchDecompressor<U: UnsignedLike> {
   // known information about the latent latent in this chunk
-  max_bits_per_ans: Bitlen,
-  max_bits_per_offset: Bitlen,
   extra_words_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
   maybe_constant_value: Option<U>,
@@ -68,25 +63,13 @@ pub struct LatentBatchDecompressor<U: UnsignedLike> {
 
 impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   pub fn new(
-    chunk_latent_meta: &ChunkLatentMetadata<U>,
-    page_latent_meta: &PageLatentMetadata<U>,
+    chunk_latent_meta: &ChunkLatentMeta<U>,
+    page_latent_meta: &PageLatentMeta<U>,
     needs_gcd: bool,
     is_trivial: bool,
   ) -> PcoResult<Self> {
-    let max_bits_per_ans = chunk_latent_meta.ans_size_log
-      - chunk_latent_meta
-        .bins
-        .iter()
-        .map(|bin| bin.weight.ilog2() as Bitlen)
-        .min()
-        .unwrap_or_default();
-    let max_bits_per_offset = chunk_latent_meta
-      .bins
-      .iter()
-      .map(|bin| bin.offset_bits)
-      .max()
-      .unwrap_or(Bitlen::MAX);
-    let extra_words_per_offset = ((max_bits_per_offset.saturating_add(7)) / WORD_BITLEN) as usize;
+    let extra_words_per_offset =
+      read_write_uint::calc_max_extra_words(chunk_latent_meta.max_bits_per_offset());
     let infos = chunk_latent_meta
       .bins
       .iter()
@@ -100,8 +83,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let decoder = ans::Decoder::from_latent_meta(chunk_latent_meta)?;
 
     Ok(Self {
-      max_bits_per_ans,
-      max_bits_per_offset,
       extra_words_per_offset,
       infos,
       maybe_constant_value,
@@ -119,87 +100,86 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
   #[allow(clippy::needless_range_loop)]
   #[inline(never)]
-  fn unchecked_decompress_ans_tokens(&mut self, reader: &mut BitReader) {
-    let mut byte_idx = reader.loaded_byte_idx;
-    let mut bit_idx = reader.bits_past_ptr;
+  fn decompress_full_ans_tokens(&mut self, reader: &mut BitReader) {
+    let stream = reader.current_stream;
+    let mut stale_byte_idx = reader.stale_byte_idx;
+    let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
     let mut state_idxs = self.state.state_idxs;
     for base_i in (0..FULL_BATCH_SIZE).step_by(MAX_ANS_SYMBOLS_PER_WORD) {
-      byte_idx += bit_idx as usize / 8;
-      bit_idx %= 8;
-      let word = reader.unchecked_word_at(byte_idx);
+      stale_byte_idx += bits_past_byte as usize / 8;
+      bits_past_byte %= 8;
+      let word = bit_reader::word_at(stream, stale_byte_idx);
       // TODO this doesn't work on 32 bits or if MAX_ANS_SYMBOLS_PER_WORD != ANS_INTERLEAVING
       for j in 0..MAX_ANS_SYMBOLS_PER_WORD {
         let i = base_i + j;
         let node = self.decoder.get_node(state_idxs[j]);
-        let state_offset = (word >> bit_idx) as AnsState & ((1 << node.bits_to_read) - 1);
+        let state_offset = (word >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
         let info = unsafe { self.infos.get_unchecked(node.token as usize) };
         self.state.set_scratch(i, offset_bit_idx, info);
-        bit_idx += node.bits_to_read;
+        bits_past_byte += node.bits_to_read;
         offset_bit_idx += info.offset_bits as usize;
         state_idxs[j] = node.next_state_idx_base + state_offset;
       }
     }
-    reader.loaded_byte_idx = byte_idx;
-    reader.bits_past_ptr = bit_idx;
+
+    reader.stale_byte_idx = stale_byte_idx;
+    reader.bits_past_byte = bits_past_byte;
     self.state.state_idxs = state_idxs;
   }
 
   #[inline(never)]
-  fn decompress_ans(&mut self, reader: &mut BitReader, batch_size: usize) -> PcoResult<()> {
-    let mut state_idxs = self.state.state_idxs;
+  fn decompress_ans_tokens(&mut self, reader: &mut BitReader, batch_size: usize) {
+    let stream = reader.current_stream;
+    let mut stale_byte_idx = reader.stale_byte_idx;
+    let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
+    let mut state_idxs = self.state.state_idxs;
     for i in 0..batch_size {
-      let j = i % ANS_INTERLEAVING;
+      let j = i % 4;
+      stale_byte_idx += bits_past_byte as usize / 8;
+      bits_past_byte %= 8;
+      let word = bit_reader::word_at(stream, stale_byte_idx);
       let node = self.decoder.get_node(state_idxs[j]);
-      let state_offset = reader.read_small(node.bits_to_read)?;
+      let state_offset = (word >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
       let info = &self.infos[node.token as usize];
       self.state.set_scratch(i, offset_bit_idx, info);
+      bits_past_byte += node.bits_to_read;
       offset_bit_idx += info.offset_bits as usize;
       state_idxs[j] = node.next_state_idx_base + state_offset;
     }
+
+    reader.stale_byte_idx = stale_byte_idx;
+    reader.bits_past_byte = bits_past_byte;
     self.state.state_idxs = state_idxs;
-    Ok(())
   }
 
   #[allow(clippy::needless_range_loop)]
   #[inline(never)]
-  fn unchecked_decompress_offsets<const MAX_EXTRA_WORDS: usize>(
+  fn decompress_offsets<const MAX_EXTRA_WORDS: usize>(
     &mut self,
     reader: &mut BitReader,
     dst: &mut [U],
   ) {
     let base_bit_idx = reader.bit_idx();
-    for i in 0..FULL_BATCH_SIZE {
+    let stream = reader.current_stream;
+    for i in 0..dst.len() {
       let offset_bits = self.state.offset_bits_scratch[i];
       let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
+      let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      let mut byte_idx = bit_idx / 8;
-      let mut res = U::from_word(reader.unchecked_word_at(byte_idx) >> bits_past_byte);
-      let mut processed = min(offset_bits, WORD_BITLEN - 8 - bits_past_byte);
-      byte_idx += BYTES_PER_WORD - 1;
-
-      for _ in 0..MAX_EXTRA_WORDS {
-        res |= U::from_word(reader.unchecked_word_at(byte_idx)) << processed;
-        processed = min(offset_bits, processed + WORD_BITLEN);
-        byte_idx += BYTES_PER_WORD;
-      }
-
-      dst[i] = bits::lowest_bits(res, offset_bits);
+      dst[i] = bit_reader::read_uint_at::<U, MAX_EXTRA_WORDS>(
+        stream,
+        byte_idx,
+        bits_past_byte,
+        offset_bits,
+      );
     }
-    reader.seek_to(
-      base_bit_idx
-        + self.state.offset_bits_csum_scratch[FULL_BATCH_SIZE - 1]
-        + self.state.offset_bits_scratch[FULL_BATCH_SIZE - 1] as usize,
-    )
-  }
-
-  #[inline(never)]
-  fn decompress_offsets(&mut self, reader: &mut BitReader, dst: &mut [U]) -> PcoResult<()> {
-    for (i, x_dst) in dst.iter_mut().enumerate() {
-      *x_dst = reader.read_uint::<U>(self.state.offset_bits_scratch[i])?;
-    }
-    Ok(())
+    let final_bit_idx = base_bit_idx
+      + self.state.offset_bits_csum_scratch[dst.len() - 1]
+      + self.state.offset_bits_scratch[dst.len() - 1] as usize;
+    reader.stale_byte_idx = final_bit_idx / 8;
+    reader.bits_past_byte = final_bit_idx as Bitlen % 8;
   }
 
   #[inline(never)]
@@ -229,6 +209,10 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     reader: &mut BitReader,
     dst: &mut [U],
   ) -> PcoResult<()> {
+    if dst.is_empty() {
+      return Ok(());
+    }
+
     if let Some(const_value) = self.maybe_constant_value {
       dst.fill(const_value);
       return Ok(());
@@ -236,29 +220,24 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
     let batch_size = dst.len();
     assert!(batch_size <= FULL_BATCH_SIZE);
+    reader.ensure_padded(PAGE_PADDING)?;
 
-    // as long as there's enough compressed data available, we don't need checked operations
-    let is_full_batch = batch_size == FULL_BATCH_SIZE;
-    if is_full_batch && self.max_bits_per_ans as usize * FULL_BATCH_SIZE <= reader.bits_remaining()
-    {
-      self.unchecked_decompress_ans_tokens(reader);
+    if batch_size == FULL_BATCH_SIZE {
+      self.decompress_full_ans_tokens(reader);
     } else {
-      self.decompress_ans(reader, batch_size)?;
+      self.decompress_ans_tokens(reader, batch_size);
     }
 
-    if is_full_batch
-      && self.max_bits_per_offset as usize * FULL_BATCH_SIZE <= reader.bits_remaining()
-    {
-      // this assertion saves some unnecessary specializations in the compiled assembly
-      assert!(self.extra_words_per_offset <= (U::PHYSICAL_BITS + 8) / WORD_SIZE);
-      match self.extra_words_per_offset {
-        0 => self.unchecked_decompress_offsets::<0>(reader, dst),
-        1 => self.unchecked_decompress_offsets::<1>(reader, dst),
-        2 => self.unchecked_decompress_offsets::<2>(reader, dst),
-        _ => panic!("invalid extra words per offset; a bug in pcodec"),
-      }
-    } else {
-      self.decompress_offsets(reader, dst)?;
+    // this assertion saves some unnecessary specializations in the compiled assembly
+    assert!(self.extra_words_per_offset <= (U::PHYSICAL_BITS + 8) / WORD_SIZE);
+    match self.extra_words_per_offset {
+      0 => self.decompress_offsets::<0>(reader, dst),
+      1 => self.decompress_offsets::<1>(reader, dst),
+      2 => self.decompress_offsets::<2>(reader, dst),
+      _ => panic!(
+        "[LatentBatchDecompressor] data type too large (extra words {} > 2)",
+        self.extra_words_per_offset
+      ),
     }
 
     if self.needs_gcd {

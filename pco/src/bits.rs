@@ -1,9 +1,9 @@
-use crate::bit_reader::ReadableUint;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
+use crate::read_write_uint::ReadWriteUint;
 
 #[inline]
-pub fn lowest_bits<U: ReadableUint>(word: U, n: Bitlen) -> U {
+pub fn lowest_bits<U: ReadWriteUint>(word: U, n: Bitlen) -> U {
   if n >= U::BITS {
     word
   } else {
@@ -19,16 +19,9 @@ pub fn avg_depth_bits(weight: Weight, total_weight: usize) -> f64 {
   (total_weight as f64 / weight as f64).log2()
 }
 
+// TODO upgrade to rust 1.73 and delete this
 pub const fn ceil_div(x: usize, divisor: usize) -> usize {
   (x + divisor - 1) / divisor
-}
-
-pub fn words_to_bytes(words: &[usize]) -> Vec<u8> {
-  // We can't just transmute because many machines are little-endian.
-  words
-    .iter()
-    .flat_map(|w| w.to_le_bytes())
-    .collect::<Vec<_>>()
 }
 
 pub fn bits_to_encode_offset<U: UnsignedLike>(max_offset: U) -> Bitlen {

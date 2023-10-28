@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::data_types::UnsignedLike;
@@ -5,6 +7,7 @@ use crate::errors::PcoResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DeltaMoments<U: UnsignedLike> {
+  // length = delta encoding order
   pub moments: Vec<U>,
 }
 
@@ -16,14 +19,14 @@ impl<U: UnsignedLike> DeltaMoments<U> {
   pub fn parse_from(reader: &mut BitReader, order: usize) -> PcoResult<Self> {
     let mut moments = Vec::new();
     for _ in 0..order {
-      moments.push(reader.read_uint::<U>(U::BITS)?);
+      moments.push(reader.read_uint::<U>(U::BITS));
     }
     Ok(DeltaMoments { moments })
   }
 
-  pub fn write_to(&self, writer: &mut BitWriter) {
+  pub fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
     for &moment in &self.moments {
-      writer.write_diff(moment, U::BITS);
+      writer.write_uint(moment, U::BITS);
     }
   }
 

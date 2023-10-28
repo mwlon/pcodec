@@ -1,5 +1,4 @@
 use crate::ans::AnsState;
-
 use crate::constants::{Bitlen, ANS_INTERLEAVING};
 use crate::data_types::UnsignedLike;
 
@@ -27,6 +26,6 @@ pub struct DissectedLatents<U: UnsignedLike> {
 
 #[derive(Clone, Debug)]
 pub struct DissectedSrc<U: UnsignedLike> {
-  pub page_n: usize,
+  pub page_size: usize,
   pub dissected_latents: Vec<DissectedLatents<U>>, // one per latent variable
 }

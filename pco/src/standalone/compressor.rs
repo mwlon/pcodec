@@ -1,112 +1,123 @@
-use crate::base_compressor::{BaseCompressor, State};
-use crate::chunk_spec::ChunkSpec;
-use crate::constants::MAGIC_TERMINATION_BYTE;
-use crate::data_types::NumberLike;
+use std::io::Write;
+
+use crate::bit_writer::BitWriter;
+use crate::chunk_config::PagingSpec;
+use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::PcoResult;
-use crate::{ChunkMetadata, CompressorConfig, Flags};
+use crate::standalone::constants::{
+  BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
+};
+use crate::{bits, wrapped, ChunkConfig, ChunkMeta};
 
-/// Converts vectors of numbers into compressed bytes in .pco format.
+/// Top-level entry point for compressing standalone .pco files.
 ///
-/// Most compressor methods leave its state unchanged if they return an error.
-/// You can configure behavior like compression level by instantiating with
-/// [`.from_config()`][Compressor::from_config]
-///
-/// You can use the standalone compressor at a chunk level.
+/// Example of the lowest level API for writing a .pco file:
 /// ```
-/// use pco::standalone::Compressor;
+/// use pco::ChunkConfig;
+/// use pco::standalone::FileCompressor;
+/// # use pco::errors::PcoResult;
 ///
-/// let my_nums = vec![1, 2, 3];
-///
-/// let mut compressor = Compressor::<i32>::default();
-/// compressor.header().expect("header");
-/// compressor.chunk(&my_nums).expect("chunk");
-/// compressor.footer().expect("footer");
-/// let bytes = compressor.drain_bytes();
+/// # fn main() -> PcoResult<()> {
+/// let mut compressed = Vec::new();
+/// let file_compressor = FileCompressor::default();
+/// file_compressor.write_header(&mut compressed)?;
+/// for chunk in [vec![1, 2, 3], vec![4, 5]] {
+///   let mut chunk_compressor = file_compressor.chunk_compressor::<i64>(
+///     &chunk,
+///     &ChunkConfig::default(),
+///   )?;
+///   chunk_compressor.write_chunk(&mut compressed)?;
+/// }
+/// file_compressor.write_footer(&mut compressed)?;
+/// // now `compressed` is a complete .pco file with 2 chunks
+/// # Ok(())
+/// # }
 /// ```
-/// Note that in practice we would need larger chunks than this to
-/// achieve good compression, preferably containing 2k-10M numbers.
-#[derive(Clone, Debug)]
-pub struct Compressor<T: NumberLike>(BaseCompressor<T>);
+///
+/// A .pco file should contain a header, followed by any number of chunks,
+/// followed by a footer.
+#[derive(Clone, Debug, Default)]
+pub struct FileCompressor(wrapped::FileCompressor);
 
-impl<T: NumberLike> Default for Compressor<T> {
-  fn default() -> Self {
-    Self::from_config(CompressorConfig::default()).unwrap()
+impl FileCompressor {
+  /// Writes a short header to the destination.
+  ///
+  /// Will return an error if the provided `Write` errors.
+  pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<W> {
+    let mut writer = BitWriter::new(dst, MAGIC_HEADER.len());
+    writer.write_aligned_bytes(&MAGIC_HEADER)?;
+    writer.flush()?;
+    let dst = writer.finish();
+    self.0.write_header(dst)
+  }
+
+  /// Creates a `ChunkCompressor` that can be used to write entire chunks
+  /// at a time.
+  ///
+  /// Will return an error if any arguments provided are invalid.
+  ///
+  /// Although this doesn't write anything yet, it does the bulk of
+  /// compute necessary for the compression.
+  pub fn chunk_compressor<T: NumberLike>(
+    &self,
+    nums: &[T],
+    config: &ChunkConfig,
+  ) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+    let mut config = config.clone();
+    config.paging_spec = PagingSpec::ExactPageSizes(vec![nums.len()]);
+
+    Ok(ChunkCompressor {
+      inner: self.0.chunk_compressor(nums, &config)?,
+      dtype_byte: T::DTYPE_BYTE,
+    })
+  }
+
+  /// Writes a short footer to the destination.
+  ///
+  /// Will return an error if the provided `Write` errors.
+  pub fn write_footer<W: Write>(&self, dst: W) -> PcoResult<W> {
+    let mut writer = BitWriter::new(dst, 1);
+    writer.write_aligned_bytes(&[MAGIC_TERMINATION_BYTE])?;
+    writer.flush()?;
+    Ok(writer.finish())
   }
 }
 
-impl<T: NumberLike> Compressor<T> {
-  /// Creates a new compressor, given a [`CompressorConfig`].
+/// Holds metadata about a chunk and supports compression.
+#[derive(Clone, Debug)]
+pub struct ChunkCompressor<U: UnsignedLike> {
+  inner: wrapped::ChunkCompressor<U>,
+  dtype_byte: u8,
+}
+
+impl<U: UnsignedLike> ChunkCompressor<U> {
+  /// Returns pre-computed information about the chunk.
+  pub fn meta(&self) -> &ChunkMeta<U> {
+    self.inner.meta()
+  }
+
+  /// Returns an estimate of the overall size of the chunk.
   ///
-  /// Internally, the compressor builds [`Flags`] as well as an internal
-  /// configuration that doesn't show up in the output file.
-  /// You can inspect the flags it chooses with [`.flags()`][Self::flags].
+  /// This can be useful when building the file as a `Vec<u8>` in memory;
+  /// you can `.reserve(chunk_compressor.chunk_size_hint())` ahead of time.
+  pub fn chunk_size_hint(&self) -> usize {
+    1 + bits::ceil_div(BITS_TO_ENCODE_N_ENTRIES as usize, 8)
+      + self.inner.chunk_meta_size_hint()
+      + self.inner.page_size_hint(0)
+  }
+
+  /// Writes an entire chunk to the destination.
   ///
-  /// Will return an error if the compressor config is invalid.
-  pub fn from_config(config: CompressorConfig) -> PcoResult<Self> {
-    Ok(Self(BaseCompressor::<T>::from_config(
-      config, false,
-    )?))
-  }
+  /// Will return an error if the provided `Write` errors.
+  pub fn write_chunk<W: Write>(&self, dst: W) -> PcoResult<W> {
+    let mut writer = BitWriter::new(dst, STANDALONE_CHUNK_PREAMBLE_PADDING);
+    writer.write_aligned_bytes(&[self.dtype_byte])?;
+    let n = self.inner.page_sizes()[0];
+    writer.write_usize(n - 1, BITS_TO_ENCODE_N_ENTRIES);
 
-  /// Returns a reference to the compressor's flags.
-  pub fn flags(&self) -> &Flags {
-    &self.0.flags
-  }
-
-  /// Writes out a header using the compressor's data type and flags.
-  /// Will return an error if the compressor has already written the header.
-  ///
-  /// Each .pco file must start with such a header, which contains:
-  /// * a 4-byte magic header for "pco!" in ascii,
-  /// * a byte for the data type (e.g. `u32` has byte 1 and `f64` has byte
-  /// 6), and
-  /// * bytes for the flags used to compress.
-  pub fn header(&mut self) -> PcoResult<()> {
-    self.0.header()
-  }
-
-  /// Writes out a chunk of data representing the provided numbers.
-  /// Will return an error if the compressor has not yet written the header
-  /// or already written the footer.
-  ///
-  /// Each chunk contains a [`ChunkMetadata`] section followed by the chunk body.
-  /// The chunk body encodes the numbers passed in here.
-  pub fn chunk(&mut self, nums: &[T]) -> PcoResult<ChunkMetadata<T::Unsigned>> {
-    let pre_meta_bit_idx = self.0.writer.bit_size();
-    let mut meta = self
-      .0
-      .chunk_metadata_internal(nums, &ChunkSpec::default())?;
-    let post_meta_byte_idx = self.0.writer.byte_size();
-
-    self.0.page_internal()?;
-
-    meta.compressed_body_size = self.0.writer.byte_size() - post_meta_byte_idx;
-    meta.update_write_compressed_body_size(&mut self.0.writer, pre_meta_bit_idx);
-    Ok(meta)
-  }
-
-  /// Writes out a single footer byte indicating that the .pco file has ended.
-  /// Will return an error if the compressor has not yet written the header
-  /// or already written the footer.
-  pub fn footer(&mut self) -> PcoResult<()> {
-    if !matches!(self.0.state, State::StartOfChunk) {
-      return Err(self.0.state.wrong_step_err("footer"));
-    }
-
-    self.0.writer.write_aligned_byte(MAGIC_TERMINATION_BYTE)?;
-    self.0.state = State::Terminated;
-    Ok(())
-  }
-
-  /// Returns all bytes produced by the compressor so far that have not yet
-  /// been read.
-  pub fn drain_bytes(&mut self) -> Vec<u8> {
-    self.0.writer.drain_bytes()
-  }
-
-  /// Returns the number of bytes produced by the compressor so far that have
-  /// not yet been read.
-  pub fn byte_size(&mut self) -> usize {
-    self.0.writer.byte_size()
+    writer.flush()?;
+    let dst = writer.finish();
+    let dst = self.inner.write_chunk_meta(dst)?;
+    self.inner.write_page(0, dst)
   }
 }

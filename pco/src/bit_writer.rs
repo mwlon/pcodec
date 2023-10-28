@@ -1,250 +1,200 @@
-use crate::bits;
-use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN, WORD_SIZE};
-use crate::data_types::UnsignedLike;
-use crate::errors::{PcoError, PcoResult};
+use std::io::Write;
 
-/// Builds compressed data, enabling a [`Compressor`][crate::Compressor] to
-/// write bit-level information and ultimately output a `Vec<u8>`.
-///
-/// It does this by maintaining a bit index from 0 to `usize::BITS` within its
-/// most recent `usize`.
-///
-/// The writer is consider is considered "aligned" if the current bit index
-/// is byte-aligned; e.g. `bit_idx % 8 == 0`.
-#[derive(Clone, Debug, Default)]
-pub struct BitWriter {
-  word: usize,
-  words: Vec<usize>,
-  j: Bitlen,
+use crate::bit_reader::word_at;
+use crate::bits;
+use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
+use crate::errors::{PcoError, PcoResult};
+use crate::read_write_uint::ReadWriteUint;
+
+// TODO One day the naming should probably be more consistent with Read/Write traits.
+// Right now "write_*" functions just stage; and "flush" writes to dst.
+
+// TODO this could be split into BitBuffer (no generics) and
+// BitWriter (wrapping BitBuffer, generic to W) to reduce binary size
+
+#[inline]
+pub fn write_word_to(word: usize, byte_idx: usize, dst: &mut [u8]) {
+  unsafe {
+    let target = dst.as_mut_ptr().add(byte_idx) as *mut [u8; BYTES_PER_WORD];
+    *target = word.to_le_bytes();
+  };
 }
 
-impl BitWriter {
-  /// Returns the number of bytes so far produced by the writer.
-  pub fn byte_size(&self) -> usize {
-    self.words.len() * BYTES_PER_WORD + bits::ceil_div(self.j as usize, 8)
-  }
+#[inline]
+pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
+  x: U,
+  mut byte_idx: usize,
+  bits_past_byte: Bitlen,
+  n: Bitlen,
+  dst: &mut [u8],
+) {
+  // See bit_reader for an explanation of why this is fast and how it works.
+  let x = bits::lowest_bits(x, n);
+  let word = word_at(dst, byte_idx) | (x.to_usize() << bits_past_byte);
+  write_word_to(word, byte_idx, dst);
+  let mut processed = WORD_BITLEN - 8 - bits_past_byte;
+  byte_idx += BYTES_PER_WORD - 1;
 
-  /// Returns the number of bits so far produced by the writer.
-  pub fn bit_size(&self) -> usize {
-    self.words.len() * WORD_SIZE + self.j as usize
+  for _ in 0..MAX_EXTRA_WORDS {
+    write_word_to((x >> processed).to_usize(), byte_idx, dst);
+    processed += WORD_BITLEN;
+    byte_idx += BYTES_PER_WORD;
   }
+}
 
-  pub fn write_aligned_byte(&mut self, byte: u8) -> PcoResult<()> {
-    self.write_aligned_bytes(&[byte])
-  }
+pub struct BitWriter<W: Write> {
+  pub buf: Vec<u8>,
+  dst: W,
+  // pub current_stream: &'a mut [u8], // either dst or extension
+  // other_stream: &'a mut [u8],
+  // current_is_dst: bool,       // as opposed to extension
+  // skipped: usize,             // in extension
+  pub stale_byte_idx: usize,
+  pub bits_past_byte: Bitlen,
+}
 
-  /// Appends the bits to the writer. Will return an error if the writer is
-  /// misaligned.
-  pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> PcoResult<()> {
-    if self.j % 8 == 0 {
-      for &byte in bytes {
-        self.refresh_if_needed();
-        self.word |= (byte as usize) << self.j;
-        self.j += 8;
-      }
-      Ok(())
-    } else {
-      Err(PcoError::invalid_argument(format!(
-        "cannot write aligned bytes to unaligned bit reader at word {} bit {}",
-        self.words.len(),
-        self.j,
-      )))
+impl<W: Write> BitWriter<W> {
+  pub fn new(dst: W, size: usize) -> Self {
+    Self {
+      buf: vec![0; size],
+      dst,
+      stale_byte_idx: 0,
+      bits_past_byte: 0,
     }
   }
 
   #[inline]
-  fn refresh_if_needed(&mut self) {
-    if self.j == WORD_BITLEN {
-      self.words.push(self.word);
-      self.word = 0;
-      self.j = 0;
-    }
+  fn refill(&mut self) {
+    self.stale_byte_idx += (self.bits_past_byte / 8) as usize;
+    self.bits_past_byte %= 8;
   }
 
-  /// Appends the bit to the writer.
-  pub fn write_one(&mut self, b: bool) {
-    self.refresh_if_needed();
-
-    if b {
-      self.word |= 1 << self.j;
-    }
-
-    self.j += 1;
+  #[inline]
+  fn consume(&mut self, n: Bitlen) {
+    self.bits_past_byte += n;
   }
 
-  pub fn write_usize(&mut self, mut x: usize, n: Bitlen) {
-    if n == 0 {
-      return;
-    }
-    // mask out any more significant digits of x
-    x &= usize::MAX >> (WORD_BITLEN - n);
-
-    self.refresh_if_needed();
-
-    self.word |= x << self.j;
-    let n_plus_j = n + self.j;
-
-    if n_plus_j <= WORD_BITLEN {
-      self.j = n_plus_j;
-      return;
+  fn check_aligned(&self) -> PcoResult<()> {
+    if self.bits_past_byte % 8 != 0 {
+      return Err(PcoError::invalid_argument(format!(
+        "cannot write aligned bytes to unaligned writer ({} bits past byte)",
+        self.bits_past_byte,
+      )));
     }
 
-    self.words.push(self.word);
-    let shift = WORD_BITLEN - self.j;
-    self.word = x >> shift;
-    self.j = n_plus_j - WORD_BITLEN;
+    Ok(())
+  }
+
+  pub fn write_aligned_bytes(&mut self, bytes: &[u8]) -> PcoResult<()> {
+    self.check_aligned()?;
+    self.refill();
+
+    let end = bytes.len() + self.stale_byte_idx;
+    self.buf[self.stale_byte_idx..end].clone_from_slice(bytes);
+    self.stale_byte_idx = end;
+
+    Ok(())
+  }
+
+  pub fn write_uint<U: ReadWriteUint>(&mut self, x: U, n: Bitlen) {
+    self.refill();
+    match U::MAX_EXTRA_WORDS {
+      0 => write_uint_to::<U, 0>(
+        x,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+        &mut self.buf,
+      ),
+      1 => write_uint_to::<U, 1>(
+        x,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+        &mut self.buf,
+      ),
+      2 => write_uint_to::<U, 2>(
+        x,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+        &mut self.buf,
+      ),
+      _ => panic!(
+        "[BitWriter] data type too large (extra words {} > 2)",
+        U::MAX_EXTRA_WORDS
+      ),
+    }
+    self.consume(n);
+  }
+
+  pub fn write_usize(&mut self, x: usize, n: Bitlen) {
+    self.write_uint(x, n)
   }
 
   pub fn write_bitlen(&mut self, x: Bitlen, n: Bitlen) {
-    self.write_usize(x as usize, n);
-  }
-
-  pub fn write_diff<U: UnsignedLike>(&mut self, mut x: U, n: Bitlen) {
-    if n == 0 {
-      return;
-    }
-
-    // mask out any more significant digits of x
-    x &= U::MAX >> (U::BITS - n);
-
-    self.refresh_if_needed();
-
-    self.word |= x.lshift_word(self.j);
-    let n_plus_j = n + self.j;
-    if n_plus_j <= WORD_BITLEN {
-      self.j = n_plus_j;
-      return;
-    }
-
-    let mut processed = WORD_BITLEN - self.j;
-    self.words.push(self.word);
-
-    for _ in 0..(U::BITS - 1) / WORD_BITLEN {
-      if n <= processed + WORD_BITLEN {
-        break;
-      }
-
-      self.words.push(x.rshift_word(processed));
-      processed += WORD_BITLEN;
-    }
-
-    // now remaining bits <= WORD_SIZE
-    self.word = x.rshift_word(processed);
-    self.j = n - processed;
+    self.write_uint(x, n)
   }
 
   pub fn finish_byte(&mut self) {
-    self.j = bits::ceil_div(self.j as usize, 8) as Bitlen * 8;
+    self.stale_byte_idx += bits::ceil_div(self.bits_past_byte as usize, 8);
+    self.bits_past_byte = 0;
   }
 
-  pub fn overwrite_usize(&mut self, bit_idx: usize, x: usize, n: Bitlen) {
-    let mut i = bit_idx / WORD_SIZE;
-    let mut j = bit_idx % WORD_SIZE;
-    // not the most efficient implementation but it's ok because we
-    // only rarely use this now
-    for k in 0..n {
-      let b = (x >> k) & 1 > 0;
-      if j == WORD_SIZE {
-        i += 1;
-        j = 0;
-      }
-      let mask = 1_usize << j;
-      let shifted_bit = (b as usize) << j;
-      let word = self.words.get_mut(i).unwrap_or(&mut self.word);
-      if *word & mask != shifted_bit {
-        *word ^= shifted_bit;
-      }
-      j += 1;
+  pub fn flush(&mut self) -> PcoResult<()> {
+    self.refill();
+    let n_bytes = self.stale_byte_idx;
+
+    self.dst.write_all(&self.buf[..n_bytes])?;
+    self.buf[..n_bytes].fill(0);
+    if n_bytes > 0 && self.bits_past_byte > 0 {
+      // We need to keep track of the partially initialized byte.
+      self.buf[0] = self.buf[n_bytes];
+      self.buf[n_bytes] = 0;
     }
+
+    self.stale_byte_idx = 0;
+    Ok(())
   }
 
-  pub fn drain_bytes(&mut self) -> Vec<u8> {
-    let byte_size = self.byte_size();
-    self.words.push(self.word);
-    self.word = 0;
-    let mut res = bits::words_to_bytes(&self.words);
-    res.truncate(byte_size);
-
-    self.words.clear();
-    self.j = 0;
-
-    res
+  pub fn finish(self) -> W {
+    self.dst
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::BitWriter;
+  use super::*;
 
   // I find little endian confusing, hence all the comments.
-  // All the bytes are written backwards, e.g. 00000001 = 2^7
+  // All the bytes in comments are written backwards,
+  // e.g. 00000001 = 2^7
 
   #[test]
-  fn test_write_bigger_num() {
-    let mut writer = BitWriter::default();
-    writer.write_diff(31_u32, 4);
-    // 1111
-    writer.write_usize(27, 4);
-    // 11111101
-    let bytes = writer.drain_bytes();
-    assert_eq!(bytes, vec![191]);
-  }
-
-  #[test]
-  fn test_long_diff_writes() {
-    let mut writer = BitWriter::default();
-    writer.write_usize((1 << 9) + (1 << 8) + 1, 9);
+  fn test_long_uint_writes() -> PcoResult<()> {
+    let mut dst = Vec::new();
+    let mut writer = BitWriter::new(&mut dst, 30);
+    writer.write_uint::<u32>((1 << 9) + (1 << 8) + 1, 9);
     // 10000000 1
-    writer.write_usize((1 << 16) + (1 << 5) + 1, 17);
-    // 10000000 11000010 00000000 01
-    writer.write_usize(1 << 1, 17);
-    // 10000000 11000010 00000000 01010000 00000000
+    writer.write_uint::<u32>((1 << 16) + (1 << 5), 17);
+    // 10000000 10000010 00000000 01
+    writer.write_uint::<u32>(1 << 1, 17);
+    // 10000000 10000010 00000000 01010000 00000000
     // 000
-    writer.write_usize(1 << 1, 13);
-    // 10000000 11000010 00000000 01010000 00000000
+    writer.flush()?;
+    writer.write_uint::<u32>(1 << 1, 13);
+    // 10000000 10000010 00000000 01010000 00000000
     // 00001000 00000000
-    writer.write_usize((1 << 23) + (1 << 15), 24);
-    // 10000000 11000010 00000000 01010000 00000000
+    writer.flush()?;
+    writer.write_uint::<u32>((1 << 23) + (1 << 15), 24);
+    // 10000000 10000010 00000000 01010000 00000000
     // 00001000 00000000 00000000 00000001 00000001
+    writer.flush()?;
 
-    let bytes = writer.drain_bytes();
     assert_eq!(
-      bytes,
-      // vec![128, 192, 8, 64, 0, 64, 2, 128, 128, 0],
-      vec![1, 67, 0, 10, 0, 16, 0, 0, 128, 128],
-    )
-  }
-
-  #[test]
-  fn test_various_writes() {
-    let mut writer = BitWriter::default();
-    writer.write_one(true);
-    writer.write_one(false);
-    // 10
-    writer.write_usize(33, 8);
-    // 10100001 00
-    writer.finish_byte();
-    // 10100001 00000000
-    writer.write_aligned_byte(123).expect("misaligned");
-    // 10100001 00000000 11011110
-    writer.write_diff(1964_u32, 12);
-    // 10100001 00000000 11011110 00110101 1110
-    writer.write_usize(5, 4);
-    // 10100001 00000000 11011110 00110101 11101010
-    writer.write_usize(5, 4);
-    // 10100001 00000000 11011110 00110101 11101010
-    // 10100000
-
-    let bytes = writer.drain_bytes();
-    assert_eq!(bytes, vec![133, 0, 123, 172, 87, 5],);
-  }
-
-  #[test]
-  fn test_assign_usize() {
-    let mut writer = BitWriter::default();
-    writer.write_usize(0, 24);
-    writer.overwrite_usize(9, 129, 9);
-    let bytes = writer.drain_bytes();
-    assert_eq!(bytes, vec![0, 2, 1],);
+      dst,
+      vec![1, 65, 0, 10, 0, 16, 0, 0, 128, 128],
+    );
+    Ok(())
   }
 }

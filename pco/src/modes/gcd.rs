@@ -1,8 +1,6 @@
-use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
-use crate::bit_reader::BitReader;
+use crate::bin::BinCompressionInfo;
 use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
-use crate::errors::PcoResult;
 use crate::modes::ConstMode;
 use crate::{bits, Bin};
 
@@ -60,21 +58,6 @@ impl<U: UnsignedLike> ConstMode<U> for GcdMode {
     let max_offset = (bin.upper - bin.lower) / gcd;
     bin.gcd = gcd;
     bin.offset_bits = bits::bits_to_encode_offset(max_offset);
-  }
-
-  #[inline]
-  fn calc_offset(u: U, bin: &BinCompressionInfo<U>) -> U {
-    (u - bin.lower) / bin.gcd
-  }
-
-  #[inline]
-  fn unchecked_decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U {
-    bin.lower + reader.unchecked_read_uint::<U>(bin.offset_bits) * bin.gcd
-  }
-
-  #[inline]
-  fn decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> PcoResult<U> {
-    Ok(bin.lower + reader.read_uint::<U>(bin.offset_bits)? * bin.gcd)
   }
 }
 

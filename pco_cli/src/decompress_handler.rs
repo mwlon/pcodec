@@ -1,5 +1,4 @@
 use std::cmp::min;
-use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -9,7 +8,7 @@ use arrow::csv::WriterBuilder as CsvWriterBuilder;
 use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
 
-use pco::standalone::Decompressor;
+use pco::standalone::FileDecompressor;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -21,9 +20,7 @@ pub trait DecompressHandler {
 
 impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
   fn decompress(&self, opt: &DecompressOpt, bytes: &[u8]) -> Result<()> {
-    let mut decompressor = Decompressor::<P::Num>::default();
-    decompressor.write_all(bytes).unwrap();
-    decompressor.header()?;
+    let (fd, mut consumed) = FileDecompressor::new(bytes)?;
 
     let mut writer = new_column_writer::<P>(opt)?;
     let mut remaining_limit = opt.limit.unwrap_or(usize::MAX);
@@ -33,11 +30,16 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
         break;
       }
 
-      let maybe_chunk_meta = decompressor.chunk_metadata()?;
-      if let Some(chunk_meta) = maybe_chunk_meta {
-        let batch_size = min(chunk_meta.n, remaining_limit);
+      let (maybe_cd, additional) = fd.chunk_decompressor::<P::Num>(&bytes[consumed..])?;
+      consumed += additional;
+
+      if let Some(mut cd) = maybe_cd {
+        let n = cd.n();
+        let batch_size = min(n, remaining_limit);
+        // TODO this doesn't work for certain batch sizes
         let mut nums = vec![P::Num::default(); batch_size];
-        decompressor.chunk_body(&mut nums)?;
+        let (_, additional) = cd.decompress(&bytes[consumed..], &mut nums)?;
+        consumed += additional;
         writer.write(nums.into_iter().map(P::num_to_native).collect::<Vec<_>>())?;
         remaining_limit -= batch_size;
       } else {

@@ -3,7 +3,7 @@ use crate::data_types::NumberLike;
 macro_rules! impl_signed {
   ($t: ty, $unsigned: ty, $header_byte: expr) => {
     impl NumberLike for $t {
-      const HEADER_BYTE: u8 = $header_byte;
+      const DTYPE_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = Self::BITS as usize;
 
       type Unsigned = $unsigned;

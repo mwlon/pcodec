@@ -5,13 +5,15 @@ use arrow::array::ArrayRef;
 use arrow::datatypes::Schema;
 
 use pco::data_types::NumberLike;
+use pco::standalone::FileDecompressor;
 
 use crate::number_like_arrow::NumberLikeArrow;
 use crate::opt::CompressOpt;
 
 pub fn get_header_byte(bytes: &[u8]) -> Result<u8> {
-  if bytes.len() >= 5 {
-    Ok(bytes[4])
+  let (_, consumed) = FileDecompressor::new(bytes)?;
+  if bytes.len() > consumed {
+    Ok(bytes[consumed])
   } else {
     Err(anyhow::anyhow!(
       "only {} bytes found in file",

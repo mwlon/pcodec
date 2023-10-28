@@ -1,11 +1,9 @@
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
-
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
-
-use crate::ChunkLatentMetadata;
+use crate::ChunkLatentMeta;
 
 #[derive(Clone, Debug)]
 pub struct Node {
@@ -43,9 +41,7 @@ impl Decoder {
     Self { nodes }
   }
 
-  pub fn from_latent_meta<U: UnsignedLike>(
-    latent_meta: &ChunkLatentMetadata<U>,
-  ) -> PcoResult<Self> {
+  pub fn from_latent_meta<U: UnsignedLike>(latent_meta: &ChunkLatentMeta<U>) -> PcoResult<Self> {
     let weights = latent_meta
       .bins
       .iter()

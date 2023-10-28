@@ -49,12 +49,12 @@ impl TryFrom<u8> for DType {
   type Error = anyhow::Error;
   fn try_from(header_byte: u8) -> Result<Self, Self::Error> {
     let res = match header_byte {
-      f32::HEADER_BYTE => DType::F32,
-      f64::HEADER_BYTE => DType::F64,
-      i32::HEADER_BYTE => DType::I32,
-      i64::HEADER_BYTE => DType::I64,
-      u32::HEADER_BYTE => DType::U32,
-      u64::HEADER_BYTE => DType::U64,
+      f32::DTYPE_BYTE => DType::F32,
+      f64::DTYPE_BYTE => DType::F64,
+      i32::DTYPE_BYTE => DType::I32,
+      i64::DTYPE_BYTE => DType::I64,
+      u32::DTYPE_BYTE => DType::U32,
+      u64::DTYPE_BYTE => DType::U64,
       _ => {
         return Err(anyhow!(
           "unknown data type byte {}",

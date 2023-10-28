@@ -55,11 +55,11 @@ Compression ratio is reported with 3 significant figures.
 
 | dataset            | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
 |--------------------|---------------------------------|-----------------------------------|-------------------|
-| `f64_decimal`      | 12                              | 92                                | 4.67              |
-| `f64_slow_cosine`  | 15                              | 120                               | 4.35              |
-| `i64_lomax05_reg`  | 16                              | 190                               | 4.62              |
-| `i64_sparse`       | 46                              | 210                               | 792               |
-| `micros_millis`    | 12                              | 160                               | 2.08              |
+| `f64_decimal`      | 12                              | 96                                | 4.67              |
+| `f64_slow_cosine`  | 16                              | 120                               | 4.35              |
+| `i64_lomax05_reg`  | 19                              | 200                               | 4.62              |
+| `i64_sparse`       | 37                              | 170                               | 792               |
+| `micros_millis`    | 12                              | 180                               | 2.08              |
 
 `i64` and `f64` are each 8 bytes, so these speeds are in the ballpark of 1GB/s.
 For reference, on the same hardware and heavy-tail integers dataset, ZStandard

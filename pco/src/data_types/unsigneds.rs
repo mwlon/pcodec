@@ -23,13 +23,8 @@ macro_rules! impl_unsigned {
       }
 
       #[inline]
-      fn rshift_word(self, shift: Bitlen) -> usize {
-        (self >> shift) as usize
-      }
-
-      #[inline]
-      fn lshift_word(self, shift: Bitlen) -> usize {
-        (self as usize) << shift
+      fn to_usize(self) -> usize {
+        self as usize
       }
 
       #[inline]
@@ -98,7 +93,7 @@ impl_unsigned!(u64, f64, i64);
 macro_rules! impl_unsigned_number {
   ($t: ty, $signed: ty, $float: ty, $header_byte: expr) => {
     impl NumberLike for $t {
-      const HEADER_BYTE: u8 = $header_byte;
+      const DTYPE_BYTE: u8 = $header_byte;
       const PHYSICAL_BITS: usize = Self::BITS as usize;
 
       type Unsigned = Self;

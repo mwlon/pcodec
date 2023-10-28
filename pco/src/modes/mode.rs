@@ -1,10 +1,8 @@
 use std::fmt::Debug;
 
-use crate::bin::{BinCompressionInfo, BinDecompressionInfo};
-use crate::bit_reader::BitReader;
+use crate::bin::BinCompressionInfo;
 use crate::constants::Weight;
 use crate::data_types::UnsignedLike;
-use crate::errors::PcoResult;
 use crate::float_mult_utils::FloatMultConfig;
 
 // Static, compile-time modes. Logic should go here if it's called in hot
@@ -19,13 +17,6 @@ pub trait ConstMode<U: UnsignedLike>: Copy + Debug + 'static {
     acc: Self::BinOptAccumulator,
     bin: &mut BinCompressionInfo<U>,
   );
-
-  // COMPRESSION
-  fn calc_offset(u: U, bin: &BinCompressionInfo<U>) -> U;
-
-  // DECOMPRESSION
-  fn unchecked_decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> U;
-  fn decompress_unsigned(bin: &BinDecompressionInfo<U>, reader: &mut BitReader) -> PcoResult<U>;
 }
 
 // Dynamic modes. Logic should go here if it isn't called in hot loops.
