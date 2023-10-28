@@ -6,6 +6,7 @@ use crate::page_metadata::PageMetadata;
 use crate::wrapped::PageDecompressor;
 use crate::{bit_reader, ChunkMetadata};
 
+#[derive(Clone, Debug)]
 pub struct ChunkDecompressor<T: NumberLike> {
   pub(crate) meta: ChunkMetadata<T::Unsigned>,
 }

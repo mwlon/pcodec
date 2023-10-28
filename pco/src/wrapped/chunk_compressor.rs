@@ -261,6 +261,7 @@ struct LatentConfig<U: UnsignedLike> {
   delta_momentss: Vec<DeltaMoments<U>>, // one per page
 }
 
+/// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
 pub struct ChunkCompressor<U: UnsignedLike> {
   meta: ChunkMetadata<U>,
@@ -444,14 +445,20 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     &self.latent_configs[latent_idx].delta_momentss[page_idx]
   }
 
+  /// Returns the count of numbers this chunk will contain in each page.
   pub fn page_sizes(&self) -> &[usize] {
     &self.page_sizes
   }
 
+  /// Returns pre-computed information about the chunk.
   pub fn chunk_meta(&self) -> &ChunkMetadata<U> {
     &self.meta
   }
 
+  /// Returns an estimate of the overall size of the chunk.
+  ///
+  /// This can be useful when building the file as a `Vec<u8>` in memory;
+  /// you can `.reserve()` ahead of time.
   pub fn chunk_meta_size_hint(&self) -> usize {
     let mut bytes = 32;
     let bytes_per_num = U::BITS / 8;
@@ -461,6 +468,9 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bytes
   }
 
+  /// Writes the chunk metadata to the destination.
+  ///
+  /// Will return an error if the provided `Write` errors.
   pub fn write_chunk_meta<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, CHUNK_META_PADDING);
     self.meta.write_to(&mut writer)?;
@@ -513,6 +523,10 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     Ok(res)
   }
 
+  /// Returns an estimate of the overall size of a specific page.
+  ///
+  /// This can be useful when building the file as a `Vec<u8>` in memory;
+  /// you can `.reserve(chunk_compressor.chunk_size_hint())` ahead of time.
   pub fn page_size_hint(&self, page_idx: usize) -> usize {
     let page_size = self.page_sizes[page_idx];
     let mut bit_size = 0;
@@ -525,6 +539,9 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bits::ceil_div(bit_size, 8)
   }
 
+  /// Writes a page to the destination.
+  ///
+  /// Will return an error if the provided `Write` errors.
   pub fn write_page<W: Write>(&self, page_idx: usize, dst: W) -> PcoResult<W> {
     if page_idx >= self.page_sizes.len() {
       return Err(PcoError::invalid_argument(format!(

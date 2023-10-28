@@ -54,6 +54,9 @@ pub const DEFAULT_MAX_PAGE_SIZE: usize = 1000000;
 
 // important parts of the format specification
 pub const ANS_INTERLEAVING: usize = 4;
+/// The count of numbers per batch, the smallest unit of decompression.
+///
+/// Only the final batch in each page may have fewer numbers than this.
 pub const FULL_BATCH_SIZE: usize = 256;
 pub const FULL_BIN_BATCH_SIZE: usize = 128;
 

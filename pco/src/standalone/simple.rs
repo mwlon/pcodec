@@ -52,7 +52,7 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 ///
 /// Will return an error if there are any compatibility, corruption,
 /// or insufficient data issues.
-pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> PcoResult<Vec<T>> {
+pub fn auto_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
   let (file_decompressor, mut consumed) = FileDecompressor::new(src)?;
 
   let mut res = Vec::new();

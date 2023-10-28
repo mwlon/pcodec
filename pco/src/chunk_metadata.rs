@@ -139,21 +139,13 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
 }
 
 /// The metadata of a pco chunk.
-///
-/// One can also create a rough histogram (or a histogram of deltas, if
-/// delta encoding was used) by aggregating chunk metadata.
-///
-/// Each .pco file may contain multiple metadata sections, so to count the
-/// entries, one must sum the count `n` for each chunk metadata. This can
-/// be done easily - see the fast_seeking.rs example. For wrapped data,
-/// `n` and `compressed_body_size` are not stored.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ChunkMetadata<U: UnsignedLike> {
   /// The formula `pco` used to compress each number at a low level.
   pub mode: Mode<U>,
   /// How many times delta encoding was applied during compression.
-  /// This is stored as 3 bits to express 0-7.
+  /// This is between 0 and 7, inclusive.
   /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
   pub delta_encoding_order: usize,
   /// The interleaved streams needed by `pco` to compress/decompress the inputs

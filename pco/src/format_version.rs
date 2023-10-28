@@ -1,7 +1,3 @@
-// Different from compressor and decompressor configs, flags change the format
-// of the compressed data.
-// New flags may be added in over time in a backward-compatible way.
-
 use std::io::Write;
 
 use crate::bit_reader::BitReader;
@@ -9,16 +5,15 @@ use crate::bit_writer::BitWriter;
 use crate::constants::CURRENT_FORMAT_VERSION;
 use crate::errors::{PcoError, PcoResult};
 
-/// The configuration stored in a pco header.
+/// The version of pco used to compress a file.
 ///
-/// During compression, flags are determined based on your `CompressorConfig`
-/// and the `pco` version.
-/// Flags affect the encoding of the rest of the file, so decompressing with
-/// the wrong flags will likely cause a corruption error.
+/// During compression, this gets stored in the file.
+/// Version can affect the encoding of the rest of the file, so older versions
+/// of pco might return compatibility errors when running on data compressed
+/// by newer versions.
 ///
-/// You will not need to manually instantiate flags; that should be done
-/// internally by `Compressor::from_config`.
-/// However, in some circumstances you may want to inspect flags during
+/// You will not need to manually instantiate this.
+/// However, in some circumstances you may want to inspect this during
 /// decompression.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FormatVersion(pub u8);

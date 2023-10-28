@@ -4,7 +4,7 @@ use crate::{bits, DEFAULT_COMPRESSION_LEVEL};
 
 /// All configurations available for a compressor.
 ///
-/// Some, like `delta_encoding_order`, are explicitly stored as `Flags` in the
+/// Some, like `delta_encoding_order`, are explicitly stored in the
 /// compressed bytes.
 /// Others, like `compression_level`, affect compression but are not explicitly
 /// stored in the output.
@@ -18,10 +18,9 @@ pub struct ChunkConfig {
   /// For example,
   /// * Level 0 achieves a small amount of compression with 1 bin.
   /// * Level 8 achieves nearly the best compression with 256 bins and still
-  /// runs in reasonable time. In some cases, its compression ratio is 3-4x as
-  /// high as level level 0's.
-  /// * Level 12 can achieve a few % better compression than 8 with 4096
-  /// bins but runs ~5x slower in many cases.
+  /// runs in reasonable time.
+  /// * Level 12 can marginally better compression than 8 with 4096
+  /// bins, but may run several times slower.
   pub compression_level: usize,
   /// `delta_encoding_order` ranges from 0 to 7 inclusive (defaults to
   /// automatically detecting on each chunk).
@@ -29,16 +28,15 @@ pub struct ChunkConfig {
   /// It is the number of times to apply delta encoding
   /// before compressing. For instance, say we have the numbers
   /// `[0, 2, 2, 4, 4, 6, 6]` and consider different delta encoding orders.
-  /// * 0 indicates no delta encoding, it compresses numbers
-  /// as-is. This is perfect for columnar data were the order is essentially
-  /// random.
-  /// * 1st order delta encoding takes consecutive differences, leaving
-  /// `[0, 2, 0, 2, 0, 2, 0]`. This is perfect for continuous but noisy time
-  /// series data, like stock prices.
-  /// * 2nd order delta encoding takes consecutive differences again,
-  /// leaving `[2, -2, 2, -2, 2, -2]`. This is perfect for locally linear data,
-  /// like a sequence of timestamps sampled approximately periodically.
-  /// * Higher-order delta encoding is good for time series that are very
+  /// * 0th order takes numbers as-is.
+  /// This is perfect for columnar data were the order is essentially random.
+  /// * 1st order takes consecutive differences, leaving
+  /// `[0, 2, 0, 2, 0, 2, 0]`. This is best for continuous but noisy time
+  /// series data, like stock prices or most time series data.
+  /// * 2nd order takes consecutive differences again,
+  /// leaving `[2, -2, 2, -2, 2, -2]`. This is best for piecewise-linear or
+  /// somewhat quadratic data.
+  /// * Even higher-order is best for time series that are very
   /// smooth, like temperature or light sensor readings.
   ///
   /// If you would like to automatically choose this once and reuse it for all
@@ -116,7 +114,7 @@ impl ChunkConfig {
 }
 
 /// `PagingSpec` specifies how a chunk is split into pages
-/// (default: equal pages up to 1000000 numbers each).
+/// (default: equal pages up to 1,000,000 numbers each).
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum PagingSpec {

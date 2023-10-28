@@ -7,6 +7,7 @@ use crate::standalone::constants::{
 };
 use crate::{bit_reader, wrapped, ChunkMetadata};
 
+#[derive(Clone, Debug)]
 pub struct FileDecompressor(wrapped::FileDecompressor);
 
 impl FileDecompressor {
@@ -71,6 +72,7 @@ impl FileDecompressor {
   }
 }
 
+#[derive(Clone, Debug)]
 pub struct ChunkDecompressor<T: NumberLike> {
   inner_cd: wrapped::ChunkDecompressor<T>,
   inner_pd: wrapped::PageDecompressor<T>,
