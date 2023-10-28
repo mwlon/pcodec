@@ -109,16 +109,15 @@ fn test_f64_codec() -> PcoResult<()> {
 fn test_multi_chunk() -> PcoResult<()> {
   let config = ChunkConfig::default();
   let fc = FileCompressor::default();
-  let mut compressed = vec![0; 300];
-  let mut consumed = fc.write_header_sliced(&mut compressed)?;
-  consumed += fc
+  let mut compressed = Vec::new();
+  fc.write_header(&mut compressed)?;
+  fc
     .chunk_compressor(&[1_i64, 2, 3], &config)?
-    .write_chunk_sliced(&mut compressed[consumed..])?;
-  consumed += fc
+    .write_chunk(&mut compressed)?;
+  fc
     .chunk_compressor(&[11_i64, 12, 13], &config)?
-    .write_chunk_sliced(&mut compressed[consumed..])?;
-  consumed += fc.write_footer_sliced(&mut compressed[consumed..])?;
-  compressed.truncate(consumed);
+    .write_chunk(&mut compressed)?;
+  fc.write_footer(&mut compressed)?;
 
   let res = auto_decompress::<i64>(&compressed)?;
   assert_eq!(res, vec![1, 2, 3, 11, 12, 13], "multi chunk");
@@ -231,7 +230,6 @@ fn assert_recovers_within_size<T: NumberLike>(
     ..Default::default()
   };
   let compressed = simple_compress(nums, &config)?;
-  println!("{:?}", compressed);
   assert!(
     compressed.len() <= max_byte_size,
     "compressed size {} > {}; {}",

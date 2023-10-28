@@ -15,20 +15,15 @@ pub struct FileCompressor {
 }
 
 impl FileCompressor {
-  pub fn header_size_hint(&self) -> usize {
-    1
-  }
-
-  pub fn write_header_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut extension = bit_reader::make_extension_for(dst, HEADER_PADDING);
-    let mut writer = BitWriter::new(dst, &mut extension);
+  // pub fn header_size_hint(&self) -> usize {
+  //   1
+  // }
+  //
+  pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<W> {
+    let mut writer = BitWriter::new(dst, HEADER_PADDING);
     self.format_version.write_to(&mut writer)?;
-    writer.bytes_consumed()
-  }
-
-  pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<()> {
-    let mut buf = vec![0; self.header_size_hint()];
-    io::write_all(self.write_header_sliced(&mut buf)?, buf, dst)
+    writer.flush()?;
+    Ok(writer.finish())
   }
 
   pub fn chunk_compressor<T: NumberLike>(

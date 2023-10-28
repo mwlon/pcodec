@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Seek, Write};
 
 use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
@@ -8,28 +8,22 @@ use crate::standalone::constants::{
   BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER,
   MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
 };
-use crate::{bit_reader, bit_writer, io, wrapped, ChunkConfig, ChunkMetadata};
+use crate::{bit_reader, bit_writer, io, wrapped, ChunkConfig, ChunkMetadata, bits};
 
 #[derive(Clone, Debug, Default)]
 pub struct FileCompressor(wrapped::FileCompressor);
 
 impl FileCompressor {
-  pub fn header_size_hint(&self) -> usize {
-    MAGIC_HEADER.len() + self.0.header_size_hint()
-  }
+  // pub fn header_size_hint(&self) -> usize {
+  //   MAGIC_HEADER.len() + self.0.header_size_hint()
+  // }
 
-  pub fn write_header_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut extension = bit_reader::make_extension_for(dst, MAGIC_HEADER.len());
-    let mut writer = BitWriter::new(dst, &mut extension);
+  pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<W> {
+    let mut writer = BitWriter::new(dst, MAGIC_HEADER.len());
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
-    let mut consumed = writer.bytes_consumed()?;
-    consumed += self.0.write_header_sliced(&mut dst[consumed..])?;
-    Ok(consumed)
-  }
-
-  pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<()> {
-    let mut buf = vec![0; self.header_size_hint()];
-    io::write_all(self.write_header_sliced(&mut buf)?, buf, dst)
+    writer.flush()?;
+    let dst = writer.finish();
+    self.0.write_header(dst)
   }
 
   pub fn chunk_compressor<T: NumberLike>(
@@ -46,20 +40,15 @@ impl FileCompressor {
     })
   }
 
-  pub fn footer_size_hint(&self) -> usize {
-    1
-  }
+  // pub fn footer_size_hint(&self) -> usize {
+  //   1
+  // }
 
-  pub fn write_footer_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut extension = bit_reader::make_extension_for(dst, 0);
-    let mut writer = BitWriter::new(dst, &mut extension);
+  pub fn write_footer<W: Write>(&self, dst: W) -> PcoResult<W> {
+    let mut writer = BitWriter::new(dst, 1);
     writer.write_aligned_bytes(&[MAGIC_TERMINATION_BYTE])?;
-    writer.bytes_consumed()
-  }
-
-  pub fn write_footer<W: Write>(&self, dst: W) -> PcoResult<()> {
-    let mut buf = vec![0; self.footer_size_hint()];
-    io::write_all(self.write_footer_sliced(&mut buf)?, buf, dst)
+    writer.flush()?;
+    Ok(writer.finish())
   }
 }
 
@@ -74,40 +63,21 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   }
 
   pub fn chunk_size_hint(&self) -> usize {
-    1 + self.inner.chunk_meta_size_hint() + self.inner.page_size_hint(0)
+    1 + bits::ceil_div(BITS_TO_ENCODE_N_ENTRIES as usize, 8) + self.inner.chunk_meta_size_hint() + self.inner.page_size_hint(0)
   }
 
-  pub fn write_chunk_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut ext = bit_reader::make_extension_for(dst, STANDALONE_CHUNK_PREAMBLE_PADDING);
-    let mut writer = BitWriter::new(dst, &mut ext);
+  pub fn write_chunk<W: Write>(&self, dst: W) -> PcoResult<W> {
+    let mut writer = BitWriter::new(dst, STANDALONE_CHUNK_PREAMBLE_PADDING);
     writer.write_aligned_bytes(&[self.dtype_byte])?;
+    let n = self.inner.page_sizes()[0];
     writer.write_usize(
-      self.inner.page_sizes()[0] - 1,
+      n - 1,
       BITS_TO_ENCODE_N_ENTRIES,
     );
-    let byte_idx_to_write_page_size = writer.aligned_dst_byte_idx()?;
-    writer.write_usize(0, BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE); // to be filled in later
 
-    let mut consumed = writer.bytes_consumed()?;
-    consumed += self.inner.write_chunk_meta_sliced(&mut dst[consumed..])?;
-
-    let pre_page_consumed = consumed;
-    consumed += self.inner.write_page_sliced(0, &mut dst[consumed..])?;
-
-    // go back and fill in the compressed page size we omitted before
-    let page_size = consumed - pre_page_consumed;
-    bit_writer::write_uint_to::<_, 0>(
-      page_size,
-      byte_idx_to_write_page_size,
-      0,
-      BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE,
-      dst,
-    );
-    Ok(consumed)
-  }
-
-  pub fn write_chunk<W: Write>(&self, dst: W) -> PcoResult<()> {
-    let mut buf = vec![0; self.chunk_size_hint()];
-    io::write_all(self.write_chunk_sliced(&mut buf)?, buf, dst)
+    writer.flush()?;
+    let dst = writer.finish();
+    let dst = self.inner.write_chunk_meta(dst)?;
+    self.inner.write_page(0, dst)
   }
 }

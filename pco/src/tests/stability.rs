@@ -13,12 +13,10 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMetadata<T::
   };
   let cc = fc.chunk_compressor(&nums, &config)?;
   let metadata = cc.chunk_meta().clone();
-  let mut compressed =
-    vec![0; fc.header_size_hint() + cc.chunk_size_hint() + fc.footer_size_hint()];
-  let mut consumed = fc.write_header_sliced(&mut compressed)?;
-  consumed += cc.write_chunk_sliced(&mut compressed[consumed..])?;
-  consumed += fc.write_footer_sliced(&mut compressed[consumed..])?;
-  compressed.truncate(consumed);
+  let mut compressed = Vec::new();
+  fc.write_header(&mut compressed)?;
+  cc.write_chunk(&mut compressed)?;
+  fc.write_footer(&mut compressed)?;
 
   for i in 0..compressed.len() - 1 {
     match auto_decompress::<T>(&compressed[0..i]) {

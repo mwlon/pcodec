@@ -1,4 +1,5 @@
 use std::cmp::max;
+use std::io::Write;
 use std::mem;
 
 use crate::bit_reader::word_at;
@@ -6,6 +7,12 @@ use crate::bits;
 use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
+
+// TODO One day the naming should probably be more consistent with Read/Write traits.
+// Right now "write_*" functions just stage; and "flush" writes to dst.
+
+// TODO this could be split into BitBuffer (no generics) and
+// BitWriter (wrapping BitBuffer, generic to W) to reduce binary size
 
 #[inline]
 pub fn write_word_to(word: usize, byte_idx: usize, dst: &mut [u8]) {
@@ -36,118 +43,25 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
   }
 }
 
-// Maybe I should rewrite this in a way that's generic to both BitReader and BitWriter
-pub struct BitWriter<'a> {
-  pub current_stream: &'a mut [u8], // either dst or extension
-  other_stream: &'a mut [u8],
-  current_is_dst: bool,       // as opposed to extension
-  skipped: usize,             // in extension
-  pub stale_byte_idx: usize,  // in current stream
-  pub bits_past_byte: Bitlen, // in current stream
+pub struct BitWriter<W: Write> {
+  pub buf: Vec<u8>,
+  dst: W,
+  // pub current_stream: &'a mut [u8], // either dst or extension
+  // other_stream: &'a mut [u8],
+  // current_is_dst: bool,       // as opposed to extension
+  // skipped: usize,             // in extension
+  pub stale_byte_idx: usize,
+  pub bits_past_byte: Bitlen,
 }
 
-impl<'a> BitWriter<'a> {
-  pub fn new(dst: &'a mut [u8], extension: &'a mut [u8]) -> Self {
-    // we assume extension has len min(dst.len(), padding) + padding
-    // where the first min(dst.len(), padding) overlap with dst
-
-    if extension.len() > 2 * dst.len() {
-      // dst doesn't have enough padding even at the start
-      Self {
-        current_stream: extension,
-        other_stream: dst,
-        skipped: 0,
-        stale_byte_idx: 0,
-        bits_past_byte: 0,
-        current_is_dst: false,
-      }
-    } else {
-      let padding = extension.len() / 2;
-      let skipped = dst.len() - padding;
-
-      Self {
-        current_stream: dst,
-        other_stream: extension,
-        skipped,
-        stale_byte_idx: 0,
-        bits_past_byte: 0,
-        current_is_dst: true,
-      }
+impl<W: Write> BitWriter<W> {
+  pub fn new(dst: W, size: usize) -> Self {
+    Self {
+      buf: vec![0; size],
+      dst,
+      stale_byte_idx: 0,
+      bits_past_byte: 0,
     }
-  }
-
-  fn dst_bit_idx(&self) -> usize {
-    let bit_idx = self.stale_byte_idx * 8 + self.bits_past_byte as usize;
-    if self.current_is_dst {
-      bit_idx
-    } else {
-      self.skipped * 8 + bit_idx
-    }
-  }
-
-  pub fn aligned_dst_byte_idx(&self) -> PcoResult<usize> {
-    self.check_aligned()?;
-    Ok(self.dst_byte_idx())
-  }
-
-  fn dst_byte_idx(&self) -> usize {
-    self.dst_bit_idx() / 8
-  }
-
-  fn switch_to_extension_if_necessary(&mut self) {
-    assert!(self.current_is_dst);
-    assert!(self.bits_past_byte < 8);
-    self.stale_byte_idx -= self.skipped;
-    self.current_is_dst = false;
-    mem::swap(
-      &mut self.current_stream,
-      &mut self.other_stream,
-    );
-  }
-
-  fn dst_byte_size(&self) -> usize {
-    if self.current_is_dst {
-      self.current_stream.len()
-    } else {
-      self.other_stream.len()
-    }
-  }
-
-  fn dst_bit_size(&self) -> usize {
-    self.dst_byte_size() * 8
-  }
-
-  pub fn check_in_bounds(&self) -> PcoResult<()> {
-    let dst_bit_idx = self.dst_bit_idx();
-    let dst_size = self.dst_bit_size();
-    if dst_bit_idx > dst_size {
-      return Err(PcoError::insufficient_data(format!(
-        "[BitWriter] out of bounds at bit {} / {}",
-        dst_bit_idx, dst_size,
-      )));
-    }
-    Ok(())
-  }
-
-  pub fn ensure_padded(&mut self, required_padding: usize) -> PcoResult<()> {
-    self.check_in_bounds()?;
-
-    self.refill();
-    let byte_idx = self.stale_byte_idx;
-    if byte_idx + required_padding < self.current_stream.len() {
-      return Ok(());
-    }
-
-    // see if we can switch to the other stream
-    if self.current_is_dst && byte_idx + required_padding < self.other_stream.len() + self.skipped {
-      self.switch_to_extension_if_necessary();
-      return Ok(());
-    }
-
-    Err(PcoError::insufficient_data(
-      "[BitWriter] insufficient padding; this is likely either a bug in pco or \
-      a result of using too large a custom data type",
-    ))
   }
 
   #[inline]
@@ -177,7 +91,7 @@ impl<'a> BitWriter<'a> {
     self.refill();
 
     let end = bytes.len() + self.stale_byte_idx;
-    self.current_stream[self.stale_byte_idx..end].clone_from_slice(bytes);
+    self.buf[self.stale_byte_idx..end].clone_from_slice(bytes);
     self.stale_byte_idx = end;
 
     Ok(())
@@ -191,21 +105,21 @@ impl<'a> BitWriter<'a> {
         self.stale_byte_idx,
         self.bits_past_byte,
         n,
-        self.current_stream,
+        &mut self.buf,
       ),
       1 => write_uint_to::<U, 1>(
         x,
         self.stale_byte_idx,
         self.bits_past_byte,
         n,
-        self.current_stream,
+        &mut self.buf,
       ),
       2 => write_uint_to::<U, 2>(
         x,
         self.stale_byte_idx,
         self.bits_past_byte,
         n,
-        self.current_stream,
+        &mut self.buf,
       ),
       _ => panic!(
         "[BitWriter] data type too large (extra words {} > 2)",
@@ -215,6 +129,7 @@ impl<'a> BitWriter<'a> {
     self.consume(n);
   }
 
+  // TODO: are these actually more convenient?
   pub fn write_usize(&mut self, x: usize, n: Bitlen) {
     self.write_uint(x, n)
   }
@@ -228,38 +143,36 @@ impl<'a> BitWriter<'a> {
     self.bits_past_byte = 0;
   }
 
-  pub fn bytes_consumed(mut self) -> PcoResult<usize> {
-    self.check_in_bounds()?;
-    self.refill();
-
-    if self.bits_past_byte != 0 {
-      panic!("dangling bits remain; this is likely a bug in pco");
-    }
-
-    let byte_idx = self.stale_byte_idx;
-    let res = if self.current_is_dst {
-      byte_idx
-    } else {
-      byte_idx + self.skipped
-    };
-    Ok(res)
+  fn byte_idx(&self) -> usize {
+    self.stale_byte_idx + (self.bits_past_byte / 8) as usize
+    // if self.bits_past_byte % 8 == 0 {
+    //   Ok(self.stale_byte_idx + (self.bits_past_byte / 8) as usize)
+    // } else {
+    //   Err(PcoError::invalid_argument(format!(
+    //     "cannot get aligned byte index on misaligned bit writer (byte {} + {} bits)",
+    //     self.stale_byte_idx, self.bits_past_byte,
+    //   )))
+    // }
   }
-}
 
-impl<'a> Drop for BitWriter<'a> {
-  fn drop(&mut self) {
-    if self.current_is_dst {
-      return;
+  pub fn flush(&mut self) -> PcoResult<()> {
+    self.refill();
+    let n_bytes = self.stale_byte_idx;
+
+    self.dst.write_all(&self.buf[..n_bytes])?;
+    self.buf[..n_bytes].fill(0);
+    if n_bytes > 0 && self.bits_past_byte > 0 {
+      // We need to keep track of the partially initialized byte.
+      self.buf[0] = self.buf[n_bytes];
+      self.buf[n_bytes] = 0;
     }
 
-    for (dst_byte, ext_byte) in self
-      .other_stream
-      .iter_mut()
-      .skip(self.skipped)
-      .zip(self.current_stream.iter())
-    {
-      *dst_byte |= *ext_byte;
-    }
+    self.stale_byte_idx = 0;
+    Ok(())
+  }
+
+  pub fn finish(self) -> W {
+    self.dst
   }
 }
 
@@ -273,8 +186,8 @@ mod tests {
 
   #[test]
   fn test_long_uint_writes() -> PcoResult<()> {
-    let (mut dst, mut ext) = (vec![0; 11], vec![0; 10]);
-    let mut writer = BitWriter::new(&mut dst, &mut ext);
+    let mut dst = Vec::new();
+    let mut writer = BitWriter::new(&mut dst, 30);
     writer.write_uint::<u32>((1 << 9) + (1 << 8) + 1, 9);
     // 10000000 1
     writer.write_uint::<u32>((1 << 16) + (1 << 5), 17);
@@ -282,19 +195,19 @@ mod tests {
     writer.write_uint::<u32>(1 << 1, 17);
     // 10000000 10000010 00000000 01010000 00000000
     // 000
+    writer.flush()?;
     writer.write_uint::<u32>(1 << 1, 13);
     // 10000000 10000010 00000000 01010000 00000000
     // 00001000 00000000
-    writer.ensure_padded(4)?;
+    writer.flush()?;
     writer.write_uint::<u32>((1 << 23) + (1 << 15), 24);
     // 10000000 10000010 00000000 01010000 00000000
     // 00001000 00000000 00000000 00000001 00000001
+    writer.flush()?;
 
-    let consumed = writer.bytes_consumed().unwrap();
-    assert_eq!(consumed, 10);
     assert_eq!(
       dst,
-      vec![1, 65, 0, 10, 0, 16, 0, 0, 128, 128, 0],
+      vec![1, 65, 0, 10, 0, 16, 0, 0, 128, 128],
     );
     Ok(())
   }

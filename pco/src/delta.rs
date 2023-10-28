@@ -1,3 +1,4 @@
+use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::data_types::UnsignedLike;
@@ -22,7 +23,7 @@ impl<U: UnsignedLike> DeltaMoments<U> {
     Ok(DeltaMoments { moments })
   }
 
-  pub fn write_to(&self, writer: &mut BitWriter) {
+  pub fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
     for &moment in &self.moments {
       writer.write_uint(moment, U::BITS);
     }

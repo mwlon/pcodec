@@ -25,7 +25,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     let extension = bit_reader::make_extension_for(src, PAGE_LATENT_META_PADDING);
     let mut reader = BitReader::new(src, &extension);
     let page_meta = PageMetadata::<T::Unsigned>::parse_from(&mut reader, &self.meta)?;
-    let pd = PageDecompressor::new(self, n, page_meta)?;
+    let pd = PageDecompressor::new(self, n, page_meta, reader.bits_past_byte % 8)?;
     Ok((pd, reader.bytes_consumed()?))
   }
 }

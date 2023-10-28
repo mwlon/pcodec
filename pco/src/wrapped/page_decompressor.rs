@@ -108,6 +108,7 @@ impl<T: NumberLike> PageDecompressor<T> {
     chunk_decompressor: &ChunkDecompressor<T>,
     n: usize,
     page_meta: PageMetadata<T::Unsigned>,
+    bits_past_byte: Bitlen,
   ) -> PcoResult<Self> {
     let chunk_meta = &chunk_decompressor.meta;
     let mode = chunk_meta.mode;
@@ -145,7 +146,7 @@ impl<T: NumberLike> PageDecompressor<T> {
         latent_batch_decompressors,
         delta_momentss,
         secondary_latents: [T::Unsigned::default(); FULL_BATCH_SIZE],
-        bits_past_byte: 0,
+        bits_past_byte,
       },
     })
   }

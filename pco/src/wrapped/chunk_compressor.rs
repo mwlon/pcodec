@@ -220,16 +220,15 @@ fn uninit_vec<T>(n: usize) -> Vec<T> {
   }
 }
 
-fn write_dissecteds<U: UnsignedLike>(
+fn write_dissecteds<U: UnsignedLike, W: Write>(
   src: DissectedSrc<U>,
-  writer: &mut BitWriter,
+  writer: &mut BitWriter<W>,
 ) -> PcoResult<()> {
   // TODO make this more SIMD like LatentBatchDecompressor::unchecked_decompress_offsets
   let mut batch_start = 0;
   while batch_start < src.page_size {
     let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_size);
     for dissected in &src.dissected_latents {
-      writer.ensure_padded(PAGE_PADDING)?;
       for (&val, &bits) in dissected
         .ans_vals
         .iter()
@@ -248,11 +247,10 @@ fn write_dissecteds<U: UnsignedLike>(
       {
         writer.write_uint(offset, bits);
       }
+      writer.flush()?;
     }
     batch_start = batch_end;
   }
-
-  writer.finish_byte();
   Ok(())
 }
 
@@ -463,20 +461,23 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bytes
   }
 
-  pub fn write_chunk_meta_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-    let mut extension = bit_reader::make_extension_for(dst, CHUNK_META_PADDING);
-    let mut writer = BitWriter::new(dst, &mut extension);
-    self.meta.write_to(&mut writer)?;
-    writer.bytes_consumed()
-  }
+  // pub fn write_chunk_meta_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
+  //   let mut extension = bit_reader::make_extension_for(dst, CHUNK_META_PADDING);
+  //   let mut writer = BitWriter::new(dst, &mut extension);
+  //   self.meta.write_to(&mut writer)?;
+  //   writer.bytes_consumed()
+  // }
 
-  pub fn write_chunk_meta<W: Write>(&self, dst: W) -> PcoResult<()> {
-    let mut buf = vec![0; self.chunk_meta_size_hint()];
-    io::write_all(
-      self.write_chunk_meta_sliced(&mut buf)?,
-      buf,
-      dst,
-    )
+  pub fn write_chunk_meta<W: Write>(&self, dst: W) -> PcoResult<W> {
+    let mut writer = BitWriter::new(dst, CHUNK_META_PADDING);
+    self.meta.write_to(&mut writer)?;
+    Ok(writer.finish())
+    // let mut buf = vec![0; self.chunk_meta_size_hint()];
+    // io::write_all(
+    //   self.write_chunk_meta_sliced(&mut buf)?,
+    //   buf,
+    //   dst,
+    // )
   }
 
   fn dissect_unsigneds(&self) -> PcoResult<DissectedSrc<U>> {
@@ -537,7 +538,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bits::ceil_div(bit_size, 8)
   }
 
-  pub fn write_page_sliced(&self, page_idx: usize, dst: &mut [u8]) -> PcoResult<usize> {
+  pub fn write_page<W: Write>(&self, page_idx: usize, dst: W) -> PcoResult<W> {
     if page_idx >= self.page_sizes.len() {
       return Err(PcoError::invalid_argument(format!(
         "page idx exceeds num pages ({} >= {})",
@@ -546,8 +547,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
       )));
     }
 
-    let mut extension = bit_reader::make_extension_for(dst, PAGE_PADDING);
-    let mut writer = BitWriter::new(dst, &mut extension);
+    let mut writer = BitWriter::new(dst, PAGE_PADDING);
 
     let dissected_src = self.dissect_unsigneds()?;
 
@@ -573,22 +573,14 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
       .iter()
       .map(|config| config.encoder.size_log());
 
-    page_meta.write_to(ans_size_logs, &mut writer)?;
+    page_meta.write_to(ans_size_logs, &mut writer);
+    writer.flush()?;
 
     write_dissecteds(dissected_src, &mut writer)?;
 
-    writer.bytes_consumed()
-  }
-
-  pub fn write_page<W: Write>(&self, page_idx: usize, dst: W) -> PcoResult<()> {
-    // TODO make this buffer instead of accumulating everything,
-    // just for performance/memory purposes
-    let mut buf = vec![0; self.page_size_hint(page_idx)];
-    io::write_all(
-      self.write_page_sliced(page_idx, &mut buf)?,
-      buf,
-      dst,
-    )
+    writer.finish_byte();
+    writer.flush()?;
+    Ok(writer.finish())
   }
 }
 

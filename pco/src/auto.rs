@@ -54,13 +54,14 @@ pub fn auto_delta_encoding_order<T: NumberLike>(
     let fc = FileCompressor::default();
     let cc = fc.chunk_compressor(head_nums, &config)?;
     let size_estimate = cc.chunk_meta_size_hint() + cc.page_size_hint(0);
-    let mut dst = vec![0; size_estimate];
-    let mut consumed = cc.write_chunk_meta_sliced(&mut dst)?;
-    consumed += cc.write_page_sliced(0, &mut dst[consumed..])?;
+    let mut dst = Vec::with_capacity(size_estimate);
+    cc.write_chunk_meta(&mut dst)?;
+    cc.write_page(0, &mut dst)?;
 
-    if consumed < best_size {
+    let size = dst.len();
+    if size < best_size {
       best_order = delta_encoding_order;
-      best_size = consumed;
+      best_size = size;
     } else {
       // it's almost always convex
       break;

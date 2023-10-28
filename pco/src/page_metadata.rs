@@ -1,3 +1,4 @@
+use std::io::Write;
 use crate::ans::AnsState;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -14,7 +15,7 @@ pub struct PageLatentMetadata<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> PageLatentMetadata<U> {
-  pub fn write_to(&self, ans_size_log: Bitlen, writer: &mut BitWriter) {
+  pub fn write_to<W: Write>(&self, ans_size_log: Bitlen, writer: &mut BitWriter<W>) {
     self.delta_moments.write_to(writer);
 
     // write the final ANS state, moving it down the range [0, table_size)
@@ -52,17 +53,15 @@ pub struct PageMetadata<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> PageMetadata<U> {
-  pub fn write_to<I: Iterator<Item = Bitlen>>(
+  pub fn write_to<I: Iterator<Item = Bitlen>, W: Write>(
     &self,
     ans_size_logs: I,
-    writer: &mut BitWriter,
-  ) -> PcoResult<()> {
-    writer.ensure_padded(PAGE_PADDING)?;
+    writer: &mut BitWriter<W>,
+  ) {
     for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
       self.latents[latent_idx].write_to(ans_size_log, writer);
     }
     writer.finish_byte();
-    Ok(())
   }
 
   pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMetadata<U>) -> PcoResult<Self> {

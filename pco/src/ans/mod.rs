@@ -17,6 +17,7 @@ pub(crate) type Token = u16;
 mod tests {
   use crate::ans::spec::Spec;
   use crate::ans::{AnsState, Decoder, Encoder, Token};
+  use crate::bit_reader;
   use crate::bit_reader::BitReader;
   use crate::bit_writer::BitWriter;
   use crate::errors::PcoResult;
@@ -32,20 +33,22 @@ mod tests {
       state = new_state;
     }
 
-    let mut bytes = vec![0; 200];
-    let mut extension = vec![];
-    let mut writer = BitWriter::new(&mut bytes, &mut extension);
+    let mut bytes = Vec::new();
+    let mut writer = BitWriter::new(&mut bytes, 5);
     for (word, bitlen) in to_write.into_iter().rev() {
       writer.write_uint(word, bitlen);
+      writer.flush()?;
     }
     writer.finish_byte();
-    let consumed = writer.bytes_consumed()?;
-    assert_eq!(consumed, expected_byte_len);
+    writer.flush()?;
+    drop(writer);
+    assert_eq!(bytes.len(), expected_byte_len);
     let final_state = state;
     let table_size = 1 << encoder.size_log();
 
     // DECODE
     let decoder = Decoder::new(spec);
+    let extension = bit_reader::make_extension_for(&bytes, 100);
     let mut reader = BitReader::new(&bytes, &extension);
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;

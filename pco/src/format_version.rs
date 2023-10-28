@@ -2,6 +2,7 @@
 // of the compressed data.
 // New flags may be added in over time in a backward-compatible way.
 
+use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::CURRENT_FORMAT_VERSION;
@@ -34,8 +35,9 @@ impl FormatVersion {
     Ok(Self(version))
   }
 
-  pub(crate) fn write_to(&self, writer: &mut BitWriter) -> PcoResult<()> {
+  pub(crate) fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<usize> {
     // in the future, we may want to allow the user to encode with their choice of a recent version
-    writer.write_aligned_bytes(&[self.0])
+    writer.write_aligned_bytes(&[self.0])?;
+    Ok(1)
   }
 }

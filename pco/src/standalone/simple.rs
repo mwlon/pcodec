@@ -9,11 +9,6 @@ use crate::standalone::decompressor::FileDecompressor;
 
 const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
 
-fn zero_pad_to(bytes: &mut Vec<u8>, total: usize) {
-  let new_len = max(bytes.len(), total);
-  bytes.resize(new_len, 0);
-}
-
 /// Takes in a slice of numbers and an exact configuration and returns
 /// compressed bytes.
 ///
@@ -21,29 +16,19 @@ fn zero_pad_to(bytes: &mut Vec<u8>, total: usize) {
 pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
   let mut dst = Vec::new();
   let file_compressor = FileCompressor::default();
-  zero_pad_to(&mut dst, file_compressor.header_size_hint());
-  let mut consumed = file_compressor.write_header_sliced(&mut dst)?;
+  file_compressor.write_header(&mut dst)?;
 
   let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
   if n_chunks > 0 {
     let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
     for chunk in nums.chunks(n_per_chunk) {
       let chunk_compressor = file_compressor.chunk_compressor(chunk, config)?;
-      zero_pad_to(
-        &mut dst,
-        consumed + chunk_compressor.chunk_size_hint(),
-      );
-      consumed += chunk_compressor.write_chunk_sliced(&mut dst[consumed..])?;
+      dst.reserve(chunk_compressor.chunk_size_hint());
+      chunk_compressor.write_chunk(&mut dst)?;
     }
   }
 
-  zero_pad_to(
-    &mut dst,
-    consumed + file_compressor.footer_size_hint(),
-  );
-  consumed += file_compressor.write_footer_sliced(&mut dst[consumed..])?;
-
-  dst.truncate(consumed);
+  file_compressor.write_footer(&mut dst)?;
   Ok(dst)
 }
 

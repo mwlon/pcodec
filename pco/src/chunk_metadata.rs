@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::io::Write;
 
 use crate::bin;
 use crate::bin::Bin;
@@ -127,7 +128,7 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
     Ok(Self { bins, ans_size_log })
   }
 
-  fn write_to(&self, mode: Mode<U>, writer: &mut BitWriter) -> PcoResult<()> {
+  fn write_to<W: Write>(&self, mode: Mode<U>, writer: &mut BitWriter<W>) -> PcoResult<()> {
     writer.write_bitlen(
       self.ans_size_log,
       BITS_TO_ENCODE_ANS_SIZE_LOG,
@@ -160,16 +161,15 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   pub latents: Vec<ChunkLatentMetadata<U>>,
 }
 
-fn write_bins<U: UnsignedLike>(
+fn write_bins<U: UnsignedLike, W: Write>(
   bins: &[Bin<U>],
   mode: Mode<U>,
   ans_size_log: Bitlen,
-  writer: &mut BitWriter,
+  writer: &mut BitWriter<W>,
 ) -> PcoResult<()> {
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
   let offset_bits_bits = bits_to_encode_offset_bits::<U>();
   for bin_batch in bins.chunks(FULL_BIN_BATCH_SIZE) {
-    writer.ensure_padded(CHUNK_META_PADDING)?;
     for bin in bin_batch {
       writer.write_uint(bin.weight - 1, ans_size_log);
       writer.write_uint(bin.lower, U::BITS);
@@ -185,6 +185,7 @@ fn write_bins<U: UnsignedLike>(
         Mode::FloatMult { .. } => (),
       }
     }
+    writer.flush()?;
   }
   Ok(())
 }
@@ -240,9 +241,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
     })
   }
 
-  pub(crate) fn write_to(&self, writer: &mut BitWriter) -> PcoResult<()> {
-    writer.ensure_padded(CHUNK_META_PADDING)?;
-
+  pub(crate) fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
     let mode_value = match self.mode {
       Mode::Classic => 0,
       Mode::Gcd => 1,
@@ -257,12 +256,14 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
       self.delta_encoding_order,
       BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
     );
+    writer.flush()?;
 
     for latents in &self.latents {
       latents.write_to(self.mode, writer)?;
     }
 
     writer.finish_byte();
+    writer.flush()?;
     Ok(())
   }
 

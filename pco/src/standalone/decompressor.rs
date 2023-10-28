@@ -53,7 +53,6 @@ impl FileDecompressor {
     }
 
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1;
-    let compressed_page_size = reader.read_usize(BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE);
     let mut consumed = reader.bytes_consumed()?;
     let (inner_cd, additional) = self.0.chunk_decompressor::<T>(&src[consumed..])?;
     consumed += additional;
@@ -66,7 +65,6 @@ impl FileDecompressor {
       inner_pd,
       n,
       n_processed: 0,
-      compressed_page_size,
       n_bytes_processed: consumed - pre_page_consumed,
     };
 
@@ -79,7 +77,6 @@ pub struct ChunkDecompressor<T: NumberLike> {
   inner_pd: wrapped::PageDecompressor<T>,
   n: usize,
   n_processed: usize,
-  compressed_page_size: usize,
   n_bytes_processed: usize,
 }
 
@@ -92,27 +89,11 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     self.n
   }
 
-  pub fn compressed_body_size(&self) -> usize {
-    self.compressed_page_size
-  }
-
   pub fn decompress(&mut self, src: &[u8], dst: &mut [T]) -> PcoResult<(Progress, usize)> {
     let (progress, consumed) = self.inner_pd.decompress_sliced(src, dst)?;
 
     self.n_processed += progress.n_processed;
     self.n_bytes_processed += consumed;
-
-    if self.n_processed >= self.n && self.n_bytes_processed != self.compressed_page_size {
-      return Err(PcoError::corruption(format!(
-        "Expected {} bytes in data page but read {} by the end",
-        self.compressed_page_size, self.n_bytes_processed,
-      )));
-    } else if self.n_bytes_processed > self.compressed_page_size {
-      return Err(PcoError::corruption(format!(
-        "Expected {} bytes in data page but read {} before reaching the end",
-        self.compressed_page_size, self.n_bytes_processed,
-      )));
-    }
 
     Ok((progress, consumed))
   }
