@@ -154,7 +154,7 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   pub mode: Mode<U>,
   /// How many times delta encoding was applied during compression.
   /// This is stored as 3 bits to express 0-7.
-  /// See [`CompressorConfig`][crate::CompressorConfig] for more details.
+  /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
   pub delta_encoding_order: usize,
   /// The interleaved streams needed by `pco` to compress/decompress the inputs
   /// to the formula used by `mode`.

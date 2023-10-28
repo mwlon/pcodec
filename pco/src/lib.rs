@@ -5,7 +5,7 @@
 
 pub use auto::auto_delta_encoding_order;
 pub use bin::Bin;
-pub use chunk_config::ChunkConfig;
+pub use chunk_config::{ChunkConfig, PagingSpec};
 pub use chunk_metadata::{ChunkLatentMetadata, ChunkMetadata};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, FULL_BATCH_SIZE};
 pub use modes::Mode;

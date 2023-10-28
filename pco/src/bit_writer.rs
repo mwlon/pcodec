@@ -128,7 +128,6 @@ impl<W: Write> BitWriter<W> {
     self.consume(n);
   }
 
-  // TODO: are these actually more convenient?
   pub fn write_usize(&mut self, x: usize, n: Bitlen) {
     self.write_uint(x, n)
   }

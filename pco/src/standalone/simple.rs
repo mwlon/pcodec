@@ -30,24 +30,6 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
   Ok(dst)
 }
 
-/// Takes in compressed bytes and an exact configuration and returns a vector
-/// of numbers.
-///
-/// Will return an error if there are any compatibility, corruption,
-/// or insufficient data issues.
-fn simple_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
-  let (file_decompressor, mut consumed) = FileDecompressor::new(src)?;
-
-  let mut res = Vec::new();
-  while let (Some(mut chunk_decompressor), additional) =
-    file_decompressor.chunk_decompressor(&src[consumed..])?
-  {
-    consumed += additional;
-    consumed += chunk_decompressor.decompress_remaining_extend(&src[consumed..], &mut res)?;
-  }
-  Ok(res)
-}
-
 /// Automatically makes an educated guess for the best compression
 /// configuration, based on `nums` and `compression_level`,
 /// then uses [`simple_compress`] to compresses the numbers to .pco bytes.
@@ -55,7 +37,7 @@ fn simple_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
 /// This adds some compute cost by trying different configurations on a subset
 /// of the numbers to determine the most likely one to do well.
 /// If you know what configuration you want ahead of time (namely delta
-/// encoding order), you can use [`Compressor::from_config`] instead to spare
+/// encoding order), you can use [`simple_compress`] instead to spare
 /// the compute cost.
 /// See [`ChunkConfig`] for information about compression levels.
 pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
@@ -66,12 +48,19 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
   simple_compress(nums, &config).unwrap()
 }
 
-/// Automatically makes an educated guess for the best decompression
-/// configuration, then uses [`simple_decompress`] to decompress .pco bytes
-/// into numbers.
+/// Takes in compressed bytes and returns a vector of numbers.
 ///
-/// There are currently no relevant fields in the decompression configuration,
-/// so there is no compute downside to using this function.
+/// Will return an error if there are any compatibility, corruption,
+/// or insufficient data issues.
 pub fn auto_decompress<T: NumberLike>(bytes: &[u8]) -> PcoResult<Vec<T>> {
-  simple_decompress(bytes)
+  let (file_decompressor, mut consumed) = FileDecompressor::new(src)?;
+
+  let mut res = Vec::new();
+  while let (Some(mut chunk_decompressor), additional) =
+    file_decompressor.chunk_decompressor(&src[consumed..])?
+  {
+    consumed += additional;
+    consumed += chunk_decompressor.decompress_remaining_extend(&src[consumed..], &mut res)?;
+  }
+  Ok(res)
 }

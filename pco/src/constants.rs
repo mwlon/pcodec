@@ -49,6 +49,7 @@ pub const MAX_SUPPORTED_PRECISION_BYTES: usize = (MAX_SUPPORTED_PRECISION / 8) a
 
 // defaults
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
+// if you modify default page size, update docs for PagingSpec
 pub const DEFAULT_MAX_PAGE_SIZE: usize = 1000000;
 
 // important parts of the format specification

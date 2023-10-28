@@ -71,7 +71,9 @@ pub struct ChunkConfig {
   /// may reduce compression speed somewhat even when it isn't helpful.
   /// However, the compression ratio improvements tend to be quite large.
   pub use_float_mult: bool,
-  // TODO
+  /// `paging_spec` specifies how the chunk should be split into pages
+  ///
+  /// See [`PagingSpec`][crate::PagingSpec] for more information.
   pub paging_spec: PagingSpec,
 }
 
@@ -88,29 +90,45 @@ impl Default for ChunkConfig {
 }
 
 impl ChunkConfig {
-  /// Sets [`compression_level`][CompressorConfig::compression_level].
+  /// Sets [`compression_level`][ChunkConfig::compression_level].
   pub fn with_compression_level(mut self, level: usize) -> Self {
     self.compression_level = level;
     self
   }
 
-  /// Sets [`delta_encoding_order`][CompressorConfig::delta_encoding_order].
+  /// Sets [`delta_encoding_order`][ChunkConfig::delta_encoding_order].
   pub fn with_delta_encoding_order(mut self, order: Option<usize>) -> Self {
     self.delta_encoding_order = order;
     self
   }
 
-  /// Sets [`use_gcds`][CompressorConfig::use_gcds].
+  /// Sets [`use_gcds`][ChunkConfig::use_gcds].
   pub fn with_use_gcds(mut self, use_gcds: bool) -> Self {
     self.use_gcds = use_gcds;
     self
   }
+
+  /// Sets [`paging_spec`][ChunkConfig::paging_spec].
+  pub fn with_paging_spec(mut self, paging_spec: PagingSpec) -> Self {
+    self.paging_spec = paging_spec;
+    self
+  }
 }
 
+/// `PagingSpec` specifies how a chunk is split into pages
+/// (default: equal pages up to 1000000 numbers each).
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum PagingSpec {
+  /// Divide the chunk into equal pages of up to the provided size in numbers.
+  ///
+  /// For example, with a default size of 100,000, a chunk of size 150,000
+  /// would be divided into 2 pages, each of 75,000 numbers.
   EqualPagesUpTo(usize),
+  /// Divide the chunk into the exactly provdided sizes.
+  ///
+  /// If any of the sizes are 0 or the chunk size does not equal the sum,
+  /// you will get an InvalidArgument error during compression.
   ExactPageSizes(Vec<usize>),
 }
 
