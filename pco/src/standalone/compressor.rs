@@ -13,10 +13,6 @@ use crate::{bits, wrapped, ChunkConfig, ChunkMetadata};
 pub struct FileCompressor(wrapped::FileCompressor);
 
 impl FileCompressor {
-  // pub fn header_size_hint(&self) -> usize {
-  //   MAGIC_HEADER.len() + self.0.header_size_hint()
-  // }
-
   pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, MAGIC_HEADER.len());
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
@@ -38,10 +34,6 @@ impl FileCompressor {
       dtype_byte: T::DTYPE_BYTE,
     })
   }
-
-  // pub fn footer_size_hint(&self) -> usize {
-  //   1
-  // }
 
   pub fn write_footer<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, 1);

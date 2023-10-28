@@ -461,23 +461,10 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     bytes
   }
 
-  // pub fn write_chunk_meta_sliced(&self, dst: &mut [u8]) -> PcoResult<usize> {
-  //   let mut extension = bit_reader::make_extension_for(dst, CHUNK_META_PADDING);
-  //   let mut writer = BitWriter::new(dst, &mut extension);
-  //   self.meta.write_to(&mut writer)?;
-  //   writer.bytes_consumed()
-  // }
-
   pub fn write_chunk_meta<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, CHUNK_META_PADDING);
     self.meta.write_to(&mut writer)?;
     Ok(writer.finish())
-    // let mut buf = vec![0; self.chunk_meta_size_hint()];
-    // io::write_all(
-    //   self.write_chunk_meta_sliced(&mut buf)?,
-    //   buf,
-    //   dst,
-    // )
   }
 
   fn dissect_unsigneds(&self) -> PcoResult<DissectedSrc<U>> {

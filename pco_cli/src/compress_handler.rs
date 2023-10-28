@@ -1,5 +1,4 @@
 use std::fs::{File, OpenOptions};
-use std::io::Write;
 use std::marker::PhantomData;
 use std::path::Path;
 
@@ -11,7 +10,6 @@ use arrow::record_batch::RecordBatch;
 use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
 
-use pco::data_types::NumberLike;
 use pco::standalone::FileCompressor;
 use pco::ChunkConfig;
 
@@ -34,7 +32,7 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
     } else {
       open_options.create_new(true);
     }
-    let mut file = open_options.open(&opt.pco_path)?;
+    let file = open_options.open(&opt.pco_path)?;
 
     let config = ChunkConfig::default()
       .with_compression_level(opt.level)
@@ -49,19 +47,15 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
       let batch = batch_result?;
       num_buffer.extend(&batch);
       if num_buffer.len() >= opt.chunk_size {
-        fc.chunk_compressor(
-          &num_buffer[..opt.chunk_size],
-          &config,
-        )?.write_chunk(&file)?;
+        fc.chunk_compressor(&num_buffer[..opt.chunk_size], &config)?
+          .write_chunk(&file)?;
         // this could be made more efficient
         num_buffer = num_buffer[opt.chunk_size..].to_vec();
       }
     }
     if !num_buffer.is_empty() {
-      fc.chunk_compressor(
-        &num_buffer,
-        &config,
-      )?.write_chunk(&file)?;
+      fc.chunk_compressor(&num_buffer, &config)?
+        .write_chunk(&file)?;
     }
 
     fc.write_footer(&file)?;

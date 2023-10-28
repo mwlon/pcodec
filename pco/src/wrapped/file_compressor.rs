@@ -15,10 +15,6 @@ pub struct FileCompressor {
 }
 
 impl FileCompressor {
-  // pub fn header_size_hint(&self) -> usize {
-  //   1
-  // }
-  //
   pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, HEADER_PADDING);
     self.format_version.write_to(&mut writer)?;

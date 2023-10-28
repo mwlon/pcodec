@@ -80,7 +80,7 @@ pub struct ChunkDecompressor<T: NumberLike> {
 }
 
 impl<T: NumberLike> ChunkDecompressor<T> {
-  pub fn metadata(&self) -> &ChunkMetadata<T::Unsigned> {
+  pub fn meta(&self) -> &ChunkMetadata<T::Unsigned> {
     &self.inner_cd.meta
   }
 
@@ -89,7 +89,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   }
 
   pub fn decompress(&mut self, src: &[u8], dst: &mut [T]) -> PcoResult<(Progress, usize)> {
-    let (progress, consumed) = self.inner_pd.decompress_sliced(src, dst)?;
+    let (progress, consumed) = self.inner_pd.decompress(src, dst)?;
 
     self.n_processed += progress.n_processed;
     self.n_bytes_processed += consumed;

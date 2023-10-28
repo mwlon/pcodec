@@ -10,10 +10,10 @@ const BILLION_U32: u32 = 1_000_000_000;
 macro_rules! impl_timestamp_96 {
   ($t: ident, $parts_per_sec: expr, $header_byte: expr, $precision: expr) => {
     #[doc = concat!(
-      "A ",
-      $precision,
-      "-precise, timezone-naive, 96-bit timestamp."
-    )]
+          "A ",
+          $precision,
+          "-precise, timezone-naive, 96-bit timestamp."
+        )]
     ///
     /// All `q_compress` 96-bit timestamps use a signed 64 bit integer for the
     /// number of
