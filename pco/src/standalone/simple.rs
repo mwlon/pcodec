@@ -1,5 +1,3 @@
-use std::cmp::max;
-
 use crate::bits;
 use crate::chunk_config::ChunkConfig;
 use crate::data_types::NumberLike;

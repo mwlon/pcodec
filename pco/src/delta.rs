@@ -1,4 +1,5 @@
 use std::io::Write;
+
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::data_types::UnsignedLike;

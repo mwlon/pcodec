@@ -19,8 +19,8 @@ use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
 use crate::page_metadata::{PageLatentMetadata, PageMetadata};
 use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
 use crate::{
-  ans, bin_optimization, bit_reader, bits, delta, float_mult_utils, io, Bin, ChunkConfig,
-  ChunkLatentMetadata, ChunkMetadata, Mode, FULL_BATCH_SIZE,
+  ans, bin_optimization, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentMetadata,
+  ChunkMetadata, Mode, FULL_BATCH_SIZE,
 };
 
 fn cumulative_sum(sizes: &[usize]) -> Vec<usize> {

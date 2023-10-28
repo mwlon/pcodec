@@ -3,8 +3,7 @@ use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::progress::Progress;
 use crate::standalone::constants::{
-  BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER,
-  MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
+  BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
 };
 use crate::{bit_reader, wrapped, ChunkMetadata};
 

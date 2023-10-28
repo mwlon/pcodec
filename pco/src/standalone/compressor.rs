@@ -1,14 +1,13 @@
-use std::io::{Seek, Write};
+use std::io::Write;
 
 use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::PcoResult;
 use crate::standalone::constants::{
-  BITS_TO_ENCODE_COMPRESSED_PAGE_SIZE, BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER,
-  MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
+  BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
 };
-use crate::{bit_reader, bit_writer, io, wrapped, ChunkConfig, ChunkMetadata, bits};
+use crate::{bits, wrapped, ChunkConfig, ChunkMetadata};
 
 #[derive(Clone, Debug, Default)]
 pub struct FileCompressor(wrapped::FileCompressor);
@@ -63,17 +62,16 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   }
 
   pub fn chunk_size_hint(&self) -> usize {
-    1 + bits::ceil_div(BITS_TO_ENCODE_N_ENTRIES as usize, 8) + self.inner.chunk_meta_size_hint() + self.inner.page_size_hint(0)
+    1 + bits::ceil_div(BITS_TO_ENCODE_N_ENTRIES as usize, 8)
+      + self.inner.chunk_meta_size_hint()
+      + self.inner.page_size_hint(0)
   }
 
   pub fn write_chunk<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, STANDALONE_CHUNK_PREAMBLE_PADDING);
     writer.write_aligned_bytes(&[self.dtype_byte])?;
     let n = self.inner.page_sizes()[0];
-    writer.write_usize(
-      n - 1,
-      BITS_TO_ENCODE_N_ENTRIES,
-    );
+    writer.write_usize(n - 1, BITS_TO_ENCODE_N_ENTRIES);
 
     writer.flush()?;
     let dst = writer.finish();

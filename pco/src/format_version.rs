@@ -3,6 +3,7 @@
 // New flags may be added in over time in a backward-compatible way.
 
 use std::io::Write;
+
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::CURRENT_FORMAT_VERSION;

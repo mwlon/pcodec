@@ -1,6 +1,4 @@
-use std::cmp::max;
 use std::io::Write;
-use std::mem;
 
 use crate::bit_reader::word_at;
 use crate::bits;
@@ -141,18 +139,6 @@ impl<W: Write> BitWriter<W> {
   pub fn finish_byte(&mut self) {
     self.stale_byte_idx += bits::ceil_div(self.bits_past_byte as usize, 8);
     self.bits_past_byte = 0;
-  }
-
-  fn byte_idx(&self) -> usize {
-    self.stale_byte_idx + (self.bits_past_byte / 8) as usize
-    // if self.bits_past_byte % 8 == 0 {
-    //   Ok(self.stale_byte_idx + (self.bits_past_byte / 8) as usize)
-    // } else {
-    //   Err(PcoError::invalid_argument(format!(
-    //     "cannot get aligned byte index on misaligned bit writer (byte {} + {} bits)",
-    //     self.stale_byte_idx, self.bits_past_byte,
-    //   )))
-    // }
   }
 
   pub fn flush(&mut self) -> PcoResult<()> {

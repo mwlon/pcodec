@@ -7,7 +7,7 @@ use crate::errors::PcoResult;
 use crate::format_version::FormatVersion;
 use crate::wrapped::chunk_compressor;
 use crate::wrapped::chunk_compressor::ChunkCompressor;
-use crate::{bit_reader, io, ChunkConfig};
+use crate::ChunkConfig;
 
 #[derive(Clone, Debug, Default)]
 pub struct FileCompressor {

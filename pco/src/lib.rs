@@ -41,7 +41,6 @@ mod progress;
 mod unsigned_src_dst;
 
 mod chunk_config;
-mod io;
 mod page_metadata;
 mod read_write_uint;
 #[cfg(test)]

@@ -111,11 +111,9 @@ fn test_multi_chunk() -> PcoResult<()> {
   let fc = FileCompressor::default();
   let mut compressed = Vec::new();
   fc.write_header(&mut compressed)?;
-  fc
-    .chunk_compressor(&[1_i64, 2, 3], &config)?
+  fc.chunk_compressor(&[1_i64, 2, 3], &config)?
     .write_chunk(&mut compressed)?;
-  fc
-    .chunk_compressor(&[11_i64, 12, 13], &config)?
+  fc.chunk_compressor(&[11_i64, 12, 13], &config)?
     .write_chunk(&mut compressed)?;
   fc.write_footer(&mut compressed)?;
 
