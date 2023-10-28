@@ -7,7 +7,7 @@ use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
-use crate::page_metadata::PageMetadata;
+use crate::page_meta::PageMeta;
 use crate::progress::Progress;
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
 use crate::{bit_reader, delta, float_mult_utils};
@@ -59,8 +59,7 @@ impl<U: UnsignedLike> State<U> {
   }
 }
 
-// PageDecompressor wraps BatchDecompressor and handles reconstruction from
-// delta encoding.
+/// Holds metadata about a page and supports decompression.
 #[derive(Clone, Debug)]
 pub struct PageDecompressor<T: NumberLike> {
   // immutable
@@ -107,7 +106,7 @@ impl<T: NumberLike> PageDecompressor<T> {
   pub(crate) fn new(
     chunk_decompressor: &ChunkDecompressor<T>,
     n: usize,
-    page_meta: PageMetadata<T::Unsigned>,
+    page_meta: PageMeta<T::Unsigned>,
     bits_past_byte: Bitlen,
   ) -> PcoResult<Self> {
     let chunk_meta = &chunk_decompressor.meta;
@@ -202,12 +201,18 @@ impl<T: NumberLike> PageDecompressor<T> {
     Ok(())
   }
 
-  // If this returns an error, num_dst might be modified.
+  /// Reads compressed numbers into the destination, returning progress and
+  /// the number of bytes read.
+  ///
+  /// Will return an error if corruptions or insufficient data are found.
+  ///
+  /// `dst` must have length either a multiple of 256 or be at least the count
+  /// of numbers remaining in the page.
   pub fn decompress(&mut self, src: &[u8], num_dst: &mut [T]) -> PcoResult<(Progress, usize)> {
     if num_dst.len() % FULL_BATCH_SIZE != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be \
-         at least the length of numbers remaining ({} < {})",
+         at least the count of numbers remaining ({} < {})",
         FULL_BATCH_SIZE,
         num_dst.len(),
         self.n_remaining(),
@@ -246,7 +251,7 @@ impl<T: NumberLike> PageDecompressor<T> {
     Ok((progress, reader.bytes_consumed()?))
   }
 
-  pub fn n_remaining(&self) -> usize {
+  fn n_remaining(&self) -> usize {
     self.n - self.state.n_processed
   }
 }

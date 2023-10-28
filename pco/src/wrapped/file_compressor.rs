@@ -40,10 +40,9 @@ use crate::ChunkConfig;
 /// # }
 /// ```
 ///
-/// You may write anything else you like in your wrapping file!
-/// Good ideas include:
-/// * counts of the numbers in each page
-/// * the compressed size of each page, possibly as a footer
+/// The one requirement for a wrapping format is that it saves the count of
+/// numbers in each page; this will be needed for decompression.
+/// Otherwise, you may write anything else you like in your wrapping file!
 #[derive(Clone, Debug, Default)]
 pub struct FileCompressor {
   format_version: FormatVersion,

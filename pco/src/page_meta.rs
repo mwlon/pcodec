@@ -7,15 +7,15 @@ use crate::constants::{Bitlen, ANS_INTERLEAVING, PAGE_LATENT_META_PADDING};
 use crate::data_types::UnsignedLike;
 use crate::delta::DeltaMoments;
 use crate::errors::PcoResult;
-use crate::ChunkMetadata;
+use crate::ChunkMeta;
 
 #[derive(Clone, Debug)]
-pub struct PageLatentMetadata<U: UnsignedLike> {
+pub struct PageLatentMeta<U: UnsignedLike> {
   pub delta_moments: DeltaMoments<U>,
   pub ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
-impl<U: UnsignedLike> PageLatentMetadata<U> {
+impl<U: UnsignedLike> PageLatentMeta<U> {
   pub fn write_to<W: Write>(&self, ans_size_log: Bitlen, writer: &mut BitWriter<W>) {
     self.delta_moments.write_to(writer);
 
@@ -49,11 +49,11 @@ impl<U: UnsignedLike> PageLatentMetadata<U> {
 // chunk metadata parsing step (standalone mode) OR from the wrapping format
 // (wrapped mode).
 #[derive(Clone, Debug)]
-pub struct PageMetadata<U: UnsignedLike> {
-  pub latents: Vec<PageLatentMetadata<U>>,
+pub struct PageMeta<U: UnsignedLike> {
+  pub latents: Vec<PageLatentMeta<U>>,
 }
 
-impl<U: UnsignedLike> PageMetadata<U> {
+impl<U: UnsignedLike> PageMeta<U> {
   pub fn write_to<I: Iterator<Item = Bitlen>, W: Write>(
     &self,
     ans_size_logs: I,
@@ -65,10 +65,10 @@ impl<U: UnsignedLike> PageMetadata<U> {
     writer.finish_byte();
   }
 
-  pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMetadata<U>) -> PcoResult<Self> {
+  pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMeta<U>) -> PcoResult<Self> {
     let mut latents = Vec::with_capacity(chunk_meta.latents.len());
     for (latent_idx, latent_meta) in chunk_meta.latents.iter().enumerate() {
-      latents.push(PageLatentMetadata::parse_from(
+      latents.push(PageLatentMeta::parse_from(
         reader,
         chunk_meta.latent_delta_order(latent_idx),
         latent_meta.ans_size_log,

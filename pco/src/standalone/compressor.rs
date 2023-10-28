@@ -7,7 +7,7 @@ use crate::errors::PcoResult;
 use crate::standalone::constants::{
   BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
 };
-use crate::{bits, wrapped, ChunkConfig, ChunkMetadata};
+use crate::{bits, wrapped, ChunkConfig, ChunkMeta};
 
 /// Top-level entry point for compressing standalone .pco files.
 ///
@@ -92,8 +92,8 @@ pub struct ChunkCompressor<U: UnsignedLike> {
 
 impl<U: UnsignedLike> ChunkCompressor<U> {
   /// Returns pre-computed information about the chunk.
-  pub fn chunk_meta(&self) -> &ChunkMetadata<U> {
-    self.inner.chunk_meta()
+  pub fn meta(&self) -> &ChunkMeta<U> {
+    self.inner.meta()
   }
 
   /// Returns an estimate of the overall size of the chunk.

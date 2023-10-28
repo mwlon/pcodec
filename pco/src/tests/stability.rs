@@ -1,10 +1,10 @@
 use crate::chunk_config::ChunkConfig;
-use crate::chunk_metadata::ChunkMetadata;
+use crate::chunk_meta::ChunkMeta;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{auto_decompress, FileCompressor};
 
-fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMetadata<T::Unsigned>> {
+fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::Unsigned>> {
   let fc = FileCompressor::default();
   let config = ChunkConfig {
     use_gcds: false,
@@ -12,7 +12,7 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMetadata<T::
     ..Default::default()
   };
   let cc = fc.chunk_compressor(&nums, &config)?;
-  let metadata = cc.chunk_meta().clone();
+  let meta = cc.meta().clone();
   let mut compressed = Vec::new();
   fc.write_header(&mut compressed)?;
   cc.write_chunk(&mut compressed)?;
@@ -29,7 +29,7 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMetadata<T::
     }
   }
 
-  Ok(metadata)
+  Ok(meta)
 }
 
 #[test]
@@ -42,9 +42,9 @@ fn test_insufficient_data_short_bins() -> PcoResult<()> {
     nums.push(1000);
   }
 
-  let metadata = assert_panic_safe(nums)?;
-  assert_eq!(metadata.latents.len(), 1);
-  assert_eq!(metadata.latents[0].bins.len(), 2);
+  let meta = assert_panic_safe(nums)?;
+  assert_eq!(meta.latents.len(), 1);
+  assert_eq!(meta.latents[0].bins.len(), 2);
   Ok(())
 }
 
@@ -55,9 +55,9 @@ fn test_insufficient_data_sparse() -> PcoResult<()> {
     nums.push(1);
   }
 
-  let metadata = assert_panic_safe(nums)?;
-  assert_eq!(metadata.latents.len(), 1);
-  assert_eq!(metadata.latents[0].bins.len(), 2);
+  let meta = assert_panic_safe(nums)?;
+  assert_eq!(meta.latents.len(), 1);
+  assert_eq!(meta.latents[0].bins.len(), 2);
   Ok(())
 }
 
@@ -69,9 +69,9 @@ fn test_insufficient_data_long_offsets() -> PcoResult<()> {
     nums.push((u64::MAX / n) * i);
   }
 
-  let metadata = assert_panic_safe(nums)?;
-  assert_eq!(metadata.latents.len(), 1);
-  assert_eq!(metadata.latents[0].bins.len(), 1);
-  assert_eq!(metadata.latents[0].bins[0].offset_bits, 64);
+  let meta = assert_panic_safe(nums)?;
+  assert_eq!(meta.latents.len(), 1);
+  assert_eq!(meta.latents[0].bins.len(), 1);
+  assert_eq!(meta.latents[0].bins[0].offset_bits, 64);
   Ok(())
 }

@@ -3,13 +3,11 @@ use std::fmt::Debug;
 use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::constants::{
-  Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, PAGE_PADDING, WORD_SIZE,
-};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, PAGE_PADDING, WORD_SIZE};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
-use crate::page_metadata::PageLatentMetadata;
-use crate::{ans, bit_reader, ChunkLatentMetadata, read_write_uint};
+use crate::page_meta::PageLatentMeta;
+use crate::{ans, bit_reader, read_write_uint, ChunkLatentMeta};
 
 const MAX_ANS_SYMBOLS_PER_WORD: usize = 4;
 
@@ -65,8 +63,8 @@ pub struct LatentBatchDecompressor<U: UnsignedLike> {
 
 impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   pub fn new(
-    chunk_latent_meta: &ChunkLatentMetadata<U>,
-    page_latent_meta: &PageLatentMetadata<U>,
+    chunk_latent_meta: &ChunkLatentMeta<U>,
+    page_latent_meta: &PageLatentMeta<U>,
     needs_gcd: bool,
     is_trivial: bool,
   ) -> PcoResult<Self> {

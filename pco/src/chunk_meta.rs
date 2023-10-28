@@ -13,7 +13,7 @@ use crate::float_mult_utils::FloatMultConfig;
 use crate::format_version::FormatVersion;
 use crate::modes::{gcd, Mode};
 
-/// Part of [`ChunkMetadata`][crate::ChunkMetadata] that describes a latent
+/// Part of [`ChunkMeta`][crate::ChunkMeta] that describes a latent
 /// variable interleaved into the compressed data.
 ///
 /// For instance, with
@@ -23,7 +23,7 @@ use crate::modes::{gcd, Mode};
 ///
 /// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ChunkLatentMetadata<U: UnsignedLike> {
+pub struct ChunkLatentMeta<U: UnsignedLike> {
   /// The log2 of the number of the number of states in this chunk's tANS
   /// table.
   ///
@@ -34,7 +34,7 @@ pub struct ChunkLatentMetadata<U: UnsignedLike> {
   pub bins: Vec<Bin<U>>,
 }
 
-impl<U: UnsignedLike> ChunkLatentMetadata<U> {
+impl<U: UnsignedLike> ChunkLatentMeta<U> {
   pub(crate) fn max_bits_per_offset(&self) -> Bitlen {
     self
       .bins
@@ -94,7 +94,7 @@ fn parse_bin_batch<U: UnsignedLike>(
   Ok(())
 }
 
-impl<U: UnsignedLike> ChunkLatentMetadata<U> {
+impl<U: UnsignedLike> ChunkLatentMeta<U> {
   fn parse_from(reader: &mut BitReader, mode: Mode<U>) -> PcoResult<Self> {
     reader.ensure_padded(CHUNK_META_PADDING)?; // TODO
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
@@ -141,7 +141,7 @@ impl<U: UnsignedLike> ChunkLatentMetadata<U> {
 /// The metadata of a pco chunk.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
-pub struct ChunkMetadata<U: UnsignedLike> {
+pub struct ChunkMeta<U: UnsignedLike> {
   /// The formula `pco` used to compress each number at a low level.
   pub mode: Mode<U>,
   /// How many times delta encoding was applied during compression.
@@ -150,7 +150,7 @@ pub struct ChunkMetadata<U: UnsignedLike> {
   pub delta_encoding_order: usize,
   /// The interleaved streams needed by `pco` to compress/decompress the inputs
   /// to the formula used by `mode`.
-  pub latents: Vec<ChunkLatentMetadata<U>>,
+  pub latents: Vec<ChunkLatentMeta<U>>,
 }
 
 fn write_bins<U: UnsignedLike, W: Write>(
@@ -182,13 +182,13 @@ fn write_bins<U: UnsignedLike, W: Write>(
   Ok(())
 }
 
-impl<U: UnsignedLike> ChunkMetadata<U> {
+impl<U: UnsignedLike> ChunkMeta<U> {
   pub(crate) fn new(
     mode: Mode<U>,
     delta_encoding_order: usize,
-    latents: Vec<ChunkLatentMetadata<U>>,
+    latents: Vec<ChunkLatentMeta<U>>,
   ) -> Self {
-    ChunkMetadata {
+    ChunkMeta {
       mode,
       delta_encoding_order,
       latents,
@@ -219,9 +219,7 @@ impl<U: UnsignedLike> ChunkMetadata<U> {
 
     let mut latents = Vec::with_capacity(n_latents);
     for _ in 0..n_latents {
-      latents.push(ChunkLatentMetadata::parse_from(
-        reader, mode,
-      )?)
+      latents.push(ChunkLatentMeta::parse_from(reader, mode)?)
     }
 
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;

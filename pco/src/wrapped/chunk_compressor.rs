@@ -16,11 +16,11 @@ use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd;
 use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
-use crate::page_metadata::{PageLatentMetadata, PageMetadata};
+use crate::page_meta::{PageLatentMeta, PageMeta};
 use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, LatentSrc};
 use crate::{
-  ans, bin_optimization, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentMetadata,
-  ChunkMetadata, Mode, FULL_BATCH_SIZE,
+  ans, bin_optimization, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentMeta,
+  ChunkMeta, Mode, FULL_BATCH_SIZE,
 };
 
 fn cumulative_sum(sizes: &[usize]) -> Vec<usize> {
@@ -264,7 +264,7 @@ struct LatentConfig<U: UnsignedLike> {
 /// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
 pub struct ChunkCompressor<U: UnsignedLike> {
-  meta: ChunkMetadata<U>,
+  meta: ChunkMeta<U>,
   latent_configs: Vec<LatentConfig<U>>,
   page_sizes: Vec<usize>,
   n_latents: usize,
@@ -396,7 +396,7 @@ pub(crate) fn new<T: NumberLike>(
     let table = CompressionTable::from(trained.infos);
     let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
 
-    latent_metas.push(ChunkLatentMetadata {
+    latent_metas.push(ChunkLatentMeta {
       bins,
       ans_size_log: trained.ans_size_log,
     });
@@ -418,7 +418,7 @@ pub(crate) fn new<T: NumberLike>(
     other => other,
   };
 
-  let meta = ChunkMetadata::new(optimized_mode, delta_order, latent_metas);
+  let meta = ChunkMeta::new(optimized_mode, delta_order, latent_metas);
   let max_bits_per_latent = meta
     .latents
     .iter()
@@ -451,7 +451,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   }
 
   /// Returns pre-computed information about the chunk.
-  pub fn chunk_meta(&self) -> &ChunkMetadata<U> {
+  pub fn meta(&self) -> &ChunkMeta<U> {
     &self.meta
   }
 
@@ -564,12 +564,12 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
         .get(latent_idx)
         .map(|dissected| dissected.ans_final_states)
         .unwrap_or([0; ANS_INTERLEAVING]);
-      latent_metas.push(PageLatentMetadata {
+      latent_metas.push(PageLatentMeta {
         delta_moments,
         ans_final_state_idxs,
       });
     }
-    let page_meta = PageMetadata {
+    let page_meta = PageMeta {
       latents: latent_metas,
     };
     let ans_size_logs = self

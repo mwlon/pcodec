@@ -109,22 +109,22 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
       bytes.len() - consumed
     );
 
-    for (i, m) in metas.iter().enumerate() {
+    for (i, meta) in metas.iter().enumerate() {
       println!(
         "\nchunk: {} n: {} delta order: {} mode: {:?}",
-        i, chunk_ns[i], m.delta_encoding_order, m.mode,
+        i, chunk_ns[i], meta.delta_encoding_order, meta.mode,
       );
-      for (latent_idx, latent) in m.latents.iter().enumerate() {
-        let latent_name = match (m.mode, latent_idx) {
+      for (latent_idx, latent) in meta.latents.iter().enumerate() {
+        let latent_name = match (meta.mode, latent_idx) {
           (Mode::Classic, 0) => "primary".to_string(),
           (Mode::Gcd, 0) => "primary".to_string(),
           (Mode::FloatMult(config), 0) => format!("multiplier [x{}]", config.base),
           (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
-          _ => panic!("unknown latent: {:?}/{}", m.mode, latent_idx),
+          _ => panic!("unknown latent: {:?}/{}", meta.mode, latent_idx),
         };
-        let show_as_float_int = matches!(m.mode, Mode::FloatMult { .. }) && latent_idx == 0;
-        let show_as_delta = (matches!(m.mode, Mode::FloatMult { .. }) && latent_idx == 1)
-          || m.delta_encoding_order > 0;
+        let show_as_float_int = matches!(meta.mode, Mode::FloatMult { .. }) && latent_idx == 0;
+        let show_as_delta = (matches!(meta.mode, Mode::FloatMult { .. }) && latent_idx == 1)
+          || meta.delta_encoding_order > 0;
         println!(
           "latent: {} n_bins: {} ANS size log: {}",
           latent_name,
