@@ -125,9 +125,9 @@ pub trait UnsignedLike:
 /// wouldn't preserve ordering and would cause pco to fail. In this example,
 /// one needs to flip the sign bit and, if negative, the rest of the bits.
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
-  /// A number from 0-255 that corresponds to the number's data type.
+  /// A number from 1-255 that corresponds to the number's data type.
   ///
-  /// Each `NumberLike` implementation should have a different `HEADER_BYTE`.
+  /// Each `NumberLike` implementation should have a different `DTYPE_BYTE`.
   /// This byte gets written into the file's header during compression, and
   /// if the wrong header byte shows up during decompression, the decompressor
   /// will return an error.

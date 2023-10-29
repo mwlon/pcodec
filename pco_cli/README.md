@@ -2,7 +2,7 @@
 
 ## Setup
 
-You can compress, decompress, and inspect .pco files using our simple CLI.
+You can compress, decompress, and inspect standalone .pco files using our simple CLI.
 Follow this setup:
 
 1. Install Rust: https://www.rust-lang.org/tools/install
@@ -52,7 +52,7 @@ This command prints numbers in a .pco file to stdout.
 Examples:
 
 ```shell
-pcodec decompress --limit 10 in.pco
+pcodec decompress --limit 256 in.pco
 ```
 
 ### Inspect

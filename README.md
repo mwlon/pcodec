@@ -16,7 +16,6 @@ with high compression ratio and moderately fast speed.
 * lossless; preserves ordering and exact bit representation
 * nth-order delta encoding
 * compresses faster or slower depending on compression level from 0 to 12
-* fully streaming decompression
 
 **Data types:**
 `u32`, `u64`, `i32`, `i64`, `f32`, `f64`
@@ -56,9 +55,10 @@ multiple chunks per file.
 | page     | interleaving w/ wrapping format | \>1k numbers        |
 | batch    | decompression                   | 256 numbers (fixed) |
 
-The standalone format is essentially a minimal implementation of a wrapped format.
-It supports batched decompression and seeking, but not nullability, multiple
-columns, random access, or other niceties.
+The standalone format is a minimal implementation of a wrapped format.
+It supports batched decompression only; no nullability, multiple
+columns, random access, seeking, or other niceties.
+It is mainly useful for quick proofs of concept (sometimes by the CLI).
 
 <img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
 
@@ -66,7 +66,7 @@ columns, random access, or other niceties.
 
 The names pcodec and pco were chosen for these reasons:
 * "Pico" suggests that it makes very small things.
-* Pco is reminiscent of qco, its preceding format.
+* Pco is reminiscent of qco, its predecessor.
 * Pco is reminiscent of PancakeDB (Pancake COmpressed). Though PancakeDB is now
   history, it had a good name.
 * Pcodec is short, provides some semantic meaning, and should be easy to
@@ -74,7 +74,7 @@ The names pcodec and pco were chosen for these reasons:
 
 The names are used for these purposes:
 * pco => the library and data format
-* pco_cli => the binary crate name
+* pco\_cli => the binary crate name
 * pcodec => the binary CLI and the repo
 
 ## Extra

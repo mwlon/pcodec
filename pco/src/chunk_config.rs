@@ -113,8 +113,7 @@ impl ChunkConfig {
   }
 }
 
-/// `PagingSpec` specifies how a chunk is split into pages
-/// (default: equal pages up to 1,000,000 numbers each).
+/// `PagingSpec` specifies how a chunk is split into pages.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum PagingSpec {
@@ -130,6 +129,7 @@ pub enum PagingSpec {
   ExactPageSizes(Vec<usize>),
 }
 
+/// Default: equal pages up to 1,000,000 numbers each.
 impl Default for PagingSpec {
   fn default() -> Self {
     Self::EqualPagesUpTo(DEFAULT_MAX_PAGE_SIZE)

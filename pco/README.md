@@ -3,7 +3,7 @@
 **⚠️ Both the API and the data format are unstable for the 0.0.0-alpha.\*
 releases. Do not depend on pco for long-term storage yet. ⚠️**
 
-## Usage as a Standalone Format
+## Quick Start
 
 ```rust
 use pco::standalone::{auto_compress, auto_decompress};
@@ -32,7 +32,7 @@ To run something right away, try
 [the benchmarks](../bench/README.md).
 
 For a lower-level standalone API that allows writing one chunk at a time /
-streaming reads, see [the docs.rs documentation](https://docs.rs/pco/latest/pco/).
+batched reads, see [the docs.rs documentation](https://docs.rs/pco/latest/pco/).
 
 ## Usage as a Wrapped Format
 
@@ -58,15 +58,4 @@ implementations are insufficient)
 `pco::data_types::UnsignedLike` and
 `pco::data_types::FloatLike`.
 
-### Seeking and Statistics
-
-Each chunk has a metadata section containing
-* the total count of numbers in the chunk,
-* the bins for the chunk and relative frequency of each bin,
-* and the size in bytes of the compressed body.
-
-Using the compressed body size, it is easy to seek through the whole file
-and collect a list of all the chunk metadatas.
-One can aggregate them to obtain the total count of numbers in the whole file
-and even an approximate histogram.
-This is typically about 100x faster than decompressing all the numbers.
+The maximum legal precision of a custom data type is currently 128 bits.
