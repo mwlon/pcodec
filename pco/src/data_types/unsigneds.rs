@@ -13,8 +13,8 @@ macro_rules! impl_unsigned {
       type Float = $float;
 
       #[inline]
-      fn from_word(word: usize) -> Self {
-        word as Self
+      fn from_u64(x: u64) -> Self {
+        x as Self
       }
 
       #[inline]
@@ -23,8 +23,8 @@ macro_rules! impl_unsigned {
       }
 
       #[inline]
-      fn to_usize(self) -> usize {
-        self as usize
+      fn to_u64(self) -> u64 {
+        self as u64
       }
 
       #[inline]

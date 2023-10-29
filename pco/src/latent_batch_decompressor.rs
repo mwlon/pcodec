@@ -109,8 +109,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     for base_i in (0..FULL_BATCH_SIZE).step_by(MAX_ANS_SYMBOLS_PER_WORD) {
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
-      let word = bit_reader::word_at(stream, stale_byte_idx);
-      // TODO this doesn't work on 32 bits or if MAX_ANS_SYMBOLS_PER_WORD != ANS_INTERLEAVING
+      let word = bit_reader::u64_at(stream, stale_byte_idx);
       for j in 0..MAX_ANS_SYMBOLS_PER_WORD {
         let i = base_i + j;
         let node = self.decoder.get_node(state_idxs[j]);
@@ -139,7 +138,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       let j = i % 4;
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
-      let word = bit_reader::word_at(stream, stale_byte_idx);
+      let word = bit_reader::u64_at(stream, stale_byte_idx);
       let node = self.decoder.get_node(state_idxs[j]);
       let state_offset = (word >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
       let info = &self.infos[node.token as usize];

@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::bit_reader::word_at;
+use crate::bit_reader::u64_at;
 use crate::bits;
 use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
 use crate::errors::{PcoError, PcoResult};
@@ -13,10 +13,10 @@ use crate::read_write_uint::ReadWriteUint;
 // BitWriter (wrapping BitBuffer, generic to W) to reduce binary size
 
 #[inline]
-pub fn write_word_to(word: usize, byte_idx: usize, dst: &mut [u8]) {
+pub fn write_u64_to(x: u64, byte_idx: usize, dst: &mut [u8]) {
   unsafe {
-    let target = dst.as_mut_ptr().add(byte_idx) as *mut [u8; BYTES_PER_WORD];
-    *target = word.to_le_bytes();
+    let target = dst.as_mut_ptr().add(byte_idx) as *mut [u8; 8];
+    *target = x.to_le_bytes();
   };
 }
 
@@ -30,13 +30,13 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
 ) {
   // See bit_reader for an explanation of why this is fast and how it works.
   let x = bits::lowest_bits(x, n);
-  let word = word_at(dst, byte_idx) | (x.to_usize() << bits_past_byte);
-  write_word_to(word, byte_idx, dst);
+  let word = u64_at(dst, byte_idx) | (x.to_u64() << bits_past_byte);
+  write_u64_to(word, byte_idx, dst);
   let mut processed = WORD_BITLEN - 8 - bits_past_byte;
   byte_idx += BYTES_PER_WORD - 1;
 
   for _ in 0..MAX_EXTRA_WORDS {
-    write_word_to((x >> processed).to_usize(), byte_idx, dst);
+    write_u64_to((x >> processed).to_u64(), byte_idx, dst);
     processed += WORD_BITLEN;
     byte_idx += BYTES_PER_WORD;
   }

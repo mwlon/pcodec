@@ -33,8 +33,8 @@ pub trait ReadWriteUint:
   const BITS: Bitlen;
   const MAX_EXTRA_WORDS: usize = calc_max_extra_words(Self::BITS);
 
-  fn from_word(word: usize) -> Self;
-  fn to_usize(self) -> usize;
+  fn from_u64(x: u64) -> Self;
+  fn to_u64(self) -> u64;
 }
 
 impl ReadWriteUint for usize {
@@ -43,13 +43,13 @@ impl ReadWriteUint for usize {
   const BITS: Bitlen = WORD_BITLEN;
 
   #[inline]
-  fn from_word(word: usize) -> Self {
-    word
+  fn from_u64(x: u64) -> Self {
+    x as Self
   }
 
   #[inline]
-  fn to_usize(self) -> usize {
-    self
+  fn to_u64(self) -> u64 {
+    self as u64
   }
 }
 
@@ -59,12 +59,12 @@ impl<U: UnsignedLike> ReadWriteUint for U {
   const BITS: Bitlen = <Self as UnsignedLike>::BITS;
 
   #[inline]
-  fn from_word(word: usize) -> Self {
-    <Self as UnsignedLike>::from_word(word)
+  fn from_u64(x: u64) -> Self {
+    <Self as UnsignedLike>::from_u64(x)
   }
 
   #[inline]
-  fn to_usize(self) -> usize {
-    <Self as UnsignedLike>::to_usize(self)
+  fn to_u64(self) -> u64 {
+    <Self as UnsignedLike>::to_u64(self)
   }
 }

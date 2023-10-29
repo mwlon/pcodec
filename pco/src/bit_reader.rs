@@ -16,10 +16,14 @@ pub fn make_extension_for(slice: &[u8], padding: usize) -> Vec<u8> {
   res
 }
 
+// Q: Why u64?
+// A: It's the largest data type most instruction sets have support for (and
+//    can do few-cycle/SIMD ops on). e.g. even 32-bit wasm has 64-bit ints and
+//    opcodes.
 #[inline]
-pub fn word_at(src: &[u8], byte_idx: usize) -> usize {
-  let raw_bytes = unsafe { *(src.as_ptr().add(byte_idx) as *const [u8; BYTES_PER_WORD]) };
-  usize::from_le_bytes(raw_bytes)
+pub fn u64_at(src: &[u8], byte_idx: usize) -> u64 {
+  let raw_bytes = unsafe { *(src.as_ptr().add(byte_idx) as *const [u8; 8]) };
+  u64::from_le_bytes(raw_bytes)
 }
 
 #[inline]
@@ -51,12 +55,12 @@ pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_WORDS: usize>(
   //    For the 3rd word and onward, we skip 8 bytes forward. Due to how we
   //    handled the 2nd word, the most we'll every need to shift by is
   //    precision - 8, which is safe.
-  let mut res = U::from_word(word_at(src, byte_idx) >> bits_past_byte);
+  let mut res = U::from_u64(u64_at(src, byte_idx) >> bits_past_byte);
   let mut processed = min(n, WORD_BITLEN - 8 - bits_past_byte);
   byte_idx += BYTES_PER_WORD - 1;
 
   for _ in 0..MAX_EXTRA_WORDS {
-    res |= U::from_word(word_at(src, byte_idx)) << processed;
+    res |= U::from_u64(u64_at(src, byte_idx)) << processed;
     processed += WORD_BITLEN;
     byte_idx += BYTES_PER_WORD;
   }
