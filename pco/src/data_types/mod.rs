@@ -90,12 +90,12 @@ pub trait UnsignedLike:
 
   /// Converts a `usize` into this type. Panics if the conversion is
   /// impossible.
-  fn from_word(word: usize) -> Self;
+  fn from_u64(x: u64) -> Self;
 
   fn leading_zeros(self) -> Bitlen;
 
   /// Converts the unsigned integer to a usize, truncating higher bits if necessary.
-  fn to_usize(self) -> usize;
+  fn to_u64(self) -> u64;
 
   fn wrapping_add(self, other: Self) -> Self;
   fn wrapping_sub(self, other: Self) -> Self;
@@ -142,7 +142,6 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// This must match the number of bytes in the `to_bytes` and `from_bytes`
   /// implementations.
   /// Note that booleans have 8 physical bits (not 1).
-  const PHYSICAL_BITS: usize;
   const IS_FLOAT: bool = false;
 
   /// The unsigned integer this type can convert between to do

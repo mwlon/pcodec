@@ -86,7 +86,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     println!("number of chunks: {}", metas.len());
     let total_n: usize = chunk_ns.iter().sum();
     println!("total n: {}", total_n);
-    let uncompressed_size = P::Num::PHYSICAL_BITS / 8 * total_n;
+    let uncompressed_size = <P::Num as NumberLike>::Unsigned::BITS as usize / 8 * total_n;
     println!(
       "uncompressed byte size: {}",
       uncompressed_size
@@ -120,7 +120,10 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
           (Mode::Gcd, 0) => "primary".to_string(),
           (Mode::FloatMult(config), 0) => format!("multiplier [x{}]", config.base),
           (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
-          _ => panic!("unknown latent: {:?}/{}", meta.mode, latent_idx),
+          _ => panic!(
+            "unknown latent: {:?}/{}",
+            meta.mode, latent_idx
+          ),
         };
         let show_as_float_int = matches!(meta.mode, Mode::FloatMult { .. }) && latent_idx == 0;
         let show_as_delta = (matches!(meta.mode, Mode::FloatMult { .. }) && latent_idx == 1)

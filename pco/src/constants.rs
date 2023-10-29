@@ -19,7 +19,8 @@ pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
 
 // padding
 pub const HEADER_PADDING: usize = 1;
-pub const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + BYTES_PER_WORD + 1;
+// + 9 because we might read an extra u64 (8 bytes), plus 1 for good measure
+pub const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + 9;
 // Chunk meta padding is enough for one full batch of bins; this should also
 // generously cover the data needed to read the other parts of chunk meta.
 pub const CHUNK_META_PADDING: usize =
@@ -30,11 +31,6 @@ pub const PAGE_LATENT_META_PADDING: usize =
 // generously cover the data needed to read the page meta.
 pub const PAGE_PADDING: usize =
   FULL_BATCH_SIZE * (MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES) + OVERSHOOT_PADDING;
-
-// native architecture info
-pub const WORD_SIZE: usize = usize::BITS as usize;
-pub const WORD_BITLEN: Bitlen = usize::BITS as Bitlen;
-pub const BYTES_PER_WORD: usize = WORD_SIZE / 8;
 
 // cutoffs and legal parameter values
 pub const AUTO_DELTA_LIMIT: usize = 1100;
