@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::bit_reader::u64_at;
 use crate::bits;
-use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
+use crate::constants::Bitlen;
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
 
@@ -21,7 +21,7 @@ pub fn write_u64_to(x: u64, byte_idx: usize, dst: &mut [u8]) {
 }
 
 #[inline]
-pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
+pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_U64S: Bitlen>(
   x: U,
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
@@ -30,15 +30,18 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_WORDS: Bitlen>(
 ) {
   // See bit_reader for an explanation of why this is fast and how it works.
   let x = bits::lowest_bits(x, n);
-  let word = u64_at(dst, byte_idx) | (x.to_u64() << bits_past_byte);
-  write_u64_to(word, byte_idx, dst);
-  let mut processed = WORD_BITLEN - 8 - bits_past_byte;
-  byte_idx += BYTES_PER_WORD - 1;
+  write_u64_to(
+    u64_at(dst, byte_idx) | (x.to_u64() << bits_past_byte),
+    byte_idx,
+    dst,
+  );
+  let mut processed = 56 - bits_past_byte;
+  byte_idx += 7;
 
-  for _ in 0..MAX_EXTRA_WORDS {
+  for _ in 0..MAX_EXTRA_U64S {
     write_u64_to((x >> processed).to_u64(), byte_idx, dst);
-    processed += WORD_BITLEN;
-    byte_idx += BYTES_PER_WORD;
+    processed += 64;
+    byte_idx += 8;
   }
 }
 
@@ -98,7 +101,7 @@ impl<W: Write> BitWriter<W> {
 
   pub fn write_uint<U: ReadWriteUint>(&mut self, x: U, n: Bitlen) {
     self.refill();
-    match U::MAX_EXTRA_WORDS {
+    match U::MAX_EXTRA_U64S {
       0 => write_uint_to::<U, 0>(
         x,
         self.stale_byte_idx,
@@ -121,8 +124,8 @@ impl<W: Write> BitWriter<W> {
         &mut self.buf,
       ),
       _ => panic!(
-        "[BitWriter] data type too large (extra words {} > 2)",
-        U::MAX_EXTRA_WORDS
+        "[BitWriter] data type too large (extra u64's {} > 2)",
+        U::MAX_EXTRA_U64S
       ),
     }
     self.consume(n);

@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::mem;
 
 use crate::bits;
-use crate::constants::{Bitlen, BYTES_PER_WORD, WORD_BITLEN};
+use crate::constants::Bitlen;
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
 
@@ -27,42 +27,42 @@ pub fn u64_at(src: &[u8], byte_idx: usize) -> u64 {
 }
 
 #[inline]
-pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_WORDS: usize>(
+pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_U64S: usize>(
   src: &[u8],
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
   n: Bitlen,
 ) -> U {
   // Q: Why is this fast?
-  // A: The 0..MAX_EXTRA_WORDS can be unrolled at compile time and interact
+  // A: The 0..MAX_EXTRA_U64S can be unrolled at compile time and interact
   //    freely with an outer loop, allowing really fast SIMD stuff.
   //
   // Q: Why does this work?
-  // A: We set MAX_EXTRA_WORDS so that e.g. on 64 bit architectures,
-  //    0  to 57  bit reads -> 0 extra words
-  //    58 to 113 bit reads -> 1 extra words
-  //    113 to 128 bit reads -> 2 extra words
-  //    During the 1st word (prior to the loop), we read all bytes from the
-  //    current word. Due to our bit packing, up to the first 7 of these may
+  // A: We set MAX_EXTRA_U64S so that e.g. on 64 bit architectures,
+  //    0  to 57  bit reads -> 0 extra u64's
+  //    58 to 113 bit reads -> 1 extra u64's
+  //    113 to 128 bit reads -> 2 extra u64's
+  //    During the 1st u64 (prior to the loop), we read all bytes from the
+  //    current u64. Due to our bit packing, up to the first 7 of these may
   //    be useless, so we can read up to (64 - 7) = 57 bits safely from a
-  //    single word. We right shift by only up to 7 bits, which is safe.
+  //    single u64. We right shift by only up to 7 bits, which is safe.
   //
-  //    For the 2nd word, we skip only 7 bytes forward. This will overlap with
-  //    the 1st word by 1 byte, which seems useless, but allows us to avoid one
+  //    For the 2nd u64, we skip only 7 bytes forward. This will overlap with
+  //    the 1st u64 by 1 byte, which seems useless, but allows us to avoid one
   //    nasty case: left shifting by U::BITS (a panic). This could happen e.g.
   //    with 64-bit reads when we start out byte-aligned (bits_past_byte=0).
   //
-  //    For the 3rd word and onward, we skip 8 bytes forward. Due to how we
-  //    handled the 2nd word, the most we'll every need to shift by is
+  //    For the 3rd u64 and onward, we skip 8 bytes forward. Due to how we
+  //    handled the 2nd u64, the most we'll every need to shift by is
   //    precision - 8, which is safe.
   let mut res = U::from_u64(u64_at(src, byte_idx) >> bits_past_byte);
-  let mut processed = min(n, WORD_BITLEN - 8 - bits_past_byte);
-  byte_idx += BYTES_PER_WORD - 1;
+  let mut processed = min(n, 56 - bits_past_byte);
+  byte_idx += 7;
 
-  for _ in 0..MAX_EXTRA_WORDS {
+  for _ in 0..MAX_EXTRA_U64S {
     res |= U::from_u64(u64_at(src, byte_idx)) << processed;
-    processed += WORD_BITLEN;
-    byte_idx += BYTES_PER_WORD;
+    processed += 64;
+    byte_idx += 8;
   }
 
   bits::lowest_bits(res, n)
@@ -205,7 +205,7 @@ impl<'a> BitReader<'a> {
 
   pub fn read_uint<U: ReadWriteUint>(&mut self, n: Bitlen) -> U {
     self.refill();
-    let res = match U::MAX_EXTRA_WORDS {
+    let res = match U::MAX_EXTRA_U64S {
       0 => read_uint_at::<U, 0>(
         self.current_stream,
         self.stale_byte_idx,
@@ -225,8 +225,8 @@ impl<'a> BitReader<'a> {
         n,
       ),
       _ => panic!(
-        "[BitReader] data type too large (extra words {} > 2)",
-        U::MAX_EXTRA_WORDS
+        "[BitReader] data type too large (extra u64's {} > 2)",
+        U::MAX_EXTRA_U64S
       ),
     };
     self.consume(n);

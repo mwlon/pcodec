@@ -3,11 +3,11 @@ use crate::data_types::UnsignedLike;
 use crate::read_write_uint::ReadWriteUint;
 
 #[inline]
-pub fn lowest_bits<U: ReadWriteUint>(word: U, n: Bitlen) -> U {
+pub fn lowest_bits<U: ReadWriteUint>(x: U, n: Bitlen) -> U {
   if n >= U::BITS {
-    word
+    x
   } else {
-    word & ((U::ONE << n) - U::ONE)
+    x & ((U::ONE << n) - U::ONE)
   }
 }
 

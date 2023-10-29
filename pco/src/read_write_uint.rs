@@ -1,10 +1,10 @@
 use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Shl, Shr, Sub};
 
-use crate::constants::{Bitlen, WORD_BITLEN};
+use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 
-pub const fn calc_max_extra_words(precision: Bitlen) -> usize {
+pub const fn calc_max_extra_u64s(precision: Bitlen) -> usize {
   // See bit_reader::read_uint_at for an explanation of these thresholds.
   if precision <= 57 {
     0
@@ -31,7 +31,7 @@ pub trait ReadWriteUint:
   const ZERO: Self;
   const ONE: Self;
   const BITS: Bitlen;
-  const MAX_EXTRA_WORDS: usize = calc_max_extra_words(Self::BITS);
+  const MAX_EXTRA_U64S: usize = calc_max_extra_u64s(Self::BITS);
 
   fn from_u64(x: u64) -> Self;
   fn to_u64(self) -> u64;
@@ -40,7 +40,7 @@ pub trait ReadWriteUint:
 impl ReadWriteUint for usize {
   const ZERO: Self = 0;
   const ONE: Self = 1;
-  const BITS: Bitlen = WORD_BITLEN;
+  const BITS: Bitlen = usize::BITS;
 
   #[inline]
   fn from_u64(x: u64) -> Self {

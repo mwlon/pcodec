@@ -142,7 +142,6 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
   /// This must match the number of bytes in the `to_bytes` and `from_bytes`
   /// implementations.
   /// Note that booleans have 8 physical bits (not 1).
-  const PHYSICAL_BITS: usize;
   const IS_FLOAT: bool = false;
 
   /// The unsigned integer this type can convert between to do

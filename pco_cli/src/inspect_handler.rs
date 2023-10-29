@@ -86,7 +86,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     println!("number of chunks: {}", metas.len());
     let total_n: usize = chunk_ns.iter().sum();
     println!("total n: {}", total_n);
-    let uncompressed_size = P::Num::PHYSICAL_BITS / 8 * total_n;
+    let uncompressed_size = <P::Num as NumberLike>::Unsigned::BITS as usize / 8 * total_n;
     println!(
       "uncompressed byte size: {}",
       uncompressed_size
