@@ -1,6 +1,6 @@
 [package]
 name = "pco"
-version = "0.0.0-alpha.1"
+version = "0.0.0-alpha.2"
 edition = "2018"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
