@@ -43,6 +43,12 @@ This allows
 (as long as the overall chunk has >2k or so)
 * less bloat by omitting metadata that the wrapping format must retain
 
+## Important API Note
+
+In some places, pco methods accept a destination (either W: Write or &mut [T: NumberLike]).
+If pco returns an error, the pco struct's state should be unaffected, but the destination
+may have been modified.
+
 ## Advanced
 
 ### Custom Data Types
