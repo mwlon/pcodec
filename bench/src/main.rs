@@ -136,14 +136,12 @@ fn print_stats(mut stats: Vec<PrintStat>, opt: &Opt) {
       .or_default()
       .add_assign(stat.clone());
   }
-  stats.extend(
-    opt.codecs.iter().map(|codec| {
-      let codec = codec.to_string();
-      let mut stat = aggregate_by_codec.get(&codec).cloned().unwrap();
-      stat.codec = codec;
-      stat
-    })
-  );
+  stats.extend(opt.codecs.iter().map(|codec| {
+    let codec = codec.to_string();
+    let mut stat = aggregate_by_codec.get(&codec).cloned().unwrap();
+    stat.codec = codec;
+    stat
+  }));
   stats.push(aggregate);
   let table = Table::new(stats)
     .with(Style::rounded())

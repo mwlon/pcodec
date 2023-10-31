@@ -395,7 +395,6 @@ pub(crate) fn new<T: NumberLike>(
 
     let table = CompressionTable::from(trained.infos);
     let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
-    println!("encoder size log {}", encoder.size_log());
 
     latent_metas.push(ChunkLatentMeta {
       bins,
@@ -554,6 +553,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
     let mut writer = BitWriter::new(dst, PAGE_PADDING);
 
+    // TODO why doesn't this take page_idx? Am I doing repeated work
+    // (or worse)?
     let dissected_src = self.dissect_unsigneds()?;
 
     let mut latent_metas = Vec::with_capacity(self.n_latents);

@@ -1,6 +1,7 @@
 use crate::codecs::CodecInternal;
 use crate::dtypes::Dtype;
 use anyhow::{anyhow, Result};
+use pco::PagingSpec;
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {
@@ -22,6 +23,10 @@ impl CodecInternal for PcoConfig {
         .unwrap_or("auto".to_string()),
       "use_gcds" => self.compressor_config.use_gcds.to_string(),
       "use_float_mult" => self.compressor_config.use_float_mult.to_string(),
+      "page_size" => match self.compressor_config.paging_spec {
+        PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
+        _ => panic!("unexpected paging spec"),
+      },
       _ => panic!("bad conf"),
     }
   }
@@ -43,6 +48,9 @@ impl CodecInternal for PcoConfig {
       }
       "use_gcds" => self.compressor_config.use_gcds = value.parse::<bool>().unwrap(),
       "use_float_mult" => self.compressor_config.use_float_mult = value.parse::<bool>().unwrap(),
+      "page_size" => {
+        self.compressor_config.paging_spec = PagingSpec::EqualPagesUpTo(value.parse().unwrap())
+      }
       _ => return Err(anyhow!("unknown conf: {}", key)),
     }
     Ok(())
