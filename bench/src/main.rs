@@ -126,7 +126,7 @@ fn handle(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   PrintStat::compute(dataset, config.to_string(), &benches)
 }
 
-fn print_stats(mut stats: Vec<PrintStat>) {
+fn print_stats(mut stats: Vec<PrintStat>, opt: &Opt) {
   let mut aggregate = PrintStat::default();
   let mut aggregate_by_codec: HashMap<String, PrintStat> = HashMap::new();
   for stat in &stats {
@@ -137,10 +137,12 @@ fn print_stats(mut stats: Vec<PrintStat>) {
       .add_assign(stat.clone());
   }
   stats.extend(
-    aggregate_by_codec.into_iter().map(|(codec, mut stat)| {
+    opt.codecs.iter().map(|codec| {
+      let codec = codec.to_string();
+      let mut stat = aggregate_by_codec.get(&codec).cloned().unwrap();
       stat.codec = codec;
       stat
-    }),
+    })
   );
   stats.push(aggregate);
   let table = Table::new(stats)
@@ -177,5 +179,5 @@ fn main() {
     }
   }
 
-  print_stats(stats);
+  print_stats(stats, &opt);
 }

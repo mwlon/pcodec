@@ -43,11 +43,14 @@ This allows
 (as long as the overall chunk has >2k or so)
 * less bloat by omitting metadata that the wrapping format must retain
 
-## Important API Note
+## Important API Notes
 
-In some places, pco methods accept a destination (either W: Write or &mut [T: NumberLike]).
+* In some places, pco methods accept a destination (either W: Write or &mut [T: NumberLike]).
 If pco returns an error, the pco struct's state should be unaffected, but the destination
 may have been modified.
+* Pco will always try to process all numbers, and it will fail if insufficient bytes are
+available. For instance, during decompression pco will try to fill the entire `&mut [T]`
+passed in, returning an insufficient data error if the `&[u8]` passed in is not long enough.
 
 ## Advanced
 
