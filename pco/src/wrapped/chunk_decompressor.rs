@@ -33,6 +33,6 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     let mut reader = BitReader::new(src, &extension);
     let page_meta = PageMeta::<T::Unsigned>::parse_from(&mut reader, &self.meta)?;
     let pd = PageDecompressor::new(self, n, page_meta, reader.bits_past_byte % 8)?;
-    Ok((pd, reader.bytes_consumed()?))
+    Ok((pd, reader.aligned_bytes_consumed()?))
   }
 }

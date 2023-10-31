@@ -38,7 +38,7 @@ pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_U64S: usize>(
   //    freely with an outer loop, allowing really fast SIMD stuff.
   //
   // Q: Why does this work?
-  // A: We set MAX_EXTRA_U64S so that e.g. on 64 bit architectures,
+  // A: We set MAX_EXTRA_U64S so that,
   //    0  to 57  bit reads -> 0 extra u64's
   //    58 to 113 bit reads -> 1 extra u64's
   //    113 to 128 bit reads -> 2 extra u64's
@@ -53,8 +53,8 @@ pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_U64S: usize>(
   //    with 64-bit reads when we start out byte-aligned (bits_past_byte=0).
   //
   //    For the 3rd u64 and onward, we skip 8 bytes forward. Due to how we
-  //    handled the 2nd u64, the most we'll every need to shift by is
-  //    precision - 8, which is safe.
+  //    handled the 2nd u64, the most we'll ever need to shift by is
+  //    U::BITS - 8, which is safe.
   let mut res = U::from_u64(u64_at(src, byte_idx) >> bits_past_byte);
   let mut processed = min(n, 56 - bits_past_byte);
   byte_idx += 7;
@@ -164,6 +164,8 @@ impl<'a> BitReader<'a> {
     ))
   }
 
+
+
   // Returns the reader's current byte index. Will return an error if the
   // reader is at a misaligned position.
   fn aligned_byte_idx(&self) -> PcoResult<usize> {
@@ -267,11 +269,15 @@ impl<'a> BitReader<'a> {
   }
 
   pub fn bytes_consumed(self) -> PcoResult<usize> {
+    Ok(self.bits_consumed()? / 8)
+  }
+
+  pub fn aligned_bytes_consumed(self) -> PcoResult<usize> {
     if self.bits_past_byte % 8 != 0 {
       panic!("dangling bits remain; this is likely a bug in pco");
     }
 
-    Ok(self.bits_consumed()? / 8)
+    self.bytes_consumed()
   }
 }
 
@@ -300,7 +306,7 @@ mod tests {
     reader.ensure_padded(4)?;
     assert_eq!(reader.read_usize(15), 255 + 65 * 256);
     reader.drain_empty_byte("should be empty")?;
-    let consumed = reader.bytes_consumed()?;
+    let consumed = reader.aligned_bytes_consumed()?;
     assert_eq!(consumed, 5);
     Ok(())
   }

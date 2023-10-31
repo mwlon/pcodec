@@ -28,7 +28,7 @@ impl FileDecompressor {
     let format_version = FormatVersion::parse_from(&mut reader)?;
     Ok((
       Self { format_version },
-      reader.bytes_consumed()?,
+      reader.aligned_bytes_consumed()?,
     ))
   }
 
@@ -48,6 +48,6 @@ impl FileDecompressor {
     let mut reader = BitReader::new(src, &extension);
     let chunk_meta = ChunkMeta::<T::Unsigned>::parse_from(&mut reader, &self.format_version)?;
     let cd = ChunkDecompressor::from(chunk_meta);
-    Ok((cd, reader.bytes_consumed()?))
+    Ok((cd, reader.aligned_bytes_consumed()?))
   }
 }

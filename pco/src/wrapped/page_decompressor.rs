@@ -248,6 +248,7 @@ impl<T: NumberLike> PageDecompressor<T> {
     };
     self.state.bits_past_byte = reader.bits_past_byte % 8;
 
+    // TODO make a unit test checking this works when reader is misaligned
     Ok((progress, reader.bytes_consumed()?))
   }
 
