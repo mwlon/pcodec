@@ -112,6 +112,12 @@ impl<U: UnsignedLike> ChunkLatentMeta<U> {
         ans_size_log,
       )));
     }
+    if ans_size_log > MAX_ANS_BITS {
+      return Err(PcoError::corruption(format!(
+        "ANS size log ({}) should not be greater than {}",
+        ans_size_log, MAX_ANS_BITS,
+      )));
+    }
 
     let mut bins = Vec::with_capacity(n_bins);
     while bins.len() < n_bins {

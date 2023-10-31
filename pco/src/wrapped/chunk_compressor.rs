@@ -153,11 +153,11 @@ fn quantize_weights<U: UnsignedLike>(
   comp_level: usize,
 ) -> Bitlen {
   let counts = infos.iter().map(|info| info.weight).collect::<Vec<_>>();
-  // This max size isn't big enough for all the bins when compression level is
-  // high, but it gets overridden later by min compression level if necessary.
-  // Going past 2^10 is undesirable because things might stop fitting in L1
-  // cache.
-  let max_size_log = min(comp_level as Bitlen + 2, 10);
+  // This max size is just big enough to handle the maximum number of bins,
+  // and it's small enough that the encoding/decoding ANS tables will
+  // mostly fit into L1 cache. We cap it so that higher compression levels
+  // don't incur substantially slower decompression.
+  let max_size_log = min(comp_level as Bitlen + 2, 12);
   let (size_log, weights) = ans::quantize_weights(counts, n_unsigneds, max_size_log);
   for (i, weight) in weights.into_iter().enumerate() {
     infos[i].weight = weight;
@@ -553,6 +553,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
     let mut writer = BitWriter::new(dst, PAGE_PADDING);
 
+    // TODO why doesn't this take page_idx? Am I doing repeated work
+    // (or worse)?
     let dissected_src = self.dissect_unsigneds()?;
 
     let mut latent_metas = Vec::with_capacity(self.n_latents);

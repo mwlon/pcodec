@@ -1,29 +1,35 @@
-use crate::bits;
 use crate::chunk_config::ChunkConfig;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::compressor::FileCompressor;
 use crate::standalone::decompressor::FileDecompressor;
-
-const DEFAULT_CHUNK_SIZE: usize = 1_000_000;
+use crate::PagingSpec;
 
 /// Takes in a slice of numbers and an exact configuration and returns
 /// compressed bytes.
 ///
 /// Will return an error if the compressor config is invalid.
+/// This will use the `PagingSpec` in `ChunkConfig` to decide where to split
+/// chunks.
+/// For standalone, the concepts of chunk and page are conflated since each
+/// chunk has exactly one page.
 pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
   let mut dst = Vec::new();
   let file_compressor = FileCompressor::default();
   file_compressor.write_header(&mut dst)?;
 
-  let n_chunks = bits::ceil_div(nums.len(), DEFAULT_CHUNK_SIZE);
-  if n_chunks > 0 {
-    let n_per_chunk = bits::ceil_div(nums.len(), n_chunks);
-    for chunk in nums.chunks(n_per_chunk) {
-      let chunk_compressor = file_compressor.chunk_compressor(chunk, config)?;
-      dst.reserve(chunk_compressor.chunk_size_hint());
-      chunk_compressor.write_chunk(&mut dst)?;
-    }
+  // here we use the paging spec to determine chunks; each chunk has 1 page
+  let page_sizes = config.paging_spec.page_sizes(nums.len())?;
+  let mut start = 0;
+  let mut this_chunk_config = config.clone();
+  for &page_size in &page_sizes {
+    let end = start + page_size;
+    this_chunk_config.paging_spec = PagingSpec::ExactPageSizes(vec![page_size]);
+    let chunk_compressor =
+      file_compressor.chunk_compressor(&nums[start..end], &this_chunk_config)?;
+    dst.reserve(chunk_compressor.chunk_size_hint());
+    chunk_compressor.write_chunk(&mut dst)?;
+    start = end;
   }
 
   file_compressor.write_footer(&mut dst)?;
