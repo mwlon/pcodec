@@ -7,7 +7,7 @@ use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, PAGE_PADDING};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::page_meta::PageLatentMeta;
-use crate::{ans, bit_reader, read_write_uint, ChunkLatentMeta};
+use crate::{ans, bit_reader, read_write_uint, ChunkLatentMeta, Mode};
 
 const MAX_ANS_SYMBOLS_PER_U64: usize = 4;
 
@@ -65,8 +65,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   pub fn new(
     chunk_latent_meta: &ChunkLatentMeta<U>,
     page_latent_meta: &PageLatentMeta<U>,
-    needs_gcd: bool,
-    is_trivial: bool,
+    mode: Mode<U>,
   ) -> PcoResult<Self> {
     let extra_u64s_per_offset =
       read_write_uint::calc_max_extra_u64s(chunk_latent_meta.max_bits_per_offset());
@@ -75,7 +74,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       .iter()
       .map(BinDecompressionInfo::from)
       .collect::<Vec<_>>();
-    let maybe_constant_value = if is_trivial {
+    let maybe_constant_value = if chunk_latent_meta.is_trivial() {
       chunk_latent_meta.bins.first().map(|bin| bin.lower)
     } else {
       None
@@ -86,7 +85,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       extra_u64s_per_offset,
       infos,
       maybe_constant_value,
-      needs_gcd,
+      needs_gcd: chunk_latent_meta.needs_gcd(mode),
       decoder,
       state: State {
         offset_bits_csum_scratch: [0; FULL_BATCH_SIZE],

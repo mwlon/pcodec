@@ -15,7 +15,7 @@ use crate::float_mult_utils::FloatMultConfig;
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::modes::classic::ClassicMode;
 use crate::modes::gcd;
-use crate::modes::gcd::{use_gcd_arithmetic, GcdMode};
+use crate::modes::gcd::GcdMode;
 use crate::page_meta::{PageLatentMeta, PageMeta};
 use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, PageLatents};
 use crate::{
@@ -248,6 +248,8 @@ struct LatentVarPolicy<U: UnsignedLike> {
   table: CompressionTable<U>,
   encoder: ans::Encoder,
   max_bits_per_latent: Bitlen,
+  is_trivial: bool,
+  needs_gcd: bool,
 }
 
 /// Holds metadata about a chunk and supports compression.
@@ -255,9 +257,6 @@ struct LatentVarPolicy<U: UnsignedLike> {
 pub struct ChunkCompressor<U: UnsignedLike> {
   meta: ChunkMeta<U>,
   latent_var_policies: Vec<LatentVarPolicy<U>>,
-  n_latents: usize,
-  n_nontrivial_latents: usize,
-  needs_gcds: bool,
   paginated_latents: Vec<PageLatents<U>>,
 }
 
@@ -389,19 +388,23 @@ fn unsigned_new<U: UnsignedLike>(
       ans_size_log: trained.ans_size_log,
     };
     let max_bits_per_latent = latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset();
+    let is_trivial = latent_meta.is_trivial();
+    let needs_gcd = latent_meta.needs_gcd(naive_mode);
 
     var_metas.push(latent_meta);
     var_policies.push(LatentVarPolicy {
       table,
       encoder,
       max_bits_per_latent,
+      is_trivial,
+      needs_gcd,
     });
   }
 
   // In some cases, we can demote to a faster mode after bin optimization.
   let optimized_mode = match naive_mode {
     Mode::Gcd => {
-      if var_metas.iter().any(|m| use_gcd_arithmetic(&m.bins)) {
+      if var_policies.iter().any(|policy| policy.needs_gcd) {
         Mode::Gcd
       } else {
         Mode::Classic
@@ -412,15 +415,9 @@ fn unsigned_new<U: UnsignedLike>(
 
   let meta = ChunkMeta::new(optimized_mode, delta_order, var_metas);
 
-  let n_latents = optimized_mode.n_latents();
-  let (needs_gcds, n_nontrivial_latents) = meta.nontrivial_gcd_and_n_latents();
-
   Ok(ChunkCompressor {
     meta,
     latent_var_policies: var_policies,
-    n_latents,
-    n_nontrivial_latents,
-    needs_gcds,
     paginated_latents,
   })
 }
@@ -507,8 +504,6 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     let Self {
       latent_var_policies,
       paginated_latents,
-      needs_gcds,
-      n_nontrivial_latents,
       ..
     } = self;
 
@@ -529,17 +524,17 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
       dissected_latents: Vec::new(),
     };
 
-    for (var_policy, var_latents) in latent_var_policies
-      .iter()
-      .zip(latent_page.vars.iter())
-      .take(*n_nontrivial_latents)
-    {
+    for (var_policy, var_latents) in latent_var_policies.iter().zip(latent_page.vars.iter()) {
+      if var_policy.is_trivial {
+        continue;
+      }
+
       let latents = &var_latents.latents;
       let LatentVarPolicy { table, encoder, .. } = var_policy;
       let mut dissected_latents = uninit_dissected_latents(latents.len(), encoder.default_state());
 
       // we go through in reverse for ANS!
-      let mut lbd = LatentBatchDissector::new(*needs_gcds, table, encoder);
+      let mut lbd = LatentBatchDissector::new(var_policy.needs_gcd, table, encoder);
       for (batch_idx, batch) in latents.chunks(FULL_BATCH_SIZE).enumerate().rev() {
         let base_i = batch_idx * FULL_BATCH_SIZE;
         lbd.dissect_latent_batch(batch, base_i, &mut dissected_latents)
@@ -587,8 +582,9 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
     let dissected_src = self.dissect_unsigneds(page_idx)?;
 
-    let mut latent_metas = Vec::with_capacity(self.n_latents);
-    for latent_idx in 0..self.n_latents {
+    let n_latents = self.meta.mode.n_latents();
+    let mut latent_metas = Vec::with_capacity(n_latents);
+    for latent_idx in 0..n_latents {
       let delta_moments = self.page_moments(page_idx, latent_idx).clone();
 
       let ans_final_state_idxs = dissected_src

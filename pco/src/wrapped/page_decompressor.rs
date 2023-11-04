@@ -117,22 +117,20 @@ impl<T: NumberLike> PageDecompressor<T> {
       .map(|latent| latent.delta_moments.clone())
       .collect();
 
-    let (needs_gcd, n_nontrivial_latents) = chunk_meta.nontrivial_gcd_and_n_latents();
     let mut latent_batch_decompressors = Vec::new();
     for latent_idx in 0..mode.n_latents() {
-      if chunk_meta.latents[latent_idx].bins.is_empty() && n > chunk_meta.delta_encoding_order {
+      let chunk_latent_meta = &chunk_meta.latents[latent_idx];
+      if chunk_latent_meta.bins.is_empty() && n > chunk_meta.delta_encoding_order {
         return Err(PcoError::corruption(format!(
           "unable to decompress chunk with no bins and {} deltas",
           n - chunk_meta.delta_encoding_order,
         )));
       }
 
-      let is_trivial = latent_idx >= n_nontrivial_latents;
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
-        &chunk_meta.latents[latent_idx],
+        chunk_latent_meta,
         &page_meta.latents[latent_idx],
-        needs_gcd,
-        is_trivial,
+        chunk_meta.mode,
       )?);
     }
     // we don't store the whole ChunkMeta because it can get large due to bins
@@ -248,7 +246,6 @@ impl<T: NumberLike> PageDecompressor<T> {
     };
     self.state.bits_past_byte = reader.bits_past_byte % 8;
 
-    // TODO make a unit test checking this works when reader is misaligned
     Ok((progress, reader.bytes_consumed()?))
   }
 
