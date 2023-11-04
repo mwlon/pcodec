@@ -287,9 +287,10 @@ fn split_latents<T: NumberLike>(
   page_nums: &[T],
 ) -> PageLatents<T::Unsigned> {
   match naive_mode {
-    Mode::Classic | Mode::Gcd => PageLatents::new_pre_delta(
-      vec![page_nums.iter().map(|x| x.to_unsigned()).collect()],
-    ),
+    Mode::Classic | Mode::Gcd => PageLatents::new_pre_delta(vec![page_nums
+      .iter()
+      .map(|x| x.to_unsigned())
+      .collect()]),
     Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
       float_mult_utils::split_latents(page_nums, base, inv_base)
     }
@@ -440,7 +441,10 @@ pub(crate) fn new<T: NumberLike>(
   let mut page_start = 0;
   for &page_size in &page_sizes {
     let page_end = page_start + page_size;
-    paginated_latents.push(split_latents(naive_mode, &nums[page_start..page_end]));
+    paginated_latents.push(split_latents(
+      naive_mode,
+      &nums[page_start..page_end],
+    ));
     page_start = page_end;
   }
 
@@ -450,7 +454,12 @@ pub(crate) fn new<T: NumberLike>(
     crate::auto_delta_encoding_order(nums, config.compression_level)?
   };
 
-  unsigned_new(paginated_latents, config, naive_mode, delta_order)
+  unsigned_new(
+    paginated_latents,
+    config,
+    naive_mode,
+    delta_order,
+  )
 }
 
 impl<U: UnsignedLike> ChunkCompressor<U> {
@@ -460,7 +469,11 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
   /// Returns the count of numbers this chunk will contain in each page.
   pub fn page_sizes(&self) -> Vec<usize> {
-    self.paginated_latents.iter().map(|page| page.page_n).collect()
+    self
+      .paginated_latents
+      .iter()
+      .map(|page| page.page_n)
+      .collect()
   }
 
   /// Returns pre-computed information about the chunk.
@@ -523,10 +536,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     {
       let latents = &var_latents.latents;
       let LatentVarPolicy { table, encoder, .. } = var_policy;
-      let mut dissected_latents = uninit_dissected_latents(
-        latents.len(),
-        encoder.default_state(),
-      );
+      let mut dissected_latents = uninit_dissected_latents(latents.len(), encoder.default_state());
 
       // we go through in reverse for ANS!
       let mut lbd = LatentBatchDissector::new(*needs_gcds, table, encoder);
@@ -547,7 +557,12 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   pub fn page_size_hint(&self, page_idx: usize) -> usize {
     let page_size = self.paginated_latents[page_idx].page_n;
     let mut bit_size = 0;
-    for (var_meta, var_policy) in self.meta.latents.iter().zip(self.latent_var_policies.iter()) {
+    for (var_meta, var_policy) in self
+      .meta
+      .latents
+      .iter()
+      .zip(self.latent_var_policies.iter())
+    {
       let meta_bit_size = self.meta.delta_encoding_order * U::BITS as usize
         + ANS_INTERLEAVING * var_meta.ans_size_log as usize;
       let nums_bit_size = page_size * var_policy.max_bits_per_latent as usize;
@@ -564,8 +579,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     if page_idx >= n_pages {
       return Err(PcoError::invalid_argument(format!(
         "page idx exceeds num pages ({} >= {})",
-        page_idx,
-        n_pages,
+        page_idx, n_pages,
       )));
     }
 

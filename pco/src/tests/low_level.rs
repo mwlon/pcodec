@@ -1,8 +1,8 @@
-use std::cmp::min;
 use crate::chunk_config::ChunkConfig;
 use crate::errors::{ErrorKind, PcoResult};
-use crate::PagingSpec;
 use crate::wrapped::{FileCompressor, FileDecompressor, PageDecompressor};
+use crate::PagingSpec;
+use std::cmp::min;
 
 struct Chunk {
   nums: Vec<i32>,
@@ -66,11 +66,8 @@ fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
       let page_end = page_start + page_size;
       let (mut pd, additional) = cd.page_decompressor(page_size, &compressed[consumed..])?;
       consumed += additional;
-      let (page_nums, additional) = try_decompressing_page_until_sufficient_data(
-        &mut pd,
-        &compressed[consumed..],
-        page_size,
-      )?;
+      let (page_nums, additional) =
+        try_decompressing_page_until_sufficient_data(&mut pd, &compressed[consumed..], page_size)?;
       assert_eq!(&page_nums, &chunk.nums[page_start..page_end]);
       consumed += additional;
       page_start = page_end;
@@ -88,7 +85,8 @@ fn test_low_level_wrapped() -> PcoResult<()> {
       config: ChunkConfig {
         delta_encoding_order: Some(0),
         paging_spec: PagingSpec::EqualPagesUpTo(500),
-        ..Default::default() },
+        ..Default::default()
+      },
     },
     Chunk {
       nums: vec![1, 2, 3],

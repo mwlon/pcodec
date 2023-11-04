@@ -19,10 +19,13 @@ pub struct PageLatents<U: UnsignedLike> {
 impl<U: UnsignedLike> PageLatents<U> {
   pub fn new_pre_delta(latents: Vec<Vec<U>>) -> Self {
     let page_n = latents[0].len();
-    let vars = latents.into_iter().map(|latents| PageVarLatents {
-      latents,
-      delta_moments: DeltaMoments::default(),
-    }).collect::<Vec<_>>();
+    let vars = latents
+      .into_iter()
+      .map(|latents| PageVarLatents {
+        latents,
+        delta_moments: DeltaMoments::default(),
+      })
+      .collect::<Vec<_>>();
     Self { page_n, vars }
   }
 }

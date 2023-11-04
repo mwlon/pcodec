@@ -164,8 +164,6 @@ impl<'a> BitReader<'a> {
     ))
   }
 
-
-
   // Returns the reader's current byte index. Will return an error if the
   // reader is at a misaligned position.
   fn aligned_byte_idx(&self) -> PcoResult<usize> {
