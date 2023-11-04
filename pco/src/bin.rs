@@ -78,7 +78,3 @@ impl<U: UnsignedLike> From<&Bin<U>> for BinDecompressionInfo<U> {
     }
   }
 }
-
-pub(crate) fn bins_are_trivial<U: UnsignedLike>(bins: &[Bin<U>]) -> bool {
-  bins.is_empty() || (bins.len() == 1 && bins[0].offset_bits == 0)
-}

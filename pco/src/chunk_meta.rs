@@ -1,7 +1,6 @@
 use std::cmp::min;
 use std::io::Write;
 
-use crate::bin;
 use crate::bin::Bin;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
@@ -142,6 +141,17 @@ impl<U: UnsignedLike> ChunkLatentMeta<U> {
 
     write_bins(&self.bins, mode, self.ans_size_log, writer)
   }
+
+  pub(crate) fn is_trivial(&self) -> bool {
+    self.bins.is_empty() || (self.bins.len() == 1 && self.bins[0].offset_bits == 0)
+  }
+
+  pub(crate) fn needs_gcd(&self, mode: Mode<U>) -> bool {
+    match mode {
+      Mode::Gcd => gcd::use_gcd_arithmetic(&self.bins),
+      _ => false,
+    }
+  }
 }
 
 /// The metadata of a pco chunk.
@@ -261,33 +271,6 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     writer.finish_byte();
     writer.flush()?;
     Ok(())
-  }
-
-  // TODO treat every latent var differently instead of having n_nontrivial_latents
-  pub(crate) fn nontrivial_gcd_and_n_latents(&self) -> (bool, usize) {
-    let primary_bins = &self.latents[0].bins;
-    match self.mode {
-      Mode::Classic | Mode::Gcd => {
-        if bin::bins_are_trivial(primary_bins) {
-          (false, 0)
-        } else {
-          let needs_gcd = gcd::use_gcd_arithmetic(primary_bins);
-          (needs_gcd, 1)
-        }
-      }
-      Mode::FloatMult(_) => {
-        let n_latents = if bin::bins_are_trivial(&self.latents[1].bins) {
-          if bin::bins_are_trivial(primary_bins) {
-            0
-          } else {
-            1
-          }
-        } else {
-          2
-        };
-        (false, n_latents)
-      }
-    }
   }
 
   pub(crate) fn latent_delta_order(&self, latent_idx: usize) -> usize {
