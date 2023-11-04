@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta;
-use crate::unsigned_src_dst::LatentSrc;
+use crate::unsigned_src_dst::PageLatents;
 
 const ARITH_CHUNK_SIZE: usize = 512;
 
@@ -19,12 +19,12 @@ pub fn join_latents<U: UnsignedLike>(base: U::Float, unsigneds: &mut [U], adjust
 
 // compressor doesn't batch, so we do that ourselves for efficiency
 pub fn split_latents<T: NumberLike>(
-  nums: &[T],
+  page_nums: &[T],
   base: <T::Unsigned as UnsignedLike>::Float,
   inv_base: <T::Unsigned as UnsignedLike>::Float,
-) -> LatentSrc<T::Unsigned> {
-  let nums = T::assert_float(nums);
-  let n = nums.len();
+) -> PageLatents<T::Unsigned> {
+  let page_nums = T::assert_float(page_nums);
+  let n = page_nums.len();
   let uninit_vec = || unsafe {
     let mut res = Vec::<T::Unsigned>::with_capacity(n);
     res.set_len(n);
@@ -34,7 +34,7 @@ pub fn split_latents<T: NumberLike>(
   let mut adjustments = uninit_vec();
   let mut mults = [<T::Unsigned as UnsignedLike>::Float::ZERO; ARITH_CHUNK_SIZE];
   let mut base_i = 0;
-  for chunk in nums.chunks(ARITH_CHUNK_SIZE) {
+  for chunk in page_nums.chunks(ARITH_CHUNK_SIZE) {
     for i in 0..chunk.len() {
       mults[i] = (chunk[i] * inv_base).round();
     }
@@ -49,7 +49,7 @@ pub fn split_latents<T: NumberLike>(
     delta::toggle_center_in_place(&mut adjustments[base_i..base_i + chunk.len()]);
     base_i += ARITH_CHUNK_SIZE;
   }
-  LatentSrc::new(nums.len(), vec![unsigneds, adjustments])
+  PageLatents::new_pre_delta(vec![unsigneds, adjustments])
 }
 
 const MIN_SAMPLE: usize = 10;

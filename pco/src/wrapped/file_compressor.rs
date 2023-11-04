@@ -56,7 +56,7 @@ impl FileCompressor {
     let mut writer = BitWriter::new(dst, HEADER_PADDING);
     self.format_version.write_to(&mut writer)?;
     writer.flush()?;
-    Ok(writer.finish())
+    Ok(writer.into_inner())
   }
 
   /// Creates a `ChunkCompressor` that can be used to write chunk metadata

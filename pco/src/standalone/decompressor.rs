@@ -63,7 +63,7 @@ impl FileDecompressor {
         MAGIC_HEADER, header,
       )));
     }
-    let consumed = reader.bytes_consumed()?;
+    let consumed = reader.aligned_bytes_consumed()?;
 
     let (inner, additional) = wrapped::FileDecompressor::new(&src[consumed..])?;
     Ok((Self(inner), consumed + additional))
@@ -88,7 +88,7 @@ impl FileDecompressor {
     let dtype_or_termination_byte = reader.read_aligned_bytes(1)?[0];
 
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
-      return Ok((None, reader.bytes_consumed()?));
+      return Ok((None, reader.aligned_bytes_consumed()?));
     }
 
     if dtype_or_termination_byte != T::DTYPE_BYTE {
@@ -100,7 +100,7 @@ impl FileDecompressor {
     }
 
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1;
-    let mut consumed = reader.bytes_consumed()?;
+    let mut consumed = reader.aligned_bytes_consumed()?;
     let (inner_cd, additional) = self.0.chunk_decompressor::<T>(&src[consumed..])?;
     consumed += additional;
     let pre_page_consumed = consumed;

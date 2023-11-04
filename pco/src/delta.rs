@@ -35,67 +35,67 @@ impl<U: UnsignedLike> DeltaMoments<U> {
   }
 }
 
-// Without this, deltas in (say) [-5, 5] would be split out of order into
+// Without this, deltas in, say, [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].
+// This can be used to convert from
+// * unsigned deltas -> (effectively) signed deltas; encoding
+// * signed deltas -> unsigned deltas; decoding
 #[inline(never)]
-pub fn toggle_center_in_place<U: UnsignedLike>(dest: &mut [U]) {
-  for u in dest.iter_mut() {
+pub fn toggle_center_in_place<U: UnsignedLike>(unsigneds: &mut [U]) {
+  for u in unsigneds.iter_mut() {
     *u = u.wrapping_add(U::MID);
   }
 }
 
-#[inline(never)]
-fn first_order_encode_in_place<U: UnsignedLike>(dest: &mut Vec<U>) {
-  if dest.is_empty() {
+fn first_order_encode_in_place<U: UnsignedLike>(unsigneds: &mut Vec<U>) {
+  if unsigneds.is_empty() {
     return;
   }
 
-  for i in 0..dest.len() - 1 {
-    dest[i] = dest[i + 1].wrapping_sub(dest[i]);
+  for i in 0..unsigneds.len() - 1 {
+    unsigneds[i] = unsigneds[i + 1].wrapping_sub(unsigneds[i]);
   }
-  dest.truncate(dest.len() - 1);
+  unsigneds.truncate(unsigneds.len() - 1);
 }
 
-pub fn encode_in_place<U: UnsignedLike>(
-  unsigneds: &mut Vec<U>,
-  order: usize,
-  page_idxs: &[usize],
-) -> Vec<DeltaMoments<U>> {
+// used for a single page, so we return the delta moments
+#[inline(never)]
+pub fn encode_in_place<U: UnsignedLike>(unsigneds: &mut Vec<U>, order: usize) -> DeltaMoments<U> {
   if order == 0 {
-    return page_idxs.iter().map(|_| DeltaMoments::default()).collect();
+    // exit early so we don't toggle to signed values
+    return DeltaMoments::default();
   }
 
-  let mut page_moments = vec![Vec::with_capacity(order); page_idxs.len()];
+  let mut page_moments = Vec::with_capacity(order);
   for _ in 0..order {
-    for (page_idx, &i) in page_idxs.iter().enumerate() {
-      page_moments[page_idx].push(unsigneds.get(i).copied().unwrap_or(U::ZERO));
-    }
+    page_moments.push(unsigneds.get(0).copied().unwrap_or(U::ZERO));
+
     first_order_encode_in_place(unsigneds);
   }
-  let moments = page_moments
-    .into_iter()
-    .map(DeltaMoments::new)
-    .collect::<Vec<_>>();
   toggle_center_in_place(unsigneds);
-  moments
+
+  DeltaMoments::new(page_moments)
 }
 
-fn first_order_decode_in_place<U: UnsignedLike>(moment: &mut U, dest: &mut [U]) {
-  for delta in dest.iter_mut() {
+fn first_order_decode_in_place<U: UnsignedLike>(moment: &mut U, unsigneds: &mut [U]) {
+  for delta in unsigneds.iter_mut() {
     let tmp = *delta;
     *delta = *moment;
     *moment = moment.wrapping_add(tmp);
   }
 }
 
-pub fn decode_in_place<U: UnsignedLike>(delta_moments: &mut DeltaMoments<U>, dest: &mut [U]) {
+// used for a single batch, so we mutate the delta moments
+#[inline(never)]
+pub fn decode_in_place<U: UnsignedLike>(delta_moments: &mut DeltaMoments<U>, unsigneds: &mut [U]) {
   if delta_moments.order() == 0 {
+    // exit early so we don't toggle to signed values
     return;
   }
 
-  toggle_center_in_place(dest);
+  toggle_center_in_place(unsigneds);
   for moment in delta_moments.moments.iter_mut().rev() {
-    first_order_decode_in_place(moment, dest);
+    first_order_decode_in_place(moment, unsigneds);
   }
 }
 
@@ -109,7 +109,7 @@ mod tests {
     let mut deltas = orig_unsigneds.to_vec();
     let order = 2;
     let zero_delta = u32::MID;
-    let mut momentss = encode_in_place(&mut deltas, order, &[0, 3]);
+    let mut moments = encode_in_place(&mut deltas, order);
 
     // add back some padding we lose during compression
     assert_eq!(deltas.len(), orig_unsigneds.len() - order);
@@ -117,11 +117,10 @@ mod tests {
       deltas.push(zero_delta);
     }
 
-    decode_in_place::<u32>(&mut momentss[0], &mut deltas[..3]);
+    decode_in_place::<u32>(&mut moments, &mut deltas[..3]);
     assert_eq!(&deltas[..3], &orig_unsigneds[..3]);
-    assert_eq!(momentss[0], momentss[1]);
 
-    decode_in_place::<u32>(&mut momentss[1], &mut deltas[3..]);
+    decode_in_place::<u32>(&mut moments, &mut deltas[3..]);
     assert_eq!(&deltas[3..], &orig_unsigneds[3..]);
   }
 }
