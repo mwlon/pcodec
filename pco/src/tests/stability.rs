@@ -2,12 +2,13 @@ use crate::chunk_config::ChunkConfig;
 use crate::chunk_meta::ChunkMeta;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
+use crate::GcdSpec;
 use crate::standalone::{auto_decompress, FileCompressor};
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::Unsigned>> {
   let fc = FileCompressor::default();
   let config = ChunkConfig {
-    use_gcds: false,
+    gcd_spec: GcdSpec::Disabled,
     delta_encoding_order: Some(0),
     ..Default::default()
   };

@@ -112,7 +112,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   pub fn write_chunk<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, STANDALONE_CHUNK_PREAMBLE_PADDING);
     writer.write_aligned_bytes(&[self.dtype_byte])?;
-    let n = self.inner.page_sizes()[0];
+    let n = self.inner.n_per_page()[0];
     writer.write_usize(n - 1, BITS_TO_ENCODE_N_ENTRIES);
 
     writer.flush()?;

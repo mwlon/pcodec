@@ -12,18 +12,18 @@ struct Chunk {
 fn try_decompressing_page_until_sufficient_data(
   pd: &mut PageDecompressor<i32>,
   src: &[u8],
-  page_size: usize,
+  page_n: usize,
 ) -> PcoResult<(Vec<i32>, usize)> {
   // we try adding more data incrementally to test that the
   // PageDecompressor doesn't get into a bad state
 
-  let backoff = 1.2;
+  let backoff = 1.3;
   let mut n_bytes = 0;
-  let mut nums = vec![0; page_size];
+  let mut nums = vec![0; page_n];
   loop {
     match pd.decompress(&src[..n_bytes], &mut nums) {
       Ok((progress, additional)) => {
-        assert_eq!(progress.n_processed, page_size);
+        assert_eq!(progress.n_processed, page_n);
         assert!(progress.finished_page);
         return Ok((nums, additional));
       }
@@ -45,14 +45,14 @@ fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
   let fc = FileCompressor::default();
   fc.write_header(&mut compressed)?;
 
-  let mut page_sizess = Vec::new();
+  let mut n_per_pages = Vec::new();
   for chunk in chunks {
     let cc = fc.chunk_compressor(&chunk.nums, &chunk.config)?;
     cc.write_chunk_meta(&mut compressed)?;
-    for page_idx in 0..cc.page_sizes().len() {
+    for page_idx in 0..cc.n_per_page().len() {
       cc.write_page(page_idx, &mut compressed)?;
     }
-    page_sizess.push(cc.page_sizes().to_vec());
+    n_per_pages.push(cc.n_per_page().to_vec());
   }
 
   // DECOMPRESS
@@ -62,12 +62,12 @@ fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
     consumed += additional;
 
     let mut page_start = 0;
-    for &page_size in &page_sizess[chunk_idx] {
-      let page_end = page_start + page_size;
-      let (mut pd, additional) = cd.page_decompressor(page_size, &compressed[consumed..])?;
+    for &page_n in &n_per_pages[chunk_idx] {
+      let page_end = page_start + page_n;
+      let (mut pd, additional) = cd.page_decompressor(page_n, &compressed[consumed..])?;
       consumed += additional;
       let (page_nums, additional) =
-        try_decompressing_page_until_sufficient_data(&mut pd, &compressed[consumed..], page_size)?;
+        try_decompressing_page_until_sufficient_data(&mut pd, &compressed[consumed..], page_n)?;
       assert_eq!(&page_nums, &chunk.nums[page_start..page_end]);
       consumed += additional;
       page_start = page_end;
@@ -81,10 +81,18 @@ fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
 fn test_low_level_wrapped() -> PcoResult<()> {
   test_wrapped(&[
     Chunk {
-      nums: (0..1111).collect::<Vec<_>>(),
+      nums: (0..1700).collect::<Vec<_>>(),
       config: ChunkConfig {
         delta_encoding_order: Some(0),
-        paging_spec: PagingSpec::EqualPagesUpTo(500),
+        paging_spec: PagingSpec::EqualPagesUpTo(600),
+        ..Default::default()
+      },
+    },
+    Chunk {
+      nums: (0..500).collect::<Vec<_>>(),
+      config: ChunkConfig {
+        delta_encoding_order: Some(2),
+        paging_spec: PagingSpec::ExactPageSizes(vec![1, 499]),
         ..Default::default()
       },
     },

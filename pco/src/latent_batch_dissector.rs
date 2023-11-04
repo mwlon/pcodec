@@ -3,7 +3,7 @@ use std::cmp::min;
 use crate::ans;
 use crate::ans::{AnsState, Token};
 use crate::compression_table::CompressionTable;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::UnsignedLike;
 use crate::unsigned_src_dst::DissectedLatents;
 
@@ -14,9 +14,9 @@ pub struct LatentBatchDissector<'a, U: UnsignedLike> {
   encoder: &'a ans::Encoder,
 
   // mutable
-  lower_scratch: [U; FULL_BATCH_SIZE],
-  gcd_scratch: [U; FULL_BATCH_SIZE],
-  token_scratch: [Token; FULL_BATCH_SIZE],
+  lower_scratch: [U; FULL_BATCH_N],
+  gcd_scratch: [U; FULL_BATCH_N],
+  token_scratch: [Token; FULL_BATCH_N],
 }
 
 impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
@@ -25,15 +25,15 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
       needs_gcd,
       table,
       encoder,
-      lower_scratch: [U::ZERO; FULL_BATCH_SIZE],
-      gcd_scratch: [U::ZERO; FULL_BATCH_SIZE],
-      token_scratch: [0; FULL_BATCH_SIZE],
+      lower_scratch: [U::ZERO; FULL_BATCH_N],
+      gcd_scratch: [U::ZERO; FULL_BATCH_N],
+      token_scratch: [0; FULL_BATCH_N],
     }
   }
 
   #[inline(never)]
-  fn binary_search(&self, latents: &[U]) -> [usize; FULL_BATCH_SIZE] {
-    let mut search_idxs = [0; FULL_BATCH_SIZE];
+  fn binary_search(&self, latents: &[U]) -> [usize; FULL_BATCH_N] {
+    let mut search_idxs = [0; FULL_BATCH_N];
 
     // we do this as `size_log` SIMD loops over the batch
     for depth in 0..self.table.search_size_log {
@@ -132,7 +132,7 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
 
     let search_idxs = self.binary_search(latents);
 
-    let end_i = min(base_i + FULL_BATCH_SIZE, ans_vals.len());
+    let end_i = min(base_i + FULL_BATCH_N, ans_vals.len());
 
     self.dissect_bins(
       &search_idxs[..latents.len()],

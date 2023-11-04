@@ -4,6 +4,7 @@ use crate::chunk_config::{ChunkConfig, PagingSpec};
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
+use crate::{FloatMultSpec, GcdSpec};
 use crate::wrapped::FileCompressor;
 
 /// Automatically makes an educated guess for the best compression
@@ -47,8 +48,8 @@ pub fn auto_delta_encoding_order<T: NumberLike>(
         compression_level,
         MAX_AUTO_DELTA_COMPRESSION_LEVEL,
       ),
-      use_gcds: false,
-      use_float_mult: true,
+      gcd_spec: GcdSpec::Disabled,
+      float_mult_spec: FloatMultSpec::Enabled,
       paging_spec: PagingSpec::default(),
     };
     let fc = FileCompressor::default();

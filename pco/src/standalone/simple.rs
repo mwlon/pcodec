@@ -19,12 +19,12 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
   file_compressor.write_header(&mut dst)?;
 
   // here we use the paging spec to determine chunks; each chunk has 1 page
-  let page_sizes = config.paging_spec.page_sizes(nums.len())?;
+  let n_per_page = config.paging_spec.n_per_page(nums.len())?;
   let mut start = 0;
   let mut this_chunk_config = config.clone();
-  for &page_size in &page_sizes {
-    let end = start + page_size;
-    this_chunk_config.paging_spec = PagingSpec::ExactPageSizes(vec![page_size]);
+  for &page_n in &n_per_page {
+    let end = start + page_n;
+    this_chunk_config.paging_spec = PagingSpec::ExactPageSizes(vec![page_n]);
     let chunk_compressor =
       file_compressor.chunk_compressor(&nums[start..end], &this_chunk_config)?;
     dst.reserve(chunk_compressor.chunk_size_hint());

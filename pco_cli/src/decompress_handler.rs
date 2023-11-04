@@ -7,7 +7,7 @@ use arrow::array::PrimitiveArray;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
 use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
-use pco::FULL_BATCH_SIZE;
+use pco::FULL_BATCH_N;
 
 use pco::standalone::FileDecompressor;
 
@@ -39,7 +39,7 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
         let n = cd.n();
         let batch_size = min(n, remaining_limit);
         // how many pco should decompress
-        let pco_size = (1 + batch_size / FULL_BATCH_SIZE) * FULL_BATCH_SIZE;
+        let pco_size = (1 + batch_size / FULL_BATCH_N) * FULL_BATCH_N;
         nums.resize(pco_size, P::Num::default());
         let (_, additional) = cd.decompress(&bytes[consumed..], &mut nums)?;
         consumed += additional;

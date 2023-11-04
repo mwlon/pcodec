@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::marker::PhantomData;
 
 use crate::bit_reader::BitReader;
-use crate::constants::{Bitlen, FULL_BATCH_SIZE, PAGE_PADDING};
+use crate::constants::{Bitlen, FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
@@ -20,7 +20,7 @@ pub struct State<U: UnsignedLike> {
   delta_momentss: Vec<DeltaMoments<U>>, // one per latent variable
   // Secondary latents is technically mutable, but it doesn't really matter
   // since we overwrite it on every call.
-  secondary_latents: [U; FULL_BATCH_SIZE],
+  secondary_latents: [U; FULL_BATCH_N],
   bits_past_byte: Bitlen, // in [0, 8), only used to start a batch
 }
 
@@ -142,7 +142,7 @@ impl<T: NumberLike> PageDecompressor<T> {
         n_processed: 0,
         latent_batch_decompressors,
         delta_momentss,
-        secondary_latents: [T::Unsigned::default(); FULL_BATCH_SIZE],
+        secondary_latents: [T::Unsigned::default(); FULL_BATCH_N],
         bits_past_byte,
       },
     })
@@ -207,11 +207,11 @@ impl<T: NumberLike> PageDecompressor<T> {
   /// `dst` must have length either a multiple of 256 or be at least the count
   /// of numbers remaining in the page.
   pub fn decompress(&mut self, src: &[u8], num_dst: &mut [T]) -> PcoResult<(Progress, usize)> {
-    if num_dst.len() % FULL_BATCH_SIZE != 0 && num_dst.len() < self.n_remaining() {
+    if num_dst.len() % FULL_BATCH_N != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be \
          at least the count of numbers remaining ({} < {})",
-        FULL_BATCH_SIZE,
+        FULL_BATCH_N,
         num_dst.len(),
         self.n_remaining(),
       )));
@@ -226,7 +226,7 @@ impl<T: NumberLike> PageDecompressor<T> {
 
     let mut n_processed = 0;
     while n_processed < n_to_process {
-      let dst_batch_end = min(n_processed + FULL_BATCH_SIZE, n_to_process);
+      let dst_batch_end = min(n_processed + FULL_BATCH_N, n_to_process);
       let batch_res = self.decompress_batch_dirty(
         &mut reader,
         &mut num_dst[n_processed..dst_batch_end],

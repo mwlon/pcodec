@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE, PAGE_PADDING};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::page_meta::PageLatentMeta;
@@ -14,10 +14,10 @@ const MAX_ANS_SYMBOLS_PER_U64: usize = 4;
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
   // scratch needs no backup
-  offset_bits_csum_scratch: [usize; FULL_BATCH_SIZE],
-  offset_bits_scratch: [Bitlen; FULL_BATCH_SIZE],
-  lowers_scratch: [U; FULL_BATCH_SIZE],
-  gcds_scratch: [U; FULL_BATCH_SIZE],
+  offset_bits_csum_scratch: [usize; FULL_BATCH_N],
+  offset_bits_scratch: [Bitlen; FULL_BATCH_N],
+  lowers_scratch: [U; FULL_BATCH_N],
+  gcds_scratch: [U; FULL_BATCH_N],
   state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
@@ -88,10 +88,10 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       needs_gcd: chunk_latent_meta.needs_gcd(mode),
       decoder,
       state: State {
-        offset_bits_csum_scratch: [0; FULL_BATCH_SIZE],
-        offset_bits_scratch: [0; FULL_BATCH_SIZE],
-        gcds_scratch: [U::ONE; FULL_BATCH_SIZE],
-        lowers_scratch: [U::ZERO; FULL_BATCH_SIZE],
+        offset_bits_csum_scratch: [0; FULL_BATCH_N],
+        offset_bits_scratch: [0; FULL_BATCH_N],
+        gcds_scratch: [U::ONE; FULL_BATCH_N],
+        lowers_scratch: [U::ZERO; FULL_BATCH_N],
         state_idxs: page_latent_meta.ans_final_state_idxs,
       },
     })
@@ -106,7 +106,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let mut offset_bit_idx = 0;
     let mut state_idxs = self.state.state_idxs;
     // this requires that MAX_ANS_SYMBOLS_PER_U64 == ANS_INTERLEAVING
-    for base_i in (0..FULL_BATCH_SIZE).step_by(MAX_ANS_SYMBOLS_PER_U64) {
+    for base_i in (0..FULL_BATCH_N).step_by(MAX_ANS_SYMBOLS_PER_U64) {
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
       let packed = bit_reader::u64_at(stream, stale_byte_idx);
@@ -218,10 +218,10 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     }
 
     let batch_size = dst.len();
-    assert!(batch_size <= FULL_BATCH_SIZE);
+    assert!(batch_size <= FULL_BATCH_N);
     reader.ensure_padded(PAGE_PADDING)?;
 
-    if batch_size == FULL_BATCH_SIZE {
+    if batch_size == FULL_BATCH_N {
       self.decompress_full_ans_tokens(reader);
     } else {
       self.decompress_ans_tokens(reader, batch_size);

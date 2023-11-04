@@ -18,10 +18,7 @@ use crate::modes::gcd;
 use crate::modes::gcd::GcdMode;
 use crate::page_meta::{PageLatentMeta, PageMeta};
 use crate::unsigned_src_dst::{DissectedLatents, DissectedSrc, PageLatents};
-use crate::{
-  ans, bin_optimization, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentMeta,
-  ChunkMeta, Mode, FULL_BATCH_SIZE,
-};
+use crate::{ans, bin_optimization, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentMeta, ChunkMeta, Mode, FULL_BATCH_N, GcdSpec, FloatMultSpec};
 
 struct BinBuffer<'a, U: UnsignedLike> {
   pub seq: Vec<BinCompressionInfo<U>>,
@@ -216,14 +213,14 @@ fn write_dissecteds<U: UnsignedLike, W: Write>(
   // TODO make this more SIMD like LatentBatchDecompressor::unchecked_decompress_offsets
   let mut batch_start = 0;
   while batch_start < src.page_n {
-    let batch_end = min(batch_start + FULL_BATCH_SIZE, src.page_n);
+    let batch_end = min(batch_start + FULL_BATCH_N, src.page_n);
     for dissected in &src.dissected_latents {
       for (&val, &bits) in dissected
         .ans_vals
         .iter()
         .zip(dissected.ans_bits.iter())
         .skip(batch_start)
-        .take(FULL_BATCH_SIZE)
+        .take(FULL_BATCH_N)
       {
         writer.write_uint(val, bits);
       }
@@ -232,7 +229,7 @@ fn write_dissecteds<U: UnsignedLike, W: Write>(
         .iter()
         .zip(dissected.offset_bits.iter())
         .skip(batch_start)
-        .take(FULL_BATCH_SIZE)
+        .take(FULL_BATCH_N)
       {
         writer.write_uint(offset, bits);
       }
@@ -268,13 +265,13 @@ fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T:
   // * Use float mult if enabled and an appropriate base is found
   // * Otherwise, use GCD if enabled
   // * Otherwise, use Classic
-  if config.use_float_mult && T::IS_FLOAT {
+  if matches!(config.float_mult_spec, FloatMultSpec::Enabled) && T::IS_FLOAT {
     if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
       return Mode::FloatMult(config);
     }
   }
 
-  if config.use_gcds {
+  if matches!(config.gcd_spec, GcdSpec::Enabled) {
     Mode::Gcd
   } else {
     Mode::Classic
@@ -431,13 +428,13 @@ pub(crate) fn new<T: NumberLike>(
   let n = nums.len();
   validate_chunk_size(n)?;
 
-  let page_sizes = config.paging_spec.page_sizes(n)?;
+  let n_per_page = config.paging_spec.n_per_page(n)?;
 
   let naive_mode = choose_naive_mode(nums, config);
-  let mut paginated_latents = Vec::with_capacity(page_sizes.len());
+  let mut paginated_latents = Vec::with_capacity(n_per_page.len());
   let mut page_start = 0;
-  for &page_size in &page_sizes {
-    let page_end = page_start + page_size;
+  for &page_n in &n_per_page {
+    let page_end = page_start + page_n;
     paginated_latents.push(split_latents(
       naive_mode,
       &nums[page_start..page_end],
@@ -465,7 +462,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   }
 
   /// Returns the count of numbers this chunk will contain in each page.
-  pub fn page_sizes(&self) -> Vec<usize> {
+  pub fn n_per_page(&self) -> Vec<usize> {
     self
       .paginated_latents
       .iter()
@@ -535,8 +532,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
       // we go through in reverse for ANS!
       let mut lbd = LatentBatchDissector::new(var_policy.needs_gcd, table, encoder);
-      for (batch_idx, batch) in latents.chunks(FULL_BATCH_SIZE).enumerate().rev() {
-        let base_i = batch_idx * FULL_BATCH_SIZE;
+      for (batch_idx, batch) in latents.chunks(FULL_BATCH_N).enumerate().rev() {
+        let base_i = batch_idx * FULL_BATCH_N;
         lbd.dissect_latent_batch(batch, base_i, &mut dissected_latents)
       }
       res.dissected_latents.push(dissected_latents);
@@ -550,7 +547,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   /// This can be useful when building the file as a `Vec<u8>` in memory;
   /// you can `.reserve(chunk_compressor.chunk_size_hint())` ahead of time.
   pub fn page_size_hint(&self, page_idx: usize) -> usize {
-    let page_size = self.paginated_latents[page_idx].page_n;
+    let page_n = self.paginated_latents[page_idx].page_n;
     let mut bit_size = 0;
     for (var_meta, var_policy) in self
       .meta
@@ -560,7 +557,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     {
       let meta_bit_size = self.meta.delta_encoding_order * U::BITS as usize
         + ANS_INTERLEAVING * var_meta.ans_size_log as usize;
-      let nums_bit_size = page_size * var_policy.max_bits_per_latent as usize;
+      let nums_bit_size = page_n * var_policy.max_bits_per_latent as usize;
       bit_size += meta_bit_size + nums_bit_size;
     }
     bits::ceil_div(bit_size, 8)
