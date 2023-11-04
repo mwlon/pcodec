@@ -160,7 +160,7 @@ impl<W: Write> BitWriter<W> {
     Ok(())
   }
 
-  pub fn finish(self) -> W {
+  pub fn into_inner(self) -> W {
     self.dst
   }
 }

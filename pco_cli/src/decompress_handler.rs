@@ -35,8 +35,6 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
       let (maybe_cd, additional) = fd.chunk_decompressor::<P::Num>(&bytes[consumed..])?;
       consumed += additional;
 
-
-
       if let Some(mut cd) = maybe_cd {
         let n = cd.n();
         let batch_size = min(n, remaining_limit);
@@ -45,7 +43,8 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
         nums.resize(pco_size, P::Num::default());
         let (_, additional) = cd.decompress(&bytes[consumed..], &mut nums)?;
         consumed += additional;
-        let arrow_nums = nums.iter()
+        let arrow_nums = nums
+          .iter()
           .take(batch_size)
           .map(|&x| P::num_to_native(x))
           .collect::<Vec<_>>();

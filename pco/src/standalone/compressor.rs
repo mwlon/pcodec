@@ -47,7 +47,7 @@ impl FileCompressor {
     let mut writer = BitWriter::new(dst, MAGIC_HEADER.len());
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
     writer.flush()?;
-    let dst = writer.finish();
+    let dst = writer.into_inner();
     self.0.write_header(dst)
   }
 
@@ -79,7 +79,7 @@ impl FileCompressor {
     let mut writer = BitWriter::new(dst, 1);
     writer.write_aligned_bytes(&[MAGIC_TERMINATION_BYTE])?;
     writer.flush()?;
-    Ok(writer.finish())
+    Ok(writer.into_inner())
   }
 }
 
@@ -116,7 +116,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     writer.write_usize(n - 1, BITS_TO_ENCODE_N_ENTRIES);
 
     writer.flush()?;
-    let dst = writer.finish();
+    let dst = writer.into_inner();
     let dst = self.inner.write_chunk_meta(dst)?;
     self.inner.write_page(0, dst)
   }
