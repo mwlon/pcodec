@@ -11,13 +11,13 @@ use crate::{bit_reader, wrapped, ChunkMeta};
 ///
 /// Example of the lowest level API for reading a .pco file:
 /// ```
-/// use pco::FULL_BATCH_SIZE;
+/// use pco::FULL_BATCH_N;
 /// use pco::standalone::FileDecompressor;
 /// # use pco::errors::PcoResult;
 ///
 /// # fn main() -> PcoResult<()> {
 /// let src = vec![112, 99, 111, 33, 0, 0]; // the minimal .pco file, for the sake of example
-/// let mut nums = vec![0; FULL_BATCH_SIZE];
+/// let mut nums = vec![0; FULL_BATCH_N];
 /// let (file_decompressor, mut byte_idx) = FileDecompressor::new(&src)?;
 /// let mut finished_file = false;
 /// while !finished_file {

@@ -25,12 +25,12 @@ pub const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + 9;
 // generously cover the data needed to read the other parts of chunk meta.
 pub const CHUNK_META_PADDING: usize =
   FULL_BIN_BATCH_SIZE * (4 + 2 * MAX_SUPPORTED_PRECISION_BYTES) + OVERSHOOT_PADDING;
-pub const PAGE_LATENT_META_PADDING: usize =
+pub const PAGE_LATENT_VAR_META_PADDING: usize =
   MAX_DELTA_ENCODING_ORDER * MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES + OVERSHOOT_PADDING;
 // Page padding is enough for one full batch of latents; this should also
 // generously cover the data needed to read the page meta.
 pub const PAGE_PADDING: usize =
-  FULL_BATCH_SIZE * (MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES) + OVERSHOOT_PADDING;
+  FULL_BATCH_N * (MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES) + OVERSHOOT_PADDING;
 
 // cutoffs and legal parameter values
 pub const AUTO_DELTA_LIMIT: usize = 1100;
@@ -46,14 +46,14 @@ pub const MAX_SUPPORTED_PRECISION_BYTES: usize = (MAX_SUPPORTED_PRECISION / 8) a
 // defaults
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 // if you modify default page size, update docs for PagingSpec
-pub const DEFAULT_MAX_PAGE_SIZE: usize = 1000000;
+pub const DEFAULT_MAX_PAGE_N: usize = 1000000;
 
 // important parts of the format specification
 pub const ANS_INTERLEAVING: usize = 4;
 /// The count of numbers per batch, the smallest unit of decompression.
 ///
 /// Only the final batch in each page may have fewer numbers than this.
-pub const FULL_BATCH_SIZE: usize = 256;
+pub const FULL_BATCH_N: usize = 256;
 pub const FULL_BIN_BATCH_SIZE: usize = 128;
 
 #[cfg(test)]

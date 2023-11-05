@@ -33,8 +33,8 @@ mod tests {
       state = new_state;
     }
 
-    let mut bytes = Vec::new();
-    let mut writer = BitWriter::new(&mut bytes, 5);
+    let mut compressed = Vec::new();
+    let mut writer = BitWriter::new(&mut compressed, 5);
     for (word, bitlen) in to_write.into_iter().rev() {
       writer.write_uint(word, bitlen);
       writer.flush()?;
@@ -42,14 +42,14 @@ mod tests {
     writer.finish_byte();
     writer.flush()?;
     drop(writer);
-    assert_eq!(bytes.len(), expected_byte_len);
+    assert_eq!(compressed.len(), expected_byte_len);
     let final_state = state;
     let table_size = 1 << encoder.size_log();
 
     // DECODE
     let decoder = Decoder::new(spec);
-    let extension = bit_reader::make_extension_for(&bytes, 100);
-    let mut reader = BitReader::new(&bytes, &extension);
+    let extension = bit_reader::make_extension_for(&compressed, 100);
+    let mut reader = BitReader::new(&compressed, &extension);
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;
     for _ in 0..tokens.len() {

@@ -29,7 +29,7 @@ use crate::ChunkConfig;
 ///     &ChunkConfig::default(),
 ///   )?;
 ///   chunk_compressor.write_chunk_meta(&mut compressed)?;
-///   for page_idx in 0..chunk_compressor.page_sizes().len() {
+///   for page_idx in 0..chunk_compressor.n_per_page().len() {
 ///     // probably write more custom stuff here
 ///     chunk_compressor.write_page(page_idx, &mut compressed)?;
 ///   }

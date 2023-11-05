@@ -1,10 +1,10 @@
 use std::cmp::{max, min};
 use std::collections::HashMap;
 
+use crate::compression_intermediates::PageLatents;
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta;
-use crate::unsigned_src_dst::PageLatents;
 
 const ARITH_CHUNK_SIZE: usize = 512;
 

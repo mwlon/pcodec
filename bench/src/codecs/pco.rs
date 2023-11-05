@@ -1,7 +1,7 @@
 use crate::codecs::CodecInternal;
 use crate::dtypes::Dtype;
 use anyhow::{anyhow, Result};
-use pco::PagingSpec;
+use pco::{FloatMultSpec, GcdSpec, PagingSpec};
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {
@@ -21,8 +21,11 @@ impl CodecInternal for PcoConfig {
         .delta_encoding_order
         .map(|order| order.to_string())
         .unwrap_or("auto".to_string()),
-      "use_gcds" => self.compressor_config.use_gcds.to_string(),
-      "use_float_mult" => self.compressor_config.use_float_mult.to_string(),
+      "gcd" => format!("{:?}", self.compressor_config.gcd_spec),
+      "float_mult" => format!(
+        "{:?}",
+        self.compressor_config.float_mult_spec
+      ),
       "page_size" => match self.compressor_config.paging_spec {
         PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
         _ => panic!("unexpected paging spec"),
@@ -32,6 +35,7 @@ impl CodecInternal for PcoConfig {
   }
 
   fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
+    let value = value.to_lowercase();
     match key {
       "level" => self.compressor_config.compression_level = value.parse::<usize>().unwrap(),
       "delta_order" => {
@@ -46,8 +50,20 @@ impl CodecInternal for PcoConfig {
           ));
         }
       }
-      "use_gcds" => self.compressor_config.use_gcds = value.parse::<bool>().unwrap(),
-      "use_float_mult" => self.compressor_config.use_float_mult = value.parse::<bool>().unwrap(),
+      "gcd" => {
+        self.compressor_config.gcd_spec = match value.as_str() {
+          "enabled" => GcdSpec::Enabled,
+          "disabled" => GcdSpec::Disabled,
+          other => return Err(anyhow!("cannot parse gcd: {}", other,)),
+        }
+      }
+      "float_mult" => {
+        self.compressor_config.float_mult_spec = match value.as_str() {
+          "enabled" => FloatMultSpec::Enabled,
+          "disabled" => FloatMultSpec::Disabled,
+          other => return Err(anyhow!("cannot parse float mult: {}", other,)),
+        }
+      }
       "page_size" => {
         self.compressor_config.paging_spec = PagingSpec::EqualPagesUpTo(value.parse().unwrap())
       }

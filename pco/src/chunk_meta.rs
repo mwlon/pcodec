@@ -16,13 +16,12 @@ use crate::modes::{gcd, Mode};
 /// variable interleaved into the compressed data.
 ///
 /// For instance, with
-/// [classic mode][crate::Mode::Classic], there is a single latent
-/// corresponding to the actual numbers' (or deltas') bins and offsets
-/// relative to those bins.
+/// [classic mode][crate::Mode::Classic], there is a single latent variable
+/// corresponding to the actual numbers' (or deltas') bins.
 ///
 /// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ChunkLatentMeta<U: UnsignedLike> {
+pub struct ChunkLatentVarMeta<U: UnsignedLike> {
   /// The log2 of the number of the number of states in this chunk's tANS
   /// table.
   ///
@@ -33,7 +32,7 @@ pub struct ChunkLatentMeta<U: UnsignedLike> {
   pub bins: Vec<Bin<U>>,
 }
 
-impl<U: UnsignedLike> ChunkLatentMeta<U> {
+impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
   pub(crate) fn max_bits_per_offset(&self) -> Bitlen {
     self
       .bins
@@ -93,7 +92,7 @@ fn parse_bin_batch<U: UnsignedLike>(
   Ok(())
 }
 
-impl<U: UnsignedLike> ChunkLatentMeta<U> {
+impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
   fn parse_from(reader: &mut BitReader, mode: Mode<U>) -> PcoResult<Self> {
     reader.ensure_padded(CHUNK_META_PADDING)?;
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
@@ -162,11 +161,13 @@ pub struct ChunkMeta<U: UnsignedLike> {
   pub mode: Mode<U>,
   /// How many times delta encoding was applied during compression.
   /// This is between 0 and 7, inclusive.
+  ///
   /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
   pub delta_encoding_order: usize,
-  /// The interleaved streams needed by `pco` to compress/decompress the inputs
-  /// to the formula used by `mode`.
-  pub latents: Vec<ChunkLatentMeta<U>>,
+  /// Metadata about the interleaved streams needed by `pco` to
+  /// compress/decompress the inputs
+  /// according to the formula used by `mode`.
+  pub per_latent_var: Vec<ChunkLatentVarMeta<U>>,
 }
 
 fn write_bins<U: UnsignedLike, W: Write>(
@@ -202,12 +203,12 @@ impl<U: UnsignedLike> ChunkMeta<U> {
   pub(crate) fn new(
     mode: Mode<U>,
     delta_encoding_order: usize,
-    latents: Vec<ChunkLatentMeta<U>>,
+    per_latent_var: Vec<ChunkLatentVarMeta<U>>,
   ) -> Self {
     ChunkMeta {
       mode,
       delta_encoding_order,
-      latents,
+      per_latent_var,
     }
   }
 
@@ -231,11 +232,11 @@ impl<U: UnsignedLike> ChunkMeta<U> {
 
     let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
 
-    let n_latents = mode.n_latents();
+    let n_latent_vars = mode.n_latent_vars();
 
-    let mut latents = Vec::with_capacity(n_latents);
-    for _ in 0..n_latents {
-      latents.push(ChunkLatentMeta::parse_from(reader, mode)?)
+    let mut latents = Vec::with_capacity(n_latent_vars);
+    for _ in 0..n_latent_vars {
+      latents.push(ChunkLatentVarMeta::parse_from(reader, mode)?)
     }
 
     reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")?;
@@ -243,7 +244,7 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     Ok(Self {
       mode,
       delta_encoding_order,
-      latents,
+      per_latent_var: latents,
     })
   }
 
@@ -264,7 +265,7 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     );
     writer.flush()?;
 
-    for latents in &self.latents {
+    for latents in &self.per_latent_var {
       latents.write_to(self.mode, writer)?;
     }
 
@@ -273,9 +274,9 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     Ok(())
   }
 
-  pub(crate) fn latent_delta_order(&self, latent_idx: usize) -> usize {
+  pub(crate) fn delta_order_for_latent_var(&self, latent_idx: usize) -> usize {
     self
       .mode
-      .latent_delta_order(latent_idx, self.delta_encoding_order)
+      .delta_order_for_latent_var(latent_idx, self.delta_encoding_order)
   }
 }
