@@ -113,12 +113,12 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       for j in 0..MAX_ANS_SYMBOLS_PER_U64 {
         let i = base_i + j;
         let node = self.decoder.get_node(state_idxs[j]);
-        let state_offset = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
+        let ans_val = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
         let info = unsafe { self.infos.get_unchecked(node.token as usize) };
         self.state.set_scratch(i, offset_bit_idx, info);
         bits_past_byte += node.bits_to_read;
         offset_bit_idx += info.offset_bits as usize;
-        state_idxs[j] = node.next_state_idx_base + state_offset;
+        state_idxs[j] = node.next_state_idx_base + ans_val;
       }
     }
 
@@ -140,12 +140,12 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       bits_past_byte %= 8;
       let packed = bit_reader::u64_at(stream, stale_byte_idx);
       let node = self.decoder.get_node(state_idxs[j]);
-      let state_offset = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
+      let ans_val = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
       let info = &self.infos[node.token as usize];
       self.state.set_scratch(i, offset_bit_idx, info);
       bits_past_byte += node.bits_to_read;
       offset_bit_idx += info.offset_bits as usize;
-      state_idxs[j] = node.next_state_idx_base + state_offset;
+      state_idxs[j] = node.next_state_idx_base + ans_val;
     }
 
     reader.stale_byte_idx = stale_byte_idx;

@@ -23,8 +23,6 @@ pub mod wrapped;
 
 // TODO namings to straighten out or reconsider:
 // * src, dst, compressed, bytes, data
-// * latent, latent variable
-// * ans vals
 
 mod ans;
 mod auto;
