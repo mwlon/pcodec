@@ -37,7 +37,11 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
     let config = ChunkConfig::default()
       .with_compression_level(opt.level)
       .with_delta_encoding_order(opt.delta_encoding_order)
-      .with_gcd_spec(if opt.disable_gcds { GcdSpec::Disabled } else { GcdSpec::Enabled });
+      .with_gcd_spec(if opt.disable_gcds {
+        GcdSpec::Disabled
+      } else {
+        GcdSpec::Enabled
+      });
     let fc = FileCompressor::default();
     fc.write_header(&file)?;
 

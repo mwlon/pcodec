@@ -22,7 +22,10 @@ impl CodecInternal for PcoConfig {
         .map(|order| order.to_string())
         .unwrap_or("auto".to_string()),
       "gcd" => format!("{:?}", self.compressor_config.gcd_spec),
-      "float_mult" => format!("{:?}", self.compressor_config.float_mult_spec),
+      "float_mult" => format!(
+        "{:?}",
+        self.compressor_config.float_mult_spec
+      ),
       "page_size" => match self.compressor_config.paging_spec {
         PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
         _ => panic!("unexpected paging spec"),
@@ -47,22 +50,20 @@ impl CodecInternal for PcoConfig {
           ));
         }
       }
-      "gcd" => self.compressor_config.gcd_spec = match value.as_str() {
-        "enabled" => GcdSpec::Enabled,
-        "disabled" => GcdSpec::Disabled,
-        other => return Err(anyhow!(
-          "cannot parse gcd: {}",
-          other,
-        ))
-      },
-      "float_mult" => self.compressor_config.float_mult_spec = match value.as_str() {
-        "enabled" => FloatMultSpec::Enabled,
-        "disabled" => FloatMultSpec::Disabled,
-        other => return Err(anyhow!(
-          "cannot parse float mult: {}",
-          other,
-        ))
-      },
+      "gcd" => {
+        self.compressor_config.gcd_spec = match value.as_str() {
+          "enabled" => GcdSpec::Enabled,
+          "disabled" => GcdSpec::Disabled,
+          other => return Err(anyhow!("cannot parse gcd: {}", other,)),
+        }
+      }
+      "float_mult" => {
+        self.compressor_config.float_mult_spec = match value.as_str() {
+          "enabled" => FloatMultSpec::Enabled,
+          "disabled" => FloatMultSpec::Disabled,
+          other => return Err(anyhow!("cannot parse float mult: {}", other,)),
+        }
+      }
       "page_size" => {
         self.compressor_config.paging_spec = PagingSpec::EqualPagesUpTo(value.parse().unwrap())
       }
