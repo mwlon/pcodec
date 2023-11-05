@@ -31,17 +31,23 @@ fn main() {
 To run something right away, try
 [the benchmarks](../bench/README.md).
 
-For a lower-level standalone API that allows writing one chunk at a time /
-batched reads, see [the docs.rs documentation](https://docs.rs/pco/latest/pco/).
+## Standalone vs Wrapped
 
-## Usage as a Wrapped Format
+Pco can be used as a standalone format (as in the above example).
+Good reasons to do so:
+* a quick proof of concept for the compression ratio or performance
+* all you need to do is transmit a long list of numbers
 
-To embed/interleave `pco` in another data format, it is better to use
-the [wrapped API and format](src/wrapped) than standalone. 
-This allows
-* fine-level data paging with good compression ratio down to page sizes of >20 numbers
-(as long as the overall chunk has >2k or so)
-* less bloat by omitting metadata that the wrapping format must retain
+However, the standalone format is quite limited, so it is expected that most
+use cases will wrap pco in a different format (imagine, say, Parquet).
+This could unlock things like
+* nullability
+* fast seeking through the file
+* fast filtering
+* a schema or key:value metadata
+
+In either case,
+[docs.rs has more examples and API details](https://docs.rs/pco/).
 
 ## Important API Notes
 
