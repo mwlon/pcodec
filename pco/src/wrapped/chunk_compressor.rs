@@ -490,12 +490,12 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   /// This can be useful when building the file as a `Vec<u8>` in memory;
   /// you can `.reserve()` ahead of time.
   pub fn chunk_meta_size_hint(&self) -> usize {
-    let mut bytes = 32;
+    let mut size = 32;
     let bytes_per_num = U::BITS / 8;
     for latent_meta in &self.meta.per_latent_var {
-      bytes += latent_meta.bins.len() * (4 + 2 * bytes_per_num as usize)
+      size += latent_meta.bins.len() * (4 + 2 * bytes_per_num as usize)
     }
-    bytes
+    size
   }
 
   /// Writes the chunk metadata to the destination.
