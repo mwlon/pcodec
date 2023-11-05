@@ -2,8 +2,8 @@ use crate::chunk_config::ChunkConfig;
 use crate::chunk_meta::ChunkMeta;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
-use crate::GcdSpec;
 use crate::standalone::{auto_decompress, FileCompressor};
+use crate::GcdSpec;
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::Unsigned>> {
   let fc = FileCompressor::default();
@@ -73,6 +73,9 @@ fn test_insufficient_data_long_offsets() -> PcoResult<()> {
   let meta = assert_panic_safe(nums)?;
   assert_eq!(meta.per_latent_var.len(), 1);
   assert_eq!(meta.per_latent_var[0].bins.len(), 1);
-  assert_eq!(meta.per_latent_var[0].bins[0].offset_bits, 64);
+  assert_eq!(
+    meta.per_latent_var[0].bins[0].offset_bits,
+    64
+  );
   Ok(())
 }

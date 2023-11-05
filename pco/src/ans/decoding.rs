@@ -41,7 +41,9 @@ impl Decoder {
     Self { nodes }
   }
 
-  pub fn from_chunk_latent_var_meta<U: UnsignedLike>(latent_meta: &ChunkLatentVarMeta<U>) -> PcoResult<Self> {
+  pub fn from_chunk_latent_var_meta<U: UnsignedLike>(
+    latent_meta: &ChunkLatentVarMeta<U>,
+  ) -> PcoResult<Self> {
     let weights = latent_meta
       .bins
       .iter()

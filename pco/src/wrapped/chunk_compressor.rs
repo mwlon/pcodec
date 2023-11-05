@@ -3,6 +3,7 @@ use std::io::Write;
 
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
+use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageLatents};
 use crate::compression_table::CompressionTable;
 use crate::constants::{
   Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, MAX_COMPRESSION_LEVEL,
@@ -17,8 +18,10 @@ use crate::modes::classic::ClassicMode;
 use crate::modes::gcd;
 use crate::modes::gcd::GcdMode;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
-use crate::compression_intermediates::{DissectedPageVar, DissectedPage, PageLatents};
-use crate::{ans, bin_optimization, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta, Mode, FULL_BATCH_N, GcdSpec, FloatMultSpec};
+use crate::{
+  ans, bin_optimization, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentVarMeta,
+  ChunkMeta, FloatMultSpec, GcdSpec, Mode, FULL_BATCH_N,
+};
 
 struct BinBuffer<'a, U: UnsignedLike> {
   pub seq: Vec<BinCompressionInfo<U>>,
@@ -213,7 +216,10 @@ fn write_dissected_page<U: UnsignedLike, W: Write>(
   // TODO make this more SIMD like LatentBatchDecompressor::unchecked_decompress_offsets
   let mut batch_start = 0;
   while batch_start < dissected_page.page_n {
-    let batch_end = min(batch_start + FULL_BATCH_N, dissected_page.page_n);
+    let batch_end = min(
+      batch_start + FULL_BATCH_N,
+      dissected_page.page_n,
+    );
     for dissected_page_var in &dissected_page.per_var {
       for (&val, &bits) in dissected_page_var
         .ans_vals
@@ -265,7 +271,11 @@ fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T:
   // * Use float mult if enabled and an appropriate base is found
   // * Otherwise, use GCD if enabled
   // * Otherwise, use Classic
-  if matches!(config.float_mult_spec, FloatMultSpec::Enabled) && T::IS_FLOAT {
+  if matches!(
+    config.float_mult_spec,
+    FloatMultSpec::Enabled
+  ) && T::IS_FLOAT
+  {
     if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
       return Mode::FloatMult(config);
     }
@@ -525,7 +535,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
       let latents = &var_latents.latents;
       let LatentVarPolicy { table, encoder, .. } = var_policy;
-      let mut dissected_page_var = uninit_dissected_page_var(latents.len(), encoder.default_state());
+      let mut dissected_page_var =
+        uninit_dissected_page_var(latents.len(), encoder.default_state());
 
       // we go through in reverse for ANS!
       let mut lbd = LatentBatchDissector::new(var_policy.needs_gcd, table, encoder);

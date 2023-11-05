@@ -5,7 +5,7 @@
 
 pub use auto::auto_delta_encoding_order;
 pub use bin::Bin;
-pub use chunk_config::{ChunkConfig, GcdSpec, FloatMultSpec, PagingSpec};
+pub use chunk_config::{ChunkConfig, FloatMultSpec, GcdSpec, PagingSpec};
 pub use chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, FULL_BATCH_N};
 pub use modes::Mode;
@@ -34,6 +34,7 @@ mod bit_reader;
 mod bit_writer;
 mod bits;
 mod chunk_meta;
+mod compression_intermediates;
 mod compression_table;
 mod constants;
 mod delta;
@@ -43,7 +44,6 @@ mod latent_batch_decompressor;
 mod latent_batch_dissector;
 mod modes;
 mod progress;
-mod compression_intermediates;
 
 mod chunk_config;
 mod page_meta;

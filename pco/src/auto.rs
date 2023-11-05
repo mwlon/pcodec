@@ -4,8 +4,8 @@ use crate::chunk_config::{ChunkConfig, PagingSpec};
 use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::{FloatMultSpec, GcdSpec};
 use crate::wrapped::FileCompressor;
+use crate::{FloatMultSpec, GcdSpec};
 
 /// Automatically makes an educated guess for the best compression
 /// delta encoding order, based on `nums` and `compression_level`.
