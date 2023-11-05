@@ -48,14 +48,14 @@ pub enum Mode<U: UnsignedLike> {
 }
 
 impl<U: UnsignedLike> Mode<U> {
-  pub(crate) fn n_latents(&self) -> usize {
+  pub(crate) fn n_latent_vars(&self) -> usize {
     match self {
       Mode::Classic | Mode::Gcd => 1,
       Mode::FloatMult(_) => 2,
     }
   }
 
-  pub(crate) fn latent_delta_order(&self, latent_idx: usize, delta_order: usize) -> usize {
+  pub(crate) fn delta_order_for_latent_var(&self, latent_idx: usize, delta_order: usize) -> usize {
     match (self, latent_idx) {
       (Mode::Classic, 0) | (Mode::Gcd, 0) | (Mode::FloatMult(_), 0) => delta_order,
       (Mode::FloatMult(_), 1) => 0,

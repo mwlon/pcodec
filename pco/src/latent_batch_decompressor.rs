@@ -6,8 +6,8 @@ use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
-use crate::page_meta::PageLatentMeta;
-use crate::{ans, bit_reader, read_write_uint, ChunkLatentMeta, Mode};
+use crate::page_meta::PageLatentVarMeta;
+use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta, Mode};
 
 const MAX_ANS_SYMBOLS_PER_U64: usize = 4;
 
@@ -50,7 +50,7 @@ impl<U: UnsignedLike> State<U> {
 // LatentBatchDecompressor does the main work of decoding bytes into UnsignedLikes
 #[derive(Clone, Debug)]
 pub struct LatentBatchDecompressor<U: UnsignedLike> {
-  // known information about the latent latent in this chunk
+  // known information about this latent variable
   extra_u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
   maybe_constant_value: Option<U>,
@@ -63,36 +63,36 @@ pub struct LatentBatchDecompressor<U: UnsignedLike> {
 
 impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   pub fn new(
-    chunk_latent_meta: &ChunkLatentMeta<U>,
-    page_latent_meta: &PageLatentMeta<U>,
+    chunk_latent_var_meta: &ChunkLatentVarMeta<U>,
+    page_latent_var_meta: &PageLatentVarMeta<U>,
     mode: Mode<U>,
   ) -> PcoResult<Self> {
     let extra_u64s_per_offset =
-      read_write_uint::calc_max_extra_u64s(chunk_latent_meta.max_bits_per_offset());
-    let infos = chunk_latent_meta
+      read_write_uint::calc_max_extra_u64s(chunk_latent_var_meta.max_bits_per_offset());
+    let infos = chunk_latent_var_meta
       .bins
       .iter()
       .map(BinDecompressionInfo::from)
       .collect::<Vec<_>>();
-    let maybe_constant_value = if chunk_latent_meta.is_trivial() {
-      chunk_latent_meta.bins.first().map(|bin| bin.lower)
+    let maybe_constant_value = if chunk_latent_var_meta.is_trivial() {
+      chunk_latent_var_meta.bins.first().map(|bin| bin.lower)
     } else {
       None
     };
-    let decoder = ans::Decoder::from_latent_meta(chunk_latent_meta)?;
+    let decoder = ans::Decoder::from_chunk_latent_var_meta(chunk_latent_var_meta)?;
 
     Ok(Self {
       extra_u64s_per_offset,
       infos,
       maybe_constant_value,
-      needs_gcd: chunk_latent_meta.needs_gcd(mode),
+      needs_gcd: chunk_latent_var_meta.needs_gcd(mode),
       decoder,
       state: State {
         offset_bits_csum_scratch: [0; FULL_BATCH_N],
         offset_bits_scratch: [0; FULL_BATCH_N],
         gcds_scratch: [U::ONE; FULL_BATCH_N],
         lowers_scratch: [U::ZERO; FULL_BATCH_N],
-        state_idxs: page_latent_meta.ans_final_state_idxs,
+        state_idxs: page_latent_var_meta.ans_final_state_idxs,
       },
     })
   }
@@ -128,13 +128,13 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   }
 
   #[inline(never)]
-  fn decompress_ans_tokens(&mut self, reader: &mut BitReader, batch_size: usize) {
+  fn decompress_ans_tokens(&mut self, reader: &mut BitReader, batch_n: usize) {
     let stream = reader.current_stream;
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
     let mut state_idxs = self.state.state_idxs;
-    for i in 0..batch_size {
+    for i in 0..batch_n {
       let j = i % 4;
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
@@ -217,14 +217,14 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       return Ok(());
     }
 
-    let batch_size = dst.len();
-    assert!(batch_size <= FULL_BATCH_N);
+    let batch_n = dst.len();
+    assert!(batch_n <= FULL_BATCH_N);
     reader.ensure_padded(PAGE_PADDING)?;
 
-    if batch_size == FULL_BATCH_N {
+    if batch_n == FULL_BATCH_N {
       self.decompress_full_ans_tokens(reader);
     } else {
-      self.decompress_ans_tokens(reader, batch_size);
+      self.decompress_ans_tokens(reader, batch_n);
     }
 
     // this assertion saves some unnecessary specializations in the compiled assembly

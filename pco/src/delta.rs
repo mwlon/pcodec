@@ -61,6 +61,8 @@ fn first_order_encode_in_place<U: UnsignedLike>(unsigneds: &mut Vec<U>) {
 // used for a single page, so we return the delta moments
 #[inline(never)]
 pub fn encode_in_place<U: UnsignedLike>(unsigneds: &mut Vec<U>, order: usize) -> DeltaMoments<U> {
+  // TODO this function could be made faster by doing all steps on mini batches
+  // of ~512 at a time
   if order == 0 {
     // exit early so we don't toggle to signed values
     return DeltaMoments::default();

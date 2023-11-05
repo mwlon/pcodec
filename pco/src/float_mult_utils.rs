@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta;
-use crate::unsigned_src_dst::PageLatents;
+use crate::compression_intermediates::PageLatents;
 
 const ARITH_CHUNK_SIZE: usize = 512;
 

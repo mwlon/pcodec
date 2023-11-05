@@ -114,7 +114,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
         "\nchunk: {} n: {} delta order: {} mode: {:?}",
         i, chunk_ns[i], meta.delta_encoding_order, meta.mode,
       );
-      for (latent_idx, latent) in meta.latents.iter().enumerate() {
+      for (latent_idx, latent) in meta.per_latent_var.iter().enumerate() {
         let latent_name = match (meta.mode, latent_idx) {
           (Mode::Classic, 0) => "primary".to_string(),
           (Mode::Gcd, 0) => "primary".to_string(),

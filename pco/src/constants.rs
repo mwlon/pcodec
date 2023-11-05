@@ -25,7 +25,7 @@ pub const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + 9;
 // generously cover the data needed to read the other parts of chunk meta.
 pub const CHUNK_META_PADDING: usize =
   FULL_BIN_BATCH_SIZE * (4 + 2 * MAX_SUPPORTED_PRECISION_BYTES) + OVERSHOOT_PADDING;
-pub const PAGE_LATENT_META_PADDING: usize =
+pub const PAGE_LATENT_VAR_META_PADDING: usize =
   MAX_DELTA_ENCODING_ORDER * MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES + OVERSHOOT_PADDING;
 // Page padding is enough for one full batch of latents; this should also
 // generously cover the data needed to read the page meta.

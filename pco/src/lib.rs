@@ -6,7 +6,7 @@
 pub use auto::auto_delta_encoding_order;
 pub use bin::Bin;
 pub use chunk_config::{ChunkConfig, GcdSpec, FloatMultSpec, PagingSpec};
-pub use chunk_meta::{ChunkLatentMeta, ChunkMeta};
+pub use chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, FULL_BATCH_N};
 pub use modes::Mode;
 
@@ -23,7 +23,6 @@ pub mod wrapped;
 
 // TODO namings to straighten out or reconsider:
 // * src, dst, compressed, bytes, data
-// * n, size, count
 // * latent, latent variable
 // * ans vals
 
@@ -44,7 +43,7 @@ mod latent_batch_decompressor;
 mod latent_batch_dissector;
 mod modes;
 mod progress;
-mod unsigned_src_dst;
+mod compression_intermediates;
 
 mod chunk_config;
 mod page_meta;

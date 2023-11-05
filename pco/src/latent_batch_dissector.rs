@@ -5,7 +5,7 @@ use crate::ans::{AnsState, Token};
 use crate::compression_table::CompressionTable;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::UnsignedLike;
-use crate::unsigned_src_dst::DissectedLatents;
+use crate::compression_intermediates::DissectedPageVar;
 
 pub struct LatentBatchDissector<'a, U: UnsignedLike> {
   // immutable
@@ -120,9 +120,9 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     &mut self,
     latents: &[U],
     base_i: usize,
-    dst: &mut DissectedLatents<U>,
+    dst: &mut DissectedPageVar<U>,
   ) {
-    let DissectedLatents {
+    let DissectedPageVar {
       ans_vals,
       ans_bits,
       offsets,

@@ -4,7 +4,7 @@ use crate::data_types::UnsignedLike;
 use crate::delta::DeltaMoments;
 
 #[derive(Clone, Debug)]
-pub struct PageVarLatents<U: UnsignedLike> {
+struct PageVarLatents<U: UnsignedLike> {
   pub latents: Vec<U>,
   pub delta_moments: DeltaMoments<U>,
 }
@@ -12,27 +12,26 @@ pub struct PageVarLatents<U: UnsignedLike> {
 #[derive(Clone, Debug)]
 pub struct PageLatents<U: UnsignedLike> {
   pub page_n: usize,
-  // one per latent variable
-  pub vars: Vec<PageVarLatents<U>>,
+  pub per_var: Vec<PageVarLatents<U>>, // on per latent variable
 }
 
 impl<U: UnsignedLike> PageLatents<U> {
-  pub fn new_pre_delta(latents: Vec<Vec<U>>) -> Self {
-    let page_n = latents[0].len();
-    let vars = latents
+  pub fn new_pre_delta(latents_per_var: Vec<Vec<U>>) -> Self {
+    let page_n = latents_per_var[0].len();
+    let per_var = latents_per_var
       .into_iter()
       .map(|latents| PageVarLatents {
         latents,
         delta_moments: DeltaMoments::default(),
       })
       .collect::<Vec<_>>();
-    Self { page_n, vars }
+    Self { page_n, per_var }
   }
 }
 
 #[derive(Clone, Debug)]
-pub struct DissectedLatents<U: UnsignedLike> {
-  // ans_vals and offsets should have the same length
+pub struct DissectedPageVar<U: UnsignedLike> {
+  // these vecs should have the same length
   pub ans_vals: Vec<AnsState>,
   pub ans_bits: Vec<Bitlen>,
   pub offsets: Vec<U>,
@@ -41,7 +40,7 @@ pub struct DissectedLatents<U: UnsignedLike> {
 }
 
 #[derive(Clone, Debug)]
-pub struct DissectedSrc<U: UnsignedLike> {
+pub struct DissectedPage<U: UnsignedLike> {
   pub page_n: usize,
-  pub dissected_latents: Vec<DissectedLatents<U>>, // one per latent variable
+  pub per_var: Vec<DissectedPageVar<U>>, // one per latent variable
 }
