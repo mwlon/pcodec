@@ -9,9 +9,8 @@ use crate::read_write_uint::ReadWriteUint;
 pub fn make_extension_for(slice: &[u8], padding: usize) -> Vec<u8> {
   let shared = min(slice.len(), padding);
   let len = shared + padding;
-  let mut res = vec![0; len];
-  // This copy isn't necessary for BitWriter, which also uses this.
-  // Not sure this will ever be a performance issue though.
+  let mut res = Vec::with_capacity(len);
+  unsafe { res.set_len(len); }
   res[..shared].copy_from_slice(&slice[slice.len() - shared..]);
   res
 }
@@ -294,7 +293,8 @@ mod tests {
     // 10010001 01100100 00000000 11111111 10000010
     let src = vec![137, 38, 0, 255, 65];
     let ext = make_extension_for(&src, 4);
-    assert_eq!(ext, vec![38, 0, 255, 65, 0, 0, 0, 0]);
+    assert_eq!(ext.len(), 8);
+    assert_eq!(&ext[0..4], &vec![38, 0, 255, 65]);
     let mut reader = BitReader::new(&src, &ext);
 
     assert_eq!(reader.read_bitlen(4), 9);

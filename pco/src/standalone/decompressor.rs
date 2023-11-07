@@ -86,6 +86,7 @@ impl FileDecompressor {
     let extension = bit_reader::make_extension_for(src, STANDALONE_CHUNK_PREAMBLE_PADDING);
     let mut reader = BitReader::new(src, &extension);
     let dtype_or_termination_byte = reader.read_aligned_bytes(1)?[0];
+    reader.check_in_bounds()?;
 
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
       return Ok((None, reader.aligned_bytes_consumed()?));

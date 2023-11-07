@@ -69,6 +69,7 @@ fn parse_bin_batch<U: UnsignedLike>(
 
     let offset_bits = reader.read_bitlen(offset_bits_bits);
     if offset_bits > U::BITS {
+      reader.check_in_bounds()?;
       return Err(PcoError::corruption(format!(
         "offset bits of {} exceeds data type of {} bits",
         offset_bits,
@@ -98,6 +99,7 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
     let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
 
     let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS);
+    reader.check_in_bounds()?;
     if 1 << ans_size_log < n_bins {
       return Err(PcoError::corruption(format!(
         "ANS size log ({}) is too small for number of bins ({})",
