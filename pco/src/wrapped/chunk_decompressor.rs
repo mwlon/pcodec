@@ -1,4 +1,5 @@
-use crate::bit_reader::BitReader;
+use better_io::BetterBufRead;
+use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::PAGE_LATENT_VAR_META_PADDING;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
@@ -28,11 +29,13 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   /// number of bytes read.
   ///
   /// Will return an error if corruptions or insufficient data are found.
-  pub fn page_decompressor(&self, n: usize, src: &[u8]) -> PcoResult<(PageDecompressor<T>, usize)> {
-    let extension = bit_reader::make_extension_for(src, PAGE_LATENT_VAR_META_PADDING);
-    let mut reader = BitReader::new(src, &extension);
-    let page_meta = PageMeta::<T::Unsigned>::parse_from(&mut reader, &self.meta)?;
-    let pd = PageDecompressor::new(self, n, page_meta, reader.bits_past_byte % 8)?;
-    Ok((pd, reader.aligned_bytes_consumed()?))
+  pub fn page_decompressor<R: BetterBufRead>(&self, n: usize, src: R) -> PcoResult<(PageDecompressor<T>, R)> {
+    let mut reader_builder = BitReaderBuilder::new(src, PAGE_LATENT_VAR_META_PADDING, 0);
+    let page_meta = reader_builder.with_reader(|mut reader| {
+      PageMeta::<T::Unsigned>::parse_from(&mut reader, &self.meta)
+    })?;
+    let bits_past_byte = reader_builder.bits_past_byte();
+    let pd = PageDecompressor::new(self, n, page_meta, bits_past_byte)?;
+    Ok((pd, reader_builder.into_inner()))
   }
 }

@@ -1,7 +1,8 @@
 use std::cmp::min;
 use std::marker::PhantomData;
+use better_io::{BetterBufRead};
 
-use crate::bit_reader::BitReader;
+use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{Bitlen, FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
@@ -149,9 +150,9 @@ impl<T: NumberLike> PageDecompressor<T> {
   }
 
   // dirties reader and state, but might fail midway
-  fn decompress_batch_dirty(
+  fn decompress_batch_dirty<R: BetterBufRead>(
     &mut self,
-    reader: &mut BitReader,
+    reader_builder: &mut BitReaderBuilder<R>,
     primary_dst: &mut [T],
   ) -> PcoResult<()> {
     let batch_n = primary_dst.len();
@@ -170,22 +171,26 @@ impl<T: NumberLike> PageDecompressor<T> {
     let n_latents = latent_batch_decompressors.len();
 
     if n_latents >= 1 {
-      decompress_latents_w_delta(
-        reader,
-        &mut delta_momentss[0],
-        &mut latent_batch_decompressors[0],
-        primary_latents,
-        n - *n_processed,
-      )?;
+      reader_builder.with_reader(|reader| {
+        decompress_latents_w_delta(
+          reader,
+          &mut delta_momentss[0],
+          &mut latent_batch_decompressors[0],
+          primary_latents,
+          n - *n_processed,
+        )
+      })?;
     }
     if n_latents >= 2 {
-      decompress_latents_w_delta(
-        reader,
-        &mut delta_momentss[1],
-        &mut latent_batch_decompressors[1],
-        secondary_latents,
-        n - *n_processed,
-      )?;
+      reader_builder.with_reader(|reader| {
+        decompress_latents_w_delta(
+          reader,
+          &mut delta_momentss[1],
+          &mut latent_batch_decompressors[1],
+          secondary_latents,
+          n - *n_processed,
+        )
+      })?;
     }
 
     join_latents(mode, primary_latents, secondary_latents);
@@ -193,7 +198,9 @@ impl<T: NumberLike> PageDecompressor<T> {
 
     *n_processed += batch_n;
     if *n_processed == n {
-      reader.drain_empty_byte("expected trailing bits at end of page to be empty")?;
+      reader_builder.with_reader(|reader| {
+        reader.drain_empty_byte("expected trailing bits at end of page to be empty")
+      })?;
     }
 
     Ok(())
@@ -206,7 +213,7 @@ impl<T: NumberLike> PageDecompressor<T> {
   ///
   /// `dst` must have length either a multiple of 256 or be at least the count
   /// of numbers remaining in the page.
-  pub fn decompress(&mut self, src: &[u8], num_dst: &mut [T]) -> PcoResult<(Progress, usize)> {
+  pub fn decompress<R: BetterBufRead>(&mut self, mut src: R, num_dst: &mut [T]) -> PcoResult<(Progress, R)> {
     if num_dst.len() % FULL_BATCH_N != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be \
@@ -217,9 +224,8 @@ impl<T: NumberLike> PageDecompressor<T> {
       )));
     }
 
-    let extension = bit_reader::make_extension_for(src, PAGE_PADDING);
-    let mut reader = BitReader::new(src, &extension);
-    reader.bits_past_byte = self.state.bits_past_byte;
+    src.resize_capacity(8192); // TODO
+    let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, self.state.bits_past_byte);
 
     let n_to_process = min(num_dst.len(), self.n_remaining());
     let backup = self.state.backup();
@@ -228,7 +234,7 @@ impl<T: NumberLike> PageDecompressor<T> {
     while n_processed < n_to_process {
       let dst_batch_end = min(n_processed + FULL_BATCH_N, n_to_process);
       let batch_res = self.decompress_batch_dirty(
-        &mut reader,
+        &mut reader_builder,
         &mut num_dst[n_processed..dst_batch_end],
       );
 
@@ -244,9 +250,8 @@ impl<T: NumberLike> PageDecompressor<T> {
       n_processed,
       finished_page: self.n_remaining() == 0,
     };
-    self.state.bits_past_byte = reader.bits_past_byte % 8;
 
-    Ok((progress, reader.bytes_consumed()?))
+    Ok((progress, reader_builder.into_inner()))
   }
 
   fn n_remaining(&self) -> usize {

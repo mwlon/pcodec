@@ -1,7 +1,8 @@
 use std::fmt::Debug;
+use better_io::BetterBufRead;
 
 use crate::bit_reader;
-use crate::bit_reader::BitReader;
+use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::chunk_meta::ChunkMeta;
 use crate::constants::{CHUNK_META_PADDING, HEADER_PADDING};
 use crate::data_types::NumberLike;
@@ -22,13 +23,12 @@ impl FileDecompressor {
   ///
   /// Will return an error if any version incompatibilities or
   /// insufficient data are found.
-  pub fn new(src: &[u8]) -> PcoResult<(Self, usize)> {
-    let extension = bit_reader::make_extension_for(src, HEADER_PADDING);
-    let mut reader = BitReader::new(src, &extension);
-    let format_version = FormatVersion::parse_from(&mut reader)?;
+  pub fn new<R: BetterBufRead>(src: R) -> PcoResult<(Self, R)> {
+    let mut reader_builder = BitReaderBuilder::new(src, HEADER_PADDING, 0);
+    let format_version = reader_builder.with_reader(FormatVersion::parse_from)?;
     Ok((
       Self { format_version },
-      reader.aligned_bytes_consumed()?,
+      reader_builder.into_inner(),
     ))
   }
 
@@ -40,14 +40,13 @@ impl FileDecompressor {
   /// number of bytes read.
   ///
   /// Will return an error if corruptions or insufficient data are found.
-  pub fn chunk_decompressor<T: NumberLike>(
+  pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
     &self,
-    src: &[u8],
-  ) -> PcoResult<(ChunkDecompressor<T>, usize)> {
-    let extension = bit_reader::make_extension_for(src, CHUNK_META_PADDING);
-    let mut reader = BitReader::new(src, &extension);
-    let chunk_meta = ChunkMeta::<T::Unsigned>::parse_from(&mut reader, &self.format_version)?;
+    src: R,
+  ) -> PcoResult<(ChunkDecompressor<T>, R)> {
+    let mut reader_builder = BitReaderBuilder::new(src, CHUNK_META_PADDING, 0);
+    let chunk_meta = ChunkMeta::<T::Unsigned>::parse_from(&mut reader_builder, &self.format_version)?;
     let cd = ChunkDecompressor::from(chunk_meta);
-    Ok((cd, reader.aligned_bytes_consumed()?))
+    Ok((cd, reader_builder.into_inner()))
   }
 }

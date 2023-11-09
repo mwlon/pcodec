@@ -30,7 +30,6 @@ impl<U: UnsignedLike> PageLatentVarMeta<U> {
     delta_order: usize,
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
-    reader.ensure_padded(PAGE_LATENT_VAR_META_PADDING)?;
     let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
     let mut ans_final_state_idxs = [0; ANS_INTERLEAVING];
     for state in &mut ans_final_state_idxs {

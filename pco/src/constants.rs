@@ -18,6 +18,7 @@ pub const BITS_TO_ENCODE_MODE: Bitlen = 4;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
 
 // padding
+const MAX_LATENT_VARS: usize = 2;
 pub const HEADER_PADDING: usize = 1;
 // + 9 because we might read an extra u64 (8 bytes), plus 1 for good measure
 pub const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + 9;
@@ -26,7 +27,8 @@ pub const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + 9;
 pub const CHUNK_META_PADDING: usize =
   FULL_BIN_BATCH_SIZE * (4 + 2 * MAX_SUPPORTED_PRECISION_BYTES) + OVERSHOOT_PADDING;
 pub const PAGE_LATENT_VAR_META_PADDING: usize =
-  MAX_DELTA_ENCODING_ORDER * MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES + OVERSHOOT_PADDING;
+  MAX_LATENT_VARS * (MAX_DELTA_ENCODING_ORDER * MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES)
+      + OVERSHOOT_PADDING;
 // Page padding is enough for one full batch of latents; this should also
 // generously cover the data needed to read the page meta.
 pub const PAGE_PADDING: usize =

@@ -47,9 +47,9 @@ mod tests {
     let table_size = 1 << encoder.size_log();
 
     // DECODE
+    compressed.extend(&vec![0; 100]);
+    let mut reader = BitReader::new(&compressed, expected_byte_len, 0);
     let decoder = Decoder::new(spec);
-    let extension = bit_reader::make_extension_for(&compressed, 100);
-    let mut reader = BitReader::new(&compressed, &extension);
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;
     for _ in 0..tokens.len() {

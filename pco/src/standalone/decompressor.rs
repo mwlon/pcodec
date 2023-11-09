@@ -1,4 +1,5 @@
-use crate::bit_reader::BitReader;
+use better_io::BetterBufRead;
+use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::progress::Progress;
@@ -52,21 +53,22 @@ impl FileDecompressor {
   ///
   /// Will return an error if any corruptions, version incompatibilities, or
   /// insufficient data are found.
-  pub fn new(src: &[u8]) -> PcoResult<(Self, usize)> {
-    let extension = bit_reader::make_extension_for(src, MAGIC_HEADER.len());
-    let mut reader = BitReader::new(src, &extension);
-    let header = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
-    reader.check_in_bounds()?;
-    if header != MAGIC_HEADER {
-      return Err(PcoError::corruption(format!(
-        "magic header does not match {:?}; instead found {:?}",
-        MAGIC_HEADER, header,
-      )));
-    }
-    let consumed = reader.aligned_bytes_consumed()?;
+  pub fn new<R: BetterBufRead>(src: R) -> PcoResult<(Self, R)> {
+    let mut reader_builder = BitReaderBuilder::new(src, MAGIC_HEADER.len(), 0);
+    reader_builder.with_reader(|reader| {
+      let header = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
 
-    let (inner, additional) = wrapped::FileDecompressor::new(&src[consumed..])?;
-    Ok((Self(inner), consumed + additional))
+      if header != MAGIC_HEADER {
+        return Err(PcoError::corruption(format!(
+          "magic header does not match {:?}; instead found {:?}",
+          MAGIC_HEADER, header,
+        )));
+      }
+      Ok(())
+    })?;
+
+    let (inner, rest) = wrapped::FileDecompressor::new(reader_builder.into_inner())?;
+    Ok((Self(inner), rest))
   }
 
   pub fn format_version(&self) -> u8 {
@@ -79,17 +81,17 @@ impl FileDecompressor {
   /// Will return None for the chunk decompressor if we've reached the footer,
   /// and will return an error if corruptions or insufficient
   /// data are found.
-  pub fn chunk_decompressor<T: NumberLike>(
+  pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
     &self,
-    src: &[u8],
-  ) -> PcoResult<(Option<ChunkDecompressor<T>>, usize)> {
-    let extension = bit_reader::make_extension_for(src, STANDALONE_CHUNK_PREAMBLE_PADDING);
-    let mut reader = BitReader::new(src, &extension);
+    src: R,
+  ) -> PcoResult<(Option<ChunkDecompressor<T>>, R)> {
+    let mut reader_builder = BitReaderBuilder::new(src, STANDALONE_CHUNK_PREAMBLE_PADDING, 0);
+    let mut reader = reader_builder.build()?;
     let dtype_or_termination_byte = reader.read_aligned_bytes(1)?[0];
     reader.check_in_bounds()?;
 
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
-      return Ok((None, reader.aligned_bytes_consumed()?));
+      return Ok((None, reader_builder.into_inner()));
     }
 
     if dtype_or_termination_byte != T::DTYPE_BYTE {
@@ -101,22 +103,18 @@ impl FileDecompressor {
     }
 
     let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1;
-    let mut consumed = reader.aligned_bytes_consumed()?;
-    let (inner_cd, additional) = self.0.chunk_decompressor::<T>(&src[consumed..])?;
-    consumed += additional;
-    let pre_page_consumed = consumed;
-    let (inner_pd, additional) = inner_cd.page_decompressor(n, &src[consumed..])?;
-    consumed += additional;
+    let src = reader_builder.into_inner();
+    let (inner_cd, src) = self.0.chunk_decompressor::<T, R>(src)?;
+    let (inner_pd, src) = inner_cd.page_decompressor(n, src)?;
 
     let res = ChunkDecompressor {
       inner_cd,
       inner_pd,
       n,
       n_processed: 0,
-      n_bytes_processed: consumed - pre_page_consumed,
     };
 
-    Ok((Some(res), consumed))
+    Ok((Some(res), src))
   }
 }
 
@@ -127,7 +125,6 @@ pub struct ChunkDecompressor<T: NumberLike> {
   inner_pd: wrapped::PageDecompressor<T>,
   n: usize,
   n_processed: usize,
-  n_bytes_processed: usize,
 }
 
 impl<T: NumberLike> ChunkDecompressor<T> {
@@ -148,33 +145,32 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   ///
   /// `dst` must have length either a multiple of 256 or be at least the count
   /// of numbers remaining in the chunk.
-  pub fn decompress(&mut self, src: &[u8], dst: &mut [T]) -> PcoResult<(Progress, usize)> {
-    let (progress, consumed) = self.inner_pd.decompress(src, dst)?;
+  pub fn decompress<R: BetterBufRead>(&mut self, src: R, dst: &mut [T]) -> PcoResult<(Progress, R)> {
+    let (progress, src) = self.inner_pd.decompress(src, dst)?;
 
     self.n_processed += progress.n_processed;
-    self.n_bytes_processed += consumed;
 
-    Ok((progress, consumed))
+    Ok((progress, src))
   }
 
   // a helper for some internal things
-  pub(crate) fn decompress_remaining_extend(
+  pub(crate) fn decompress_remaining_extend<R: BetterBufRead>(
     &mut self,
-    bytes: &[u8],
+    src: R,
     dst: &mut Vec<T>,
-  ) -> PcoResult<usize> {
+  ) -> PcoResult<R> {
     let initial_len = dst.len();
     let remaining = self.n - self.n_processed;
     dst.reserve(remaining);
     unsafe {
       dst.set_len(initial_len + remaining);
     }
-    let result = self.decompress(bytes, &mut dst[initial_len..]);
+    let result = self.decompress(src, &mut dst[initial_len..]);
     if result.is_err() {
       dst.truncate(initial_len);
     }
-    let (progress, consumed) = result?;
+    let (progress, rest) = result?;
     assert!(progress.finished_page);
-    Ok(consumed)
+    Ok(rest)
   }
 }

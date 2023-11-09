@@ -1,19 +1,11 @@
 use std::cmp::min;
-use std::mem;
+use std::{io, mem};
+use better_io::{BetterBufRead};
 
 use crate::bits;
 use crate::constants::Bitlen;
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;
-
-pub fn make_extension_for(slice: &[u8], padding: usize) -> Vec<u8> {
-  let shared = min(slice.len(), padding);
-  let len = shared + padding;
-  let mut res = Vec::with_capacity(len);
-  unsafe { res.set_len(len); }
-  res[..shared].copy_from_slice(&slice[slice.len() - shared..]);
-  res
-}
 
 // Q: Why u64?
 // A: It's the largest data type most instruction sets have support for (and
@@ -67,42 +59,26 @@ pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_U64S: usize>(
   bits::lowest_bits(res, n)
 }
 
+struct BitReaderTombstone {
+  bytes_read: usize,
+  bits_past_byte: Bitlen,
+}
+
 pub struct BitReader<'a> {
-  pub current_stream: &'a [u8], // either src or extension
-  other_stream: &'a [u8],
-  current_is_src: bool,       // as opposed to extension
-  skipped: usize,             // in extension
+  pub src: &'a [u8],
+  unpadded_bit_size: usize,
+
   pub stale_byte_idx: usize,  // in current stream
   pub bits_past_byte: Bitlen, // in current stream
 }
 
 impl<'a> BitReader<'a> {
-  pub fn new(src: &'a [u8], extension: &'a [u8]) -> Self {
-    // we assume extension has len min(src.len(), padding) + padding
-    // where the first min(src.len(), padding) overlap with src
-
-    if extension.len() > 2 * src.len() {
-      // src doesn't have enough padding even at the start
-      Self {
-        current_stream: extension,
-        other_stream: src,
-        skipped: 0,
-        stale_byte_idx: 0,
-        bits_past_byte: 0,
-        current_is_src: false,
-      }
-    } else {
-      let padding = extension.len() / 2;
-      let skipped = src.len() - padding;
-
-      Self {
-        current_stream: src,
-        other_stream: extension,
-        skipped,
-        stale_byte_idx: 0,
-        bits_past_byte: 0,
-        current_is_src: true,
-      }
+  pub fn new(src: &'a [u8], unpadded_byte_size: usize, bits_past_byte: Bitlen) -> Self {
+    Self {
+      src,
+      unpadded_bit_size: unpadded_byte_size * 8,
+      stale_byte_idx: 0,
+      bits_past_byte,
     }
   }
 
@@ -112,55 +88,6 @@ impl<'a> BitReader<'a> {
 
   fn byte_idx(&self) -> usize {
     self.bit_idx() / 8
-  }
-
-  fn src_bit_idx(&self) -> usize {
-    let bit_idx = self.bit_idx();
-    if self.current_is_src {
-      bit_idx
-    } else {
-      bit_idx + self.skipped * 8
-    }
-  }
-
-  fn src_bit_size(&self) -> usize {
-    let byte_size = if self.current_is_src {
-      self.current_stream.len()
-    } else {
-      self.other_stream.len()
-    };
-    byte_size * 8
-  }
-
-  fn switch_to_extension(&mut self) {
-    assert!(self.current_is_src);
-    self.stale_byte_idx -= self.skipped;
-    self.current_is_src = false;
-    mem::swap(
-      &mut self.current_stream,
-      &mut self.other_stream,
-    );
-  }
-
-  pub fn ensure_padded(&mut self, required_padding: usize) -> PcoResult<()> {
-    self.check_in_bounds()?;
-    self.refill();
-
-    let byte_idx = self.stale_byte_idx;
-    if byte_idx + required_padding < self.current_stream.len() {
-      return Ok(());
-    }
-
-    // see if we can switch to the other stream
-    if self.current_is_src && byte_idx + required_padding < self.other_stream.len() + self.skipped {
-      self.switch_to_extension();
-      return Ok(());
-    }
-
-    Err(PcoError::insufficient_data(
-      "[BitReader] insufficient padding; this is likely either a bug in pco or \
-      a result of using too large a custom data type",
-    ))
   }
 
   // Returns the reader's current byte index. Will return an error if the
@@ -191,34 +118,26 @@ impl<'a> BitReader<'a> {
     let byte_idx = self.aligned_byte_idx()?;
     let new_byte_idx = byte_idx + n;
     self.stale_byte_idx = new_byte_idx;
-    Ok(&self.current_stream[byte_idx..new_byte_idx])
-  }
-
-  pub fn read_usize(&mut self, n: Bitlen) -> usize {
-    self.read_uint(n)
-  }
-
-  pub fn read_bitlen(&mut self, n: Bitlen) -> Bitlen {
-    self.read_uint(n)
+    Ok(&self.src[byte_idx..new_byte_idx])
   }
 
   pub fn read_uint<U: ReadWriteUint>(&mut self, n: Bitlen) -> U {
     self.refill();
     let res = match U::MAX_EXTRA_U64S {
       0 => read_uint_at::<U, 0>(
-        self.current_stream,
+        self.src,
         self.stale_byte_idx,
         self.bits_past_byte,
         n,
       ),
       1 => read_uint_at::<U, 1>(
-        self.current_stream,
+        self.src,
         self.stale_byte_idx,
         self.bits_past_byte,
         n,
       ),
       2 => read_uint_at::<U, 2>(
-        self.current_stream,
+        self.src,
         self.stale_byte_idx,
         self.bits_past_byte,
         n,
@@ -231,27 +150,33 @@ impl<'a> BitReader<'a> {
     self.consume(n);
     res
   }
+  pub fn read_usize(&mut self, n: Bitlen) -> usize {
+    self.read_uint(n)
+  }
+
+  pub fn read_bitlen(&mut self, n: Bitlen) -> Bitlen {
+    self.read_uint(n)
+  }
 
   pub fn check_in_bounds(&self) -> PcoResult<()> {
-    let src_bit_idx = self.src_bit_idx();
-    let src_size = self.src_bit_size();
-    if src_bit_idx > src_size {
+    let bit_idx = self.bit_idx();
+    if bit_idx > self.unpadded_bit_size {
       return Err(PcoError::insufficient_data(format!(
         "[BitReader] out of bounds at bit {} / {}",
-        src_bit_idx, src_size,
+        bit_idx, self.unpadded_bit_size
       )));
     }
     Ok(())
   }
 
-  // Seek to the end of the byte.
-  // Used to skip to the next metadata or body section of the file, since they
-  // always start byte-aligned.
+  // Seek to the end of the byte, asserting it's all 0.
+  // Used to terminate each section of the file, since they
+  // always start and end byte-aligned.
   pub fn drain_empty_byte(&mut self, message: &str) -> PcoResult<()> {
     self.check_in_bounds()?;
     self.refill();
     if self.bits_past_byte != 0 {
-      if (self.current_stream[self.stale_byte_idx] >> self.bits_past_byte) > 0 {
+      if (self.src[self.stale_byte_idx] >> self.bits_past_byte) > 0 {
         return Err(PcoError::corruption(message));
       }
       self.consume(8 - self.bits_past_byte);
@@ -259,22 +184,89 @@ impl<'a> BitReader<'a> {
     Ok(())
   }
 
-  pub fn bits_consumed(self) -> PcoResult<usize> {
+  fn close(mut self) -> PcoResult<BitReaderTombstone> {
     self.check_in_bounds()?;
+    self.refill();
 
-    Ok(self.src_bit_idx())
+    Ok(BitReaderTombstone {
+      bytes_read: self.stale_byte_idx,
+      bits_past_byte: self.bits_past_byte,
+    })
+  }
+}
+
+pub struct BitReaderBuilder<R: BetterBufRead> {
+  padding: usize,
+  inner: R,
+  eof_buffer: Vec<u8>,
+  reached_eof: bool,
+  bytes_into_eof_buffer: usize,
+  bits_past_byte: Bitlen,
+}
+
+impl<R: BetterBufRead> BitReaderBuilder<R> {
+  pub fn new(inner: R, padding: usize, bits_past_byte: Bitlen) -> Self {
+    Self {
+      padding,
+      inner,
+      eof_buffer: vec![],
+      reached_eof: false,
+      bytes_into_eof_buffer: 0,
+      bits_past_byte,
+    }
   }
 
-  pub fn bytes_consumed(self) -> PcoResult<usize> {
-    Ok(self.bits_consumed()? / 8)
-  }
+  fn read(&mut self, n_bytes: usize) -> io::Result<&[u8]> {
+    if !self.reached_eof {
+      self.inner.fill_or_eof(n_bytes)?;
+      let inner_bytes = self.inner.buffer();
 
-  pub fn aligned_bytes_consumed(self) -> PcoResult<usize> {
-    if self.bits_past_byte % 8 != 0 {
-      panic!("dangling bits remain; this is likely a bug in pco");
+      if inner_bytes.len() >= n_bytes {
+        return Ok(inner_bytes);
+      } else {
+        self.reached_eof = true;
+        self.eof_buffer = vec![0; inner_bytes.len() + self.padding];
+        self.eof_buffer[..inner_bytes.len()].copy_from_slice(inner_bytes);
+      }
     }
 
-    self.bytes_consumed()
+    // we've reached the end of file buffer
+    Ok(&self.eof_buffer[self.bytes_into_eof_buffer..])
+  }
+
+  fn build(&mut self) -> io::Result<BitReader> {
+    let unpadded_bytes = if self.reached_eof {
+      self.eof_buffer.len() - self.padding - self.bytes_into_eof_buffer
+    } else {
+      0
+    };
+    let bits_past_byte = self.bits_past_byte;
+    let src = self.read(self.padding)?;
+    Ok(BitReader::new(src, unpadded_bytes, bits_past_byte))
+  }
+
+  pub fn into_inner(self) -> R {
+    self.inner
+  }
+
+  fn update(&mut self, tombstone: BitReaderTombstone) {
+    self.inner.consume(tombstone.bytes_read);
+    if self.reached_eof {
+      self.bytes_into_eof_buffer += tombstone.bytes_read;
+    }
+    self.bits_past_byte = tombstone.bits_past_byte;
+  }
+
+  pub fn with_reader<Y, F: FnOnce(&mut BitReader) -> PcoResult<Y>>(&mut self, f: F) -> PcoResult<Y> {
+    let mut reader = self.build()?;
+    let res = f(&mut reader)?;
+    let tombstone = reader.close()?;
+    self.update(tombstone);
+    Ok(res)
+  }
+
+  pub fn bits_past_byte(&self) -> Bitlen {
+    self.bits_past_byte
   }
 }
 
@@ -291,21 +283,16 @@ mod tests {
   #[test]
   fn test_bit_reader() -> PcoResult<()> {
     // 10010001 01100100 00000000 11111111 10000010
-    let src = vec![137, 38, 0, 255, 65];
-    let ext = make_extension_for(&src, 4);
-    assert_eq!(ext.len(), 8);
-    assert_eq!(&ext[0..4], &vec![38, 0, 255, 65]);
-    let mut reader = BitReader::new(&src, &ext);
+    let src = vec![137, 38, 0, 255, 65, 0, 0, 0, 0];
+    let mut reader = BitReader::new(&src, 5, 0);
 
     assert_eq!(reader.read_bitlen(4), 9);
     assert!(reader.read_aligned_bytes(1).is_err());
     assert_eq!(reader.read_bitlen(4), 8);
     assert_eq!(reader.read_aligned_bytes(1)?, vec![38]);
-    reader.ensure_padded(4)?;
     assert_eq!(reader.read_usize(15), 255 + 65 * 256);
     reader.drain_empty_byte("should be empty")?;
-    let consumed = reader.aligned_bytes_consumed()?;
-    assert_eq!(consumed, 5);
+    assert_eq!(reader.aligned_byte_idx()?, 5);
     Ok(())
   }
 }
