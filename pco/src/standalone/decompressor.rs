@@ -17,28 +17,20 @@ use better_io::BetterBufRead;
 /// # use pco::errors::PcoResult;
 ///
 /// # fn main() -> PcoResult<()> {
-/// let src = vec![112, 99, 111, 33, 0, 0]; // the minimal .pco file, for the sake of example
+/// let compressed = vec![112, 99, 111, 33, 0, 0]; // the minimal .pco file, for the sake of example
 /// let mut nums = vec![0; FULL_BATCH_N];
-/// let (file_decompressor, mut byte_idx) = FileDecompressor::new(&src)?;
-/// let mut finished_file = false;
-/// while !finished_file {
-///   let (maybe_cd, bytes_read) = file_decompressor.chunk_decompressor::<i64>(
-///     &src[byte_idx..]
-///   )?;
-///   byte_idx += bytes_read;
-///   if let Some(mut chunk_decompressor) = maybe_cd {
-///     let mut finished_chunk = false;
-///     while !finished_chunk {
-///       let (progress, bytes_read) = chunk_decompressor.decompress(
-///         &src[byte_idx..],
-///         &mut nums,
-///       )?;
-///       byte_idx += bytes_read;
-///       // Do something with &nums[0..progress.n_processed]
-///       finished_chunk = progress.finished_page;
-///     }
-///   } else {
-///     finished_file = true;
+/// let (file_decompressor, mut src) = FileDecompressor::new(compressed.as_slice())?;
+/// while let (Some(mut chunk_decompressor), new_src) = file_decompressor.chunk_decompressor::<i64, _>(src)? {
+///   src = new_src;
+///   let mut finished_chunk = false;
+///   while !finished_chunk {
+///     let (progress, new_src) = chunk_decompressor.decompress(
+///       src,
+///       &mut nums,
+///     )?;
+///     src = new_src;
+///     // Do something with &nums[0..progress.n_processed]
+///     finished_chunk = progress.finished_page;
 ///   }
 /// }
 /// # Ok(())

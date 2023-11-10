@@ -59,11 +59,6 @@ pub fn read_uint_at<U: ReadWriteUint, const MAX_EXTRA_U64S: usize>(
   bits::lowest_bits(res, n)
 }
 
-struct BitReaderTombstone {
-  bytes_read: usize,
-  bits_past_byte: Bitlen,
-}
-
 pub struct BitReader<'a> {
   pub src: &'a [u8],
   unpadded_bit_size: usize,
@@ -159,7 +154,9 @@ impl<'a> BitReader<'a> {
     self.read_uint(n)
   }
 
-  pub fn check_in_bounds(&self) -> PcoResult<()> {
+  // checks in bounds and returns bit idx
+  #[inline]
+  fn bit_idx_safe(&self) -> PcoResult<usize> {
     let bit_idx = self.bit_idx();
     if bit_idx > self.unpadded_bit_size {
       return Err(PcoError::insufficient_data(format!(
@@ -167,6 +164,11 @@ impl<'a> BitReader<'a> {
         bit_idx, self.unpadded_bit_size
       )));
     }
+    Ok(bit_idx)
+  }
+
+  pub fn check_in_bounds(&self) -> PcoResult<()> {
+    self.bit_idx_safe()?;
     Ok(())
   }
 
@@ -183,16 +185,6 @@ impl<'a> BitReader<'a> {
       self.consume(8 - self.bits_past_byte);
     }
     Ok(())
-  }
-
-  fn close(mut self) -> PcoResult<BitReaderTombstone> {
-    self.check_in_bounds()?;
-    self.refill();
-
-    Ok(BitReaderTombstone {
-      bytes_read: self.stale_byte_idx,
-      bits_past_byte: self.bits_past_byte,
-    })
   }
 }
 
@@ -255,12 +247,13 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
     self.inner
   }
 
-  fn update(&mut self, tombstone: BitReaderTombstone) {
-    self.inner.consume(tombstone.bytes_read);
+  fn update(&mut self, final_bit_idx: usize) {
+    let bytes_consumed = final_bit_idx / 8;
+    self.inner.consume(bytes_consumed);
     if self.reached_eof {
-      self.bytes_into_eof_buffer += tombstone.bytes_read;
+      self.bytes_into_eof_buffer += bytes_consumed;
     }
-    self.bits_past_byte = tombstone.bits_past_byte;
+    self.bits_past_byte = final_bit_idx as Bitlen % 8;
   }
 
   pub fn with_reader<Y, F: FnOnce(&mut BitReader) -> PcoResult<Y>>(
@@ -269,8 +262,8 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
   ) -> PcoResult<Y> {
     let mut reader = self.build()?;
     let res = f(&mut reader)?;
-    let tombstone = reader.close()?;
-    self.update(tombstone);
+    let final_bit_idx = reader.bit_idx_safe()?;
+    self.update(final_bit_idx);
     Ok(res)
   }
 
