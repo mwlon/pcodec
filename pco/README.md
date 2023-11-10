@@ -52,8 +52,8 @@ In either case,
 ## Important API Notes
 
 * In some places, pco methods accept a destination (either W: Write or &mut [T: NumberLike]).
-If pco returns an error, the pco struct's state should be unaffected, but the destination
-may have been modified.
+If pco returns an error, it is possible both the destination and the struct
+have been modified.
 * Pco will always try to process all numbers, and it will fail if insufficient bytes are
 available. For instance, during decompression pco will try to fill the entire `&mut [T]`
 passed in, returning an insufficient data error if the `&[u8]` passed in is not long enough.

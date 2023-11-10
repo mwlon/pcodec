@@ -40,8 +40,8 @@ use better_io::BetterBufRead;
 pub struct FileDecompressor(wrapped::FileDecompressor);
 
 impl FileDecompressor {
-  /// Reads a short header and returns a `FileDecompressor` and the number of
-  /// bytes read.
+  /// Reads a short header and returns a `FileDecompressor` and the
+  /// remaining input.
   ///
   /// Will return an error if any corruptions, version incompatibilities, or
   /// insufficient data are found.
@@ -65,7 +65,7 @@ impl FileDecompressor {
   }
 
   /// Reads a chunk's metadata and returns a `ChunkDecompressor` and the
-  /// number of bytes read.
+  /// remaining input.
   ///
   /// Will return None for the chunk decompressor if we've reached the footer,
   /// and will return an error if corruptions or insufficient
@@ -127,7 +127,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   }
 
   /// Reads compressed numbers into the destination, returning progress and
-  /// the number of bytes read.
+  /// the remaining input.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   ///

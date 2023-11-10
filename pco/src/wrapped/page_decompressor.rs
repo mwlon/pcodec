@@ -169,7 +169,7 @@ impl<T: NumberLike> PageDecompressor<T> {
   }
 
   /// Reads compressed numbers into the destination, returning progress and
-  /// the number of bytes read.
+  /// the remaining input.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   ///

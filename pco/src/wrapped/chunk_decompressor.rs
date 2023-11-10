@@ -26,7 +26,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   }
 
   /// Reads metadata for a page and returns a `PageDecompressor` and the
-  /// number of bytes read.
+  /// remaining input.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   pub fn page_decompressor<R: BetterBufRead>(
