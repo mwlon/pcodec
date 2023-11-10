@@ -45,10 +45,19 @@ fn print_bins<T: NumberLike>(
   }
 }
 
+fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
+  let res = *prev_src_len - src.len();
+  *prev_src_len = src.len();
+  res
+}
+
 impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
-  fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()> {
+  fn inspect(&self, opt: &InspectOpt, src: &[u8]) -> Result<()> {
+    let mut prev_src_len_val = src.len();
+    let prev_src_len = &mut prev_src_len_val;
     println!("inspecting {:?}", opt.path);
-    let (fd, mut consumed) = FileDecompressor::new(bytes)?;
+    let (fd, mut src) = FileDecompressor::new(src)?;
+    let header_size = measure_bytes_read(src, prev_src_len);
 
     let version = fd.format_version();
     println!("=================\n");
@@ -57,7 +66,6 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
       utils::dtype_name::<P::Num>()
     );
     println!("format version: {}", version,);
-    let header_size = consumed;
 
     let mut meta_size = 0;
     let mut page_size = 0;
@@ -66,19 +74,19 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     let mut metas = Vec::new();
     let mut void = Vec::new();
     loop {
-      let (maybe_cd, additional) = fd.chunk_decompressor::<P::Num>(&bytes[consumed..])?;
-      consumed += additional;
+      let (maybe_cd, new_src) = fd.chunk_decompressor::<P::Num, _>(src)?;
+      src = new_src;
       if let Some(mut cd) = maybe_cd {
-        meta_size += additional;
+        meta_size += measure_bytes_read(src, prev_src_len);
         chunk_ns.push(cd.n());
         metas.push(cd.meta().clone());
 
         void.resize(cd.n(), P::Num::default());
-        let (_, additional) = cd.decompress(&bytes[consumed..], &mut void)?;
-        consumed += additional;
-        page_size += additional;
+        let (_, new_src) = cd.decompress(src, &mut void)?;
+        src = new_src;
+        page_size += measure_bytes_read(src, prev_src_len);
       } else {
-        footer_size += additional;
+        footer_size += measure_bytes_read(src, prev_src_len);
         break;
       }
     }
@@ -91,10 +99,11 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
       "uncompressed byte size: {}",
       uncompressed_size
     );
+    let compressed_size = header_size + meta_size + page_size + footer_size;
     println!(
       "compressed byte size: {} (ratio: {})",
-      consumed,
-      uncompressed_size as f64 / consumed as f64,
+      compressed_size,
+      uncompressed_size as f64 / compressed_size as f64,
     );
     println!("{}header size: {}", INDENT, header_size);
     println!(
@@ -106,7 +115,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     println!(
       "{}unknown trailing bytes: {}",
       INDENT,
-      bytes.len() - consumed
+      src.len(),
     );
 
     for (i, meta) in metas.iter().enumerate() {

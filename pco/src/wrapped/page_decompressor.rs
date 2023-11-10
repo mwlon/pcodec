@@ -19,45 +19,8 @@ pub struct State<U: UnsignedLike> {
   n_processed: usize,
   latent_batch_decompressors: Vec<LatentBatchDecompressor<U>>,
   delta_momentss: Vec<DeltaMoments<U>>, // one per latent variable
-  // Secondary latents is technically mutable, but it doesn't really matter
-  // since we overwrite it on every call.
   secondary_latents: [U; FULL_BATCH_N],
   bits_past_byte: Bitlen, // in [0, 8), only used to start a batch
-}
-
-pub struct Backup<U: UnsignedLike> {
-  n_processed: usize,
-  latent_batch_backups: Vec<latent_batch_decompressor::Backup>,
-  delta_momentss: Vec<DeltaMoments<U>>,
-  bits_past_byte: Bitlen,
-}
-
-impl<U: UnsignedLike> State<U> {
-  fn backup(&self) -> Backup<U> {
-    Backup {
-      n_processed: self.n_processed,
-      latent_batch_backups: self
-        .latent_batch_decompressors
-        .iter()
-        .map(|lbd| lbd.backup())
-        .collect::<Vec<_>>(),
-      delta_momentss: self.delta_momentss.clone(),
-      bits_past_byte: self.bits_past_byte,
-    }
-  }
-
-  fn recover(&mut self, backup: Backup<U>) {
-    self.n_processed = backup.n_processed;
-    self
-      .latent_batch_decompressors
-      .iter_mut()
-      .zip(backup.latent_batch_backups.into_iter())
-      .for_each(|(lbd, lbd_backup)| {
-        lbd.recover(lbd_backup);
-      });
-    self.delta_momentss = backup.delta_momentss;
-    self.bits_past_byte = backup.bits_past_byte;
-  }
 }
 
 /// Holds metadata about a page and supports decompression.
@@ -149,8 +112,7 @@ impl<T: NumberLike> PageDecompressor<T> {
     })
   }
 
-  // dirties reader and state, but might fail midway
-  fn decompress_batch_dirty<R: BetterBufRead>(
+  fn decompress_batch<R: BetterBufRead>(
     &mut self,
     reader_builder: &mut BitReaderBuilder<R>,
     primary_dst: &mut [T],
@@ -228,21 +190,14 @@ impl<T: NumberLike> PageDecompressor<T> {
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, self.state.bits_past_byte);
 
     let n_to_process = min(num_dst.len(), self.n_remaining());
-    let backup = self.state.backup();
 
     let mut n_processed = 0;
     while n_processed < n_to_process {
       let dst_batch_end = min(n_processed + FULL_BATCH_N, n_to_process);
-      let batch_res = self.decompress_batch_dirty(
+      self.decompress_batch(
         &mut reader_builder,
         &mut num_dst[n_processed..dst_batch_end],
-      );
-
-      if let Err(e) = batch_res {
-        self.state.recover(backup);
-        return Err(e);
-      }
-
+      )?;
       n_processed = dst_batch_end;
     }
 
@@ -250,6 +205,7 @@ impl<T: NumberLike> PageDecompressor<T> {
       n_processed,
       finished_page: self.n_remaining() == 0,
     };
+    self.state.bits_past_byte = reader_builder.bits_past_byte();
 
     Ok((progress, reader_builder.into_inner()))
   }

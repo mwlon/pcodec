@@ -55,17 +55,15 @@ impl FileDecompressor {
   /// insufficient data are found.
   pub fn new<R: BetterBufRead>(src: R) -> PcoResult<(Self, R)> {
     let mut reader_builder = BitReaderBuilder::new(src, MAGIC_HEADER.len(), 0);
-    reader_builder.with_reader(|reader| {
-      let header = reader.read_aligned_bytes(MAGIC_HEADER.len())?;
-
-      if header != MAGIC_HEADER {
-        return Err(PcoError::corruption(format!(
-          "magic header does not match {:?}; instead found {:?}",
-          MAGIC_HEADER, header,
-        )));
-      }
-      Ok(())
+    let header = reader_builder.with_reader(|reader| {
+      Ok(reader.read_aligned_bytes(MAGIC_HEADER.len())?.to_vec())
     })?;
+    if &header != MAGIC_HEADER.as_slice() {
+      return Err(PcoError::corruption(format!(
+        "magic header does not match {:?}; instead found {:?}",
+        MAGIC_HEADER, header,
+      )));
+    }
 
     let (inner, rest) = wrapped::FileDecompressor::new(reader_builder.into_inner())?;
     Ok((Self(inner), rest))
@@ -86,10 +84,9 @@ impl FileDecompressor {
     src: R,
   ) -> PcoResult<(Option<ChunkDecompressor<T>>, R)> {
     let mut reader_builder = BitReaderBuilder::new(src, STANDALONE_CHUNK_PREAMBLE_PADDING, 0);
-    let mut reader = reader_builder.build()?;
-    let dtype_or_termination_byte = reader.read_aligned_bytes(1)?[0];
-    reader.check_in_bounds()?;
-
+    let dtype_or_termination_byte = reader_builder.with_reader(|reader| {
+      Ok(reader.read_aligned_bytes(1)?[0])
+    })?;
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
       return Ok((None, reader_builder.into_inner()));
     }
@@ -102,7 +99,9 @@ impl FileDecompressor {
       )));
     }
 
-    let n = reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1;
+    let n = reader_builder.with_reader(|reader| {
+      Ok(reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1)
+    })?;
     let src = reader_builder.into_inner();
     let (inner_cd, src) = self.0.chunk_decompressor::<T, R>(src)?;
     let (inner_pd, src) = inner_cd.page_decompressor(n, src)?;

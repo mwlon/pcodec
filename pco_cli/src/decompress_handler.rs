@@ -20,8 +20,9 @@ pub trait DecompressHandler {
 }
 
 impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
-  fn decompress(&self, opt: &DecompressOpt, bytes: &[u8]) -> Result<()> {
-    let (fd, mut consumed) = FileDecompressor::new(bytes)?;
+  // TODO read directly from file
+  fn decompress(&self, opt: &DecompressOpt, src: &[u8]) -> Result<()> {
+    let (fd, mut src) = FileDecompressor::new(src)?;
 
     let mut writer = new_column_writer::<P>(opt)?;
     let mut remaining_limit = opt.limit.unwrap_or(usize::MAX);
@@ -32,8 +33,8 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
         break;
       }
 
-      let (maybe_cd, additional) = fd.chunk_decompressor::<P::Num>(&bytes[consumed..])?;
-      consumed += additional;
+      let (maybe_cd, new_src) = fd.chunk_decompressor::<P::Num, _>(src)?;
+      src = new_src;
 
       if let Some(mut cd) = maybe_cd {
         let n = cd.n();
@@ -41,8 +42,8 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
         // how many pco should decompress
         let pco_size = (1 + batch_size / FULL_BATCH_N) * FULL_BATCH_N;
         nums.resize(pco_size, P::Num::default());
-        let (_, additional) = cd.decompress(&bytes[consumed..], &mut nums)?;
-        consumed += additional;
+        let (_, new_src) = cd.decompress(src, &mut nums)?;
+        src = new_src;
         let arrow_nums = nums
           .iter()
           .take(batch_size)

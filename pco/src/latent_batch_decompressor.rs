@@ -21,21 +21,7 @@ struct State<U: UnsignedLike> {
   state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
-pub struct Backup {
-  state_idxs: [AnsState; ANS_INTERLEAVING],
-}
-
 impl<U: UnsignedLike> State<U> {
-  fn backup(&self) -> Backup {
-    Backup {
-      state_idxs: self.state_idxs,
-    }
-  }
-
-  fn recover(&mut self, backup: Backup) {
-    self.state_idxs = backup.state_idxs;
-  }
-
   #[inline]
   fn set_scratch(&mut self, i: usize, offset_bit_idx: usize, info: &BinDecompressionInfo<U>) {
     unsafe {
@@ -245,14 +231,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     self.add_offsets(dst);
 
     Ok(())
-  }
-
-  pub fn backup(&self) -> Backup {
-    self.state.backup()
-  }
-
-  pub fn recover(&mut self, backup: Backup) {
-    self.state.recover(backup);
   }
 }
 

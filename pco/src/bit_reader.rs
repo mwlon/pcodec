@@ -118,6 +118,7 @@ impl<'a> BitReader<'a> {
     let byte_idx = self.aligned_byte_idx()?;
     let new_byte_idx = byte_idx + n;
     self.stale_byte_idx = new_byte_idx;
+    self.bits_past_byte = 0;
     Ok(&self.src[byte_idx..new_byte_idx])
   }
 
@@ -216,32 +217,33 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
     }
   }
 
-  fn read(&mut self, n_bytes: usize) -> io::Result<&[u8]> {
+  fn build(&mut self) -> io::Result<BitReader> {
+    // could make n_bytes configurably smaller if it matters for some reason
+    let n_bytes_to_read = self.padding;
     if !self.reached_eof {
-      self.inner.fill_or_eof(n_bytes)?;
+      self.inner.fill_or_eof(n_bytes_to_read)?;
       let inner_bytes = self.inner.buffer();
 
-      if inner_bytes.len() >= n_bytes {
-        return Ok(inner_bytes);
-      } else {
+      if inner_bytes.len() < n_bytes_to_read {
         self.reached_eof = true;
         self.eof_buffer = vec![0; inner_bytes.len() + self.padding];
         self.eof_buffer[..inner_bytes.len()].copy_from_slice(inner_bytes);
       }
     }
 
-    // we've reached the end of file buffer
-    Ok(&self.eof_buffer[self.bytes_into_eof_buffer..])
-  }
+    let src = if self.reached_eof {
+      &self.eof_buffer[self.bytes_into_eof_buffer..]
+    } else {
+      &self.inner.buffer()
+    };
 
-  fn build(&mut self) -> io::Result<BitReader> {
+    // we've reached the end of file buffer
     let unpadded_bytes = if self.reached_eof {
       self.eof_buffer.len() - self.padding - self.bytes_into_eof_buffer
     } else {
-      0
+      src.len()
     };
     let bits_past_byte = self.bits_past_byte;
-    let src = self.read(self.padding)?;
     Ok(BitReader::new(src, unpadded_bytes, bits_past_byte))
   }
 
@@ -272,7 +274,7 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
 
 #[cfg(test)]
 mod tests {
-  use crate::errors::PcoResult;
+  use crate::errors::{ErrorKind, PcoResult};
 
   use super::*;
 
@@ -293,6 +295,34 @@ mod tests {
     assert_eq!(reader.read_usize(15), 255 + 65 * 256);
     reader.drain_empty_byte("should be empty")?;
     assert_eq!(reader.aligned_byte_idx()?, 5);
+    Ok(())
+  }
+
+  #[test]
+  fn test_bit_reader_builder() -> PcoResult<()> {
+    let src = (0..7).collect::<Vec<_>>();
+    let mut reader_builder = BitReaderBuilder::new(src.as_slice(), 4, 1);
+    reader_builder.with_reader(|reader| {
+      assert_eq!(&reader.src[0..4], &vec![0, 1, 2, 3]);
+      assert_eq!(reader.bit_idx(), 1);
+      assert_eq!(reader.read_usize(16), 1 << 7); // not 1 << 8, because we started at bit_idx 1
+      Ok(())
+    })?;
+    reader_builder.with_reader(|reader| {
+      assert_eq!(&reader.src[0..4], &vec![2, 3, 4, 5]);
+      assert_eq!(reader.bit_idx(), 1);
+      assert_eq!(reader.read_usize(7), 1);
+      assert_eq!(reader.bit_idx(), 8);
+      assert_eq!(reader.read_aligned_bytes(3)?, &vec![3, 4, 5]);
+      Ok(())
+    })?;
+    let err = reader_builder.with_reader(|reader| {
+      assert!(reader.src.len() >= 4); // because of padding
+      reader.read_usize(9); // this overshoots the end of the data by 1 bit
+      Ok(())
+    }).unwrap_err();
+    assert!(matches!(err.kind, ErrorKind::InsufficientData));
+
     Ok(())
   }
 }

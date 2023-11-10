@@ -13,17 +13,17 @@ fn main() {
   // your data
   let mut my_ints = Vec::new();
   for i in 0..100000 {
-    my_ints.push(i as i64);
+      my_ints.push(i as i64);
   }
- 
+
   // Here we let the library choose a configuration with default compression
   // level. If you know about the data you're compressing, you can compress
   // faster by creating a `CompressorConfig`.
-  let bytes: Vec<u8> = auto_compress(&my_ints, DEFAULT_COMPRESSION_LEVEL);
-  println!("compressed down to {} bytes", bytes.len());
- 
+  let compressed: Vec<u8> = auto_compress(&my_ints, DEFAULT_COMPRESSION_LEVEL);
+  println!("compressed down to {} bytes", compressed.len());
+
   // decompress
-  let recovered = auto_decompress::<i64>(&bytes).expect("failed to decompress");
+  let recovered = auto_decompress::<i64>(&compressed).expect("failed to decompress");
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
 }
 ```

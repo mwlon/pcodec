@@ -10,15 +10,12 @@ use pco::standalone::FileDecompressor;
 use crate::number_like_arrow::NumberLikeArrow;
 use crate::opt::CompressOpt;
 
-pub fn get_header_byte(bytes: &[u8]) -> Result<u8> {
-  let (_, consumed) = FileDecompressor::new(bytes)?;
-  if bytes.len() > consumed {
-    Ok(bytes[consumed])
+pub fn get_header_byte(src: &[u8]) -> Result<u8> {
+  let (_, src) = FileDecompressor::new(src)?;
+  if src.is_empty() {
+    Err(anyhow::anyhow!("file too short to identify dtype"))
   } else {
-    Err(anyhow::anyhow!(
-      "only {} bytes found in file",
-      bytes.len()
-    ))
+    Ok(src[0])
   }
 }
 
