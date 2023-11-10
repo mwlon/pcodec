@@ -209,6 +209,7 @@ fn uninit_vec<T>(n: usize) -> Vec<T> {
   }
 }
 
+#[inline(never)]
 fn write_dissected_page<U: UnsignedLike, W: Write>(
   dissected_page: DissectedPage<U>,
   writer: &mut BitWriter<W>,

@@ -5,6 +5,70 @@ use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{auto_decompress, simple_compress, FileCompressor};
 
+fn assert_recovers_within_size<T: NumberLike>(
+  nums: &[T],
+  compression_level: usize,
+  name: &str,
+  delta_encoding_order: usize,
+  max_byte_size: usize,
+) -> PcoResult<()> {
+  let debug_info = format!(
+    "name={} delta_encoding_order={}",
+    name, delta_encoding_order,
+  );
+  let config = ChunkConfig {
+    compression_level,
+    delta_encoding_order: Some(delta_encoding_order),
+    ..Default::default()
+  };
+  let compressed = simple_compress(nums, &config)?;
+  assert!(
+    compressed.len() <= max_byte_size,
+    "compressed size {} > {}; {}",
+    compressed.len(),
+    max_byte_size,
+    debug_info
+  );
+  let decompressed = auto_decompress::<T>(&compressed)?;
+  // We can't do assert_eq on the whole vector because even bitwise identical
+  // floats sometimes aren't equal by ==.
+  assert_eq!(
+    decompressed.len(),
+    nums.len(),
+    "{}",
+    debug_info
+  );
+  for i in 0..decompressed.len() {
+    // directly comparing numbers might not work for floats
+    assert!(
+      decompressed[i].to_unsigned() == nums[i].to_unsigned(),
+      "{} != {} at {}; {}",
+      decompressed[i],
+      nums[i],
+      i,
+      debug_info,
+    );
+  }
+  Ok(())
+}
+
+fn assert_recovers<T: NumberLike>(
+  nums: Vec<T>,
+  compression_level: usize,
+  name: &str,
+) -> PcoResult<()> {
+  for delta_encoding_order in [0, 1, 7] {
+    assert_recovers_within_size(
+      &nums,
+      compression_level,
+      name,
+      delta_encoding_order,
+      usize::MAX,
+    )?;
+  }
+  Ok(())
+}
+
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
   assert_recovers(vec![u64::MIN, u64::MAX], 0, "int extremes 0")?;
@@ -192,68 +256,4 @@ fn test_decimals() -> PcoResult<()> {
     (9 * n + 3 * n) / 8 + overhead_bytes,
   )?;
   assert_recovers(nums, 2, "decimals")
-}
-
-fn assert_recovers<T: NumberLike>(
-  nums: Vec<T>,
-  compression_level: usize,
-  name: &str,
-) -> PcoResult<()> {
-  for delta_encoding_order in [0, 1, 7] {
-    assert_recovers_within_size(
-      &nums,
-      compression_level,
-      name,
-      delta_encoding_order,
-      usize::MAX,
-    )?;
-  }
-  Ok(())
-}
-
-fn assert_recovers_within_size<T: NumberLike>(
-  nums: &[T],
-  compression_level: usize,
-  name: &str,
-  delta_encoding_order: usize,
-  max_byte_size: usize,
-) -> PcoResult<()> {
-  let debug_info = format!(
-    "name={} delta_encoding_order={}",
-    name, delta_encoding_order,
-  );
-  let config = ChunkConfig {
-    compression_level,
-    delta_encoding_order: Some(delta_encoding_order),
-    ..Default::default()
-  };
-  let compressed = simple_compress(nums, &config)?;
-  assert!(
-    compressed.len() <= max_byte_size,
-    "compressed size {} > {}; {}",
-    compressed.len(),
-    max_byte_size,
-    debug_info
-  );
-  let decompressed = auto_decompress::<T>(&compressed)?;
-  // We can't do assert_eq on the whole vector because even bitwise identical
-  // floats sometimes aren't equal by ==.
-  assert_eq!(
-    decompressed.len(),
-    nums.len(),
-    "{}",
-    debug_info
-  );
-  for i in 0..decompressed.len() {
-    // directly comparing numbers might not work for floats
-    assert!(
-      decompressed[i].to_unsigned() == nums[i].to_unsigned(),
-      "{} != {} at {}; {}",
-      decompressed[i],
-      nums[i],
-      i,
-      debug_info,
-    );
-  }
-  Ok(())
 }

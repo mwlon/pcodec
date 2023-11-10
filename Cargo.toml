@@ -2,6 +2,7 @@
 
 members = [
   "bench",
+  "better_io",
   "pco",
   "pco_cli",
   "quantile-compression/ffi",

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N, PAGE_PADDING};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::page_meta::PageLatentVarMeta;
@@ -21,21 +21,7 @@ struct State<U: UnsignedLike> {
   state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
-pub struct Backup {
-  state_idxs: [AnsState; ANS_INTERLEAVING],
-}
-
 impl<U: UnsignedLike> State<U> {
-  fn backup(&self) -> Backup {
-    Backup {
-      state_idxs: self.state_idxs,
-    }
-  }
-
-  fn recover(&mut self, backup: Backup) {
-    self.state_idxs = backup.state_idxs;
-  }
-
   #[inline]
   fn set_scratch(&mut self, i: usize, offset_bit_idx: usize, info: &BinDecompressionInfo<U>) {
     unsafe {
@@ -100,7 +86,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   #[allow(clippy::needless_range_loop)]
   #[inline(never)]
   fn decompress_full_ans_tokens(&mut self, reader: &mut BitReader) {
-    let stream = reader.current_stream;
+    let src = reader.src;
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
@@ -109,7 +95,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     for base_i in (0..FULL_BATCH_N).step_by(MAX_ANS_SYMBOLS_PER_U64) {
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
-      let packed = bit_reader::u64_at(stream, stale_byte_idx);
+      let packed = bit_reader::u64_at(src, stale_byte_idx);
       for j in 0..MAX_ANS_SYMBOLS_PER_U64 {
         let i = base_i + j;
         let node = self.decoder.get_node(state_idxs[j]);
@@ -129,7 +115,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
   #[inline(never)]
   fn decompress_ans_tokens(&mut self, reader: &mut BitReader, batch_n: usize) {
-    let stream = reader.current_stream;
+    let src = reader.src;
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
@@ -138,7 +124,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       let j = i % 4;
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
-      let packed = bit_reader::u64_at(stream, stale_byte_idx);
+      let packed = bit_reader::u64_at(src, stale_byte_idx);
       let node = self.decoder.get_node(state_idxs[j]);
       let ans_val = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
       let info = &self.infos[node.token as usize];
@@ -161,18 +147,14 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     dst: &mut [U],
   ) {
     let base_bit_idx = reader.bit_idx();
-    let stream = reader.current_stream;
+    let src = reader.src;
     for i in 0..dst.len() {
       let offset_bits = self.state.offset_bits_scratch[i];
       let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      dst[i] = bit_reader::read_uint_at::<U, MAX_EXTRA_U64S>(
-        stream,
-        byte_idx,
-        bits_past_byte,
-        offset_bits,
-      );
+      dst[i] =
+        bit_reader::read_uint_at::<U, MAX_EXTRA_U64S>(src, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
       + self.state.offset_bits_csum_scratch[dst.len() - 1]
@@ -219,7 +201,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
     let batch_n = dst.len();
     assert!(batch_n <= FULL_BATCH_N);
-    reader.ensure_padded(PAGE_PADDING)?;
 
     if batch_n == FULL_BATCH_N {
       self.decompress_full_ans_tokens(reader);
@@ -246,14 +227,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     self.add_offsets(dst);
 
     Ok(())
-  }
-
-  pub fn backup(&self) -> Backup {
-    self.state.backup()
-  }
-
-  pub fn recover(&mut self, backup: Backup) {
-    self.state.recover(backup);
   }
 }
 

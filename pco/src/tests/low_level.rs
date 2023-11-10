@@ -1,42 +1,36 @@
 use crate::chunk_config::ChunkConfig;
-use crate::errors::{ErrorKind, PcoResult};
+use crate::errors::PcoResult;
 use crate::wrapped::{FileCompressor, FileDecompressor, PageDecompressor};
-use crate::PagingSpec;
+use crate::{PagingSpec, FULL_BATCH_N};
 use std::cmp::min;
 
 struct Chunk {
-  nums: Vec<i32>,
+  nums: Vec<u32>,
   config: ChunkConfig,
 }
 
-fn try_decompressing_page_until_sufficient_data(
-  pd: &mut PageDecompressor<i32>,
-  src: &[u8],
+fn decompress_by_batch<'a>(
+  pd: &mut PageDecompressor<u32>,
+  mut src: &'a [u8],
   page_n: usize,
-) -> PcoResult<(Vec<i32>, usize)> {
-  // we try adding more data incrementally to test that the
-  // PageDecompressor doesn't get into a bad state
-
-  let backoff = 1.3;
-  let mut n_bytes = 0;
+) -> PcoResult<(Vec<u32>, &'a [u8])> {
   let mut nums = vec![0; page_n];
+  let mut start = 0;
   loop {
-    match pd.decompress(&src[..n_bytes], &mut nums) {
-      Ok((progress, additional)) => {
-        assert_eq!(progress.n_processed, page_n);
-        assert!(progress.finished_page);
-        return Ok((nums, additional));
-      }
-      Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (),
-      Err(e) => panic!("{}", e),
+    let end = min(start + FULL_BATCH_N, page_n);
+    let batch_size = end - start;
+    let (progress, new_src) = pd.decompress(src, &mut nums[start..end])?;
+    src = new_src;
+    assert_eq!(progress.n_processed, batch_size);
+    start = end;
+    if end == page_n {
+      assert!(progress.finished_page);
     }
-
-    assert!(n_bytes < src.len());
-    n_bytes = min(
-      (n_bytes as f32 * backoff) as usize + 1,
-      src.len(),
-    );
+    if progress.finished_page {
+      break;
+    }
   }
+  Ok((nums, src))
 }
 
 fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
@@ -56,20 +50,19 @@ fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
   }
 
   // DECOMPRESS
-  let (fd, mut consumed) = FileDecompressor::new(&compressed)?;
+  let (fd, mut src) = FileDecompressor::new(compressed.as_slice())?;
   for (chunk_idx, chunk) in chunks.iter().enumerate() {
-    let (cd, additional) = fd.chunk_decompressor(&compressed[consumed..])?;
-    consumed += additional;
+    let (cd, new_src) = fd.chunk_decompressor(src)?;
+    src = new_src;
 
     let mut page_start = 0;
     for &page_n in &n_per_pages[chunk_idx] {
       let page_end = page_start + page_n;
-      let (mut pd, additional) = cd.page_decompressor(page_n, &compressed[consumed..])?;
-      consumed += additional;
-      let (page_nums, additional) =
-        try_decompressing_page_until_sufficient_data(&mut pd, &compressed[consumed..], page_n)?;
+      let (mut pd, new_src) = cd.page_decompressor(page_n, src)?;
+      src = new_src;
+      let (page_nums, new_src) = decompress_by_batch(&mut pd, src, page_n)?;
+      src = new_src;
       assert_eq!(&page_nums, &chunk.nums[page_start..page_end]);
-      consumed += additional;
       page_start = page_end;
     }
   }

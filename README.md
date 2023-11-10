@@ -3,27 +3,22 @@
 # Pcodec
 
 Pcodec (or pco, pronounced "pico") losslessly compresses and decompresses
-numerical sequences
-with high compression ratio and moderately fast speed.
+numerical sequences with
+[high compression ratio and fairly fast speed](./bench/README.md).
 
 **Use cases:**
 * columnar data
 * long-term time series data
+* serving numerical data to web clients
 * low-bandwidth communication
-
-**Features:**
-* wrapped format for interleaving within another format
-* lossless; preserves ordering and exact bit representation
-* nth-order delta encoding
-* compresses faster or slower depending on compression level from 0 to 12
 
 **Data types:**
 `u32`, `u64`, `i32`, `i64`, `f32`, `f64`
 
 It is also possible to implement your own data type via `NumberLike` and (if
 necessary) `UnsignedLike` and `FloatLike`.
-For smaller integers or timestamps, it is best to simply cast to one of the
-natively supported data types.
+For timestamps or smaller integers, it is probably best to simply cast to one
+of the natively supported data types.
 
 ## Get Started
 
@@ -62,21 +57,7 @@ It is mainly useful for quick proofs of concept (sometimes by the CLI).
 
 <img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
 
-## Etymology
-
-The names pcodec and pco were chosen for these reasons:
-* "Pico" suggests that it makes very small things.
-* Pco is reminiscent of qco, its predecessor.
-* Pco is reminiscent of PancakeDB (Pancake COmpressed). Though PancakeDB is now
-  history, it had a good name.
-* Pcodec is short, provides some semantic meaning, and should be easy to
-  search for.
-
-The names are used for these purposes:
-* pco => the library and data format
-* pco\_cli => the binary crate name
-* pcodec => the binary CLI and the repo
-
 ## Extra
 
 [join the Discord](https://discord.gg/f6eRXgMP8w)
+[etymology and vocabulary](./docs/vocabulary.md)
