@@ -1,7 +1,7 @@
 use crate::chunk_config::ChunkConfig;
-use crate::errors::{ErrorKind, PcoResult};
+use crate::errors::PcoResult;
 use crate::wrapped::{FileCompressor, FileDecompressor, PageDecompressor};
-use crate::{FULL_BATCH_N, PagingSpec};
+use crate::{PagingSpec, FULL_BATCH_N};
 use std::cmp::min;
 
 struct Chunk {
@@ -60,8 +60,7 @@ fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
       let page_end = page_start + page_n;
       let (mut pd, new_src) = cd.page_decompressor(page_n, src)?;
       src = new_src;
-      let (page_nums, new_src) =
-        decompress_by_batch(&mut pd, src, page_n)?;
+      let (page_nums, new_src) = decompress_by_batch(&mut pd, src, page_n)?;
       src = new_src;
       assert_eq!(&page_nums, &chunk.nums[page_start..page_end]);
       page_start = page_end;

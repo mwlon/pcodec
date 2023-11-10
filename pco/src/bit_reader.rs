@@ -1,6 +1,6 @@
+use better_io::BetterBufRead;
 use std::cmp::min;
-use std::{io, mem};
-use better_io::{BetterBufRead};
+use std::io;
 
 use crate::bits;
 use crate::constants::Bitlen;
@@ -234,7 +234,7 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
     let src = if self.reached_eof {
       &self.eof_buffer[self.bytes_into_eof_buffer..]
     } else {
-      &self.inner.buffer()
+      self.inner.buffer()
     };
 
     // we've reached the end of file buffer
@@ -244,7 +244,11 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
       src.len()
     };
     let bits_past_byte = self.bits_past_byte;
-    Ok(BitReader::new(src, unpadded_bytes, bits_past_byte))
+    Ok(BitReader::new(
+      src,
+      unpadded_bytes,
+      bits_past_byte,
+    ))
   }
 
   pub fn into_inner(self) -> R {
@@ -259,7 +263,10 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
     self.bits_past_byte = tombstone.bits_past_byte;
   }
 
-  pub fn with_reader<Y, F: FnOnce(&mut BitReader) -> PcoResult<Y>>(&mut self, f: F) -> PcoResult<Y> {
+  pub fn with_reader<Y, F: FnOnce(&mut BitReader) -> PcoResult<Y>>(
+    &mut self,
+    f: F,
+  ) -> PcoResult<Y> {
     let mut reader = self.build()?;
     let res = f(&mut reader)?;
     let tombstone = reader.close()?;
@@ -285,7 +292,7 @@ mod tests {
   #[test]
   fn test_bit_reader() -> PcoResult<()> {
     // 10010001 01100100 00000000 11111111 10000010
-    let src = vec![137, 38, 0, 255, 65, 0, 0, 0, 0];
+    let src = vec![137, 38, 255, 65, 0, 0, 0, 0];
     let mut reader = BitReader::new(&src, 5, 0);
 
     assert_eq!(reader.read_bitlen(4), 9);
@@ -294,7 +301,7 @@ mod tests {
     assert_eq!(reader.read_aligned_bytes(1)?, vec![38]);
     assert_eq!(reader.read_usize(15), 255 + 65 * 256);
     reader.drain_empty_byte("should be empty")?;
-    assert_eq!(reader.aligned_byte_idx()?, 5);
+    assert_eq!(reader.aligned_byte_idx()?, 4);
     Ok(())
   }
 
@@ -316,12 +323,17 @@ mod tests {
       assert_eq!(reader.read_aligned_bytes(3)?, &vec![3, 4, 5]);
       Ok(())
     })?;
-    let err = reader_builder.with_reader(|reader| {
-      assert!(reader.src.len() >= 4); // because of padding
-      reader.read_usize(9); // this overshoots the end of the data by 1 bit
-      Ok(())
-    }).unwrap_err();
-    assert!(matches!(err.kind, ErrorKind::InsufficientData));
+    let err = reader_builder
+      .with_reader(|reader| {
+        assert!(reader.src.len() >= 4); // because of padding
+        reader.read_usize(9); // this overshoots the end of the data by 1 bit
+        Ok(())
+      })
+      .unwrap_err();
+    assert!(matches!(
+      err.kind,
+      ErrorKind::InsufficientData
+    ));
 
     Ok(())
   }

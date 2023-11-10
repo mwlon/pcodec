@@ -62,9 +62,7 @@ pub fn auto_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
   let (file_decompressor, mut src) = FileDecompressor::new(src)?;
 
   let mut res = Vec::new();
-  while let (Some(mut chunk_decompressor), new_src) =
-    file_decompressor.chunk_decompressor(src)?
-  {
+  while let (Some(mut chunk_decompressor), new_src) = file_decompressor.chunk_decompressor(src)? {
     src = chunk_decompressor.decompress_remaining_extend(new_src, &mut res)?;
   }
   Ok(res)

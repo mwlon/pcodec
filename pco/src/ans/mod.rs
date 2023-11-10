@@ -17,7 +17,7 @@ pub(crate) type Token = u16;
 mod tests {
   use crate::ans::spec::Spec;
   use crate::ans::{AnsState, Decoder, Encoder, Token};
-  use crate::bit_reader;
+
   use crate::bit_reader::BitReader;
   use crate::bit_writer::BitWriter;
   use crate::errors::PcoResult;

@@ -1,6 +1,6 @@
+use better_io::BetterBufRead;
 use std::cmp::min;
 use std::marker::PhantomData;
-use better_io::{BetterBufRead};
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{Bitlen, FULL_BATCH_N, PAGE_PADDING};
@@ -11,8 +11,8 @@ use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::page_meta::PageMeta;
 use crate::progress::Progress;
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
-use crate::{bit_reader, delta, float_mult_utils};
-use crate::{latent_batch_decompressor, Mode};
+use crate::Mode;
+use crate::{delta, float_mult_utils};
 
 #[derive(Clone, Debug)]
 pub struct State<U: UnsignedLike> {
@@ -175,7 +175,11 @@ impl<T: NumberLike> PageDecompressor<T> {
   ///
   /// `dst` must have length either a multiple of 256 or be at least the count
   /// of numbers remaining in the page.
-  pub fn decompress<R: BetterBufRead>(&mut self, mut src: R, num_dst: &mut [T]) -> PcoResult<(Progress, R)> {
+  pub fn decompress<R: BetterBufRead>(
+    &mut self,
+    mut src: R,
+    num_dst: &mut [T],
+  ) -> PcoResult<(Progress, R)> {
     if num_dst.len() % FULL_BATCH_N != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be \

@@ -1,9 +1,9 @@
+use better_io::BetterBufRead;
 use std::cmp::min;
 use std::io::Write;
-use better_io::BetterBufRead;
 
 use crate::bin::Bin;
-use crate::bit_reader::{BitReader, BitReaderBuilder};
+use crate::bit_reader::BitReaderBuilder;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
@@ -96,7 +96,10 @@ fn parse_bin_batch<U: UnsignedLike, R: BetterBufRead>(
 }
 
 impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
-  fn parse_from<R: BetterBufRead>(reader_builder: &mut BitReaderBuilder<R>, mode: Mode<U>) -> PcoResult<Self> {
+  fn parse_from<R: BetterBufRead>(
+    reader_builder: &mut BitReaderBuilder<R>,
+    mode: Mode<U>,
+  ) -> PcoResult<Self> {
     let (ans_size_log, n_bins) = reader_builder.with_reader(|reader| {
       let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
       let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS);
@@ -217,7 +220,10 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     }
   }
 
-  pub(crate) fn parse_from<R: BetterBufRead>(reader_builder: &mut BitReaderBuilder<R>, _version: &FormatVersion) -> PcoResult<Self> {
+  pub(crate) fn parse_from<R: BetterBufRead>(
+    reader_builder: &mut BitReaderBuilder<R>,
+    _version: &FormatVersion,
+  ) -> PcoResult<Self> {
     let (mode, delta_encoding_order) = reader_builder.with_reader(|reader| {
       let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
         0 => Ok(Mode::Classic),
@@ -245,7 +251,10 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     let mut per_latent_var = Vec::with_capacity(n_latent_vars);
 
     for _ in 0..n_latent_vars {
-      per_latent_var.push(ChunkLatentVarMeta::parse_from(reader_builder, mode)?)
+      per_latent_var.push(ChunkLatentVarMeta::parse_from(
+        reader_builder,
+        mode,
+      )?)
     }
 
     reader_builder.with_reader(|reader| {

@@ -1,8 +1,7 @@
-use std::fmt::Debug;
 use better_io::BetterBufRead;
+use std::fmt::Debug;
 
-use crate::bit_reader;
-use crate::bit_reader::{BitReader, BitReaderBuilder};
+use crate::bit_reader::BitReaderBuilder;
 use crate::chunk_meta::ChunkMeta;
 use crate::constants::{CHUNK_META_PADDING, HEADER_PADDING};
 use crate::data_types::NumberLike;
@@ -45,7 +44,8 @@ impl FileDecompressor {
     src: R,
   ) -> PcoResult<(ChunkDecompressor<T>, R)> {
     let mut reader_builder = BitReaderBuilder::new(src, CHUNK_META_PADDING, 0);
-    let chunk_meta = ChunkMeta::<T::Unsigned>::parse_from(&mut reader_builder, &self.format_version)?;
+    let chunk_meta =
+      ChunkMeta::<T::Unsigned>::parse_from(&mut reader_builder, &self.format_version)?;
     let cd = ChunkDecompressor::from(chunk_meta);
     Ok((cd, reader_builder.into_inner()))
   }

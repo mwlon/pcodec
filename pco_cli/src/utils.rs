@@ -13,7 +13,9 @@ use crate::opt::CompressOpt;
 pub fn get_header_byte(src: &[u8]) -> Result<u8> {
   let (_, src) = FileDecompressor::new(src)?;
   if src.is_empty() {
-    Err(anyhow::anyhow!("file too short to identify dtype"))
+    Err(anyhow::anyhow!(
+      "file too short to identify dtype"
+    ))
   } else {
     Ok(src[0])
   }

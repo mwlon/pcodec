@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::ans::AnsState;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, PAGE_LATENT_VAR_META_PADDING};
+use crate::constants::{Bitlen, ANS_INTERLEAVING};
 use crate::data_types::UnsignedLike;
 use crate::delta::DeltaMoments;
 use crate::errors::PcoResult;

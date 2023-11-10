@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N, PAGE_PADDING};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::page_meta::PageLatentVarMeta;
@@ -153,12 +153,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      dst[i] = bit_reader::read_uint_at::<U, MAX_EXTRA_U64S>(
-        src,
-        byte_idx,
-        bits_past_byte,
-        offset_bits,
-      );
+      dst[i] =
+        bit_reader::read_uint_at::<U, MAX_EXTRA_U64S>(src, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
       + self.state.offset_bits_csum_scratch[dst.len() - 1]

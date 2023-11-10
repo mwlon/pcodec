@@ -1,12 +1,12 @@
-use better_io::BetterBufRead;
-use crate::bit_reader::{BitReader, BitReaderBuilder};
+use crate::bit_reader::BitReaderBuilder;
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::progress::Progress;
 use crate::standalone::constants::{
   BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
 };
-use crate::{bit_reader, wrapped, ChunkMeta};
+use crate::{wrapped, ChunkMeta};
+use better_io::BetterBufRead;
 
 /// Top-level entry point for decompressing standalone .pco files.
 ///
@@ -55,10 +55,9 @@ impl FileDecompressor {
   /// insufficient data are found.
   pub fn new<R: BetterBufRead>(src: R) -> PcoResult<(Self, R)> {
     let mut reader_builder = BitReaderBuilder::new(src, MAGIC_HEADER.len(), 0);
-    let header = reader_builder.with_reader(|reader| {
-      Ok(reader.read_aligned_bytes(MAGIC_HEADER.len())?.to_vec())
-    })?;
-    if &header != MAGIC_HEADER.as_slice() {
+    let header = reader_builder
+      .with_reader(|reader| Ok(reader.read_aligned_bytes(MAGIC_HEADER.len())?.to_vec()))?;
+    if header != MAGIC_HEADER {
       return Err(PcoError::corruption(format!(
         "magic header does not match {:?}; instead found {:?}",
         MAGIC_HEADER, header,
@@ -84,9 +83,8 @@ impl FileDecompressor {
     src: R,
   ) -> PcoResult<(Option<ChunkDecompressor<T>>, R)> {
     let mut reader_builder = BitReaderBuilder::new(src, STANDALONE_CHUNK_PREAMBLE_PADDING, 0);
-    let dtype_or_termination_byte = reader_builder.with_reader(|reader| {
-      Ok(reader.read_aligned_bytes(1)?[0])
-    })?;
+    let dtype_or_termination_byte =
+      reader_builder.with_reader(|reader| Ok(reader.read_aligned_bytes(1)?[0]))?;
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
       return Ok((None, reader_builder.into_inner()));
     }
@@ -99,9 +97,8 @@ impl FileDecompressor {
       )));
     }
 
-    let n = reader_builder.with_reader(|reader| {
-      Ok(reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1)
-    })?;
+    let n =
+      reader_builder.with_reader(|reader| Ok(reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1))?;
     let src = reader_builder.into_inner();
     let (inner_cd, src) = self.0.chunk_decompressor::<T, R>(src)?;
     let (inner_pd, src) = inner_cd.page_decompressor(n, src)?;
@@ -144,7 +141,11 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   ///
   /// `dst` must have length either a multiple of 256 or be at least the count
   /// of numbers remaining in the chunk.
-  pub fn decompress<R: BetterBufRead>(&mut self, src: R, dst: &mut [T]) -> PcoResult<(Progress, R)> {
+  pub fn decompress<R: BetterBufRead>(
+    &mut self,
+    src: R,
+    dst: &mut [T],
+  ) -> PcoResult<(Progress, R)> {
     let (progress, src) = self.inner_pd.decompress(src, dst)?;
 
     self.n_processed += progress.n_processed;
