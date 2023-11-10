@@ -1,6 +1,6 @@
+use crate::buf_read::BetterBufRead;
 use std::cmp::max;
 use std::io::{BufReader, Error, ErrorKind, Read};
-use crate::buf_read::BetterBufRead;
 
 pub struct BetterBufReader<R: Read> {
   inner: R,
@@ -16,7 +16,10 @@ impl<R: Read> BetterBufRead for BetterBufReader<R> {
     let unfilled = self.buffer.len() - self.pos;
     let max_available = max(unfilled, self.desired_capacity);
     if n_bytes > max_available {
-      return Err(Error::new(ErrorKind::InvalidInput, "requested reading more bytes than fit in buffer"));
+      return Err(Error::new(
+        ErrorKind::InvalidInput,
+        "requested reading more bytes than fit in buffer",
+      ));
     }
 
     if n_bytes > unfilled {
@@ -140,6 +143,9 @@ mod tests {
     assert_eq!(reader.buffer(), &[8, 9]);
 
     // getting the read back
-    assert_eq!(reader.into_inner(), &(10..100).collect::<Vec<_>>());
+    assert_eq!(
+      reader.into_inner(),
+      &(10..100).collect::<Vec<_>>()
+    );
   }
 }

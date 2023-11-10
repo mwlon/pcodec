@@ -13,7 +13,7 @@ fn main() {
   // your data
   let mut my_ints = Vec::new();
   for i in 0..100000 {
-      my_ints.push(i as i64);
+    my_ints.push(i as i64);
   }
 
   // Here we let the library choose a configuration with default compression

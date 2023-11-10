@@ -1,5 +1,5 @@
 use crate::bit_reader::BitReaderBuilder;
-use crate::constants::PAGE_LATENT_VAR_META_PADDING;
+use crate::constants::PAGE_META_PADDING;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::page_meta::PageMeta;
@@ -34,7 +34,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     n: usize,
     src: R,
   ) -> PcoResult<(PageDecompressor<T>, R)> {
-    let mut reader_builder = BitReaderBuilder::new(src, PAGE_LATENT_VAR_META_PADDING, 0);
+    let mut reader_builder = BitReaderBuilder::new(src, PAGE_META_PADDING, 0);
     let page_meta = reader_builder
       .with_reader(|reader| PageMeta::<T::Unsigned>::parse_from(reader, &self.meta))?;
     let bits_past_byte = reader_builder.bits_past_byte();

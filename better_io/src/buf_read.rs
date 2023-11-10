@@ -4,7 +4,6 @@ pub trait BetterBufRead {
   fn fill_or_eof(&mut self, n_bytes: usize) -> Result<()>;
   fn buffer(&self) -> &[u8];
   fn consume(&mut self, n_bytes: usize);
-
   fn resize_capacity(&mut self, desired: usize);
 }
 
