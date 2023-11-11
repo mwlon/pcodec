@@ -1,3 +1,8 @@
+[![Crates.io][crates-badge]][crates-url]
+
+[crates-badge]: https://img.shields.io/crates/v/pco.svg
+[crates-url]: https://crates.io/crates/pco
+
 # `pco`
 
 **⚠️ Both the API and the data format are unstable for the 0.0.0-alpha.\*

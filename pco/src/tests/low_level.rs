@@ -1,8 +1,9 @@
+use std::cmp::min;
+
 use crate::chunk_config::ChunkConfig;
 use crate::errors::PcoResult;
 use crate::wrapped::{FileCompressor, FileDecompressor, PageDecompressor};
 use crate::{PagingSpec, FULL_BATCH_N};
-use std::cmp::min;
 
 struct Chunk {
   nums: Vec<u32>,

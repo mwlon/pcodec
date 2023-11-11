@@ -1,5 +1,6 @@
-use better_io::BetterBufRead;
 use std::fmt::Debug;
+
+use better_io::BetterBufRead;
 
 use crate::bit_reader::BitReaderBuilder;
 use crate::chunk_meta::ChunkMeta;

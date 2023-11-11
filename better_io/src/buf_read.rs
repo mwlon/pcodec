@@ -1,9 +1,42 @@
 use std::io::Result;
 
+/// A better trait for buffered reading from a source.
+///
+/// Supports all of these:
+/// * zero-copy reads from data that is already in memory (`&[u8]`)
+/// * resizable capacity so `BetterBufRead` can be passed between programs that
+///   require reading different lengths of data at once
+/// * ensuring that the buffer contains at least the requested length of data
+///   (unless we've reached the end of the file)
+///
+/// In contrast, programs that use a `BufRead` require copying from in-memory
+/// data and often require a 2nd copy to an internal buffer to ensure their
+/// internal buffer reaches the size they need.
 pub trait BetterBufRead {
+  /// Fills the internal buffer with at least `n_bytes` if possible, or as many
+  /// as possible if the end of the file is reached.
+  ///
+  /// Depending on the implementation, this may return an IO error for either
+  /// of these reasons:
+  /// * `n_bytes` exceeds the current capacity
+  /// * errors crop up when reading from the source
   fn fill_or_eof(&mut self, n_bytes: usize) -> Result<()>;
+  /// Returns all data available in memory.
+  ///
+  /// This may be smaller than the last `n_bytes` read during `fill_or_eof`,
+  /// but only if EOF was reached; and it may be larger than that depending on
+  /// the implementation.
   fn buffer(&self) -> &[u8];
+  /// Advances by `n_bytes`, reducing the size of the available data to read.
+  ///
+  /// Panics if `n_bytes` is greater than the buffer's length.
   fn consume(&mut self, n_bytes: usize);
+  /// Modifies capacity.
+  ///
+  /// It is advisable to set capacity long enough to support any
+  /// optimistic reads you need to do and avoid excessively frequent reads,
+  /// but short enough that it fits into a cache or doesn't take too much
+  /// memory.
   fn resize_capacity(&mut self, desired: usize);
 }
 
