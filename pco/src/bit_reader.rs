@@ -1,6 +1,7 @@
-use better_io::BetterBufRead;
 use std::cmp::min;
 use std::io;
+
+use better_io::BetterBufRead;
 
 use crate::bits;
 use crate::constants::Bitlen;

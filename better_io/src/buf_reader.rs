@@ -1,7 +1,17 @@
-use crate::buf_read::BetterBufRead;
 use std::cmp::max;
 use std::io::{BufReader, Error, ErrorKind, Read};
 
+use crate::buf_read::BetterBufRead;
+
+/// An implementation of [`BetterBufRead`][crate::BetterBufRead] that wraps a
+/// generic `Read`.
+///
+/// Use this to wrap things like files and network streams, but not data that's
+/// already in memory.
+/// This endows the `Read` with a buffer, unlocking a few benefits:
+/// * better performance for repeated small reads
+/// * doesn't lose data when passed around by programs that optimistically read
+///   ahead
 pub struct BetterBufReader<R: Read> {
   inner: R,
   buffer: Vec<u8>,
@@ -72,6 +82,12 @@ fn make_buffer(preloaded_data: &[u8], capacity: usize) -> (Vec<u8>, usize) {
 }
 
 impl<R: Read> BetterBufReader<R> {
+  /// Creates a `BetterBufReader` based on a `Read`.
+  ///
+  /// Providing preloaded data is optional, but can be useful if instantiating
+  /// based on another abstraction that held a buffer and `Read`.
+  ///
+  /// Panics if `preloaded_data` is longer than `capacity`.
   pub fn new(preloaded_data: &[u8], inner: R, capacity: usize) -> Self {
     let (buffer, filled) = make_buffer(preloaded_data, capacity);
     Self {
@@ -83,10 +99,9 @@ impl<R: Read> BetterBufReader<R> {
     }
   }
 
-  pub fn from_read(inner: R, capacity: usize) -> Self {
-    Self::new(&[], inner, capacity)
-  }
-
+  /// Creates a `BetterBufReader` based on a `BufReader`.
+  ///
+  /// Panics if the `BufReader`'s buffer is longer than `capacity`.
   pub fn from_buf_reader(br: BufReader<R>, capacity: usize) -> Self {
     let (buffer, filled) = make_buffer(br.buffer(), capacity);
     Self {
@@ -98,6 +113,10 @@ impl<R: Read> BetterBufReader<R> {
     }
   }
 
+  /// Returns the inner `Read`, dropping the `BetterBufReader` and its buffer.
+  ///
+  /// To avoid losing data, be sure to read the last of the buffer before
+  /// calling this.
   pub fn into_inner(self) -> R {
     self.inner
   }

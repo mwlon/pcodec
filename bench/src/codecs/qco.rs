@@ -1,6 +1,7 @@
+use anyhow::{anyhow, Result};
+
 use crate::codecs::CodecInternal;
 use crate::dtypes::Dtype;
-use anyhow::{anyhow, Result};
 
 #[derive(Clone, Debug, Default)]
 pub struct QcoConfig {

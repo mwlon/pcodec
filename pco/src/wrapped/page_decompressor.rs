@@ -1,6 +1,7 @@
-use better_io::BetterBufRead;
 use std::cmp::min;
 use std::marker::PhantomData;
+
+use better_io::BetterBufRead;
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{Bitlen, FULL_BATCH_N, PAGE_PADDING};

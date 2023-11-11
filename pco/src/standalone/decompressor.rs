@@ -1,3 +1,5 @@
+use better_io::BetterBufRead;
+
 use crate::bit_reader::BitReaderBuilder;
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
@@ -6,7 +8,6 @@ use crate::standalone::constants::{
   BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
 };
 use crate::{wrapped, ChunkMeta};
-use better_io::BetterBufRead;
 
 /// Top-level entry point for decompressing standalone .pco files.
 ///

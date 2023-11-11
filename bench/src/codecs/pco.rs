@@ -1,7 +1,9 @@
+use anyhow::{anyhow, Result};
+
+use pco::{FloatMultSpec, GcdSpec, PagingSpec};
+
 use crate::codecs::CodecInternal;
 use crate::dtypes::Dtype;
-use anyhow::{anyhow, Result};
-use pco::{FloatMultSpec, GcdSpec, PagingSpec};
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {

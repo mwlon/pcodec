@@ -1,7 +1,9 @@
+use std::mem;
+
 use parquet::data_type as parq;
+
 use pco::data_types::NumberLike as PNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
-use std::mem;
 
 pub fn dtype_str(dataset: &str) -> &str {
   dataset.split('_').next().unwrap()

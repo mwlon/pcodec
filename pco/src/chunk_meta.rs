@@ -1,6 +1,7 @@
-use better_io::BetterBufRead;
 use std::cmp::min;
 use std::io::Write;
+
+use better_io::BetterBufRead;
 
 use crate::bin::Bin;
 use crate::bit_reader::BitReaderBuilder;

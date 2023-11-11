@@ -7,9 +7,9 @@ use arrow::array::PrimitiveArray;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
 use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
-use pco::FULL_BATCH_N;
 
 use pco::standalone::FileDecompressor;
+use pco::FULL_BATCH_N;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;

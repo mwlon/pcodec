@@ -1,7 +1,7 @@
 [package]
 name = "pco_cli"
 version = "0.0.0-alpha.3"
-edition = "2018"
+edition = "2021"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding", "command-line-utilities"]

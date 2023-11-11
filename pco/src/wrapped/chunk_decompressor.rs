@@ -1,3 +1,5 @@
+use better_io::BetterBufRead;
+
 use crate::bit_reader::BitReaderBuilder;
 use crate::constants::PAGE_META_PADDING;
 use crate::data_types::NumberLike;
@@ -5,7 +7,6 @@ use crate::errors::PcoResult;
 use crate::page_meta::PageMeta;
 use crate::wrapped::PageDecompressor;
 use crate::ChunkMeta;
-use better_io::BetterBufRead;
 
 /// Holds metadata about a chunk and can produce page decompressors.
 #[derive(Clone, Debug)]
