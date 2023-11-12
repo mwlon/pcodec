@@ -54,14 +54,14 @@ Compression ratio is reported with 3 significant figures.
 
 | dataset            | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
 |--------------------|---------------------------------|-----------------------------------|-------------------|
-| `f64_decimal`      | 30                              | 130                               | 4.67              |
-| `f64_slow_cosine`  | 39                              | 180                               | 4.35              |
-| `i64_lomax05_reg`  | 43                              | 270                               | 4.62              |
-| `i64_sparse`       | 100                             | 270                               | 792               |
-| `micros_millis`    | 32                              | 260                               | 2.08              |
+| `f64_decimal`      | 30                              | 230                               | 4.67              |
+| `f64_slow_cosine`  | 39                              | 260                               | 4.35              |
+| `i64_lomax05_reg`  | 43                              | 490                               | 4.62              |
+| `i64_sparse`       | 100                             | 520                               | 792               |
+| `micros_millis`    | 32                              | 440                               | 2.08              |
 
-`i64` and `f64` are each 8 bytes, so compression is around 300MB/s,
-and decompression is around 2GB/s.
+`i64` and `f64` are each 8 bytes, so compression is around 250-350MB/s,
+and decompression is around 2-4GB/s.
 For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
 `0.12.3+zstd.1.5.2` gets:
 
