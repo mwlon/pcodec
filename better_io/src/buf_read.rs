@@ -9,9 +9,8 @@ use std::io::Result;
 /// * ensuring that the buffer contains at least the requested length of data
 ///   (unless we've reached the end of the file)
 ///
-/// In contrast, programs that use a `BufRead` require copying from in-memory
-/// data and often require a 2nd copy to an internal buffer to ensure their
-/// internal buffer reaches the size they need.
+/// In contrast, programs that use a `BufRead` often copy to yet another
+/// buffer so that they can guarantee it has an appropriate size they need.
 pub trait BetterBufRead {
   /// Fills the internal buffer with at least `n_bytes` if possible, or as many
   /// as possible if the end of the file is reached.
@@ -31,7 +30,12 @@ pub trait BetterBufRead {
   ///
   /// Panics if `n_bytes` is greater than the buffer's length.
   fn consume(&mut self, n_bytes: usize);
-  /// Modifies capacity.
+  /// Returns the capacity of the internal buffer, if one exists.
+  ///
+  /// Implementations like `&[u8]` will return None, since they have no
+  /// real internal buffer.
+  fn capacity(&self) -> Option<usize>;
+  /// Modifies capacity of the internal buffer, if one exists.
   ///
   /// It is advisable to set capacity long enough to support any
   /// optimistic reads you need to do and avoid excessively frequent reads,
@@ -53,6 +57,10 @@ impl BetterBufRead for &[u8] {
 
   fn consume(&mut self, n_bytes: usize) {
     *self = &self[n_bytes..];
+  }
+
+  fn capacity(&self) -> Option<usize> {
+    None
   }
 
   fn resize_capacity(&mut self, _desired: usize) {}

@@ -6,7 +6,7 @@ use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::page_meta::PageMeta;
 use crate::wrapped::PageDecompressor;
-use crate::ChunkMeta;
+use crate::{bit_reader, ChunkMeta};
 
 /// Holds metadata about a chunk and can produce page decompressors.
 #[derive(Clone, Debug)]
@@ -33,8 +33,9 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   pub fn page_decompressor<R: BetterBufRead>(
     &self,
     n: usize,
-    src: R,
+    mut src: R,
   ) -> PcoResult<(PageDecompressor<T>, R)> {
+    bit_reader::ensure_buf_read_capacity(&mut src, PAGE_META_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_META_PADDING, 0);
     let page_meta = reader_builder
       .with_reader(|reader| PageMeta::<T::Unsigned>::parse_from(reader, &self.meta))?;

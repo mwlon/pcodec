@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use crate::bit_reader;
 use better_io::BetterBufRead;
 
 use crate::bit_reader::BitReaderBuilder;
@@ -23,7 +24,8 @@ impl FileDecompressor {
   ///
   /// Will return an error if any version incompatibilities or
   /// insufficient data are found.
-  pub fn new<R: BetterBufRead>(src: R) -> PcoResult<(Self, R)> {
+  pub fn new<R: BetterBufRead>(mut src: R) -> PcoResult<(Self, R)> {
+    bit_reader::ensure_buf_read_capacity(&mut src, HEADER_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, HEADER_PADDING, 0);
     let format_version = reader_builder.with_reader(FormatVersion::parse_from)?;
     Ok((
@@ -42,8 +44,9 @@ impl FileDecompressor {
   /// Will return an error if corruptions or insufficient data are found.
   pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
     &self,
-    src: R,
+    mut src: R,
   ) -> PcoResult<(ChunkDecompressor<T>, R)> {
+    bit_reader::ensure_buf_read_capacity(&mut src, CHUNK_META_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, CHUNK_META_PADDING, 0);
     let chunk_meta =
       ChunkMeta::<T::Unsigned>::parse_from(&mut reader_builder, &self.format_version)?;

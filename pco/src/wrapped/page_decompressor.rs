@@ -12,8 +12,10 @@ use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::page_meta::PageMeta;
 use crate::progress::Progress;
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
-use crate::Mode;
+use crate::{bit_reader, Mode};
 use crate::{delta, float_mult_utils};
+
+const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
 
 #[derive(Clone, Debug)]
 pub struct State<U: UnsignedLike> {
@@ -191,7 +193,7 @@ impl<T: NumberLike> PageDecompressor<T> {
       )));
     }
 
-    src.resize_capacity(8192); // TODO
+    bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, self.state.bits_past_byte);
 
     let n_to_process = min(num_dst.len(), self.n_remaining());

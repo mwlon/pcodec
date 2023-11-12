@@ -66,6 +66,10 @@ impl<R: Read> BetterBufRead for BetterBufReader<R> {
     self.pos += n_bytes;
   }
 
+  fn capacity(&self) -> Option<usize> {
+    Some(self.desired_capacity)
+  }
+
   fn resize_capacity(&mut self, desired: usize) {
     self.desired_capacity = desired;
     if desired >= self.filled {
@@ -150,12 +154,15 @@ mod tests {
     assert_eq!(reader.buffer(), &[2, 3, 4, 5, 6]);
 
     // resizing larger
+    assert_eq!(reader.capacity(), Some(5));
     reader.resize_capacity(7);
+    assert_eq!(reader.capacity(), Some(7));
     reader.fill_or_eof(7).unwrap();
     assert_eq!(reader.buffer(), &[2, 3, 4, 5, 6, 7, 8]);
 
     // resizing smaller
     reader.resize_capacity(2);
+    assert_eq!(reader.capacity(), Some(2));
     assert_eq!(reader.buffer(), &[2, 3, 4, 5, 6, 7, 8]);
     reader.consume(6);
     reader.fill_or_eof(2).unwrap();
