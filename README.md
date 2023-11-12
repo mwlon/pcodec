@@ -4,9 +4,9 @@
 
 Pcodec (or pco, pronounced "pico") losslessly compresses and decompresses
 numerical sequences with
-[high compression ratio and fairly fast speed](./bench/README.md).
+[high compression ratio and fast speed](./bench/README.md).
 
-**Use cases:**
+**Use cases include:**
 * columnar data
 * long-term time series data
 * serving numerical data to web clients
@@ -53,11 +53,15 @@ multiple chunks per file.
 The standalone format is a minimal implementation of a wrapped format.
 It supports batched decompression only; no nullability, multiple
 columns, random access, seeking, or other niceties.
-It is mainly useful for quick proofs of concept (sometimes by the CLI).
+It is mainly useful for quick proofs of concept and benchmarking.
 
 <img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
+
+## Contributing
+
+[see CONTRIBUTING.md](./docs/CONTRIBUTING.md)
 
 ## Extra
 
 [join the Discord](https://discord.gg/f6eRXgMP8w)
-[etymology and vocabulary](./docs/vocabulary.md)
+[terminology](./docs/terminology.md)
