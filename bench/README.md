@@ -43,9 +43,8 @@ etc.
 
 ## Results
 
-All figures reported here are calculated using a single thread on a
-2.8GHz i5 CPU, operating on in-memory data, using Rust 1.70 with instruction
-sets BMI1 and BMI2 enabled.
+All figures reported here are calculated using a single thread on an Apple
+M3 performance core, operating on in-memory data, using Rust 1.73.
 Benchmarks were done by taking the median of 100 runs on a dataset of 1M
 numbers with `compression_level` 8.
 
@@ -55,17 +54,18 @@ Compression ratio is reported with 3 significant figures.
 
 | dataset            | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
 |--------------------|---------------------------------|-----------------------------------|-------------------|
-| `f64_decimal`      | 13                              | 96                                | 4.67              |
-| `f64_slow_cosine`  | 17                              | 120                               | 4.35              |
-| `i64_lomax05_reg`  | 20                              | 200                               | 4.62              |
-| `i64_sparse`       | 38                              | 200                               | 792               |
-| `micros_millis`    | 13                              | 180                               | 2.08              |
+| `f64_decimal`      | 30                              | 130                               | 4.67              |
+| `f64_slow_cosine`  | 39                              | 180                               | 4.35              |
+| `i64_lomax05_reg`  | 43                              | 270                               | 4.62              |
+| `i64_sparse`       | 100                             | 270                               | 792               |
+| `micros_millis`    | 32                              | 260                               | 2.08              |
 
-`i64` and `f64` are each 8 bytes, so these speeds are in the ballpark of 1GB/s.
+`i64` and `f64` are each 8 bytes, so compression is around 300MB/s,
+and decompression is around 2GB/s.
 For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
 `0.12.3+zstd.1.5.2` gets:
 
-* level 3: compresses 14 million/s, decompresses 51 million/s, compression
+* level 3: compresses 40 million/s, decompresses 110 million/s, compression
   ratio 3.14.
-* level 22: compresses 0.16 million/s, decompresses 58 million/s,
+* level 22: compresses 0.44 million/s, decompresses 170 million/s,
   compression ratio 3.51.
