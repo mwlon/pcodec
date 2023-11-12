@@ -115,9 +115,9 @@ impl CodecInternal for ParquetConfig {
     // maybe this can be improved
     let reader = SerializedFileReader::new(bytes::Bytes::from(bytes.to_vec())).unwrap();
 
-    let parquet_metadata = reader.metadata();
+    let parquet_meta = reader.metadata();
     let mut n = 0;
-    for row_group_meta in parquet_metadata.row_groups() {
+    for row_group_meta in parquet_meta.row_groups() {
       n += row_group_meta.num_rows();
     }
 
@@ -125,13 +125,15 @@ impl CodecInternal for ParquetConfig {
     unsafe {
       res.set_len(n as usize);
     }
-    for i in 0..parquet_metadata.num_row_groups() {
+    let mut start = 0;
+    for i in 0..parquet_meta.num_row_groups() {
       let row_group_reader = reader.get_row_group(i).unwrap();
       let mut col_reader =
         get_typed_column_reader::<T::Parquet>(row_group_reader.get_column_reader(0).unwrap());
-      col_reader
-        .read_records(usize::MAX, None, None, &mut res)
+      let (n_records_read, _, _) = col_reader
+        .read_records(usize::MAX, None, None, &mut res[start..])
         .unwrap();
+      start += n_records_read
     }
 
     T::vec_from_parquet(res)

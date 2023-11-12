@@ -32,4 +32,13 @@ impl NumVec {
       _ => panic!("unknown dtype {}", dtype),
     }
   }
+
+  pub fn dtype_str(&self) -> &'static str {
+    match self {
+      NumVec::U32(_) => "u32",
+      NumVec::I64(_) => "i64",
+      NumVec::F64(_) => "f64",
+      NumVec::Micros(_) => "micros",
+    }
+  }
 }

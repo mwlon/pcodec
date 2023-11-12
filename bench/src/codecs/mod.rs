@@ -13,7 +13,7 @@ use crate::codecs::pco::PcoConfig;
 use crate::codecs::qco::QcoConfig;
 use crate::codecs::snappy::SnappyConfig;
 use crate::codecs::zstd::ZstdConfig;
-use crate::dtypes::{dtype_str, Dtype};
+use crate::dtypes::Dtype;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
 use crate::{BenchStat, Precomputed, BASE_DIR};
@@ -93,7 +93,6 @@ pub trait CodecSurface: Debug + Send + Sync {
   fn warmup_iter(
     &self,
     num_vec: &NumVec,
-    dataset: &str,
     fname: &str,
     opt: &HandlerOpt,
   ) -> Precomputed;
@@ -130,17 +129,15 @@ impl<C: CodecInternal> CodecSurface for C {
   fn warmup_iter(
     &self,
     nums: &NumVec,
-    dataset: &str,
     fname: &str,
     opt: &HandlerOpt,
   ) -> Precomputed {
-    let dtype = dtype_str(dataset);
+    let dtype = nums.dtype_str();
 
     // compress
     let compressed = self.compress_dynamic(nums);
     println!(
-      "\nwarmup for {}: compressed to {} bytes",
-      dataset,
+      "\nwarmup: compressed to {} bytes",
       compressed.len(),
     );
 
