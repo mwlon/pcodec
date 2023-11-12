@@ -14,7 +14,7 @@ pub struct Node {
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
-  nodes: Vec<Node>,
+  pub nodes: Vec<Node>,
 }
 
 impl Decoder {
@@ -51,10 +51,5 @@ impl Decoder {
       .collect::<Vec<_>>();
     let spec = Spec::from_weights(latent_meta.ans_size_log, weights)?;
     Ok(Self::new(&spec))
-  }
-
-  #[inline]
-  pub fn get_node(&self, state_idx: AnsState) -> &Node {
-    unsafe { self.nodes.get_unchecked(state_idx as usize) }
   }
 }

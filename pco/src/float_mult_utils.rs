@@ -9,6 +9,7 @@ use crate::delta;
 const ARITH_CHUNK_SIZE: usize = 512;
 
 // PageDecompressor is already doing batching, so we don't need to here
+#[inline(never)]
 pub fn join_latents<U: UnsignedLike>(base: U::Float, unsigneds: &mut [U], adjustments: &mut [U]) {
   delta::toggle_center_in_place(adjustments);
   for i in 0..unsigneds.len() {

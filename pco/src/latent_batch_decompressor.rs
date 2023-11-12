@@ -86,31 +86,49 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   #[allow(clippy::needless_range_loop)]
   #[inline(never)]
   fn decompress_full_ans_tokens(&mut self, reader: &mut BitReader) {
+    // At each iteration, this loads a single u64 and has all ANS decoders
+    // read a single token from it.
+    // Therefore it requires that
+    // MAX_ANS_SYMBOLS_PER_U64 >= ANS_INTERLEAVING.
+    // Additionally, we're unpacking all ANS states using the fact that
+    // ANS_INTERLEAVING == 4.
     let src = reader.src;
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
-    let mut state_idxs = self.state.state_idxs;
-    // this requires that MAX_ANS_SYMBOLS_PER_U64 == ANS_INTERLEAVING
+    let [mut state_idx_0, mut state_idx_1, mut state_idx_2, mut state_idx_3] =
+      self.state.state_idxs;
+    let infos = self.infos.as_slice();
+    let ans_nodes = self.decoder.nodes.as_slice();
     for base_i in (0..FULL_BATCH_N).step_by(MAX_ANS_SYMBOLS_PER_U64) {
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
       let packed = bit_reader::u64_at(src, stale_byte_idx);
-      for j in 0..MAX_ANS_SYMBOLS_PER_U64 {
-        let i = base_i + j;
-        let node = self.decoder.get_node(state_idxs[j]);
-        let ans_val = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
-        let info = unsafe { self.infos.get_unchecked(node.token as usize) };
-        self.state.set_scratch(i, offset_bit_idx, info);
-        bits_past_byte += node.bits_to_read;
-        offset_bit_idx += info.offset_bits as usize;
-        state_idxs[j] = node.next_state_idx_base + ans_val;
+      // I hate that I have to do this with a macro, but it gives a serious
+      // performance gain. If I use a [AnsState; 4] for the state_idxs instead
+      // of separate identifiers, it tries to repeatedly load and write to
+      // the array instead of keeping the states in registers.
+      macro_rules! handle_single_token {
+        ($j: expr, $state_idx: ident) => {
+          let i = base_i + $j;
+          let node = unsafe { ans_nodes.get_unchecked($state_idx as usize) };
+          let ans_val = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
+          let info = unsafe { infos.get_unchecked(node.token as usize) };
+          self.state.set_scratch(i, offset_bit_idx, info);
+          bits_past_byte += node.bits_to_read;
+          offset_bit_idx += info.offset_bits as usize;
+          $state_idx = node.next_state_idx_base + ans_val;
+        };
       }
+      handle_single_token!(0, state_idx_0);
+      handle_single_token!(1, state_idx_1);
+      handle_single_token!(2, state_idx_2);
+      handle_single_token!(3, state_idx_3);
     }
 
     reader.stale_byte_idx = stale_byte_idx;
     reader.bits_past_byte = bits_past_byte;
-    self.state.state_idxs = state_idxs;
+    self.state.state_idxs = [state_idx_0, state_idx_1, state_idx_2, state_idx_3];
   }
 
   #[inline(never)]
@@ -125,7 +143,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
       let packed = bit_reader::u64_at(src, stale_byte_idx);
-      let node = self.decoder.get_node(state_idxs[j]);
+      let node = unsafe { self.decoder.nodes.get_unchecked(state_idxs[j] as usize) };
       let ans_val = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
       let info = &self.infos[node.token as usize];
       self.state.set_scratch(i, offset_bit_idx, info);
@@ -185,7 +203,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
   // May contaminate dst.
-  pub fn decompress_latent_batch_dirty(
+  pub fn decompress_latent_batch(
     &mut self,
     reader: &mut BitReader,
     dst: &mut [U],

@@ -52,7 +52,7 @@ mod tests {
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;
     for _ in 0..tokens.len() {
-      let node = decoder.get_node(state_idx);
+      let node = &decoder.nodes[state_idx as usize];
       decoded.push(node.token);
       state_idx = node.next_state_idx_base + reader.read_uint::<AnsState>(node.bits_to_read);
     }
