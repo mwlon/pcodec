@@ -273,6 +273,14 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
   }
 }
 
+pub fn ensure_buf_read_capacity<R: BetterBufRead>(src: &mut R, required: usize) {
+  if let Some(current_capacity) = src.capacity() {
+    if current_capacity < required {
+      src.resize_capacity(required);
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use crate::errors::{ErrorKind, PcoResult};

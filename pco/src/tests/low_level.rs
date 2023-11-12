@@ -1,4 +1,7 @@
+use better_io::{BetterBufRead, BetterBufReader};
 use std::cmp::min;
+use std::fs::File;
+use std::io::Write;
 
 use crate::chunk_config::ChunkConfig;
 use crate::errors::PcoResult;
@@ -10,11 +13,11 @@ struct Chunk {
   config: ChunkConfig,
 }
 
-fn decompress_by_batch<'a>(
+fn decompress_by_batch<R: BetterBufRead>(
   pd: &mut PageDecompressor<u32>,
-  mut src: &'a [u8],
+  mut src: R,
   page_n: usize,
-) -> PcoResult<(Vec<u32>, &'a [u8])> {
+) -> PcoResult<(Vec<u32>, R)> {
   let mut nums = vec![0; page_n];
   let mut start = 0;
   loop {
@@ -34,39 +37,64 @@ fn decompress_by_batch<'a>(
   Ok((nums, src))
 }
 
-fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
-  // COMPRESS
-  let mut compressed = Vec::new();
+fn test_wrapped_compress<W: Write>(chunks: &[Chunk], dst: W) -> PcoResult<W> {
   let fc = FileCompressor::default();
-  fc.write_header(&mut compressed)?;
+  let mut dst = fc.write_header(dst)?;
 
-  let mut n_per_pages = Vec::new();
   for chunk in chunks {
     let cc = fc.chunk_compressor(&chunk.nums, &chunk.config)?;
-    cc.write_chunk_meta(&mut compressed)?;
+    dst = cc.write_chunk_meta(dst)?;
     for page_idx in 0..cc.n_per_page().len() {
-      cc.write_page(page_idx, &mut compressed)?;
+      dst = cc.write_page(page_idx, dst)?;
     }
-    n_per_pages.push(cc.n_per_page().to_vec());
   }
 
-  // DECOMPRESS
-  let (fd, mut src) = FileDecompressor::new(compressed.as_slice())?;
-  for (chunk_idx, chunk) in chunks.iter().enumerate() {
+  Ok(dst)
+}
+
+fn test_wrapped_decompress<R: BetterBufRead>(chunks: &[Chunk], src: R) -> PcoResult<()> {
+  let (fd, mut src) = FileDecompressor::new(src)?;
+
+  // antagonistically keep setting the buf read capacity to 0
+  for chunk in chunks {
+    src.resize_capacity(0);
     let (cd, new_src) = fd.chunk_decompressor(src)?;
     src = new_src;
 
     let mut page_start = 0;
-    for &page_n in &n_per_pages[chunk_idx] {
+    let n_per_page = chunk.config.paging_spec.n_per_page(chunk.nums.len())?;
+    for &page_n in &n_per_page {
       let page_end = page_start + page_n;
+
+      src.resize_capacity(0);
       let (mut pd, new_src) = cd.page_decompressor(page_n, src)?;
       src = new_src;
+
+      src.resize_capacity(0);
       let (page_nums, new_src) = decompress_by_batch(&mut pd, src, page_n)?;
       src = new_src;
+
       assert_eq!(&page_nums, &chunk.nums[page_start..page_end]);
       page_start = page_end;
     }
   }
+
+  Ok(())
+}
+
+fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
+  // IN MEMORY
+  let mut compressed = Vec::new();
+  test_wrapped_compress(chunks, &mut compressed)?;
+  test_wrapped_decompress(chunks, compressed.as_slice())?;
+
+  // ON DISK
+  let file_path = std::env::temp_dir().join("pco_test_file");
+  let f = File::create(&file_path)?;
+  test_wrapped_compress(chunks, f)?;
+  let f = File::open(file_path)?;
+  let buf_read = BetterBufReader::new(&[], f, 0);
+  test_wrapped_decompress(chunks, buf_read)?;
 
   Ok(())
 }

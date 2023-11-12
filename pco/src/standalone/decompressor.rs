@@ -7,7 +7,7 @@ use crate::progress::Progress;
 use crate::standalone::constants::{
   BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
 };
-use crate::{wrapped, ChunkMeta};
+use crate::{bit_reader, wrapped, ChunkMeta};
 
 /// Top-level entry point for decompressing standalone .pco files.
 ///
@@ -46,7 +46,8 @@ impl FileDecompressor {
   ///
   /// Will return an error if any corruptions, version incompatibilities, or
   /// insufficient data are found.
-  pub fn new<R: BetterBufRead>(src: R) -> PcoResult<(Self, R)> {
+  pub fn new<R: BetterBufRead>(mut src: R) -> PcoResult<(Self, R)> {
+    bit_reader::ensure_buf_read_capacity(&mut src, MAGIC_HEADER.len());
     let mut reader_builder = BitReaderBuilder::new(src, MAGIC_HEADER.len(), 0);
     let header = reader_builder
       .with_reader(|reader| Ok(reader.read_aligned_bytes(MAGIC_HEADER.len())?.to_vec()))?;
@@ -73,8 +74,9 @@ impl FileDecompressor {
   /// data are found.
   pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
     &self,
-    src: R,
+    mut src: R,
   ) -> PcoResult<(Option<ChunkDecompressor<T>>, R)> {
+    bit_reader::ensure_buf_read_capacity(&mut src, STANDALONE_CHUNK_PREAMBLE_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, STANDALONE_CHUNK_PREAMBLE_PADDING, 0);
     let dtype_or_termination_byte =
       reader_builder.with_reader(|reader| Ok(reader.read_aligned_bytes(1)?[0]))?;
