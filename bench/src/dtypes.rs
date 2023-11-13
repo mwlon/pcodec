@@ -2,9 +2,9 @@ use std::mem;
 
 use parquet::data_type as parq;
 
+use crate::num_vec::NumVec;
 use pco::data_types::NumberLike as PNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
-use crate::num_vec::NumVec;
 
 pub trait Dtype: QNumberLike {
   type Pco: PNumberLike;
@@ -44,7 +44,7 @@ impl Dtype for i32 {
   }
 
   fn vec_from_parquet(v: Vec<i32>) -> Vec<Self> {
-    unsafe { mem::transmute(v) }
+    v
   }
 }
 

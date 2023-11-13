@@ -93,12 +93,7 @@ pub trait CodecSurface: Debug + Send + Sync {
   fn set_conf(&mut self, key: &str, value: String) -> Result<()>;
   fn details(&self, confs: &[String]) -> String;
 
-  fn warmup_iter(
-    &self,
-    num_vec: &NumVec,
-    fname: &str,
-    opt: &HandlerOpt,
-  ) -> Precomputed;
+  fn warmup_iter(&self, num_vec: &NumVec, fname: &str, opt: &HandlerOpt) -> Precomputed;
   fn stats_iter(&self, nums: &NumVec, precomputed: &Precomputed, opt: &HandlerOpt) -> BenchStat;
 
   fn clone_to_box(&self) -> Box<dyn CodecSurface>;
@@ -129,18 +124,13 @@ impl<C: CodecInternal> CodecSurface for C {
     res
   }
 
-  fn warmup_iter(
-    &self,
-    nums: &NumVec,
-    fname: &str,
-    opt: &HandlerOpt,
-  ) -> Precomputed {
+  fn warmup_iter(&self, nums: &NumVec, fname: &str, opt: &HandlerOpt) -> Precomputed {
     let dtype = nums.dtype_str();
 
     // compress
     let compressed = self.compress_dynamic(nums);
     println!(
-      "\nwarmup: compressed to {} bytes",
+      "warmup: compressed to {} bytes",
       compressed.len(),
     );
 

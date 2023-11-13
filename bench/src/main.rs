@@ -106,7 +106,7 @@ pub struct Precomputed {
 }
 
 fn handle(num_vec: &NumVec, dataset: String, config: &CodecConfig, opt: &Opt) -> PrintStat {
-  println!("{} x {}", dataset, config.to_string());
+  println!("\n{} x {}", dataset, config);
   let save_fname = format!(
     "{}{}.{}",
     &dataset,
@@ -115,13 +115,13 @@ fn handle(num_vec: &NumVec, dataset: String, config: &CodecConfig, opt: &Opt) ->
   );
   let precomputed = config
     .inner
-    .warmup_iter(&num_vec, &save_fname, &opt.handler_opt);
+    .warmup_iter(num_vec, &save_fname, &opt.handler_opt);
   let mut benches = Vec::with_capacity(opt.iters);
   for _ in 0..opt.iters {
     benches.push(
       config
         .inner
-        .stats_iter(&num_vec, &precomputed, &opt.handler_opt),
+        .stats_iter(num_vec, &precomputed, &opt.handler_opt),
     );
   }
   PrintStat::compute(dataset, config.to_string(), &benches)
@@ -136,7 +136,11 @@ fn handle_synthetic(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   handle(&num_vec, dataset, config, opt)
 }
 
-fn collect_parquet_num_vec<T: Dtype>(pq_reader: &SerializedFileReader<File>, col_idx: usize, n: usize) -> NumVec {
+fn collect_parquet_num_vec<T: Dtype>(
+  pq_reader: &SerializedFileReader<File>,
+  col_idx: usize,
+  n: usize,
+) -> NumVec {
   let mut res = Vec::with_capacity(n);
   let mut def_levels = Vec::with_capacity(n);
   let mut rep_levels = Vec::with_capacity(n);
@@ -153,7 +157,12 @@ fn collect_parquet_num_vec<T: Dtype>(pq_reader: &SerializedFileReader<File>, col
       get_typed_column_reader::<T::Parquet>(row_group_reader.get_column_reader(col_idx).unwrap());
 
     let (n_records_read, _, _) = col_reader
-      .read_records(usize::MAX, Some(&mut def_levels), Some(&mut rep_levels), &mut res[start..])
+      .read_records(
+        usize::MAX,
+        Some(&mut def_levels),
+        Some(&mut rep_levels),
+        &mut res[start..],
+      )
       .unwrap();
     start += n_records_read
   }
@@ -161,7 +170,12 @@ fn collect_parquet_num_vec<T: Dtype>(pq_reader: &SerializedFileReader<File>, col
   T::num_vec(T::vec_from_parquet(res))
 }
 
-fn handle_parquet_column(pq_reader: &SerializedFileReader<File>, col_idx: usize, n: usize, opt: &Opt) -> Vec<PrintStat> {
+fn handle_parquet_column(
+  pq_reader: &SerializedFileReader<File>,
+  col_idx: usize,
+  n: usize,
+  opt: &Opt,
+) -> Vec<PrintStat> {
   let pq_meta = pq_reader.metadata();
   let pq_col = pq_meta.file_metadata().schema_descr().column(col_idx);
   let num_vec = match pq_col.physical_type() {
@@ -175,7 +189,12 @@ fn handle_parquet_column(pq_reader: &SerializedFileReader<File>, col_idx: usize,
   let mut stats = Vec::new();
   let dataset = format!("{}_{}", num_vec.dtype_str(), pq_col.name());
   for codec in &opt.codecs {
-    stats.push(handle(&num_vec, dataset.to_string(), codec, opt));
+    stats.push(handle(
+      &num_vec,
+      dataset.to_string(),
+      codec,
+      opt,
+    ));
   }
 
   stats
@@ -197,7 +216,9 @@ fn handle_parquet_dataset(path: &Path, opt: &Opt) -> Vec<PrintStat> {
   let mut stats = Vec::new();
 
   for col_idx in 0..n_cols {
-    stats.extend(handle_parquet_column(&pq_reader, col_idx, n, opt));
+    stats.extend(handle_parquet_column(
+      &pq_reader, col_idx, n, opt,
+    ));
   }
   stats
 }
@@ -237,13 +258,16 @@ fn main() {
   synthetic_paths.sort();
 
   if opt.datasets != vec!["".to_string()] {
-    synthetic_paths = synthetic_paths.into_iter().filter(|path| {
-      let path_str = path.to_str().unwrap();
-      opt
-        .datasets
-        .iter()
-        .any(|dataset| path_str.contains(dataset))
-    }).collect::<Vec<_>>();
+    synthetic_paths = synthetic_paths
+      .into_iter()
+      .filter(|path| {
+        let path_str = path.to_str().unwrap();
+        opt
+          .datasets
+          .iter()
+          .any(|dataset| path_str.contains(dataset))
+      })
+      .collect::<Vec<_>>();
   } else if opt.parquet_dataset.is_some() {
     synthetic_paths = vec![];
   }

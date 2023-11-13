@@ -97,7 +97,7 @@ impl CodecInternal for ParquetConfig {
           .build(),
       ),
     )
-      .unwrap();
+    .unwrap();
 
     for col_chunk in nums.chunks(self.group_size) {
       let mut row_group_writer = writer.next_row_group().unwrap();
