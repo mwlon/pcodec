@@ -2,6 +2,14 @@
 
 # Pcodec
 
+<div style="text-align:center">
+  <img
+    alt="bar charts showing better compression at faster speeds for pco than zstd.parquet"
+    src="images/real_world_bench.svg"
+    width="70%"
+  >
+</div>
+
 Pcodec (or pco, pronounced "pico") losslessly compresses and decompresses
 numerical sequences with
 [high compression ratio and fast speed](./bench/README.md).

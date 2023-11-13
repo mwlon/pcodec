@@ -8,11 +8,9 @@ use std::path::Path;
 use std::time::Duration;
 
 use clap::Parser;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::basic::Type;
 use parquet::column::reader::get_typed_column_reader;
 use parquet::file::reader::{FileReader, SerializedFileReader};
-use parquet::schema::types::ColumnDescPtr;
 use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
@@ -108,6 +106,7 @@ pub struct Precomputed {
 }
 
 fn handle(num_vec: &NumVec, dataset: String, config: &CodecConfig, opt: &Opt) -> PrintStat {
+  println!("{} x {}", dataset, config.to_string());
   let save_fname = format!(
     "{}{}.{}",
     &dataset,
@@ -166,12 +165,15 @@ fn handle_parquet_column(pq_reader: &SerializedFileReader<File>, col_idx: usize,
   let pq_meta = pq_reader.metadata();
   let pq_col = pq_meta.file_metadata().schema_descr().column(col_idx);
   let num_vec = match pq_col.physical_type() {
+    Type::INT32 => collect_parquet_num_vec::<i32>(pq_reader, col_idx, n),
     Type::INT64 => collect_parquet_num_vec::<i64>(pq_reader, col_idx, n),
+    Type::FLOAT => collect_parquet_num_vec::<f32>(pq_reader, col_idx, n),
+    Type::DOUBLE => collect_parquet_num_vec::<f64>(pq_reader, col_idx, n),
     _ => return vec![],
   };
 
   let mut stats = Vec::new();
-  let dataset = pq_col.name().to_string();
+  let dataset = format!("{}_{}", num_vec.dtype_str(), pq_col.name());
   for codec in &opt.codecs {
     stats.push(handle(&num_vec, dataset.to_string(), codec, opt));
   }

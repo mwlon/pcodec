@@ -21,14 +21,14 @@ pub trait Dtype: QNumberLike {
 
 // This is technically not correct for parquet.
 // Parquet only has signed ints; here we just transmute between them.
-impl Dtype for u32 {
-  type Pco = u32;
+impl Dtype for i32 {
+  type Pco = i32;
   type Parquet = parq::Int32Type;
 
   const PARQUET_DTYPE_STR: &'static str = "INT32";
 
   fn num_vec(nums: Vec<Self>) -> NumVec {
-    NumVec::U32(nums)
+    NumVec::I32(nums)
   }
 
   fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {
@@ -56,6 +56,33 @@ impl Dtype for i64 {
 
   fn num_vec(nums: Vec<Self>) -> NumVec {
     NumVec::I64(nums)
+  }
+
+  fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {
+    slice
+  }
+
+  fn slice_to_pco(slice: &[Self]) -> &[Self::Pco] {
+    slice
+  }
+
+  fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self> {
+    v
+  }
+
+  fn vec_from_parquet(v: Vec<Self>) -> Vec<Self> {
+    v
+  }
+}
+
+impl Dtype for f32 {
+  type Pco = f32;
+  type Parquet = parq::FloatType;
+
+  const PARQUET_DTYPE_STR: &'static str = "FLOAT";
+
+  fn num_vec(nums: Vec<Self>) -> NumVec {
+    NumVec::F32(nums)
   }
 
   fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {

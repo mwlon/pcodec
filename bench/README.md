@@ -1,13 +1,19 @@
 # Benchmarks
 
-This generates a wide variety of common distributions,
-compresses them, decompresses them, and makes sure
-all the data came back bitwise identical.
-It supports
-* multiple codecs (pco, q\_compress, zstd)
-* multiple data types
+The benchmarks support many things!
+* different codecs
+* all sorts of configurations on those codecs
+* multiple datasets
+  * synthetic, theoretically understood ones
+  * arbitrary Parquet files
+* measurement for compressed size, compression time, and decompression time
 
-## Running
+By default, the benchmarks also assert that the data comes back bitwise
+identical to the input.
+
+Check `cargo run --release --bin bench -- --help` for most usage information.
+
+## Synthetic
 
 TL;DR (`cd`'d into the repo):
 * `python bench/generate_randoms.py`
@@ -37,11 +43,7 @@ it took to compress and decompress each dataset.
 You can see the compressed files in
 `bench/data/pco/`.
 
-Check `cargo run --release --bin bench -- --help` for information on how to
-run other codecs, configure codecs differently, only run specific datasets,
-etc.
-
-## Results
+### Results
 
 All figures reported here are calculated using a single thread on an Apple
 M3 performance core, operating on in-memory data, using Rust 1.73.
@@ -69,3 +71,9 @@ For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
   ratio 3.14.
 * level 22: compresses 0.44 million/s, decompresses 170 million/s,
   compression ratio 3.51.
+
+## Real World
+
+Real world datasets are the best indicator of usefulness.
+
+TODO: put download links in here.
