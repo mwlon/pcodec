@@ -22,11 +22,11 @@ def write_generic(strs, arr, full_name):
   with open(f'{base_dir}/binary/{full_name}.bin', 'wb') as f:
     f.write(arr.tobytes())
 
-def write_u32(arr, name):
-  if arr.dtype != np.uint32:
-    arr = np.floor(arr).astype(np.uint32)
+def write_i32(arr, name):
+  if arr.dtype != np.int32:
+    arr = np.floor(arr).astype(np.int32)
   strs = [str(x) for x in arr]
-  full_name = f'u32_{name}'
+  full_name = f'i32_{name}'
   write_generic(strs, arr, full_name)
 
 def write_i64(arr, name):

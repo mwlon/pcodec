@@ -13,7 +13,7 @@ use crate::codecs::pco::PcoConfig;
 use crate::codecs::qco::QcoConfig;
 use crate::codecs::snappy::SnappyConfig;
 use crate::codecs::zstd::ZstdConfig;
-use crate::dtypes::{dtype_str, Dtype};
+use crate::dtypes::Dtype;
 use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
 use crate::{BenchStat, Precomputed, BASE_DIR};
@@ -41,8 +41,9 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
   // of (dtype x codec)
   fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
     match num_vec {
-      NumVec::U32(nums) => self.compress(nums),
+      NumVec::I32(nums) => self.compress(nums),
       NumVec::I64(nums) => self.compress(nums),
+      NumVec::F32(nums) => self.compress(nums),
       NumVec::F64(nums) => self.compress(nums),
       NumVec::Micros(nums) => self.compress(nums),
     }
@@ -50,8 +51,9 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
 
   fn decompress_dynamic(&self, dtype: &str, compressed: &[u8]) -> NumVec {
     match dtype {
-      "u32" => NumVec::U32(self.decompress::<u32>(compressed)),
+      "i32" => NumVec::I32(self.decompress::<i32>(compressed)),
       "i64" => NumVec::I64(self.decompress::<i64>(compressed)),
+      "f32" => NumVec::F32(self.decompress::<f32>(compressed)),
       "f64" => NumVec::F64(self.decompress::<f64>(compressed)),
       "micros" => NumVec::Micros(self.decompress::<TimestampMicros>(compressed)),
       _ => panic!("unknown dtype {}", dtype),
@@ -74,8 +76,9 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
 
   fn compare_nums_dynamic(&self, recovered: &NumVec, original: &NumVec) {
     match (recovered, original) {
-      (NumVec::U32(x), NumVec::U32(y)) => self.compare_nums(x, y),
+      (NumVec::I32(x), NumVec::I32(y)) => self.compare_nums(x, y),
       (NumVec::I64(x), NumVec::I64(y)) => self.compare_nums(x, y),
+      (NumVec::F32(x), NumVec::F32(y)) => self.compare_nums(x, y),
       (NumVec::F64(x), NumVec::F64(y)) => self.compare_nums(x, y),
       (NumVec::Micros(x), NumVec::Micros(y)) => self.compare_nums(x, y),
       _ => panic!("should be unreachable"),
@@ -90,13 +93,7 @@ pub trait CodecSurface: Debug + Send + Sync {
   fn set_conf(&mut self, key: &str, value: String) -> Result<()>;
   fn details(&self, confs: &[String]) -> String;
 
-  fn warmup_iter(
-    &self,
-    num_vec: &NumVec,
-    dataset: &str,
-    fname: &str,
-    opt: &HandlerOpt,
-  ) -> Precomputed;
+  fn warmup_iter(&self, num_vec: &NumVec, fname: &str, opt: &HandlerOpt) -> Precomputed;
   fn stats_iter(&self, nums: &NumVec, precomputed: &Precomputed, opt: &HandlerOpt) -> BenchStat;
 
   fn clone_to_box(&self) -> Box<dyn CodecSurface>;
@@ -127,20 +124,13 @@ impl<C: CodecInternal> CodecSurface for C {
     res
   }
 
-  fn warmup_iter(
-    &self,
-    nums: &NumVec,
-    dataset: &str,
-    fname: &str,
-    opt: &HandlerOpt,
-  ) -> Precomputed {
-    let dtype = dtype_str(dataset);
+  fn warmup_iter(&self, nums: &NumVec, fname: &str, opt: &HandlerOpt) -> Precomputed {
+    let dtype = nums.dtype_str();
 
     // compress
     let compressed = self.compress_dynamic(nums);
     println!(
-      "\nwarmup for {}: compressed to {} bytes",
-      dataset,
+      "warmup: compressed to {} bytes",
       compressed.len(),
     );
 

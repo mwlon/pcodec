@@ -9,8 +9,10 @@ use std::io::Result;
 /// * ensuring that the buffer contains at least the requested length of data
 ///   (unless we've reached the end of the file)
 ///
-/// In contrast, programs that use a `BufRead` often copy to yet another
-/// buffer so that they can guarantee it has an appropriate size they need.
+/// In contrast, programs that use a [`BufRead`][std::io::BufRead] often copy
+/// to yet another internal buffer in order to guarantee an appropriate size.
+/// This reduces performance and inevitably makes implementations more
+/// complicated.
 pub trait BetterBufRead {
   /// Fills the internal buffer with at least `n_bytes` if possible, or as many
   /// as possible if the end of the file is reached.

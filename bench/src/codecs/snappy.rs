@@ -22,7 +22,6 @@ impl CodecInternal for SnappyConfig {
     Err(anyhow!("unknown conf: {}", key))
   }
 
-  // we prefix with a u32 of the
   fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
     res.extend((nums.len() as u32).to_le_bytes());

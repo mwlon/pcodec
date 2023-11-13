@@ -64,7 +64,7 @@ fn decompress_latents_w_delta<U: UnsignedLike>(
     dst.len(),
     n_remaining.saturating_sub(delta_moments.order()),
   );
-  lbd.decompress_latent_batch_dirty(reader, &mut dst[..pre_delta_len])?;
+  lbd.decompress_latent_batch(reader, &mut dst[..pre_delta_len])?;
   delta::decode_in_place(delta_moments, &mut dst[..]);
   Ok(())
 }
