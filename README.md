@@ -52,11 +52,11 @@ Pco is mainly meant to be wrapped into another format for production use cases.
 It has a hierarchy of multiple batches per page; multiple pages per chunk; and
 multiple chunks per file.
 
-|       | unit of ___                     | size for good compression | size for good performance |
-|-------|---------------------------------|---------------------------|---------------------------|
-| chunk | compression                     | \>20k numbers             | ???                       |
-| page  | interleaving w/ wrapping format | \>1k numbers              | ???                       |
-| batch | decompression                   | 256 numbers (fixed)       | 256 numbers (fixed)       |
+|       | unit of ___                     | size for good compression |
+|-------|---------------------------------|---------------------------|
+| chunk | compression                     | \>20k numbers             |
+| page  | interleaving w/ wrapping format | \>1k numbers              |
+| batch | decompression                   | 256 numbers (fixed)       |
 
 The standalone format is a minimal implementation of a wrapped format.
 It supports batched decompression only; no nullability, multiple
