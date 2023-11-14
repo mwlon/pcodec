@@ -35,6 +35,7 @@ pub enum FloatMultSpec {
   Disabled,
   #[default]
   Enabled,
+  // TODO support a LossyEnabled mode that always drops the ULPs latent var
 }
 
 /// All configurations available for a compressor.
@@ -92,7 +93,7 @@ pub struct ChunkConfig {
   /// See [`FloatMultSpec`][crate::FloatMultSpec] for more detail.
   pub float_mult_spec: FloatMultSpec,
   /// `paging_spec` specifies how the chunk should be split into pages
-  /// (default: equal pages up to 1,000,000 numbers each).
+  /// (default: equal pages up to 2^20 numbers each).
   ///
   /// See [`PagingSpec`][crate::PagingSpec] for more information.
   pub paging_spec: PagingSpec,

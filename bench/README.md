@@ -75,5 +75,28 @@ For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
 ## Real World
 
 Real world datasets are the best indicator of usefulness.
+We have compared against 3 datasets, all of which are readily available and
+accessible in size:
+* [Devin Smith's air quality data](https://deephaven.io/wp-content/devinrsmith-air-quality.20220714.zstd.parquet)
+* [NYC taxi data (2023-04 high volume for hire)](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
+* [r/place 2022 placement data](https://www.reddit.com/r/place/comments/txvk2d/rplace_datasets_april_fools_2022/)
+  * Using it as 6 numerical columns: timestamp, x, y, red, green, and blue
+  * TODO: put processed parquet download link here
 
-TODO: put download links in here.
+<div style="text-align:center">
+  <img
+    alt="bar charts showing better compression for pco than zstd.parquet"
+    src="../images/real_world_compression_ratio.svg"
+    width="600px"
+  >
+  <img
+    alt="bar charts showing similar compression speed for pco and zstd.parquet"
+    src="../images/real_world_compression_speed.svg"
+    width="600px"
+  >
+  <img
+    alt="bar charts showing faster decompression speed for pco than zstd.parquet"
+    src="../images/real_world_decompression_speed.svg"
+    width="600px"
+  >
+</div>

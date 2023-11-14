@@ -212,6 +212,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       return Ok(());
     }
 
+    // TODO support faster decompression when there is a single nontrivial bin
+    // also make bin optimization use a single bin when it's close to 0 cost
     if let Some(const_value) = self.maybe_constant_value {
       dst.fill(const_value);
       return Ok(());
