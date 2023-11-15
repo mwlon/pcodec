@@ -7,7 +7,7 @@ use crate::dtypes::Dtype;
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {
-  compressor_config: pco::ChunkConfig,
+  chunk_config: pco::ChunkConfig,
 }
 
 impl CodecInternal for PcoConfig {
@@ -17,18 +17,18 @@ impl CodecInternal for PcoConfig {
 
   fn get_conf(&self, key: &str) -> String {
     match key {
-      "level" => self.compressor_config.compression_level.to_string(),
+      "level" => self.chunk_config.compression_level.to_string(),
       "delta_order" => self
-        .compressor_config
+        .chunk_config
         .delta_encoding_order
         .map(|order| order.to_string())
         .unwrap_or("auto".to_string()),
-      "gcd" => format!("{:?}", self.compressor_config.gcd_spec),
+      "gcd" => format!("{:?}", self.chunk_config.gcd_spec),
       "float_mult" => format!(
         "{:?}",
-        self.compressor_config.float_mult_spec
+        self.chunk_config.float_mult_spec
       ),
-      "page_size" => match self.compressor_config.paging_spec {
+      "chunk_size" => match self.chunk_config.paging_spec {
         PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
         _ => panic!("unexpected paging spec"),
       },
@@ -39,12 +39,12 @@ impl CodecInternal for PcoConfig {
   fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
     let value = value.to_lowercase();
     match key {
-      "level" => self.compressor_config.compression_level = value.parse::<usize>().unwrap(),
+      "level" => self.chunk_config.compression_level = value.parse::<usize>().unwrap(),
       "delta_order" => {
         if let Ok(order) = value.parse::<usize>() {
-          self.compressor_config.delta_encoding_order = Some(order);
+          self.chunk_config.delta_encoding_order = Some(order);
         } else if value.to_lowercase() == "auto" {
-          self.compressor_config.delta_encoding_order = None;
+          self.chunk_config.delta_encoding_order = None;
         } else {
           return Err(anyhow!(
             "cannot parse delta order: {}",
@@ -53,21 +53,21 @@ impl CodecInternal for PcoConfig {
         }
       }
       "gcd" => {
-        self.compressor_config.gcd_spec = match value.as_str() {
+        self.chunk_config.gcd_spec = match value.as_str() {
           "enabled" => GcdSpec::Enabled,
           "disabled" => GcdSpec::Disabled,
           other => return Err(anyhow!("cannot parse gcd: {}", other,)),
         }
       }
       "float_mult" => {
-        self.compressor_config.float_mult_spec = match value.as_str() {
+        self.chunk_config.float_mult_spec = match value.as_str() {
           "enabled" => FloatMultSpec::Enabled,
           "disabled" => FloatMultSpec::Disabled,
           other => return Err(anyhow!("cannot parse float mult: {}", other,)),
         }
       }
-      "page_size" => {
-        self.compressor_config.paging_spec = PagingSpec::EqualPagesUpTo(value.parse().unwrap())
+      "chunk_size" => {
+        self.chunk_config.paging_spec = PagingSpec::EqualPagesUpTo(value.parse().unwrap())
       }
       _ => return Err(anyhow!("unknown conf: {}", key)),
     }
@@ -76,7 +76,7 @@ impl CodecInternal for PcoConfig {
 
   fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
     let pco_nums = T::slice_to_pco(nums);
-    pco::standalone::simple_compress(pco_nums, &self.compressor_config).expect("invalid config")
+    pco::standalone::simple_compress(pco_nums, &self.chunk_config).expect("invalid config")
   }
 
   fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {

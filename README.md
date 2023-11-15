@@ -4,9 +4,9 @@
 
 <div style="text-align:center">
   <img
-    alt="bar charts showing better compression at faster speeds for pco than zstd.parquet"
-    src="images/real_world_bench.svg"
-    width="70%"
+    alt="bar charts showing better compression for pco than zstd.parquet"
+    src="images/real_world_compression_ratio.svg"
+    width="600px"
   >
 </div>
 
@@ -52,11 +52,11 @@ Pco is mainly meant to be wrapped into another format for production use cases.
 It has a hierarchy of multiple batches per page; multiple pages per chunk; and
 multiple chunks per file.
 
-|          | unit of ___                     | recommended size    |
-|----------|---------------------------------|---------------------|
-| chunk    | compression                     | \>20k numbers       |
-| page     | interleaving w/ wrapping format | \>1k numbers        |
-| batch    | decompression                   | 256 numbers (fixed) |
+|       | unit of ___                     | size for good compression |
+|-------|---------------------------------|---------------------------|
+| chunk | compression                     | \>20k numbers             |
+| page  | interleaving w/ wrapping format | \>1k numbers              |
+| batch | decompression                   | 256 numbers (fixed)       |
 
 The standalone format is a minimal implementation of a wrapped format.
 It supports batched decompression only; no nullability, multiple

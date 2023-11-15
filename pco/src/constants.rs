@@ -9,7 +9,7 @@ pub(crate) type Bitlen = u32;
 pub(crate) type Weight = u32;
 
 // compatibility
-pub const CURRENT_FORMAT_VERSION: u8 = 0; // .
+pub const CURRENT_FORMAT_VERSION: u8 = 0;
 
 // bit lengths
 pub const BITS_TO_ENCODE_ANS_SIZE_LOG: Bitlen = 4;
@@ -48,7 +48,7 @@ pub const MAX_SUPPORTED_PRECISION_BYTES: usize = (MAX_SUPPORTED_PRECISION / 8) a
 // defaults
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
 // if you modify default page size, update docs for PagingSpec
-pub const DEFAULT_MAX_PAGE_N: usize = 1000000;
+pub const DEFAULT_MAX_PAGE_N: usize = 1 << 20;
 
 // important parts of the format specification
 pub const ANS_INTERLEAVING: usize = 4;

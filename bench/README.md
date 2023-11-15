@@ -75,5 +75,32 @@ For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
 ## Real World
 
 Real world datasets are the best indicator of usefulness.
+We have compared against 3 datasets, all of which are readily available and
+accessible in download size:
+* [Devin Smith's air quality data download](https://deephaven.io/wp-content/devinrsmith-air-quality.20220714.zstd.parquet) (15MB)
+* [NYC taxi data (2023-04 high volume for hire)](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page) (469MB)
+* Reddit r/place 2022 data
+  * [upstream Reddit post and original data](https://www.reddit.com/r/place/comments/txvk2d/rplace_datasets_april_fools_2022/)
+  * [processed Parquet file download](https://pcodec-public.s3.amazonaws.com/reddit_2022_place_numerical.parquet) (1.3GB)
 
-TODO: put download links in here.
+<div style="text-align:center">
+  <img
+    alt="bar charts showing better compression for pco than zstd.parquet"
+    src="../images/real_world_compression_ratio.svg"
+    width="600px"
+  >
+  <img
+    alt="bar charts showing similar compression speed for pco and zstd.parquet"
+    src="../images/real_world_compression_speed.svg"
+    width="600px"
+  >
+  <img
+    alt="bar charts showing faster decompression speed for pco than zstd.parquet"
+    src="../images/real_world_decompression_speed.svg"
+    width="600px"
+  >
+</div>
+
+These were again done on a single core of an M3 performance core.
+Only numerical columns (the physical dtypes INT32, INT64, FLOAT, and DOUBLE)
+were used.

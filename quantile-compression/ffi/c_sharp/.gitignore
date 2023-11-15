@@ -1,7 +1,0 @@
-.vs
-bin
-c_sharp/obj
-
-*.sln
-*.csproj
-*.dylib
