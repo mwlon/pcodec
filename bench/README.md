@@ -76,12 +76,12 @@ For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
 
 Real world datasets are the best indicator of usefulness.
 We have compared against 3 datasets, all of which are readily available and
-accessible in size:
-* [Devin Smith's air quality data](https://deephaven.io/wp-content/devinrsmith-air-quality.20220714.zstd.parquet)
-* [NYC taxi data (2023-04 high volume for hire)](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
-* [r/place 2022 placement data](https://www.reddit.com/r/place/comments/txvk2d/rplace_datasets_april_fools_2022/)
-  * Using it as 6 numerical columns: timestamp, x, y, red, green, and blue
-  * TODO: put processed parquet download link here
+accessible in download size:
+* [Devin Smith's air quality data download](https://deephaven.io/wp-content/devinrsmith-air-quality.20220714.zstd.parquet) (15MB)
+* [NYC taxi data (2023-04 high volume for hire)](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page) (469MB)
+* Reddit r/place 2022 data
+  * [upstream Reddit post and original data](https://www.reddit.com/r/place/comments/txvk2d/rplace_datasets_april_fools_2022/)
+  * [processed Parquet file download](https://pcodec-public.s3.amazonaws.com/reddit_2022_place_numerical.parquet) (1.3GB)
 
 <div style="text-align:center">
   <img
@@ -100,3 +100,7 @@ accessible in size:
     width="600px"
   >
 </div>
+
+These were again done on a single core of an M3 performance core.
+Only numerical columns (the physical dtypes INT32, INT64, FLOAT, and DOUBLE)
+were used.
