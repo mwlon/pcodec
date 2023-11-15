@@ -167,8 +167,8 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     Ok(())
   }
 
-  /// Reads compressed numbers into the destination, returning progress and
-  /// the remaining input.
+  /// Reads the next decompressed numbers into the destination, returning
+  /// progress and advancing along the compressed data.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   ///
@@ -204,6 +204,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     self.n - self.state.n_processed
   }
 
+  /// Returns the rest of the compressed data source.
   pub fn into_src(self) -> R {
     self.reader_builder.into_inner()
   }

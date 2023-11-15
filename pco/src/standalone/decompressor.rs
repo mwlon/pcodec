@@ -36,9 +36,14 @@ use crate::{bit_reader, wrapped, ChunkMeta};
 #[derive(Clone, Debug)]
 pub struct FileDecompressor(wrapped::FileDecompressor);
 
+/// The outcome of starting a new chunk of a standalone file.
 pub enum MaybeChunkDecompressor<T: NumberLike, R: BetterBufRead> {
+  /// We get a `ChunkDecompressor` when there is another chunk as evidenced
+  /// by the data type byte.
   Some(ChunkDecompressor<T, R>),
-  EndOfFile(R),
+  /// We are at the end of the pco data if we encounter a null byte instead of
+  /// a data type byte.
+  EndOfData(R),
 }
 
 impl FileDecompressor {
@@ -67,11 +72,10 @@ impl FileDecompressor {
     self.0.format_version()
   }
 
-  /// Reads a chunk's metadata and returns a `ChunkDecompressor` and the
-  /// remaining input.
+  /// Reads a chunk's metadata and returns either a `ChunkDecompressor` or
+  /// the rest of the source if at the end of the pco file.
   ///
-  /// Will return None for the chunk decompressor if we've reached the footer,
-  /// and will return an error if corruptions or insufficient
+  /// Will return an error if corruptions or insufficient
   /// data are found.
   pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
     &self,
@@ -82,7 +86,7 @@ impl FileDecompressor {
     let dtype_or_termination_byte =
       reader_builder.with_reader(|reader| Ok(reader.read_aligned_bytes(1)?[0]))?;
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
-      return Ok(MaybeChunkDecompressor::EndOfFile(
+      return Ok(MaybeChunkDecompressor::EndOfData(
         reader_builder.into_inner(),
       ));
     }
@@ -130,8 +134,8 @@ impl<T: NumberLike, R: BetterBufRead> ChunkDecompressor<T, R> {
     self.n
   }
 
-  /// Reads compressed numbers into the destination, returning progress and
-  /// the remaining input.
+  /// Reads the next decompressed numbers into the destination, returning
+  /// progress and advancing along the compressed data.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   ///
@@ -145,6 +149,7 @@ impl<T: NumberLike, R: BetterBufRead> ChunkDecompressor<T, R> {
     Ok(progress)
   }
 
+  /// Returns the rest of the compressed data source.
   pub fn into_src(self) -> R {
     self.inner_pd.into_src()
   }

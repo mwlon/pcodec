@@ -82,7 +82,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
           metas.push(cd.meta().clone());
           meta_size += measure_bytes_read(cd.into_src(), prev_src_len);
         }
-        MaybeChunkDecompressor::EndOfFile(rest) => {
+        MaybeChunkDecompressor::EndOfData(rest) => {
           src = rest;
           footer_size += measure_bytes_read(src, prev_src_len);
           break;
