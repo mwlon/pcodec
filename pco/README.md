@@ -5,9 +5,6 @@
 
 # `pco`
 
-**⚠️ Both the API and the data format are unstable for the 0.0.0-alpha.\*
-releases. Do not depend on pco for long-term storage yet. ⚠️**
-
 ## Quick Start
 
 ```rust
