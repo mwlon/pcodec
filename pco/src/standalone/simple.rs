@@ -2,7 +2,7 @@ use crate::chunk_config::ChunkConfig;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::compressor::FileCompressor;
-use crate::standalone::decompressor::FileDecompressor;
+use crate::standalone::decompressor::{FileDecompressor, MaybeChunkDecompressor};
 use crate::PagingSpec;
 
 /// Takes in a slice of numbers and an exact configuration and returns
@@ -62,7 +62,9 @@ pub fn auto_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
   let (file_decompressor, mut src) = FileDecompressor::new(src)?;
 
   let mut res = Vec::new();
-  while let Some(mut chunk_decompressor) = file_decompressor.chunk_decompressor(src)? {
+  while let MaybeChunkDecompressor::Some(mut chunk_decompressor) =
+    file_decompressor.chunk_decompressor(src)?
+  {
     chunk_decompressor.decompress_remaining_extend(&mut res)?;
     src = chunk_decompressor.into_src();
   }

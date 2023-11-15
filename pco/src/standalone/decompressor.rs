@@ -14,14 +14,14 @@ use crate::{bit_reader, wrapped, ChunkMeta};
 /// Example of the lowest level API for reading a .pco file:
 /// ```
 /// use pco::FULL_BATCH_N;
-/// use pco::standalone::FileDecompressor;
+/// use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 /// # use pco::errors::PcoResult;
 ///
 /// # fn main() -> PcoResult<()> {
 /// let compressed = vec![112, 99, 111, 33, 0, 0]; // the minimal .pco file, for the sake of example
 /// let mut nums = vec![0; FULL_BATCH_N];
 /// let (file_decompressor, mut src) = FileDecompressor::new(compressed.as_slice())?;
-/// while let Some(mut chunk_decompressor) = file_decompressor.chunk_decompressor::<i64, _>(src)? {
+/// while let MaybeChunkDecompressor::Some(mut chunk_decompressor) = file_decompressor.chunk_decompressor::<i64, _>(src)? {
 ///   let mut finished_chunk = false;
 ///   while !finished_chunk {
 ///     let progress = chunk_decompressor.decompress(&mut nums)?;
@@ -35,6 +35,11 @@ use crate::{bit_reader, wrapped, ChunkMeta};
 /// ```
 #[derive(Clone, Debug)]
 pub struct FileDecompressor(wrapped::FileDecompressor);
+
+pub enum MaybeChunkDecompressor<T: NumberLike, R: BetterBufRead> {
+  Some(ChunkDecompressor<T, R>),
+  EndOfFile(R),
+}
 
 impl FileDecompressor {
   /// Reads a short header and returns a `FileDecompressor` and the
@@ -71,13 +76,15 @@ impl FileDecompressor {
   pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
     &self,
     mut src: R,
-  ) -> PcoResult<Option<ChunkDecompressor<T, R>>> {
+  ) -> PcoResult<MaybeChunkDecompressor<T, R>> {
     bit_reader::ensure_buf_read_capacity(&mut src, STANDALONE_CHUNK_PREAMBLE_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, STANDALONE_CHUNK_PREAMBLE_PADDING, 0);
     let dtype_or_termination_byte =
       reader_builder.with_reader(|reader| Ok(reader.read_aligned_bytes(1)?[0]))?;
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
-      return Ok(None);
+      return Ok(MaybeChunkDecompressor::EndOfFile(
+        reader_builder.into_inner(),
+      ));
     }
 
     if dtype_or_termination_byte != T::DTYPE_BYTE {
@@ -100,8 +107,7 @@ impl FileDecompressor {
       n,
       n_processed: 0,
     };
-
-    Ok(Some(res))
+    Ok(MaybeChunkDecompressor::Some(res))
   }
 }
 
