@@ -267,10 +267,6 @@ impl<R: BetterBufRead> BitReaderBuilder<R> {
     self.update(final_bit_idx);
     Ok(res)
   }
-
-  pub fn bits_past_byte(&self) -> Bitlen {
-    self.bits_past_byte
-  }
 }
 
 pub fn ensure_buf_read_capacity<R: BetterBufRead>(src: &mut R, required: usize) {
