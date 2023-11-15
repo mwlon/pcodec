@@ -1,18 +1,19 @@
 use std::cmp::min;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use better_io::BetterBufRead;
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
-use crate::constants::{Bitlen, FULL_BATCH_N, PAGE_PADDING};
+use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::page_meta::PageMeta;
 use crate::progress::Progress;
-use crate::wrapped::chunk_decompressor::ChunkDecompressor;
-use crate::{bit_reader, Mode};
+
+use crate::{bit_reader, ChunkMeta, Mode};
 use crate::{delta, float_mult_utils};
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
@@ -23,18 +24,17 @@ pub struct State<U: UnsignedLike> {
   latent_batch_decompressors: Vec<LatentBatchDecompressor<U>>,
   delta_momentss: Vec<DeltaMoments<U>>, // one per latent variable
   secondary_latents: [U; FULL_BATCH_N],
-  bits_past_byte: Bitlen, // in [0, 8), only used to start a batch
 }
 
 /// Holds metadata about a page and supports decompression.
-#[derive(Clone, Debug)]
-pub struct PageDecompressor<T: NumberLike> {
+pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   // immutable
   n: usize,
   mode: Mode<T::Unsigned>,
   phantom: PhantomData<T>,
 
   // mutable
+  reader_builder: BitReaderBuilder<R>,
   state: State<T::Unsigned>,
 }
 
@@ -69,14 +69,14 @@ fn decompress_latents_w_delta<U: UnsignedLike>(
   Ok(())
 }
 
-impl<T: NumberLike> PageDecompressor<T> {
-  pub(crate) fn new(
-    chunk_decompressor: &ChunkDecompressor<T>,
-    n: usize,
-    page_meta: PageMeta<T::Unsigned>,
-    bits_past_byte: Bitlen,
-  ) -> PcoResult<Self> {
-    let chunk_meta = &chunk_decompressor.meta;
+impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
+  pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta<T::Unsigned>, n: usize) -> PcoResult<Self> {
+    bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
+    let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
+
+    let page_meta = reader_builder
+      .with_reader(|reader| PageMeta::<T::Unsigned>::parse_from(reader, chunk_meta))?;
+
     let mode = chunk_meta.mode;
     let delta_momentss = page_meta
       .per_latent_var
@@ -105,21 +105,17 @@ impl<T: NumberLike> PageDecompressor<T> {
       n,
       mode,
       phantom: PhantomData,
+      reader_builder,
       state: State {
         n_processed: 0,
         latent_batch_decompressors,
         delta_momentss,
         secondary_latents: [T::Unsigned::default(); FULL_BATCH_N],
-        bits_past_byte,
       },
     })
   }
 
-  fn decompress_batch<R: BetterBufRead>(
-    &mut self,
-    reader_builder: &mut BitReaderBuilder<R>,
-    primary_dst: &mut [T],
-  ) -> PcoResult<()> {
+  fn decompress_batch(&mut self, primary_dst: &mut [T]) -> PcoResult<()> {
     let batch_n = primary_dst.len();
     let primary_latents = T::transmute_to_unsigned_slice(primary_dst);
     let n = self.n;
@@ -136,7 +132,7 @@ impl<T: NumberLike> PageDecompressor<T> {
     let n_latents = latent_batch_decompressors.len();
 
     if n_latents >= 1 {
-      reader_builder.with_reader(|reader| {
+      self.reader_builder.with_reader(|reader| {
         decompress_latents_w_delta(
           reader,
           &mut delta_momentss[0],
@@ -147,7 +143,7 @@ impl<T: NumberLike> PageDecompressor<T> {
       })?;
     }
     if n_latents >= 2 {
-      reader_builder.with_reader(|reader| {
+      self.reader_builder.with_reader(|reader| {
         decompress_latents_w_delta(
           reader,
           &mut delta_momentss[1],
@@ -163,7 +159,7 @@ impl<T: NumberLike> PageDecompressor<T> {
 
     *n_processed += batch_n;
     if *n_processed == n {
-      reader_builder.with_reader(|reader| {
+      self.reader_builder.with_reader(|reader| {
         reader.drain_empty_byte("expected trailing bits at end of page to be empty")
       })?;
     }
@@ -171,18 +167,14 @@ impl<T: NumberLike> PageDecompressor<T> {
     Ok(())
   }
 
-  /// Reads compressed numbers into the destination, returning progress and
-  /// the remaining input.
+  /// Reads the next decompressed numbers into the destination, returning
+  /// progress and advancing along the compressed data.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   ///
   /// `dst` must have length either a multiple of 256 or be at least the count
   /// of numbers remaining in the page.
-  pub fn decompress<R: BetterBufRead>(
-    &mut self,
-    mut src: R,
-    num_dst: &mut [T],
-  ) -> PcoResult<(Progress, R)> {
+  pub fn decompress(&mut self, num_dst: &mut [T]) -> PcoResult<Progress> {
     if num_dst.len() % FULL_BATCH_N != 0 && num_dst.len() < self.n_remaining() {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be \
@@ -193,31 +185,27 @@ impl<T: NumberLike> PageDecompressor<T> {
       )));
     }
 
-    bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
-    let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, self.state.bits_past_byte);
-
     let n_to_process = min(num_dst.len(), self.n_remaining());
 
     let mut n_processed = 0;
     while n_processed < n_to_process {
       let dst_batch_end = min(n_processed + FULL_BATCH_N, n_to_process);
-      self.decompress_batch(
-        &mut reader_builder,
-        &mut num_dst[n_processed..dst_batch_end],
-      )?;
+      self.decompress_batch(&mut num_dst[n_processed..dst_batch_end])?;
       n_processed = dst_batch_end;
     }
 
-    let progress = Progress {
+    Ok(Progress {
       n_processed,
       finished_page: self.n_remaining() == 0,
-    };
-    self.state.bits_past_byte = reader_builder.bits_past_byte();
-
-    Ok((progress, reader_builder.into_inner()))
+    })
   }
 
   fn n_remaining(&self) -> usize {
     self.n - self.state.n_processed
+  }
+
+  /// Returns the rest of the compressed data source.
+  pub fn into_src(self) -> R {
+    self.reader_builder.into_inner()
   }
 }

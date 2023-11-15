@@ -14,31 +14,37 @@ use crate::{bit_reader, wrapped, ChunkMeta};
 /// Example of the lowest level API for reading a .pco file:
 /// ```
 /// use pco::FULL_BATCH_N;
-/// use pco::standalone::FileDecompressor;
+/// use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 /// # use pco::errors::PcoResult;
 ///
 /// # fn main() -> PcoResult<()> {
 /// let compressed = vec![112, 99, 111, 33, 0, 0]; // the minimal .pco file, for the sake of example
 /// let mut nums = vec![0; FULL_BATCH_N];
 /// let (file_decompressor, mut src) = FileDecompressor::new(compressed.as_slice())?;
-/// while let (Some(mut chunk_decompressor), new_src) = file_decompressor.chunk_decompressor::<i64, _>(src)? {
-///   src = new_src;
+/// while let MaybeChunkDecompressor::Some(mut chunk_decompressor) = file_decompressor.chunk_decompressor::<i64, _>(src)? {
 ///   let mut finished_chunk = false;
 ///   while !finished_chunk {
-///     let (progress, new_src) = chunk_decompressor.decompress(
-///       src,
-///       &mut nums,
-///     )?;
-///     src = new_src;
+///     let progress = chunk_decompressor.decompress(&mut nums)?;
 ///     // Do something with &nums[0..progress.n_processed]
 ///     finished_chunk = progress.finished_page;
 ///   }
+///   src = chunk_decompressor.into_src();
 /// }
 /// # Ok(())
 /// # }
 /// ```
 #[derive(Clone, Debug)]
 pub struct FileDecompressor(wrapped::FileDecompressor);
+
+/// The outcome of starting a new chunk of a standalone file.
+pub enum MaybeChunkDecompressor<T: NumberLike, R: BetterBufRead> {
+  /// We get a `ChunkDecompressor` when there is another chunk as evidenced
+  /// by the data type byte.
+  Some(ChunkDecompressor<T, R>),
+  /// We are at the end of the pco data if we encounter a null byte instead of
+  /// a data type byte.
+  EndOfData(R),
+}
 
 impl FileDecompressor {
   /// Reads a short header and returns a `FileDecompressor` and the
@@ -66,22 +72,23 @@ impl FileDecompressor {
     self.0.format_version()
   }
 
-  /// Reads a chunk's metadata and returns a `ChunkDecompressor` and the
-  /// remaining input.
+  /// Reads a chunk's metadata and returns either a `ChunkDecompressor` or
+  /// the rest of the source if at the end of the pco file.
   ///
-  /// Will return None for the chunk decompressor if we've reached the footer,
-  /// and will return an error if corruptions or insufficient
+  /// Will return an error if corruptions or insufficient
   /// data are found.
   pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
     &self,
     mut src: R,
-  ) -> PcoResult<(Option<ChunkDecompressor<T>>, R)> {
+  ) -> PcoResult<MaybeChunkDecompressor<T, R>> {
     bit_reader::ensure_buf_read_capacity(&mut src, STANDALONE_CHUNK_PREAMBLE_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, STANDALONE_CHUNK_PREAMBLE_PADDING, 0);
     let dtype_or_termination_byte =
       reader_builder.with_reader(|reader| Ok(reader.read_aligned_bytes(1)?[0]))?;
     if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
-      return Ok((None, reader_builder.into_inner()));
+      return Ok(MaybeChunkDecompressor::EndOfData(
+        reader_builder.into_inner(),
+      ));
     }
 
     if dtype_or_termination_byte != T::DTYPE_BYTE {
@@ -96,7 +103,7 @@ impl FileDecompressor {
       reader_builder.with_reader(|reader| Ok(reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1))?;
     let src = reader_builder.into_inner();
     let (inner_cd, src) = self.0.chunk_decompressor::<T, R>(src)?;
-    let (inner_pd, src) = inner_cd.page_decompressor(n, src)?;
+    let inner_pd = inner_cd.page_decompressor(src, n)?;
 
     let res = ChunkDecompressor {
       inner_cd,
@@ -104,21 +111,19 @@ impl FileDecompressor {
       n,
       n_processed: 0,
     };
-
-    Ok((Some(res), src))
+    Ok(MaybeChunkDecompressor::Some(res))
   }
 }
 
 /// Holds metadata about a chunk and supports decompression.
-#[derive(Clone, Debug)]
-pub struct ChunkDecompressor<T: NumberLike> {
+pub struct ChunkDecompressor<T: NumberLike, R: BetterBufRead> {
   inner_cd: wrapped::ChunkDecompressor<T>,
-  inner_pd: wrapped::PageDecompressor<T>,
+  inner_pd: wrapped::PageDecompressor<T, R>,
   n: usize,
   n_processed: usize,
 }
 
-impl<T: NumberLike> ChunkDecompressor<T> {
+impl<T: NumberLike, R: BetterBufRead> ChunkDecompressor<T, R> {
   /// Returns pre-computed information about the chunk.
   pub fn meta(&self) -> &ChunkMeta<T::Unsigned> {
     &self.inner_cd.meta
@@ -129,43 +134,36 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     self.n
   }
 
-  /// Reads compressed numbers into the destination, returning progress and
-  /// the remaining input.
+  /// Reads the next decompressed numbers into the destination, returning
+  /// progress and advancing along the compressed data.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   ///
   /// `dst` must have length either a multiple of 256 or be at least the count
   /// of numbers remaining in the chunk.
-  pub fn decompress<R: BetterBufRead>(
-    &mut self,
-    src: R,
-    dst: &mut [T],
-  ) -> PcoResult<(Progress, R)> {
-    let (progress, src) = self.inner_pd.decompress(src, dst)?;
+  pub fn decompress(&mut self, dst: &mut [T]) -> PcoResult<Progress> {
+    let progress = self.inner_pd.decompress(dst)?;
 
     self.n_processed += progress.n_processed;
 
-    Ok((progress, src))
+    Ok(progress)
+  }
+
+  /// Returns the rest of the compressed data source.
+  pub fn into_src(self) -> R {
+    self.inner_pd.into_src()
   }
 
   // a helper for some internal things
-  pub(crate) fn decompress_remaining_extend<R: BetterBufRead>(
-    &mut self,
-    src: R,
-    dst: &mut Vec<T>,
-  ) -> PcoResult<R> {
+  pub(crate) fn decompress_remaining_extend(&mut self, dst: &mut Vec<T>) -> PcoResult<()> {
     let initial_len = dst.len();
     let remaining = self.n - self.n_processed;
     dst.reserve(remaining);
     unsafe {
       dst.set_len(initial_len + remaining);
     }
-    let result = self.decompress(src, &mut dst[initial_len..]);
-    if result.is_err() {
-      dst.truncate(initial_len);
-    }
-    let (progress, rest) = result?;
+    let progress = self.decompress(&mut dst[initial_len..])?;
     assert!(progress.finished_page);
-    Ok(rest)
+    Ok(())
   }
 }

@@ -8,7 +8,7 @@ use arrow::csv::WriterBuilder as CsvWriterBuilder;
 use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
 
-use pco::standalone::FileDecompressor;
+use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::FULL_BATCH_N;
 
 use crate::handlers::HandlerImpl;
@@ -33,17 +33,14 @@ impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
         break;
       }
 
-      let (maybe_cd, new_src) = fd.chunk_decompressor::<P::Num, _>(src)?;
-      src = new_src;
-
-      if let Some(mut cd) = maybe_cd {
+      if let MaybeChunkDecompressor::Some(mut cd) = fd.chunk_decompressor::<P::Num, _>(src)? {
         let n = cd.n();
         let batch_size = min(n, remaining_limit);
         // how many pco should decompress
         let pco_size = (1 + batch_size / FULL_BATCH_N) * FULL_BATCH_N;
         nums.resize(pco_size, P::Num::default());
-        let (_, new_src) = cd.decompress(src, &mut nums)?;
-        src = new_src;
+        let _ = cd.decompress(&mut nums)?;
+        src = cd.into_src();
         let arrow_nums = nums
           .iter()
           .take(batch_size)

@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use pco::data_types::{NumberLike, UnsignedLike};
-use pco::standalone::FileDecompressor;
+use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::{Bin, Mode};
 
 use crate::handlers::HandlerImpl;
@@ -74,20 +74,29 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     let mut metas = Vec::new();
     let mut void = Vec::new();
     loop {
-      let (maybe_cd, new_src) = fd.chunk_decompressor::<P::Num, _>(src)?;
-      src = new_src;
-      if let Some(mut cd) = maybe_cd {
-        meta_size += measure_bytes_read(src, prev_src_len);
-        chunk_ns.push(cd.n());
-        metas.push(cd.meta().clone());
+      // Rather hacky, but first just measure the metadata size,
+      // then reread it to measure the page size
+      match fd.chunk_decompressor::<P::Num, _>(src)? {
+        MaybeChunkDecompressor::Some(cd) => {
+          chunk_ns.push(cd.n());
+          metas.push(cd.meta().clone());
+          meta_size += measure_bytes_read(cd.into_src(), prev_src_len);
+        }
+        MaybeChunkDecompressor::EndOfData(rest) => {
+          src = rest;
+          footer_size += measure_bytes_read(src, prev_src_len);
+          break;
+        }
+      }
 
-        void.resize(cd.n(), P::Num::default());
-        let (_, new_src) = cd.decompress(src, &mut void)?;
-        src = new_src;
-        page_size += measure_bytes_read(src, prev_src_len);
-      } else {
-        footer_size += measure_bytes_read(src, prev_src_len);
-        break;
+      match fd.chunk_decompressor::<P::Num, _>(src)? {
+        MaybeChunkDecompressor::Some(mut cd) => {
+          void.resize(cd.n(), P::Num::default());
+          let _ = cd.decompress(&mut void)?;
+          src = cd.into_src();
+          page_size += measure_bytes_read(src, prev_src_len);
+        }
+        _ => panic!("unreachable"),
       }
     }
 

@@ -14,17 +14,15 @@ struct Chunk {
 }
 
 fn decompress_by_batch<R: BetterBufRead>(
-  pd: &mut PageDecompressor<u32>,
-  mut src: R,
+  pd: &mut PageDecompressor<u32, R>,
   page_n: usize,
-) -> PcoResult<(Vec<u32>, R)> {
+) -> PcoResult<Vec<u32>> {
   let mut nums = vec![0; page_n];
   let mut start = 0;
   loop {
     let end = min(start + FULL_BATCH_N, page_n);
     let batch_size = end - start;
-    let (progress, new_src) = pd.decompress(src, &mut nums[start..end])?;
-    src = new_src;
+    let progress = pd.decompress(&mut nums[start..end])?;
     assert_eq!(progress.n_processed, batch_size);
     start = end;
     if end == page_n {
@@ -34,7 +32,7 @@ fn decompress_by_batch<R: BetterBufRead>(
       break;
     }
   }
-  Ok((nums, src))
+  Ok(nums)
 }
 
 fn test_wrapped_compress<W: Write>(chunks: &[Chunk], dst: W) -> PcoResult<W> {
@@ -67,12 +65,9 @@ fn test_wrapped_decompress<R: BetterBufRead>(chunks: &[Chunk], src: R) -> PcoRes
       let page_end = page_start + page_n;
 
       src.resize_capacity(0);
-      let (mut pd, new_src) = cd.page_decompressor(page_n, src)?;
-      src = new_src;
-
-      src.resize_capacity(0);
-      let (page_nums, new_src) = decompress_by_batch(&mut pd, src, page_n)?;
-      src = new_src;
+      let mut pd = cd.page_decompressor(src, page_n)?;
+      let page_nums = decompress_by_batch(&mut pd, page_n)?;
+      src = pd.into_src();
 
       assert_eq!(&page_nums, &chunk.nums[page_start..page_end]);
       page_start = page_end;
