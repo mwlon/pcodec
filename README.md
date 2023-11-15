@@ -1,5 +1,3 @@
-[Click here for Quantile Compression](./quantile-compression/README.md).
-
 # Pcodec
 
 <div style="text-align:center">
@@ -45,8 +43,10 @@ or see its results.
 
 The core idea of pco is to represent numbers as approximate, entropy-coded bins
 paired with exact offsets into those bins.
-Depending on the mode, there may be up to 2 streams of these bin-offset
-pairings.
+Depending on the mode, there may be up to 2 streams (latent variables) of these
+bin-offset pairings.
+
+<img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
 
 Pco is mainly meant to be wrapped into another format for production use cases.
 It has a hierarchy of multiple batches per page; multiple pages per chunk; and
@@ -63,8 +63,6 @@ It supports batched decompression only; no nullability, multiple
 columns, random access, seeking, or other niceties.
 It is mainly useful for quick proofs of concept and benchmarking.
 
-<img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
-
 ## Contributing
 
 [see CONTRIBUTING.md](./docs/CONTRIBUTING.md)
@@ -72,4 +70,8 @@ It is mainly useful for quick proofs of concept and benchmarking.
 ## Extra
 
 [join the Discord](https://discord.gg/f6eRXgMP8w)
+
 [terminology](./docs/terminology.md)
+
+[Quantile Compression](./quantile-compression/README.md)
+
