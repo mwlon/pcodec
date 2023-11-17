@@ -5,7 +5,7 @@
 
 **⚠️ Quantile Compression is being succeeded by [pco](). `q_compress` will
 still work, probably forever, but it is highly recommended that users port to
-pco for 10x faster decompression, better compression on certain types of data,
+pco for 5x faster decompression, better compression on certain types of data,
 a better API, and ongoing updates. ⚠️**
 
 # Quantile Compression

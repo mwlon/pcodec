@@ -24,10 +24,7 @@ impl CodecInternal for PcoConfig {
         .map(|order| order.to_string())
         .unwrap_or("auto".to_string()),
       "gcd" => format!("{:?}", self.chunk_config.gcd_spec),
-      "float_mult" => format!(
-        "{:?}",
-        self.chunk_config.float_mult_spec
-      ),
+      "float_mult" => format!("{:?}", self.chunk_config.float_mult_spec),
       "chunk_size" => match self.chunk_config.paging_spec {
         PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
         _ => panic!("unexpected paging spec"),

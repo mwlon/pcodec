@@ -65,11 +65,10 @@ def fixed_median_lomax(a, median):
   return np.random.pareto(a=a, size=n) / unscaled_median * median
 np.random.seed(0)
 lomax05 = fixed_median_lomax(0.5, 1000)
-write_u32(lomax05, 'lomax05_reg')
+write_i32(lomax05, 'lomax05_reg')
 write_i64(lomax05, 'lomax05_reg')
 write_i64(lomax05[:mini_n], 'lomax05_mini')
 np.random.seed(0)
-write_i64(fixed_median_lomax(2.5, 1000), 'lomax25')
 
 np.random.seed(0)
 uniform = np.random.randint(-2**63, 2**63, size=max_n)

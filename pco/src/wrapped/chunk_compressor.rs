@@ -395,6 +395,7 @@ fn unsigned_new<U: UnsignedLike>(
       bins,
       ans_size_log: trained.ans_size_log,
     };
+    // TODO this bound could be lower
     let max_bits_per_latent = latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset();
     let is_trivial = latent_meta.is_trivial();
     let needs_gcd = latent_meta.needs_gcd(naive_mode);
