@@ -21,6 +21,7 @@ pub struct Bin<U: UnsignedLike> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BinCompressionInfo<U: UnsignedLike> {
+  // weight and upper are only used up through bin optimization, not dissection or writing
   pub weight: Weight,
   pub lower: U,
   pub upper: U,
@@ -38,12 +39,6 @@ impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
       offset_bits: info.offset_bits,
       gcd: info.gcd,
     }
-  }
-}
-
-impl<U: UnsignedLike> BinCompressionInfo<U> {
-  pub fn contains(&self, unsigned: U) -> bool {
-    self.lower <= unsigned && self.upper >= unsigned
   }
 }
 

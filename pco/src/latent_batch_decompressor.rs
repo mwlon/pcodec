@@ -9,8 +9,6 @@ use crate::errors::PcoResult;
 use crate::page_meta::PageLatentVarMeta;
 use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta, Mode};
 
-const MAX_ANS_SYMBOLS_PER_U64: usize = 4;
-
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
   // scratch needs no backup
@@ -88,8 +86,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   fn decompress_full_ans_tokens(&mut self, reader: &mut BitReader) {
     // At each iteration, this loads a single u64 and has all ANS decoders
     // read a single token from it.
-    // Therefore it requires that
-    // MAX_ANS_SYMBOLS_PER_U64 >= ANS_INTERLEAVING.
+    // Therefore it requires that ANS_INTERLEAVING * MAX_BITS_PER_ANS <= 57.
     // Additionally, we're unpacking all ANS states using the fact that
     // ANS_INTERLEAVING == 4.
     let src = reader.src;
@@ -100,7 +97,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       self.state.state_idxs;
     let infos = self.infos.as_slice();
     let ans_nodes = self.decoder.nodes.as_slice();
-    for base_i in (0..FULL_BATCH_N).step_by(MAX_ANS_SYMBOLS_PER_U64) {
+    for base_i in (0..FULL_BATCH_N).step_by(ANS_INTERLEAVING) {
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
       let packed = bit_reader::u64_at(src, stale_byte_idx);
@@ -192,7 +189,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   }
 
   #[inline(never)]
-  fn add_offsets(&self, dst: &mut [U]) {
+  fn add_lowers(&self, dst: &mut [U]) {
     for (&lower, dst) in self.state.lowers_scratch[0..dst.len()]
       .iter()
       .zip(dst.iter_mut())
@@ -244,19 +241,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       self.multiply_by_gcds(dst);
     }
 
-    self.add_offsets(dst);
+    self.add_lowers(dst);
 
     Ok(())
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use crate::constants::ANS_INTERLEAVING;
-  use crate::latent_batch_decompressor::MAX_ANS_SYMBOLS_PER_U64;
-
-  #[test]
-  fn test_ans_constants_work_out() {
-    assert_eq!(MAX_ANS_SYMBOLS_PER_U64, ANS_INTERLEAVING);
   }
 }

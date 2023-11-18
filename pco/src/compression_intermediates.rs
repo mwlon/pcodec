@@ -31,11 +31,12 @@ impl<U: UnsignedLike> PageLatents<U> {
 
 #[derive(Clone, Debug)]
 pub struct DissectedPageVar<U: UnsignedLike> {
-  // these vecs should have the same length
+  // These vecs should have the same length.
   pub ans_vals: Vec<AnsState>,
   pub ans_bits: Vec<Bitlen>,
   pub offsets: Vec<U>,
   pub offset_bits: Vec<Bitlen>,
+
   pub ans_final_states: [AnsState; ANS_INTERLEAVING],
 }
 
