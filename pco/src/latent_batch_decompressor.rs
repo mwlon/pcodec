@@ -81,7 +81,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     })
   }
 
-  #[allow(clippy::needless_range_loop)]
+  // This implementation handles only a full batch, but is faster.
   #[inline(never)]
   fn decompress_full_ans_tokens(&mut self, reader: &mut BitReader) {
     // At each iteration, this loads a single u64 and has all ANS decoders
@@ -128,6 +128,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     self.state.state_idxs = [state_idx_0, state_idx_1, state_idx_2, state_idx_3];
   }
 
+  // This implementation handles arbitrary batch size and looks simpler, but is
+  // slower, so we only use it at the end of the page.
   #[inline(never)]
   fn decompress_ans_tokens(&mut self, reader: &mut BitReader, batch_n: usize) {
     let src = reader.src;
