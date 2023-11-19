@@ -163,17 +163,22 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   ) {
     let base_bit_idx = reader.bit_idx();
     let src = reader.src;
-    for i in 0..dst.len() {
-      let offset_bits = self.state.offset_bits_scratch[i];
-      let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
+    let state = &mut self.state;
+    for (dst, (&offset_bits, &offset_bits_csum)) in dst.iter_mut().zip(
+      state
+        .offset_bits_scratch
+        .iter()
+        .zip(state.offset_bits_csum_scratch.iter()),
+    ) {
+      let bit_idx = base_bit_idx + offset_bits_csum;
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      dst[i] =
+      *dst =
         bit_reader::read_uint_at::<U, MAX_EXTRA_U64S>(src, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
-      + self.state.offset_bits_csum_scratch[dst.len() - 1]
-      + self.state.offset_bits_scratch[dst.len() - 1] as usize;
+      + state.offset_bits_csum_scratch[dst.len() - 1]
+      + state.offset_bits_scratch[dst.len() - 1] as usize;
     reader.stale_byte_idx = final_bit_idx / 8;
     reader.bits_past_byte = final_bit_idx as Bitlen % 8;
   }
