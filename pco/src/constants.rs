@@ -76,6 +76,6 @@ mod tests {
 
   #[test]
   fn test_ans_interleaving_fits_in_u64() {
-    assert!(ANS_INTERLEAVING * MAX_ANS_BITS <= 57);
+    assert!(ANS_INTERLEAVING * MAX_ANS_BITS as usize <= 57);
   }
 }
