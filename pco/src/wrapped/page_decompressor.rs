@@ -13,7 +13,8 @@ use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::page_meta::PageMeta;
 use crate::progress::Progress;
 
-use crate::{bit_reader, ChunkMeta, Mode};
+use crate::Mode::*;
+use crate::{bit_reader, gcd_utils, ChunkMeta, Mode};
 use crate::{delta, float_mult_utils};
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
@@ -46,10 +47,10 @@ fn unsigneds_to_nums_in_place<T: NumberLike>(dst: &mut [T::Unsigned]) {
 }
 
 fn join_latents<U: UnsignedLike>(mode: Mode<U>, primary: &mut [U], secondary: &mut [U]) {
-  // For classic and GCD modes, we already wrote the unsigneds into the primary
-  // latent stream directly.
-  if let Mode::FloatMult(config) = mode {
-    float_mult_utils::join_latents(config.base, primary, secondary);
+  match mode {
+    Classic => (), // we already wrote the nums to the primary dst
+    FloatMult(config) => float_mult_utils::join_latents(config.base, primary, secondary),
+    Gcd(gcd) => gcd_utils::join_latents(gcd, primary, secondary),
   }
 }
 
