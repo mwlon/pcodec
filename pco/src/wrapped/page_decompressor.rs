@@ -97,7 +97,6 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
         chunk_latent_meta,
         &page_meta.per_latent_var[latent_idx],
-        chunk_meta.mode,
       )?);
     }
     // we don't store the whole ChunkMeta because it can get large due to bins

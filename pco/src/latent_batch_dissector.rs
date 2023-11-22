@@ -9,24 +9,20 @@ use crate::data_types::UnsignedLike;
 
 pub struct LatentBatchDissector<'a, U: UnsignedLike> {
   // immutable
-  needs_gcd: bool,
   table: &'a CompressionTable<U>,
   encoder: &'a ans::Encoder,
 
   // mutable
   lower_scratch: [U; FULL_BATCH_N],
-  gcd_scratch: [U; FULL_BATCH_N],
   token_scratch: [Token; FULL_BATCH_N],
 }
 
 impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
-  pub fn new(needs_gcd: bool, table: &'a CompressionTable<U>, encoder: &'a ans::Encoder) -> Self {
+  pub fn new(table: &'a CompressionTable<U>, encoder: &'a ans::Encoder) -> Self {
     Self {
-      needs_gcd,
       table,
       encoder,
       lower_scratch: [U::ZERO; FULL_BATCH_N],
-      gcd_scratch: [U::ZERO; FULL_BATCH_N],
       token_scratch: [0; FULL_BATCH_N],
     }
   }
@@ -58,7 +54,6 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     for (i, &search_idx) in search_idxs.iter().enumerate() {
       let info = &self.table.infos[search_idx];
       self.lower_scratch[i] = info.lower;
-      self.gcd_scratch[i] = info.gcd;
       self.token_scratch[i] = info.token;
       dst_offset_bits[i] = info.offset_bits;
     }
@@ -71,13 +66,6 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
       .zip(latents.iter().zip(self.lower_scratch.iter()))
     {
       *offset = latent - lower;
-    }
-  }
-
-  #[inline(never)]
-  fn divide_by_gcds(&self, offsets: &mut [U]) {
-    for (offset, &gcd) in offsets.iter_mut().zip(self.gcd_scratch.iter()) {
-      *offset /= gcd;
     }
   }
 
@@ -140,10 +128,6 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     );
 
     self.set_offsets(latents, &mut offsets[base_i..end_i]);
-
-    if self.needs_gcd {
-      self.divide_by_gcds(&mut offsets[base_i..end_i]);
-    }
 
     self.encode_ans_in_reverse(
       &mut ans_vals[base_i..end_i],

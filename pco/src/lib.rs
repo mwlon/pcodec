@@ -8,7 +8,7 @@ pub use bin::Bin;
 pub use chunk_config::{ChunkConfig, FloatMultSpec, GcdSpec, PagingSpec};
 pub use chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, FULL_BATCH_N};
-pub use modes::Mode;
+pub use mode::Mode;
 
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)]
@@ -35,12 +35,13 @@ mod constants;
 mod delta;
 mod float_mult_utils;
 mod format_version;
+mod gcd_utils;
 mod latent_batch_decompressor;
 mod latent_batch_dissector;
-mod modes;
 mod progress;
 
 mod chunk_config;
+mod mode;
 mod page_meta;
 mod read_write_uint;
 #[cfg(test)]

@@ -7,7 +7,7 @@ use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
 use crate::page_meta::PageLatentVarMeta;
-use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta, Mode};
+use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta};
 
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
@@ -15,7 +15,6 @@ struct State<U: UnsignedLike> {
   offset_bits_csum_scratch: [usize; FULL_BATCH_N],
   offset_bits_scratch: [Bitlen; FULL_BATCH_N],
   lowers_scratch: [U; FULL_BATCH_N],
-  gcds_scratch: [U; FULL_BATCH_N],
   state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
@@ -26,7 +25,6 @@ impl<U: UnsignedLike> State<U> {
       *self.offset_bits_csum_scratch.get_unchecked_mut(i) = offset_bit_idx;
       *self.offset_bits_scratch.get_unchecked_mut(i) = info.offset_bits;
       *self.lowers_scratch.get_unchecked_mut(i) = info.lower;
-      *self.gcds_scratch.get_unchecked_mut(i) = info.gcd;
     };
   }
 }
@@ -38,7 +36,6 @@ pub struct LatentBatchDecompressor<U: UnsignedLike> {
   extra_u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
   maybe_constant_value: Option<U>,
-  needs_gcd: bool,
   decoder: ans::Decoder,
 
   // mutable state
@@ -49,7 +46,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   pub fn new(
     chunk_latent_var_meta: &ChunkLatentVarMeta<U>,
     page_latent_var_meta: &PageLatentVarMeta<U>,
-    mode: Mode<U>,
   ) -> PcoResult<Self> {
     let extra_u64s_per_offset =
       read_write_uint::calc_max_extra_u64s(chunk_latent_var_meta.max_bits_per_offset());
@@ -69,12 +65,10 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       extra_u64s_per_offset,
       infos,
       maybe_constant_value,
-      needs_gcd: chunk_latent_var_meta.needs_gcd(mode),
       decoder,
       state: State {
         offset_bits_csum_scratch: [0; FULL_BATCH_N],
         offset_bits_scratch: [0; FULL_BATCH_N],
-        gcds_scratch: [U::ONE; FULL_BATCH_N],
         lowers_scratch: [U::ZERO; FULL_BATCH_N],
         state_idxs: page_latent_var_meta.ans_final_state_idxs,
       },
@@ -186,16 +180,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   }
 
   #[inline(never)]
-  fn multiply_by_gcds(&self, dst: &mut [U]) {
-    for (&gcd, dst) in self.state.gcds_scratch[0..dst.len()]
-      .iter()
-      .zip(dst.iter_mut())
-    {
-      *dst *= gcd;
-    }
-  }
-
-  #[inline(never)]
   fn add_lowers(&self, dst: &mut [U]) {
     for (&lower, dst) in self.state.lowers_scratch[0..dst.len()]
       .iter()
@@ -242,10 +226,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
         "[LatentBatchDecompressor] data type too large (extra u64's {} > 2)",
         self.extra_u64s_per_offset
       ),
-    }
-
-    if self.needs_gcd {
-      self.multiply_by_gcds(dst);
     }
 
     self.add_lowers(dst);
