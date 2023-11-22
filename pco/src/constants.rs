@@ -73,4 +73,9 @@ mod tests {
       MAX_DELTA_ENCODING_ORDER,
     );
   }
+
+  #[test]
+  fn test_ans_interleaving_fits_in_u64() {
+    assert!(ANS_INTERLEAVING * MAX_ANS_BITS as usize <= 57);
+  }
 }

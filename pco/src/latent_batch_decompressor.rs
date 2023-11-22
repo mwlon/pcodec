@@ -9,8 +9,6 @@ use crate::errors::PcoResult;
 use crate::page_meta::PageLatentVarMeta;
 use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta, Mode};
 
-const MAX_ANS_SYMBOLS_PER_U64: usize = 4;
-
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
   // scratch needs no backup
@@ -83,13 +81,12 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     })
   }
 
-  #[allow(clippy::needless_range_loop)]
+  // This implementation handles only a full batch, but is faster.
   #[inline(never)]
   fn decompress_full_ans_tokens(&mut self, reader: &mut BitReader) {
     // At each iteration, this loads a single u64 and has all ANS decoders
     // read a single token from it.
-    // Therefore it requires that
-    // MAX_ANS_SYMBOLS_PER_U64 >= ANS_INTERLEAVING.
+    // Therefore it requires that ANS_INTERLEAVING * MAX_BITS_PER_ANS <= 57.
     // Additionally, we're unpacking all ANS states using the fact that
     // ANS_INTERLEAVING == 4.
     let src = reader.src;
@@ -100,7 +97,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       self.state.state_idxs;
     let infos = self.infos.as_slice();
     let ans_nodes = self.decoder.nodes.as_slice();
-    for base_i in (0..FULL_BATCH_N).step_by(MAX_ANS_SYMBOLS_PER_U64) {
+    for base_i in (0..FULL_BATCH_N).step_by(ANS_INTERLEAVING) {
       stale_byte_idx += bits_past_byte as usize / 8;
       bits_past_byte %= 8;
       let packed = bit_reader::u64_at(src, stale_byte_idx);
@@ -131,6 +128,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     self.state.state_idxs = [state_idx_0, state_idx_1, state_idx_2, state_idx_3];
   }
 
+  // This implementation handles arbitrary batch size and looks simpler, but is
+  // slower, so we only use it at the end of the page.
   #[inline(never)]
   fn decompress_ans_tokens(&mut self, reader: &mut BitReader, batch_n: usize) {
     let src = reader.src;
@@ -166,17 +165,22 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   ) {
     let base_bit_idx = reader.bit_idx();
     let src = reader.src;
-    for i in 0..dst.len() {
-      let offset_bits = self.state.offset_bits_scratch[i];
-      let bit_idx = base_bit_idx + self.state.offset_bits_csum_scratch[i];
+    let state = &mut self.state;
+    for (dst, (&offset_bits, &offset_bits_csum)) in dst.iter_mut().zip(
+      state
+        .offset_bits_scratch
+        .iter()
+        .zip(state.offset_bits_csum_scratch.iter()),
+    ) {
+      let bit_idx = base_bit_idx + offset_bits_csum;
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      dst[i] =
+      *dst =
         bit_reader::read_uint_at::<U, MAX_EXTRA_U64S>(src, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
-      + self.state.offset_bits_csum_scratch[dst.len() - 1]
-      + self.state.offset_bits_scratch[dst.len() - 1] as usize;
+      + state.offset_bits_csum_scratch[dst.len() - 1]
+      + state.offset_bits_scratch[dst.len() - 1] as usize;
     reader.stale_byte_idx = final_bit_idx / 8;
     reader.bits_past_byte = final_bit_idx as Bitlen % 8;
   }
@@ -192,7 +196,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
   }
 
   #[inline(never)]
-  fn add_offsets(&self, dst: &mut [U]) {
+  fn add_lowers(&self, dst: &mut [U]) {
     for (&lower, dst) in self.state.lowers_scratch[0..dst.len()]
       .iter()
       .zip(dst.iter_mut())
@@ -244,19 +248,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       self.multiply_by_gcds(dst);
     }
 
-    self.add_offsets(dst);
+    self.add_lowers(dst);
 
     Ok(())
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use crate::constants::ANS_INTERLEAVING;
-  use crate::latent_batch_decompressor::MAX_ANS_SYMBOLS_PER_U64;
-
-  #[test]
-  fn test_ans_constants_work_out() {
-    assert_eq!(MAX_ANS_SYMBOLS_PER_U64, ANS_INTERLEAVING);
   }
 }
