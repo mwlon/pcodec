@@ -183,7 +183,6 @@ fn write_dissected_page<U: UnsignedLike, W: Write>(
   dissected_page: DissectedPage<U>,
   writer: &mut BitWriter<W>,
 ) -> PcoResult<()> {
-  // TODO make this more SIMD like LatentBatchDecompressor::unchecked_decompress_offsets
   let mut batch_start = 0;
   while batch_start < dissected_page.page_n {
     let batch_end = min(
@@ -250,7 +249,7 @@ fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T:
     }
   }
 
-  if matches!(config.gcd_spec, GcdSpec::Enabled) {
+  if matches!(config.gcd_spec, GcdSpec::Enabled) && !T::IS_FLOAT {
     if let Some(gcd) = gcd_utils::choose_gcd(nums) {
       return Mode::Gcd(gcd);
     }
@@ -361,7 +360,8 @@ fn unsigned_new<U: UnsignedLike>(
       bins,
       ans_size_log: trained.ans_size_log,
     };
-    // TODO this bound could be lower
+    // TODO this bound could be lower, and we're probably off with something
+    // more like an average anyway.
     let max_bits_per_latent = latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset();
     let is_trivial = latent_meta.is_trivial();
 

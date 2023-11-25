@@ -15,8 +15,14 @@ use crate::errors::{PcoError, PcoResult};
 /// You will not need to manually instantiate this.
 /// However, in some circumstances you may want to inspect this during
 /// decompression.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FormatVersion(pub u8);
+
+impl Default for FormatVersion {
+  fn default() -> Self {
+    Self(CURRENT_FORMAT_VERSION)
+  }
+}
 
 impl FormatVersion {
   pub(crate) fn parse_from(reader: &mut BitReader) -> PcoResult<Self> {
@@ -35,5 +41,9 @@ impl FormatVersion {
     // in the future, we may want to allow the user to encode with their choice of a recent version
     writer.write_aligned_bytes(&[self.0])?;
     Ok(1)
+  }
+
+  pub(crate) fn used_old_gcds(&self) -> bool {
+    self.0 == 0
   }
 }

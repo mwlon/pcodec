@@ -194,12 +194,18 @@ impl<U: UnsignedLike> ChunkMeta<U> {
 
   pub(crate) fn parse_from<R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
-    _version: &FormatVersion,
+    version: &FormatVersion,
   ) -> PcoResult<Self> {
     let (mode, delta_encoding_order) = reader_builder.with_reader(|reader| {
       let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
         0 => Ok(Mode::Classic),
         1 => {
+          if version.used_old_gcds() {
+            return Err(PcoError::compatibility(
+              "unable to decompress data from v0.0.0 of pco with different GCD encoding",
+            ));
+          }
+
           let gcd = reader.read_uint::<U>(U::BITS);
           Ok(Mode::Gcd(gcd))
         }

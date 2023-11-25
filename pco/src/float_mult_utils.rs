@@ -1,10 +1,9 @@
 use std::cmp::{max, min};
-use std::collections::HashMap;
 
 use crate::compression_intermediates::PageLatents;
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
-use crate::delta;
+use crate::{delta, sampling};
 
 const ARITH_CHUNK_SIZE: usize = 512;
 
@@ -53,62 +52,15 @@ pub fn split_latents<T: NumberLike>(
   PageLatents::new_pre_delta(vec![unsigneds, adjustments])
 }
 
-const MIN_SAMPLE: usize = 10;
-// 1 in this many nums get put into sample
-const SAMPLE_RATIO: usize = 40;
-const SAMPLE_SIN_PERIOD: usize = 16;
 // # of bins before classic can't memorize them anymore, even if it tried
 const NEAR_ZERO_MACHINE_EPSILON_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
 const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
-// Int mults will be considered infrequent if they occur less than 1/this of
-// the time.
-const CLASSIC_MEMORIZATION_THRESH: f64 = 256.0;
-// what proportion of numbers must come from infrequent mults
-const INFREQUENT_MULT_WEIGHT_THRESH: f64 = 0.05;
 // We require that using adj bits (as opposed to full offsets between
 // consecutive multiples of the base) saves at least this proportion of the
 // full offsets (relative) or full uncompressed size (absolute).
 const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
 const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.2;
-
-fn calc_sample_n(n: usize) -> Option<usize> {
-  if n >= MIN_SAMPLE {
-    Some(MIN_SAMPLE + (n - MIN_SAMPLE) / SAMPLE_RATIO)
-  } else {
-    None
-  }
-}
-
-fn choose_sample<F: FloatLike>(nums: &[F]) -> Option<Vec<F>> {
-  // pick evenly-spaced nums
-  let n = nums.len();
-  let sample_n = calc_sample_n(n)?;
-
-  let mut res = Vec::with_capacity(sample_n);
-  // we avoid cyclic sampling by throwing in another frequency
-  let slope = n as f64 / sample_n as f64;
-  let sin_rate = std::f64::consts::TAU / (SAMPLE_SIN_PERIOD as f64);
-  let sins: [f64; SAMPLE_SIN_PERIOD] = core::array::from_fn(|i| (i as f64 * sin_rate).sin() * 0.5);
-  for i in 0..sample_n {
-    let idx = ((i as f64 + sins[i % 16]) * slope) as usize;
-    let num = nums[min(idx, n - 1)];
-    // We can compress infinities, nans, and baby floats, but we can't learn
-    // the GCD from them.
-    if num.is_finite_and_normal() {
-      res.push(num.abs());
-    }
-  }
-
-  // this is valid since all the x's are well behaved
-  res.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-
-  if res.len() > MIN_SAMPLE {
-    Some(res)
-  } else {
-    None
-  }
-}
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
   let significant_precision_bits =
@@ -236,27 +188,6 @@ fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
   }
 }
 
-fn has_enough_infrequent_ints<U: UnsignedLike>(inv_gcd: U::Float, sample: &[U::Float]) -> bool {
-  let mut mult_counts = HashMap::<U, usize>::with_capacity(sample.len());
-  for &x in sample {
-    let mult = U::from_int_float((x * inv_gcd).round());
-    *mult_counts.entry(mult).or_default() += 1;
-  }
-
-  let infrequent_cutoff = max(
-    1,
-    (sample.len() as f64 / CLASSIC_MEMORIZATION_THRESH) as usize,
-  );
-
-  // Maybe this should be made fuzzy instead of a hard cutoff because it's just
-  // a sample.
-  let infrequent_mult_weight_estimate = mult_counts
-    .values()
-    .filter(|&&count| count <= infrequent_cutoff)
-    .sum::<usize>();
-  (infrequent_mult_weight_estimate as f64 / sample.len() as f64) > INFREQUENT_MULT_WEIGHT_THRESH
-}
-
 // TODO there is redundant work between this and split_latents
 fn uses_few_enough_adj_bits<U: UnsignedLike>(inv_base: U::Float, nums: &[U::Float]) -> bool {
   let base = inv_base.inv();
@@ -284,7 +215,9 @@ fn better_compression_than_classic<U: UnsignedLike>(
   sample: &[U::Float],
   nums: &[U::Float],
 ) -> bool {
-  has_enough_infrequent_ints::<U>(inv_gcd, sample) && uses_few_enough_adj_bits::<U>(inv_gcd, nums)
+  sampling::has_enough_infrequent_ints(sample, |x| {
+    U::from_int_float((x * inv_gcd).round())
+  }) && uses_few_enough_adj_bits::<U>(inv_gcd, nums)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -315,7 +248,18 @@ pub fn choose_config<T: NumberLike>(
   nums: &[T],
 ) -> Option<FloatMultConfig<<T::Unsigned as UnsignedLike>::Float>> {
   let nums = T::assert_float(nums);
-  let sample = choose_sample(nums)?;
+  // We can compress infinities, nans, and baby floats, but we can't learn
+  // the GCD from them.
+  let mut sample = sampling::choose_sample(nums, |num| {
+    if num.is_finite_and_normal() {
+      Some(num.abs())
+    } else {
+      None
+    }
+  })?;
+
+  // this is valid since all the x's are well behaved
+  sample.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
   choose_config_w_sample::<T::Unsigned>(&sample, nums)
 }
 
@@ -350,25 +294,6 @@ mod test {
 
   fn plus_epsilons(a: f32, epsilons: i32) -> f32 {
     f32::from_unsigned(a.to_unsigned().wrapping_add(epsilons as u32))
-  }
-
-  #[test]
-  fn test_sample_n() {
-    assert_eq!(calc_sample_n(9), None);
-    assert_eq!(calc_sample_n(10), Some(10));
-    assert_eq!(calc_sample_n(100), Some(12));
-    assert_eq!(calc_sample_n(1000010), Some(25010));
-  }
-
-  #[test]
-  fn test_choose_sample() {
-    let mut nums = Vec::new();
-    for i in 0..150 {
-      nums.push(-i as f32);
-    }
-    let sample = choose_sample(&nums).unwrap();
-    assert_eq!(sample.len(), 13);
-    assert_eq!(&sample[0..3], &[0.0, 13.0, 27.0]);
   }
 
   #[test]

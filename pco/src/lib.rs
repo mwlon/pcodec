@@ -28,6 +28,7 @@ mod bin_optimization;
 mod bit_reader;
 mod bit_writer;
 mod bits;
+mod chunk_config;
 mod chunk_meta;
 mod compression_intermediates;
 mod compression_table;
@@ -38,11 +39,11 @@ mod format_version;
 mod gcd_utils;
 mod latent_batch_decompressor;
 mod latent_batch_dissector;
-mod progress;
-
-mod chunk_config;
 mod mode;
 mod page_meta;
+mod progress;
 mod read_write_uint;
+mod sampling;
+
 #[cfg(test)]
 mod tests;

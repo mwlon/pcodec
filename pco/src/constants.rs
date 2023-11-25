@@ -9,7 +9,7 @@ pub(crate) type Bitlen = u32;
 pub(crate) type Weight = u32;
 
 // compatibility
-pub const CURRENT_FORMAT_VERSION: u8 = 0;
+pub const CURRENT_FORMAT_VERSION: u8 = 1;
 
 // bit lengths
 pub const BITS_TO_ENCODE_ANS_SIZE_LOG: Bitlen = 4;
