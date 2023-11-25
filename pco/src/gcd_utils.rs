@@ -5,7 +5,6 @@ use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 use std::cmp::min;
 use std::collections::HashMap;
 
-const MAX_DOWNSAMPLING_ROUNDS: usize = 5;
 const SMALL_INTS: [u64; 4] = [1, 2, 3, 4];
 
 pub fn split_latents<T: NumberLike>(nums: &[T], gcd: T::Unsigned) -> PageLatents<T::Unsigned> {
@@ -46,9 +45,7 @@ fn shuffle_sample<U: Copy>(sample: &mut [U]) {
   let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
   for i in 0..sample.len() {
     let rand_idx = i + (rng.next_u64() as usize - i) % (sample.len() - i);
-    let temp = sample[rand_idx];
-    sample[rand_idx] = sample[i];
-    sample[i] = temp;
+    sample.swap(i, rand_idx);
   }
 }
 
@@ -62,23 +59,13 @@ fn calc_triple_gcd<U: UnsignedLike>(triple: &[U]) -> U {
     } else {
       (c, a, b)
     }
+  } else if b < c {
+    (b, c, a)
   } else {
-    if b < c {
-      (b, c, a)
-    } else {
-      (c, a, b)
-    }
+    (c, a, b)
   };
 
   calc_gcd(x - lower, y - lower)
-}
-
-fn merge_gcds<U: UnsignedLike>(gcds: &[U]) -> Vec<U> {
-  gcds
-    .chunks_exact(2)
-    .map(|pair| calc_gcd(pair[0], pair[1]))
-    .filter(|&gcd| gcd > U::ONE)
-    .collect()
 }
 
 fn score_triple_gcd<U: UnsignedLike>(
@@ -98,7 +85,7 @@ fn score_triple_gcd<U: UnsignedLike>(
 
   // awkward approx conversion from gcd -> float since UnsignedLike doesn't have
   // much equipment for this, sorry
-  let natural_prob_per_num = 1.0 / gcd_f64;
+  let _natural_prob_per_num = 1.0 / gcd_f64;
 
   // heuristic for when the gcd is useless, even if true
   if implied_prob_per_num < 0.2 || implied_prob_per_num < 1.0 / (0.9 + 0.2 * gcd_f64) {
@@ -215,29 +202,6 @@ mod tests {
     assert_eq!(calc_triple_gcd(&[8_u32, 5, 2]), 3);
     assert_eq!(calc_triple_gcd(&[3_u32, 3, 3]), 0);
     assert_eq!(calc_triple_gcd(&[5_u32, 0, 10]), 5);
-  }
-
-  #[test]
-  fn test_statistically_prominent() {
-    // gcd, groups w gcd, pairwise congruences, n groups
-    assert!(!is_statistically_prominent(2_u32, 1, 1, 2));
-
-    assert!(!is_statistically_prominent(2_u32, 15, 1, 20));
-    assert!(is_statistically_prominent(2_u32, 19, 1, 20));
-
-    assert!(!is_statistically_prominent(
-      2_u32, 100, 4, 320
-    ));
-    assert!(is_statistically_prominent(
-      2_u32, 250, 4, 320
-    ));
-
-    assert!(!is_statistically_prominent(
-      100_u32, 300, 2, 10_000
-    ));
-    assert!(is_statistically_prominent(
-      100_u32, 500, 2, 10_000
-    ));
   }
 
   #[test]
