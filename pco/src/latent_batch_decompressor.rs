@@ -210,6 +210,10 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     let batch_n = dst.len();
     assert!(batch_n <= FULL_BATCH_N);
 
+    // TODO add shortcuts for more cases
+    // * there's only one nontrivial bin
+    // * all offsets have 0 bits (worth it?)
+    // * all reads are byte-aligned
     if batch_n == FULL_BATCH_N {
       self.decompress_full_ans_tokens(reader);
     } else {
