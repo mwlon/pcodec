@@ -189,7 +189,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
   }
 
   /// Reads the next decompressed numbers into the destination, returning
-  /// progress and advancing along the compressed data.
+  /// progress into the page and advancing along the compressed data.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   ///
@@ -217,7 +217,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
     Ok(Progress {
       n_processed,
-      finished_page: self.n_remaining() == 0,
+      finished: self.n_remaining() == 0,
     })
   }
 

@@ -26,7 +26,7 @@ use crate::{bit_reader, wrapped, ChunkMeta};
 ///   while !finished_chunk {
 ///     let progress = chunk_decompressor.decompress(&mut nums)?;
 ///     // Do something with &nums[0..progress.n_processed]
-///     finished_chunk = progress.finished_page;
+///     finished_chunk = progress.finished;
 ///   }
 ///   src = chunk_decompressor.into_src();
 /// }
@@ -135,7 +135,7 @@ impl<T: NumberLike, R: BetterBufRead> ChunkDecompressor<T, R> {
   }
 
   /// Reads the next decompressed numbers into the destination, returning
-  /// progress and advancing along the compressed data.
+  /// progress into the chunk and advancing along the compressed data.
   ///
   /// Will return an error if corruptions or insufficient data are found.
   ///
@@ -163,7 +163,7 @@ impl<T: NumberLike, R: BetterBufRead> ChunkDecompressor<T, R> {
       dst.set_len(initial_len + remaining);
     }
     let progress = self.decompress(&mut dst[initial_len..])?;
-    assert!(progress.finished_page);
+    assert!(progress.finished);
     Ok(())
   }
 }

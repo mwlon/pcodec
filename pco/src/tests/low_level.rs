@@ -26,9 +26,9 @@ fn decompress_by_batch<R: BetterBufRead>(
     assert_eq!(progress.n_processed, batch_size);
     start = end;
     if end == page_n {
-      assert!(progress.finished_page);
+      assert!(progress.finished);
     }
-    if progress.finished_page {
+    if progress.finished {
       break;
     }
   }
