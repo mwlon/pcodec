@@ -83,16 +83,17 @@ fn score_triple_gcd<U: UnsignedLike>(
   let implied_prob_per_num = prob_per_triple.sqrt();
   let gcd_f64 = min(gcd, U::from_u64(u64::MAX)).to_u64() as f64;
 
-  // awkward approx conversion from gcd -> float since UnsignedLike doesn't have
-  // much equipment for this, sorry
-  let _natural_prob_per_num = 1.0 / gcd_f64;
-
-  // heuristic for when the gcd is useless, even if true
-  if implied_prob_per_num < 0.2 || implied_prob_per_num < 1.0 / (0.9 + 0.2 * gcd_f64) {
+  // heuristic for when the GCD is useless, even if true
+  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (0.9 + 0.2 * gcd_f64) {
     return None;
   }
 
-  let score = prob_per_triple * gcd_f64;
+  // heuristic for how good a GCD is. It mostly scales with overperformance of
+  // the GCD relative to expectations, but that breaks down when considering
+  // multiples of the GCD. e.g. if 100 is the true GCD, 200 will appear half
+  // as often and look equally enticing. To decide between them we add a small
+  // penalty for larger GCDs.
+  let score = (implied_prob_per_num - 0.05) * gcd_f64;
   Some(score)
 }
 
