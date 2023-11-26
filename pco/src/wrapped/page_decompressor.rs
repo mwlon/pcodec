@@ -16,7 +16,7 @@ use crate::progress::Progress;
 use crate::wrapped::page_decompressor::SecondaryLatents::Nonconstant;
 use crate::wrapped::SecondaryLatents::Constant;
 use crate::Mode::*;
-use crate::{bit_reader, gcd_utils, ChunkMeta, Mode};
+use crate::{bit_reader, int_mult_utils, ChunkMeta, Mode};
 use crate::{delta, float_mult_utils};
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
@@ -59,7 +59,7 @@ fn join_latents<U: UnsignedLike>(mode: Mode<U>, primary: &mut [U], secondary: Se
   match mode {
     Classic => (), // we already wrote the nums to the primary dst
     FloatMult(config) => float_mult_utils::join_latents(config.base, primary, secondary),
-    Gcd(gcd) => gcd_utils::join_latents(gcd, primary, secondary),
+    IntMult(gcd) => int_mult_utils::join_latents(gcd, primary, secondary),
   }
 }
 

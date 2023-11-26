@@ -33,7 +33,7 @@ pub struct CompressOpt {
   #[arg(long = "delta-order")]
   pub delta_encoding_order: Option<usize>,
   #[arg(long)]
-  pub disable_gcds: bool,
+  pub disable_int_mult: bool,
   #[arg(long)]
   pub dtype: Option<DType>,
   #[arg(long)]

@@ -2,24 +2,25 @@ use crate::constants::DEFAULT_MAX_PAGE_N;
 use crate::errors::{PcoError, PcoResult};
 use crate::{bits, DEFAULT_COMPRESSION_LEVEL};
 
-/// Configures whether per-bin Greatest Common Divisor detection is enabled.
+/// Configures whether integer multiplier detection is enabled.
 ///
 /// Examples where this helps:
-/// * nanosecond-precision timestamps that are all whole numbers of
-/// microseconds
+/// * nanosecond-precision timestamps that are mostly whole numbers of
+/// microseconds, with a few exceptions
 /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
 ///
-/// When this is helpful, compression and decompression speeds are slightly
-/// reduced. In rare cases, this configuration may reduce
+/// When this is helpful, compression and decompression speeds can be
+/// substantially reduced. This configuration may hurt
 /// compression speed slightly even when it isn't helpful.
+/// However, the compression ratio improvements tend to be large.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum GcdSpec {
+pub enum IntMultSpec {
   Disabled,
   #[default]
   Enabled,
 }
 
-/// Configures whether per-chunk float multiplier detection is enabled.
+/// Configures whether float multiplier detection is enabled.
 ///
 /// Examples where this helps:
 /// * approximate multiples of 0.01
@@ -29,7 +30,7 @@ pub enum GcdSpec {
 /// When this is helpful, compression and decompression speeds can be
 /// substantially reduced. In rare cases, this configuration
 /// may reduce compression speed somewhat even when it isn't helpful.
-/// However, the compression ratio improvements tend to be quite large.
+/// However, the compression ratio improvements tend to be large.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FloatMultSpec {
   Disabled,
@@ -79,12 +80,12 @@ pub struct ChunkConfig {
   /// chunks,
   /// [`auto_compressor_config()`][crate::auto_delta_encoding_order] can help.
   pub delta_encoding_order: Option<usize>,
-  /// GCDs improve compression ratio in cases where all
-  /// numbers in a bin share a nontrivial Greatest Common Divisor
+  /// Integer multiplier mode improves compression ratio in cases where many
+  /// numbers are congruent modulo an integer `base`
   /// (default: `Enabled`).
   ///
-  /// See [`GcdSpec`][crate::GcdSpec] for more detail.
-  pub gcd_spec: GcdSpec,
+  /// See [`IntMultSpec`][crate::IntMultSpec] for more detail.
+  pub int_mult_spec: IntMultSpec,
   /// Float multiplier mode improves compression ratio in cases where the data
   /// type is a float and all numbers are close to a multiple of a float
   /// `base`
@@ -104,7 +105,7 @@ impl Default for ChunkConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: None,
-      gcd_spec: GcdSpec::Enabled,
+      int_mult_spec: IntMultSpec::Enabled,
       float_mult_spec: FloatMultSpec::Enabled,
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
@@ -124,9 +125,9 @@ impl ChunkConfig {
     self
   }
 
-  /// Sets [`gcd_spec`][ChunkConfig::gcd_spec].
-  pub fn with_gcd_spec(mut self, gcd_spec: GcdSpec) -> Self {
-    self.gcd_spec = gcd_spec;
+  /// Sets [`int_mult_spec`][ChunkConfig::int_mult_spec].
+  pub fn with_int_mult_spec(mut self, int_mult_spec: IntMultSpec) -> Self {
+    self.int_mult_spec = int_mult_spec;
     self
   }
 

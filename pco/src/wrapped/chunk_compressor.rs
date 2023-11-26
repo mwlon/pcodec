@@ -16,8 +16,8 @@ use crate::float_mult_utils::FloatMultConfig;
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::{
-  ans, bin_optimization, bits, delta, float_mult_utils, gcd_utils, Bin, ChunkConfig,
-  ChunkLatentVarMeta, ChunkMeta, FloatMultSpec, GcdSpec, Mode, FULL_BATCH_N,
+  ans, bin_optimization, bits, delta, float_mult_utils, int_mult_utils, Bin, ChunkConfig,
+  ChunkLatentVarMeta, ChunkMeta, FloatMultSpec, IntMultSpec, Mode, FULL_BATCH_N,
 };
 
 struct BinBuffer<'a, U: UnsignedLike> {
@@ -237,7 +237,7 @@ fn bins_from_compression_infos<U: UnsignedLike>(infos: &[BinCompressionInfo<U>])
 
 fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T::Unsigned> {
   // * Use float mult if enabled and an appropriate base is found
-  // * Otherwise, use GCD if enabled and an appropriate GCD is found
+  // * Otherwise, use int mult if enabled and an appropriate int mult is found
   // * Otherwise, use Classic
   if matches!(
     config.float_mult_spec,
@@ -249,9 +249,9 @@ fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T:
     }
   }
 
-  if matches!(config.gcd_spec, GcdSpec::Enabled) && !T::IS_FLOAT {
-    if let Some(gcd) = gcd_utils::choose_gcd(nums) {
-      return Mode::Gcd(gcd);
+  if matches!(config.int_mult_spec, IntMultSpec::Enabled) && !T::IS_FLOAT {
+    if let Some(base) = int_mult_utils::choose_base(nums) {
+      return Mode::IntMult(base);
     }
   }
 
@@ -271,7 +271,7 @@ fn split_latents<T: NumberLike>(
     Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
       float_mult_utils::split_latents(page_nums, base, inv_base)
     }
-    Mode::Gcd(gcd) => gcd_utils::split_latents(page_nums, gcd),
+    Mode::IntMult(base) => int_mult_utils::split_latents(page_nums, base),
   }
 }
 

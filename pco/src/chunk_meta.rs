@@ -206,8 +206,8 @@ impl<U: UnsignedLike> ChunkMeta<U> {
             ));
           }
 
-          let gcd = reader.read_uint::<U>(U::BITS);
-          Ok(Mode::Gcd(gcd))
+          let base = reader.read_uint::<U>(U::BITS);
+          Ok(Mode::IntMult(base))
         }
         2 => {
           let base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS));
@@ -251,14 +251,14 @@ impl<U: UnsignedLike> ChunkMeta<U> {
   pub(crate) fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
     let mode_value = match self.mode {
       Mode::Classic => 0,
-      Mode::Gcd(_) => 1,
+      Mode::IntMult(_) => 1,
       Mode::FloatMult { .. } => 2,
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
     match self.mode {
       Mode::Classic => (),
-      Mode::Gcd(gcd) => {
-        writer.write_uint(gcd, U::BITS);
+      Mode::IntMult(base) => {
+        writer.write_uint(base, U::BITS);
       }
       Mode::FloatMult(config) => {
         writer.write_uint(config.base.to_unsigned(), U::BITS);

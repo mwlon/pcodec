@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 
-use pco::{FloatMultSpec, GcdSpec, PagingSpec};
+use pco::{FloatMultSpec, IntMultSpec, PagingSpec};
 
 use crate::codecs::CodecInternal;
 use crate::dtypes::Dtype;
@@ -23,7 +23,7 @@ impl CodecInternal for PcoConfig {
         .delta_encoding_order
         .map(|order| order.to_string())
         .unwrap_or("auto".to_string()),
-      "gcd" => format!("{:?}", self.chunk_config.gcd_spec),
+      "gcd" => format!("{:?}", self.chunk_config.int_mult_spec),
       "float_mult" => format!("{:?}", self.chunk_config.float_mult_spec),
       "chunk_size" => match self.chunk_config.paging_spec {
         PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
@@ -50,9 +50,9 @@ impl CodecInternal for PcoConfig {
         }
       }
       "gcd" => {
-        self.chunk_config.gcd_spec = match value.as_str() {
-          "enabled" => GcdSpec::Enabled,
-          "disabled" => GcdSpec::Disabled,
+        self.chunk_config.int_mult_spec = match value.as_str() {
+          "enabled" => IntMultSpec::Enabled,
+          "disabled" => IntMultSpec::Disabled,
           other => return Err(anyhow!("cannot parse gcd: {}", other,)),
         }
       }

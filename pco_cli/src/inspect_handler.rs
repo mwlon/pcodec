@@ -132,8 +132,8 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
           (Mode::Classic, 0) => "primary".to_string(),
           (Mode::FloatMult(config), 0) => format!("multiplier [x{}]", config.base),
           (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
-          (Mode::Gcd(gcd), 0) => format!("multiplier [x{}]", gcd),
-          (Mode::Gcd(_), 1) => "adjustment".to_string(),
+          (Mode::IntMult(base), 0) => format!("multiplier [x{}]", base),
+          (Mode::IntMult(_), 1) => "adjustment".to_string(),
           _ => panic!(
             "unknown latent: {:?}/{}",
             meta.mode, latent_idx

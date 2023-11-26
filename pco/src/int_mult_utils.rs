@@ -8,19 +8,19 @@ use std::collections::HashMap;
 
 const SMALL_INTS: [u64; 4] = [1, 2, 3, 4];
 
-pub fn split_latents<T: NumberLike>(nums: &[T], gcd: T::Unsigned) -> PageLatents<T::Unsigned> {
+pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> PageLatents<T::Unsigned> {
   let mut mults = Vec::with_capacity(nums.len());
   let mut adjs = Vec::with_capacity(nums.len());
   for num in nums {
     let u = num.to_unsigned();
-    mults.push(u / gcd);
-    adjs.push((u % gcd).wrapping_add(T::Unsigned::MID));
+    mults.push(u / base);
+    adjs.push((u % base).wrapping_add(T::Unsigned::MID));
   }
   PageLatents::new_pre_delta(vec![mults, adjs])
 }
 
 pub(crate) fn join_latents<U: UnsignedLike>(
-  gcd: U,
+  base: U,
   unsigneds: &mut [U],
   secondary: SecondaryLatents<U>,
 ) {
@@ -28,13 +28,13 @@ pub(crate) fn join_latents<U: UnsignedLike>(
     SecondaryLatents::Nonconstant(adjustments) => {
       delta::toggle_center_in_place(adjustments);
       for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
-        *u = (*u * gcd).wrapping_add(adj)
+        *u = (*u * base).wrapping_add(adj)
       }
     }
     SecondaryLatents::Constant(adj) => {
       let adj = adj.wrapping_add(U::MID);
       for u in unsigneds.iter_mut() {
-        *u = (*u * gcd).wrapping_add(adj)
+        *u = (*u * base).wrapping_add(adj)
       }
     }
   }
@@ -148,7 +148,7 @@ fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) 
   Some(candidate_gcd)
 }
 
-fn calc_candidate_gcd<U: UnsignedLike>(sample: &[U]) -> Option<U> {
+fn calc_candidate_base<U: UnsignedLike>(sample: &[U]) -> Option<U> {
   let triple_gcds = sample
     .chunks_exact(3)
     .map(calc_triple_gcd)
@@ -167,10 +167,10 @@ fn calc_candidate_gcd<U: UnsignedLike>(sample: &[U]) -> Option<U> {
 fn candidate_gcd_w_sample<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
   // should we switch sample to use a deterministic RNG so that we don't need to shuffle here?
   shuffle_sample(sample);
-  calc_candidate_gcd(sample)
+  calc_candidate_base(sample)
 }
 
-pub fn choose_gcd<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
+pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_unsigned()))?;
   let candidate = candidate_gcd_w_sample(&mut sample)?;
   // TODO validate adj distribution on entire `nums` is simple enough?
@@ -235,25 +235,25 @@ mod tests {
   fn test_calc_candidate_gcd() {
     // not significant enough
     assert_eq!(
-      calc_candidate_gcd(&mut vec![0_u32, 4, 8, 10, 14, 18]),
+      calc_candidate_base(&mut vec![0_u32, 4, 8, 10, 14, 18]),
       None,
     );
     assert_eq!(
-      calc_candidate_gcd(&mut vec![
+      calc_candidate_base(&mut vec![
         0_u32, 4, 8, 10, 14, 18, 20, 24, 28
       ]),
       Some(4),
     );
     // 2 out of 3 triples have a rare congruency
     assert_eq!(
-      calc_candidate_gcd(&mut vec![
+      calc_candidate_base(&mut vec![
         1_u32, 11, 21, 31, 41, 51, 61, 71, 82
       ]),
       Some(10),
     );
     // 1 out of 3 triples has a rare congruency
     assert_eq!(
-      calc_candidate_gcd(&mut vec![
+      calc_candidate_base(&mut vec![
         1_u32, 11, 22, 31, 41, 51, 61, 71, 82
       ]),
       None,
