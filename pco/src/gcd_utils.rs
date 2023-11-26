@@ -109,7 +109,7 @@ fn score_triple_gcd<U: UnsignedLike>(
   Some(score)
 }
 
-fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U]) -> Option<U> {
+fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) -> Option<U> {
   let mut raw_counts = HashMap::new();
   for &gcd in triple_gcds {
     *raw_counts.entry(gcd).or_insert(0) += 1;
@@ -130,7 +130,7 @@ fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U]) -> Option<U> {
   let (candidate_gcd, _) = counts_accounting_for_small_multiples
     .iter()
     .filter_map(|(&gcd, &count)| {
-      let score = score_triple_gcd(gcd, count, triple_gcds.len())?;
+      let score = score_triple_gcd(gcd, count, total_triples)?;
       Some((gcd, score))
     })
     .max_by_key(|(_, score)| score.to_unsigned())?;
@@ -145,7 +145,7 @@ fn calc_candidate_gcd<U: UnsignedLike>(sample: &[U]) -> Option<U> {
     .filter(|&gcd| gcd > U::ONE)
     .collect::<Vec<_>>();
 
-  let candidate_gcd = most_prominent_gcd(&triple_gcds)?;
+  let candidate_gcd = most_prominent_gcd(&triple_gcds, sample.len() / 3)?;
 
   if !sampling::has_enough_infrequent_ints(sample, |x| x / candidate_gcd) {
     return None;
@@ -163,7 +163,7 @@ fn candidate_gcd_w_sample<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
 pub fn choose_gcd<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_unsigned()))?;
   let candidate = candidate_gcd_w_sample(&mut sample)?;
-  // TODO validate adj distribution on entire `nums` is simple enough
+  // TODO validate adj distribution on entire `nums` is simple enough?
   Some(candidate)
 }
 

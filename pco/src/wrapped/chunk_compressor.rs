@@ -258,6 +258,7 @@ fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T:
   Mode::Classic
 }
 
+#[inline(never)]
 fn split_latents<T: NumberLike>(
   naive_mode: Mode<T::Unsigned>,
   page_nums: &[T],
@@ -360,8 +361,8 @@ fn unsigned_new<U: UnsignedLike>(
       bins,
       ans_size_log: trained.ans_size_log,
     };
-    // TODO this bound could be lower, and we're probably off with something
-    // more like an average anyway.
+    // TODO this bound could be lower. We're probably better off with something
+    // more like an expected size though.
     let max_bits_per_latent = latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset();
     let is_trivial = latent_meta.is_trivial();
 
