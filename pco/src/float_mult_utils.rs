@@ -3,17 +3,33 @@ use std::cmp::{max, min};
 use crate::compression_intermediates::PageLatents;
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
+use crate::wrapped::SecondaryLatents;
+use crate::wrapped::SecondaryLatents::{Constant, Nonconstant};
 use crate::{delta, sampling};
 
 const ARITH_CHUNK_SIZE: usize = 512;
 
 // PageDecompressor is already doing batching, so we don't need to here
-#[inline(never)]
-pub fn join_latents<U: UnsignedLike>(base: U::Float, unsigneds: &mut [U], adjustments: &mut [U]) {
-  delta::toggle_center_in_place(adjustments);
-  for i in 0..unsigneds.len() {
-    let unadjusted = unsigneds[i].to_int_float() * base;
-    unsigneds[i] = unadjusted.to_unsigned().wrapping_add(adjustments[i])
+pub(crate) fn join_latents<U: UnsignedLike>(
+  base: U::Float,
+  unsigneds: &mut [U],
+  secondary: SecondaryLatents<U>,
+) {
+  match secondary {
+    Nonconstant(adjustments) => {
+      delta::toggle_center_in_place(adjustments);
+      for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
+        let unadjusted = u.to_int_float() * base;
+        *u = unadjusted.to_unsigned().wrapping_add(adj)
+      }
+    }
+    Constant(adj) => {
+      let adj = adj.wrapping_add(U::MID);
+      for u in unsigneds.iter_mut() {
+        let unadjusted = u.to_int_float() * base;
+        *u = unadjusted.to_unsigned().wrapping_add(adj)
+      }
+    }
   }
 }
 

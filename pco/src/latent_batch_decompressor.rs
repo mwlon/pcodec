@@ -35,7 +35,7 @@ pub struct LatentBatchDecompressor<U: UnsignedLike> {
   // known information about this latent variable
   extra_u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
-  maybe_constant_value: Option<U>,
+  pub maybe_constant_value: Option<U>,
   decoder: ans::Decoder,
 
   // mutable state

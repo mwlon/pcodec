@@ -1,5 +1,6 @@
 use crate::compression_intermediates::PageLatents;
 use crate::data_types::{NumberLike, UnsignedLike};
+use crate::wrapped::SecondaryLatents;
 use crate::{delta, sampling};
 use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 use std::cmp::min;
@@ -18,11 +19,24 @@ pub fn split_latents<T: NumberLike>(nums: &[T], gcd: T::Unsigned) -> PageLatents
   PageLatents::new_pre_delta(vec![mults, adjs])
 }
 
-#[inline(never)]
-pub fn join_latents<U: UnsignedLike>(gcd: U, unsigneds: &mut [U], adjustments: &mut [U]) {
-  delta::toggle_center_in_place(adjustments);
-  for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
-    *u = (*u * gcd).wrapping_add(adj)
+pub(crate) fn join_latents<U: UnsignedLike>(
+  gcd: U,
+  unsigneds: &mut [U],
+  secondary: SecondaryLatents<U>,
+) {
+  match secondary {
+    SecondaryLatents::Nonconstant(adjustments) => {
+      delta::toggle_center_in_place(adjustments);
+      for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
+        *u = (*u * gcd).wrapping_add(adj)
+      }
+    }
+    SecondaryLatents::Constant(adj) => {
+      let adj = adj.wrapping_add(U::MID);
+      for u in unsigneds.iter_mut() {
+        *u = (*u * gcd).wrapping_add(adj)
+      }
+    }
   }
 }
 
@@ -190,7 +204,11 @@ mod tests {
     // JOIN
     let mut primary = latents[0].latents.clone();
     let mut secondary = latents[1].latents.clone();
-    join_latents(4, &mut primary, &mut secondary);
+    join_latents(
+      4,
+      &mut primary,
+      SecondaryLatents::Nonconstant(&mut secondary),
+    );
 
     assert_eq!(
       primary,
@@ -219,26 +237,29 @@ mod tests {
 
   #[test]
   fn test_calc_candidate_gcd() {
+    // not significant enough
     assert_eq!(
-      calc_candidate_gcd(&mut vec![0_u32, 4, 8, 10, 14, 18],),
-      Some(4),
+      calc_candidate_gcd(&mut vec![0_u32, 4, 8, 10, 14, 18]),
+      None,
     );
     assert_eq!(
-      calc_candidate_gcd(&mut vec![0_u32, 4, 7, 10, 14, 18],),
-      None,
+      calc_candidate_gcd(&mut vec![
+        0_u32, 4, 8, 10, 14, 18, 20, 24, 28
+      ]),
+      Some(4),
     );
     // 2 out of 3 triples have a rare congruency
     assert_eq!(
       calc_candidate_gcd(&mut vec![
         1_u32, 11, 21, 31, 41, 51, 61, 71, 82
-      ],),
+      ]),
       Some(10),
     );
     // 1 out of 3 triples has a rare congruency
     assert_eq!(
       calc_candidate_gcd(&mut vec![
         1_u32, 11, 22, 31, 41, 51, 61, 71, 82
-      ],),
+      ]),
       None,
     );
   }
