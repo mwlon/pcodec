@@ -13,7 +13,10 @@ use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::page_meta::PageMeta;
 use crate::progress::Progress;
 
-use crate::{bit_reader, ChunkMeta, Mode};
+use crate::wrapped::page_decompressor::SecondaryLatents::Nonconstant;
+use crate::wrapped::SecondaryLatents::Constant;
+use crate::Mode::*;
+use crate::{bit_reader, int_mult_utils, ChunkMeta, Mode};
 use crate::{delta, float_mult_utils};
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
@@ -31,6 +34,7 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   // immutable
   n: usize,
   mode: Mode<T::Unsigned>,
+  maybe_constant_secondary: Option<T::Unsigned>,
   phantom: PhantomData<T>,
 
   // mutable
@@ -45,11 +49,17 @@ fn unsigneds_to_nums_in_place<T: NumberLike>(dst: &mut [T::Unsigned]) {
   }
 }
 
-fn join_latents<U: UnsignedLike>(mode: Mode<U>, primary: &mut [U], secondary: &mut [U]) {
-  // For classic and GCD modes, we already wrote the unsigneds into the primary
-  // latent stream directly.
-  if let Mode::FloatMult(config) = mode {
-    float_mult_utils::join_latents(config.base, primary, secondary);
+pub(crate) enum SecondaryLatents<'a, U: UnsignedLike> {
+  Nonconstant(&'a mut [U]),
+  Constant(U),
+}
+
+#[inline(never)]
+fn join_latents<U: UnsignedLike>(mode: Mode<U>, primary: &mut [U], secondary: SecondaryLatents<U>) {
+  match mode {
+    Classic => (), // we already wrote the nums to the primary dst
+    FloatMult(config) => float_mult_utils::join_latents(config.base, primary, secondary),
+    IntMult(gcd) => int_mult_utils::join_latents(gcd, primary, secondary),
   }
 }
 
@@ -82,7 +92,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       .per_latent_var
       .iter()
       .map(|latent| latent.delta_moments.clone())
-      .collect();
+      .collect::<Vec<_>>();
 
     let mut latent_batch_decompressors = Vec::new();
     for latent_idx in 0..mode.n_latent_vars() {
@@ -97,13 +107,21 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
         chunk_latent_meta,
         &page_meta.per_latent_var[latent_idx],
-        chunk_meta.mode,
       )?);
     }
+
+    let maybe_constant_secondary =
+      if latent_batch_decompressors.len() >= 2 && delta_momentss[1].order() == 0 {
+        latent_batch_decompressors[1].maybe_constant_value
+      } else {
+        None
+      };
+
     // we don't store the whole ChunkMeta because it can get large due to bins
     Ok(Self {
       n,
       mode,
+      maybe_constant_secondary,
       phantom: PhantomData,
       reader_builder,
       state: State {
@@ -131,18 +149,17 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     let secondary_latents = &mut secondary_latents[..batch_n];
     let n_latents = latent_batch_decompressors.len();
 
-    if n_latents >= 1 {
-      self.reader_builder.with_reader(|reader| {
-        decompress_latents_w_delta(
-          reader,
-          &mut delta_momentss[0],
-          &mut latent_batch_decompressors[0],
-          primary_latents,
-          n - *n_processed,
-        )
-      })?;
-    }
-    if n_latents >= 2 {
+    self.reader_builder.with_reader(|reader| {
+      decompress_latents_w_delta(
+        reader,
+        &mut delta_momentss[0],
+        &mut latent_batch_decompressors[0],
+        primary_latents,
+        n - *n_processed,
+      )
+    })?;
+
+    if n_latents >= 2 && self.maybe_constant_secondary.is_none() {
       self.reader_builder.with_reader(|reader| {
         decompress_latents_w_delta(
           reader,
@@ -153,8 +170,12 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
         )
       })?;
     }
+    let secondary = match self.maybe_constant_secondary {
+      Some(u) => Constant(u),
+      None => Nonconstant(secondary_latents),
+    };
 
-    join_latents(mode, primary_latents, secondary_latents);
+    join_latents(mode, primary_latents, secondary);
     unsigneds_to_nums_in_place::<T>(primary_latents);
 
     *n_processed += batch_n;

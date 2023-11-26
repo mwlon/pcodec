@@ -21,11 +21,6 @@ fn print_bins<T: NumberLike>(
   show_as_float_int: bool,
 ) {
   for bin in bins {
-    let gcd_str = if bin.gcd == T::Unsigned::ONE {
-      "".to_string()
-    } else {
-      format!(" [gcd: {}]", bin.gcd)
-    };
     let lower_str = if show_as_delta {
       // hacky way to print the centered unsigned as a signed integer
       if bin.lower < T::Unsigned::MID {
@@ -39,8 +34,8 @@ fn print_bins<T: NumberLike>(
       T::from_unsigned(bin.lower).to_string()
     };
     println!(
-      "{}weight: {} lower: {} offset bits: {}{}",
-      INDENT, bin.weight, lower_str, bin.offset_bits, gcd_str
+      "{}weight: {} lower: {} offset bits: {}",
+      INDENT, bin.weight, lower_str, bin.offset_bits
     );
   }
 }
@@ -135,9 +130,10 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
       for (latent_idx, latent) in meta.per_latent_var.iter().enumerate() {
         let latent_name = match (meta.mode, latent_idx) {
           (Mode::Classic, 0) => "primary".to_string(),
-          (Mode::Gcd, 0) => "primary".to_string(),
           (Mode::FloatMult(config), 0) => format!("multiplier [x{}]", config.base),
           (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
+          (Mode::IntMult(base), 0) => format!("multiplier [x{}]", base),
+          (Mode::IntMult(_), 1) => "adjustment".to_string(),
           _ => panic!(
             "unknown latent: {:?}/{}",
             meta.mode, latent_idx

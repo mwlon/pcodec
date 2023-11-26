@@ -187,25 +187,7 @@ fn test_multi_chunk() -> PcoResult<()> {
 }
 
 #[test]
-fn test_with_gcds() -> PcoResult<()> {
-  assert_recovers(vec![7, 7, 21, 21], 1, "trivial gcd ranges")?;
-  assert_recovers(
-    vec![7, 7, 21, 28],
-    1,
-    "one trivial gcd range",
-  )?;
-  assert_recovers(
-    vec![7, 14, 21, 28],
-    1,
-    "nontrivial gcd ranges",
-  )?;
-  assert_recovers(vec![7, 14, 22, 29], 1, "offset gcds")?;
-  assert_recovers(
-    vec![7, 11, 13, 17],
-    1,
-    "partially offset gcds",
-  )?;
-
+fn test_with_int_mult() -> PcoResult<()> {
   let mut sparse_with_gcd = vec![15, 23, 31, 39];
   for _ in 0..100 {
     sparse_with_gcd.push(7);

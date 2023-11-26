@@ -14,13 +14,10 @@ use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::latent_batch_dissector::LatentBatchDissector;
-use crate::modes::classic::ClassicMode;
-use crate::modes::gcd;
-use crate::modes::gcd::GcdMode;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::{
-  ans, bin_optimization, bits, delta, float_mult_utils, Bin, ChunkConfig, ChunkLatentVarMeta,
-  ChunkMeta, FloatMultSpec, GcdSpec, Mode, FULL_BATCH_N,
+  ans, bin_optimization, bits, delta, float_mult_utils, int_mult_utils, Bin, ChunkConfig,
+  ChunkLatentVarMeta, ChunkMeta, FloatMultSpec, IntMultSpec, Mode, FULL_BATCH_N,
 };
 
 struct BinBuffer<'a, U: UnsignedLike> {
@@ -29,7 +26,6 @@ struct BinBuffer<'a, U: UnsignedLike> {
   max_n_bin: usize,
   n_unsigneds: usize,
   sorted: &'a [U],
-  mode: Mode<U>,
   pub target_j: usize,
 }
 
@@ -38,14 +34,13 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
 
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U], mode: Mode<U>) -> Self {
+  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U]) -> Self {
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
       max_n_bin,
       n_unsigneds,
       sorted,
-      mode,
       target_j: 0,
     };
     res.calc_target_j();
@@ -64,16 +59,10 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
     let lower = sorted[i];
     let upper = sorted[j - 1];
 
-    let mut bin_gcd = U::ONE;
-    if self.mode == Mode::Gcd {
-      bin_gcd = gcd::gcd(&sorted[i..j]);
-    }
-
     let bin = BinCompressionInfo {
       weight: count as Weight,
       lower,
       upper,
-      gcd: bin_gcd,
       ..Default::default()
     };
     self.seq.push(bin);
@@ -97,17 +86,16 @@ fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
   min(1_usize << real_comp_level, n_unsigneds)
 }
 
-fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
+fn choose_unoptimized_bins<U: UnsignedLike>(
   sorted: &[U],
   comp_level: usize,
-  naive_mode: Mode<U>,
-) -> (Mode<U>, Vec<BinCompressionInfo<U>>) {
+) -> Vec<BinCompressionInfo<U>> {
   let n_unsigneds = sorted.len();
   let max_n_bin = choose_max_n_bins(comp_level, n_unsigneds);
 
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted, naive_mode);
+  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted);
 
   for j in 1..n_unsigneds {
     let target_j = bin_buffer.target_j;
@@ -126,13 +114,7 @@ fn choose_unoptimized_mode_and_bins<U: UnsignedLike>(
   }
   bin_buffer.push_bin(i, n_unsigneds);
 
-  // in some cases, we can now reduce to a simpler mode
-  let unoptimized_mode = match bin_buffer.mode {
-    Mode::Gcd if !gcd::use_gcd_bin_optimize(&bin_buffer.seq) => Mode::Classic,
-    other => other,
-  };
-
-  (unoptimized_mode, bin_buffer.seq)
+  bin_buffer.seq
 }
 
 // returns table size log
@@ -160,10 +142,9 @@ struct TrainedBins<U: UnsignedLike> {
   ans_size_log: Bitlen,
 }
 
-fn train_mode_and_infos<U: UnsignedLike>(
+fn train_infos<U: UnsignedLike>(
   unsigneds: Vec<U>,
   comp_level: usize,
-  naive_mode: Mode<U>,
   n: usize, // can be greater than unsigneds.len() if delta encoding is on
 ) -> PcoResult<TrainedBins<U>> {
   if unsigneds.is_empty() {
@@ -171,27 +152,15 @@ fn train_mode_and_infos<U: UnsignedLike>(
   }
 
   let n_unsigneds = unsigneds.len();
-  let (unoptimized_mode, unoptimized_bins) = {
+  let unoptimized_bins = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
-    choose_unoptimized_mode_and_bins(&sorted, comp_level, naive_mode)
+    choose_unoptimized_bins(&sorted, comp_level)
   };
 
   let estimated_ans_size_log = (comp_level + 2) as Bitlen;
-  let mut optimized_infos = match unoptimized_mode {
-    Mode::Classic | Mode::FloatMult { .. } => bin_optimization::optimize_bins(
-      unoptimized_bins,
-      estimated_ans_size_log,
-      ClassicMode,
-      n,
-    ),
-    Mode::Gcd => bin_optimization::optimize_bins(
-      unoptimized_bins,
-      estimated_ans_size_log,
-      GcdMode,
-      n,
-    ),
-  };
+  let mut optimized_infos =
+    bin_optimization::optimize_bins(unoptimized_bins, estimated_ans_size_log, n);
 
   let ans_size_log = quantize_weights(&mut optimized_infos, n_unsigneds, comp_level);
 
@@ -214,7 +183,6 @@ fn write_dissected_page<U: UnsignedLike, W: Write>(
   dissected_page: DissectedPage<U>,
   writer: &mut BitWriter<W>,
 ) -> PcoResult<()> {
-  // TODO make this more SIMD like LatentBatchDecompressor::unchecked_decompress_offsets
   let mut batch_start = 0;
   while batch_start < dissected_page.page_n {
     let batch_end = min(
@@ -253,7 +221,6 @@ struct LatentVarPolicy<U: UnsignedLike> {
   encoder: ans::Encoder,
   max_bits_per_latent: Bitlen,
   is_trivial: bool,
-  needs_gcd: bool,
 }
 
 /// Holds metadata about a chunk and supports compression.
@@ -270,37 +237,41 @@ fn bins_from_compression_infos<U: UnsignedLike>(infos: &[BinCompressionInfo<U>])
 
 fn choose_naive_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T::Unsigned> {
   // * Use float mult if enabled and an appropriate base is found
-  // * Otherwise, use GCD if enabled
+  // * Otherwise, use int mult if enabled and an appropriate int mult is found
   // * Otherwise, use Classic
   if matches!(
     config.float_mult_spec,
     FloatMultSpec::Enabled
   ) && T::IS_FLOAT
   {
-    if let Some(config) = float_mult_utils::choose_config::<T>(nums) {
+    if let Some(config) = float_mult_utils::choose_config(nums) {
       return Mode::FloatMult(config);
     }
   }
 
-  if matches!(config.gcd_spec, GcdSpec::Enabled) {
-    Mode::Gcd
-  } else {
-    Mode::Classic
+  if matches!(config.int_mult_spec, IntMultSpec::Enabled) && !T::IS_FLOAT {
+    if let Some(base) = int_mult_utils::choose_base(nums) {
+      return Mode::IntMult(base);
+    }
   }
+
+  Mode::Classic
 }
 
+#[inline(never)]
 fn split_latents<T: NumberLike>(
   naive_mode: Mode<T::Unsigned>,
   page_nums: &[T],
 ) -> PageLatents<T::Unsigned> {
   match naive_mode {
-    Mode::Classic | Mode::Gcd => PageLatents::new_pre_delta(vec![page_nums
+    Mode::Classic => PageLatents::new_pre_delta(vec![page_nums
       .iter()
       .map(|x| x.to_unsigned())
       .collect()]),
     Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
       float_mult_utils::split_latents(page_nums, base, inv_base)
     }
+    Mode::IntMult(base) => int_mult_utils::split_latents(page_nums, base),
   }
 }
 
@@ -346,10 +317,10 @@ fn validate_chunk_size(n: usize) -> PcoResult<()> {
 fn unsigned_new<U: UnsignedLike>(
   mut paginated_latents: Vec<PageLatents<U>>,
   config: &ChunkConfig,
-  naive_mode: Mode<U>,
+  mode: Mode<U>,
   delta_order: usize,
 ) -> PcoResult<ChunkCompressor<U>> {
-  let n_latents = naive_mode.n_latent_vars();
+  let n_latents = mode.n_latent_vars();
   let mut var_metas = Vec::with_capacity(n_latents);
   let mut var_policies = Vec::with_capacity(n_latents);
   let chunk_n = paginated_latents.iter().map(|page| page.page_n).sum();
@@ -357,7 +328,7 @@ fn unsigned_new<U: UnsignedLike>(
   // delta encoding
   for latent_page in &mut paginated_latents {
     for (latent_idx, page_var_latents) in latent_page.per_var.iter_mut().enumerate() {
-      let var_delta_order = naive_mode.delta_order_for_latent_var(latent_idx, delta_order);
+      let var_delta_order = mode.delta_order_for_latent_var(latent_idx, delta_order);
       page_var_latents.delta_moments = delta::encode_in_place(
         &mut page_var_latents.latents,
         var_delta_order,
@@ -380,12 +351,7 @@ fn unsigned_new<U: UnsignedLike>(
       .copied()
       .collect::<Vec<_>>();
 
-    let trained = train_mode_and_infos(
-      contiguous_latents,
-      comp_level,
-      naive_mode,
-      chunk_n,
-    )?;
+    let trained = train_infos(contiguous_latents, comp_level, chunk_n)?;
     let bins = bins_from_compression_infos(&trained.infos);
 
     let table = CompressionTable::from(trained.infos);
@@ -395,10 +361,10 @@ fn unsigned_new<U: UnsignedLike>(
       bins,
       ans_size_log: trained.ans_size_log,
     };
-    // TODO this bound could be lower
+    // TODO this bound could be lower. We're probably better off with something
+    // more like an expected size though.
     let max_bits_per_latent = latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset();
     let is_trivial = latent_meta.is_trivial();
-    let needs_gcd = latent_meta.needs_gcd(naive_mode);
 
     var_metas.push(latent_meta);
     var_policies.push(LatentVarPolicy {
@@ -406,23 +372,10 @@ fn unsigned_new<U: UnsignedLike>(
       encoder,
       max_bits_per_latent,
       is_trivial,
-      needs_gcd,
     });
   }
 
-  // In some cases, we can demote to a faster mode after bin optimization.
-  let optimized_mode = match naive_mode {
-    Mode::Gcd => {
-      if var_policies.iter().any(|policy| policy.needs_gcd) {
-        Mode::Gcd
-      } else {
-        Mode::Classic
-      }
-    }
-    other => other,
-  };
-
-  let meta = ChunkMeta::new(optimized_mode, delta_order, var_metas);
+  let meta = ChunkMeta::new(mode, delta_order, var_metas);
 
   Ok(ChunkCompressor {
     meta,
@@ -541,7 +494,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
         uninit_dissected_page_var(latents.len(), encoder.default_state());
 
       // we go through in reverse for ANS!
-      let mut lbd = LatentBatchDissector::new(var_policy.needs_gcd, table, encoder);
+      let mut lbd = LatentBatchDissector::new(table, encoder);
       for (batch_idx, batch) in latents.chunks(FULL_BATCH_N).enumerate().rev() {
         let base_i = batch_idx * FULL_BATCH_N;
         lbd.dissect_latent_batch(batch, base_i, &mut dissected_page_var)

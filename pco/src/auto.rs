@@ -5,7 +5,7 @@ use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::wrapped::FileCompressor;
-use crate::{FloatMultSpec, GcdSpec};
+use crate::{FloatMultSpec, IntMultSpec};
 
 /// Automatically makes an educated guess for the best compression
 /// delta encoding order, based on `nums` and `compression_level`.
@@ -39,16 +39,13 @@ pub fn auto_delta_encoding_order<T: NumberLike>(
   let mut best_order = usize::MAX;
   let mut best_size = usize::MAX;
   for delta_encoding_order in 0..8 {
-    // Taking deltas of a large dataset won't change the GCD,
-    // so we don't need to waste compute here inferring GCD's just to
-    // determine the best delta order.
     let config = ChunkConfig {
       delta_encoding_order: Some(delta_encoding_order),
       compression_level: min(
         compression_level,
         MAX_AUTO_DELTA_COMPRESSION_LEVEL,
       ),
-      gcd_spec: GcdSpec::Disabled,
+      int_mult_spec: IntMultSpec::Enabled,
       float_mult_spec: FloatMultSpec::Enabled,
       paging_spec: PagingSpec::default(),
     };

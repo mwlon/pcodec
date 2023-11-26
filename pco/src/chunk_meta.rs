@@ -12,7 +12,7 @@ use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::format_version::FormatVersion;
-use crate::modes::{gcd, Mode};
+use crate::Mode;
 
 /// Part of [`ChunkMeta`][crate::ChunkMeta] that describes a latent
 /// variable interleaved into the compressed data.
@@ -57,7 +57,6 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
 
 fn parse_bin_batch<U: UnsignedLike, R: BetterBufRead>(
   reader_builder: &mut BitReaderBuilder<R>,
-  mode: Mode<U>,
   ans_size_log: Bitlen,
   batch_size: usize,
   dst: &mut Vec<Bin<U>>,
@@ -78,16 +77,10 @@ fn parse_bin_batch<U: UnsignedLike, R: BetterBufRead>(
         )));
       }
 
-      let gcd = match mode {
-        Mode::Gcd if offset_bits != 0 => reader.read_uint(U::BITS),
-        _ => U::ONE,
-      };
-
       dst.push(Bin {
         weight,
         lower,
         offset_bits,
-        gcd,
       });
     }
     Ok(())
@@ -97,10 +90,7 @@ fn parse_bin_batch<U: UnsignedLike, R: BetterBufRead>(
 }
 
 impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
-  fn parse_from<R: BetterBufRead>(
-    reader_builder: &mut BitReaderBuilder<R>,
-    mode: Mode<U>,
-  ) -> PcoResult<Self> {
+  fn parse_from<R: BetterBufRead>(reader_builder: &mut BitReaderBuilder<R>) -> PcoResult<Self> {
     let (ans_size_log, n_bins) = reader_builder.with_reader(|reader| {
       let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
       let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS);
@@ -131,7 +121,6 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
       let batch_size = min(n_bins - bins.len(), FULL_BIN_BATCH_SIZE);
       parse_bin_batch(
         reader_builder,
-        mode,
         ans_size_log,
         batch_size,
         &mut bins,
@@ -141,24 +130,17 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
     Ok(Self { bins, ans_size_log })
   }
 
-  fn write_to<W: Write>(&self, mode: Mode<U>, writer: &mut BitWriter<W>) -> PcoResult<()> {
+  fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
     writer.write_bitlen(
       self.ans_size_log,
       BITS_TO_ENCODE_ANS_SIZE_LOG,
     );
 
-    write_bins(&self.bins, mode, self.ans_size_log, writer)
+    write_bins(&self.bins, self.ans_size_log, writer)
   }
 
   pub(crate) fn is_trivial(&self) -> bool {
     self.bins.is_empty() || (self.bins.len() == 1 && self.bins[0].offset_bits == 0)
-  }
-
-  pub(crate) fn needs_gcd(&self, mode: Mode<U>) -> bool {
-    match mode {
-      Mode::Gcd => gcd::use_gcd_arithmetic(&self.bins),
-      _ => false,
-    }
   }
 }
 
@@ -181,7 +163,6 @@ pub struct ChunkMeta<U: UnsignedLike> {
 
 fn write_bins<U: UnsignedLike, W: Write>(
   bins: &[Bin<U>],
-  mode: Mode<U>,
   ans_size_log: Bitlen,
   writer: &mut BitWriter<W>,
 ) -> PcoResult<()> {
@@ -192,16 +173,6 @@ fn write_bins<U: UnsignedLike, W: Write>(
       writer.write_uint(bin.weight - 1, ans_size_log);
       writer.write_uint(bin.lower, U::BITS);
       writer.write_bitlen(bin.offset_bits, offset_bits_bits);
-
-      match mode {
-        Mode::Classic => (),
-        Mode::Gcd => {
-          if bin.offset_bits > 0 {
-            writer.write_uint(bin.gcd, U::BITS);
-          }
-        }
-        Mode::FloatMult { .. } => (),
-      }
     }
     writer.flush()?;
   }
@@ -223,12 +194,21 @@ impl<U: UnsignedLike> ChunkMeta<U> {
 
   pub(crate) fn parse_from<R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
-    _version: &FormatVersion,
+    version: &FormatVersion,
   ) -> PcoResult<Self> {
     let (mode, delta_encoding_order) = reader_builder.with_reader(|reader| {
       let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
         0 => Ok(Mode::Classic),
-        1 => Ok(Mode::Gcd),
+        1 => {
+          if version.used_old_gcds() {
+            return Err(PcoError::compatibility(
+              "unable to decompress data from v0.0.0 of pco with different GCD encoding",
+            ));
+          }
+
+          let base = reader.read_uint::<U>(U::BITS);
+          Ok(Mode::IntMult(base))
+        }
         2 => {
           let base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS));
           Ok(Mode::FloatMult(FloatMultConfig {
@@ -254,7 +234,6 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     for _ in 0..n_latent_vars {
       per_latent_var.push(ChunkLatentVarMeta::parse_from(
         reader_builder,
-        mode,
       )?)
     }
 
@@ -272,13 +251,19 @@ impl<U: UnsignedLike> ChunkMeta<U> {
   pub(crate) fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
     let mode_value = match self.mode {
       Mode::Classic => 0,
-      Mode::Gcd => 1,
+      Mode::IntMult(_) => 1,
       Mode::FloatMult { .. } => 2,
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
-    if let Mode::FloatMult(config) = self.mode {
-      writer.write_uint(config.base.to_unsigned(), U::BITS);
-    }
+    match self.mode {
+      Mode::Classic => (),
+      Mode::IntMult(base) => {
+        writer.write_uint(base, U::BITS);
+      }
+      Mode::FloatMult(config) => {
+        writer.write_uint(config.base.to_unsigned(), U::BITS);
+      }
+    };
 
     writer.write_usize(
       self.delta_encoding_order,
@@ -287,7 +272,7 @@ impl<U: UnsignedLike> ChunkMeta<U> {
     writer.flush()?;
 
     for latents in &self.per_latent_var {
-      latents.write_to(self.mode, writer)?;
+      latents.write_to(writer)?;
     }
 
     writer.finish_byte();

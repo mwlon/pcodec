@@ -41,7 +41,8 @@ impl FileDecompressor {
   /// Reads a chunk's metadata and returns a `ChunkDecompressor` and the
   /// remaining input.
   ///
-  /// Will return an error if corruptions or insufficient data are found.
+  /// Will return an error if version incompatibilities, corruptions, or
+  /// insufficient data are found.
   pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
     &self,
     mut src: R,
