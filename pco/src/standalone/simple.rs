@@ -131,7 +131,8 @@ mod tests {
 
   #[test]
   fn test_simple_decompress_into() -> PcoResult<()> {
-    let nums = (0..600).collect::<Vec<i32>>();
+    let max_n = 600;
+    let nums = (0..max_n).map(|x| x as i32).collect::<Vec<i32>>();
     let src = simple_compress(
       &nums,
       &ChunkConfig {
@@ -142,10 +143,10 @@ mod tests {
       },
     )?;
 
-    for n in [0, 1, 256, 299, 300, 301, 556, 600] {
-      println!("n={}", n);
-      let mut dst = vec![0; n];
+    for possibly_overshooting_n in [0, 1, 256, 299, 300, 301, 556, 600, 601] {
+      let mut dst = vec![0; possibly_overshooting_n];
       let progress = simple_decompress_into(&src, &mut dst)?;
+      let n = min(possibly_overshooting_n, max_n);
       assert_eq!(progress.n_processed, n);
       assert_eq!(progress.finished, n >= nums.len());
       assert_eq!(
