@@ -83,6 +83,14 @@ fn score_triple_gcd<U: UnsignedLike>(
   let implied_prob_per_num = prob_per_triple.sqrt();
   let gcd_f64 = min(gcd, U::from_u64(u64::MAX)).to_u64() as f64;
 
+  // check if the GCD has statistical evidence (3 sigma)
+  let natural_prob_per_num = 1.0 / gcd_f64;
+  let stdev = (natural_prob_per_num * (1.0 - natural_prob_per_num) / total_triples as f64).sqrt();
+  let z_score = (implied_prob_per_num - natural_prob_per_num) / stdev;
+  if z_score < 3.0 {
+    return None;
+  }
+
   // heuristic for when the GCD is useless, even if true
   if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (0.9 + 0.2 * gcd_f64) {
     return None;
@@ -94,6 +102,10 @@ fn score_triple_gcd<U: UnsignedLike>(
   // as often and look equally enticing. To decide between them we add a small
   // penalty for larger GCDs.
   let score = (implied_prob_per_num - 0.05) * gcd_f64;
+  // println!(
+  //   "{}: {} {} {} {}",
+  //   gcd, triples_w_gcd, total_triples, implied_prob_per_num, score
+  // );
   Some(score)
 }
 
@@ -107,7 +119,7 @@ fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U]) -> Option<U> {
   for (&gcd, &count) in raw_counts.iter() {
     for divisor in SMALL_INTS {
       let divisor = U::from_u64(divisor);
-      if gcd % divisor == U::ZERO {
+      if gcd % divisor == U::ZERO && gcd != divisor {
         *counts_accounting_for_small_multiples
           .entry(gcd / divisor)
           .or_insert(0) += count;
