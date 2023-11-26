@@ -116,10 +116,6 @@ fn score_triple_gcd<U: UnsignedLike>(
   // as often and look equally enticing. To decide between them we add a small
   // penalty for larger GCDs.
   let score = (implied_prob_per_num - 0.05) * gcd_f64;
-  // println!(
-  //   "{}: {} {} {} {}",
-  //   gcd, triples_w_gcd, total_triples, implied_prob_per_num, score
-  // );
   Some(score)
 }
 
