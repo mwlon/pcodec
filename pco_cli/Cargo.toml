@@ -1,6 +1,6 @@
 [package]
 name = "pco_cli"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
@@ -21,7 +21,7 @@ arrow = {version = "43.0.0", features = ["csv"], default-features=false}
 clap = {version = "4.3.11", features = ["derive"]}
 num-complex = "0.4.3"
 parquet = {version = "43.0.0", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
-pco = {version = "0.1.0", path = "../pco" }
+pco = {version = "0.0.0", path = "../pco" }
 
 [dev-dependencies]
 enum-iterator = "1.4.1"
