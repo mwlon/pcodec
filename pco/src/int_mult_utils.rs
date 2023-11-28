@@ -14,7 +14,7 @@ pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> PageLatent
   for num in nums {
     let u = num.to_unsigned();
     mults.push(u / base);
-    adjs.push(u % base); //.wrapping_add(T::Unsigned::MID));
+    adjs.push(u % base);
   }
   PageLatents::new_pre_delta(vec![mults, adjs])
 }
@@ -26,13 +26,11 @@ pub(crate) fn join_latents<U: UnsignedLike>(
 ) {
   match secondary {
     SecondaryLatents::Nonconstant(adjustments) => {
-      // delta::toggle_center_in_place(adjustments);
       for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
         *u = (*u * base).wrapping_add(adj)
       }
     }
     SecondaryLatents::Constant(adj) => {
-      // let adj = adj.wrapping_add(U::MID);
       for u in unsigneds.iter_mut() {
         *u = (*u * base).wrapping_add(adj)
       }
