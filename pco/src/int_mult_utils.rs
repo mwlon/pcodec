@@ -1,7 +1,7 @@
 use crate::compression_intermediates::PageLatents;
 use crate::data_types::{NumberLike, UnsignedLike};
+use crate::sampling;
 use crate::wrapped::SecondaryLatents;
-use crate::{delta, sampling};
 use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 use std::cmp::min;
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> PageLatent
   for num in nums {
     let u = num.to_unsigned();
     mults.push(u / base);
-    adjs.push((u % base).wrapping_add(T::Unsigned::MID));
+    adjs.push(u % base);
   }
   PageLatents::new_pre_delta(vec![mults, adjs])
 }
@@ -26,13 +26,11 @@ pub(crate) fn join_latents<U: UnsignedLike>(
 ) {
   match secondary {
     SecondaryLatents::Nonconstant(adjustments) => {
-      delta::toggle_center_in_place(adjustments);
       for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
         *u = (*u * base).wrapping_add(adj)
       }
     }
     SecondaryLatents::Constant(adj) => {
-      let adj = adj.wrapping_add(U::MID);
       for u in unsigneds.iter_mut() {
         *u = (*u * base).wrapping_add(adj)
       }
@@ -191,11 +189,7 @@ mod tests {
       latents[0].latents,
       vec![536870911_u32, 536870912, 536870913]
     );
-    let one_u32 = u32::MID + 1;
-    assert_eq!(
-      latents[1].latents,
-      vec![one_u32, one_u32, one_u32]
-    );
+    assert_eq!(latents[1].latents, vec![1, 1, 1]);
 
     // JOIN
     let mut primary = latents[0].latents.clone();
