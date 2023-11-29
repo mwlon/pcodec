@@ -98,8 +98,7 @@ fn score_triple_gcd<U: UnsignedLike>(
 
   // check if the GCD has statistical evidence
   let natural_prob_per_triple = 1.0 / (gcd_f64 * gcd_f64);
-  let stdev =
-    (natural_prob_per_triple * (1.0 - natural_prob_per_triple) / total_triples as f64).sqrt();
+  let stdev = (natural_prob_per_triple * (1.0 - natural_prob_per_triple) / total_triples).sqrt();
   let z_score = (prob_per_triple - natural_prob_per_triple) / stdev;
   let implied_prob_per_num = prob_per_triple.sqrt();
   if z_score < 3.0 {
