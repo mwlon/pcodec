@@ -1,10 +1,7 @@
-use crate::bit_reader::{BitReader, BitReaderBuilder};
-use crate::bit_writer::BitWriter;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::{standalone, ChunkConfig};
 use std::fs;
-use std::fs::File;
 use std::path::PathBuf;
 use std::str::FromStr;
 
