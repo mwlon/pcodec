@@ -89,13 +89,11 @@ mod tests {
   }
 
   #[test]
-  fn v0_1_0_delta_float_mult() -> PcoResult<()> {
-    // starting at 0.1.0 because there was a compression bug with trivial
-    // primary latent variables in 0.0.0
-    let version = "0.1.0";
+  fn v0_0_0_delta_float_mult() -> PcoResult<()> {
+    let version = "0.0.0";
     let name = "delta_float_mult";
     let mut nums = (0..2000).map(|i| i as f32).collect::<Vec<_>>();
-    nums[1337] += 0.001;
+    nums[1337] += 1.001;
     let config = ChunkConfig {
       delta_encoding_order: Some(1),
       ..Default::default()

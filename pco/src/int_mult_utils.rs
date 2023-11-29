@@ -90,8 +90,10 @@ fn score_triple_gcd<U: UnsignedLike>(
     return None;
   }
 
+  let triples_w_gcd = triples_w_gcd as f64;
+  let total_triples = total_triples as f64;
   // defining rarity as 1 / probability
-  let prob_per_triple = triples_w_gcd as f64 / total_triples as f64;
+  let prob_per_triple = triples_w_gcd / total_triples;
   let gcd_f64 = min(gcd, U::from_u64(u64::MAX)).to_u64() as f64;
 
   // check if the GCD has statistical evidence
@@ -100,10 +102,6 @@ fn score_triple_gcd<U: UnsignedLike>(
     (natural_prob_per_triple * (1.0 - natural_prob_per_triple) / total_triples as f64).sqrt();
   let z_score = (prob_per_triple - natural_prob_per_triple) / stdev;
   let implied_prob_per_num = prob_per_triple.sqrt();
-  println!(
-    "{}: {} {} {} {}",
-    gcd, triples_w_gcd, total_triples, implied_prob_per_num, z_score
-  );
   if z_score < 3.0 {
     return None;
   }
@@ -113,14 +111,17 @@ fn score_triple_gcd<U: UnsignedLike>(
     return None;
   }
 
-  // heuristic for how good a GCD is.
-  // the GCD relative to expectations, but that breaks down when considering
-  // multiples of the GCD. e.g. if 100 is the true GCD, 200 will appear half
-  // as often and look equally enticing. To decide between them we add a small
-  // penalty for larger GCDs.
-  Some(z_score)
-  // let score = (implied_prob_per_num - 0.05) * gcd_f64;
-  // Some(score)
+  // The most likely valid GCD maximizes triples * gcd, and the most
+  // valuable one (if true) maximizes triples.sqrt() * gcd. We take a
+  // conservative lower confidence bound for how many triples we'd get if we
+  // repeated the measurement, and strike a compromise between most likely and
+  // most valuable.
+  let triples_lcb = triples_w_gcd - 1.0 * triples_w_gcd.sqrt();
+  if triples_lcb >= 0.0 {
+    Some(triples_lcb.powf(0.6) * gcd_f64)
+  } else {
+    None
+  }
 }
 
 fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) -> Option<U> {
@@ -178,7 +179,6 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_unsigned()))?;
   let candidate = candidate_gcd_w_sample(&mut sample)?;
   // TODO validate adj distribution on entire `nums` is simple enough?
-  println!("CANDIDATE {}", candidate);
   Some(candidate)
 }
 
@@ -236,7 +236,7 @@ mod tests {
   fn test_calc_candidate_gcd() {
     // not significant enough
     assert_eq!(
-      calc_candidate_base(&mut vec![0_u32, 4, 8, 10, 14, 18]),
+      calc_candidate_base(&mut vec![0_u32, 4, 8]),
       None,
     );
     assert_eq!(
