@@ -485,6 +485,10 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 
     for (var_policy, var_latents) in latent_var_policies.iter().zip(page_latents.per_var.iter()) {
       if var_policy.is_trivial {
+        per_var.push(uninit_dissected_page_var(
+          0,
+          var_policy.encoder.default_state(),
+        ));
         continue;
       }
 

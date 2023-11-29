@@ -90,31 +90,37 @@ fn score_triple_gcd<U: UnsignedLike>(
     return None;
   }
 
+  let triples_w_gcd = triples_w_gcd as f64;
+  let total_triples = total_triples as f64;
   // defining rarity as 1 / probability
-  let prob_per_triple = triples_w_gcd as f64 / total_triples as f64;
-  let implied_prob_per_num = prob_per_triple.sqrt();
+  let prob_per_triple = triples_w_gcd / total_triples;
   let gcd_f64 = min(gcd, U::from_u64(u64::MAX)).to_u64() as f64;
 
-  // check if the GCD has statistical evidence (3 sigma)
-  let natural_prob_per_num = 1.0 / gcd_f64;
-  let stdev = (natural_prob_per_num * (1.0 - natural_prob_per_num) / total_triples as f64).sqrt();
-  let z_score = (implied_prob_per_num - natural_prob_per_num) / stdev;
+  // check if the GCD has statistical evidence
+  let natural_prob_per_triple = 1.0 / (gcd_f64 * gcd_f64);
+  let stdev = (natural_prob_per_triple * (1.0 - natural_prob_per_triple) / total_triples).sqrt();
+  let z_score = (prob_per_triple - natural_prob_per_triple) / stdev;
+  let implied_prob_per_num = prob_per_triple.sqrt();
   if z_score < 3.0 {
     return None;
   }
 
   // heuristic for when the GCD is useless, even if true
-  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (0.9 + 0.2 * gcd_f64) {
+  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (1.0 + 0.1 * gcd_f64) {
     return None;
   }
 
-  // heuristic for how good a GCD is. It mostly scales with overperformance of
-  // the GCD relative to expectations, but that breaks down when considering
-  // multiples of the GCD. e.g. if 100 is the true GCD, 200 will appear half
-  // as often and look equally enticing. To decide between them we add a small
-  // penalty for larger GCDs.
-  let score = (implied_prob_per_num - 0.05) * gcd_f64;
-  Some(score)
+  // The most likely valid GCD maximizes triples * gcd, and the most
+  // valuable one (if true) maximizes triples.sqrt() * gcd. We take a
+  // conservative lower confidence bound for how many triples we'd get if we
+  // repeated the measurement, and strike a compromise between most likely and
+  // most valuable.
+  let triples_lcb = triples_w_gcd - 1.0 * triples_w_gcd.sqrt();
+  if triples_lcb >= 0.0 {
+    Some(triples_lcb.powf(0.6) * gcd_f64)
+  } else {
+    None
+  }
 }
 
 fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) -> Option<U> {
@@ -178,6 +184,7 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use rand::Rng;
 
   #[test]
   fn test_split_join_latents() {
@@ -229,7 +236,7 @@ mod tests {
   fn test_calc_candidate_gcd() {
     // not significant enough
     assert_eq!(
-      calc_candidate_base(&mut vec![0_u32, 4, 8, 10, 14, 18]),
+      calc_candidate_base(&mut vec![0_u32, 4, 8]),
       None,
     );
     assert_eq!(
@@ -252,5 +259,11 @@ mod tests {
       ]),
       None,
     );
+    // even just evens can be useful if the signal is strong enough
+    let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
+    let mut twos = (0_u32..100)
+      .map(|_| rng.gen_range(0_u32..1000) * 2)
+      .collect::<Vec<_>>();
+    assert_eq!(calc_candidate_base(&mut twos), Some(2));
   }
 }
