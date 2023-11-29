@@ -92,29 +92,35 @@ fn score_triple_gcd<U: UnsignedLike>(
 
   // defining rarity as 1 / probability
   let prob_per_triple = triples_w_gcd as f64 / total_triples as f64;
-  let implied_prob_per_num = prob_per_triple.sqrt();
   let gcd_f64 = min(gcd, U::from_u64(u64::MAX)).to_u64() as f64;
 
-  // check if the GCD has statistical evidence (3 sigma)
-  let natural_prob_per_num = 1.0 / gcd_f64;
-  let stdev = (natural_prob_per_num * (1.0 - natural_prob_per_num) / total_triples as f64).sqrt();
-  let z_score = (implied_prob_per_num - natural_prob_per_num) / stdev;
+  // check if the GCD has statistical evidence
+  let natural_prob_per_triple = 1.0 / (gcd_f64 * gcd_f64);
+  let stdev =
+    (natural_prob_per_triple * (1.0 - natural_prob_per_triple) / total_triples as f64).sqrt();
+  let z_score = (prob_per_triple - natural_prob_per_triple) / stdev;
+  let implied_prob_per_num = prob_per_triple.sqrt();
+  println!(
+    "{}: {} {} {} {}",
+    gcd, triples_w_gcd, total_triples, implied_prob_per_num, z_score
+  );
   if z_score < 3.0 {
     return None;
   }
 
   // heuristic for when the GCD is useless, even if true
-  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (0.9 + 0.2 * gcd_f64) {
+  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (0.95 + 0.2 * gcd_f64) {
     return None;
   }
 
-  // heuristic for how good a GCD is. It mostly scales with overperformance of
+  // heuristic for how good a GCD is.
   // the GCD relative to expectations, but that breaks down when considering
   // multiples of the GCD. e.g. if 100 is the true GCD, 200 will appear half
   // as often and look equally enticing. To decide between them we add a small
   // penalty for larger GCDs.
-  let score = (implied_prob_per_num - 0.05) * gcd_f64;
-  Some(score)
+  Some(z_score)
+  // let score = (implied_prob_per_num - 0.05) * gcd_f64;
+  // Some(score)
 }
 
 fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) -> Option<U> {
@@ -172,6 +178,7 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_unsigned()))?;
   let candidate = candidate_gcd_w_sample(&mut sample)?;
   // TODO validate adj distribution on entire `nums` is simple enough?
+  println!("CANDIDATE {}", candidate);
   Some(candidate)
 }
 

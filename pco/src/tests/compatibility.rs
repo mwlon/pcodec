@@ -56,13 +56,10 @@ fn simple_write_if_version_matches<T: NumberLike>(
     return Ok(());
   }
 
-  println!("HERE");
   let pco_path = get_pco_path(version, name);
-  println!("{:?}", pco_path);
   if pco_path.exists() {
     return Ok(());
   }
-  println!("THERE {:?}", pco_path);
 
   fs::write(
     pco_path,
@@ -81,7 +78,7 @@ mod tests {
   fn v0_0_0_classic() -> PcoResult<()> {
     let name = "classic";
     let version = "0.0.0";
-    let nums = (0_i32..2000).collect::<Vec<_>>();
+    let nums = (0_i32..1000).chain(2000..3000).collect::<Vec<_>>();
     let config = ChunkConfig {
       delta_encoding_order: Some(0),
       ..Default::default()
@@ -92,8 +89,10 @@ mod tests {
   }
 
   #[test]
-  fn v0_0_0_delta_float_mult() -> PcoResult<()> {
-    let version = "0.0.0";
+  fn v0_1_0_delta_float_mult() -> PcoResult<()> {
+    // starting at 0.1.0 because there was a compression bug with trivial
+    // primary latent variables in 0.0.0
+    let version = "0.1.0";
     let name = "delta_float_mult";
     let mut nums = (0..2000).map(|i| i as f32).collect::<Vec<_>>();
     nums[1337] += 0.001;
@@ -108,6 +107,8 @@ mod tests {
 
   #[test]
   fn v0_1_0_delta_int_mult() -> PcoResult<()> {
+    // starting at 0.1.0 because 0.0.0 had GCD mode (no longer supported)
+    // instead of int mult
     let version = "0.1.0";
     let name = "delta_int_mult";
     let mut nums = (0..2000).map(|i| i * 1000).collect::<Vec<_>>();
@@ -117,7 +118,6 @@ mod tests {
       ..Default::default()
     };
     simple_write_if_version_matches(version, name, &nums, &config)?;
-    println!("!");
     assert_compatible(version, name, &nums)?;
     Ok(())
   }
