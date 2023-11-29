@@ -106,7 +106,7 @@ fn score_triple_gcd<U: UnsignedLike>(
   }
 
   // heuristic for when the GCD is useless, even if true
-  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (0.95 + 0.2 * gcd_f64) {
+  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (1.0 + 0.1 * gcd_f64) {
     return None;
   }
 
@@ -184,6 +184,7 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use rand::Rng;
 
   #[test]
   fn test_split_join_latents() {
@@ -258,5 +259,11 @@ mod tests {
       ]),
       None,
     );
+    // even just evens can be useful if the signal is strong enough
+    let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
+    let mut twos = (0_u32..100)
+      .map(|_| rng.gen_range(0_u32..1000) * 2)
+      .collect::<Vec<_>>();
+    assert_eq!(calc_candidate_base(&mut twos), Some(2));
   }
 }
