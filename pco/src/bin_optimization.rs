@@ -91,4 +91,57 @@ pub fn optimize_bins<U: UnsignedLike>(
   res
 }
 
-// TODO add a test
+#[cfg(test)]
+mod tests {
+  use crate::bin::BinCompressionInfo;
+  use crate::bin_optimization::optimize_bins;
+  use crate::constants::Weight;
+
+  fn make_info(weight: Weight, lower: u32, upper: u32) -> BinCompressionInfo<u32> {
+    BinCompressionInfo {
+      weight,
+      lower,
+      upper,
+      offset_bits: 0, // not used
+      token: 0,       // not used
+    }
+  }
+
+  #[test]
+  fn test_bin_optimization() {
+    let infos = vec![
+      make_info(100, 1, 16),  // far enough from the others to stay independent
+      make_info(100, 33, 48), // same density as next bin, gets combined
+      make_info(100, 49, 64),
+      make_info(100, 65, 74), // same density as next bin (but different from previous ones)
+      make_info(50, 75, 79),
+    ];
+    let optimized = optimize_bins(infos, 10, 450);
+    assert_eq!(
+      optimized,
+      vec![
+        BinCompressionInfo {
+          weight: 100,
+          lower: 1,
+          upper: 16,
+          offset_bits: 4,
+          token: 0,
+        },
+        BinCompressionInfo {
+          weight: 200,
+          lower: 33,
+          upper: 64,
+          offset_bits: 5,
+          token: 1,
+        },
+        BinCompressionInfo {
+          weight: 150,
+          lower: 65,
+          upper: 79,
+          offset_bits: 4,
+          token: 2,
+        },
+      ]
+    )
+  }
+}

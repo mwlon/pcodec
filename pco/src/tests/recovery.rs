@@ -8,8 +8,6 @@ use crate::float_mult_utils::FloatMultConfig;
 use crate::standalone::{auto_decompress, simple_compress, FileCompressor};
 use crate::{ChunkMeta, Mode};
 
-// TODO make a test for 2 latent vars where first is trivial
-
 fn compress_w_meta<T: NumberLike>(
   nums: &[T],
   config: &ChunkConfig,
