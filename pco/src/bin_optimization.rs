@@ -5,6 +5,9 @@ use crate::bits::avg_depth_bits;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
+// TODO if the optimal binning is only 0.x% better than a single bin, just use
+// a single bin for better performance?
+
 fn bin_bit_cost<U: UnsignedLike>(
   base_meta_cost: f64,
   lower: U,

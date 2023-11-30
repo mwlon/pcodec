@@ -21,7 +21,7 @@ pub fn write_u64_to(x: u64, byte_idx: usize, dst: &mut [u8]) {
 }
 
 #[inline]
-pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_U64S: Bitlen>(
+pub fn write_uint_to<U: ReadWriteUint, const MAX_U64S: Bitlen>(
   x: U,
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
@@ -38,7 +38,7 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_EXTRA_U64S: Bitlen>(
   let mut processed = 56 - bits_past_byte;
   byte_idx += 7;
 
-  for _ in 0..MAX_EXTRA_U64S {
+  for _ in 0..MAX_U64S - 1 {
     write_u64_to((x >> processed).to_u64(), byte_idx, dst);
     processed += 64;
     byte_idx += 8;
@@ -101,14 +101,7 @@ impl<W: Write> BitWriter<W> {
 
   pub fn write_uint<U: ReadWriteUint>(&mut self, x: U, n: Bitlen) {
     self.refill();
-    match U::MAX_EXTRA_U64S {
-      0 => write_uint_to::<U, 0>(
-        x,
-        self.stale_byte_idx,
-        self.bits_past_byte,
-        n,
-        &mut self.buf,
-      ),
+    match U::MAX_U64S {
       1 => write_uint_to::<U, 1>(
         x,
         self.stale_byte_idx,
@@ -123,9 +116,17 @@ impl<W: Write> BitWriter<W> {
         n,
         &mut self.buf,
       ),
+      3 => write_uint_to::<U, 3>(
+        x,
+        self.stale_byte_idx,
+        self.bits_past_byte,
+        n,
+        &mut self.buf,
+      ),
+      0 => panic!("[BitReader] data type cannot have 0 bits"),
       _ => panic!(
         "[BitWriter] data type too large (extra u64's {} > 2)",
-        U::MAX_EXTRA_U64S
+        U::MAX_U64S
       ),
     }
     self.consume(n);

@@ -33,8 +33,9 @@ impl<U: UnsignedLike> State<U> {
 #[derive(Clone, Debug)]
 pub struct LatentBatchDecompressor<U: UnsignedLike> {
   // known information about this latent variable
-  extra_u64s_per_offset: usize,
+  u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
+  needs_ans: bool,
   pub maybe_constant_value: Option<U>,
   decoder: ans::Decoder,
 
@@ -47,8 +48,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     chunk_latent_var_meta: &ChunkLatentVarMeta<U>,
     page_latent_var_meta: &PageLatentVarMeta<U>,
   ) -> PcoResult<Self> {
-    let extra_u64s_per_offset =
-      read_write_uint::calc_max_extra_u64s(chunk_latent_var_meta.max_bits_per_offset());
+    let u64s_per_offset =
+      read_write_uint::calc_max_u64s(chunk_latent_var_meta.max_bits_per_offset());
     let infos = chunk_latent_var_meta
       .bins
       .iter()
@@ -61,17 +62,33 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     };
     let decoder = ans::Decoder::from_chunk_latent_var_meta(chunk_latent_var_meta)?;
 
+    let mut state = State {
+      offset_bits_csum_scratch: [0; FULL_BATCH_N],
+      offset_bits_scratch: [0; FULL_BATCH_N],
+      lowers_scratch: [U::ZERO; FULL_BATCH_N],
+      state_idxs: page_latent_var_meta.ans_final_state_idxs,
+    };
+
+    let needs_ans = chunk_latent_var_meta.bins.len() != 1;
+    if !needs_ans {
+      // we optimize performance by setting state once and never again
+      let bin = &chunk_latent_var_meta.bins[0];
+      let mut csum = 0;
+      for i in 0..FULL_BATCH_N {
+        state.offset_bits_scratch[i] = bin.offset_bits;
+        state.offset_bits_csum_scratch[i] = csum;
+        state.lowers_scratch[i] = bin.lower;
+        csum += bin.offset_bits as usize;
+      }
+    }
+
     Ok(Self {
-      extra_u64s_per_offset,
+      u64s_per_offset,
       infos,
+      needs_ans,
       maybe_constant_value,
       decoder,
-      state: State {
-        offset_bits_csum_scratch: [0; FULL_BATCH_N],
-        offset_bits_scratch: [0; FULL_BATCH_N],
-        lowers_scratch: [U::ZERO; FULL_BATCH_N],
-        state_idxs: page_latent_var_meta.ans_final_state_idxs,
-      },
+      state,
     })
   }
 
@@ -200,35 +217,29 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       return Ok(());
     }
 
-    // TODO support faster decompression when there is a single nontrivial bin
-    // also make bin optimization use a single bin when it's close to 0 cost
-    if let Some(const_value) = self.maybe_constant_value {
-      dst.fill(const_value);
-      return Ok(());
-    }
-
-    let batch_n = dst.len();
-    assert!(batch_n <= FULL_BATCH_N);
-
     // TODO add shortcuts for more cases
-    // * there's only one nontrivial bin
-    // * all offsets have 0 bits (worth it?)
     // * all reads are byte-aligned
-    if batch_n == FULL_BATCH_N {
-      self.decompress_full_ans_tokens(reader);
-    } else {
-      self.decompress_ans_tokens(reader, batch_n);
+    if self.needs_ans {
+      let batch_n = dst.len();
+      assert!(batch_n <= FULL_BATCH_N);
+
+      if batch_n == FULL_BATCH_N {
+        self.decompress_full_ans_tokens(reader);
+      } else {
+        self.decompress_ans_tokens(reader, batch_n);
+      }
     }
 
     // this assertion saves some unnecessary specializations in the compiled assembly
-    assert!(self.extra_u64s_per_offset <= read_write_uint::calc_max_extra_u64s(U::BITS));
-    match self.extra_u64s_per_offset {
-      0 => self.decompress_offsets::<0>(reader, dst),
+    assert!(self.u64s_per_offset <= read_write_uint::calc_max_u64s(U::BITS));
+    match self.u64s_per_offset {
+      0 => dst.fill(U::ZERO),
       1 => self.decompress_offsets::<1>(reader, dst),
       2 => self.decompress_offsets::<2>(reader, dst),
+      3 => self.decompress_offsets::<3>(reader, dst),
       _ => panic!(
         "[LatentBatchDecompressor] data type too large (extra u64's {} > 2)",
-        self.extra_u64s_per_offset
+        self.u64s_per_offset
       ),
     }
 
