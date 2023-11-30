@@ -36,8 +36,8 @@ pub struct LatentBatchDecompressor<U: UnsignedLike> {
   u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
   needs_ans: bool,
-  pub maybe_constant_value: Option<U>,
   decoder: ans::Decoder,
+  pub maybe_constant_value: Option<U>,
 
   // mutable state
   state: State<U>,
@@ -55,11 +55,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       .iter()
       .map(BinDecompressionInfo::from)
       .collect::<Vec<_>>();
-    let maybe_constant_value = if chunk_latent_var_meta.is_trivial() {
-      chunk_latent_var_meta.bins.first().map(|bin| bin.lower)
-    } else {
-      None
-    };
     let decoder = ans::Decoder::from_chunk_latent_var_meta(chunk_latent_var_meta)?;
 
     let mut state = State {
@@ -82,12 +77,18 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       }
     }
 
+    let maybe_constant_value = if chunk_latent_var_meta.is_trivial() {
+      chunk_latent_var_meta.bins.first().map(|bin| bin.lower)
+    } else {
+      None
+    };
+
     Ok(Self {
       u64s_per_offset,
       infos,
       needs_ans,
-      maybe_constant_value,
       decoder,
+      maybe_constant_value,
       state,
     })
   }
@@ -217,8 +218,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       return Ok(());
     }
 
-    // TODO add shortcuts for more cases
-    // * all reads are byte-aligned
     if self.needs_ans {
       let batch_n = dst.len();
       assert!(batch_n <= FULL_BATCH_N);
