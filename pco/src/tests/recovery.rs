@@ -278,7 +278,6 @@ fn test_trivial_first_latent_var() -> PcoResult<()> {
       inv_base: 1.0
     })
   );
-  println!("{:?}", meta);
   let decompressed = auto_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, "trivial_first_latent")?;
   Ok(())
