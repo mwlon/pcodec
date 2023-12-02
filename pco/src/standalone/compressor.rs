@@ -5,9 +5,17 @@ use crate::chunk_config::PagingSpec;
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::errors::PcoResult;
 use crate::standalone::constants::{
-  BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
+  BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_STANDALONE_VERSION, CURRENT_STANDALONE_VERSION,
+  MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
+  STANDALONE_HEADER_PADDING,
 };
 use crate::{bits, wrapped, ChunkConfig, ChunkMeta};
+
+fn write_varint<W: Write>(n: u64, writer: &mut BitWriter<W>) {
+  let power = if n == 0 { 1 } else { n.ilog2() + 1 };
+  writer.write_uint(power - 1, 6);
+  writer.write_uint(bits::lowest_bits(n, power), power);
+}
 
 /// Top-level entry point for compressing standalone .pco files.
 ///
@@ -37,18 +45,32 @@ use crate::{bits, wrapped, ChunkConfig, ChunkMeta};
 /// A .pco file should contain a header, followed by any number of chunks,
 /// followed by a footer.
 #[derive(Clone, Debug, Default)]
-pub struct FileCompressor(wrapped::FileCompressor);
+pub struct FileCompressor {
+  inner: wrapped::FileCompressor,
+  n_hint: usize,
+}
 
 impl FileCompressor {
+  pub fn with_n_hint(mut self, n: usize) -> Self {
+    self.n_hint = n;
+    self
+  }
+
   /// Writes a short header to the destination.
   ///
   /// Will return an error if the provided `Write` errors.
   pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<W> {
-    let mut writer = BitWriter::new(dst, MAGIC_HEADER.len());
+    let mut writer = BitWriter::new(dst, STANDALONE_HEADER_PADDING);
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
+    writer.write_usize(
+      CURRENT_STANDALONE_VERSION,
+      BITS_TO_ENCODE_STANDALONE_VERSION,
+    );
+    write_varint(self.n_hint as u64, &mut writer);
+    writer.finish_byte();
     writer.flush()?;
     let dst = writer.into_inner();
-    self.0.write_header(dst)
+    self.inner.write_header(dst)
   }
 
   /// Creates a `ChunkCompressor` that can be used to write entire chunks
@@ -67,7 +89,7 @@ impl FileCompressor {
     config.paging_spec = PagingSpec::ExactPageSizes(vec![nums.len()]);
 
     Ok(ChunkCompressor {
-      inner: self.0.chunk_compressor(nums, &config)?,
+      inner: self.inner.chunk_compressor(nums, &config)?,
       dtype_byte: T::DTYPE_BYTE,
     })
   }

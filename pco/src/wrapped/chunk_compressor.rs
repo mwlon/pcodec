@@ -15,9 +15,11 @@ use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
+use crate::read_write_uint::ReadWriteUint;
 use crate::{
-  ans, bin_optimization, bits, delta, float_mult_utils, int_mult_utils, Bin, ChunkConfig,
-  ChunkLatentVarMeta, ChunkMeta, FloatMultSpec, IntMultSpec, Mode, FULL_BATCH_N,
+  ans, bin_optimization, bit_reader, bit_writer, bits, delta, float_mult_utils, int_mult_utils,
+  read_write_uint, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta, FloatMultSpec, IntMultSpec,
+  Mode, FULL_BATCH_N,
 };
 
 struct BinBuffer<'a, U: UnsignedLike> {
@@ -178,41 +180,102 @@ fn uninit_vec<T>(n: usize) -> Vec<T> {
   }
 }
 
+// This would be very hard to combine with write_uints because it makes use of
+// an optimization that only works easily for single-u64 writes of 56 bits or
+// less: we keep the `target_u64` value we're updating in a register instead
+// of referring back to `dst` (recent values of which will be in L1 cache). If
+// a write exceeds 56 bits, we may need to shift target_u64 by 64 bits, which
+// would be an overflow panic.
 #[inline(never)]
-fn write_dissected_page<U: UnsignedLike, W: Write>(
-  dissected_page: DissectedPage<U>,
-  writer: &mut BitWriter<W>,
-) -> PcoResult<()> {
-  let mut batch_start = 0;
-  while batch_start < dissected_page.page_n {
-    let batch_end = min(
-      batch_start + FULL_BATCH_N,
-      dissected_page.page_n,
-    );
-    for dissected_page_var in &dissected_page.per_var {
-      for (&val, &bits) in dissected_page_var
-        .ans_vals
-        .iter()
-        .zip(dissected_page_var.ans_bits.iter())
-        .skip(batch_start)
-        .take(FULL_BATCH_N)
-      {
-        writer.write_uint(val, bits);
-      }
-      for (&offset, &bits) in dissected_page_var
-        .offsets
-        .iter()
-        .zip(dissected_page_var.offset_bits.iter())
-        .skip(batch_start)
-        .take(FULL_BATCH_N)
-      {
-        writer.write_uint(offset, bits);
-      }
-      writer.flush()?;
-    }
-    batch_start = batch_end;
+fn write_short_uints<U: ReadWriteUint>(
+  vals: &[U],
+  bitlens: &[Bitlen],
+  mut stale_byte_idx: usize,
+  mut bits_past_byte: Bitlen,
+  dst: &mut [u8],
+) -> (usize, Bitlen) {
+  stale_byte_idx += bits_past_byte as usize / 8;
+  bits_past_byte %= 8;
+  let mut target_u64 = bit_reader::u64_at(dst, stale_byte_idx);
+
+  for (&val, &bitlen) in vals.iter().zip(bitlens).take(FULL_BATCH_N) {
+    let bytes_added = bits_past_byte as usize / 8;
+    stale_byte_idx += bytes_added;
+    target_u64 >>= bytes_added * 8;
+    bits_past_byte %= 8;
+
+    target_u64 |= val.to_u64() << bits_past_byte;
+    bit_writer::write_u64_to(target_u64, stale_byte_idx, dst);
+
+    bits_past_byte += bitlen;
   }
-  Ok(())
+  (stale_byte_idx, bits_past_byte)
+}
+
+#[inline(never)]
+fn write_uints<U: ReadWriteUint, const MAX_U64S: usize>(
+  vals: &[U],
+  bitlens: &[Bitlen],
+  mut stale_byte_idx: usize,
+  mut bits_past_byte: Bitlen,
+  dst: &mut [u8],
+) -> (usize, Bitlen) {
+  for (&val, &bitlen) in vals.iter().zip(bitlens).take(FULL_BATCH_N) {
+    stale_byte_idx += bits_past_byte as usize / 8;
+    bits_past_byte %= 8;
+    bit_writer::write_uint_to::<_, MAX_U64S>(val, stale_byte_idx, bits_past_byte, dst);
+    bits_past_byte += bitlen;
+  }
+  (stale_byte_idx, bits_past_byte)
+}
+
+fn write_dissected_batch_var<U: UnsignedLike, W: Write>(
+  dissected_page_var: &DissectedPageVar<U>,
+  var_policy: &LatentVarPolicy<U>,
+  batch_start: usize,
+  writer: &mut BitWriter<W>,
+) {
+  if batch_start >= dissected_page_var.offsets.len() {
+    return;
+  }
+
+  // write ANS
+  if var_policy.needs_ans {
+    (writer.stale_byte_idx, writer.bits_past_byte) = write_short_uints(
+      &dissected_page_var.ans_vals[batch_start..],
+      &dissected_page_var.ans_bits[batch_start..],
+      writer.stale_byte_idx,
+      writer.bits_past_byte,
+      &mut writer.buf,
+    );
+  }
+
+  // write offsets
+  (writer.stale_byte_idx, writer.bits_past_byte) = match var_policy.max_u64s_per_offset {
+    0 => (writer.stale_byte_idx, writer.bits_past_byte),
+    1 => write_short_uints::<U>(
+      &dissected_page_var.offsets[batch_start..],
+      &dissected_page_var.offset_bits[batch_start..],
+      writer.stale_byte_idx,
+      writer.bits_past_byte,
+      &mut writer.buf,
+    ),
+    2 => write_uints::<U, 2>(
+      &dissected_page_var.offsets[batch_start..],
+      &dissected_page_var.offset_bits[batch_start..],
+      writer.stale_byte_idx,
+      writer.bits_past_byte,
+      &mut writer.buf,
+    ),
+    3 => write_uints::<U, 3>(
+      &dissected_page_var.offsets[batch_start..],
+      &dissected_page_var.offset_bits[batch_start..],
+      writer.stale_byte_idx,
+      writer.bits_past_byte,
+      &mut writer.buf,
+    ),
+    _ => panic!("[ChunkCompressor] data type is too large"),
+  };
 }
 
 #[derive(Clone, Debug)]
@@ -221,6 +284,8 @@ struct LatentVarPolicy<U: UnsignedLike> {
   encoder: ans::Encoder,
   max_bits_per_latent: Bitlen,
   is_trivial: bool,
+  needs_ans: bool,
+  max_u64s_per_offset: usize,
 }
 
 /// Holds metadata about a chunk and supports compression.
@@ -353,6 +418,7 @@ fn unsigned_new<U: UnsignedLike>(
 
     let trained = train_infos(contiguous_latents, comp_level, chunk_n)?;
     let bins = bins_from_compression_infos(&trained.infos);
+    let needs_ans = bins.len() != 1;
 
     let table = CompressionTable::from(trained.infos);
     let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
@@ -361,10 +427,16 @@ fn unsigned_new<U: UnsignedLike>(
       bins,
       ans_size_log: trained.ans_size_log,
     };
-    // TODO this bound could be lower. We're probably better off with something
-    // more like an expected size though.
-    let max_bits_per_latent = latent_meta.max_bits_per_ans() + latent_meta.max_bits_per_offset();
+    let max_bits_per_offset = latent_meta.max_bits_per_offset();
+    let max_bits_per_latent = latent_meta.max_bits_per_ans() + max_bits_per_offset;
     let is_trivial = latent_meta.is_trivial();
+
+    let mut max_u64s_per_offset = read_write_uint::calc_max_u64s(max_bits_per_offset);
+    // We need to be slightly more conservative about max_u64s_per_offset than
+    // normal due to how write_short_uints is implemented.
+    if max_u64s_per_offset == 1 && max_bits_per_offset > 56 {
+      max_u64s_per_offset = 2;
+    }
 
     var_metas.push(latent_meta);
     var_policies.push(LatentVarPolicy {
@@ -372,6 +444,8 @@ fn unsigned_new<U: UnsignedLike>(
       encoder,
       max_bits_per_latent,
       is_trivial,
+      needs_ans,
+      max_u64s_per_offset,
     });
   }
 
@@ -527,10 +601,43 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     {
       let meta_bit_size = self.meta.delta_encoding_order * U::BITS as usize
         + ANS_INTERLEAVING * var_meta.ans_size_log as usize;
+      // We're probably reserving more than necessary sometimes, because
+      // max_bits_per_latent is quite a loose upper bound.
+      // But most datasets have multiple pages, and if we really wanted to
+      // improve performance for standalone files too, we'd need a whole-file
+      // compressed size estimate.
       let nums_bit_size = page_n * var_policy.max_bits_per_latent as usize;
       bit_size += meta_bit_size + nums_bit_size;
     }
     bits::ceil_div(bit_size, 8)
+  }
+
+  #[inline(never)]
+  fn write_dissected_page<W: Write>(
+    &self,
+    dissected_page: DissectedPage<U>,
+    writer: &mut BitWriter<W>,
+  ) -> PcoResult<()> {
+    let mut batch_start = 0;
+    while batch_start < dissected_page.page_n {
+      let batch_end = min(
+        batch_start + FULL_BATCH_N,
+        dissected_page.page_n,
+      );
+      for (dissected_page_var, policy) in
+        dissected_page.per_var.iter().zip(&self.latent_var_policies)
+      {
+        write_dissected_batch_var(
+          dissected_page_var,
+          policy,
+          batch_start,
+          writer,
+        );
+        writer.flush()?;
+      }
+      batch_start = batch_end;
+    }
+    Ok(())
   }
 
   /// Writes a page to the destination.
@@ -553,11 +660,12 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     let mut latent_metas = Vec::with_capacity(n_latents);
     for latent_idx in 0..n_latents {
       let delta_moments = self.page_moments(page_idx, latent_idx).clone();
+      let base_state = self.latent_var_policies[latent_idx].encoder.default_state();
 
       let ans_final_state_idxs = dissected_page
         .per_var
         .get(latent_idx)
-        .map(|dissected| dissected.ans_final_states)
+        .map(|dissected| dissected.ans_final_states.map(|state| state - base_state))
         .unwrap_or([0; ANS_INTERLEAVING]);
       latent_metas.push(PageLatentVarMeta {
         delta_moments,
@@ -575,7 +683,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     page_meta.write_to(ans_size_logs, &mut writer);
     writer.flush()?;
 
-    write_dissected_page(dissected_page, &mut writer)?;
+    self.write_dissected_page(dissected_page, &mut writer)?;
 
     writer.finish_byte();
     writer.flush()?;

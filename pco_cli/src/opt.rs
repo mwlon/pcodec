@@ -40,7 +40,7 @@ pub struct CompressOpt {
   pub col_name: Option<String>,
   #[arg(long)]
   pub col_idx: Option<usize>,
-  #[arg(long, default_value = "524288")]
+  #[arg(long, default_value = "262144")]
   pub chunk_size: usize,
   #[arg(long)]
   pub overwrite: bool,

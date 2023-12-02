@@ -1,13 +1,23 @@
 use better_io::BetterBufRead;
 
-use crate::bit_reader::BitReaderBuilder;
+use crate::bit_reader::{BitReader, BitReaderBuilder};
+use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::progress::Progress;
 use crate::standalone::constants::{
-  BITS_TO_ENCODE_N_ENTRIES, MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
+  BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_STANDALONE_VERSION, CURRENT_STANDALONE_VERSION,
+  MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
+  STANDALONE_HEADER_PADDING,
 };
 use crate::{bit_reader, wrapped, ChunkMeta};
+
+fn read_varint(reader: &mut BitReader) -> PcoResult<u64> {
+  let power = 1 + reader.read_uint::<Bitlen>(6);
+  let res = reader.read_uint(power);
+  reader.drain_empty_byte("standalone size hint")?;
+  Ok(res)
+}
 
 /// Top-level entry point for decompressing standalone .pco files.
 ///
@@ -34,7 +44,10 @@ use crate::{bit_reader, wrapped, ChunkMeta};
 /// # }
 /// ```
 #[derive(Clone, Debug)]
-pub struct FileDecompressor(wrapped::FileDecompressor);
+pub struct FileDecompressor {
+  n_hint: usize,
+  inner: wrapped::FileDecompressor,
+}
 
 /// The outcome of starting a new chunk of a standalone file.
 pub enum MaybeChunkDecompressor<T: NumberLike, R: BetterBufRead> {
@@ -53,8 +66,10 @@ impl FileDecompressor {
   /// Will return an error if any corruptions, version incompatibilities, or
   /// insufficient data are found.
   pub fn new<R: BetterBufRead>(mut src: R) -> PcoResult<(Self, R)> {
-    bit_reader::ensure_buf_read_capacity(&mut src, MAGIC_HEADER.len());
-    let mut reader_builder = BitReaderBuilder::new(src, MAGIC_HEADER.len(), 0);
+    bit_reader::ensure_buf_read_capacity(&mut src, STANDALONE_HEADER_PADDING);
+    let mut reader_builder = BitReaderBuilder::new(src, STANDALONE_HEADER_PADDING, 0);
+    // Do this part first so we check for insufficient data before returning a
+    // confusing corruption error.
     let header = reader_builder
       .with_reader(|reader| Ok(reader.read_aligned_bytes(MAGIC_HEADER.len())?.to_vec()))?;
     if header != MAGIC_HEADER {
@@ -64,12 +79,37 @@ impl FileDecompressor {
       )));
     }
 
+    let (standalone_version, n_hint) = reader_builder.with_reader(|reader| {
+      let standalone_version = reader.read_usize(BITS_TO_ENCODE_STANDALONE_VERSION);
+      let n_hint = if standalone_version >= 2 {
+        read_varint(reader)? as usize
+      } else {
+        // These versions only had wrapped version; we need to rewind so they can
+        // reuse it.
+        reader.bits_past_byte -= BITS_TO_ENCODE_STANDALONE_VERSION;
+        0
+      };
+
+      Ok((standalone_version, n_hint))
+    })?;
+
+    if standalone_version > CURRENT_STANDALONE_VERSION {
+      return Err(PcoError::compatibility(format!(
+        "file's standalone version ({}) exceeds max supported ({}); consider upgrading pco",
+        standalone_version, CURRENT_STANDALONE_VERSION,
+      )));
+    }
+
     let (inner, rest) = wrapped::FileDecompressor::new(reader_builder.into_inner())?;
-    Ok((Self(inner), rest))
+    Ok((Self { inner, n_hint }, rest))
   }
 
   pub fn format_version(&self) -> u8 {
-    self.0.format_version()
+    self.inner.format_version()
+  }
+
+  pub fn n_hint(&self) -> usize {
+    self.n_hint
   }
 
   /// Reads a chunk's metadata and returns either a `ChunkDecompressor` or
@@ -102,7 +142,7 @@ impl FileDecompressor {
     let n =
       reader_builder.with_reader(|reader| Ok(reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1))?;
     let src = reader_builder.into_inner();
-    let (inner_cd, src) = self.0.chunk_decompressor::<T, R>(src)?;
+    let (inner_cd, src) = self.inner.chunk_decompressor::<T, R>(src)?;
     let inner_pd = inner_cd.page_decompressor(src, n)?;
 
     let res = ChunkDecompressor {

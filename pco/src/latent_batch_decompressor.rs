@@ -33,10 +33,11 @@ impl<U: UnsignedLike> State<U> {
 #[derive(Clone, Debug)]
 pub struct LatentBatchDecompressor<U: UnsignedLike> {
   // known information about this latent variable
-  extra_u64s_per_offset: usize,
+  u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
-  pub maybe_constant_value: Option<U>,
+  needs_ans: bool,
   decoder: ans::Decoder,
+  pub maybe_constant_value: Option<U>,
 
   // mutable state
   state: State<U>,
@@ -47,31 +48,48 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     chunk_latent_var_meta: &ChunkLatentVarMeta<U>,
     page_latent_var_meta: &PageLatentVarMeta<U>,
   ) -> PcoResult<Self> {
-    let extra_u64s_per_offset =
-      read_write_uint::calc_max_extra_u64s(chunk_latent_var_meta.max_bits_per_offset());
+    let u64s_per_offset =
+      read_write_uint::calc_max_u64s(chunk_latent_var_meta.max_bits_per_offset());
     let infos = chunk_latent_var_meta
       .bins
       .iter()
       .map(BinDecompressionInfo::from)
       .collect::<Vec<_>>();
+    let decoder = ans::Decoder::from_chunk_latent_var_meta(chunk_latent_var_meta)?;
+
+    let mut state = State {
+      offset_bits_csum_scratch: [0; FULL_BATCH_N],
+      offset_bits_scratch: [0; FULL_BATCH_N],
+      lowers_scratch: [U::ZERO; FULL_BATCH_N],
+      state_idxs: page_latent_var_meta.ans_final_state_idxs,
+    };
+
+    let needs_ans = chunk_latent_var_meta.bins.len() != 1;
+    if !needs_ans {
+      // we optimize performance by setting state once and never again
+      let bin = &chunk_latent_var_meta.bins[0];
+      let mut csum = 0;
+      for i in 0..FULL_BATCH_N {
+        state.offset_bits_scratch[i] = bin.offset_bits;
+        state.offset_bits_csum_scratch[i] = csum;
+        state.lowers_scratch[i] = bin.lower;
+        csum += bin.offset_bits as usize;
+      }
+    }
+
     let maybe_constant_value = if chunk_latent_var_meta.is_trivial() {
       chunk_latent_var_meta.bins.first().map(|bin| bin.lower)
     } else {
       None
     };
-    let decoder = ans::Decoder::from_chunk_latent_var_meta(chunk_latent_var_meta)?;
 
     Ok(Self {
-      extra_u64s_per_offset,
+      u64s_per_offset,
       infos,
-      maybe_constant_value,
+      needs_ans,
       decoder,
-      state: State {
-        offset_bits_csum_scratch: [0; FULL_BATCH_N],
-        offset_bits_scratch: [0; FULL_BATCH_N],
-        lowers_scratch: [U::ZERO; FULL_BATCH_N],
-        state_idxs: page_latent_var_meta.ans_final_state_idxs,
-      },
+      maybe_constant_value,
+      state,
     })
   }
 
@@ -152,11 +170,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
   #[allow(clippy::needless_range_loop)]
   #[inline(never)]
-  fn decompress_offsets<const MAX_EXTRA_U64S: usize>(
-    &mut self,
-    reader: &mut BitReader,
-    dst: &mut [U],
-  ) {
+  fn decompress_offsets<const MAX_U64S: usize>(&mut self, reader: &mut BitReader, dst: &mut [U]) {
     let base_bit_idx = reader.bit_idx();
     let src = reader.src;
     let state = &mut self.state;
@@ -169,8 +183,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       let bit_idx = base_bit_idx + offset_bits_csum;
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      *dst =
-        bit_reader::read_uint_at::<U, MAX_EXTRA_U64S>(src, byte_idx, bits_past_byte, offset_bits);
+      *dst = bit_reader::read_uint_at::<U, MAX_U64S>(src, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
       + state.offset_bits_csum_scratch[dst.len() - 1]
@@ -200,35 +213,27 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       return Ok(());
     }
 
-    // TODO support faster decompression when there is a single nontrivial bin
-    // also make bin optimization use a single bin when it's close to 0 cost
-    if let Some(const_value) = self.maybe_constant_value {
-      dst.fill(const_value);
-      return Ok(());
-    }
+    if self.needs_ans {
+      let batch_n = dst.len();
+      assert!(batch_n <= FULL_BATCH_N);
 
-    let batch_n = dst.len();
-    assert!(batch_n <= FULL_BATCH_N);
-
-    // TODO add shortcuts for more cases
-    // * there's only one nontrivial bin
-    // * all offsets have 0 bits (worth it?)
-    // * all reads are byte-aligned
-    if batch_n == FULL_BATCH_N {
-      self.decompress_full_ans_tokens(reader);
-    } else {
-      self.decompress_ans_tokens(reader, batch_n);
+      if batch_n == FULL_BATCH_N {
+        self.decompress_full_ans_tokens(reader);
+      } else {
+        self.decompress_ans_tokens(reader, batch_n);
+      }
     }
 
     // this assertion saves some unnecessary specializations in the compiled assembly
-    assert!(self.extra_u64s_per_offset <= read_write_uint::calc_max_extra_u64s(U::BITS));
-    match self.extra_u64s_per_offset {
-      0 => self.decompress_offsets::<0>(reader, dst),
+    assert!(self.u64s_per_offset <= read_write_uint::calc_max_u64s(U::BITS));
+    match self.u64s_per_offset {
+      0 => dst.fill(U::ZERO),
       1 => self.decompress_offsets::<1>(reader, dst),
       2 => self.decompress_offsets::<2>(reader, dst),
+      3 => self.decompress_offsets::<3>(reader, dst),
       _ => panic!(
         "[LatentBatchDecompressor] data type too large (extra u64's {} > 2)",
-        self.extra_u64s_per_offset
+        self.u64s_per_offset
       ),
     }
 

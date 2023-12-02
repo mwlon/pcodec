@@ -73,8 +73,8 @@ mod tests {
 
   #[test]
   fn v0_0_0_classic() -> PcoResult<()> {
-    let name = "classic";
     let version = "0.0.0";
+    let name = "classic";
     let nums = (0_i32..1000).chain(2000..3000).collect::<Vec<_>>();
     let config = ChunkConfig {
       delta_encoding_order: Some(0),
@@ -113,6 +113,18 @@ mod tests {
       ..Default::default()
     };
     simple_write_if_version_matches(version, name, &nums, &config)?;
+    assert_compatible(version, name, &nums)?;
+    Ok(())
+  }
+
+  #[test]
+  fn v0_1_1_classic() -> PcoResult<()> {
+    // v0.1.1 introduced standalone versioning, separate from wrapped versioning
+    let version = "0.1.1";
+    let name = "standalone_versioned";
+    let nums = vec![];
+    let config = ChunkConfig::default();
+    simple_write_if_version_matches::<f32>(version, name, &nums, &config)?;
     assert_compatible(version, name, &nums)?;
     Ok(())
   }

@@ -216,7 +216,7 @@ impl<U: UnsignedLike> ChunkMeta<U> {
             inv_base: base.inv(),
           }))
         }
-        value => Err(PcoError::compatibility(format!(
+        value => Err(PcoError::corruption(format!(
           "unknown mode value {}",
           value
         ))),

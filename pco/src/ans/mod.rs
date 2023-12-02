@@ -19,6 +19,7 @@ mod tests {
   use crate::ans::{AnsState, Decoder, Encoder, Token};
   use crate::bit_reader::BitReader;
   use crate::bit_writer::BitWriter;
+  use crate::bits;
   use crate::errors::PcoResult;
 
   fn assert_recovers(spec: &Spec, tokens: Vec<Token>, expected_byte_len: usize) -> PcoResult<()> {
@@ -34,8 +35,8 @@ mod tests {
 
     let mut compressed = Vec::new();
     let mut writer = BitWriter::new(&mut compressed, 5);
-    for (word, bitlen) in to_write.into_iter().rev() {
-      writer.write_uint(word, bitlen);
+    for (val, bitlen) in to_write.into_iter().rev() {
+      writer.write_uint(bits::lowest_bits_fast(val, bitlen), bitlen);
       writer.flush()?;
     }
     writer.finish_byte();

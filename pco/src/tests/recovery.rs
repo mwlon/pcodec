@@ -2,6 +2,7 @@ use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 
 use crate::chunk_config::ChunkConfig;
+use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::float_mult_utils::FloatMultConfig;
@@ -195,6 +196,40 @@ fn test_multi_chunk() -> PcoResult<()> {
   Ok(())
 }
 
+fn recover_with_alternating_nums(offset_bits: Bitlen, name: &str) -> PcoResult<()> {
+  let nums = vec![0_u64, 1 << (offset_bits - 1)].repeat(50);
+  let (compressed, meta) = compress_w_meta(
+    &nums,
+    &ChunkConfig {
+      delta_encoding_order: Some(0),
+      compression_level: 0,
+      ..Default::default()
+    },
+  )?;
+  assert_eq!(meta.per_latent_var.len(), 1);
+  let latent_var = &meta.per_latent_var[0];
+  assert_eq!(latent_var.bins.len(), 1);
+  let bin = latent_var.bins[0];
+  assert_eq!(bin.offset_bits, offset_bits);
+  let decompressed = auto_decompress(&compressed)?;
+  assert_nums_eq(&decompressed, &nums, name)
+}
+
+#[test]
+fn test_56_bit_offsets() -> PcoResult<()> {
+  recover_with_alternating_nums(56, "56 bit offsets")
+}
+
+#[test]
+fn test_57_bit_offsets() -> PcoResult<()> {
+  recover_with_alternating_nums(57, "57 bit offsets")
+}
+
+#[test]
+fn test_64_bit_offsets() -> PcoResult<()> {
+  recover_with_alternating_nums(64, "64 bit offsets")
+}
+
 #[test]
 fn test_with_int_mult() -> PcoResult<()> {
   let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
@@ -278,7 +313,6 @@ fn test_trivial_first_latent_var() -> PcoResult<()> {
       inv_base: 1.0
     })
   );
-  println!("{:?}", meta);
   let decompressed = auto_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, "trivial_first_latent")?;
   Ok(())

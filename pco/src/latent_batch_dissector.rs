@@ -1,11 +1,11 @@
 use std::cmp::min;
 
-use crate::ans;
 use crate::ans::{AnsState, Token};
 use crate::compression_intermediates::DissectedPageVar;
 use crate::compression_table::CompressionTable;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::UnsignedLike;
+use crate::{ans, bits};
 
 pub struct LatentBatchDissector<'a, U: UnsignedLike> {
   // immutable
@@ -85,7 +85,7 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
       let (new_state, bitlen) = self
         .encoder
         .encode(ans_final_states[j], self.token_scratch[i]);
-      ans_vals[i] = ans_final_states[j];
+      ans_vals[i] = bits::lowest_bits_fast(ans_final_states[j], bitlen);
       ans_bits[i] = bitlen;
       ans_final_states[j] = new_state;
     }
@@ -97,7 +97,7 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
         let (new_state, bitlen) = self
           .encoder
           .encode(ans_final_states[j], self.token_scratch[i]);
-        ans_vals[i] = ans_final_states[j];
+        ans_vals[i] = bits::lowest_bits_fast(ans_final_states[j], bitlen);
         ans_bits[i] = bitlen;
         ans_final_states[j] = new_state;
       }

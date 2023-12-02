@@ -17,7 +17,7 @@ use std::cmp::min;
 /// chunk has exactly one page.
 pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
   let mut dst = Vec::new();
-  let file_compressor = FileCompressor::default();
+  let file_compressor = FileCompressor::default().with_n_hint(nums.len());
   file_compressor.write_header(&mut dst)?;
 
   // here we use the paging spec to determine chunks; each chunk has 1 page
@@ -115,7 +115,7 @@ pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec
 pub fn auto_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
   let (file_decompressor, mut src) = FileDecompressor::new(src)?;
 
-  let mut res = Vec::new();
+  let mut res = Vec::with_capacity(file_decompressor.n_hint());
   while let MaybeChunkDecompressor::Some(mut chunk_decompressor) =
     file_decompressor.chunk_decompressor(src)?
   {
