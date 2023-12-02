@@ -1,7 +1,6 @@
 use std::cmp::{max, min};
 use std::io::Write;
 
-
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
 use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageLatents};
@@ -181,6 +180,12 @@ fn uninit_vec<T>(n: usize) -> Vec<T> {
   }
 }
 
+// This would be very hard to combine with write_uints because it makes use of
+// an optimization that only works easily for single-u64 writes of 56 bits or
+// less: we keep the `target_u64` value we're updating in a register instead
+// of referring back to `dst` (recent values of which will be in L1 cache). If
+// a write exceeds 56 bits, we may need to shift target_u64 by 64 bits, which
+// would be an overflow panic.
 #[inline(never)]
 fn write_short_uints<U: ReadWriteUint>(
   vals: &[U],
@@ -428,6 +433,13 @@ fn unsigned_new<U: UnsignedLike>(
     let max_bits_per_latent = latent_meta.max_bits_per_ans() + max_bits_per_offset;
     let is_trivial = latent_meta.is_trivial();
 
+    let mut max_u64s_per_offset = read_write_uint::calc_max_u64s(max_bits_per_offset);
+    // We need to be slightly more conservative about max_u64s_per_offset than
+    // normal due to how write_short_uints is implemented.
+    if max_u64s_per_offset == 1 && max_bits_per_offset > 56 {
+      max_u64s_per_offset = 2;
+    }
+
     var_metas.push(latent_meta);
     var_policies.push(LatentVarPolicy {
       table,
@@ -435,7 +447,7 @@ fn unsigned_new<U: UnsignedLike>(
       max_bits_per_latent,
       is_trivial,
       needs_ans,
-      max_u64s_per_offset: read_write_uint::calc_max_u64s(max_bits_per_offset),
+      max_u64s_per_offset,
     });
   }
 

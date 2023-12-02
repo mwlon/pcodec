@@ -27,8 +27,8 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
   for &page_n in &n_per_page {
     let end = start + page_n;
     this_chunk_config.paging_spec = PagingSpec::ExactPageSizes(vec![page_n]);
-    let stuff = &nums[start..end];
-    let chunk_compressor = file_compressor.chunk_compressor(stuff, &this_chunk_config)?;
+    let chunk_compressor =
+      file_compressor.chunk_compressor(&nums[start..end], &this_chunk_config)?;
     dst.reserve(chunk_compressor.chunk_size_hint());
     chunk_compressor.write_chunk(&mut dst)?;
     start = end;
