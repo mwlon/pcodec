@@ -427,8 +427,6 @@ fn unsigned_new<U: UnsignedLike>(
       bins,
       ans_size_log: trained.ans_size_log,
     };
-    // TODO this bound could be lower. We're probably better off with something
-    // more like an expected size though.
     let max_bits_per_offset = latent_meta.max_bits_per_offset();
     let max_bits_per_latent = latent_meta.max_bits_per_ans() + max_bits_per_offset;
     let is_trivial = latent_meta.is_trivial();
@@ -603,6 +601,11 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
     {
       let meta_bit_size = self.meta.delta_encoding_order * U::BITS as usize
         + ANS_INTERLEAVING * var_meta.ans_size_log as usize;
+      // We're probably reserving more than necessary sometimes, because
+      // max_bits_per_latent is quite a loose upper bound.
+      // But most datasets have multiple pages, and if we really wanted to
+      // improve performance for standalone files too, we'd need a whole-file
+      // compressed size estimate.
       let nums_bit_size = page_n * var_policy.max_bits_per_latent as usize;
       bit_size += meta_bit_size + nums_bit_size;
     }
