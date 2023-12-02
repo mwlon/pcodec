@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 use std::io::Write;
 
-use crate::ans::AnsState;
+
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
 use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageLatents};
