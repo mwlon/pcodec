@@ -26,14 +26,14 @@ pub fn read_uint_at<U: ReadWriteUint, const MAX_U64S: usize>(
   n: Bitlen,
 ) -> U {
   // Q: Why is this fast?
-  // A: The 0..MAX_EXTRA_U64S can be unrolled at compile time and interact
-  //    freely with an outer loop, allowing really fast SIMD stuff.
+  // A: The 0..MAX_U64S can be unrolled at compile time, allowing really
+  // fast SIMD stuff at least in the MAX_U64S=1 (most common) case.
   //
   // Q: Why does this work?
-  // A: We set MAX_EXTRA_U64S so that,
-  //    0  to 57  bit reads -> 0 extra u64's
-  //    58 to 113 bit reads -> 1 extra u64's
-  //    113 to 128 bit reads -> 2 extra u64's
+  // A: We set MAX_U64S so that,
+  //    0  to 57  bit reads -> 1 u64
+  //    58 to 113 bit reads -> 2 u64's
+  //    113 to 128 bit reads -> 3 u64's
   //    During the 1st u64 (prior to the loop), we read all bytes from the
   //    current u64. Due to our bit packing, up to the first 7 of these may
   //    be useless, so we can read up to (64 - 7) = 57 bits safely from a

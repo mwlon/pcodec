@@ -170,11 +170,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
 
   #[allow(clippy::needless_range_loop)]
   #[inline(never)]
-  fn decompress_offsets<const MAX_EXTRA_U64S: usize>(
-    &mut self,
-    reader: &mut BitReader,
-    dst: &mut [U],
-  ) {
+  fn decompress_offsets<const MAX_U64S: usize>(&mut self, reader: &mut BitReader, dst: &mut [U]) {
     let base_bit_idx = reader.bit_idx();
     let src = reader.src;
     let state = &mut self.state;
@@ -187,8 +183,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       let bit_idx = base_bit_idx + offset_bits_csum;
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
-      *dst =
-        bit_reader::read_uint_at::<U, MAX_EXTRA_U64S>(src, byte_idx, bits_past_byte, offset_bits);
+      *dst = bit_reader::read_uint_at::<U, MAX_U64S>(src, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
       + state.offset_bits_csum_scratch[dst.len() - 1]

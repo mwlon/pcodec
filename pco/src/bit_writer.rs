@@ -21,17 +21,15 @@ pub fn write_u64_to(x: u64, byte_idx: usize, dst: &mut [u8]) {
 }
 
 #[inline]
-pub fn write_uint_to<U: ReadWriteUint, const MAX_U64S: Bitlen>(
-  x: U,
+pub fn write_uint_to<U: ReadWriteUint, const MAX_U64S: usize>(
+  val: U,
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
-  n: Bitlen,
   dst: &mut [u8],
 ) {
   // See bit_reader for an explanation of why this is fast and how it works.
-  let x = bits::lowest_bits(x, n);
   write_u64_to(
-    u64_at(dst, byte_idx) | (x.to_u64() << bits_past_byte),
+    u64_at(dst, byte_idx) | (val.to_u64() << bits_past_byte),
     byte_idx,
     dst,
   );
@@ -39,7 +37,7 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_U64S: Bitlen>(
   byte_idx += 7;
 
   for _ in 0..MAX_U64S - 1 {
-    write_u64_to((x >> processed).to_u64(), byte_idx, dst);
+    write_u64_to((val >> processed).to_u64(), byte_idx, dst);
     processed += 64;
     byte_idx += 8;
   }
@@ -47,22 +45,18 @@ pub fn write_uint_to<U: ReadWriteUint, const MAX_U64S: Bitlen>(
 
 pub struct BitWriter<W: Write> {
   pub buf: Vec<u8>,
-  dst: W,
-  // pub current_stream: &'a mut [u8], // either dst or extension
-  // other_stream: &'a mut [u8],
-  // current_is_dst: bool,       // as opposed to extension
-  // skipped: usize,             // in extension
   pub stale_byte_idx: usize,
   pub bits_past_byte: Bitlen,
+  dst: W,
 }
 
 impl<W: Write> BitWriter<W> {
   pub fn new(dst: W, size: usize) -> Self {
     Self {
       buf: vec![0; size],
-      dst,
       stale_byte_idx: 0,
       bits_past_byte: 0,
+      dst,
     }
   }
 
@@ -106,21 +100,18 @@ impl<W: Write> BitWriter<W> {
         x,
         self.stale_byte_idx,
         self.bits_past_byte,
-        n,
         &mut self.buf,
       ),
       2 => write_uint_to::<U, 2>(
         x,
         self.stale_byte_idx,
         self.bits_past_byte,
-        n,
         &mut self.buf,
       ),
       3 => write_uint_to::<U, 3>(
         x,
         self.stale_byte_idx,
         self.bits_past_byte,
-        n,
         &mut self.buf,
       ),
       0 => panic!("[BitReader] data type cannot have 0 bits"),
@@ -178,7 +169,7 @@ mod tests {
   fn test_long_uint_writes() -> PcoResult<()> {
     let mut dst = Vec::new();
     let mut writer = BitWriter::new(&mut dst, 30);
-    writer.write_uint::<u32>((1 << 9) + (1 << 8) + 1, 9);
+    writer.write_uint::<u32>((1 << 8) + 1, 9);
     // 10000000 1
     writer.write_uint::<u32>((1 << 16) + (1 << 5), 17);
     // 10000000 10000010 00000000 01
