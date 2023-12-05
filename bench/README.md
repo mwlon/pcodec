@@ -16,11 +16,11 @@ Check `cargo run --release --bin bench -- --help` for most usage information.
 ## Synthetic
 
 TL;DR (`cd`'d into the repo):
-* `python bench/generate_randoms.py`
+* `python bench/generate_randoms.py` (with numpy installed)
 * `cargo run --release --bin bench`
 
 The script to generate the data uses python, so set up a python3
-environment with `numpy` and `pyarrow` installed.
+environment with `numpy` installed.
 In that environment, run
 `python bench/generate_randoms.py`.
 This will populate some human-readable data in `bench/data/txt/` and
@@ -65,9 +65,9 @@ Compression ratio is reported with 3 significant figures.
 `i64` and `f64` are each 8 bytes, so compression is around 300-500MB/s,
 and decompression is around 2-5GB/s.
 For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
-`0.12.3+zstd.1.5.2` gets:
+`0.13.0` gets:
 
-* level 3: compresses 40 million/s, decompresses 110 million/s, compression
+* level 3: compresses 40 million/s, decompresses 120 million/s, compression
   ratio 3.14.
 * level 22: compresses 0.44 million/s, decompresses 170 million/s,
   compression ratio 3.51.
