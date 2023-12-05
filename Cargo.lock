@@ -96,9 +96,9 @@ checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
 
 [[package]]
 name = "arrow"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "022f3a3f389ac02a971427acafeab9b74c81c49ee5fb94fe781a2956cbca3aa6"
+checksum = "5bc25126d18a012146a888a0298f2c22e1150327bd2765fc76d710a556b2d614"
 dependencies = [
  "ahash",
  "arrow-arith",
@@ -116,9 +116,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-arith"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81b94d8e21d4d195fa371dba4d6684a7e3196ca5696278812e3ceefca9559a8f"
+checksum = "34ccd45e217ffa6e53bbb0080990e77113bdd4e91ddb84e97b77649810bcf1a7"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -131,9 +131,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-array"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e09d42ecd482a864445ed95bf78fb159e37b4d879ca08405b247170fb331daf5"
+checksum = "6bda9acea48b25123c08340f3a8ac361aa0f74469bb36f5ee9acf923fce23e9d"
 dependencies = [
  "ahash",
  "arrow-buffer",
@@ -143,30 +143,31 @@ dependencies = [
  "half",
  "hashbrown",
  "num",
- "num-complex",
 ]
 
 [[package]]
 name = "arrow-buffer"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe5044e672568feeb9e134a96781c8fdee3bce58df889f463517880d4992f751"
+checksum = "01a0fc21915b00fc6c2667b069c1b64bdd920982f426079bc4a7cab86822886c"
 dependencies = [
+ "bytes",
  "half",
  "num",
 ]
 
 [[package]]
 name = "arrow-cast"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eac1141b252f3c4e240de118125fb2ece6a2e31d9740ec98a471feda35898e76"
+checksum = "5dc0368ed618d509636c1e3cc20db1281148190a78f43519487b2daf07b63b4a"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
  "arrow-data",
  "arrow-schema",
  "arrow-select",
+ "base64",
  "chrono",
  "half",
  "lexical-core",
@@ -175,9 +176,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-csv"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13a5e99b4852cc8c85c2274093ba20f4f490266bdecd2fa7c3663c956a5089b5"
+checksum = "2e09aa6246a1d6459b3f14baeaa49606cfdbca34435c46320e14054d244987ca"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -194,9 +195,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-data"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "425a65a08947ed20b54e66749e9a56ed5a1cb1366c001329470dff365dd8411a"
+checksum = "907fafe280a3874474678c1858b9ca4cb7fd83fb8034ff5b6d6376205a08c634"
 dependencies = [
  "arrow-buffer",
  "arrow-schema",
@@ -206,9 +207,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-ipc"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db281245b30c8ac194ed048f1c9bd62ce3d3bfd9a955b6cfe90b554708820bce"
+checksum = "79a43d6808411886b8c7d4f6f7dd477029c1e77ffffffb7923555cc6579639cd"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -220,9 +221,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-ord"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66226fbe71670fa7f95bd4734379a9b14096b4498ed48935d69b5d3c27f96a7f"
+checksum = "9b23b0e53c0db57c6749997fd343d4c0354c994be7eca67152dd2bdb9a3e1bb4"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -235,9 +236,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-row"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f41b69153013b7594edf4a1e6318d36ad539e0be66a7f62ae872f51dea507ac"
+checksum = "361249898d2d6d4a6eeb7484be6ac74977e48da12a4dd81a708d620cc558117a"
 dependencies = [
  "ahash",
  "arrow-array",
@@ -250,16 +251,17 @@ dependencies = [
 
 [[package]]
 name = "arrow-schema"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dceed0efbaf304aaa296169c9eedde4e0ec90e0dc2010a88ea79ea6d86046ae9"
+checksum = "09e28a5e781bf1b0f981333684ad13f5901f4cd2f20589eab7cf1797da8fc167"
 
 [[package]]
 name = "arrow-select"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1640b6be81eddc789e0fa6c4c4c621411afa195146bda577a51de845b368573"
+checksum = "4f6208466590960efc1d2a7172bc4ff18a67d6e25c529381d7f96ddaf0dc4036"
 dependencies = [
+ "ahash",
  "arrow-array",
  "arrow-buffer",
  "arrow-data",
@@ -269,9 +271,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-string"
-version = "44.0.0"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deb780faf7995b2f4f6273109520435262e10fbaba047ebcf13347770bd79d28"
+checksum = "a4a48149c63c11c9ff571e50ab8f017d2a7cb71037a882b42f6354ed2da9acc7"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -280,7 +282,7 @@ dependencies = [
  "arrow-select",
  "num",
  "regex",
- "regex-syntax 0.7.3",
+ "regex-syntax 0.8.2",
 ]
 
 [[package]]
@@ -307,7 +309,7 @@ dependencies = [
  "q_compress",
  "snap",
  "tabled",
- "zstd 0.12.3+zstd.1.5.2",
+ "zstd",
 ]
 
 [[package]]
@@ -358,9 +360,9 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
-version = "1.1.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
+checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
 
 [[package]]
 name = "c_sharp"
@@ -906,9 +908,9 @@ dependencies = [
 
 [[package]]
 name = "num"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
+checksum = "b05180d69e3da0e530ba2a1dae5110317e49e3b7f3d41be227dc5f92e49ee7af"
 dependencies = [
  "num-bigint",
  "num-complex",
@@ -940,9 +942,9 @@ dependencies = [
 
 [[package]]
 name = "num-integer"
-version = "0.1.44"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2cc698a63b549a70bc047073d2949cce27cd1c7b0a4a862d08a8031bc2801db"
+checksum = "225d3389fb3509a24c93f5c29eb6bde2586b98d9f016636dff58d7c6f7569cd9"
 dependencies = [
  "autocfg",
  "num-traits",
@@ -950,9 +952,9 @@ dependencies = [
 
 [[package]]
 name = "num-iter"
-version = "0.1.42"
+version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2021c8337a54d21aca0d59a92577a029af9431cb59b909b03252b9c164fad59"
+checksum = "7d03e6c028c5dc5cac6e2dec0efda81fc887605bb3d884578bb6d6bf7514e252"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -961,9 +963,9 @@ dependencies = [
 
 [[package]]
 name = "num-rational"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d41702bd167c2df5520b384281bc111a4b5efcf7fbc4c9c222c815b07e0a6a6a"
+checksum = "0638a1c9d0a3c0914158145bc76cff373a75a627e6ecbfb71cbe6f453a5a19b0"
 dependencies = [
  "autocfg",
  "num-bigint",
@@ -973,9 +975,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.14"
+version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
+checksum = "39e3200413f237f41ab11ad6d161bc7239c84dcb631773ccd7de3dfe4b5c267c"
 dependencies = [
  "autocfg",
  "libm",
@@ -1042,9 +1044,29 @@ dependencies = [
 
 [[package]]
 name = "parquet"
-version = "44.0.0"
+version = "49.0.0"
+dependencies = [
+ "ahash",
+ "bytes",
+ "chrono",
+ "half",
+ "hashbrown",
+ "num",
+ "num-bigint",
+ "paste",
+ "pco",
+ "seq-macro",
+ "snap",
+ "thrift",
+ "twox-hash",
+ "zstd",
+]
+
+[[package]]
+name = "parquet"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5cbba4c2958e69fcf9cfc03d8cc49ff03d9d2041fcbf26d248637d314bce210"
+checksum = "af88740a842787da39b3d69ce5fbf6fce97d20211d3b299fee0a0da6430c74d4"
 dependencies = [
  "ahash",
  "arrow-array",
@@ -1065,27 +1087,7 @@ dependencies = [
  "snap",
  "thrift",
  "twox-hash",
- "zstd 0.12.3+zstd.1.5.2",
-]
-
-[[package]]
-name = "parquet"
-version = "49.0.0"
-dependencies = [
- "ahash",
- "bytes",
- "chrono",
- "half",
- "hashbrown",
- "num",
- "num-bigint",
- "paste",
- "pco",
- "seq-macro",
- "snap",
- "thrift",
- "twox-hash",
- "zstd 0.13.0",
+ "zstd",
 ]
 
 [[package]]
@@ -1113,8 +1115,7 @@ dependencies = [
  "arrow",
  "clap",
  "enum-iterator",
- "num-complex",
- "parquet 44.0.0",
+ "parquet 49.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pco",
 ]
 
@@ -1272,9 +1273,9 @@ checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "regex-syntax"
-version = "0.7.3"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ab07dc67230e4a4718e70fd5c20055a4334b121f1f9db8fe63ef39ce9b8c846"
+checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rustc_version"
@@ -1716,30 +1717,11 @@ checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
 name = "zstd"
-version = "0.12.3+zstd.1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76eea132fb024e0e13fd9c2f5d5d595d8a967aa72382ac2f9d39fcc95afd0806"
-dependencies = [
- "zstd-safe 6.0.5+zstd.1.5.4",
-]
-
-[[package]]
-name = "zstd"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bffb3309596d527cfcba7dfc6ed6052f1d39dfbd7c867aa2e865e4a449c10110"
 dependencies = [
- "zstd-safe 7.0.0",
-]
-
-[[package]]
-name = "zstd-safe"
-version = "6.0.5+zstd.1.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d56d9e60b4b1758206c238a10165fbcae3ca37b01744e394c463463f6529d23b"
-dependencies = [
- "libc",
- "zstd-sys",
+ "zstd-safe",
 ]
 
 [[package]]
