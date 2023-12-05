@@ -144,7 +144,7 @@ impl<P: NumberLikeArrow> ColumnReader<P> for CsvColumnReader<P> {
     Self: Sized,
   {
     let csv_reader = csv::ReaderBuilder::new(SchemaRef::new(schema.clone()))
-      .has_header(opt.csv_has_header()?)
+      .with_header(opt.csv_has_header()?)
       .with_batch_size(opt.chunk_size)
       .with_delimiter(opt.delimiter as u8)
       .build(File::open(path)?)?;
