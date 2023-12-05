@@ -92,7 +92,7 @@ impl<P: NumberLikeArrow> ColumnWriter<P> for StdoutWriter<P> {
     let mut stdout_bytes = Vec::<u8>::new();
     {
       let mut writer = CsvWriterBuilder::new()
-        .has_headers(false)
+        .with_header(false)
         .with_timestamp_format(self.timestamp_format.clone())
         .build(&mut stdout_bytes);
       writer.write(&batch)?;
