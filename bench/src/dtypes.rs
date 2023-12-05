@@ -1,11 +1,10 @@
-use parquet::data_type as parq;
-use pco::data_types::NumberLike as PNumberLike;
-use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
 use std::mem;
 
-pub fn dtype_str(dataset: &str) -> &str {
-  dataset.split('_').next().unwrap()
-}
+use parquet::data_type as parq;
+
+use crate::num_vec::NumVec;
+use pco::data_types::NumberLike as PNumberLike;
+use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
 
 pub trait Dtype: QNumberLike {
   type Pco: PNumberLike;
@@ -13,6 +12,7 @@ pub trait Dtype: QNumberLike {
 
   const PARQUET_DTYPE_STR: &'static str;
 
+  fn num_vec(nums: Vec<Self>) -> NumVec;
   fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T];
   fn slice_to_pco(slice: &[Self]) -> &[Self::Pco];
   fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self>;
@@ -21,11 +21,15 @@ pub trait Dtype: QNumberLike {
 
 // This is technically not correct for parquet.
 // Parquet only has signed ints; here we just transmute between them.
-impl Dtype for u32 {
-  type Pco = u32;
+impl Dtype for i32 {
+  type Pco = i32;
   type Parquet = parq::Int32Type;
 
   const PARQUET_DTYPE_STR: &'static str = "INT32";
+
+  fn num_vec(nums: Vec<Self>) -> NumVec {
+    NumVec::I32(nums)
+  }
 
   fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {
     unsafe { mem::transmute(slice) }
@@ -40,7 +44,7 @@ impl Dtype for u32 {
   }
 
   fn vec_from_parquet(v: Vec<i32>) -> Vec<Self> {
-    unsafe { mem::transmute(v) }
+    v
   }
 }
 
@@ -49,6 +53,37 @@ impl Dtype for i64 {
   type Parquet = parq::Int64Type;
 
   const PARQUET_DTYPE_STR: &'static str = "INT64";
+
+  fn num_vec(nums: Vec<Self>) -> NumVec {
+    NumVec::I64(nums)
+  }
+
+  fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {
+    slice
+  }
+
+  fn slice_to_pco(slice: &[Self]) -> &[Self::Pco] {
+    slice
+  }
+
+  fn vec_from_pco(v: Vec<Self::Pco>) -> Vec<Self> {
+    v
+  }
+
+  fn vec_from_parquet(v: Vec<Self>) -> Vec<Self> {
+    v
+  }
+}
+
+impl Dtype for f32 {
+  type Pco = f32;
+  type Parquet = parq::FloatType;
+
+  const PARQUET_DTYPE_STR: &'static str = "FLOAT";
+
+  fn num_vec(nums: Vec<Self>) -> NumVec {
+    NumVec::F32(nums)
+  }
 
   fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {
     slice
@@ -73,6 +108,10 @@ impl Dtype for f64 {
 
   const PARQUET_DTYPE_STR: &'static str = "DOUBLE";
 
+  fn num_vec(nums: Vec<Self>) -> NumVec {
+    NumVec::F64(nums)
+  }
+
   fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {
     slice
   }
@@ -95,6 +134,10 @@ impl Dtype for TimestampMicros {
   type Parquet = parq::Int64Type;
 
   const PARQUET_DTYPE_STR: &'static str = "INT64";
+
+  fn num_vec(nums: Vec<Self>) -> NumVec {
+    NumVec::I64(unsafe { mem::transmute(nums) })
+  }
 
   fn slice_to_parquet(slice: &[Self]) -> &[<Self::Parquet as parq::DataType>::T] {
     unsafe { mem::transmute(slice) }

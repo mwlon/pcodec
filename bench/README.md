@@ -1,13 +1,19 @@
 # Benchmarks
 
-This generates a wide variety of common distributions,
-compresses them, decompresses them, and makes sure
-all the data came back bitwise identical.
-It supports
-* multiple codecs (pco, q\_compress, zstd)
-* multiple data types
+The benchmarks support many things!
+* different codecs
+* all sorts of configurations on those codecs
+* multiple datasets
+  * synthetic, theoretically understood ones
+  * arbitrary Parquet files
+* measurement for compressed size, compression time, and decompression time
 
-## Running
+By default, the benchmarks also assert that the data comes back bitwise
+identical to the input.
+
+Check `cargo run --release --bin bench -- --help` for most usage information.
+
+## Synthetic
 
 TL;DR (`cd`'d into the repo):
 * `python bench/generate_randoms.py` (with numpy installed)
@@ -37,15 +43,10 @@ it took to compress and decompress each dataset.
 You can see the compressed files in
 `bench/data/pco/`.
 
-Check `cargo run --release --bin bench -- --help` for information on how to
-run other codecs, configure codecs differently, only run specific datasets,
-etc.
+### Results
 
-## Results
-
-All figures reported here are calculated using a single thread on a
-2.8GHz i5 CPU, operating on in-memory data, using Rust 1.70 with instruction
-sets BMI1 and BMI2 enabled.
+All figures reported here are calculated using a single thread on an Apple
+M3 performance core, operating on in-memory data, using Rust 1.73.
 Benchmarks were done by taking the median of 100 runs on a dataset of 1M
 numbers with `compression_level` 8.
 
@@ -55,17 +56,51 @@ Compression ratio is reported with 3 significant figures.
 
 | dataset            | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
 |--------------------|---------------------------------|-----------------------------------|-------------------|
-| `f64_decimal`      | 12                              | 96                                | 4.67              |
-| `f64_slow_cosine`  | 16                              | 120                               | 4.35              |
-| `i64_lomax05_reg`  | 19                              | 200                               | 4.62              |
-| `i64_sparse`       | 37                              | 170                               | 792               |
-| `micros_millis`    | 12                              | 180                               | 2.08              |
+| `f64_decimal`      | 36                              | 290                               | 4.67              |
+| `f64_slow_cosine`  | 41                              | 270                               | 4.51              |
+| `i64_lomax05_reg`  | 49                              | 550                               | 4.63              |
+| `i64_sparse`       | 190                             | 690                               | 780               |
+| `micros_millis`    | 35                              | 540                               | 2.14              |
 
-`i64` and `f64` are each 8 bytes, so these speeds are in the ballpark of 1GB/s.
-For reference, on the same hardware and heavy-tail integers dataset, ZStandard
+`i64` and `f64` are each 8 bytes, so compression is around 300-500MB/s,
+and decompression is around 2-5GB/s.
+For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
 `0.12.3+zstd.1.5.2` gets:
 
-* level 3: compresses 13 million/s, decompresses 52 million/s, compression
+* level 3: compresses 40 million/s, decompresses 110 million/s, compression
   ratio 3.14.
-* level 22: compresses 0.15 million/s, decompresses 48 million/s,
+* level 22: compresses 0.44 million/s, decompresses 170 million/s,
   compression ratio 3.51.
+
+## Real World
+
+Real world datasets are the best indicator of usefulness.
+We have compared against 3 datasets, all of which are readily available and
+accessible in download size:
+* [Devin Smith's air quality data download](https://deephaven.io/wp-content/devinrsmith-air-quality.20220714.zstd.parquet) (15MB)
+* [NYC taxi data (2023-04 high volume for hire)](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page) (469MB)
+* Reddit r/place 2022 data
+  * [upstream Reddit post and original data](https://www.reddit.com/r/place/comments/txvk2d/rplace_datasets_april_fools_2022/)
+  * [processed Parquet file download](https://pcodec-public.s3.amazonaws.com/reddit_2022_place_numerical.parquet) (1.3GB)
+
+<div style="text-align:center">
+  <img
+    alt="bar charts showing better compression for pco than zstd.parquet"
+    src="../images/real_world_compression_ratio.svg"
+    width="600px"
+  >
+  <img
+    alt="bar charts showing similar compression speed for pco and zstd.parquet"
+    src="../images/real_world_compression_speed.svg"
+    width="600px"
+  >
+  <img
+    alt="bar charts showing faster decompression speed for pco than zstd.parquet"
+    src="../images/real_world_decompression_speed.svg"
+    width="600px"
+  >
+</div>
+
+These were again done on a single core of an M3 performance core.
+Only numerical columns (the physical dtypes INT32, INT64, FLOAT, and DOUBLE)
+were used.

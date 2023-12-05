@@ -8,7 +8,8 @@ use arrow::csv::WriterBuilder as CsvWriterBuilder;
 use arrow::datatypes::{Field, Schema};
 use arrow::record_batch::RecordBatch;
 
-use pco::standalone::FileDecompressor;
+use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
+use pco::FULL_BATCH_N;
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -19,28 +20,33 @@ pub trait DecompressHandler {
 }
 
 impl<P: NumberLikeArrow> DecompressHandler for HandlerImpl<P> {
-  fn decompress(&self, opt: &DecompressOpt, bytes: &[u8]) -> Result<()> {
-    let (fd, mut consumed) = FileDecompressor::new(bytes)?;
+  // TODO read directly from file
+  fn decompress(&self, opt: &DecompressOpt, src: &[u8]) -> Result<()> {
+    let (fd, mut src) = FileDecompressor::new(src)?;
 
     let mut writer = new_column_writer::<P>(opt)?;
     let mut remaining_limit = opt.limit.unwrap_or(usize::MAX);
+    let mut nums = Vec::new();
 
     loop {
       if remaining_limit == 0 {
         break;
       }
 
-      let (maybe_cd, additional) = fd.chunk_decompressor::<P::Num>(&bytes[consumed..])?;
-      consumed += additional;
-
-      if let Some(mut cd) = maybe_cd {
+      if let MaybeChunkDecompressor::Some(mut cd) = fd.chunk_decompressor::<P::Num, _>(src)? {
         let n = cd.n();
         let batch_size = min(n, remaining_limit);
-        // TODO this doesn't work for certain batch sizes
-        let mut nums = vec![P::Num::default(); batch_size];
-        let (_, additional) = cd.decompress(&bytes[consumed..], &mut nums)?;
-        consumed += additional;
-        writer.write(nums.into_iter().map(P::num_to_native).collect::<Vec<_>>())?;
+        // how many pco should decompress
+        let pco_size = (1 + batch_size / FULL_BATCH_N) * FULL_BATCH_N;
+        nums.resize(pco_size, P::Num::default());
+        let _ = cd.decompress(&mut nums)?;
+        src = cd.into_src();
+        let arrow_nums = nums
+          .iter()
+          .take(batch_size)
+          .map(|&x| P::num_to_native(x))
+          .collect::<Vec<_>>();
+        writer.write(arrow_nums)?;
         remaining_limit -= batch_size;
       } else {
         break;

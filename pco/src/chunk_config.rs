@@ -1,6 +1,43 @@
-use crate::constants::DEFAULT_MAX_PAGE_SIZE;
+use crate::constants::DEFAULT_MAX_PAGE_N;
 use crate::errors::{PcoError, PcoResult};
 use crate::{bits, DEFAULT_COMPRESSION_LEVEL};
+
+/// Configures whether integer multiplier detection is enabled.
+///
+/// Examples where this helps:
+/// * nanosecond-precision timestamps that are mostly whole numbers of
+/// microseconds, with a few exceptions
+/// * integers `[7, 107, 207, 307, ... 100007]` shuffled
+///
+/// When this is helpful, compression and decompression speeds can be
+/// substantially reduced. This configuration may hurt
+/// compression speed slightly even when it isn't helpful.
+/// However, the compression ratio improvements tend to be large.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum IntMultSpec {
+  Disabled,
+  #[default]
+  Enabled,
+}
+
+/// Configures whether float multiplier detection is enabled.
+///
+/// Examples where this helps:
+/// * approximate multiples of 0.01
+/// * approximate multiples of pi
+///
+/// Float mults can work even when there are NaNs and infinities.
+/// When this is helpful, compression and decompression speeds can be
+/// substantially reduced. In rare cases, this configuration
+/// may reduce compression speed somewhat even when it isn't helpful.
+/// However, the compression ratio improvements tend to be large.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatMultSpec {
+  Disabled,
+  #[default]
+  Enabled,
+  // TODO support a LossyEnabled mode that always drops the ULPs latent var
+}
 
 /// All configurations available for a compressor.
 ///
@@ -11,7 +48,7 @@ use crate::{bits, DEFAULT_COMPRESSION_LEVEL};
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ChunkConfig {
-  /// `compression_level` ranges from 0 to 12 inclusive (default 8).
+  /// `compression_level` ranges from 0 to 12 inclusive (default: 8).
   ///
   /// The compressor uses up to 2^`compression_level` bins.
   ///
@@ -22,8 +59,8 @@ pub struct ChunkConfig {
   /// * Level 12 can marginally better compression than 8 with 4096
   /// bins, but may run several times slower.
   pub compression_level: usize,
-  /// `delta_encoding_order` ranges from 0 to 7 inclusive (defaults to
-  /// automatically detecting on each chunk).
+  /// `delta_encoding_order` ranges from 0 to 7 inclusive (default:
+  /// `None`, automatically detecting on each chunk).
   ///
   /// It is the number of times to apply delta encoding
   /// before compressing. For instance, say we have the numbers
@@ -43,33 +80,21 @@ pub struct ChunkConfig {
   /// chunks,
   /// [`auto_compressor_config()`][crate::auto_delta_encoding_order] can help.
   pub delta_encoding_order: Option<usize>,
-  /// `use_gcds` improves compression ratio in cases where all
-  /// numbers in a bin share a nontrivial Greatest Common Divisor
-  /// (default true).
+  /// Integer multiplier mode improves compression ratio in cases where many
+  /// numbers are congruent modulo an integer `base`
+  /// (default: `Enabled`).
   ///
-  /// Examples where this helps:
-  /// * nanosecond-precision timestamps that are all whole numbers of
-  /// microseconds
-  /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
+  /// See [`IntMultSpec`][crate::IntMultSpec] for more detail.
+  pub int_mult_spec: IntMultSpec,
+  /// Float multiplier mode improves compression ratio in cases where the data
+  /// type is a float and all numbers are close to a multiple of a float
+  /// `base`
+  /// (default: `Enabled`).
   ///
-  /// When this is helpful, compression and decompression speeds are slightly
-  /// reduced (up to ~15%). In rare cases, this configuration may reduce
-  /// compression speed even when it isn't helpful.
-  pub use_gcds: bool,
-  /// `use_float_mult` improves compression ratio in cases where the data type
-  /// is a float and all numbers are close to a multiple of a single float
-  /// `base`.
-  /// (default true).
-  ///
-  /// `base` is automatically detected. For example, this is helpful if all
-  /// floats are approximately decimals (multiples of 0.01).
-  ///
-  /// When this is helpful, compression and decompression speeds are
-  /// substantially reduced (up to ~50%). In rare cases, this configuration
-  /// may reduce compression speed somewhat even when it isn't helpful.
-  /// However, the compression ratio improvements tend to be quite large.
-  pub use_float_mult: bool,
+  /// See [`FloatMultSpec`][crate::FloatMultSpec] for more detail.
+  pub float_mult_spec: FloatMultSpec,
   /// `paging_spec` specifies how the chunk should be split into pages
+  /// (default: equal pages up to 2^18 numbers each).
   ///
   /// See [`PagingSpec`][crate::PagingSpec] for more information.
   pub paging_spec: PagingSpec,
@@ -80,9 +105,9 @@ impl Default for ChunkConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: None,
-      use_gcds: true,
-      use_float_mult: true,
-      paging_spec: Default::default(),
+      int_mult_spec: IntMultSpec::Enabled,
+      float_mult_spec: FloatMultSpec::Enabled,
+      paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }
 }
@@ -100,9 +125,15 @@ impl ChunkConfig {
     self
   }
 
-  /// Sets [`use_gcds`][ChunkConfig::use_gcds].
-  pub fn with_use_gcds(mut self, use_gcds: bool) -> Self {
-    self.use_gcds = use_gcds;
+  /// Sets [`int_mult_spec`][ChunkConfig::int_mult_spec].
+  pub fn with_int_mult_spec(mut self, int_mult_spec: IntMultSpec) -> Self {
+    self.int_mult_spec = int_mult_spec;
+    self
+  }
+
+  /// Sets [`float_mult_spec`][ChunkConfig::float_mult_spec].
+  pub fn with_float_mult_spec(mut self, float_mult_spec: FloatMultSpec) -> Self {
+    self.float_mult_spec = float_mult_spec;
     self
   }
 
@@ -117,28 +148,27 @@ impl ChunkConfig {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum PagingSpec {
-  /// Divide the chunk into equal pages of up to the provided size in numbers.
+  /// Divide the chunk into equal pages of up to this many numbers.
   ///
-  /// For example, with a default size of 100,000, a chunk of size 150,000
-  /// would be divided into 2 pages, each of 75,000 numbers.
+  /// For example, with equal pages up to 100,000, a chunk of 150,000
+  /// numbers would be divided into 2 pages, each of 75,000 numbers.
   EqualPagesUpTo(usize),
-  /// Divide the chunk into the exactly provdided sizes.
+  /// Divide the chunk into the exactly provided counts.
   ///
-  /// If any of the sizes are 0 or the chunk size does not equal the sum,
-  /// you will get an InvalidArgument error during compression.
+  /// Will return an InvalidArgument error during compression if
+  /// any of the counts are 0 or the sum does not equal the chunk count.
   ExactPageSizes(Vec<usize>),
 }
 
-/// Default: equal pages up to 1,000,000 numbers each.
 impl Default for PagingSpec {
   fn default() -> Self {
-    Self::EqualPagesUpTo(DEFAULT_MAX_PAGE_SIZE)
+    Self::EqualPagesUpTo(DEFAULT_MAX_PAGE_N)
   }
 }
 
 impl PagingSpec {
-  pub(crate) fn page_sizes(&self, n: usize) -> PcoResult<Vec<usize>> {
-    let page_sizes = match self {
+  pub(crate) fn n_per_page(&self, n: usize) -> PcoResult<Vec<usize>> {
+    let n_per_page = match self {
       PagingSpec::EqualPagesUpTo(max_size) => {
         let n_pages = bits::ceil_div(n, *max_size);
         let mut res = Vec::new();
@@ -150,25 +180,25 @@ impl PagingSpec {
         }
         res
       }
-      PagingSpec::ExactPageSizes(sizes) => sizes.to_vec(),
+      PagingSpec::ExactPageSizes(n_per_page) => n_per_page.to_vec(),
     };
 
-    let sizes_n: usize = page_sizes.iter().sum();
-    if sizes_n != n {
+    let summed_n: usize = n_per_page.iter().sum();
+    if summed_n != n {
       return Err(PcoError::invalid_argument(format!(
         "paging spec suggests {} numbers but {} were given",
-        sizes_n, n,
+        summed_n, n,
       )));
     }
 
-    for &size in &page_sizes {
-      if size == 0 {
+    for &page_n in &n_per_page {
+      if page_n == 0 {
         return Err(PcoError::invalid_argument(
           "cannot write data page of 0 numbers",
         ));
       }
     }
 
-    Ok(page_sizes)
+    Ok(n_per_page)
   }
 }

@@ -1,5 +1,12 @@
+/// Information about progress after calling a decompression function.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Progress {
-  pub n_processed: usize,  // # of numbers decompressed
-  pub finished_page: bool, // all numbers have been decompressed
+  /// The count of numbers written to `dst`.
+  pub n_processed: usize,
+  /// Whether the decompressor finished all compressed data relevant to
+  /// the unit.
+  /// For instance,
+  /// [`PageDecompressor::decompress`][crate::wrapped::PageDecompressor::decompress]
+  /// will return whether all data in the page was finished.
+  pub finished: bool,
 }

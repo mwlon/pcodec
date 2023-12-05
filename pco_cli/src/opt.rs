@@ -33,14 +33,14 @@ pub struct CompressOpt {
   #[arg(long = "delta-order")]
   pub delta_encoding_order: Option<usize>,
   #[arg(long)]
-  pub disable_gcds: bool,
+  pub disable_int_mult: bool,
   #[arg(long)]
   pub dtype: Option<DType>,
   #[arg(long)]
   pub col_name: Option<String>,
   #[arg(long)]
   pub col_idx: Option<usize>,
-  #[arg(long, default_value = "1000000")]
+  #[arg(long, default_value = "262144")]
   pub chunk_size: usize,
   #[arg(long)]
   pub overwrite: bool,

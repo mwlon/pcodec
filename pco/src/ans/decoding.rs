@@ -3,7 +3,7 @@ use crate::ans::{AnsState, Token};
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::errors::PcoResult;
-use crate::ChunkLatentMeta;
+use crate::ChunkLatentVarMeta;
 
 #[derive(Clone, Debug)]
 pub struct Node {
@@ -14,7 +14,7 @@ pub struct Node {
 
 #[derive(Clone, Debug)]
 pub struct Decoder {
-  nodes: Vec<Node>,
+  pub nodes: Vec<Node>,
 }
 
 impl Decoder {
@@ -41,7 +41,9 @@ impl Decoder {
     Self { nodes }
   }
 
-  pub fn from_latent_meta<U: UnsignedLike>(latent_meta: &ChunkLatentMeta<U>) -> PcoResult<Self> {
+  pub fn from_chunk_latent_var_meta<U: UnsignedLike>(
+    latent_meta: &ChunkLatentVarMeta<U>,
+  ) -> PcoResult<Self> {
     let weights = latent_meta
       .bins
       .iter()
@@ -49,10 +51,5 @@ impl Decoder {
       .collect::<Vec<_>>();
     let spec = Spec::from_weights(latent_meta.ans_size_log, weights)?;
     Ok(Self::new(&spec))
-  }
-
-  #[inline]
-  pub fn get_node(&self, state_idx: AnsState) -> &Node {
-    unsafe { self.nodes.get_unchecked(state_idx as usize) }
   }
 }

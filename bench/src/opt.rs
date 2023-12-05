@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{Args, Parser};
@@ -17,10 +18,15 @@ pub struct Opt {
   /// codec.
   #[arg(long, short, default_value = "pco", value_parser=CodecConfig::from_str, value_delimiter=',')]
   pub codecs: Vec<CodecConfig>,
-  /// Comma-separated substrings of datasets to benchmark.
-  /// By default all datasets are run.
+  /// Comma-separated substrings of synthetic datasets to benchmark.
+  /// By default all synthetic datasets are run.
   #[arg(long, short, default_value = "", value_delimiter = ',')]
   pub datasets: Vec<String>,
+  /// Path to a parquet file to use as input.
+  /// Only numerical columns in the file will be used.
+  /// Only non-null values will be used.
+  #[arg(long, short)]
+  pub parquet_dataset: Option<PathBuf>,
   /// Number of iterations to run each codec x dataset combination for
   /// better estimation of durations.
   /// The median duration is kept.

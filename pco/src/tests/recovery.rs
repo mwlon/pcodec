@@ -1,23 +1,93 @@
 use rand::Rng;
+use rand_xoshiro::rand_core::SeedableRng;
 
 use crate::chunk_config::ChunkConfig;
+use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
+use crate::float_mult_utils::FloatMultConfig;
 use crate::standalone::{auto_decompress, simple_compress, FileCompressor};
+use crate::{ChunkMeta, Mode};
+
+fn compress_w_meta<T: NumberLike>(
+  nums: &[T],
+  config: &ChunkConfig,
+) -> PcoResult<(Vec<u8>, ChunkMeta<T::Unsigned>)> {
+  let mut compressed = Vec::new();
+  let fc = FileCompressor::default();
+  fc.write_header(&mut compressed)?;
+  let cd = fc.chunk_compressor(nums, config)?;
+  let meta = cd.meta().clone();
+  cd.write_chunk(&mut compressed)?;
+  fc.write_footer(&mut compressed)?;
+
+  Ok((compressed, meta))
+}
+
+fn assert_nums_eq<T: NumberLike>(decompressed: &[T], expected: &[T], name: &str) -> PcoResult<()> {
+  let debug_info = format!("name={}", name,);
+  // We can't do assert_eq on the whole vector because even bitwise identical
+  // floats sometimes aren't equal by ==.
+  assert_eq!(
+    decompressed.len(),
+    expected.len(),
+    "{}",
+    debug_info
+  );
+  for (i, (x, y)) in decompressed.iter().zip(expected).enumerate() {
+    assert_eq!(
+      x.to_unsigned(),
+      y.to_unsigned(),
+      "at {}; {}",
+      i,
+      debug_info,
+    );
+  }
+  Ok(())
+}
+
+fn assert_recovers<T: NumberLike>(
+  nums: &[T],
+  compression_level: usize,
+  name: &str,
+) -> PcoResult<()> {
+  for delta_encoding_order in [0, 1, 7] {
+    let config = ChunkConfig {
+      compression_level,
+      delta_encoding_order: Some(delta_encoding_order),
+      ..Default::default()
+    };
+    let compressed = simple_compress(&nums, &config)?;
+    let decompressed = auto_decompress(&compressed)?;
+    assert_nums_eq(
+      &decompressed,
+      &nums,
+      &format!(
+        "{} delta order={}",
+        name, delta_encoding_order
+      ),
+    )?;
+  }
+  Ok(())
+}
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
-  assert_recovers(vec![u64::MIN, u64::MAX], 0, "int extremes 0")?;
   assert_recovers(
-    vec![f64::MIN, f64::MAX],
+    &vec![u64::MIN, u64::MAX],
+    0,
+    "int extremes 0",
+  )?;
+  assert_recovers(
+    &vec![f64::MIN, f64::MAX],
     0,
     "float extremes 0",
   )?;
-  assert_recovers(vec![1.2_f32], 0, "float 0")?;
-  assert_recovers(vec![1.2_f32], 1, "float 1")?;
-  assert_recovers(vec![1.2_f32], 2, "float 2")?;
-  assert_recovers(Vec::<u32>::new(), 6, "empty 6")?;
-  assert_recovers(Vec::<u32>::new(), 0, "empty 0")
+  assert_recovers(&vec![1.2_f32], 0, "float 0")?;
+  assert_recovers(&vec![1.2_f32], 1, "float 1")?;
+  assert_recovers(&vec![1.2_f32], 2, "float 2")?;
+  assert_recovers(&Vec::<u32>::new(), 6, "empty 6")?;
+  assert_recovers(&Vec::<u32>::new(), 0, "empty 0")
 }
 
 #[test]
@@ -26,7 +96,7 @@ fn test_moderate_data() -> PcoResult<()> {
   for i in -50000..50000 {
     v.push(i);
   }
-  assert_recovers(v, 3, "moderate data")
+  assert_recovers(&v, 3, "moderate data")
 }
 
 #[test]
@@ -38,23 +108,23 @@ fn test_sparse() -> PcoResult<()> {
   v.push(0);
   v.push(0);
   v.push(1);
-  assert_recovers(v, 1, "sparse")
+  assert_recovers(&v, 1, "sparse")
 }
 
 #[test]
 fn test_u32_codec() -> PcoResult<()> {
-  assert_recovers(vec![0_u32, u32::MAX, 3, 4, 5], 1, "u32s")
+  assert_recovers(&vec![0_u32, u32::MAX, 3, 4, 5], 1, "u32s")
 }
 
 #[test]
 fn test_u64_codec() -> PcoResult<()> {
-  assert_recovers(vec![0_u64, u64::MAX, 3, 4, 5], 1, "u64s")
+  assert_recovers(&vec![0_u64, u64::MAX, 3, 4, 5], 1, "u64s")
 }
 
 #[test]
 fn test_i32_codec() -> PcoResult<()> {
   assert_recovers(
-    vec![0_i32, -1, i32::MAX, i32::MIN, 7],
+    &vec![0_i32, -1, i32::MAX, i32::MIN, 7],
     1,
     "i32s",
   )
@@ -63,7 +133,7 @@ fn test_i32_codec() -> PcoResult<()> {
 #[test]
 fn test_i64_codec() -> PcoResult<()> {
   assert_recovers(
-    vec![0_i64, -1, i64::MAX, i64::MIN, 7],
+    &vec![0_i64, -1, i64::MAX, i64::MIN, 7],
     1,
     "i64s",
   )
@@ -72,7 +142,7 @@ fn test_i64_codec() -> PcoResult<()> {
 #[test]
 fn test_f32_codec() -> PcoResult<()> {
   assert_recovers(
-    vec![
+    &vec![
       f32::MAX,
       f32::MIN,
       f32::NAN,
@@ -90,7 +160,7 @@ fn test_f32_codec() -> PcoResult<()> {
 #[test]
 fn test_f64_codec() -> PcoResult<()> {
   assert_recovers(
-    vec![
+    &vec![
       f64::MAX,
       f64::MIN,
       f64::NAN,
@@ -118,40 +188,71 @@ fn test_multi_chunk() -> PcoResult<()> {
   fc.write_footer(&mut compressed)?;
 
   let res = auto_decompress::<i64>(&compressed)?;
-  assert_eq!(res, vec![1, 2, 3, 11, 12, 13], "multi chunk");
+  assert_nums_eq(
+    &res,
+    &vec![1, 2, 3, 11, 12, 13],
+    "multi chunk",
+  )?;
+  Ok(())
+}
+
+fn recover_with_alternating_nums(offset_bits: Bitlen, name: &str) -> PcoResult<()> {
+  let nums = vec![0_u64, 1 << (offset_bits - 1)].repeat(50);
+  let (compressed, meta) = compress_w_meta(
+    &nums,
+    &ChunkConfig {
+      delta_encoding_order: Some(0),
+      compression_level: 0,
+      ..Default::default()
+    },
+  )?;
+  assert_eq!(meta.per_latent_var.len(), 1);
+  let latent_var = &meta.per_latent_var[0];
+  assert_eq!(latent_var.bins.len(), 1);
+  let bin = latent_var.bins[0];
+  assert_eq!(bin.offset_bits, offset_bits);
+  let decompressed = auto_decompress(&compressed)?;
+  assert_nums_eq(&decompressed, &nums, name)
+}
+
+#[test]
+fn test_56_bit_offsets() -> PcoResult<()> {
+  recover_with_alternating_nums(56, "56 bit offsets")
+}
+
+#[test]
+fn test_57_bit_offsets() -> PcoResult<()> {
+  recover_with_alternating_nums(57, "57 bit offsets")
+}
+
+#[test]
+fn test_64_bit_offsets() -> PcoResult<()> {
+  recover_with_alternating_nums(64, "64 bit offsets")
+}
+
+#[test]
+fn test_with_int_mult() -> PcoResult<()> {
+  let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
+  let mut nums = Vec::new();
+  for _ in 0..300 {
+    nums.push(rng.gen_range(-1000..1000) * 8 - 1);
+  }
+  let (compressed, meta) = compress_w_meta(
+    &nums,
+    &ChunkConfig {
+      delta_encoding_order: Some(0),
+      ..Default::default()
+    },
+  )?;
+  assert_eq!(meta.mode, Mode::IntMult(8_u32));
+  let decompressed = auto_decompress(&compressed)?;
+  assert_nums_eq(&decompressed, &nums, "sparse w gcd")?;
   Ok(())
 }
 
 #[test]
-fn test_with_gcds() -> PcoResult<()> {
-  assert_recovers(vec![7, 7, 21, 21], 1, "trivial gcd ranges")?;
-  assert_recovers(
-    vec![7, 7, 21, 28],
-    1,
-    "one trivial gcd range",
-  )?;
-  assert_recovers(
-    vec![7, 14, 21, 28],
-    1,
-    "nontrivial gcd ranges",
-  )?;
-  assert_recovers(vec![7, 14, 22, 29], 1, "offset gcds")?;
-  assert_recovers(
-    vec![7, 11, 13, 17],
-    1,
-    "partially offset gcds",
-  )?;
-
-  let mut sparse_with_gcd = vec![15, 23, 31, 39];
-  for _ in 0..100 {
-    sparse_with_gcd.push(7);
-  }
-  assert_recovers(sparse_with_gcd, 4, "sparse with gcd")
-}
-
-#[test]
 fn test_sparse_islands() -> PcoResult<()> {
-  let mut rng = rand::thread_rng();
+  let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
   let mut nums = Vec::new();
   // sparse - one common island of [0, 8) and one rare of [1000, 1008)
   for _ in 0..20 {
@@ -160,12 +261,12 @@ fn test_sparse_islands() -> PcoResult<()> {
     }
     nums.push(rng.gen_range(1000..1008))
   }
-  assert_recovers(nums, 4, "sparse islands")
+  assert_recovers(&nums, 4, "sparse islands")
 }
 
 #[test]
 fn test_decimals() -> PcoResult<()> {
-  let mut rng = rand::thread_rng();
+  let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
   let mut nums = Vec::new();
   let n = 300;
 
@@ -184,76 +285,35 @@ fn test_decimals() -> PcoResult<()> {
   // adjustment, plus some overhead. Each infinity should take 1 bit plus maybe
   // 2 for adjustment.
   let overhead_bytes = 100;
-  assert_recovers_within_size(
-    &nums,
-    2,
-    "decimals",
-    0,
-    (9 * n + 3 * n) / 8 + overhead_bytes,
-  )?;
-  assert_recovers(nums, 2, "decimals")
-}
-
-fn assert_recovers<T: NumberLike>(
-  nums: Vec<T>,
-  compression_level: usize,
-  name: &str,
-) -> PcoResult<()> {
-  for delta_encoding_order in [0, 1, 7] {
-    assert_recovers_within_size(
-      &nums,
-      compression_level,
-      name,
-      delta_encoding_order,
-      usize::MAX,
-    )?;
-  }
-  Ok(())
-}
-
-fn assert_recovers_within_size<T: NumberLike>(
-  nums: &[T],
-  compression_level: usize,
-  name: &str,
-  delta_encoding_order: usize,
-  max_byte_size: usize,
-) -> PcoResult<()> {
-  let debug_info = format!(
-    "name={} delta_encoding_order={}",
-    name, delta_encoding_order,
-  );
-  let config = ChunkConfig {
-    compression_level,
-    delta_encoding_order: Some(delta_encoding_order),
-    ..Default::default()
-  };
-  let compressed = simple_compress(nums, &config)?;
-  assert!(
-    compressed.len() <= max_byte_size,
-    "compressed size {} > {}; {}",
-    compressed.len(),
-    max_byte_size,
-    debug_info
-  );
-  let decompressed = auto_decompress::<T>(&compressed)?;
-  // We can't do assert_eq on the whole vector because even bitwise identical
-  // floats sometimes aren't equal by ==.
+  let (compressed, meta) = compress_w_meta(&nums, &ChunkConfig::default())?;
+  assert!(compressed.len() < (9 * n + 3 * n) / 8 + overhead_bytes);
   assert_eq!(
-    decompressed.len(),
-    nums.len(),
-    "{}",
-    debug_info
+    meta.mode,
+    Mode::FloatMult(FloatMultConfig {
+      base: 1.0 / 100.0,
+      inv_base: 100.0
+    })
   );
-  for i in 0..decompressed.len() {
-    // directly comparing numbers might not work for floats
-    assert!(
-      decompressed[i].to_unsigned() == nums[i].to_unsigned(),
-      "{} != {} at {}; {}",
-      decompressed[i],
-      nums[i],
-      i,
-      debug_info,
-    );
+
+  assert_recovers(&nums, 2, "decimals")
+}
+
+#[test]
+fn test_trivial_first_latent_var() -> PcoResult<()> {
+  let mut nums = Vec::new();
+  for i in 0..100 {
+    nums.push(i as f32);
   }
+  nums[77] += 0.0001;
+  let (compressed, meta) = compress_w_meta(&nums, &ChunkConfig::default())?;
+  assert_eq!(
+    meta.mode,
+    Mode::FloatMult(FloatMultConfig {
+      base: 1.0,
+      inv_base: 1.0
+    })
+  );
+  let decompressed = auto_decompress(&compressed)?;
+  assert_nums_eq(&decompressed, &nums, "trivial_first_latent")?;
   Ok(())
 }

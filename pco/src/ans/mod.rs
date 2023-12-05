@@ -17,9 +17,9 @@ pub(crate) type Token = u16;
 mod tests {
   use crate::ans::spec::Spec;
   use crate::ans::{AnsState, Decoder, Encoder, Token};
-  use crate::bit_reader;
   use crate::bit_reader::BitReader;
   use crate::bit_writer::BitWriter;
+  use crate::bits;
   use crate::errors::PcoResult;
 
   fn assert_recovers(spec: &Spec, tokens: Vec<Token>, expected_byte_len: usize) -> PcoResult<()> {
@@ -33,27 +33,27 @@ mod tests {
       state = new_state;
     }
 
-    let mut bytes = Vec::new();
-    let mut writer = BitWriter::new(&mut bytes, 5);
-    for (word, bitlen) in to_write.into_iter().rev() {
-      writer.write_uint(word, bitlen);
+    let mut compressed = Vec::new();
+    let mut writer = BitWriter::new(&mut compressed, 5);
+    for (val, bitlen) in to_write.into_iter().rev() {
+      writer.write_uint(bits::lowest_bits_fast(val, bitlen), bitlen);
       writer.flush()?;
     }
     writer.finish_byte();
     writer.flush()?;
     drop(writer);
-    assert_eq!(bytes.len(), expected_byte_len);
+    assert_eq!(compressed.len(), expected_byte_len);
     let final_state = state;
     let table_size = 1 << encoder.size_log();
 
     // DECODE
+    compressed.extend(&vec![0; 100]);
+    let mut reader = BitReader::new(&compressed, expected_byte_len, 0);
     let decoder = Decoder::new(spec);
-    let extension = bit_reader::make_extension_for(&bytes, 100);
-    let mut reader = BitReader::new(&bytes, &extension);
     let mut decoded = Vec::new();
     let mut state_idx = final_state - table_size;
     for _ in 0..tokens.len() {
-      let node = decoder.get_node(state_idx);
+      let node = &decoder.nodes[state_idx as usize];
       decoded.push(node.token);
       state_idx = node.next_state_idx_base + reader.read_uint::<AnsState>(node.bits_to_read);
     }

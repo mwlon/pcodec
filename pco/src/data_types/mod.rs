@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::ops::{
-  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, DivAssign, Mul, MulAssign,
+  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, DivAssign, Mul, MulAssign, Rem,
   RemAssign, Shl, Shr, Sub, SubAssign,
 };
 
@@ -74,6 +74,7 @@ pub trait UnsignedLike:
   + NumberLike<Unsigned = Self>
   + Ord
   + PartialOrd
+  + Rem<Output = Self>
   + RemAssign
   + Shl<Bitlen, Output = Self>
   + Shr<Bitlen, Output = Self>

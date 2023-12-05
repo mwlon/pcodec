@@ -1,39 +1,35 @@
 use std::cmp::min;
 
-use crate::ans;
 use crate::ans::{AnsState, Token};
+use crate::compression_intermediates::DissectedPageVar;
 use crate::compression_table::CompressionTable;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_SIZE};
+use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::UnsignedLike;
-use crate::unsigned_src_dst::DissectedLatents;
+use crate::{ans, bits};
 
 pub struct LatentBatchDissector<'a, U: UnsignedLike> {
   // immutable
-  needs_gcd: bool,
   table: &'a CompressionTable<U>,
   encoder: &'a ans::Encoder,
 
   // mutable
-  lower_scratch: [U; FULL_BATCH_SIZE],
-  gcd_scratch: [U; FULL_BATCH_SIZE],
-  token_scratch: [Token; FULL_BATCH_SIZE],
+  lower_scratch: [U; FULL_BATCH_N],
+  token_scratch: [Token; FULL_BATCH_N],
 }
 
 impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
-  pub fn new(needs_gcd: bool, table: &'a CompressionTable<U>, encoder: &'a ans::Encoder) -> Self {
+  pub fn new(table: &'a CompressionTable<U>, encoder: &'a ans::Encoder) -> Self {
     Self {
-      needs_gcd,
       table,
       encoder,
-      lower_scratch: [U::ZERO; FULL_BATCH_SIZE],
-      gcd_scratch: [U::ZERO; FULL_BATCH_SIZE],
-      token_scratch: [0; FULL_BATCH_SIZE],
+      lower_scratch: [U::ZERO; FULL_BATCH_N],
+      token_scratch: [0; FULL_BATCH_N],
     }
   }
 
   #[inline(never)]
-  fn binary_search(&self, latents: &[U]) -> [usize; FULL_BATCH_SIZE] {
-    let mut search_idxs = [0; FULL_BATCH_SIZE];
+  fn binary_search(&self, latents: &[U]) -> [usize; FULL_BATCH_N] {
+    let mut search_idxs = [0; FULL_BATCH_N];
 
     // we do this as `size_log` SIMD loops over the batch
     for depth in 0..self.table.search_size_log {
@@ -58,7 +54,6 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     for (i, &search_idx) in search_idxs.iter().enumerate() {
       let info = &self.table.infos[search_idx];
       self.lower_scratch[i] = info.lower;
-      self.gcd_scratch[i] = info.gcd;
       self.token_scratch[i] = info.token;
       dst_offset_bits[i] = info.offset_bits;
     }
@@ -71,13 +66,6 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
       .zip(latents.iter().zip(self.lower_scratch.iter()))
     {
       *offset = latent - lower;
-    }
-  }
-
-  #[inline(never)]
-  fn divide_by_gcds(&self, offsets: &mut [U]) {
-    for (offset, &gcd) in offsets.iter_mut().zip(self.gcd_scratch.iter()) {
-      *offset /= gcd;
     }
   }
 
@@ -97,7 +85,7 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
       let (new_state, bitlen) = self
         .encoder
         .encode(ans_final_states[j], self.token_scratch[i]);
-      ans_vals[i] = ans_final_states[j];
+      ans_vals[i] = bits::lowest_bits_fast(ans_final_states[j], bitlen);
       ans_bits[i] = bitlen;
       ans_final_states[j] = new_state;
     }
@@ -109,7 +97,7 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
         let (new_state, bitlen) = self
           .encoder
           .encode(ans_final_states[j], self.token_scratch[i]);
-        ans_vals[i] = ans_final_states[j];
+        ans_vals[i] = bits::lowest_bits_fast(ans_final_states[j], bitlen);
         ans_bits[i] = bitlen;
         ans_final_states[j] = new_state;
       }
@@ -120,9 +108,9 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     &mut self,
     latents: &[U],
     base_i: usize,
-    dst: &mut DissectedLatents<U>,
+    dst: &mut DissectedPageVar<U>,
   ) {
-    let DissectedLatents {
+    let DissectedPageVar {
       ans_vals,
       ans_bits,
       offsets,
@@ -132,7 +120,7 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
 
     let search_idxs = self.binary_search(latents);
 
-    let end_i = min(base_i + FULL_BATCH_SIZE, ans_vals.len());
+    let end_i = min(base_i + FULL_BATCH_N, ans_vals.len());
 
     self.dissect_bins(
       &search_idxs[..latents.len()],
@@ -140,10 +128,6 @@ impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
     );
 
     self.set_offsets(latents, &mut offsets[base_i..end_i]);
-
-    if self.needs_gcd {
-      self.divide_by_gcds(&mut offsets[base_i..end_i]);
-    }
 
     self.encode_ans_in_reverse(
       &mut ans_vals[base_i..end_i],

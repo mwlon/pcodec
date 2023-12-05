@@ -3,11 +3,12 @@ use crate::chunk_meta::ChunkMeta;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{auto_decompress, FileCompressor};
+use crate::IntMultSpec;
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::Unsigned>> {
   let fc = FileCompressor::default();
   let config = ChunkConfig {
-    use_gcds: false,
+    int_mult_spec: IntMultSpec::Disabled,
     delta_encoding_order: Some(0),
     ..Default::default()
   };
@@ -43,8 +44,8 @@ fn test_insufficient_data_short_bins() -> PcoResult<()> {
   }
 
   let meta = assert_panic_safe(nums)?;
-  assert_eq!(meta.latents.len(), 1);
-  assert_eq!(meta.latents[0].bins.len(), 2);
+  assert_eq!(meta.per_latent_var.len(), 1);
+  assert_eq!(meta.per_latent_var[0].bins.len(), 2);
   Ok(())
 }
 
@@ -56,8 +57,8 @@ fn test_insufficient_data_sparse() -> PcoResult<()> {
   }
 
   let meta = assert_panic_safe(nums)?;
-  assert_eq!(meta.latents.len(), 1);
-  assert_eq!(meta.latents[0].bins.len(), 2);
+  assert_eq!(meta.per_latent_var.len(), 1);
+  assert_eq!(meta.per_latent_var[0].bins.len(), 2);
   Ok(())
 }
 
@@ -70,8 +71,11 @@ fn test_insufficient_data_long_offsets() -> PcoResult<()> {
   }
 
   let meta = assert_panic_safe(nums)?;
-  assert_eq!(meta.latents.len(), 1);
-  assert_eq!(meta.latents[0].bins.len(), 1);
-  assert_eq!(meta.latents[0].bins[0].offset_bits, 64);
+  assert_eq!(meta.per_latent_var.len(), 1);
+  assert_eq!(meta.per_latent_var[0].bins.len(), 1);
+  assert_eq!(
+    meta.per_latent_var[0].bins[0].offset_bits,
+    64
+  );
   Ok(())
 }

@@ -1,29 +1,30 @@
-[Click here for Quantile Compression](./quantile-compression/README.md).
-
 # Pcodec
 
-Pcodec (or pco, pronounced "pico") losslessly compresses and decompresses
-numerical sequences
-with high compression ratio and moderately fast speed.
+<div style="text-align:center">
+  <img
+    alt="bar charts showing better compression for pco than zstd.parquet"
+    src="images/real_world_compression_ratio.svg"
+    width="600px"
+  >
+</div>
 
-**Use cases:**
+Pcodec (or pco, pronounced "pico") losslessly compresses and decompresses
+numerical sequences with
+[high compression ratio and fast speed](./bench/README.md).
+
+**Use cases include:**
 * columnar data
 * long-term time series data
+* serving numerical data to web clients
 * low-bandwidth communication
-
-**Features:**
-* wrapped format for interleaving within another format
-* lossless; preserves ordering and exact bit representation
-* nth-order delta encoding
-* compresses faster or slower depending on compression level from 0 to 12
 
 **Data types:**
 `u32`, `u64`, `i32`, `i64`, `f32`, `f64`
 
 It is also possible to implement your own data type via `NumberLike` and (if
 necessary) `UnsignedLike` and `FloatLike`.
-For smaller integers or timestamps, it is best to simply cast to one of the
-natively supported data types.
+For timestamps or smaller integers, it is probably best to simply cast to one
+of the natively supported data types.
 
 ## Get Started
 
@@ -42,41 +43,35 @@ or see its results.
 
 The core idea of pco is to represent numbers as approximate, entropy-coded bins
 paired with exact offsets into those bins.
-Depending on the mode, there may be up to 2 streams of these bin-offset
-pairings.
+Depending on the mode, there may be up to 2 streams (latent variables) of these
+bin-offset pairings.
+
+<img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
 
 Pco is mainly meant to be wrapped into another format for production use cases.
 It has a hierarchy of multiple batches per page; multiple pages per chunk; and
 multiple chunks per file.
 
-|          | unit of ___                     | recommended size    |
-|----------|---------------------------------|---------------------|
-| chunk    | compression                     | \>20k numbers       |
-| page     | interleaving w/ wrapping format | \>1k numbers        |
-| batch    | decompression                   | 256 numbers (fixed) |
+|       | unit of ___                     | size for good compression |
+|-------|---------------------------------|---------------------------|
+| chunk | compression                     | \>20k numbers             |
+| page  | interleaving w/ wrapping format | \>1k numbers              |
+| batch | decompression                   | 256 numbers (fixed)       |
 
 The standalone format is a minimal implementation of a wrapped format.
 It supports batched decompression only; no nullability, multiple
 columns, random access, seeking, or other niceties.
-It is mainly useful for quick proofs of concept (sometimes by the CLI).
+It is mainly useful for quick proofs of concept and benchmarking.
 
-<img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
+## Contributing
 
-## Etymology
-
-The names pcodec and pco were chosen for these reasons:
-* "Pico" suggests that it makes very small things.
-* Pco is reminiscent of qco, its predecessor.
-* Pco is reminiscent of PancakeDB (Pancake COmpressed). Though PancakeDB is now
-  history, it had a good name.
-* Pcodec is short, provides some semantic meaning, and should be easy to
-  search for.
-
-The names are used for these purposes:
-* pco => the library and data format
-* pco\_cli => the binary crate name
-* pcodec => the binary CLI and the repo
+[see CONTRIBUTING.md](./docs/CONTRIBUTING.md)
 
 ## Extra
 
 [join the Discord](https://discord.gg/f6eRXgMP8w)
+
+[terminology](./docs/terminology.md)
+
+[Quantile Compression](./quantile-compression/README.md)
+

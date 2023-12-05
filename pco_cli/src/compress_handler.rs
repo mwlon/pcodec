@@ -11,7 +11,7 @@ use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchR
 use parquet::arrow::ProjectionMask;
 
 use pco::standalone::FileCompressor;
-use pco::ChunkConfig;
+use pco::{ChunkConfig, IntMultSpec};
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
@@ -37,7 +37,11 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
     let config = ChunkConfig::default()
       .with_compression_level(opt.level)
       .with_delta_encoding_order(opt.delta_encoding_order)
-      .with_use_gcds(!opt.disable_gcds);
+      .with_int_mult_spec(if opt.disable_int_mult {
+        IntMultSpec::Disabled
+      } else {
+        IntMultSpec::Enabled
+      });
     let fc = FileCompressor::default();
     fc.write_header(&file)?;
 

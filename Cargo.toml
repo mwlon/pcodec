@@ -1,7 +1,9 @@
 [workspace]
+resolver = "2"
 
 members = [
   "bench",
+  "better_io",
   "pco",
   "pco_cli",
   "quantile-compression/ffi",

@@ -22,11 +22,11 @@ def write_generic(strs, arr, full_name):
   with open(f'{base_dir}/binary/{full_name}.bin', 'wb') as f:
     f.write(arr.tobytes())
 
-def write_u32(arr, name):
-  if arr.dtype != np.uint32:
-    arr = np.floor(arr).astype(np.uint32)
+def write_i32(arr, name):
+  if arr.dtype != np.int32:
+    arr = np.floor(arr).astype(np.int32)
   strs = [str(x) for x in arr]
-  full_name = f'u32_{name}'
+  full_name = f'i32_{name}'
   write_generic(strs, arr, full_name)
 
 def write_i64(arr, name):
@@ -65,11 +65,10 @@ def fixed_median_lomax(a, median):
   return np.random.pareto(a=a, size=n) / unscaled_median * median
 np.random.seed(0)
 lomax05 = fixed_median_lomax(0.5, 1000)
-write_u32(lomax05, 'lomax05_reg')
+write_i32(lomax05, 'lomax05_reg')
 write_i64(lomax05, 'lomax05_reg')
 write_i64(lomax05[:mini_n], 'lomax05_mini')
 np.random.seed(0)
-write_i64(fixed_median_lomax(2.5, 1000), 'lomax25')
 
 np.random.seed(0)
 uniform = np.random.randint(-2**63, 2**63, size=max_n)

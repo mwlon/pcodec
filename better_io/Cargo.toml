@@ -1,0 +1,14 @@
+[package]
+name = "better_io"
+version = "0.0.0"
+edition = "2021"
+
+authors = ["mwlon <m.w.loncaric@gmail.com>"]
+categories = ["encoding"]
+description = "Better traits and implementations for IO and buffering"
+include = ["src/**/*.rs", "Cargo.toml", "README.md"]
+keywords = ["io", "buffering", "bufread"]
+license = "Apache-2.0"
+repository = "https://github.com/mwlon/pcodec"
+
+[dependencies]

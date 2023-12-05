@@ -4,14 +4,16 @@ use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Shl, Shr, Sub};
 use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 
-pub const fn calc_max_extra_u64s(precision: Bitlen) -> usize {
+pub const fn calc_max_u64s(precision: Bitlen) -> usize {
   // See bit_reader::read_uint_at for an explanation of these thresholds.
-  if precision <= 57 {
+  if precision == 0 {
     0
-  } else if precision <= 113 {
+  } else if precision <= 57 {
     1
-  } else {
+  } else if precision <= 113 {
     2
+  } else {
+    3
   }
 }
 
@@ -31,10 +33,11 @@ pub trait ReadWriteUint:
   const ZERO: Self;
   const ONE: Self;
   const BITS: Bitlen;
-  const MAX_EXTRA_U64S: usize = calc_max_extra_u64s(Self::BITS);
+  const MAX_U64S: usize = calc_max_u64s(Self::BITS);
 
   fn from_u64(x: u64) -> Self;
   fn to_u64(self) -> u64;
+  fn wrapping_sub(self, other: Self) -> Self;
 }
 
 impl ReadWriteUint for usize {
@@ -51,6 +54,11 @@ impl ReadWriteUint for usize {
   fn to_u64(self) -> u64 {
     self as u64
   }
+
+  #[inline]
+  fn wrapping_sub(self, other: Self) -> Self {
+    self.wrapping_sub(other)
+  }
 }
 
 impl<U: UnsignedLike> ReadWriteUint for U {
@@ -66,5 +74,10 @@ impl<U: UnsignedLike> ReadWriteUint for U {
   #[inline]
   fn to_u64(self) -> u64 {
     <Self as UnsignedLike>::to_u64(self)
+  }
+
+  #[inline]
+  fn wrapping_sub(self, other: Self) -> Self {
+    <Self as UnsignedLike>::wrapping_sub(self, other)
   }
 }

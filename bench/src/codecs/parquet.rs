@@ -17,12 +17,14 @@ const ZSTD: &str = "zstd";
 #[derive(Clone, Debug)]
 pub struct ParquetConfig {
   compression: Compression,
+  group_size: usize,
 }
 
 impl Default for ParquetConfig {
   fn default() -> Self {
     Self {
       compression: Compression::UNCOMPRESSED,
+      group_size: 1 << 20, // TODO is this the best default?
     }
   }
 }
@@ -65,6 +67,7 @@ impl CodecInternal for ParquetConfig {
   fn get_conf(&self, key: &str) -> String {
     match key {
       "compression" => compression_to_string(&self.compression),
+      "group_size" => self.group_size.to_string(),
       _ => panic!("bad conf"),
     }
   }
@@ -72,6 +75,7 @@ impl CodecInternal for ParquetConfig {
   fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
     match key {
       "compression" => self.compression = str_to_compression(&value)?,
+      "group_size" => self.group_size = value.parse().unwrap(),
       _ => return Err(anyhow!("unknown conf: {}", key)),
     }
     Ok(())
@@ -94,17 +98,17 @@ impl CodecInternal for ParquetConfig {
       ),
     )
     .unwrap();
-    let mut row_group_writer = writer.next_row_group().unwrap();
-    while let Some(mut col_writer) = row_group_writer.next_column().unwrap() {
-      {
-        let typed = col_writer.typed::<T::Parquet>();
-        typed
-          .write_batch(T::slice_to_parquet(nums), None, None)
-          .unwrap();
-      }
-      col_writer.close().unwrap()
+
+    for col_chunk in nums.chunks(self.group_size) {
+      let mut row_group_writer = writer.next_row_group().unwrap();
+      let mut col_writer = row_group_writer.next_column().unwrap().unwrap();
+      let typed = col_writer.typed::<T::Parquet>();
+      typed
+        .write_batch(T::slice_to_parquet(col_chunk), None, None)
+        .unwrap();
+      col_writer.close().unwrap();
+      row_group_writer.close().unwrap();
     }
-    row_group_writer.close().unwrap();
     writer.close().unwrap();
 
     res
@@ -115,9 +119,9 @@ impl CodecInternal for ParquetConfig {
     // maybe this can be improved
     let reader = SerializedFileReader::new(bytes::Bytes::from(bytes.to_vec())).unwrap();
 
-    let parquet_metadata = reader.metadata();
+    let parquet_meta = reader.metadata();
     let mut n = 0;
-    for row_group_meta in parquet_metadata.row_groups() {
+    for row_group_meta in parquet_meta.row_groups() {
       n += row_group_meta.num_rows();
     }
 
@@ -125,13 +129,15 @@ impl CodecInternal for ParquetConfig {
     unsafe {
       res.set_len(n as usize);
     }
-    for i in 0..parquet_metadata.num_row_groups() {
+    let mut start = 0;
+    for i in 0..parquet_meta.num_row_groups() {
       let row_group_reader = reader.get_row_group(i).unwrap();
       let mut col_reader =
         get_typed_column_reader::<T::Parquet>(row_group_reader.get_column_reader(0).unwrap());
-      col_reader
-        .read_records(usize::MAX, None, None, &mut res)
+      let (n_records_read, _, _) = col_reader
+        .read_records(usize::MAX, None, None, &mut res[start..])
         .unwrap();
+      start += n_records_read
     }
 
     T::vec_from_parquet(res)
