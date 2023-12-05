@@ -65,9 +65,9 @@ Compression ratio is reported with 3 significant figures.
 `i64` and `f64` are each 8 bytes, so compression is around 300-500MB/s,
 and decompression is around 2-5GB/s.
 For reference, on the same hardware and `i64_lomax05_reg` dataset, ZStandard
-`0.12.3+zstd.1.5.2` gets:
+`0.13.0` gets:
 
-* level 3: compresses 40 million/s, decompresses 110 million/s, compression
+* level 3: compresses 40 million/s, decompresses 120 million/s, compression
   ratio 3.14.
 * level 22: compresses 0.44 million/s, decompresses 170 million/s,
   compression ratio 3.51.
