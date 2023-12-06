@@ -90,16 +90,14 @@ pub fn simple_decompress_into<T: NumberLike>(src: &[u8], mut dst: &mut [T]) -> P
   Ok(progress)
 }
 
-/// Automatically makes an educated guess for the best compression
-/// configuration, based on `nums` and `compression_level`,
-/// then uses [`simple_compress`] to compresses the numbers to .pco bytes.
+// TODO in 0.2 make this return an error instead of panic
+/// Compresses the numbers using the given compression level and an otherwise
+/// default configuration.
 ///
-/// This adds some compute cost by trying different configurations on a subset
-/// of the numbers to determine the most likely one to do well.
-/// If you know what configuration you want ahead of time (namely delta
-/// encoding order), you can use [`simple_compress`] instead to spare
-/// the compute cost.
-/// See [`ChunkConfig`] for information about compression levels.
+/// Will panic if the compression level is invalid (see
+/// [`ChunkConfig`][crate::ChunkConfig] for an explanation of compression
+/// levels).
+/// This wraps [`simple_compress`].
 pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
   let config = ChunkConfig {
     compression_level,

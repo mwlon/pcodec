@@ -51,13 +51,17 @@ pub struct ChunkConfig {
   /// `compression_level` ranges from 0 to 12 inclusive (default: 8).
   ///
   /// The compressor uses up to 2^`compression_level` bins.
-  ///
   /// For example,
   /// * Level 0 achieves a small amount of compression with 1 bin.
-  /// * Level 8 achieves nearly the best compression with 256 bins and still
-  /// runs in reasonable time.
-  /// * Level 12 can marginally better compression than 8 with 4096
-  /// bins, but may run several times slower.
+  /// * Level 8 achieves nearly the best compression with 256 bins and runs
+  /// only slightly slower.
+  /// * Level 12 achieves marginally better compression than 8 with up to 4096
+  /// bins and may run several times slower.
+  ///
+  /// At present, the compression levels cover a relatively small range of the
+  /// compression time vs. ratio tradeoff.
+  /// However, the meaning of the compression levels is subject to change with
+  /// new releases.
   pub compression_level: usize,
   /// `delta_encoding_order` ranges from 0 to 7 inclusive (default:
   /// `None`, automatically detecting on each chunk).
