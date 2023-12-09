@@ -173,6 +173,8 @@ impl Default for PagingSpec {
 impl PagingSpec {
   pub(crate) fn n_per_page(&self, n: usize) -> PcoResult<Vec<usize>> {
     let n_per_page = match self {
+      // TODO in 0.2 make this error if max_size isn't a multiple of full batch size
+      // and try to make all but one page a multiple of full batch size
       PagingSpec::EqualPagesUpTo(max_size) => {
         let n_pages = bits::ceil_div(n, *max_size);
         let mut res = Vec::new();

@@ -62,10 +62,12 @@ impl<R: Read> BetterBufRead for BetterBufReader<R> {
     &self.buffer[self.pos..self.filled]
   }
 
+  #[inline]
   fn consume(&mut self, n_bytes: usize) {
     self.pos += n_bytes;
   }
 
+  #[inline]
   fn capacity(&self) -> Option<usize> {
     Some(self.desired_capacity)
   }

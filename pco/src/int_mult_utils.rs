@@ -19,6 +19,7 @@ pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> PageLatent
   PageLatents::new_pre_delta(vec![mults, adjs])
 }
 
+#[inline(never)]
 pub(crate) fn join_latents<U: UnsignedLike>(
   base: U,
   unsigneds: &mut [U],

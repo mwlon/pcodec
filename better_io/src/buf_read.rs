@@ -57,14 +57,17 @@ impl BetterBufRead for &[u8] {
     self
   }
 
+  #[inline]
   fn consume(&mut self, n_bytes: usize) {
     *self = &self[n_bytes..];
   }
 
+  #[inline]
   fn capacity(&self) -> Option<usize> {
     None
   }
 
+  #[inline]
   fn resize_capacity(&mut self, _desired: usize) {}
 }
 

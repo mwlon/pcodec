@@ -6,6 +6,7 @@ use crate::errors::PcoResult;
 use crate::ChunkLatentVarMeta;
 
 #[derive(Clone, Debug)]
+#[repr(align(16))]
 pub struct Node {
   pub token: Token,
   pub next_state_idx_base: AnsState,

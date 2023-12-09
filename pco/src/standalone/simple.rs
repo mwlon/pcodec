@@ -24,12 +24,20 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
   let n_per_page = config.paging_spec.n_per_page(nums.len())?;
   let mut start = 0;
   let mut this_chunk_config = config.clone();
+  let mut hinted_size = false;
   for &page_n in &n_per_page {
     let end = start + page_n;
     this_chunk_config.paging_spec = PagingSpec::ExactPageSizes(vec![page_n]);
     let chunk_compressor =
       file_compressor.chunk_compressor(&nums[start..end], &this_chunk_config)?;
-    dst.reserve(chunk_compressor.chunk_size_hint());
+
+    if !hinted_size {
+      let file_size_hint =
+        chunk_compressor.chunk_size_hint() as f64 * nums.len() as f64 / page_n as f64;
+      dst.reserve_exact(file_size_hint as usize + 10);
+      hinted_size = true;
+    }
+
     chunk_compressor.write_chunk(&mut dst)?;
     start = end;
   }

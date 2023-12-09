@@ -22,6 +22,10 @@ use crate::{
   Mode, FULL_BATCH_N,
 };
 
+// if it looks like the average page of size n will use k bits, hint that it
+// will be PAGE_SIZE_OVERESTIMATION * k bits.
+const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
+
 struct BinBuffer<'a, U: UnsignedLike> {
   pub seq: Vec<BinCompressionInfo<U>>,
   bin_idx: usize,
@@ -282,7 +286,7 @@ fn write_dissected_batch_var<U: UnsignedLike, W: Write>(
 struct LatentVarPolicy<U: UnsignedLike> {
   table: CompressionTable<U>,
   encoder: ans::Encoder,
-  max_bits_per_latent: Bitlen,
+  avg_bits_per_latent: f64,
   is_trivial: bool,
   needs_ans: bool,
   max_u64s_per_offset: usize,
@@ -428,7 +432,7 @@ fn unsigned_new<U: UnsignedLike>(
       ans_size_log: trained.ans_size_log,
     };
     let max_bits_per_offset = latent_meta.max_bits_per_offset();
-    let max_bits_per_latent = latent_meta.max_bits_per_ans() + max_bits_per_offset;
+    let avg_bits_per_latent = latent_meta.avg_bits_per_latent();
     let is_trivial = latent_meta.is_trivial();
 
     let mut max_u64s_per_offset = read_write_uint::calc_max_u64s(max_bits_per_offset);
@@ -442,7 +446,7 @@ fn unsigned_new<U: UnsignedLike>(
     var_policies.push(LatentVarPolicy {
       table,
       encoder,
-      max_bits_per_latent,
+      avg_bits_per_latent,
       is_trivial,
       needs_ans,
       max_u64s_per_offset,
@@ -606,8 +610,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
       // But most datasets have multiple pages, and if we really wanted to
       // improve performance for standalone files too, we'd need a whole-file
       // compressed size estimate.
-      let nums_bit_size = page_n * var_policy.max_bits_per_latent as usize;
-      bit_size += meta_bit_size + nums_bit_size;
+      let nums_bit_size = PAGE_SIZE_OVERESTIMATION * page_n as f64 * var_policy.avg_bits_per_latent;
+      bit_size += meta_bit_size + nums_bit_size.ceil() as usize;
     }
     bits::ceil_div(bit_size, 8)
   }

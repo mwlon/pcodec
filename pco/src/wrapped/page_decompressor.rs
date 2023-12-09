@@ -54,7 +54,6 @@ pub(crate) enum SecondaryLatents<'a, U: UnsignedLike> {
   Constant(U),
 }
 
-#[inline(never)]
 fn join_latents<U: UnsignedLike>(mode: Mode<U>, primary: &mut [U], secondary: SecondaryLatents<U>) {
   match mode {
     Classic => (), // we already wrote the nums to the primary dst
