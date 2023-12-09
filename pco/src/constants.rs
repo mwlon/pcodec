@@ -1,7 +1,8 @@
 use crate::bits;
 
-// must be u8 or larger
-// u64+ seems less performant
+// must be u16 or larger
+// u32 is performant because it aligns with other things and doesn't require
+// masking
 // exposed in public API
 pub(crate) type Bitlen = u32;
 // must be u32 or larger
