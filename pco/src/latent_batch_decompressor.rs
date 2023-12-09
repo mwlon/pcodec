@@ -12,7 +12,7 @@ use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta};
 #[derive(Clone, Debug)]
 struct State<U: UnsignedLike> {
   // scratch needs no backup
-  offset_bits_csum_scratch: [usize; FULL_BATCH_N],
+  offset_bits_csum_scratch: [Bitlen; FULL_BATCH_N],
   offset_bits_scratch: [Bitlen; FULL_BATCH_N],
   lowers_scratch: [U; FULL_BATCH_N],
   state_idxs: [AnsState; ANS_INTERLEAVING],
@@ -20,7 +20,7 @@ struct State<U: UnsignedLike> {
 
 impl<U: UnsignedLike> State<U> {
   #[inline]
-  fn set_scratch(&mut self, i: usize, offset_bit_idx: usize, info: &BinDecompressionInfo<U>) {
+  fn set_scratch(&mut self, i: usize, offset_bit_idx: Bitlen, info: &BinDecompressionInfo<U>) {
     unsafe {
       *self.offset_bits_csum_scratch.get_unchecked_mut(i) = offset_bit_idx;
       *self.offset_bits_scratch.get_unchecked_mut(i) = info.offset_bits;
@@ -73,7 +73,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
         state.offset_bits_scratch[i] = bin.offset_bits;
         state.offset_bits_csum_scratch[i] = csum;
         state.lowers_scratch[i] = bin.lower;
-        csum += bin.offset_bits as usize;
+        csum += bin.offset_bits;
       }
     }
 
@@ -125,8 +125,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
           let info = unsafe { infos.get_unchecked(node.token as usize) };
           self.state.set_scratch(i, offset_bit_idx, info);
           bits_past_byte += node.bits_to_read;
-          offset_bit_idx += info.offset_bits as usize;
-          $state_idx = node.next_state_idx_base + ans_val;
+          offset_bit_idx += info.offset_bits;
+          $state_idx = node.next_state_idx_base as AnsState + ans_val;
         };
       }
       handle_single_token!(0, state_idx_0);
@@ -159,8 +159,8 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       let info = &self.infos[node.token as usize];
       self.state.set_scratch(i, offset_bit_idx, info);
       bits_past_byte += node.bits_to_read;
-      offset_bit_idx += info.offset_bits as usize;
-      state_idxs[j] = node.next_state_idx_base + ans_val;
+      offset_bit_idx += info.offset_bits;
+      state_idxs[j] = node.next_state_idx_base as AnsState + ans_val;
     }
 
     reader.stale_byte_idx = stale_byte_idx;
@@ -180,13 +180,13 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
         .iter()
         .zip(state.offset_bits_csum_scratch.iter()),
     ) {
-      let bit_idx = base_bit_idx + offset_bits_csum;
+      let bit_idx = base_bit_idx + offset_bits_csum as usize;
       let byte_idx = bit_idx / 8;
       let bits_past_byte = bit_idx as Bitlen % 8;
       *dst = bit_reader::read_uint_at::<U, MAX_U64S>(src, byte_idx, bits_past_byte, offset_bits);
     }
     let final_bit_idx = base_bit_idx
-      + state.offset_bits_csum_scratch[dst.len() - 1]
+      + state.offset_bits_csum_scratch[dst.len() - 1] as usize
       + state.offset_bits_scratch[dst.len() - 1] as usize;
     reader.stale_byte_idx = final_bit_idx / 8;
     reader.bits_past_byte = final_bit_idx as Bitlen % 8;

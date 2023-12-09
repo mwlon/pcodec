@@ -43,6 +43,12 @@ def write_bool(arr, name):
   full_name = f'bool_{name}'
   write_generic(strs, arr, full_name)
 
+def write_f32(arr, name):
+  arr = arr.astype(np.float32)
+  strs = [str(x) for x in arr]
+  full_name = f'f32_{name}'
+  write_generic(strs, arr, full_name)
+
 def write_f64(arr, name):
   arr = arr.astype(np.float64)
   strs = [str(x) for x in arr]
@@ -58,7 +64,7 @@ def write_timestamp_micros(arr, name):
   write_generic(strs, arr, full_name)
 
 np.random.seed(0)
-write_i64(np.random.geometric(p=0.5, size=n), 'geo2')
+write_i64(np.random.geometric(p=0.001, size=n), 'geo')
 
 def fixed_median_lomax(a, median):
   unscaled_median = 2 ** (1 / a) - 1
@@ -106,7 +112,12 @@ write_i64(slow_cosine, 'slow_cosine')
 write_f64(slow_cosine, 'slow_cosine')
 
 np.random.seed(0)
-write_f64(np.random.normal(size=n), 'normal_at_0')
+normal = np.random.normal(size=n)
+write_f64(normal, 'normal')
+# mostly just to test performance bottlenecks on f32
+write_f32(normal, 'normal')
+write_f32(np.exp(normal), 'log_normal')
+
 
 # timestamps increasing 1s at a time on average from 2022-01-01T00:00:00 with
 # 1s random jitter
@@ -150,12 +161,6 @@ np.random.seed(0)
 idxs = np.random.rand(*interleaved.shape).argsort(axis=1)
 interleaved_scrambled = np.take_along_axis(interleaved, idxs, axis=1)
 write_i64(interleaved_scrambled.reshape(-1), 'interl_scrambl1')
-
-# randomly one of 4 distinct values
-np.random.seed(0)
-values = [77, 777, 7777, 77777]
-bad_huffman = np.random.choice(values, size=n, p=[0.33, 0.33, 0.33, 0.01])
-write_i64(bad_huffman, 'bad_huffman')
 
 # a sequence whose variance gradually increases
 np.random.seed(0)
