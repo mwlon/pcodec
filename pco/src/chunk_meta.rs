@@ -55,15 +55,6 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
       })
       .sum()
   }
-  pub(crate) fn max_bits_per_ans(&self) -> Bitlen {
-    self.ans_size_log
-      - self
-        .bins
-        .iter()
-        .map(|bin| bin.weight.ilog2() as Bitlen)
-        .min()
-        .unwrap_or_default()
-  }
 }
 
 fn parse_bin_batch<U: UnsignedLike, R: BetterBufRead>(

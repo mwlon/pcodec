@@ -4,7 +4,7 @@ use crate::errors::PcoResult;
 use crate::progress::Progress;
 use crate::standalone::compressor::FileCompressor;
 use crate::standalone::decompressor::{FileDecompressor, MaybeChunkDecompressor};
-use crate::{bits, PagingSpec, FULL_BATCH_N};
+use crate::{PagingSpec, FULL_BATCH_N};
 use std::cmp::min;
 
 /// Takes in a slice of numbers and an exact configuration and returns
