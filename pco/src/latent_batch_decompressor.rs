@@ -168,7 +168,6 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
     self.state.state_idxs = state_idxs;
   }
 
-  #[allow(clippy::needless_range_loop)]
   #[inline(never)]
   fn decompress_offsets<const MAX_U64S: usize>(&mut self, reader: &mut BitReader, dst: &mut [U]) {
     let base_bit_idx = reader.bit_idx();

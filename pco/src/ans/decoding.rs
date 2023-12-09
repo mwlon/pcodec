@@ -8,7 +8,7 @@ use crate::ChunkLatentVarMeta;
 #[derive(Clone, Debug)]
 pub struct Node {
   pub token: Token,
-  pub next_state_idx_base: AnsState,
+  pub next_state_idx_base: usize,
   pub bits_to_read: Bitlen,
 }
 
@@ -24,15 +24,15 @@ impl Decoder {
     // x_s from Jarek Duda's paper
     let mut token_x_s = spec.token_weights.clone();
     for &token in &spec.state_tokens {
-      let mut next_state_base = token_x_s[token as usize] as AnsState;
+      let mut next_state_base = token_x_s[token as usize] as usize;
       let mut bits_to_read = 0;
-      while next_state_base < table_size as AnsState {
+      while next_state_base < table_size {
         next_state_base *= 2;
         bits_to_read += 1;
       }
       nodes.push(Node {
         token,
-        next_state_idx_base: next_state_base - table_size as AnsState,
+        next_state_idx_base: next_state_base - table_size,
         bits_to_read,
       });
       token_x_s[token as usize] += 1;
