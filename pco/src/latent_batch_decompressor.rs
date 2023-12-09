@@ -126,7 +126,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
           self.state.set_scratch(i, offset_bit_idx, info);
           bits_past_byte += node.bits_to_read;
           offset_bit_idx += info.offset_bits;
-          $state_idx = node.next_state_idx_base as AnsState + ans_val;
+          $state_idx = node.next_state_idx_base + ans_val;
         };
       }
       handle_single_token!(0, state_idx_0);
@@ -160,7 +160,7 @@ impl<U: UnsignedLike> LatentBatchDecompressor<U> {
       self.state.set_scratch(i, offset_bit_idx, info);
       bits_past_byte += node.bits_to_read;
       offset_bit_idx += info.offset_bits;
-      state_idxs[j] = node.next_state_idx_base as AnsState + ans_val;
+      state_idxs[j] = node.next_state_idx_base + ans_val;
     }
 
     reader.stale_byte_idx = stale_byte_idx;
