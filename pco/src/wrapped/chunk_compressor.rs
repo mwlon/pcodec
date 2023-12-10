@@ -25,8 +25,8 @@ use crate::{
 // if it looks like the average page of size n will use k bits, hint that it
 // will be PAGE_SIZE_OVERESTIMATION * k bits.
 const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
-const N_PER_EXTRA_DELTA_GROUP: usize = 25000;
-const DELTA_GROUP_SIZE: usize = 100;
+const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
+const DELTA_GROUP_SIZE: usize = 200;
 
 struct BinBuffer<'a, U: UnsignedLike> {
   pub seq: Vec<BinCompressionInfo<U>>,
@@ -513,7 +513,7 @@ fn choose_delta_sample<U: UnsignedLike>(
 // Right now this is entirely based on the primary latents since no existing
 // modes apply deltas to secondary latents. Might want to change this
 // eventually?
-fn best_delta_encoding_order<U: UnsignedLike>(
+fn choose_delta_encoding_order<U: UnsignedLike>(
   primary_latents: &[U],
   compression_level: usize,
 ) -> PcoResult<usize> {
@@ -530,7 +530,7 @@ fn best_delta_encoding_order<U: UnsignedLike>(
     // the options related to mode- and delta-detection in this config don't
     // matter; we pass the exact mode and delta order in
     let config = ChunkConfig {
-      compression_level: min(compression_level, LIMITED_COMPRESSION_LEVEL),
+      compression_level,
       paging_spec: PagingSpec::ExactPageSizes(vec![sample.len()]),
       ..Default::default()
     };
@@ -563,7 +563,7 @@ fn unsigned_new<U: UnsignedLike>(
   let delta_order = if let Some(delta_order) = config.delta_encoding_order {
     delta_order
   } else {
-    best_delta_encoding_order(&latents[0], config.compression_level)?
+    choose_delta_encoding_order(&latents[0], config.compression_level)?
   };
 
   unsigned_new_w_delta_order(latents, config, mode, delta_order)
