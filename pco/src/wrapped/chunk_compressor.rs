@@ -3,12 +3,11 @@ use std::io::Write;
 
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
-use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageInfo, PageLatents};
+use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageInfo};
 use crate::compression_table::CompressionTable;
 use crate::constants::{
-  Bitlen, Weight, ANS_INTERLEAVING, AUTO_DELTA_LIMIT, CHUNK_META_PADDING,
-  LIMITED_COMPRESSION_LEVEL, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES,
-  PAGE_PADDING,
+  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_COMPRESSION_LEVEL,
+  MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
 };
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
@@ -425,7 +424,7 @@ fn unsigned_new_w_delta_order<U: UnsignedLike>(
   // training bins
   let mut var_metas = Vec::with_capacity(n_latents);
   let mut var_policies = Vec::with_capacity(n_latents);
-  for latent_idx in 0..n_latents {
+  for (latent_idx, deltas) in deltas.iter().enumerate() {
     // secondary latents should be compressed faster
     let comp_level = if latent_idx == 0 {
       config.compression_level
@@ -438,9 +437,7 @@ fn unsigned_new_w_delta_order<U: UnsignedLike>(
 
     let contiguous_deltas = page_infos
       .iter()
-      .flat_map(|page_info| {
-        &deltas[latent_idx][page_info.start_idx..page_info.end_idx_per_var[latent_idx]]
-      })
+      .flat_map(|page_info| &deltas[page_info.start_idx..page_info.end_idx_per_var[latent_idx]])
       .copied()
       .collect::<Vec<_>>();
 

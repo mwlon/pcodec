@@ -1,6 +1,6 @@
 use std::cmp::{max, min};
 
-use crate::compression_intermediates::PageLatents;
+
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::wrapped::SecondaryLatents;
