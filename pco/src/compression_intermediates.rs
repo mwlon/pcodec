@@ -4,6 +4,13 @@ use crate::data_types::UnsignedLike;
 use crate::delta::DeltaMoments;
 
 #[derive(Clone, Debug)]
+pub struct PageInfo {
+  pub page_n: usize,
+  pub start_idx: usize,
+  pub end_idx_per_var: Vec<usize>,
+}
+
+#[derive(Clone, Debug)]
 pub struct PageVarLatents<U: UnsignedLike> {
   pub latents: Vec<U>,
   pub delta_moments: DeltaMoments<U>,

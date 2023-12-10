@@ -47,7 +47,7 @@ pub fn toggle_center_in_place<U: UnsignedLike>(unsigneds: &mut [U]) {
   }
 }
 
-fn first_order_encode_in_place<U: UnsignedLike>(unsigneds: &mut Vec<U>) {
+fn first_order_encode_in_place<U: UnsignedLike>(unsigneds: &mut [U]) {
   if unsigneds.is_empty() {
     return;
   }
@@ -55,12 +55,11 @@ fn first_order_encode_in_place<U: UnsignedLike>(unsigneds: &mut Vec<U>) {
   for i in 0..unsigneds.len() - 1 {
     unsigneds[i] = unsigneds[i + 1].wrapping_sub(unsigneds[i]);
   }
-  unsigneds.truncate(unsigneds.len() - 1);
 }
 
 // used for a single page, so we return the delta moments
 #[inline(never)]
-pub fn encode_in_place<U: UnsignedLike>(unsigneds: &mut Vec<U>, order: usize) -> DeltaMoments<U> {
+pub fn encode_in_place<U: UnsignedLike>(mut latents: &mut [U], order: usize) -> DeltaMoments<U> {
   // TODO this function could be made faster by doing all steps on mini batches
   // of ~512 at a time
   if order == 0 {
@@ -70,11 +69,13 @@ pub fn encode_in_place<U: UnsignedLike>(unsigneds: &mut Vec<U>, order: usize) ->
 
   let mut page_moments = Vec::with_capacity(order);
   for _ in 0..order {
-    page_moments.push(unsigneds.get(0).copied().unwrap_or(U::ZERO));
+    page_moments.push(latents.get(0).copied().unwrap_or(U::ZERO));
 
-    first_order_encode_in_place(unsigneds);
+    first_order_encode_in_place(latents);
+    let truncated_len = latents.len().saturating_sub(1);
+    latents = &mut latents[0..truncated_len];
   }
-  toggle_center_in_place(unsigneds);
+  toggle_center_in_place(latents);
 
   DeltaMoments::new(page_moments)
 }
@@ -114,7 +115,6 @@ mod tests {
     let mut moments = encode_in_place(&mut deltas, order);
 
     // add back some padding we lose during compression
-    assert_eq!(deltas.len(), orig_unsigneds.len() - order);
     for _ in 0..order {
       deltas.push(zero_delta);
     }
@@ -123,6 +123,6 @@ mod tests {
     assert_eq!(&deltas[..3], &orig_unsigneds[..3]);
 
     decode_in_place::<u32>(&mut moments, &mut deltas[3..]);
-    assert_eq!(&deltas[3..], &orig_unsigneds[3..]);
+    assert_eq!(&deltas[3..5], &orig_unsigneds[3..5]);
   }
 }

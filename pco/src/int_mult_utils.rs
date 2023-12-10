@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 const SMALL_INTS: [u64; 4] = [1, 2, 3, 4];
 
-pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> PageLatents<T::Unsigned> {
+pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> Vec<Vec<T::Unsigned>> {
   let mut mults = Vec::with_capacity(nums.len());
   let mut adjs = Vec::with_capacity(nums.len());
   for num in nums {
@@ -16,7 +16,7 @@ pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> PageLatent
     mults.push(u / base);
     adjs.push(u % base);
   }
-  PageLatents::new_pre_delta(vec![mults, adjs])
+  vec![mults, adjs]
 }
 
 #[inline(never)]
@@ -191,17 +191,17 @@ mod tests {
   fn test_split_join_latents() {
     // SPLIT
     let nums = vec![-3, 1, 5];
-    let latents = split_latents(&nums, 4_u32).per_var;
+    let latents = split_latents(&nums, 4_u32);
     assert_eq!(latents.len(), 2);
     assert_eq!(
-      latents[0].latents,
+      latents[0],
       vec![536870911_u32, 536870912, 536870913]
     );
-    assert_eq!(latents[1].latents, vec![1, 1, 1]);
+    assert_eq!(latents[1], vec![1, 1, 1]);
 
     // JOIN
-    let mut primary = latents[0].latents.clone();
-    let mut secondary = latents[1].latents.clone();
+    let mut primary = latents[0].clone();
+    let mut secondary = latents[1].clone();
     join_latents(
       4,
       &mut primary,

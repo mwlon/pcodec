@@ -49,7 +49,7 @@ impl<U: UnsignedLike> PageLatentVarMeta<U> {
 // (wrapped mode).
 #[derive(Clone, Debug)]
 pub struct PageMeta<U: UnsignedLike> {
-  pub per_latent_var: Vec<PageLatentVarMeta<U>>,
+  pub per_var: Vec<PageLatentVarMeta<U>>,
 }
 
 impl<U: UnsignedLike> PageMeta<U> {
@@ -59,7 +59,7 @@ impl<U: UnsignedLike> PageMeta<U> {
     writer: &mut BitWriter<W>,
   ) {
     for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
-      self.per_latent_var[latent_idx].write_to(ans_size_log, writer);
+      self.per_var[latent_idx].write_to(ans_size_log, writer);
     }
     writer.finish_byte();
   }
@@ -75,6 +75,8 @@ impl<U: UnsignedLike> PageMeta<U> {
     }
     reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
 
-    Ok(Self { per_latent_var })
+    Ok(Self {
+      per_var: per_latent_var,
+    })
   }
 }

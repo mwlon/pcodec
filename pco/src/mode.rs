@@ -57,13 +57,17 @@ impl<U: UnsignedLike> Mode<U> {
     }
   }
 
-  pub(crate) fn delta_order_for_latent_var(&self, latent_idx: usize, delta_order: usize) -> usize {
-    match (self, latent_idx) {
+  pub(crate) fn delta_order_for_latent_var(
+    &self,
+    latent_var_idx: usize,
+    delta_order: usize,
+  ) -> usize {
+    match (self, latent_var_idx) {
       (Mode::Classic, 0) | (Mode::FloatMult(_), 0) | (Mode::IntMult(_), 0) => delta_order,
       (Mode::FloatMult(_), 1) | (Mode::IntMult(_), 1) => 0,
       _ => panic!(
         "should be unreachable; unknown latent {:?}/{}",
-        self, latent_idx
+        self, latent_var_idx
       ),
     }
   }

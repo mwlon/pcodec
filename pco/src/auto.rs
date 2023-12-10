@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use crate::chunk_config::{ChunkConfig, PagingSpec};
-use crate::constants::{AUTO_DELTA_LIMIT, MAX_AUTO_DELTA_COMPRESSION_LEVEL};
+use crate::constants::{AUTO_DELTA_LIMIT, LIMITED_COMPRESSION_LEVEL};
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::wrapped::FileCompressor;
@@ -17,56 +17,13 @@ pub fn auto_delta_encoding_order<T: NumberLike>(
   nums: &[T],
   compression_level: usize,
 ) -> PcoResult<usize> {
-  let mut sampled_nums;
-  let head_nums = if nums.len() < AUTO_DELTA_LIMIT {
-    nums
-  } else {
-    // We take nums from start and maybe the end.
-    // If the first numbers are all constant, we need to sample from the end.
-    // Otherwise we'll do well enough by just using the start.
-    let half_limit = AUTO_DELTA_LIMIT / 2;
-    sampled_nums = Vec::with_capacity(AUTO_DELTA_LIMIT);
-    sampled_nums.extend(&nums[..half_limit]);
-    let zeroth_num = sampled_nums[0];
-    if sampled_nums.iter().all(|num| *num == zeroth_num) {
-      sampled_nums.extend(&nums[nums.len() - half_limit..]);
-    } else {
-      sampled_nums.extend(&nums[half_limit..AUTO_DELTA_LIMIT]);
-    }
-    &sampled_nums
+  let fc = FileCompressor::default();
+  let chunk_config = ChunkConfig {
+    compression_level,
+    ..Default::default()
   };
-
-  let mut best_order = usize::MAX;
-  let mut best_size = usize::MAX;
-  for delta_encoding_order in 0..8 {
-    let config = ChunkConfig {
-      delta_encoding_order: Some(delta_encoding_order),
-      compression_level: min(
-        compression_level,
-        MAX_AUTO_DELTA_COMPRESSION_LEVEL,
-      ),
-      int_mult_spec: IntMultSpec::Enabled,
-      float_mult_spec: FloatMultSpec::Enabled,
-      paging_spec: PagingSpec::default(),
-    };
-    let fc = FileCompressor::default();
-    let cc = fc.chunk_compressor(head_nums, &config)?;
-    let size_estimate = cc.chunk_meta_size_hint() + cc.page_size_hint(0);
-    let mut dst = Vec::with_capacity(size_estimate);
-    cc.write_chunk_meta(&mut dst)?;
-    cc.write_page(0, &mut dst)?;
-
-    let size = dst.len();
-    if size < best_size {
-      best_order = delta_encoding_order;
-      best_size = size;
-    } else {
-      // it's almost always convex
-      break;
-    }
-  }
-
-  Ok(best_order)
+  let cc = fc.chunk_compressor(nums, &chunk_config)?;
+  Ok(cc.meta().delta_encoding_order)
 }
 
 #[cfg(test)]

@@ -39,7 +39,7 @@ pub fn split_latents<T: NumberLike>(
   page_nums: &[T],
   base: <T::Unsigned as UnsignedLike>::Float,
   inv_base: <T::Unsigned as UnsignedLike>::Float,
-) -> PageLatents<T::Unsigned> {
+) -> Vec<Vec<T::Unsigned>> {
   let page_nums = T::assert_float(page_nums);
   let n = page_nums.len();
   let uninit_vec = || unsafe {
@@ -66,7 +66,7 @@ pub fn split_latents<T: NumberLike>(
     delta::toggle_center_in_place(&mut adjustments[base_i..base_i + chunk.len()]);
     base_i += ARITH_CHUNK_SIZE;
   }
-  PageLatents::new_pre_delta(vec![unsigneds, adjustments])
+  vec![unsigneds, adjustments]
 }
 
 // # of bins before classic can't memorize them anymore, even if it tried
