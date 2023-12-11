@@ -45,7 +45,7 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
   }
 
   pub(crate) fn avg_bits_per_delta(&self) -> f64 {
-    let total_weight = self.bins.iter().map(|bin| bin.weight).sum::<Weight>() as f64;
+    let total_weight = (1 << self.ans_size_log) as f64;
     self
       .bins
       .iter()

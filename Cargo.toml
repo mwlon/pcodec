@@ -9,3 +9,8 @@ members = [
   "quantile-compression/ffi",
   "quantile-compression/q_compress",
 ]
+
+exclude = [
+  # conflicting dependencies and not worth upgrading
+  "quantile-compression/q_compress_cli"
+]

@@ -17,12 +17,12 @@ pub fn lowest_bits<U: ReadWriteUint>(x: U, n: Bitlen) -> U {
   }
 }
 
-// The true Huffman cost of course depends on the tree. We can statistically
+// The true ANS cost of course depends on the tree. We can statistically
 // model this cost and get slightly different bumpy log formulas,
 // but I haven't found
 // anything that beats a simple log. Plus it's computationally cheap.
-pub fn avg_depth_bits(weight: Weight, total_weight: usize) -> f64 {
-  (total_weight as f64 / weight as f64).log2()
+pub fn avg_ans_bits(count: Weight, total_count: Weight) -> f64 {
+  (total_count as f64 / count as f64).log2()
 }
 
 // TODO upgrade to rust 1.73 and delete this
@@ -53,10 +53,10 @@ mod tests {
 
   #[test]
   fn test_depth_bits() {
-    assert_eq!(avg_depth_bits(2, 2), 0.0);
-    assert_eq!(avg_depth_bits(2, 4), 1.0);
-    assert_eq!(avg_depth_bits(2, 8), 2.0);
-    assert_eq!(avg_depth_bits(4, 8), 1.0);
+    assert_eq!(avg_ans_bits(2, 2), 0.0);
+    assert_eq!(avg_ans_bits(2, 4), 1.0);
+    assert_eq!(avg_ans_bits(2, 8), 2.0);
+    assert_eq!(avg_ans_bits(4, 8), 1.0);
   }
 
   #[test]

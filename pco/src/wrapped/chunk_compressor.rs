@@ -6,7 +6,7 @@ use crate::bit_writer::BitWriter;
 use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageInfo};
 use crate::compression_table::CompressionTable;
 use crate::constants::{
-  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_COMPRESSION_LEVEL,
+  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_COMPRESSION_LEVEL, MAX_ANS_BITS,
   MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
 };
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -71,6 +71,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
       weight: count as Weight,
       lower,
       upper,
+      offset_bits: bits::bits_to_encode_offset(upper - lower),
       ..Default::default()
     };
     self.seq.push(bin);
@@ -129,19 +130,15 @@ fn choose_unoptimized_bins<U: UnsignedLike>(
 fn quantize_weights<U: UnsignedLike>(
   infos: &mut [BinCompressionInfo<U>],
   n_unsigneds: usize,
-  comp_level: usize,
+  estimated_ans_size_log: Bitlen,
 ) -> Bitlen {
   let counts = infos.iter().map(|info| info.weight).collect::<Vec<_>>();
-  // This max size is just big enough to handle the maximum number of bins,
-  // and it's small enough that the encoding/decoding ANS tables will
-  // mostly fit into L1 cache. We cap it so that higher compression levels
-  // don't incur substantially slower decompression.
-  let max_size_log = min(comp_level as Bitlen + 2, 12);
-  let (size_log, weights) = ans::quantize_weights(counts, n_unsigneds, max_size_log);
+  let (ans_size_log, weights) = ans::quantize_weights(counts, n_unsigneds, estimated_ans_size_log);
+
   for (i, weight) in weights.into_iter().enumerate() {
     infos[i].weight = weight;
   }
-  size_log
+  ans_size_log
 }
 
 #[derive(Default)]
@@ -150,11 +147,7 @@ struct TrainedBins<U: UnsignedLike> {
   ans_size_log: Bitlen,
 }
 
-fn train_infos<U: UnsignedLike>(
-  unsigneds: Vec<U>,
-  comp_level: usize,
-  n: usize, // can be greater than unsigneds.len() if delta encoding is on
-) -> PcoResult<TrainedBins<U>> {
+fn train_infos<U: UnsignedLike>(unsigneds: Vec<U>, comp_level: usize) -> PcoResult<TrainedBins<U>> {
   if unsigneds.is_empty() {
     return Ok(TrainedBins::default());
   }
@@ -166,11 +159,35 @@ fn train_infos<U: UnsignedLike>(
     choose_unoptimized_bins(&sorted, comp_level)
   };
 
-  let estimated_ans_size_log = (comp_level + 2) as Bitlen;
-  let mut optimized_infos =
-    bin_optimization::optimize_bins(unoptimized_bins, estimated_ans_size_log, n);
+  let n_log_ceil = if n_unsigneds <= 1 {
+    0
+  } else {
+    (n_unsigneds - 1).ilog2() + 1
+  };
+  // We cap the ANS table size so that it fits into L1 (or at least L2)w cache
+  // and has predictably small bitlengths for fast decompression.
+  // Maybe in the future we could extend this to MAX_ANS_BITS (14) if the user
+  // enables something. We should definitely quantize more aggressively if we
+  // do that.
+  let estimated_ans_size_log = min(
+    min(
+      (comp_level + 2) as Bitlen,
+      MAX_COMPRESSION_LEVEL as Bitlen,
+    ),
+    n_log_ceil,
+  );
 
-  let ans_size_log = quantize_weights(&mut optimized_infos, n_unsigneds, comp_level);
+  let mut optimized_infos = bin_optimization::optimize_bins(
+    unoptimized_bins,
+    estimated_ans_size_log,
+    n_unsigneds as Weight,
+  );
+
+  let ans_size_log = quantize_weights(
+    &mut optimized_infos,
+    n_unsigneds,
+    estimated_ans_size_log,
+  );
 
   Ok(TrainedBins {
     infos: optimized_infos,
@@ -441,7 +458,7 @@ fn unsigned_new_w_delta_order<U: UnsignedLike>(
       .copied()
       .collect::<Vec<_>>();
 
-    let trained = train_infos(contiguous_deltas, comp_level, chunk_n)?;
+    let trained = train_infos(contiguous_deltas, comp_level)?;
     let bins = bins_from_compression_infos(&trained.infos);
     let needs_ans = bins.len() != 1;
 
@@ -685,6 +702,7 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
   }
 
   fn page_size_hint_inner(&self, page_idx: usize, page_size_overestimation: f64) -> usize {
+    // TODO share logic between this and bin optimization
     let page_info = &self.page_infos[page_idx];
     let mut bit_size = 0;
     for ((var_meta, var_policy), &end_idx) in self
@@ -702,9 +720,8 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
       // But most datasets have multiple pages, and if we really wanted to
       // improve performance for standalone files too, we'd need a whole-file
       // compressed size estimate.
-      let nums_bit_size =
-        page_size_overestimation * page_n_deltas as f64 * var_policy.avg_bits_per_delta;
-      bit_size += meta_bit_size + nums_bit_size.ceil() as usize;
+      let nums_bit_size = page_n_deltas as f64 * var_policy.avg_bits_per_delta;
+      bit_size += meta_bit_size + (nums_bit_size * page_size_overestimation).ceil() as usize;
     }
     bits::ceil_div(bit_size, 8)
   }

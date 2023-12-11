@@ -1,7 +1,7 @@
 use crate::ans::Token;
 use crate::bin::BinCompressionInfo;
 use crate::bits;
-use crate::bits::avg_depth_bits;
+use crate::bits::avg_ans_bits;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
@@ -13,18 +13,18 @@ fn bin_bit_cost<U: UnsignedLike>(
   lower: U,
   upper: U,
   count: Weight,
-  n: usize,
+  total_count: Weight,
 ) -> f64 {
-  let ans_cost = avg_depth_bits(count, n);
-  let offset_cost = (bits::bits_to_encode_offset(upper - lower) as u64 * count as u64) as f64;
-  base_meta_cost + ans_cost * (count as f64) + offset_cost
+  let ans_cost = avg_ans_bits(count, total_count);
+  let offset_cost = bits::bits_to_encode_offset(upper - lower) as f64;
+  base_meta_cost + (ans_cost + offset_cost) * (count as f64)
 }
 
 // this is an exact optimal strategy
 pub fn optimize_bins<U: UnsignedLike>(
   bins: Vec<BinCompressionInfo<U>>,
   ans_size_log: Bitlen,
-  n: usize,
+  total_count: Weight,
 ) -> Vec<BinCompressionInfo<U>> {
   let mut c = 0;
   let mut cum_count = Vec::with_capacity(bins.len() + 1);
@@ -60,7 +60,7 @@ pub fn optimize_bins<U: UnsignedLike>(
           lower,
           upper,
           cum_count_i - cum_count[j],
-          n,
+          total_count,
         );
       if cost < best_cost {
         best_cost = cost;
@@ -143,6 +143,34 @@ mod tests {
           upper: 79,
           offset_bits: 4,
           token: 2,
+        },
+      ]
+    )
+  }
+
+  #[test]
+  fn test_bin_optimization_enveloped() {
+    // here the 2nd bin would be covered by previous bin (which takes 8 offset
+    // bits), but it's disadvantageous to combine them because the 2nd bin has
+    // so much higher density
+    let infos = vec![make_info(1000, 0, 150), make_info(1000, 200, 200)];
+    let optimized = optimize_bins(infos, 10, 2000);
+    assert_eq!(
+      optimized,
+      vec![
+        BinCompressionInfo {
+          weight: 1000,
+          lower: 0,
+          upper: 150,
+          offset_bits: 8,
+          token: 0,
+        },
+        BinCompressionInfo {
+          weight: 1000,
+          lower: 200,
+          upper: 200,
+          offset_bits: 0,
+          token: 1,
         },
       ]
     )
