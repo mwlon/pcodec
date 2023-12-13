@@ -6,7 +6,7 @@ use crate::bit_writer::BitWriter;
 use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageInfo};
 use crate::compression_table::CompressionTable;
 use crate::constants::{
-  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_COMPRESSION_LEVEL, MAX_ANS_BITS,
+  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_COMPRESSION_LEVEL,
   MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
 };
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -25,8 +25,8 @@ use crate::{
 // if it looks like the average page of size n will use k bits, hint that it
 // will be PAGE_SIZE_OVERESTIMATION * k bits.
 const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
-const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
-const DELTA_GROUP_SIZE: usize = 200;
+const N_PER_EXTRA_DELTA_GROUP: usize = 25000;
+const DELTA_GROUP_SIZE: usize = 100;
 
 struct BinBuffer<'a, U: UnsignedLike> {
   pub seq: Vec<BinCompressionInfo<U>>,
