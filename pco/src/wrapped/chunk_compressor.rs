@@ -402,6 +402,23 @@ fn validate_chunk_size(n: usize) -> PcoResult<()> {
   Ok(())
 }
 
+#[inline(never)]
+fn collect_contiguous_deltas<U: UnsignedLike>(
+  deltas: &[U],
+  page_infos: &[PageInfo],
+  latent_idx: usize,
+) -> Vec<U> {
+  let total_len = page_infos
+    .iter()
+    .map(|page| page.end_idx_per_var[latent_idx] - page.start_idx)
+    .sum();
+  let mut res = Vec::with_capacity(total_len);
+  for page in page_infos {
+    res.extend(&deltas[page.start_idx..page.end_idx_per_var[latent_idx]]);
+  }
+  res
+}
+
 fn unsigned_new_w_delta_order<U: UnsignedLike>(
   mut latents: Vec<Vec<U>>, // start out plain, gets delta encoded in place
   config: &ChunkConfig,
@@ -452,11 +469,7 @@ fn unsigned_new_w_delta_order<U: UnsignedLike>(
       )
     };
 
-    let contiguous_deltas = page_infos
-      .iter()
-      .flat_map(|page_info| &deltas[page_info.start_idx..page_info.end_idx_per_var[latent_idx]])
-      .copied()
-      .collect::<Vec<_>>();
+    let contiguous_deltas = collect_contiguous_deltas(deltas, &page_infos, latent_idx);
 
     let trained = train_infos(contiguous_deltas, comp_level)?;
     let bins = bins_from_compression_infos(&trained.infos);
@@ -530,6 +543,7 @@ fn choose_delta_sample<U: UnsignedLike>(
 // Right now this is entirely based on the primary latents since no existing
 // modes apply deltas to secondary latents. Might want to change this
 // eventually?
+#[inline(never)]
 fn choose_delta_encoding_order<U: UnsignedLike>(
   primary_latents: &[U],
   compression_level: usize,
