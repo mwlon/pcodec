@@ -6,7 +6,7 @@ use crate::bit_writer::BitWriter;
 use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageInfo};
 use crate::compression_table::CompressionTable;
 use crate::constants::{
-  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_COMPRESSION_LEVEL,
+  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_UNOPTIMIZED_BINS_LOG,
   MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
 };
 use crate::data_types::{NumberLike, UnsignedLike};
@@ -25,8 +25,8 @@ use crate::{
 // if it looks like the average page of size n will use k bits, hint that it
 // will be PAGE_SIZE_OVERESTIMATION * k bits.
 const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
-const N_PER_EXTRA_DELTA_GROUP: usize = 25000;
-const DELTA_GROUP_SIZE: usize = 100;
+const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
+const DELTA_GROUP_SIZE: usize = 200;
 
 struct BinBuffer<'a, U: UnsignedLike> {
   pub seq: Vec<BinCompressionInfo<U>>,
@@ -80,31 +80,17 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
   }
 }
 
-// 2 ^ comp level, with 2 caveats:
-// * Enforce n_bins <= n_unsigneds
-// * Due to bin optimization compute cost ~ O(4 ^ comp level), limit max comp level when
-// n_unsigneds is small
-fn choose_max_n_bins(comp_level: usize, n_unsigneds: usize) -> usize {
-  let log_n = (n_unsigneds as f64).log2().floor() as usize;
-  let fast_comp_level = log_n.saturating_sub(4);
-  let real_comp_level = if comp_level <= fast_comp_level {
-    comp_level
-  } else {
-    fast_comp_level + comp_level.saturating_sub(fast_comp_level) / 2
-  };
-  min(1_usize << real_comp_level, n_unsigneds)
-}
-
+#[inline(never)]
 fn choose_unoptimized_bins<U: UnsignedLike>(
   sorted: &[U],
-  comp_level: usize,
+  unoptimized_bins_log: usize,
 ) -> Vec<BinCompressionInfo<U>> {
   let n_unsigneds = sorted.len();
-  let max_n_bin = choose_max_n_bins(comp_level, n_unsigneds);
+  let max_n_bins = min(1 << unoptimized_bins_log, n_unsigneds);
 
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<U>::new(max_n_bin, n_unsigneds, sorted);
+  let mut bin_buffer = BinBuffer::<U>::new(max_n_bins, n_unsigneds, sorted);
 
   for j in 1..n_unsigneds {
     let target_j = bin_buffer.target_j;
@@ -147,7 +133,10 @@ struct TrainedBins<U: UnsignedLike> {
   ans_size_log: Bitlen,
 }
 
-fn train_infos<U: UnsignedLike>(unsigneds: Vec<U>, comp_level: usize) -> PcoResult<TrainedBins<U>> {
+fn train_infos<U: UnsignedLike>(
+  unsigneds: Vec<U>,
+  unoptimized_bins_log: usize,
+) -> PcoResult<TrainedBins<U>> {
   if unsigneds.is_empty() {
     return Ok(TrainedBins::default());
   }
@@ -156,7 +145,7 @@ fn train_infos<U: UnsignedLike>(unsigneds: Vec<U>, comp_level: usize) -> PcoResu
   let unoptimized_bins = {
     let mut sorted = unsigneds;
     sorted.sort_unstable();
-    choose_unoptimized_bins(&sorted, comp_level)
+    choose_unoptimized_bins(&sorted, unoptimized_bins_log)
   };
 
   let n_log_ceil = if n_unsigneds <= 1 {
@@ -171,7 +160,7 @@ fn train_infos<U: UnsignedLike>(unsigneds: Vec<U>, comp_level: usize) -> PcoResu
   // do that.
   let estimated_ans_size_log = min(
     min(
-      (comp_level + 2) as Bitlen,
+      (unoptimized_bins_log + 2) as Bitlen,
       MAX_COMPRESSION_LEVEL as Bitlen,
     ),
     n_log_ceil,
@@ -421,12 +410,13 @@ fn collect_contiguous_deltas<U: UnsignedLike>(
 
 fn unsigned_new_w_delta_order<U: UnsignedLike>(
   mut latents: Vec<Vec<U>>, // start out plain, gets delta encoded in place
-  config: &ChunkConfig,
+  paging_spec: &PagingSpec,
   mode: Mode<U>,
   delta_order: usize,
+  unoptimized_bins_log: usize,
 ) -> PcoResult<ChunkCompressor<U>> {
   let chunk_n = latents[0].len();
-  let n_per_page = config.paging_spec.n_per_page(chunk_n)?;
+  let n_per_page = paging_spec.n_per_page(chunk_n)?;
   let n_pages = n_per_page.len();
   let n_latents = mode.n_latent_vars();
 
@@ -460,18 +450,18 @@ fn unsigned_new_w_delta_order<U: UnsignedLike>(
   let mut var_policies = Vec::with_capacity(n_latents);
   for (latent_idx, deltas) in deltas.iter().enumerate() {
     // secondary latents should be compressed faster
-    let comp_level = if latent_idx == 0 {
-      config.compression_level
+    let unoptimized_bins_log = if latent_idx == 0 {
+      unoptimized_bins_log
     } else {
       min(
-        config.compression_level,
-        LIMITED_COMPRESSION_LEVEL,
+        unoptimized_bins_log,
+        LIMITED_UNOPTIMIZED_BINS_LOG,
       )
     };
 
     let contiguous_deltas = collect_contiguous_deltas(deltas, &page_infos, latent_idx);
 
-    let trained = train_infos(contiguous_deltas, comp_level)?;
+    let trained = train_infos(contiguous_deltas, unoptimized_bins_log)?;
     let bins = bins_from_compression_infos(&trained.infos);
     let needs_ans = bins.len() != 1;
 
@@ -546,30 +536,23 @@ fn choose_delta_sample<U: UnsignedLike>(
 #[inline(never)]
 fn choose_delta_encoding_order<U: UnsignedLike>(
   primary_latents: &[U],
-  compression_level: usize,
+  unoptimized_bins_log: usize,
 ) -> PcoResult<usize> {
-  let n = primary_latents.len();
   let sample = choose_delta_sample(
     primary_latents,
     DELTA_GROUP_SIZE,
-    1 + n / N_PER_EXTRA_DELTA_GROUP,
+    1 + primary_latents.len() / N_PER_EXTRA_DELTA_GROUP,
   );
 
   let mut best_order = usize::MAX;
   let mut best_size = usize::MAX;
   for delta_encoding_order in 0..MAX_DELTA_ENCODING_ORDER + 1 {
-    // the options related to mode- and delta-detection in this config don't
-    // matter; we pass the exact mode and delta order in
-    let config = ChunkConfig {
-      compression_level,
-      paging_spec: PagingSpec::ExactPageSizes(vec![sample.len()]),
-      ..Default::default()
-    };
     let sample_cc = unsigned_new_w_delta_order(
       vec![sample.clone()],
-      &config,
+      &PagingSpec::ExactPageSizes(vec![sample.len()]),
       Mode::Classic,
       delta_encoding_order,
+      unoptimized_bins_log,
     )?;
     let size_estimate = sample_cc.chunk_meta_size_hint() + sample_cc.page_size_hint_inner(0, 1.0);
     if size_estimate < best_size {
@@ -584,6 +567,16 @@ fn choose_delta_encoding_order<U: UnsignedLike>(
   Ok(best_order)
 }
 
+fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> usize {
+  let log_n = (n as f64).log2().floor() as usize;
+  let fast_unoptimized_bins_log = log_n.saturating_sub(4);
+  if compression_level <= fast_unoptimized_bins_log {
+    compression_level
+  } else {
+    fast_unoptimized_bins_log + compression_level.saturating_sub(fast_unoptimized_bins_log) / 2
+  }
+}
+
 // We pull this stuff out of `new` because it only depends on the unsigned type
 // and we don't need a specialization for each full dtype.
 fn unsigned_new<U: UnsignedLike>(
@@ -591,13 +584,21 @@ fn unsigned_new<U: UnsignedLike>(
   config: &ChunkConfig,
   mode: Mode<U>,
 ) -> PcoResult<ChunkCompressor<U>> {
+  let unoptimized_bins_log =
+    choose_unoptimized_bins_log(config.compression_level, latents[0].len());
   let delta_order = if let Some(delta_order) = config.delta_encoding_order {
     delta_order
   } else {
-    choose_delta_encoding_order(&latents[0], config.compression_level)?
+    choose_delta_encoding_order(&latents[0], unoptimized_bins_log)?
   };
 
-  unsigned_new_w_delta_order(latents, config, mode, delta_order)
+  unsigned_new_w_delta_order(
+    latents,
+    &config.paging_spec,
+    mode,
+    delta_order,
+    unoptimized_bins_log,
+  )
 }
 
 // Should this take nums as a slice of slices instead of having a config.paging_spec?
@@ -822,20 +823,6 @@ impl<U: UnsignedLike> ChunkCompressor<U> {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn test_choose_max_n_bins() {
-    assert_eq!(choose_max_n_bins(0, 100), 1);
-    assert_eq!(choose_max_n_bins(12, 200), 1 << 7);
-    assert_eq!(choose_max_n_bins(12, 1 << 10), 1 << 9);
-    assert_eq!(choose_max_n_bins(8, 1 << 10), 1 << 7);
-    assert_eq!(choose_max_n_bins(1, 1 << 10), 2);
-    assert_eq!(choose_max_n_bins(12, (1 << 12) - 1), 1 << 9);
-    assert_eq!(choose_max_n_bins(12, 1 << 12), 1 << 10);
-    assert_eq!(choose_max_n_bins(12, (1 << 16) - 1), 1 << 11);
-    assert_eq!(choose_max_n_bins(12, 1 << 16), 1 << 12);
-    assert_eq!(choose_max_n_bins(12, 1 << 20), 1 << 12);
-  }
 
   #[test]
   fn test_choose_delta_sample() {

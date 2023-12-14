@@ -9,15 +9,16 @@ use crate::data_types::UnsignedLike;
 // a single bin for better performance?
 
 fn bin_bit_cost<U: UnsignedLike>(
-  base_meta_cost: f64,
+  bin_meta_cost: f32,
   lower: U,
   upper: U,
   count: Weight,
-  total_count: Weight,
-) -> f64 {
-  let ans_cost = avg_ans_bits(count, total_count);
-  let offset_cost = bits::bits_to_encode_offset(upper - lower) as f64;
-  base_meta_cost + (ans_cost + offset_cost) * (count as f64)
+  total_count_log2: f32,
+) -> f32 {
+  let count = count as f32;
+  let ans_cost = avg_ans_bits(count, total_count_log2);
+  let offset_cost = bits::bits_to_encode_offset(upper - lower) as f32;
+  bin_meta_cost + (ans_cost + offset_cost) * count
 }
 
 // this is an exact optimal strategy
@@ -35,6 +36,7 @@ pub fn optimize_bins<U: UnsignedLike>(
   }
   let lowers = bins.iter().map(|bin| bin.lower).collect::<Vec<_>>();
   let uppers = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
+  let total_count_log2 = (total_count as f32).log2();
 
   let mut best_costs = Vec::with_capacity(bins.len() + 1);
   let mut best_paths = Vec::with_capacity(bins.len() + 1);
@@ -42,12 +44,12 @@ pub fn optimize_bins<U: UnsignedLike>(
   best_paths.push(Vec::new());
 
   let bits_to_encode_weight = ans_size_log;
-  let base_meta_cost = bits_to_encode_weight as f64 +
-    U::BITS as f64 + // lower bound
-    bits::bits_to_encode_offset_bits::<U>() as f64;
+  let bin_meta_cost = bits_to_encode_weight as f32 +
+    U::BITS as f32 + // lower bound
+    bits::bits_to_encode_offset_bits::<U>() as f32;
 
   for i in 0..bins.len() {
-    let mut best_cost = f64::MAX;
+    let mut best_cost = f32::MAX;
     let mut best_j = usize::MAX;
     let upper = uppers[i];
     let cum_count_i = cum_count[i + 1];
@@ -56,11 +58,11 @@ pub fn optimize_bins<U: UnsignedLike>(
 
       let cost = best_costs[j]
         + bin_bit_cost::<U>(
-          base_meta_cost,
+          bin_meta_cost,
           lower,
           upper,
           cum_count_i - cum_count[j],
-          total_count,
+          total_count_log2,
         );
       if cost < best_cost {
         best_cost = cost;
