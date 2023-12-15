@@ -44,14 +44,14 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
       .unwrap_or_default()
   }
 
-  pub(crate) fn avg_bits_per_latent(&self) -> f64 {
-    let total_weight = self.bins.iter().map(|bin| bin.weight).sum::<Weight>() as f64;
+  pub(crate) fn avg_bits_per_delta(&self) -> f64 {
+    let total_weight = (1 << self.ans_size_log) as f64;
     self
       .bins
       .iter()
       .map(|bin| {
-        let max_ans_bits = self.ans_size_log - bin.weight.ilog2() as Bitlen;
-        (max_ans_bits + bin.offset_bits) as f64 * bin.weight as f64 / total_weight
+        let ans_bits = self.ans_size_log as f64 - (bin.weight as f64).log2();
+        (ans_bits + bin.offset_bits as f64) * bin.weight as f64 / total_weight
       })
       .sum()
   }

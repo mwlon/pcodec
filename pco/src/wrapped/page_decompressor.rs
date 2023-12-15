@@ -12,7 +12,6 @@ use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::page_meta::PageMeta;
 use crate::progress::Progress;
-
 use crate::wrapped::page_decompressor::SecondaryLatents::Nonconstant;
 use crate::wrapped::SecondaryLatents::Constant;
 use crate::Mode::*;
@@ -88,7 +87,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
     let mode = chunk_meta.mode;
     let delta_momentss = page_meta
-      .per_latent_var
+      .per_var
       .iter()
       .map(|latent| latent.delta_moments.clone())
       .collect::<Vec<_>>();
@@ -105,7 +104,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
         chunk_latent_meta,
-        &page_meta.per_latent_var[latent_idx],
+        &page_meta.per_var[latent_idx],
       )?);
     }
 

@@ -1,6 +1,5 @@
 use std::cmp::{max, min};
 
-use crate::compression_intermediates::PageLatents;
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::wrapped::SecondaryLatents;
@@ -13,20 +12,20 @@ const ARITH_CHUNK_SIZE: usize = 512;
 #[inline(never)]
 pub(crate) fn join_latents<U: UnsignedLike>(
   base: U::Float,
-  unsigneds: &mut [U],
+  primary_dst: &mut [U],
   secondary: SecondaryLatents<U>,
 ) {
   match secondary {
     Nonconstant(adjustments) => {
       delta::toggle_center_in_place(adjustments);
-      for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
+      for (u, &adj) in primary_dst.iter_mut().zip(adjustments.iter()) {
         let unadjusted = u.to_int_float() * base;
         *u = unadjusted.to_unsigned().wrapping_add(adj)
       }
     }
     Constant(adj) => {
       let adj = adj.wrapping_add(U::MID);
-      for u in unsigneds.iter_mut() {
+      for u in primary_dst.iter_mut() {
         let unadjusted = u.to_int_float() * base;
         *u = unadjusted.to_unsigned().wrapping_add(adj)
       }
@@ -39,7 +38,7 @@ pub fn split_latents<T: NumberLike>(
   page_nums: &[T],
   base: <T::Unsigned as UnsignedLike>::Float,
   inv_base: <T::Unsigned as UnsignedLike>::Float,
-) -> PageLatents<T::Unsigned> {
+) -> Vec<Vec<T::Unsigned>> {
   let page_nums = T::assert_float(page_nums);
   let n = page_nums.len();
   let uninit_vec = || unsafe {
@@ -47,7 +46,7 @@ pub fn split_latents<T: NumberLike>(
     res.set_len(n);
     res
   };
-  let mut unsigneds = uninit_vec();
+  let mut primary = uninit_vec();
   let mut adjustments = uninit_vec();
   let mut mults = [<T::Unsigned as UnsignedLike>::Float::ZERO; ARITH_CHUNK_SIZE];
   let mut base_i = 0;
@@ -56,7 +55,7 @@ pub fn split_latents<T: NumberLike>(
       mults[i] = (chunk[i] * inv_base).round();
     }
     for i in 0..chunk.len() {
-      unsigneds[base_i + i] = T::Unsigned::from_int_float(mults[i]);
+      primary[base_i + i] = T::Unsigned::from_int_float(mults[i]);
     }
     for i in 0..chunk.len() {
       adjustments[base_i + i] = chunk[i]
@@ -66,7 +65,7 @@ pub fn split_latents<T: NumberLike>(
     delta::toggle_center_in_place(&mut adjustments[base_i..base_i + chunk.len()]);
     base_i += ARITH_CHUNK_SIZE;
   }
-  PageLatents::new_pre_delta(vec![unsigneds, adjustments])
+  vec![primary, adjustments]
 }
 
 // # of bins before classic can't memorize them anymore, even if it tried

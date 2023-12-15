@@ -1,4 +1,4 @@
-use crate::constants::{Bitlen, Weight};
+use crate::constants::Bitlen;
 use crate::data_types::UnsignedLike;
 use crate::read_write_uint::ReadWriteUint;
 
@@ -15,14 +15,6 @@ pub fn lowest_bits<U: ReadWriteUint>(x: U, n: Bitlen) -> U {
   } else {
     lowest_bits_fast(x, n)
   }
-}
-
-// The true Huffman cost of course depends on the tree. We can statistically
-// model this cost and get slightly different bumpy log formulas,
-// but I haven't found
-// anything that beats a simple log. Plus it's computationally cheap.
-pub fn avg_depth_bits(weight: Weight, total_weight: usize) -> f64 {
-  (total_weight as f64 / weight as f64).log2()
 }
 
 // TODO upgrade to rust 1.73 and delete this
@@ -49,14 +41,6 @@ mod tests {
     assert_eq!(lowest_bits(u32::MAX, 3), 7);
     assert_eq!(lowest_bits_fast(u32::MAX, 3), 7);
     assert_eq!(lowest_bits(u32::MAX, 32), u32::MAX);
-  }
-
-  #[test]
-  fn test_depth_bits() {
-    assert_eq!(avg_depth_bits(2, 2), 0.0);
-    assert_eq!(avg_depth_bits(2, 4), 1.0);
-    assert_eq!(avg_depth_bits(2, 8), 2.0);
-    assert_eq!(avg_depth_bits(4, 8), 1.0);
   }
 
   #[test]

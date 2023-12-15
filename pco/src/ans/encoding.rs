@@ -160,6 +160,8 @@ fn quantize_weights_to(counts: &[Weight], total_count: usize, size_log: Bitlen) 
 }
 
 // choose both size_log and weights
+// increase size_log if it's insufficient to encode all bins;
+// decrease it if all the weights are divisible by 2^k
 pub fn quantize_weights(
   counts: Vec<Weight>,
   total_count: usize,

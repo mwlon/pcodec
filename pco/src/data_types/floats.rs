@@ -108,3 +108,15 @@ macro_rules! impl_float_number {
 
 impl_float_number!(f32, u32, 32, 1_u32 << 31, 5, -126);
 impl_float_number!(f64, u64, 64, 1_u64 << 63, 6, -1022);
+
+#[cfg(test)]
+mod tests {
+  use crate::data_types::NumberLike;
+
+  #[test]
+  fn test_float_ordering() {
+    assert!(f32::NEG_INFINITY.to_unsigned() < (-0.0_f32).to_unsigned());
+    assert!((-0.0_f32).to_unsigned() < (0.0_f32).to_unsigned());
+    assert!((0.0_f32).to_unsigned() < f32::INFINITY.to_unsigned());
+  }
+}

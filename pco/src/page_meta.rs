@@ -49,7 +49,7 @@ impl<U: UnsignedLike> PageLatentVarMeta<U> {
 // (wrapped mode).
 #[derive(Clone, Debug)]
 pub struct PageMeta<U: UnsignedLike> {
-  pub per_latent_var: Vec<PageLatentVarMeta<U>>,
+  pub per_var: Vec<PageLatentVarMeta<U>>,
 }
 
 impl<U: UnsignedLike> PageMeta<U> {
@@ -59,15 +59,15 @@ impl<U: UnsignedLike> PageMeta<U> {
     writer: &mut BitWriter<W>,
   ) {
     for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
-      self.per_latent_var[latent_idx].write_to(ans_size_log, writer);
+      self.per_var[latent_idx].write_to(ans_size_log, writer);
     }
     writer.finish_byte();
   }
 
   pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMeta<U>) -> PcoResult<Self> {
-    let mut per_latent_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
+    let mut per_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
     for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
-      per_latent_var.push(PageLatentVarMeta::parse_from(
+      per_var.push(PageLatentVarMeta::parse_from(
         reader,
         chunk_meta.delta_order_for_latent_var(latent_idx),
         chunk_latent_var_meta.ans_size_log,
@@ -75,6 +75,6 @@ impl<U: UnsignedLike> PageMeta<U> {
     }
     reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
 
-    Ok(Self { per_latent_var })
+    Ok(Self { per_var })
   }
 }

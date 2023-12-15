@@ -1,14 +1,15 @@
-use crate::compression_intermediates::PageLatents;
-use crate::data_types::{NumberLike, UnsignedLike};
-use crate::sampling;
-use crate::wrapped::SecondaryLatents;
-use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 use std::cmp::min;
 use std::collections::HashMap;
 
+use rand_xoshiro::rand_core::{RngCore, SeedableRng};
+
+use crate::data_types::{NumberLike, UnsignedLike};
+use crate::sampling;
+use crate::wrapped::SecondaryLatents;
+
 const SMALL_INTS: [u64; 4] = [1, 2, 3, 4];
 
-pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> PageLatents<T::Unsigned> {
+pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> Vec<Vec<T::Unsigned>> {
   let mut mults = Vec::with_capacity(nums.len());
   let mut adjs = Vec::with_capacity(nums.len());
   for num in nums {
@@ -16,23 +17,23 @@ pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> PageLatent
     mults.push(u / base);
     adjs.push(u % base);
   }
-  PageLatents::new_pre_delta(vec![mults, adjs])
+  vec![mults, adjs]
 }
 
 #[inline(never)]
 pub(crate) fn join_latents<U: UnsignedLike>(
   base: U,
-  unsigneds: &mut [U],
+  primary_dst: &mut [U],
   secondary: SecondaryLatents<U>,
 ) {
   match secondary {
     SecondaryLatents::Nonconstant(adjustments) => {
-      for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
+      for (u, &adj) in primary_dst.iter_mut().zip(adjustments.iter()) {
         *u = (*u * base).wrapping_add(adj)
       }
     }
     SecondaryLatents::Constant(adj) => {
-      for u in unsigneds.iter_mut() {
+      for u in primary_dst.iter_mut() {
         *u = (*u * base).wrapping_add(adj)
       }
     }
@@ -184,24 +185,25 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
   use rand::Rng;
+
+  use super::*;
 
   #[test]
   fn test_split_join_latents() {
     // SPLIT
     let nums = vec![-3, 1, 5];
-    let latents = split_latents(&nums, 4_u32).per_var;
+    let latents = split_latents(&nums, 4_u32);
     assert_eq!(latents.len(), 2);
     assert_eq!(
-      latents[0].latents,
+      latents[0],
       vec![536870911_u32, 536870912, 536870913]
     );
-    assert_eq!(latents[1].latents, vec![1, 1, 1]);
+    assert_eq!(latents[1], vec![1, 1, 1]);
 
     // JOIN
-    let mut primary = latents[0].latents.clone();
-    let mut secondary = latents[1].latents.clone();
+    let mut primary = latents[0].clone();
+    let mut secondary = latents[1].clone();
     join_latents(
       4,
       &mut primary,

@@ -116,7 +116,9 @@ normal = np.random.normal(size=n)
 write_f64(normal, 'normal')
 # mostly just to test performance bottlenecks on f32
 write_f32(normal, 'normal')
-write_f32(np.exp(normal), 'log_normal')
+log_normal = np.exp(normal)
+write_f32(log_normal, 'log_normal')
+write_f32(np.cumsum(log_normal - np.exp(0.5)), 'csum')
 
 
 # timestamps increasing 1s at a time on average from 2022-01-01T00:00:00 with

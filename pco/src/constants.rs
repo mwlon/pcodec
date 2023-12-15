@@ -32,10 +32,9 @@ pub const PAGE_PADDING: usize =
   FULL_BATCH_N * (MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES) + OVERSHOOT_PADDING;
 
 // cutoffs and legal parameter values
-pub const AUTO_DELTA_LIMIT: usize = 1100;
 pub const MAX_ANS_BITS: Bitlen = 14;
 pub const MAX_ANS_BYTES: usize = bits::ceil_div(MAX_ANS_BITS as usize, 8);
-pub const MAX_AUTO_DELTA_COMPRESSION_LEVEL: usize = 6;
+pub const LIMITED_UNOPTIMIZED_BINS_LOG: usize = 6;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
 pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
 pub const MAX_ENTRIES: usize = 1 << 24;

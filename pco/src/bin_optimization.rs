@@ -1,30 +1,31 @@
 use crate::ans::Token;
 use crate::bin::BinCompressionInfo;
 use crate::bits;
-use crate::bits::avg_depth_bits;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
 // TODO if the optimal binning is only 0.x% better than a single bin, just use
 // a single bin for better performance?
 
+// using f32 instead of f64 because the .log2() is faster
 fn bin_bit_cost<U: UnsignedLike>(
-  base_meta_cost: f64,
+  bin_meta_cost: f32,
   lower: U,
   upper: U,
   count: Weight,
-  n: usize,
-) -> f64 {
-  let ans_cost = avg_depth_bits(count, n);
-  let offset_cost = (bits::bits_to_encode_offset(upper - lower) as u64 * count as u64) as f64;
-  base_meta_cost + ans_cost * (count as f64) + offset_cost
+  total_count_log2: f32,
+) -> f32 {
+  let count = count as f32;
+  let ans_cost = total_count_log2 - count.log2();
+  let offset_cost = bits::bits_to_encode_offset(upper - lower) as f32;
+  bin_meta_cost + (ans_cost + offset_cost) * count
 }
 
 // this is an exact optimal strategy
 pub fn optimize_bins<U: UnsignedLike>(
   bins: Vec<BinCompressionInfo<U>>,
   ans_size_log: Bitlen,
-  n: usize,
+  total_count: Weight,
 ) -> Vec<BinCompressionInfo<U>> {
   let mut c = 0;
   let mut cum_count = Vec::with_capacity(bins.len() + 1);
@@ -35,6 +36,7 @@ pub fn optimize_bins<U: UnsignedLike>(
   }
   let lowers = bins.iter().map(|bin| bin.lower).collect::<Vec<_>>();
   let uppers = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
+  let total_count_log2 = (total_count as f32).log2();
 
   let mut best_costs = Vec::with_capacity(bins.len() + 1);
   let mut best_paths = Vec::with_capacity(bins.len() + 1);
@@ -42,12 +44,12 @@ pub fn optimize_bins<U: UnsignedLike>(
   best_paths.push(Vec::new());
 
   let bits_to_encode_weight = ans_size_log;
-  let base_meta_cost = bits_to_encode_weight as f64 +
-    U::BITS as f64 + // lower bound
-    bits::bits_to_encode_offset_bits::<U>() as f64;
+  let bin_meta_cost = bits_to_encode_weight as f32 +
+    U::BITS as f32 + // lower bound
+    bits::bits_to_encode_offset_bits::<U>() as f32;
 
   for i in 0..bins.len() {
-    let mut best_cost = f64::MAX;
+    let mut best_cost = f32::MAX;
     let mut best_j = usize::MAX;
     let upper = uppers[i];
     let cum_count_i = cum_count[i + 1];
@@ -56,11 +58,11 @@ pub fn optimize_bins<U: UnsignedLike>(
 
       let cost = best_costs[j]
         + bin_bit_cost::<U>(
-          base_meta_cost,
+          bin_meta_cost,
           lower,
           upper,
           cum_count_i - cum_count[j],
-          n,
+          total_count_log2,
         );
       if cost < best_cost {
         best_cost = cost;
@@ -143,6 +145,34 @@ mod tests {
           upper: 79,
           offset_bits: 4,
           token: 2,
+        },
+      ]
+    )
+  }
+
+  #[test]
+  fn test_bin_optimization_enveloped() {
+    // here the 2nd bin would be covered by previous bin (which takes 8 offset
+    // bits), but it's disadvantageous to combine them because the 2nd bin has
+    // so much higher density
+    let infos = vec![make_info(1000, 0, 150), make_info(1000, 200, 200)];
+    let optimized = optimize_bins(infos, 10, 2000);
+    assert_eq!(
+      optimized,
+      vec![
+        BinCompressionInfo {
+          weight: 1000,
+          lower: 0,
+          upper: 150,
+          offset_bits: 8,
+          token: 0,
+        },
+        BinCompressionInfo {
+          weight: 1000,
+          lower: 200,
+          upper: 200,
+          offset_bits: 0,
+          token: 1,
         },
       ]
     )
