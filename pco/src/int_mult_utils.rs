@@ -1,10 +1,11 @@
+use std::cmp::min;
+use std::collections::HashMap;
+
+use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::sampling;
 use crate::wrapped::SecondaryLatents;
-use rand_xoshiro::rand_core::{RngCore, SeedableRng};
-use std::cmp::min;
-use std::collections::HashMap;
 
 const SMALL_INTS: [u64; 4] = [1, 2, 3, 4];
 
@@ -22,17 +23,17 @@ pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> Vec<Vec<T:
 #[inline(never)]
 pub(crate) fn join_latents<U: UnsignedLike>(
   base: U,
-  unsigneds: &mut [U],
+  primary_dst: &mut [U],
   secondary: SecondaryLatents<U>,
 ) {
   match secondary {
     SecondaryLatents::Nonconstant(adjustments) => {
-      for (u, &adj) in unsigneds.iter_mut().zip(adjustments.iter()) {
+      for (u, &adj) in primary_dst.iter_mut().zip(adjustments.iter()) {
         *u = (*u * base).wrapping_add(adj)
       }
     }
     SecondaryLatents::Constant(adj) => {
-      for u in unsigneds.iter_mut() {
+      for u in primary_dst.iter_mut() {
         *u = (*u * base).wrapping_add(adj)
       }
     }
@@ -184,8 +185,9 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
   use rand::Rng;
+
+  use super::*;
 
   #[test]
   fn test_split_join_latents() {

@@ -1,6 +1,7 @@
-use crate::data_types::UnsignedLike;
 use std::cmp::{max, min};
 use std::collections::HashMap;
+
+use crate::data_types::UnsignedLike;
 
 const MIN_SAMPLE: usize = 10;
 // 1 in this many nums get put into sample

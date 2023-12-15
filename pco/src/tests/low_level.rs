@@ -1,7 +1,8 @@
-use better_io::{BetterBufRead, BetterBufReader};
 use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
+
+use better_io::{BetterBufRead, BetterBufReader};
 
 use crate::chunk_config::ChunkConfig;
 use crate::errors::PcoResult;

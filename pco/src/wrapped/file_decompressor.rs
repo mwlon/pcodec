@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use crate::bit_reader;
 use better_io::BetterBufRead;
 
+use crate::bit_reader;
 use crate::bit_reader::BitReaderBuilder;
 use crate::chunk_meta::ChunkMeta;
 use crate::constants::{CHUNK_META_PADDING, HEADER_PADDING};

@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 use crate::chunk_config::ChunkConfig;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
@@ -5,7 +7,6 @@ use crate::progress::Progress;
 use crate::standalone::compressor::FileCompressor;
 use crate::standalone::decompressor::{FileDecompressor, MaybeChunkDecompressor};
 use crate::{PagingSpec, FULL_BATCH_N};
-use std::cmp::min;
 
 /// Takes in a slice of numbers and an exact configuration and returns
 /// compressed bytes.

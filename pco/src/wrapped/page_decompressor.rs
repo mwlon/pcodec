@@ -12,7 +12,6 @@ use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::page_meta::PageMeta;
 use crate::progress::Progress;
-
 use crate::wrapped::page_decompressor::SecondaryLatents::Nonconstant;
 use crate::wrapped::SecondaryLatents::Constant;
 use crate::Mode::*;
