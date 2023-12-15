@@ -17,15 +17,6 @@ pub fn lowest_bits<U: ReadWriteUint>(x: U, n: Bitlen) -> U {
   }
 }
 
-// The true ANS cost of course depends on the tree. We can statistically
-// model this cost and get slightly different bumpy log formulas,
-// but I haven't found
-// anything that beats a simple log. Plus it's computationally cheap.
-#[inline]
-pub fn avg_ans_bits(count: f32, total_count_log2: f32) -> f32 {
-  total_count_log2 - count.log2()
-}
-
 // TODO upgrade to rust 1.73 and delete this
 pub const fn ceil_div(x: usize, divisor: usize) -> usize {
   (x + divisor - 1) / divisor

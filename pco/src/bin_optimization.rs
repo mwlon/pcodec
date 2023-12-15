@@ -1,13 +1,13 @@
 use crate::ans::Token;
 use crate::bin::BinCompressionInfo;
 use crate::bits;
-use crate::bits::avg_ans_bits;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
 // TODO if the optimal binning is only 0.x% better than a single bin, just use
 // a single bin for better performance?
 
+// using f32 instead of f64 because the .log2() is faster
 fn bin_bit_cost<U: UnsignedLike>(
   bin_meta_cost: f32,
   lower: U,
@@ -16,7 +16,7 @@ fn bin_bit_cost<U: UnsignedLike>(
   total_count_log2: f32,
 ) -> f32 {
   let count = count as f32;
-  let ans_cost = avg_ans_bits(count, total_count_log2);
+  let ans_cost = total_count_log2 - count.log2();
   let offset_cost = bits::bits_to_encode_offset(upper - lower) as f32;
   bin_meta_cost + (ans_cost + offset_cost) * count
 }

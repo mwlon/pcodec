@@ -65,9 +65,9 @@ impl<U: UnsignedLike> PageMeta<U> {
   }
 
   pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMeta<U>) -> PcoResult<Self> {
-    let mut per_latent_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
+    let mut per_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
     for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
-      per_latent_var.push(PageLatentVarMeta::parse_from(
+      per_var.push(PageLatentVarMeta::parse_from(
         reader,
         chunk_meta.delta_order_for_latent_var(latent_idx),
         chunk_latent_var_meta.ans_size_log,
@@ -75,8 +75,6 @@ impl<U: UnsignedLike> PageMeta<U> {
     }
     reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
 
-    Ok(Self {
-      per_var: per_latent_var,
-    })
+    Ok(Self { per_var })
   }
 }

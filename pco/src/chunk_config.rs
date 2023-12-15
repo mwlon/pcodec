@@ -50,13 +50,12 @@ pub enum FloatMultSpec {
 pub struct ChunkConfig {
   /// `compression_level` ranges from 0 to 12 inclusive (default: 8).
   ///
-  /// The compressor uses up to 2^`compression_level` bins.
-  /// For example,
-  /// * Level 0 achieves a small amount of compression with 1 bin.
-  /// * Level 8 achieves nearly the best compression with 256 bins and runs
+  /// At present,
+  /// * Level 0 achieves only a small amount of compression.
+  /// * Level 8 achieves very good compression and runs
   /// only slightly slower.
-  /// * Level 12 achieves marginally better compression than 8 with up to 4096
-  /// bins and may run several times slower.
+  /// * Level 12 achieves marginally better compression than 8
+  /// and may run several times slower.
   ///
   /// At present, the compression levels cover a relatively small range of the
   /// compression time vs. ratio tradeoff.

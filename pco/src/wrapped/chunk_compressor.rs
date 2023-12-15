@@ -341,11 +341,8 @@ fn choose_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T::Unsig
 
 // returns a long vec of latents per latent variable
 #[inline(never)]
-fn split_latents<T: NumberLike>(
-  naive_mode: Mode<T::Unsigned>,
-  page_nums: &[T],
-) -> Vec<Vec<T::Unsigned>> {
-  match naive_mode {
+fn split_latents<T: NumberLike>(mode: Mode<T::Unsigned>, page_nums: &[T]) -> Vec<Vec<T::Unsigned>> {
+  match mode {
     Mode::Classic => vec![page_nums.iter().map(|x| x.to_unsigned()).collect()],
     Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
       float_mult_utils::split_latents(page_nums, base, inv_base)
@@ -397,11 +394,7 @@ fn collect_contiguous_deltas<U: UnsignedLike>(
   page_infos: &[PageInfo],
   latent_idx: usize,
 ) -> Vec<U> {
-  let total_len = page_infos
-    .iter()
-    .map(|page| page.end_idx_per_var[latent_idx] - page.start_idx)
-    .sum();
-  let mut res = Vec::with_capacity(total_len);
+  let mut res = Vec::with_capacity(deltas.len());
   for page in page_infos {
     res.extend(&deltas[page.start_idx..page.end_idx_per_var[latent_idx]]);
   }
