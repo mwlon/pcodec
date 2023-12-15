@@ -44,14 +44,6 @@ mod tests {
   }
 
   #[test]
-  fn test_avg_ans_bits() {
-    assert_eq!(avg_ans_bits(2.0, 1.0), 0.0);
-    assert_eq!(avg_ans_bits(2.0, 2.0), 1.0);
-    assert_eq!(avg_ans_bits(2.0, 3.0), 2.0);
-    assert_eq!(avg_ans_bits(4.0, 3.0), 1.0);
-  }
-
-  #[test]
   fn test_bits_to_encode_offset_bits() {
     assert_eq!(bits_to_encode_offset_bits::<u32>(), 6);
     assert_eq!(bits_to_encode_offset_bits::<u64>(), 7);

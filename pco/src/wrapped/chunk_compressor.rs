@@ -153,7 +153,7 @@ fn train_infos<U: UnsignedLike>(
   } else {
     (n_unsigneds - 1).ilog2() + 1
   };
-  // We cap the ANS table size so that it fits into L1 (or at least L2)w cache
+  // We cap the ANS table size so that it fits into L1 (or at least L2) cache
   // and has predictably small bitlengths for fast decompression.
   // Maybe in the future we could extend this to MAX_ANS_BITS (14) if the user
   // enables something. We should definitely quantize more aggressively if we
