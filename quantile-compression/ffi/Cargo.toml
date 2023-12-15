@@ -1,5 +1,5 @@
 [package]
-name = "c_sharp"
+name = "q_compress_ffi"
 version = "0.0.0"
 edition = "2021"
 
