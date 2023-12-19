@@ -2,7 +2,7 @@ import numpy as np
 from pcodec import compress, decompress
 import pytest
 
-rng = np.random.default_rng(12345)
+np.random.seed(12345)
 
 @pytest.mark.parametrize(
     "shape",
@@ -13,9 +13,9 @@ rng = np.random.default_rng(12345)
         (2, 10, 10, 50),
     ],
 )
-@pytest.mark.parametrize("dtype", ['f4', 'f8'])
+@pytest.mark.parametrize("dtype", ['f4', 'f8', 'i4', 'i8', 'u4', 'u8'])
 def test_round_trip(shape, dtype):
-    data = rng.random(shape, dtype)
+    data = np.random.uniform(0, 1000, size=shape).astype(dtype)
     compressed = compress(data)
     out = np.empty_like(data)
     decompress(compressed, out)
