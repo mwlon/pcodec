@@ -15,8 +15,6 @@ be in vain.
 * Before making a PR, make sure to
   * Test your code; `cargo test` and `cargo clippy`.
   * Format it; `cargo fmt`.
-  There is a fmt bug that reformats some macro
-  docstrings in `quantile-compression` repeatedly, so don't commit that change.
   * [Run the benchmarks](../bench/README.md).
   This verifies compression and
   decompression works for each synthetic dataset, which occasionally catches

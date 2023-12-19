@@ -365,14 +365,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
 
 [[package]]
-name = "c_sharp"
-version = "0.0.0"
-dependencies = [
- "libc",
- "q_compress",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1169,6 +1161,14 @@ dependencies = [
  "futures",
  "rand",
  "tokio",
+]
+
+[[package]]
+name = "q_compress_ffi"
+version = "0.0.0"
+dependencies = [
+ "libc",
+ "q_compress",
 ]
 
 [[package]]
