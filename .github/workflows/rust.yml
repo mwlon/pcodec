@@ -11,12 +11,12 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
     - name: Clippy
       run: cargo clippy --no-deps
     - name: Run tests
       run: cargo test --verbose
+    - name: Ensure formatted
+      run: cargo fmt --check
