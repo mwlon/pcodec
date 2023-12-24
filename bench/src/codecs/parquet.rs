@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use parquet::basic::{Compression, ZstdLevel};
+use parquet::basic::{Compression, Encoding, ZstdLevel};
 use parquet::column::reader::get_typed_column_reader;
 use parquet::file::properties::{WriterProperties, WriterVersion};
 use parquet::file::reader::FileReader;
@@ -17,6 +17,7 @@ const ZSTD: &str = "zstd";
 #[derive(Clone, Debug)]
 pub struct ParquetConfig {
   compression: Compression,
+  encoding: Option<Encoding>,
   group_size: usize,
 }
 
@@ -28,6 +29,7 @@ impl Default for ParquetConfig {
       // others, sometimes with dramatic impact.
       // Based on experiments with zstd compression, 2^20 seems like a good default.
       group_size: 1 << 20,
+      encoding: None,
     }
   }
 }
@@ -71,6 +73,10 @@ impl CodecInternal for ParquetConfig {
     match key {
       "compression" => compression_to_string(&self.compression),
       "group_size" => self.group_size.to_string(),
+      "encoding" => self
+        .encoding
+        .map(|encoding| format!("{:?}", encoding))
+        .unwrap_or("default".to_string()),
       _ => panic!("bad conf"),
     }
   }
@@ -79,6 +85,13 @@ impl CodecInternal for ParquetConfig {
     match key {
       "compression" => self.compression = str_to_compression(&value)?,
       "group_size" => self.group_size = value.parse().unwrap(),
+      "encoding" => {
+        self.encoding = match value.to_lowercase().as_str() {
+          "pco" => Some(Encoding::PCO),
+          "default" => None,
+          other => return Err(anyhow!("unknown encoding: {}", other)),
+        };
+      }
       _ => return Err(anyhow!("unknown conf: {}", key)),
     }
     Ok(())
@@ -91,13 +104,23 @@ impl CodecInternal for ParquetConfig {
       T::PARQUET_DTYPE_STR
     );
     let schema = Arc::new(parse_message_type(&message_type).unwrap());
-    let properties_builder = WriterProperties::builder()
+    let mut props_builder = WriterProperties::builder()
       .set_writer_version(WriterVersion::PARQUET_2_0)
       .set_compression(self.compression);
+
+    if let Some(encoding) = self.encoding {
+      props_builder = props_builder
+        .set_encoding(encoding)
+        .set_dictionary_enabled(false);
+      if matches!(encoding, Encoding::PCO) {
+        props_builder = props_builder.set_write_batch_size(usize::MAX);
+      }
+    }
+
     let mut writer = SerializedFileWriter::new(
       &mut res,
       schema,
-      Arc::new(properties_builder.build()),
+      Arc::new(props_builder.build()),
     )
     .unwrap();
 

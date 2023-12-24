@@ -304,7 +304,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "clap",
- "parquet",
+ "parquet 49.0.0",
  "pco",
  "q_compress",
  "snap",
@@ -1037,6 +1037,26 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "49.0.0"
+dependencies = [
+ "ahash",
+ "bytes",
+ "chrono",
+ "half",
+ "hashbrown",
+ "num",
+ "num-bigint",
+ "paste",
+ "pco",
+ "seq-macro",
+ "snap",
+ "thrift",
+ "twox-hash",
+ "zstd",
+]
+
+[[package]]
+name = "parquet"
+version = "49.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af88740a842787da39b3d69ce5fbf6fce97d20211d3b299fee0a0da6430c74d4"
 dependencies = [
@@ -1087,7 +1107,7 @@ dependencies = [
  "arrow",
  "clap",
  "enum-iterator",
- "parquet",
+ "parquet 49.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pco",
 ]
 
