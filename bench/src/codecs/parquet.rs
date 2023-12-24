@@ -104,23 +104,23 @@ impl CodecInternal for ParquetConfig {
       T::PARQUET_DTYPE_STR
     );
     let schema = Arc::new(parse_message_type(&message_type).unwrap());
-    let mut props_builder = WriterProperties::builder()
+    let mut properties_builder = WriterProperties::builder()
       .set_writer_version(WriterVersion::PARQUET_2_0)
       .set_compression(self.compression);
 
     if let Some(encoding) = self.encoding {
-      props_builder = props_builder
+      properties_builder = properties_builder
         .set_encoding(encoding)
         .set_dictionary_enabled(false);
       if matches!(encoding, Encoding::PCO) {
-        props_builder = props_builder.set_write_batch_size(usize::MAX);
+        properties_builder = properties_builder.set_write_batch_size(usize::MAX);
       }
     }
 
     let mut writer = SerializedFileWriter::new(
       &mut res,
       schema,
-      Arc::new(props_builder.build()),
+      Arc::new(properties_builder.build()),
     )
     .unwrap();
 
