@@ -24,7 +24,10 @@ impl Default for ParquetConfig {
   fn default() -> Self {
     Self {
       compression: Compression::UNCOMPRESSED,
-      group_size: 1 << 18, // not the absolute fastest, but gives better compression ratio
+      // Larger group sizes work better on some datasets, and smaller ones on
+      // others, sometimes with dramatic impact.
+      // Based on experiments with zstd compression, 2^20 seems like a good default.
+      group_size: 1 << 20,
     }
   }
 }
