@@ -113,7 +113,9 @@ impl CodecInternal for ParquetConfig {
         .set_encoding(encoding)
         .set_dictionary_enabled(false);
       if matches!(encoding, Encoding::PCO) {
-        properties_builder = properties_builder.set_write_batch_size(usize::MAX);
+        properties_builder = properties_builder
+          .set_write_batch_size(usize::MAX)
+          .set_data_page_row_count_limit(1 << 18);
       }
     }
 
