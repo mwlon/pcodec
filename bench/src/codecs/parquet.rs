@@ -24,7 +24,7 @@ impl Default for ParquetConfig {
   fn default() -> Self {
     Self {
       compression: Compression::UNCOMPRESSED,
-      group_size: 1 << 22,
+      group_size: 1 << 18, // not the absolute fastest, but gives better compression ratio
     }
   }
 }
