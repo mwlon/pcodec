@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use std::cmp::{min};
 use std::io::Write;
 
 use crate::bin::BinCompressionInfo;
@@ -18,8 +18,8 @@ use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::read_write_uint::ReadWriteUint;
 use crate::{
   ans, bin_optimization, bit_reader, bit_writer, bits, delta, float_mult_utils, int_mult_utils,
-  read_write_uint, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta, FloatMultSpec, IntMultSpec,
-  Mode, PagingSpec, FULL_BATCH_N,
+  read_write_uint, unoptimized_bin_selection, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta,
+  FloatMultSpec, IntMultSpec, Mode, PagingSpec, FULL_BATCH_N,
 };
 
 // if it looks like the average page of size n will use k bits, hint that it
@@ -27,90 +27,6 @@ use crate::{
 const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
-
-struct BinBuffer<'a, U: UnsignedLike> {
-  pub seq: Vec<BinCompressionInfo<U>>,
-  bin_idx: usize,
-  max_n_bin: usize,
-  n_unsigneds: usize,
-  sorted: &'a [U],
-  pub target_j: usize,
-}
-
-impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
-  fn calc_target_j(&mut self) {
-    self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
-  }
-
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U]) -> Self {
-    let mut res = Self {
-      seq: Vec::with_capacity(max_n_bin),
-      bin_idx: 0,
-      max_n_bin,
-      n_unsigneds,
-      sorted,
-      target_j: 0,
-    };
-    res.calc_target_j();
-    res
-  }
-
-  fn push_bin(&mut self, i: usize, j: usize) {
-    let sorted = self.sorted;
-    let n_unsigneds = self.n_unsigneds;
-
-    let count = j - i;
-    let new_bin_idx = max(
-      self.bin_idx + 1,
-      (j * self.max_n_bin) / n_unsigneds,
-    );
-    let lower = sorted[i];
-    let upper = sorted[j - 1];
-
-    let bin = BinCompressionInfo {
-      weight: count as Weight,
-      lower,
-      upper,
-      offset_bits: bits::bits_to_encode_offset(upper - lower),
-      ..Default::default()
-    };
-    self.seq.push(bin);
-    self.bin_idx = new_bin_idx;
-    self.calc_target_j();
-  }
-}
-
-#[inline(never)]
-fn choose_unoptimized_bins<U: UnsignedLike>(
-  sorted: &[U],
-  unoptimized_bins_log: usize,
-) -> Vec<BinCompressionInfo<U>> {
-  let n_unsigneds = sorted.len();
-  let max_n_bins = min(1 << unoptimized_bins_log, n_unsigneds);
-
-  let mut i = 0;
-  let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<U>::new(max_n_bins, n_unsigneds, sorted);
-
-  for j in 1..n_unsigneds {
-    let target_j = bin_buffer.target_j;
-    if sorted[j] == sorted[j - 1] {
-      if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        bin_buffer.push_bin(i, backup_j);
-        i = backup_j;
-      }
-    } else {
-      backup_j = j;
-      if j >= target_j {
-        bin_buffer.push_bin(i, j);
-        i = j;
-      }
-    }
-  }
-  bin_buffer.push_bin(i, n_unsigneds);
-
-  bin_buffer.seq
-}
 
 // returns table size log
 fn quantize_weights<U: UnsignedLike>(
@@ -134,19 +50,16 @@ struct TrainedBins<U: UnsignedLike> {
 }
 
 fn train_infos<U: UnsignedLike>(
-  unsigneds: Vec<U>,
-  unoptimized_bins_log: usize,
+  deltas: Vec<U>,
+  unoptimized_bins_log: Bitlen,
 ) -> PcoResult<TrainedBins<U>> {
-  if unsigneds.is_empty() {
+  if deltas.is_empty() {
     return Ok(TrainedBins::default());
   }
 
-  let n_unsigneds = unsigneds.len();
-  let unoptimized_bins = {
-    let mut sorted = unsigneds;
-    sorted.sort_unstable();
-    choose_unoptimized_bins(&sorted, unoptimized_bins_log)
-  };
+  let n_unsigneds = deltas.len();
+  let unoptimized_bins =
+    unoptimized_bin_selection::choose_unoptimized_bins(deltas, unoptimized_bins_log);
 
   let n_log_ceil = if n_unsigneds <= 1 {
     0
@@ -160,7 +73,7 @@ fn train_infos<U: UnsignedLike>(
   // do that.
   let estimated_ans_size_log = min(
     min(
-      (unoptimized_bins_log + 2) as Bitlen,
+      unoptimized_bins_log + 2,
       MAX_COMPRESSION_LEVEL as Bitlen,
     ),
     n_log_ceil,
@@ -406,7 +319,7 @@ fn unsigned_new_w_delta_order<U: UnsignedLike>(
   paging_spec: &PagingSpec,
   mode: Mode<U>,
   delta_order: usize,
-  unoptimized_bins_log: usize,
+  unoptimized_bins_log: Bitlen,
 ) -> PcoResult<ChunkCompressor<U>> {
   let chunk_n = latents[0].len();
   let n_per_page = paging_spec.n_per_page(chunk_n)?;
@@ -529,7 +442,7 @@ fn choose_delta_sample<U: UnsignedLike>(
 #[inline(never)]
 fn choose_delta_encoding_order<U: UnsignedLike>(
   primary_latents: &[U],
-  unoptimized_bins_log: usize,
+  unoptimized_bins_log: Bitlen,
 ) -> PcoResult<usize> {
   let sample = choose_delta_sample(
     primary_latents,
@@ -560,9 +473,10 @@ fn choose_delta_encoding_order<U: UnsignedLike>(
   Ok(best_order)
 }
 
-fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> usize {
-  let log_n = (n as f64).log2().floor() as usize;
+fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> Bitlen {
+  let log_n = (n as f64).log2().floor() as Bitlen;
   let fast_unoptimized_bins_log = log_n.saturating_sub(4);
+  let compression_level = compression_level as Bitlen;
   if compression_level <= fast_unoptimized_bins_log {
     compression_level
   } else {

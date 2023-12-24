@@ -45,6 +45,7 @@ mod page_meta;
 mod progress;
 mod read_write_uint;
 mod sampling;
+mod unoptimized_bin_selection;
 
 #[cfg(test)]
 mod tests;
