@@ -1,4 +1,4 @@
-use std::cmp::{min};
+use std::cmp::min;
 use std::io::Write;
 
 use crate::bin::BinCompressionInfo;
@@ -50,7 +50,7 @@ struct TrainedBins<U: UnsignedLike> {
 }
 
 fn train_infos<U: UnsignedLike>(
-  deltas: Vec<U>,
+  deltas: &[U],
   unoptimized_bins_log: Bitlen,
 ) -> PcoResult<TrainedBins<U>> {
   if deltas.is_empty() {
@@ -59,7 +59,7 @@ fn train_infos<U: UnsignedLike>(
 
   let n_unsigneds = deltas.len();
   let unoptimized_bins =
-    unoptimized_bin_selection::choose_unoptimized_bins(deltas, unoptimized_bins_log);
+    unoptimized_bin_selection::choose_unoptimized_bins(&deltas, unoptimized_bins_log);
 
   let n_log_ceil = if n_unsigneds <= 1 {
     0
@@ -367,7 +367,7 @@ fn unsigned_new_w_delta_order<U: UnsignedLike>(
 
     let contiguous_deltas = collect_contiguous_deltas(deltas, &page_infos, latent_idx);
 
-    let trained = train_infos(contiguous_deltas, unoptimized_bins_log)?;
+    let trained = train_infos(&contiguous_deltas, unoptimized_bins_log)?;
     let bins = bins_from_compression_infos(&trained.infos);
     let needs_ans = bins.len() != 1;
 
