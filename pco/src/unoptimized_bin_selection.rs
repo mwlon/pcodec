@@ -107,39 +107,22 @@ struct IncompleteBin<U: UnsignedLike> {
   upper: U,
 }
 
-#[inline(never)]
-fn merge_incomplete<U: UnsignedLike>(
-  incomplete_bin: Option<IncompleteBin<U>>,
-  deltas: &[U],
-  bucket_lower: U,
-) -> Option<IncompleteBin<U>> {
-  if deltas.is_empty() {
-    return incomplete_bin;
-  }
-
-  let upper = bucket_lower + deltas.iter().cloned().max().unwrap();
-  if let Some(mut bin) = incomplete_bin {
-    bin.upper = upper;
-    bin.count += deltas.len();
-    Some(bin)
-  } else {
-    if deltas.is_empty() {
-      None
-    } else {
-      let lower = bucket_lower + deltas.iter().cloned().min().unwrap();
-      Some(IncompleteBin {
-        count: deltas.len(),
-        lower,
-        upper,
-      })
-    }
-  }
-}
-
 struct UnoptimizedBinAfsState<U: UnsignedLike> {
   total_count: usize,
   target_n_bins: usize,
+  incomplete_bin: Option<IncompleteBin<U>>,
   dst: Vec<BinCompressionInfo<U>>,
+}
+
+impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
+  fn new(total_count: usize, target_n_bins: usize) -> Self {
+    UnoptimizedBinAfsState {
+      total_count,
+      target_n_bins,
+      incomplete_bin: None,
+      dst: Vec::with_capacity(target_n_bins),
+    }
+  }
 }
 
 fn make_info<U: UnsignedLike>(count: usize, lower: U, upper: U) -> BinCompressionInfo<U> {
@@ -177,6 +160,17 @@ fn radix_permute<U: UnsignedLike>(deltas: &mut [U], shift: Bitlen) -> [usize; N_
   }
   let start_idxs = swap_idxs.clone();
 
+  let next_nonempty_bucket_idx = {
+    let mut res = [0; N_BUCKETS];
+    let mut next_nonempty = N_BUCKETS;
+    for (bucket_idx, &count) in bucket_counts.iter().enumerate().rev() {
+      res[bucket_idx] = next_nonempty;
+      if count > 0 {
+        next_nonempty = bucket_idx;
+      }
+    }
+    res
+  };
   // let mut bucket_idx = 0;
   // let mut bucket_end = start_idxs[1];
   // while bucket_idx < N_BUCKETS {
@@ -194,22 +188,48 @@ fn radix_permute<U: UnsignedLike>(deltas: &mut [U], shift: Bitlen) -> [usize; N_
   //   swap_idxs[swap_bucket_idx] += 1;
   // }
 
-  for bucket_idx in 0..N_BUCKETS {
-    let end = start_idxs[bucket_idx + 1];
-    if swap_idxs[bucket_idx] == end {
-      continue;
+  let mut i = 0;
+  let mut bucket_end = start_idxs[1];
+  let mut bucket_idx = 0;
+  loop {
+    if i == bucket_end {
+      while bucket_idx < N_BUCKETS && (bucket_end <= i || swap_idxs[bucket_idx] == bucket_end) {
+        bucket_idx += 1;
+        bucket_end = start_idxs
+          .get(bucket_idx + 1)
+          .cloned()
+          .unwrap_or(deltas.len());
+      }
+      if bucket_idx >= N_BUCKETS {
+        break;
+      }
+      i = swap_idxs[bucket_idx];
     }
-
-    while swap_idxs[bucket_idx] < end {
-      let i = swap_idxs[bucket_idx];
-      let delta = deltas[i];
-      let swap_bucket_idx = calc_bucket_idx(delta, shift);
-      let swap_i = swap_idxs[swap_bucket_idx];
-      deltas[i] = deltas[swap_i];
-      deltas[swap_i] = delta;
-      swap_idxs[swap_bucket_idx] += 1;
-    }
+    // println!("i={}", i);
+    let delta = deltas[i];
+    let swap_bucket_idx = calc_bucket_idx(delta, shift);
+    let swap_i = swap_idxs[swap_bucket_idx];
+    deltas[i] = deltas[swap_i];
+    deltas[swap_i] = delta;
+    swap_idxs[swap_bucket_idx] += 1;
+    i += (swap_bucket_idx == bucket_idx) as usize;
   }
+  // for bucket_idx in 0..N_BUCKETS {
+  //   let end = start_idxs[bucket_idx + 1];
+  //   if swap_idxs[bucket_idx] == end {
+  //     continue;
+  //   }
+  //
+  //   while swap_idxs[bucket_idx] < end {
+  //     let i = swap_idxs[bucket_idx];
+  //     let delta = deltas[i];
+  //     let swap_bucket_idx = calc_bucket_idx(delta, shift);
+  //     let swap_i = swap_idxs[swap_bucket_idx];
+  //     deltas[i] = deltas[swap_i];
+  //     deltas[swap_i] = delta;
+  //     swap_idxs[swap_bucket_idx] += 1;
+  //   }
+  // }
 
   // for sub_bucket_idx in 0..N_BUCKETS {
   //   for i in start_idxs[sub_bucket_idx]..start_idxs[sub_bucket_idx + 1] {
@@ -227,6 +247,26 @@ fn radix_permute<U: UnsignedLike>(deltas: &mut [U], shift: Bitlen) -> [usize; N_
 }
 
 impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
+  #[inline(never)]
+  fn merge_incomplete(&mut self, deltas: &[U], bucket_lower: U) {
+    if deltas.is_empty() {
+      return;
+    }
+
+    let upper = bucket_lower + deltas.iter().cloned().max().unwrap();
+    if let Some(mut bin) = self.incomplete_bin.as_mut() {
+      bin.upper = upper;
+      bin.count += deltas.len();
+    } else {
+      let lower = bucket_lower + deltas.iter().cloned().min().unwrap();
+      self.incomplete_bin = Some(IncompleteBin {
+        count: deltas.len(),
+        lower,
+        upper,
+      });
+    }
+  }
+
   fn push_info(&mut self, count: usize, lower: U, upper: U) {
     self.dst.push(make_info(count, lower, upper));
   }
@@ -242,54 +282,54 @@ impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
       .collect::<Vec<_>>()
   }
 
-  fn afs(
-    &mut self,
-    c_count: usize,
-    deltas: &mut [U],
-    bucket_lower: U,
-    depth: Bitlen,
-    mut incomplete_bin: Option<IncompleteBin<U>>,
-  ) -> Option<IncompleteBin<U>> {
+  fn finish_incomplete_bin(&mut self) {
+    if let Some(bin) = self.incomplete_bin.as_ref() {
+      self.push_info(bin.count, bin.lower, bin.upper);
+    }
+    self.incomplete_bin = None;
+  }
+
+  fn afs(&mut self, c_count: usize, deltas: &mut [U], bucket_lower: U, depth: Bitlen) {
     // 2 base cases and one recursion case
     let bucket_count = deltas.len();
     let bin_end_c_counts = self.bin_end_counts(c_count, bucket_count);
 
     // base case 1: There are no complete bins in this bucket. We update
     // incomplete bin information and return early.
-    if bin_end_c_counts.is_empty() {
-      return merge_incomplete(incomplete_bin, deltas, bucket_lower);
+    if bin_end_c_counts
+      .iter()
+      .all(|&count| count == c_count + deltas.len())
+    {
+      self.merge_incomplete(deltas, bucket_lower);
+      if bin_end_c_counts.len() == 1 {
+        self.finish_incomplete_bin();
+      }
+      return;
     }
 
     // base case 2: The bucket contains a single constant value. We either
     // combine this bucket with the incomplete bin information or push each one
     // separately.
     // let c_count_w_incomplete_bin = c_count + incomplete_bin.map(|bin| bin.count).unwrap_or_default();
-    if depth == U::BITS / BUCKETS_LOG {
+    let max_depth = U::BITS / BUCKETS_LOG;
+    if depth == max_depth {
       let bucket_constant_value = bucket_lower;
       let first_target_c_count = bin_end_c_counts[0];
-      return if c_count + bucket_count - first_target_c_count > first_target_c_count - c_count {
+      if c_count + bucket_count - first_target_c_count > first_target_c_count - c_count {
         // enough to warrant separate bins
-        for bin in &incomplete_bin {
-          self.push_info(bin.count, bin.lower, bin.upper);
-        }
+        self.finish_incomplete_bin();
+        self.incomplete_bin = Some(IncompleteBin {
+          count: bucket_count,
+          lower: bucket_constant_value,
+          upper: bucket_constant_value,
+        });
 
         if bin_end_c_counts.len() >= 2 {
-          self.push_info(
-            bucket_count,
-            bucket_constant_value,
-            bucket_constant_value,
-          );
-          None
-        } else {
-          Some(IncompleteBin {
-            count: bucket_count,
-            lower: bucket_constant_value,
-            upper: bucket_constant_value,
-          })
+          self.finish_incomplete_bin();
         }
       } else {
         // one bin
-        let (incomplete_count, lower) = if let Some(bin) = incomplete_bin {
+        let (incomplete_count, lower) = if let Some(bin) = self.incomplete_bin.as_ref() {
           (bin.count, bin.lower)
         } else {
           (0, bucket_constant_value)
@@ -299,8 +339,10 @@ impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
           lower,
           bucket_constant_value,
         );
-        None
-      };
+        self.incomplete_bin = None;
+      }
+
+      return;
     }
 
     let height = U::BITS / BUCKETS_LOG - (depth + 1);
@@ -315,16 +357,13 @@ impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
       for delta in &mut deltas[start..end] {
         *delta -= d_bucket_lower;
       }
-      incomplete_bin = self.afs(
+      self.afs(
         c_count + start,
         &mut deltas[start..end],
         bucket_lower + d_bucket_lower,
         depth + 1,
-        incomplete_bin,
       );
     }
-
-    incomplete_bin
   }
 }
 
@@ -332,12 +371,9 @@ pub fn choose_unoptimized_bins<U: UnsignedLike>(
   deltas: &mut [U],
   unoptimized_bins_log: Bitlen,
 ) -> Vec<BinCompressionInfo<U>> {
-  let mut state = UnoptimizedBinAfsState {
-    total_count: deltas.len(),
-    target_n_bins: 1 << unoptimized_bins_log,
-    dst: Vec::new(),
-  };
-  state.afs(0, deltas, U::ZERO, 0, None);
+  let target_n_bins = 1 << unoptimized_bins_log;
+  let mut state = UnoptimizedBinAfsState::new(deltas.len(), target_n_bins);
+  state.afs(0, deltas, U::ZERO, 0);
   state.dst
 }
 
@@ -381,11 +417,7 @@ mod tests {
 
   #[test]
   fn test_bin_end_counts() {
-    let state = UnoptimizedBinAfsState::<u32> {
-      total_count: 14,
-      target_n_bins: 4,
-      dst: Vec::new(),
-    };
+    let state = UnoptimizedBinAfsState::<u32>::new(14, 4);
     assert_eq!(state.bin_end_counts(0, 3), vec![]);
     assert_eq!(state.bin_end_counts(0, 4), vec![3]);
     assert_eq!(state.bin_end_counts(4, 2), vec![]);
