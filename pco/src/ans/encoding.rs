@@ -106,41 +106,41 @@ fn quantize_weights_to(counts: &[Weight], total_count: usize, size_log: Bitlen) 
     return vec![1];
   }
 
-  let target_weight_sum = 1 << size_log;
-  let multiplier = target_weight_sum as f32 / total_count as f32;
-  let surplus_idxs = counts
+  let required_weight_sum = 1 << size_log;
+  let multiplier = required_weight_sum as f32 / total_count as f32;
+  // We need to give each bin a weight of at least 1, so we first calculate
+  // how much surplus weight each bin wants above 1.
+  let desired_surplus_per_bin = counts
     .iter()
-    .enumerate()
-    .filter_map(|(i, &count)| {
-      if count as f32 * multiplier > 1.0 {
-        Some(i)
-      } else {
-        None
-      }
-    })
+    .map(|&count| (count as f32 * multiplier - 1.0).max(0.0))
     .collect::<Vec<_>>();
-  let mut surplus = vec![0.0; counts.len()];
-  let mut total_surplus = 0.0;
-  for idx in surplus_idxs {
-    surplus[idx] = counts[idx] as f32 * multiplier - 1.0;
-    total_surplus += surplus[idx];
-  }
-  let target_surplus = target_weight_sum - counts.len() as Weight;
-  let surplus_mult = target_surplus as f32 / total_surplus;
+  let desired_surplus = desired_surplus_per_bin.iter().sum::<f32>();
+  let required_surplus = required_weight_sum - counts.len() as Weight;
 
-  let mut float_weights = vec![1.0; counts.len()];
-  for idx in 0..counts.len() {
-    float_weights[idx] = 1.0 + (surplus[idx] * surplus_mult);
-  }
+  // Divide the available surplus among the bins, proportional to their desired
+  // surplus.
+  let surplus_mult = if desired_surplus == 0.0 {
+    0.0
+  } else {
+    required_surplus as f32 / desired_surplus
+  };
+  let float_weights = desired_surplus_per_bin
+    .iter()
+    .map(|&surplus| 1.0 + surplus * surplus_mult)
+    .collect::<Vec<_>>();
 
+  // Round the float weights to integers. This doesn't give us the exact right
+  // sum, so we further adjust afterward.
   let mut weights = float_weights
     .iter()
     .map(|&weight| weight.round() as Weight)
     .collect::<Vec<_>>();
   let mut weight_sum = weights.iter().sum::<Weight>();
 
+  // Take weight away from bins that got rounded up or give it out to bins that
+  // got rounded down until we have the exact right weight sum.
   let mut i = 0;
-  while weight_sum > target_weight_sum {
+  while weight_sum > required_weight_sum {
     if weights[i] > 1 && weights[i] as f32 > float_weights[i] {
       weights[i] -= 1;
       weight_sum -= 1;
@@ -148,7 +148,7 @@ fn quantize_weights_to(counts: &[Weight], total_count: usize, size_log: Bitlen) 
     i += 1;
   }
   i = 0;
-  while weight_sum < target_weight_sum {
+  while weight_sum < required_weight_sum {
     if (weights[i] as f32) < float_weights[i] {
       weights[i] += 1;
       weight_sum += 1;
@@ -200,6 +200,9 @@ mod tests {
 
     let quantized = quantize_weights_to(&[2, 3, 6, 5, 1], 17, 3);
     assert_eq!(quantized, vec![1, 1, 3, 2, 1]);
+
+    let quantized = quantize_weights_to(&[1, 1], 2, 1);
+    assert_eq!(quantized, vec![1, 1]);
   }
 
   #[test]
