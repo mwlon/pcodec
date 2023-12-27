@@ -79,6 +79,7 @@ pub trait UnsignedLike:
   + Shl<Bitlen, Output = Self>
   + Shr<Bitlen, Output = Self>
   + Sub<Output = Self>
+  + SubAssign
 {
   const ZERO: Self;
   const ONE: Self;
