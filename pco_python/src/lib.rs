@@ -49,7 +49,7 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
   #[pyfn(m)]
-  fn compress<'py>(py: Python<'py>, x: ArrayDynFloat<'py>) -> PyResult<PyObject> {
+  fn auto_compress<'py>(py: Python<'py>, x: ArrayDynFloat<'py>) -> PyResult<PyObject> {
     match x {
       ArrayDynFloat::F32(py_arr) => compress_typed(py, py_arr),
       ArrayDynFloat::F64(py_arr) => compress_typed(py, py_arr),
@@ -61,7 +61,7 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   }
 
   #[pyfn(m)]
-  fn decompress(compressed: &PyBytes, out: ArrayDynFloat) -> PyResult<()> {
+  fn simple_decompress_into(compressed: &PyBytes, out: ArrayDynFloat) -> PyResult<()> {
     match out {
       ArrayDynFloat::F32(out) => decompress_typed(compressed, out),
       ArrayDynFloat::F64(out) => decompress_typed(compressed, out),
