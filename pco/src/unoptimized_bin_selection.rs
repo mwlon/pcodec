@@ -142,11 +142,25 @@ fn calc_bucket_idx<U: UnsignedLike>(delta: U, shift: Bitlen) -> usize {
 
 #[inline(never)]
 fn calc_bucket_counts<U: UnsignedLike>(deltas: &[U], shift: Bitlen) -> [usize; N_BUCKETS] {
-  let mut bucket_counts = [0; N_BUCKETS];
-  for &delta in deltas.iter() {
-    bucket_counts[calc_bucket_idx(delta, shift)] += 1;
+  let mut counts_a = [0; N_BUCKETS];
+  let mut counts_b = [0; N_BUCKETS];
+  for (&delta_a, &delta_b) in deltas
+    .iter()
+    .step_by(2)
+    .zip(deltas.iter().skip(1).step_by(2))
+  {
+    counts_a[calc_bucket_idx(delta_a, shift)] += 1;
+    counts_b[calc_bucket_idx(delta_b, shift)] += 1;
   }
-  bucket_counts
+  let x = vec![1];
+  x.sort_unstable()
+  if deltas.len() % 2 == 1 {
+    counts_a[calc_bucket_idx(*deltas.last().unwrap(), shift)] += 1;
+  }
+  for (counts_a, counts_b) in counts_a.iter_mut().zip(counts_b) {
+    *counts_a += counts_b
+  }
+  counts_a
 }
 
 fn radix_permute<U: UnsignedLike>(deltas: &mut [U], shift: Bitlen) -> [usize; N_BUCKETS + 1] {
