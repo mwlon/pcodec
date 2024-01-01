@@ -24,6 +24,8 @@ pub trait FloatLike:
   + Mul<Output = Self>
   + PartialOrd
   + RemAssign
+  + Send
+  + Sync
   + Sub<Output = Self>
   + SubAssign
   + Div<Output = Self>
@@ -76,6 +78,8 @@ pub trait UnsignedLike:
   + PartialOrd
   + Rem<Output = Self>
   + RemAssign
+  + Send
+  + Sync
   + Shl<Bitlen, Output = Self>
   + Shr<Bitlen, Output = Self>
   + Sub<Output = Self>
@@ -125,7 +129,7 @@ pub trait UnsignedLike:
 /// in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
 /// wouldn't preserve ordering and would cause pco to fail. In this example,
 /// one needs to flip the sign bit and, if negative, the rest of the bits.
-pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + 'static {
+pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync + 'static {
   /// A number from 1-255 that corresponds to the number's data type.
   ///
   /// Each `NumberLike` implementation should have a different `DTYPE_BYTE`.

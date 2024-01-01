@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use parquet::basic::{Compression, ZstdLevel};
 use parquet::column::reader::get_typed_column_reader;
-use parquet::file::properties::WriterProperties;
+use parquet::file::properties::{WriterProperties, WriterVersion};
 use parquet::file::reader::FileReader;
 use parquet::file::reader::SerializedFileReader;
 use parquet::file::writer::SerializedFileWriter;
@@ -24,7 +24,10 @@ impl Default for ParquetConfig {
   fn default() -> Self {
     Self {
       compression: Compression::UNCOMPRESSED,
-      group_size: 1 << 20, // TODO is this the best default?
+      // Larger group sizes work better on some datasets, and smaller ones on
+      // others, sometimes with dramatic impact.
+      // Based on experiments with zstd compression, 2^20 seems like a good default.
+      group_size: 1 << 20,
     }
   }
 }
@@ -88,14 +91,13 @@ impl CodecInternal for ParquetConfig {
       T::PARQUET_DTYPE_STR
     );
     let schema = Arc::new(parse_message_type(&message_type).unwrap());
+    let properties_builder = WriterProperties::builder()
+      .set_writer_version(WriterVersion::PARQUET_2_0)
+      .set_compression(self.compression);
     let mut writer = SerializedFileWriter::new(
       &mut res,
       schema,
-      Arc::new(
-        WriterProperties::builder()
-          .set_compression(self.compression)
-          .build(),
-      ),
+      Arc::new(properties_builder.build()),
     )
     .unwrap();
 

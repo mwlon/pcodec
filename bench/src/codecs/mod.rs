@@ -148,10 +148,12 @@ impl<C: CodecInternal> CodecSurface for C {
     fs::write(output_path, &compressed).expect("couldn't write");
 
     // decompress
-    let rec_nums = self.decompress_dynamic(dtype, &compressed);
+    if !opt.no_decompress {
+      let rec_nums = self.decompress_dynamic(dtype, &compressed);
 
-    if !opt.no_assertions {
-      self.compare_nums_dynamic(&rec_nums, nums);
+      if !opt.no_assertions {
+        self.compare_nums_dynamic(&rec_nums, nums);
+      }
     }
 
     Precomputed {
