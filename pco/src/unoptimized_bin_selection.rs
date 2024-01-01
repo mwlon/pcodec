@@ -2,10 +2,53 @@ use crate::bin::BinCompressionInfo;
 use crate::bits;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
+use std::cmp::{max, min};
 use std::mem;
 
 const BUCKETS_LOG: Bitlen = 8;
 const N_BUCKETS: usize = 1 << BUCKETS_LOG;
+
+#[derive(Default)]
+struct Bounds<U: UnsignedLike> {
+  lower: Option<U>,
+  upper: Option<U>,
+}
+
+impl<U: UnsignedLike> Bounds<U> {
+  fn left(&self, upper: Option<U>) -> Self {
+    Bounds {
+      lower: self.lower,
+      upper,
+    }
+  }
+
+  fn right(&self, lower: Option<U>) -> Self {
+    Bounds {
+      lower,
+      upper: self.upper,
+    }
+  }
+}
+
+// median of first, middle, last
+// idea from https://drops.dagstuhl.de/storage/00lipics/lipics-vol057-esa2016/LIPIcs.ESA.2016.38/LIPIcs.ESA.2016.38.pdf
+fn choose_pivot<U: UnsignedLike>(deltas: &[U]) -> U {
+  let a = deltas[0];
+  let b = deltas[deltas.len() / 2];
+  let c = deltas[deltas.len() - 1];
+
+  let bc_max = max(b, c);
+  if a >= bc_max {
+    bc_max
+  } else {
+    let bc_min = min(b, c);
+    if a >= bc_min {
+      a
+    } else {
+      bc_min
+    }
+  }
+}
 
 // struct BinBuffer<'a, U: UnsignedLike> {
 //   pub seq: Vec<BinCompressionInfo<U>>,
@@ -107,16 +150,16 @@ struct IncompleteBin<U: UnsignedLike> {
   upper: U,
 }
 
-struct UnoptimizedBinAfsState<U: UnsignedLike> {
+struct PartitioningState<U: UnsignedLike> {
   total_count: usize,
   target_n_bins: usize,
   incomplete_bin: Option<IncompleteBin<U>>,
   dst: Vec<BinCompressionInfo<U>>,
 }
 
-impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
+impl<U: UnsignedLike> PartitioningState<U> {
   fn new(total_count: usize, target_n_bins: usize) -> Self {
-    UnoptimizedBinAfsState {
+    PartitioningState {
       total_count,
       target_n_bins,
       incomplete_bin: None,
@@ -153,7 +196,6 @@ fn calc_bucket_counts<U: UnsignedLike>(deltas: &[U], shift: Bitlen) -> [usize; N
     counts_b[calc_bucket_idx(delta_b, shift)] += 1;
   }
   let x = vec![1];
-  x.sort_unstable()
   if deltas.len() % 2 == 1 {
     counts_a[calc_bucket_idx(*deltas.last().unwrap(), shift)] += 1;
   }
@@ -260,7 +302,7 @@ fn radix_permute<U: UnsignedLike>(deltas: &mut [U], shift: Bitlen) -> [usize; N_
   start_idxs
 }
 
-impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
+impl<U: UnsignedLike> PartitioningState<U> {
   #[inline(never)]
   fn merge_incomplete(&mut self, deltas: &[U], bucket_lower: U) {
     if deltas.is_empty() {
@@ -303,7 +345,7 @@ impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
     self.incomplete_bin = None;
   }
 
-  fn afs(&mut self, c_count: usize, deltas: &mut [U], bucket_lower: U, depth: Bitlen) {
+  fn partition_exclusive(&mut self, c_count: usize, deltas: &mut [U], bounds: Bounds<U>) {
     // 2 base cases and one recursion case
     let bucket_count = deltas.len();
     let bin_end_c_counts = self.bin_end_counts(c_count, bucket_count);
@@ -371,11 +413,11 @@ impl<U: UnsignedLike> UnoptimizedBinAfsState<U> {
       for delta in &mut deltas[start..end] {
         *delta -= d_bucket_lower;
       }
-      self.afs(
+      self.partition_exclusive(
         c_count + start,
         &mut deltas[start..end],
         bucket_lower + d_bucket_lower,
-        depth + 1,
+        Bounds::default(),
       );
     }
   }
@@ -386,8 +428,8 @@ pub fn choose_unoptimized_bins<U: UnsignedLike>(
   unoptimized_bins_log: Bitlen,
 ) -> Vec<BinCompressionInfo<U>> {
   let target_n_bins = 1 << unoptimized_bins_log;
-  let mut state = UnoptimizedBinAfsState::new(deltas.len(), target_n_bins);
-  state.afs(0, deltas, U::ZERO, 0);
+  let mut state = PartitioningState::new(deltas.len(), target_n_bins);
+  state.partition_exclusive(0, deltas, U::ZERO, 0);
   state.dst
 }
 
@@ -431,7 +473,7 @@ mod tests {
 
   #[test]
   fn test_bin_end_counts() {
-    let state = UnoptimizedBinAfsState::<u32>::new(14, 4);
+    let state = PartitioningState::<u32>::new(14, 4);
     assert_eq!(state.bin_end_counts(0, 3), vec![]);
     assert_eq!(state.bin_end_counts(0, 4), vec![3]);
     assert_eq!(state.bin_end_counts(4, 2), vec![]);
