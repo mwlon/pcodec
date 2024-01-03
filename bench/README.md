@@ -83,6 +83,12 @@ accessible in download size:
   * [upstream Reddit post and original data](https://www.reddit.com/r/place/comments/txvk2d/rplace_datasets_april_fools_2022/)
   * [processed Parquet file download](https://pcodec-public.s3.amazonaws.com/reddit_2022_place_numerical.parquet) (1.3GB)
 
+| dataset     | uncompressed size | numeric data types |
+|-------------|-------------------|--------------------|
+| air quality | 59.7MB            | i32, i64           |
+| taxi        | 2.14GB            | f64, i32, i64      |
+| r/place     | 4.19GB            | i32, i64           |
+
 <div style="text-align:center">
   <img
     alt="bar charts showing better compression for pco than zstd.parquet"
