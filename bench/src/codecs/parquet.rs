@@ -76,7 +76,8 @@ impl CodecInternal for ParquetConfig {
       "encoding" => self
         .encoding
         .map(|encoding| format!("{:?}", encoding))
-        .unwrap_or("default".to_string()),
+        .unwrap_or("default".to_string())
+        .to_lowercase(),
       _ => panic!("bad conf"),
     }
   }
@@ -88,6 +89,9 @@ impl CodecInternal for ParquetConfig {
       "encoding" => {
         self.encoding = match value.to_lowercase().as_str() {
           "pco" => Some(Encoding::PCO),
+          "plain" => Some(Encoding::PLAIN),
+          "split" | "byte_stream_split" => Some(Encoding::BYTE_STREAM_SPLIT),
+          "delta" | "delta_binary_packed" => Some(Encoding::DELTA_BINARY_PACKED),
           "default" => None,
           other => return Err(anyhow!("unknown encoding: {}", other)),
         };
