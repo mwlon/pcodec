@@ -127,12 +127,17 @@ fn handle(num_vec: &NumVec, dataset: String, config: &CodecConfig, opt: &Opt) ->
   PrintStat::compute(dataset, config.to_string(), &benches)
 }
 
+fn get_dataset_and_dtype(synthetic_path: &Path) -> (String, String) {
+  let dataset = basename_no_ext(synthetic_path);
+  let dtype = dataset.split('_').next().unwrap().to_string();
+  (dataset, dtype)
+}
+
 fn handle_synthetic(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
-  let dataset = basename_no_ext(path);
-  let dtype_str = dataset.split('_').next().unwrap();
+  let (dataset, dtype) = get_dataset_and_dtype(path);
 
   let raw_bytes = fs::read(path).expect("could not read");
-  let num_vec = NumVec::new(dtype_str, raw_bytes);
+  let num_vec = NumVec::new(&dtype, raw_bytes);
   handle(&num_vec, dataset, config, opt)
 }
 
@@ -186,8 +191,13 @@ fn handle_parquet_column(
     _ => return vec![],
   };
 
+  let dtype = num_vec.dtype_str();
+  if !opt.includes_dtype(dtype) {
+    return vec![];
+  }
+
   let mut stats = Vec::new();
-  let dataset = format!("{}_{}", num_vec.dtype_str(), pq_col.name());
+  let dataset = format!("{}_{}", dtype, pq_col.name());
   for codec in &opt.codecs {
     stats.push(handle(
       &num_vec,
@@ -224,6 +234,11 @@ fn handle_parquet_dataset(path: &Path, opt: &Opt) -> Vec<PrintStat> {
 }
 
 fn print_stats(mut stats: Vec<PrintStat>, opt: &Opt) {
+  if stats.is_empty() {
+    println!("No datasets found that match filters!");
+    return;
+  }
+
   let mut aggregate = PrintStat::default();
   let mut aggregate_by_codec: HashMap<String, PrintStat> = HashMap::new();
   for stat in &stats {
@@ -251,26 +266,20 @@ fn main() {
   let opt: Opt = Opt::parse();
 
   let files = fs::read_dir(format!("{}/binary", BASE_DIR)).expect("couldn't read");
-  let mut synthetic_paths = files
-    .into_iter()
-    .map(|f| f.unwrap().path())
-    .collect::<Vec<_>>();
-  synthetic_paths.sort();
-
-  if opt.datasets != vec!["".to_string()] {
-    synthetic_paths = synthetic_paths
+  let synthetic_paths = if opt.parquet_dataset.is_some() {
+    vec![]
+  } else {
+    let mut synthetic_paths = files
       .into_iter()
+      .map(|f| f.unwrap().path())
       .filter(|path| {
-        let path_str = path.to_str().unwrap();
-        opt
-          .datasets
-          .iter()
-          .any(|dataset| path_str.contains(dataset))
+        let (dataset, dtype) = get_dataset_and_dtype(path);
+        opt.includes_dtype(&dtype) && opt.includes_dataset(&dataset)
       })
       .collect::<Vec<_>>();
-  } else if opt.parquet_dataset.is_some() {
-    synthetic_paths = vec![];
-  }
+    synthetic_paths.sort();
+    synthetic_paths
+  };
 
   let mut stats = Vec::new();
   for path in synthetic_paths {
