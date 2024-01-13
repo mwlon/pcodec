@@ -39,14 +39,10 @@ or see its results.
 
 ## File Format
 
-<img alt="pco wrapped format diagram" title="pco wrapped format" src="./images/wrapped_format.svg" />
+See [format.md](./docs/format.md) for a full description of the file format.
 
 The core idea of pco is to represent numbers as approximate, entropy-coded bins
 paired with exact offsets into those bins.
-Depending on the mode, there may be up to 2 streams (latent variables) of these
-bin-offset pairings.
-
-<img alt="pco compression and decompression steps" title="compression and decompression steps" src="./images/processing.svg" />
 
 Pco is mainly meant to be wrapped into another format for production use cases.
 It has a hierarchy of multiple batches per page; multiple pages per chunk; and
