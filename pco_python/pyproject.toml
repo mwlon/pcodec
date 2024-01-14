@@ -1,11 +1,22 @@
 [project]
-name = "pcodec"
+authors = [
+  {name = "mwlon", email = "m.w.loncaric@gmail.com"}
+]
+description = "Good compression for numerical sequences"
+dependencies = [
+  "numpy",
+]
 dynamic = ["version"]
+keywords = ["compression", "numerical"]
 license = "Apache-2.0"
+name = "pcodec"
+
+[project.urls]
+Repository = "https://github.com/mwlon/pcodec"
 
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
+requires = ["maturin>=1.0,<2.0"]
 
 [tool.maturin]
 # "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
