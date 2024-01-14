@@ -15,7 +15,7 @@ jobs:
       with:
         python-version: '3.11'
     - name: "create venv"
-      run: python -m venv venv && source venv/bin/activate
+      run: python -m venv .venv
     - uses: PyO3/maturin-action@v1
       with:
         command: develop
