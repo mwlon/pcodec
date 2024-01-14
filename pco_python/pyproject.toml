@@ -3,7 +3,6 @@ name = "pcodec"
 dynamic = ["version"]
 license = "Apache-2.0"
 
-
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
