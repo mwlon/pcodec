@@ -17,6 +17,8 @@ jobs:
     - uses: PyO3/maturin-action@v1
       with:
         command: develop
+        args: --manifest-path pco_python/Cargo.toml
+        sscache: true
     - name: Install pytest
       run: pip install pytest
     - name: Run tests
