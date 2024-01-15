@@ -1,11 +1,11 @@
-use numpy::{Element, PyArrayDyn};
+use numpy::{Element, PyArray1, PyArrayDyn, IntoPyArray};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyObject, PyResult, Python};
 use pyo3::pyclass;
 use pyo3::types::PyBytes;
 
 use pco::data_types::NumberLike;
-use pco::standalone::{auto_compress, simple_decompress_into};
+use pco::standalone::{auto_compress, simple_decompress_into, auto_decompress};
 use pco::DEFAULT_COMPRESSION_LEVEL;
 
 #[pyclass]
@@ -76,6 +76,15 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
       ArrayDynFloat::U32(out) => decompress_typed(compressed, out),
       ArrayDynFloat::U64(out) => decompress_typed(compressed, out),
     }
+  }
+
+  #[pyfn(m)]
+  fn auto_decompress_f32<'py>(py: Python<'py>, compressed: &PyBytes) -> PyResult<&'py PyArray1<f32>> {
+    let src = compressed.as_bytes();
+    let decompressed = auto_decompress::<f32>(src)
+      .map_err(|e| PyRuntimeError::new_err(format!("pco decompression error: {}", e)))?;
+    let py_array = decompressed.into_pyarray(py);
+    Ok(py_array)
   }
 
   Ok(())
