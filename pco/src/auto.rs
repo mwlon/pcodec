@@ -3,6 +3,7 @@ use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::wrapped::FileCompressor;
 
+// TODO in 0.2 clean up the inconsistencies among `auto` and `simple`
 /// Automatically makes an educated guess for the best compression
 /// delta encoding order, based on `nums` and `compression_level`.
 ///

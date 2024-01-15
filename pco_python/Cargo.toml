@@ -11,7 +11,6 @@ publish = false
 name = "pcodec"
 crate-type = ["cdylib"]
 
-
 [dependencies]
 numpy = "0.20.0"
 pco = {version = "0.1.0", path = "../pco" }
