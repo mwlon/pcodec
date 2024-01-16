@@ -26,9 +26,22 @@ def test_round_trip_decompress_into(shape, dtype):
 
 
 @pytest.mark.parametrize("shape", all_shapes)
-def test_round_trip_auto_decompress_f32(shape, dtype='f4'):
+def test_round_trip_auto_decompress_f32(shape, dtype='i4'):
     data = np.random.uniform(0, 1000, size=shape).astype(dtype)
     compressed = auto_compress(data)
+
+    # [32 bits] magic header (ASCII for "pco!")
+    # [8 bits] standalone version
+    # [6 bits] 1 less than n_hint_log2
+    # [n_hint_log2 bits] the total count of numbers in the file, if known; 0 otherwise
+    # a wrapped header
+
+
+    magic = compressed[:4]
+    standalone_version = compressed[4] 
+    hint = compressed[5]
+    header = compressed[6]
+    print(magic, standalone_version, hint, header)
 
     out = auto_decompress_f32(compressed)
     # data are decompressed into a 1D array
