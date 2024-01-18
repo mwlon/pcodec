@@ -43,7 +43,7 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     compression_level=pco::DEFAULT_COMPRESSION_LEVEL,
     delta_encoding_order=None,
     int_mult_spec="enabled",
-    float_mult_spec="disabled",
+    float_mult_spec="enabled",
     max_page_size=262144
   ))]
   #[pyfn(m)]

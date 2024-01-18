@@ -57,6 +57,8 @@ def test_compression_options():
   data = np.random.normal(size=100).astype(np.float32)
   default_size = len(auto_compress(data))
 
+  # this is mostly just to check that there is no error, but these settings
+  # should give worse compression than the defaults
   assert len(auto_compress(
     data,
     compression_level=0,
