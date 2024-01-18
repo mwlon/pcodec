@@ -1,25 +1,39 @@
-use numpy::{Element, PyArrayDyn};
+use numpy::PyArrayDyn;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyObject, PyResult, Python};
-use pyo3::pyclass;
 use pyo3::types::PyBytes;
+use pyo3::{pyclass, PyErr};
 
-use pco::data_types::NumberLike;
-use pco::standalone::{auto_compress, simple_decompress_into};
-use pco::DEFAULT_COMPRESSION_LEVEL;
+use pco::errors::PcoError;
 
-#[pyclass]
-struct PyProgress {
-  #[pyo3(get)]
+use crate::array_handler::array_to_handler;
+
+mod array_handler;
+
+#[pyclass(get_all)]
+pub struct Progress {
   n_processed: usize,
-  #[pyo3(get)]
   finished: bool,
+}
+
+#[pyclass(get_all, set_all)]
+pub struct ChunkConfig {
+  compression_level: usize,
+  delta_encoding_order: Option<usize>,
+  int_mult_spec: String,
+  float_mult_spec: String,
+  max_page_size: usize,
+}
+
+pub fn pco_err_to_py(pco: PcoError) -> PyErr {
+  PyRuntimeError::new_err(format!("pco error: {}", pco))
 }
 
 // The Numpy crate recommends using this type of enum to write functions that accept different Numpy dtypes
 // https://github.com/PyO3/rust-numpy/blob/32740b33ec55ef0b7ebec726288665837722841d/examples/simple/src/lib.rs#L113
+// The first dyn refers to dynamic dtype; the second to dynamic shape
 #[derive(FromPyObject)]
-enum ArrayDynFloat<'py> {
+pub enum DynTypedPyArrayDyn<'py> {
   F32(&'py PyArrayDyn<f32>),
   F64(&'py PyArrayDyn<f64>),
   I32(&'py PyArrayDyn<i32>),
@@ -28,54 +42,23 @@ enum ArrayDynFloat<'py> {
   U64(&'py PyArrayDyn<u64>),
 }
 
-fn compress_typed<T: NumberLike + Element>(py: Python, arr: &PyArrayDyn<T>) -> PyResult<PyObject> {
-  let arr_ro = arr.readonly();
-  let src = arr_ro.as_slice()?;
-  let compressed = auto_compress(src, DEFAULT_COMPRESSION_LEVEL);
-  Ok(PyBytes::new(py, &compressed).into())
-}
-
-fn decompress_typed<T: NumberLike + Element>(
-  compressed: &PyBytes,
-  out: &PyArrayDyn<T>,
-) -> PyResult<PyProgress> {
-  let mut out_rw = out.readwrite();
-  let dst = out_rw.as_slice_mut()?;
-  let src = compressed.as_bytes();
-  let progress = simple_decompress_into(src, dst)
-    .map_err(|e| PyRuntimeError::new_err(format!("pco decompression error: {}", e)))?;
-  Ok(PyProgress {
-    n_processed: progress.n_processed,
-    finished: progress.finished,
-  })
-}
-
 #[pymodule]
 fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
+  #[pyo3(signature = (nums, compression_level=pco::DEFAULT_COMPRESSION_LEVEL))]
   #[pyfn(m)]
-  fn auto_compress<'py>(py: Python<'py>, x: ArrayDynFloat<'py>) -> PyResult<PyObject> {
-    match x {
-      ArrayDynFloat::F32(py_arr) => compress_typed(py, py_arr),
-      ArrayDynFloat::F64(py_arr) => compress_typed(py, py_arr),
-      ArrayDynFloat::I32(py_arr) => compress_typed(py, py_arr),
-      ArrayDynFloat::I64(py_arr) => compress_typed(py, py_arr),
-      ArrayDynFloat::U32(py_arr) => compress_typed(py, py_arr),
-      ArrayDynFloat::U64(py_arr) => compress_typed(py, py_arr),
-    }
+  fn auto_compress<'py>(
+    py: Python<'py>,
+    nums: DynTypedPyArrayDyn<'py>,
+    compression_level: usize,
+  ) -> PyResult<PyObject> {
+    array_to_handler(nums).auto_compress(py, compression_level)
   }
 
   #[pyfn(m)]
-  fn simple_decompress_into(compressed: &PyBytes, out: ArrayDynFloat) -> PyResult<PyProgress> {
-    match out {
-      ArrayDynFloat::F32(out) => decompress_typed(compressed, out),
-      ArrayDynFloat::F64(out) => decompress_typed(compressed, out),
-      ArrayDynFloat::I32(out) => decompress_typed(compressed, out),
-      ArrayDynFloat::I64(out) => decompress_typed(compressed, out),
-      ArrayDynFloat::U32(out) => decompress_typed(compressed, out),
-      ArrayDynFloat::U64(out) => decompress_typed(compressed, out),
-    }
+  fn simple_decompress_into(compressed: &PyBytes, dst: DynTypedPyArrayDyn) -> PyResult<Progress> {
+    array_to_handler(dst).simple_decompress_into(compressed)
   }
 
   Ok(())
