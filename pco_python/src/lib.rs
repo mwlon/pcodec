@@ -38,13 +38,14 @@ pub enum DynTypedPyArrayDyn<'py> {
 fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
+  // TODO: when pco 0.1.4 is released, use pco::DEFAULT_MAX_PAGE_N
   #[pyo3(signature = (
     nums,
     compression_level=pco::DEFAULT_COMPRESSION_LEVEL,
     delta_encoding_order=None,
     int_mult_spec="enabled",
     float_mult_spec="enabled",
-    max_page_size=262144
+    max_page_n=262144,
   ))]
   #[pyfn(m)]
   fn auto_compress<'py>(
@@ -54,7 +55,7 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     delta_encoding_order: Option<usize>,
     int_mult_spec: &str,
     float_mult_spec: &str,
-    max_page_size: usize,
+    max_page_n: usize,
   ) -> PyResult<PyObject> {
     let int_mult_spec = match int_mult_spec.to_lowercase().as_str() {
       "enabled" => IntMultSpec::Enabled,
@@ -81,7 +82,7 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
       .with_delta_encoding_order(delta_encoding_order)
       .with_int_mult_spec(int_mult_spec)
       .with_float_mult_spec(float_mult_spec)
-      .with_paging_spec(PagingSpec::EqualPagesUpTo(max_page_size));
+      .with_paging_spec(PagingSpec::EqualPagesUpTo(max_page_n));
 
     array_to_handler(nums).simple_compress(py, &config)
   }

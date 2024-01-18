@@ -65,6 +65,6 @@ def test_compression_options():
     delta_encoding_order=1,
     int_mult_spec='disabled',
     float_mult_spec='DISABLED',
-    max_page_size=77,
+    max_page_n=77,
   )) > default_size
 
