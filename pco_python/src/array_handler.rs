@@ -1,21 +1,22 @@
 use crate::{pco_err_to_py, DynTypedPyArrayDyn, Progress};
 use numpy::{Element, PyArrayDyn};
 use pco::data_types::NumberLike;
-use pco::standalone::{auto_compress, simple_decompress_into};
+use pco::standalone::{simple_compress, simple_decompress_into};
 
+use pco::ChunkConfig;
 use pyo3::types::PyBytes;
 use pyo3::{PyObject, PyResult, Python};
 
 pub trait ArrayHandler<'py> {
-  fn auto_compress(&self, py: Python<'py>, compression_level: usize) -> PyResult<PyObject>;
+  fn simple_compress(&self, py: Python<'py>, config: &ChunkConfig) -> PyResult<PyObject>;
   fn simple_decompress_into(&self, compressed: &PyBytes) -> PyResult<Progress>;
 }
 
 impl<'py, T: NumberLike + Element> ArrayHandler<'py> for &'py PyArrayDyn<T> {
-  fn auto_compress(&self, py: Python<'py>, compression_level: usize) -> PyResult<PyObject> {
+  fn simple_compress(&self, py: Python<'py>, config: &ChunkConfig) -> PyResult<PyObject> {
     let arr_ro = self.readonly();
     let src = arr_ro.as_slice()?;
-    let compressed = auto_compress(src, compression_level);
+    let compressed = simple_compress(src, config).map_err(pco_err_to_py)?;
     Ok(PyBytes::new(py, &compressed).into())
   }
 

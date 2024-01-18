@@ -5,6 +5,7 @@ use pyo3::types::PyBytes;
 use pyo3::{pyclass, PyErr};
 
 use pco::errors::PcoError;
+use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
 
 use crate::array_handler::array_to_handler;
 
@@ -14,15 +15,6 @@ mod array_handler;
 pub struct Progress {
   n_processed: usize,
   finished: bool,
-}
-
-#[pyclass(get_all, set_all)]
-pub struct ChunkConfig {
-  compression_level: usize,
-  delta_encoding_order: Option<usize>,
-  int_mult_spec: String,
-  float_mult_spec: String,
-  max_page_size: usize,
 }
 
 pub fn pco_err_to_py(pco: PcoError) -> PyErr {
@@ -46,14 +38,52 @@ pub enum DynTypedPyArrayDyn<'py> {
 fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
-  #[pyo3(signature = (nums, compression_level=pco::DEFAULT_COMPRESSION_LEVEL))]
+  #[pyo3(signature = (
+    nums,
+    compression_level=pco::DEFAULT_COMPRESSION_LEVEL,
+    delta_encoding_order=None,
+    int_mult_spec="enabled",
+    float_mult_spec="enabled",
+    max_page_size=262144
+  ))]
   #[pyfn(m)]
   fn auto_compress<'py>(
     py: Python<'py>,
     nums: DynTypedPyArrayDyn<'py>,
     compression_level: usize,
+    delta_encoding_order: Option<usize>,
+    int_mult_spec: &str,
+    float_mult_spec: &str,
+    max_page_size: usize,
   ) -> PyResult<PyObject> {
-    array_to_handler(nums).auto_compress(py, compression_level)
+    let int_mult_spec = match int_mult_spec.to_lowercase().as_str() {
+      "enabled" => IntMultSpec::Enabled,
+      "disabled" => IntMultSpec::Disabled,
+      other => {
+        return Err(PyRuntimeError::new_err(format!(
+          "unknown int mult spec: {}",
+          other
+        )))
+      }
+    };
+    let float_mult_spec = match float_mult_spec.to_lowercase().as_str() {
+      "enabled" => FloatMultSpec::Enabled,
+      "disabled" => FloatMultSpec::Disabled,
+      other => {
+        return Err(PyRuntimeError::new_err(format!(
+          "unknown float mult spec: {}",
+          other
+        )))
+      }
+    };
+    let config = ChunkConfig::default()
+      .with_compression_level(compression_level)
+      .with_delta_encoding_order(delta_encoding_order)
+      .with_int_mult_spec(int_mult_spec)
+      .with_float_mult_spec(float_mult_spec)
+      .with_paging_spec(PagingSpec::EqualPagesUpTo(max_page_size));
+
+    array_to_handler(nums).simple_compress(py, &config)
   }
 
   #[pyfn(m)]

@@ -52,3 +52,19 @@ def test_errors():
   with pytest.raises(RuntimeError):
     simple_decompress_into(compressed, out)
 
+
+def test_compression_options():
+  data = np.random.normal(size=100).astype(np.float32)
+  default_size = len(auto_compress(data))
+
+  # this is mostly just to check that there is no error, but these settings
+  # should give worse compression than the defaults
+  assert len(auto_compress(
+    data,
+    compression_level=0,
+    delta_encoding_order=1,
+    int_mult_spec='disabled',
+    float_mult_spec='DISABLED',
+    max_page_size=77,
+  )) > default_size
+
