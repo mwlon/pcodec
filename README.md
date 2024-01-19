@@ -32,6 +32,8 @@ of the natively supported data types.
 
 [Use the Rust API](./pco/README.md)
 
+[Use the Python API](./pco_python/README.md)
+
 ## Performance and Compression Ratio
 
 See [the benchmarks](./bench/README.md) to run the benchmark suite

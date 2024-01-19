@@ -13,7 +13,9 @@ mod array_handler;
 
 #[pyclass(get_all)]
 pub struct Progress {
+  /// count of decompressed numbers.
   n_processed: usize,
+  /// whether the compressed data was finished.
   finished: bool,
 }
 
@@ -34,11 +36,39 @@ pub enum DynTypedPyArrayDyn<'py> {
   U64(&'py PyArrayDyn<u64>),
 }
 
+/// Pcodec is a codec for numerical sequences.
 #[pymodule]
 fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+  m.add_class::<Progress>()?;
+  m.add(
+    "DEFAULT_COMPRESSION_LEVEL",
+    pco::DEFAULT_COMPRESSION_LEVEL,
+  )?;
 
   // TODO: when pco 0.1.4 is released, use pco::DEFAULT_MAX_PAGE_N
+  /// Compresses an array into a standalone format.
+  ///
+  /// :param nums: numpy array to compress. This may have any shape.
+  /// However, it must be contiguous, and only the following data types are
+  /// supported: float32, float64, int32, int64, uint32, uint64.
+  /// :param compression_level: a compression level from 0-12, where 12 takes
+  /// the longest and compresses the most.
+  /// :param delta_encoding_order: either a delta encoding level from 0-7 or
+  /// None. If set to None, pcodec will try to infer the optimal delta encoding
+  /// order.
+  /// :param int_mult_spec: either 'enabled' or 'disabled'. If enabled, pcodec
+  /// will consider using int mult mode, which can substantially improve
+  /// compression ratio but decrease speed in some cases for integer types.
+  /// :param float_mult_spec: either 'enabled' or 'disabled'. If enabled, pcodec
+  /// will consider using float mult mode, which can substantially improve
+  /// compression ratio but decrease speed in some cases for float types.
+  /// :param max_page_n: the maximum number of values to encoder per pcodec
+  /// page. If set too high or too low, pcodec's compression ratio may drop.
+  ///
+  /// :returns: compressed bytes for an entire standalone file
+  ///
+  /// :raises: TypeError, RuntimeError
   #[pyo3(signature = (
     nums,
     compression_level=pco::DEFAULT_COMPRESSION_LEVEL,
@@ -87,6 +117,19 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     array_to_handler(nums).simple_compress(py, &config)
   }
 
+  /// Decompresses pcodec compressed bytes into a pre-existing array.
+  ///
+  /// :param compressed: a bytes object a full standalone file of compressed data.
+  /// :param dst: a numpy array to fill with the decompressed values. May have
+  /// any shape, but must be contiguous.
+  ///
+  /// :returns: progress, an object with a count of elements written and
+  /// whether the compressed data was finished. If dst is shorter than the
+  /// numbers in compressed, writes as much as possible and leaves the rest
+  /// untouched. If dst is longer, fills dst and does nothing with the
+  /// remaining data.
+  ///
+  /// :raises: TypeError, RuntimeError
   #[pyfn(m)]
   fn simple_decompress_into(compressed: &PyBytes, dst: DynTypedPyArrayDyn) -> PyResult<Progress> {
     array_to_handler(dst).simple_decompress_into(compressed)
