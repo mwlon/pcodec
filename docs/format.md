@@ -7,6 +7,8 @@ All bit packing (and thus integer encoding) is done in a little-endian fashion.
 Bit packing a component is completed by filling the rest of the byte with 0s.
 
 Let `dtype_size` be the data type's number of bits.
+A "raw" value for a number is a `dtype_size` value that maps to the number
+via [its `from_unsigned` function](#numbers---latents).
 
 ## Wrapped Format Components
 
@@ -30,6 +32,13 @@ The header simply consists of
 
 * \[8 bits\] the format version
 
+So far, these format versions exist:
+
+| format version | deviations from next version |
+|----------------|------------------------------|
+| 0              | int mult mode unsupported    |
+| 1              | -                            |
+
 ### Chunk Metadata
 
 It is expected that decompressors raise corruption errors if any part of
@@ -47,17 +56,17 @@ Each chunk metadata consists of
   | 1     | int mult     | 2                  | no                     |
   | 2     | float mult   | 2                  | no                     |
   | 3-15  | \<reserved\> |                    |                        |
-* \[0 or `dtype_size` bits\] for int mult and float mult modes, a multiplier
-  is encoded in the data type's corresponding unsigned type.
-* \[3 bits\] the delta encoding order `delta_order`
+* \[0 or `dtype_size` bits\] for int mult and float mult modes, a raw
+  multiplier `mult` is encoded in the data type.
+* \[3 bits\] the delta encoding order `delta_order`.
 * per latent variable,
   * \[4 bits\] `ans_size_log`, the log2 of the size of its tANS table.
     This may not exceed 14.
   * \[15 bits\] the count of bins
   * per bin,
     * \[`ans_size_log` bits\] 1 less than `weight`, this bin's weight in the tANS table
-    * \[`dtype_size` bits\] the lower bound of this bin's numerical range.
-      e.g. for a 64-bit data type, this will be 64 bits long.
+    * \[`dtype_size` bits\] the lower bound of this bin's numerical range,
+      encoded as a raw value.
     * \[`log2(dtype_size) + 1` bits\] the number of offset bits for this bin
       e.g. for a 64-bit data type, this will be 7 bits long.
 
@@ -81,7 +90,10 @@ Each data page consists of
 * per batch of `k` numbers,
   * per latent variable,
     * for `i in 0..k`,
-      * \[tANS state `i % 4`'s bits\] tANS encoded bin idx for the `i`th latent. Store the bin as `bin[i]`.
+      * \[tANS state `i % 4`'s bits\] tANS encoded bin idx for the `i`th
+        latent. Store the bin as `bin[i]`. Asymmetric Numeral System links:
+        [original paper](https://arxiv.org/abs/0902.0271),
+        [blog post explanation](https://graphallthethings.com/posts/streaming-ans-explained).
     * for `i in 0..k`,
       * \[`bin[i].offset_bits` bits\] offset for `i`th latent
 
@@ -111,24 +123,36 @@ It consists of
 
 Based on the mode, unsigneds are decomposed into latents.
 
-| mode       | decoding formula                                           |
-|------------|------------------------------------------------------------|
-| classic    | `from_unsigned(latent0)`                                   |
-| int mult   | `from_unsigned(latent0 * mult + latent1)`                  |
-| float mult | `to_int_float(latent0) * mult + latent1 * machine_epsilon` |
+| mode       | decoding formula                              |
+|------------|-----------------------------------------------|
+| classic    | `from_unsigned(latent0)`                      |
+| int mult   | `from_unsigned(latent0 * mult + latent1)`     |
+| float mult | `to_int_float(latent0) * mult + latent1 ULPs` |
+
+Here ULP refers to [unit in the last place](https://en.wikipedia.org/wiki/Unit_in_the_last_place).
 
 Each data type has an order-preserving bijection to an unsigned data type.
-For instance:
+For instance, floats have their first bit toggled, and the rest of their bits
+bits toggled if the float was originally negative:
 
 ```rust
-fn from_unsigned(off: u32) -> f32 {
-  if off & (1 << 31) > 0 {
+fn from_unsigned(unsigned: u32) -> f32 {
+  if unsigned & (1 << 31) > 0 {
     // positive float
-    f32::from_bits(off ^ (1 << 31))
+    f32::from_bits(unsigned ^ (1 << 31))
   } else {
     // negative float
-    f32::from_bits(!off)
+    f32::from_bits(!unsigned)
   }
+}
+```
+
+Signed integers have an order-preserving wrapping addition and wrapping
+conversion like so:
+
+```rust
+fn from_unsigned(unsigned: u32) -> i32 {
+  i32::MIN.wrapping_add(unsigned as i32)
 }
 ```
 
