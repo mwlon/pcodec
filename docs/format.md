@@ -30,7 +30,7 @@ version.
 This enables pcodec to make small format changes in the future if necessary.
 The header simply consists of
 
-* \[8 bits\] the format version
+* [8 bits] the format version
 
 So far, these format versions exist:
 
@@ -48,7 +48,7 @@ bin's offset bits exceed the data type size.
 
 Each chunk metadata consists of
 
-* \[4 bits\] `mode`, using this table:
+* [4 bits] `mode`, using this table:
 
   | value | mode         | n latent variables | 2nd latent uses delta? |
   |-------|--------------|--------------------|------------------------|
@@ -56,18 +56,18 @@ Each chunk metadata consists of
   | 1     | int mult     | 2                  | no                     |
   | 2     | float mult   | 2                  | no                     |
   | 3-15  | \<reserved\> |                    |                        |
-* \[0 or `dtype_size` bits\] for int mult and float mult modes, a raw
+* [0 or `dtype_size` bits] for int mult and float mult modes, a raw
   multiplier `mult` is encoded in the data type.
-* \[3 bits\] the delta encoding order `delta_order`.
+* [3 bits] the delta encoding order `delta_order`.
 * per latent variable,
-  * \[4 bits\] `ans_size_log`, the log2 of the size of its tANS table.
+  * [4 bits] `ans_size_log`, the log2 of the size of its tANS table.
     This may not exceed 14.
-  * \[15 bits\] the count of bins
+  * [15 bits] the count of bins
   * per bin,
-    * \[`ans_size_log` bits\] 1 less than `weight`, this bin's weight in the tANS table
-    * \[`dtype_size` bits\] the lower bound of this bin's numerical range,
+    * [`ans_size_log` bits] 1 less than `weight`, this bin's weight in the tANS table
+    * [`dtype_size` bits] the lower bound of this bin's numerical range,
       encoded as a raw value.
-    * \[`log2(dtype_size) + 1` bits\] the number of offset bits for this bin
+    * [`log2(dtype_size) + 1` bits] the number of offset bits for this bin
       e.g. for a 64-bit data type, this will be 7 bits long.
 
 Based on chunk metadata, 4-way interleaved tANS decoders should be initialized
@@ -84,18 +84,19 @@ Each data page consists of
 
 * per latent variable,
   * if delta encoding is applicable, for `i in 0..delta_order`,
-    * \[`dtype_size` bits\] the `i`th delta moment
+    * [`dtype_size` bits] the `i`th delta moment
   * for `i in 0..4`,
-    * \[`ans_size_log` bits\] the `i`th interleaved tANS state index
+    * [`ans_size_log` bits] the `i`th interleaved tANS state index
+* [0-7 bits] 0s until byte-aligned
 * per batch of `k` numbers,
   * per latent variable,
     * for `i in 0..k`,
-      * \[tANS state `i % 4`'s bits\] tANS encoded bin idx for the `i`th
+      * [tANS state `i % 4`'s bits] tANS encoded bin idx for the `i`th
         latent. Store the bin as `bin[i]`. Asymmetric Numeral System links:
         [original paper](https://arxiv.org/abs/0902.0271),
         [blog post explanation](https://graphallthethings.com/posts/streaming-ans-explained).
     * for `i in 0..k`,
-      * \[`bin[i].offset_bits` bits\] offset for `i`th latent
+      * [`bin[i].offset_bits` bits] offset for `i`th latent
 
 ## Standalone Format
 
@@ -107,6 +108,7 @@ It consists of
 * [6 bits] 1 less than `n_hint_log2`
 * [`n_hint_log2` bits] the total count of numbers in the file, if known;
   0 otherwise
+* [0-7 bits] 0s until byte-aligned
 * a wrapped header
 * per chunk,
   * [8 bits] a byte for the data type
