@@ -9,7 +9,7 @@ Pcodec is a codec for numerical sequences. Example usage:
 
 ```python
 import pcodec
-import numpy
+import numpy as np
 
 n = 1000000
 nums = np.random.normal(size=n)
@@ -22,7 +22,7 @@ print(f'compressed to {len(compressed)} bytes')
 recovered = np.empty(n)
 pcodec.simple_decompress_into(compressed, recovered)
 
-assert np.testing.array_equal(recovered, nums)
+np.testing.assert_array_equal(recovered, nums)
 ```
 
 For pcodec's uses, design, and benchmarks, [see the main repo](https://github.com/mwlon/pcodec).
