@@ -110,3 +110,5 @@ accessible in download size:
 These were again done on a single core of an M3 performance core.
 Only numerical columns (the physical dtypes INT32, INT64, FLOAT, and DOUBLE)
 were used.
+For Blosc, the SHUFFLE filter and the Zstd default of Zstd level 3 was used.
+For Parquet, the Parquet default of Zstd level 1 was used.
