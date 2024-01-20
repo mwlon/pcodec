@@ -4,7 +4,7 @@
   <img
     alt="bar charts showing better compression for pco than zstd.parquet"
     src="images/real_world_compression_ratio.svg"
-    width="600px"
+    width="700px"
   >
 </div>
 

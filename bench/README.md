@@ -93,17 +93,17 @@ accessible in download size:
   <img
     alt="bar charts showing better compression for pco than zstd.parquet"
     src="../images/real_world_compression_ratio.svg"
-    width="600px"
+    width="700px"
   >
   <img
     alt="bar charts showing similar compression speed for pco and zstd.parquet"
     src="../images/real_world_compression_speed.svg"
-    width="600px"
+    width="700px"
   >
   <img
     alt="bar charts showing faster decompression speed for pco than zstd.parquet"
     src="../images/real_world_decompression_speed.svg"
-    width="600px"
+    width="700px"
   >
 </div>
 
