@@ -8,6 +8,7 @@ use anyhow::{anyhow, Result};
 
 use q_compress::data_types::TimestampMicros;
 
+use crate::codecs::blosc::BloscConfig;
 use crate::codecs::parquet::ParquetConfig;
 use crate::codecs::pco::PcoConfig;
 use crate::codecs::qco::QcoConfig;
@@ -18,6 +19,7 @@ use crate::num_vec::NumVec;
 use crate::opt::HandlerOpt;
 use crate::{BenchStat, Precomputed, BASE_DIR};
 
+mod blosc;
 mod parquet;
 mod pco;
 mod qco;
@@ -227,6 +229,7 @@ impl FromStr for CodecConfig {
       "zstd" => Box::<ZstdConfig>::default(),
       "snap" | "snappy" => Box::<SnappyConfig>::default(),
       "parq" | "parquet" => Box::<ParquetConfig>::default(),
+      "blosc" => Box::<BloscConfig>::default(),
       _ => return Err(anyhow!("unknown codec: {}", name)),
     };
 

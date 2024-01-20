@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.71"
+blosc-src = {version = "0.3", features = ["zstd"]}
 bytes = "1.1.0"
 clap = {version = "4.3.11", features = ["derive"]}
 parquet = {version = "49.0.0", features = ["snap", "zstd"], default-features=false}
@@ -18,3 +19,4 @@ q_compress = {path = "../quantile-compression/q_compress" }
 snap = "1.1.0"
 tabled = "0.12.2"
 zstd = "0.13"
+zstd-sys = "2.0.9"
