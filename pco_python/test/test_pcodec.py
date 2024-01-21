@@ -1,21 +1,14 @@
 import numpy as np
-from pcodec import auto_compress, simple_decompress_into, auto_decompress_f32
+from pcodec import auto_compress, simple_decompress_into, auto_decompress
 import pytest
 
 np.random.seed(12345)
 
-<<<<<<< HEAD
 all_shapes = [
-=======
-@pytest.mark.parametrize(
-  "shape",
-  [
->>>>>>> upstream/main
     (100,),
     (100, 100),
     (10, 10, 100),
     (2, 10, 10, 50),
-<<<<<<< HEAD
 ]
 
 @pytest.mark.parametrize("shape", all_shapes)
@@ -23,28 +16,20 @@ all_shapes = [
 def test_round_trip_decompress_into(shape, dtype):
     data = np.random.uniform(0, 1000, size=shape).astype(dtype)
     compressed = auto_compress(data)
-=======
-  ],
-)
-@pytest.mark.parametrize("dtype", ['f4', 'f8', 'i4', 'i8', 'u4', 'u8'])
-def test_round_trip(shape, dtype):
-  data = np.random.uniform(0, 1000, size=shape).astype(dtype)
-  compressed = auto_compress(data)
->>>>>>> upstream/main
 
-  # decompress exactly
-  out = np.empty_like(data)
-  progress = simple_decompress_into(compressed, out)
-  np.testing.assert_array_equal(data, out)
-  assert progress.n_processed == data.size
-  assert progress.finished
+    # decompress exactly
+    out = np.empty_like(data)
+    progress = simple_decompress_into(compressed, out)
+    np.testing.assert_array_equal(data, out)
+    assert progress.n_processed == data.size
+    assert progress.finished
 
 
 @pytest.mark.parametrize("shape", all_shapes)
-def test_round_trip_auto_decompress_f32(shape, dtype='f4'):
+def test_round_trip_auto_decompress(shape, dtype='f4'):
     data = np.random.uniform(0, 1000, size=shape).astype(dtype)
     compressed = auto_compress(data)
-    out = auto_decompress_f32(compressed)
+    out = auto_decompress(compressed)
     # data are decompressed into a 1D array
     np.testing.assert_array_equal(data.ravel(), out)
 

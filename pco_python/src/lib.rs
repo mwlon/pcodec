@@ -1,13 +1,13 @@
-use numpy::{Element, IntoPyArray, PyArray1, PyArrayDyn};
+use numpy::{IntoPyArray, PyArray1, PyArrayDyn};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyObject, PyResult, Python};
 use pyo3::types::PyBytes;
 use pyo3::{pyclass, PyErr};
 
 use pco::data_types::NumberLike;
-use pco::standalone::{auto_compress, auto_decompress, simple_decompress_into};
-use pco::DEFAULT_COMPRESSION_LEVEL;
 use pco::errors::PcoError;
+use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
+use pco::DEFAULT_COMPRESSION_LEVEL;
 use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
 
 use crate::array_handler::array_to_handler;
@@ -136,6 +136,48 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   #[pyfn(m)]
   fn simple_decompress_into(compressed: &PyBytes, dst: DynTypedPyArrayDyn) -> PyResult<Progress> {
     array_to_handler(dst).simple_decompress_into(compressed)
+  }
+
+  #[pyfn(m)]
+  fn auto_decompress<'py>(py: Python<'py>, compressed: &PyBytes) -> PyResult<&'py PyArray1<f32>> {
+    let src = compressed.as_bytes();
+    let (file_decompressor, mut src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
+    let dtype_byte = src.first().cloned().expect("didn't find dtype byte");
+    match dtype_byte {
+      f32::DTYPE_BYTE => Ok(decompress_chunks::<f32>(
+        py,
+        src,
+        file_decompressor,
+      )?),
+      other => Err(PyRuntimeError::new_err(format!(
+        "unrecognized data type byte {:?}",
+        dtype_byte,
+      ))),
+    }
+  }
+
+  fn decompress_chunks<'py, T: NumberLike>(
+    py: Python<'py>,
+    mut src: &[u8],
+    file_decompressor: FileDecompressor,
+  ) -> PyResult<&'py PyArray1<f32>> {
+    let n_hint = file_decompressor.n_hint();
+    let mut res: Vec<f32> = Vec::with_capacity(n_hint);
+    while let MaybeChunkDecompressor::Some(mut chunk_decompressor) = file_decompressor
+      .chunk_decompressor::<f32, &[u8]>(src)
+      .map_err(pco_err_to_py)?
+    {
+      chunk_decompressor
+        .decompress_remaining_extend(&mut res)
+        .map_err(pco_err_to_py)?;
+      src = chunk_decompressor.into_src();
+    }
+    // Python::with_gil(|py| -> PyResult<&PyArray1<f32>>
+    //   {
+    let py_array = res.into_pyarray(py);
+    Ok(py_array)
+    //  }
+    //)
   }
 
   Ok(())

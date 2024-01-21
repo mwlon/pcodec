@@ -195,7 +195,7 @@ impl<T: NumberLike, R: BetterBufRead> ChunkDecompressor<T, R> {
   }
 
   // a helper for some internal things
-  pub(crate) fn decompress_remaining_extend(&mut self, dst: &mut Vec<T>) -> PcoResult<()> {
+  pub fn decompress_remaining_extend(&mut self, dst: &mut Vec<T>) -> PcoResult<()> {
     let initial_len = dst.len();
     let remaining = self.n - self.n_processed;
     dst.reserve(remaining);
