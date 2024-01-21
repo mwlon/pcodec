@@ -4,15 +4,17 @@ import pytest
 
 np.random.seed(12345)
 
-all_shapes = [
+all_shapes = (
     (100,),
     (100, 100),
     (10, 10, 100),
     (2, 10, 10, 50),
-]
+)
+
+all_dtypes = ('f4', 'f8', 'i4', 'i8', 'u4', 'u8')
 
 @pytest.mark.parametrize("shape", all_shapes)
-@pytest.mark.parametrize("dtype", ['f4', 'f8', 'i4', 'i8', 'u4', 'u8'])
+@pytest.mark.parametrize("dtype", all_dtypes)
 def test_round_trip_decompress_into(shape, dtype):
     data = np.random.uniform(0, 1000, size=shape).astype(dtype)
     compressed = auto_compress(data)
@@ -26,12 +28,14 @@ def test_round_trip_decompress_into(shape, dtype):
 
 
 @pytest.mark.parametrize("shape", all_shapes)
-def test_round_trip_auto_decompress(shape, dtype='f4'):
+@pytest.mark.parametrize("dtype", all_dtypes)
+def test_round_trip_auto_decompress(shape, dtype):
     data = np.random.uniform(0, 1000, size=shape).astype(dtype)
     compressed = auto_compress(data)
     out = auto_decompress(compressed)
-    # data are decompressed into a 1D array
-    np.testing.assert_array_equal(data.ravel(), out)
+    # data are decompressed into a 1D array; ensure it can be reshaped to the original shape
+    out.shape = shape
+    np.testing.assert_array_equal(data, out)
 
 
 def test_inexact_decompression():
@@ -53,13 +57,24 @@ def test_inexact_decompression():
   assert progress.n_processed == 300
   assert progress.finished
 
-def test_errors():
+def test_decompresss_into_size_error():
   data = np.random.uniform(size=100).astype(np.float32)
   compressed = auto_compress(data)
 
   out = np.zeros(100).astype(np.float64)
-  with pytest.raises(RuntimeError):
+  with pytest.raises(RuntimeError, match="data type byte does not match"):
     simple_decompress_into(compressed, out)
+
+
+def test_auto_decompresss_unknown_dtype_error():
+    data = np.random.uniform(size=100).astype(np.float32)
+    compressed = bytearray(auto_compress(data))
+
+    # corrupt the data with unknown dtype byte
+    # (is this safe to hard code? could the length of the header change in future version?)
+    compressed[8] = 99
+    with pytest.raises(RuntimeError, match="unrecognized dtype byte"):
+        auto_decompress(bytes(compressed))
 
 
 def test_compression_options():

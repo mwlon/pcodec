@@ -1,4 +1,4 @@
-use numpy::{IntoPyArray, PyArray1, PyArrayDyn};
+use numpy::{Element, IntoPyArray, PyArray1, PyArrayDyn};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyObject, PyResult, Python};
 use pyo3::types::PyBytes;
@@ -7,7 +7,6 @@ use pyo3::{pyclass, PyErr};
 use pco::data_types::NumberLike;
 use pco::errors::PcoError;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::DEFAULT_COMPRESSION_LEVEL;
 use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
 
 use crate::array_handler::array_to_handler;
@@ -139,32 +138,33 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   }
 
   #[pyfn(m)]
-  fn auto_decompress<'py>(py: Python<'py>, compressed: &PyBytes) -> PyResult<&'py PyArray1<f32>> {
+  fn auto_decompress<'py>(py: Python<'py>, compressed: &PyBytes) -> PyResult<PyObject> {
     let src = compressed.as_bytes();
-    let (file_decompressor, mut src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
+    let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
     let dtype_byte = src.first().cloned().expect("didn't find dtype byte");
     match dtype_byte {
-      f32::DTYPE_BYTE => Ok(decompress_chunks::<f32>(
-        py,
-        src,
-        file_decompressor,
-      )?),
+      f32::DTYPE_BYTE => Ok(decompress_chunks::<f32>(py, src, file_decompressor)?.into()),
+      f64::DTYPE_BYTE => Ok(decompress_chunks::<f64>(py, src, file_decompressor)?.into()),
+      i32::DTYPE_BYTE => Ok(decompress_chunks::<i32>(py, src, file_decompressor)?.into()),
+      i64::DTYPE_BYTE => Ok(decompress_chunks::<i64>(py, src, file_decompressor)?.into()),
+      u32::DTYPE_BYTE => Ok(decompress_chunks::<u32>(py, src, file_decompressor)?.into()),
+      u64::DTYPE_BYTE => Ok(decompress_chunks::<u64>(py, src, file_decompressor)?.into()),
       other => Err(PyRuntimeError::new_err(format!(
-        "unrecognized data type byte {:?}",
-        dtype_byte,
+        "unrecognized dtype byte {:?}",
+        other,
       ))),
     }
   }
 
-  fn decompress_chunks<'py, T: NumberLike>(
+  fn decompress_chunks<'py, T: NumberLike + Element>(
     py: Python<'py>,
     mut src: &[u8],
     file_decompressor: FileDecompressor,
-  ) -> PyResult<&'py PyArray1<f32>> {
+  ) -> PyResult<&'py PyArray1<T>> {
     let n_hint = file_decompressor.n_hint();
-    let mut res: Vec<f32> = Vec::with_capacity(n_hint);
+    let mut res: Vec<T> = Vec::with_capacity(n_hint);
     while let MaybeChunkDecompressor::Some(mut chunk_decompressor) = file_decompressor
-      .chunk_decompressor::<f32, &[u8]>(src)
+      .chunk_decompressor::<T, &[u8]>(src)
       .map_err(pco_err_to_py)?
     {
       chunk_decompressor
@@ -172,12 +172,8 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         .map_err(pco_err_to_py)?;
       src = chunk_decompressor.into_src();
     }
-    // Python::with_gil(|py| -> PyResult<&PyArray1<f32>>
-    //   {
     let py_array = res.into_pyarray(py);
     Ok(py_array)
-    //  }
-    //)
   }
 
   Ok(())
