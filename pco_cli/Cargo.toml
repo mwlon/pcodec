@@ -20,7 +20,7 @@ anyhow = "1.0.71"
 arrow = {version = "49.0.0", features = ["csv"], default-features=false}
 clap = {version = "4.3.11", features = ["derive"]}
 parquet = {version = "49.0.0", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
-pco = {version = "0.1.0", path = "../pco" }
+pco = {version = "0.1.4", path = "../pco" }
 
 [dev-dependencies]
 enum-iterator = "1.4.1"

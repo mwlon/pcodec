@@ -93,20 +93,22 @@ accessible in download size:
   <img
     alt="bar charts showing better compression for pco than zstd.parquet"
     src="../images/real_world_compression_ratio.svg"
-    width="600px"
+    width="700px"
   >
   <img
     alt="bar charts showing similar compression speed for pco and zstd.parquet"
     src="../images/real_world_compression_speed.svg"
-    width="600px"
+    width="700px"
   >
   <img
     alt="bar charts showing faster decompression speed for pco than zstd.parquet"
     src="../images/real_world_decompression_speed.svg"
-    width="600px"
+    width="700px"
   >
 </div>
 
 These were again done on a single core of an M3 performance core.
 Only numerical columns (the physical dtypes INT32, INT64, FLOAT, and DOUBLE)
 were used.
+For Blosc, the SHUFFLE filter and the Zstd default of Zstd level 3 was used.
+For Parquet, the Parquet default of Zstd level 1 was used.

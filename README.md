@@ -4,7 +4,7 @@
   <img
     alt="bar charts showing better compression for pco than zstd.parquet"
     src="images/real_world_compression_ratio.svg"
-    width="600px"
+    width="700px"
   >
 </div>
 
@@ -31,6 +31,8 @@ of the natively supported data types.
 [Use the CLI](./pco_cli/README.md)
 
 [Use the Rust API](./pco/README.md)
+
+[Use the Python API](./pco_python/README.md)
 
 ## Performance and Compression Ratio
 

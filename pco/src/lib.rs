@@ -7,7 +7,7 @@ pub use auto::auto_delta_encoding_order;
 pub use bin::Bin;
 pub use chunk_config::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
 pub use chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
-pub use constants::{DEFAULT_COMPRESSION_LEVEL, FULL_BATCH_N};
+pub use constants::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_MAX_PAGE_N, FULL_BATCH_N};
 pub use mode::Mode;
 pub use progress::Progress;
 

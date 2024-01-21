@@ -10,6 +10,7 @@ dynamic = ["version"]
 keywords = ["compression", "numerical"]
 license = "Apache-2.0"
 name = "pcodec"
+readme = "README.md"
 
 [project.urls]
 Repository = "https://github.com/mwlon/pcodec"
