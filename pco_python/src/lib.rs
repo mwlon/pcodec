@@ -137,6 +137,14 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     array_to_handler(dst).simple_decompress_into(compressed)
   }
 
+  /// Decompresses pcodec compressed bytes into a new Numpy array.
+  ///
+  /// :param compressed: a bytes object a full standalone file of compressed data.
+  ///
+  /// :returns: data, a 1D numpy array of the decompressed values.
+  /// The data type will be set appropriately based on the contents of the file header.
+  ///
+  /// :raises: RuntimeError
   #[pyfn(m)]
   fn auto_decompress<'py>(py: Python<'py>, compressed: &PyBytes) -> PyResult<PyObject> {
     let src = compressed.as_bytes();
