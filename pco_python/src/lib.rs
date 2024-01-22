@@ -167,9 +167,15 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
       .chunk_decompressor::<T, &[u8]>(src)
       .map_err(pco_err_to_py)?
     {
-      chunk_decompressor
-        .decompress_remaining_extend(&mut res)
+      let initial_len = res.len(); // probably always zero to start, since we just created res
+      let remaining = chunk_decompressor.n();
+      unsafe {
+        res.set_len(initial_len + remaining);
+      }
+      let progress = chunk_decompressor
+        .decompress(&mut res)
         .map_err(pco_err_to_py)?;
+      assert!(progress.finished);
       src = chunk_decompressor.into_src();
     }
     let py_array = res.into_pyarray(py);
