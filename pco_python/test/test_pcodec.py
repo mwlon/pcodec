@@ -72,6 +72,10 @@ def test_auto_decompress_errors():
     data = np.random.uniform(size=100).astype(np.float32)
     compressed = bytearray(auto_compress(data))
 
+    truncated = compressed[:8]
+    with pytest.raises(RuntimeError, match="chunk data is empty"):
+        auto_decompress(bytes(truncated))
+
     # corrupt the data with unknown dtype byte
     # (is this safe to hard code? could the length of the header change in future version?)
     compressed[8] = 99

@@ -141,7 +141,15 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   fn auto_decompress<'py>(py: Python<'py>, compressed: &PyBytes) -> PyResult<PyObject> {
     let src = compressed.as_bytes();
     let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
-    let dtype_byte = src.first().cloned().expect("didn't find dtype byte");
+    let dtype_byte = match src.first().cloned() {
+      Some(dtype_byte) => dtype_byte,
+      None => {
+        return Err(PyRuntimeError::new_err(
+          "chunk data is empty",
+        ))
+      }
+    };
+
     match dtype_byte {
       f32::DTYPE_BYTE => Ok(decompress_chunks::<f32>(py, src, file_decompressor)?.into()),
       f64::DTYPE_BYTE => Ok(decompress_chunks::<f64>(py, src, file_decompressor)?.into()),
