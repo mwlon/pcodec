@@ -57,7 +57,8 @@ def test_inexact_decompression():
   assert progress.n_processed == 300
   assert progress.finished
 
-def test_decompresss_into_size_error():
+def test_simple_decompress_into_errors():
+  """Test possible error states for simple_decompress_into"""
   data = np.random.uniform(size=100).astype(np.float32)
   compressed = auto_compress(data)
 
@@ -66,7 +67,8 @@ def test_decompresss_into_size_error():
     simple_decompress_into(compressed, out)
 
 
-def test_auto_decompresss_unknown_dtype_error():
+def test_auto_decompress_errors():
+    """Test possible error states for auto_decompress"""
     data = np.random.uniform(size=100).astype(np.float32)
     compressed = bytearray(auto_compress(data))
 
