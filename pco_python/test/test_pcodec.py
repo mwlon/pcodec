@@ -82,6 +82,10 @@ def test_auto_decompress_errors():
     with pytest.raises(RuntimeError, match="unrecognized dtype byte"):
         auto_decompress(bytes(compressed))
 
+    # this happens if the user passed in a file with no chunks.
+    compressed[8] = 0
+    assert auto_decompress(bytes(compressed)) is None
+
 
 def test_compression_options():
   data = np.random.normal(size=100).astype(np.float32)

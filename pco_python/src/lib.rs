@@ -1,7 +1,7 @@
 use numpy::{Element, IntoPyArray, PyArray1, PyArrayDyn};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyObject, PyResult, Python};
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyNone};
 use pyo3::{pyclass, PyErr};
 
 use pco::data_types::NumberLike;
@@ -157,6 +157,8 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
       i64::DTYPE_BYTE => Ok(decompress_chunks::<i64>(py, src, file_decompressor)?.into()),
       u32::DTYPE_BYTE => Ok(decompress_chunks::<u32>(py, src, file_decompressor)?.into()),
       u64::DTYPE_BYTE => Ok(decompress_chunks::<u64>(py, src, file_decompressor)?.into()),
+      // termination byte
+      0 => Ok(PyNone::get(py).into()),
       other => Err(PyRuntimeError::new_err(format!(
         "unrecognized dtype byte {:?}",
         other,
