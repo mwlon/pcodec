@@ -141,12 +141,14 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   ///
   /// :param compressed: a bytes object a full standalone file of compressed data.
   ///
-  /// :returns: data, a 1D numpy array of the decompressed values.
-  /// The data type will be set appropriately based on the contents of the file header.
+  /// :returns: data, either a 1D numpy array of the decompressed values or, in
+  /// the event that there are no values, a None.
+  /// The array's data type will be set appropriately based on the contents of
+  /// the file header.
   ///
-  /// :raises: RuntimeError
+  /// :raises: TypeError, RuntimeError
   #[pyfn(m)]
-  fn auto_decompress<'py>(py: Python<'py>, compressed: &PyBytes) -> PyResult<PyObject> {
+  fn auto_decompress(py: Python, compressed: &PyBytes) -> PyResult<PyObject> {
     let src = compressed.as_bytes();
     let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
     let dtype_byte = match src.first().cloned() {
