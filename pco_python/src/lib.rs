@@ -1,10 +1,12 @@
-use numpy::PyArrayDyn;
+use numpy::{Element, IntoPyArray, PyArray1, PyArrayDyn};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyObject, PyResult, Python};
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyNone};
 use pyo3::{pyclass, PyErr};
 
+use pco::data_types::NumberLike;
 use pco::errors::PcoError;
+use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
 
 use crate::array_handler::array_to_handler;
@@ -133,6 +135,71 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   #[pyfn(m)]
   fn simple_decompress_into(compressed: &PyBytes, dst: DynTypedPyArrayDyn) -> PyResult<Progress> {
     array_to_handler(dst).simple_decompress_into(compressed)
+  }
+
+  /// Decompresses pcodec compressed bytes into a new Numpy array.
+  ///
+  /// :param compressed: a bytes object a full standalone file of compressed data.
+  ///
+  /// :returns: data, either a 1D numpy array of the decompressed values or, in
+  /// the event that there are no values, a None.
+  /// The array's data type will be set appropriately based on the contents of
+  /// the file header.
+  ///
+  /// :raises: TypeError, RuntimeError
+  #[pyfn(m)]
+  fn auto_decompress(py: Python, compressed: &PyBytes) -> PyResult<PyObject> {
+    let src = compressed.as_bytes();
+    let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
+    let dtype_byte = match src.first().cloned() {
+      Some(dtype_byte) => dtype_byte,
+      None => {
+        return Err(PyRuntimeError::new_err(
+          "chunk data is empty",
+        ))
+      }
+    };
+
+    match dtype_byte {
+      f32::DTYPE_BYTE => Ok(decompress_chunks::<f32>(py, src, file_decompressor)?.into()),
+      f64::DTYPE_BYTE => Ok(decompress_chunks::<f64>(py, src, file_decompressor)?.into()),
+      i32::DTYPE_BYTE => Ok(decompress_chunks::<i32>(py, src, file_decompressor)?.into()),
+      i64::DTYPE_BYTE => Ok(decompress_chunks::<i64>(py, src, file_decompressor)?.into()),
+      u32::DTYPE_BYTE => Ok(decompress_chunks::<u32>(py, src, file_decompressor)?.into()),
+      u64::DTYPE_BYTE => Ok(decompress_chunks::<u64>(py, src, file_decompressor)?.into()),
+      // termination byte
+      0 => Ok(PyNone::get(py).into()),
+      other => Err(PyRuntimeError::new_err(format!(
+        "unrecognized dtype byte {:?}",
+        other,
+      ))),
+    }
+  }
+
+  fn decompress_chunks<'py, T: NumberLike + Element>(
+    py: Python<'py>,
+    mut src: &[u8],
+    file_decompressor: FileDecompressor,
+  ) -> PyResult<&'py PyArray1<T>> {
+    let n_hint = file_decompressor.n_hint();
+    let mut res: Vec<T> = Vec::with_capacity(n_hint);
+    while let MaybeChunkDecompressor::Some(mut chunk_decompressor) = file_decompressor
+      .chunk_decompressor::<T, &[u8]>(src)
+      .map_err(pco_err_to_py)?
+    {
+      let initial_len = res.len(); // probably always zero to start, since we just created res
+      let remaining = chunk_decompressor.n();
+      unsafe {
+        res.set_len(initial_len + remaining);
+      }
+      let progress = chunk_decompressor
+        .decompress(&mut res)
+        .map_err(pco_err_to_py)?;
+      assert!(progress.finished);
+      src = chunk_decompressor.into_src();
+    }
+    let py_array = res.into_pyarray(py);
+    Ok(py_array)
   }
 
   Ok(())
