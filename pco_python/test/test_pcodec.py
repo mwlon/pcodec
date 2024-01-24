@@ -5,10 +5,9 @@ import pytest
 np.random.seed(12345)
 
 all_shapes = (
-    (100,),
-    (100, 100),
-    (10, 10, 100),
-    (2, 10, 10, 50),
+  [],
+  [900],
+  [9, 100],
 )
 
 all_dtypes = ('f4', 'f8', 'i4', 'i8', 'u4', 'u8')
@@ -16,26 +15,26 @@ all_dtypes = ('f4', 'f8', 'i4', 'i8', 'u4', 'u8')
 @pytest.mark.parametrize("shape", all_shapes)
 @pytest.mark.parametrize("dtype", all_dtypes)
 def test_round_trip_decompress_into(shape, dtype):
-    data = np.random.uniform(0, 1000, size=shape).astype(dtype)
-    compressed = auto_compress(data)
+  data = np.random.uniform(0, 1000, size=shape).astype(dtype)
+  compressed = auto_compress(data)
 
-    # decompress exactly
-    out = np.empty_like(data)
-    progress = simple_decompress_into(compressed, out)
-    np.testing.assert_array_equal(data, out)
-    assert progress.n_processed == data.size
-    assert progress.finished
+  # decompress exactly
+  out = np.empty_like(data)
+  progress = simple_decompress_into(compressed, out)
+  np.testing.assert_array_equal(data, out)
+  assert progress.n_processed == data.size
+  assert progress.finished
 
 
 @pytest.mark.parametrize("shape", all_shapes)
 @pytest.mark.parametrize("dtype", all_dtypes)
 def test_round_trip_auto_decompress(shape, dtype):
-    data = np.random.uniform(0, 1000, size=shape).astype(dtype)
-    compressed = auto_compress(data)
-    out = auto_decompress(compressed)
-    # data are decompressed into a 1D array; ensure it can be reshaped to the original shape
-    out.shape = shape
-    np.testing.assert_array_equal(data, out)
+  data = np.random.uniform(0, 1000, size=shape).astype(dtype)
+  compressed = auto_compress(data, max_page_n=300)
+  out = auto_decompress(compressed)
+  # data are decompressed into a 1D array; ensure it can be reshaped to the original shape
+  out.shape = shape
+  np.testing.assert_array_equal(data, out)
 
 
 def test_inexact_decompression():
@@ -68,23 +67,23 @@ def test_simple_decompress_into_errors():
 
 
 def test_auto_decompress_errors():
-    """Test possible error states for auto_decompress"""
-    data = np.random.uniform(size=100).astype(np.float32)
-    compressed = bytearray(auto_compress(data))
+  """Test possible error states for auto_decompress"""
+  data = np.random.uniform(size=100).astype(np.float32)
+  compressed = bytearray(auto_compress(data))
 
-    truncated = compressed[:8]
-    with pytest.raises(RuntimeError, match="chunk data is empty"):
-        auto_decompress(bytes(truncated))
+  truncated = compressed[:8]
+  with pytest.raises(RuntimeError, match="chunk data is empty"):
+      auto_decompress(bytes(truncated))
 
-    # corrupt the data with unknown dtype byte
-    # (is this safe to hard code? could the length of the header change in future version?)
-    compressed[8] = 99
-    with pytest.raises(RuntimeError, match="unrecognized dtype byte"):
-        auto_decompress(bytes(compressed))
+  # corrupt the data with unknown dtype byte
+  # (is this safe to hard code? could the length of the header change in future version?)
+  compressed[8] = 99
+  with pytest.raises(RuntimeError, match="unrecognized dtype byte"):
+      auto_decompress(bytes(compressed))
 
-    # this happens if the user passed in a file with no chunks.
-    compressed[8] = 0
-    assert auto_decompress(bytes(compressed)) is None
+  # this happens if the user passed in a file with no chunks.
+  compressed[8] = 0
+  assert auto_decompress(bytes(compressed)) is None
 
 
 def test_compression_options():
@@ -101,4 +100,3 @@ def test_compression_options():
     float_mult_spec='DISABLED',
     max_page_n=77,
   )) > default_size
-

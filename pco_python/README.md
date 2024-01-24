@@ -11,16 +11,14 @@ Pcodec is a codec for numerical sequences. Example usage:
 import pcodec
 import numpy as np
 
-n = 1000000
-nums = np.random.normal(size=n)
+nums = np.random.normal(size=1000000)
 
 # compress
 compressed = pcodec.auto_compress(nums)
 print(f'compressed to {len(compressed)} bytes')
 
 # decompress
-recovered = np.empty(n)
-pcodec.simple_decompress_into(compressed, recovered)
+recovered = pcodec.auto_decompress(compressed)
 
 np.testing.assert_array_equal(recovered, nums)
 ```

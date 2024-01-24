@@ -193,7 +193,7 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         res.set_len(initial_len + remaining);
       }
       let progress = chunk_decompressor
-        .decompress(&mut res)
+        .decompress(&mut res[initial_len..])
         .map_err(pco_err_to_py)?;
       assert!(progress.finished);
       src = chunk_decompressor.into_src();
