@@ -5,8 +5,11 @@ use std::ops::{
   RemAssign, Shl, Shr, Sub, SubAssign,
 };
 
+pub use dynamic::CoreDataType;
+
 use crate::constants::Bitlen;
 
+mod dynamic;
 mod floats;
 mod signeds;
 mod unsigneds;

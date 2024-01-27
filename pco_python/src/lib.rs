@@ -149,27 +149,23 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   /// :raises: TypeError, RuntimeError
   #[pyfn(m)]
   fn auto_decompress(py: Python, compressed: &PyBytes) -> PyResult<PyObject> {
+    use pco::data_types::CoreDataType::*;
+    use pco::standalone::DataTypeOrTermination::*;
+
     let src = compressed.as_bytes();
     let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
-    let dtype_byte = match src.first().cloned() {
-      Some(dtype_byte) => dtype_byte,
-      None => {
-        return Err(PyRuntimeError::new_err(
-          "chunk data is empty",
-        ))
-      }
-    };
-
-    match dtype_byte {
-      f32::DTYPE_BYTE => Ok(decompress_chunks::<f32>(py, src, file_decompressor)?.into()),
-      f64::DTYPE_BYTE => Ok(decompress_chunks::<f64>(py, src, file_decompressor)?.into()),
-      i32::DTYPE_BYTE => Ok(decompress_chunks::<i32>(py, src, file_decompressor)?.into()),
-      i64::DTYPE_BYTE => Ok(decompress_chunks::<i64>(py, src, file_decompressor)?.into()),
-      u32::DTYPE_BYTE => Ok(decompress_chunks::<u32>(py, src, file_decompressor)?.into()),
-      u64::DTYPE_BYTE => Ok(decompress_chunks::<u64>(py, src, file_decompressor)?.into()),
-      // termination byte
-      0 => Ok(PyNone::get(py).into()),
-      other => Err(PyRuntimeError::new_err(format!(
+    let dtype = file_decompressor
+      .peek_dtype_or_termination(src)
+      .map_err(pco_err_to_py)?;
+    match dtype {
+      Known(F32) => Ok(decompress_chunks::<f32>(py, src, file_decompressor)?.into()),
+      Known(F64) => Ok(decompress_chunks::<f64>(py, src, file_decompressor)?.into()),
+      Known(I32) => Ok(decompress_chunks::<i32>(py, src, file_decompressor)?.into()),
+      Known(I64) => Ok(decompress_chunks::<i64>(py, src, file_decompressor)?.into()),
+      Known(U32) => Ok(decompress_chunks::<u32>(py, src, file_decompressor)?.into()),
+      Known(U64) => Ok(decompress_chunks::<u64>(py, src, file_decompressor)?.into()),
+      Termination => Ok(PyNone::get(py).into()),
+      Unknown(other) => Err(PyRuntimeError::new_err(format!(
         "unrecognized dtype byte {:?}",
         other,
       ))),

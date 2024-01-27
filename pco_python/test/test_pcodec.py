@@ -72,7 +72,7 @@ def test_auto_decompress_errors():
   compressed = bytearray(auto_compress(data))
 
   truncated = compressed[:8]
-  with pytest.raises(RuntimeError, match="chunk data is empty"):
+  with pytest.raises(RuntimeError, match="empty bytes"):
       auto_decompress(bytes(truncated))
 
   # corrupt the data with unknown dtype byte
