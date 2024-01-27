@@ -10,6 +10,7 @@ use crate::standalone::constants::{
   MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
   STANDALONE_HEADER_PADDING,
 };
+use crate::standalone::DataTypeOrTermination;
 use crate::{bit_reader, wrapped, ChunkMeta};
 
 fn read_varint(reader: &mut BitReader) -> PcoResult<u64> {
@@ -110,6 +111,19 @@ impl FileDecompressor {
 
   pub fn n_hint(&self) -> usize {
     self.n_hint
+  }
+
+  /// Peeks at what's next in the file, returning whether it's a termination
+  /// or chunk with some data type.
+  ///
+  /// Will return an error if there is insufficient data.
+  pub fn peek_dtype_or_termination(&self, src: &[u8]) -> PcoResult<DataTypeOrTermination> {
+    match src.first() {
+      Some(&byte) => Ok(DataTypeOrTermination::from(byte)),
+      None => Err(PcoError::insufficient_data(
+        "unable to peek data type from empty bytes",
+      )),
+    }
   }
 
   /// Reads a chunk's metadata and returns either a `ChunkDecompressor` or
