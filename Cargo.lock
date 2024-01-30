@@ -483,7 +483,6 @@ name = "cpcodec"
 version = "0.0.0"
 dependencies = [
  "libc",
- "paste",
  "pco",
 ]
 

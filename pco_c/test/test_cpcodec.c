@@ -5,7 +5,7 @@ int main() {
   float input[] = {1.1f, 2.2f, 3.3f, 4.4f};
   int num_elems = sizeof(input) / sizeof(input[0]);
 
-  struct PcoVec cvec;
+  struct PcoFfiVec cvec;
   enum PcoError res = auto_compress(&input, num_elems, PCO_TYPE_F32, 8, &cvec);
   if (res != Success) {
     printf("Error compressing: %d\n", res);
@@ -13,7 +13,7 @@ int main() {
   }
   printf("Compressed %d floats to %d bytes\n", num_elems, cvec.len);
 
-  struct PcoVec dvec;
+  struct PcoFfiVec dvec;
   res = auto_decompress(cvec.ptr, cvec.len, PCO_TYPE_F32, &dvec);
   if (res != Success) {
     printf("Error decompressing: %d\n", res);

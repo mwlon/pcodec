@@ -1,51 +1,44 @@
 use libc::{c_uchar, c_uint, c_void};
-use paste::paste;
-use pco::data_types::NumberLike;
+
+use pco::data_types::{CoreDataType, NumberLike};
+
+use crate::PcoError::InvalidType;
 
 #[repr(C)]
 pub enum PcoError {
   Success,
   InvalidType,
-  DecompressionError,
+  DecompressionError, // TODO split this into the actual error kinds
 }
 
-macro_rules! ffi_types {
+macro_rules! impl_dtypes {
   {$($names:ident => $types:ty,)+} => {
-    // TODO: the following constants must be manually fixed in the cbindgen header output.
-    paste! {$(pub const [<PCO_TYPE_ $names>]: c_uchar = <$types>::DTYPE_BYTE;)+ }
-
-    enum FfiVec {
+    enum DynTypedVec {
       U8(Vec<u8>),
       $($names(Vec<$types>),)+
     }
 
-    trait IntoFfiVec {
-      fn into_ffi_vec(self) -> FfiVec;
-    }
-
-    impl IntoFfiVec for Vec<u8> {
-      fn into_ffi_vec(self) -> FfiVec { FfiVec::U8(self) }
+    impl Into<DynTypedVec> for Vec<u8> {
+      fn into(self) -> DynTypedVec { DynTypedVec::U8(self) }
     }
 
     $(
-      impl IntoFfiVec for Vec<$types> {
-        fn into_ffi_vec(self) -> FfiVec { FfiVec::$names(self) }
+      impl Into<DynTypedVec> for Vec<$types> {
+        fn into(self) -> DynTypedVec { DynTypedVec::$names(self) }
       }
     )+
 
-    macro_rules! ffi_switch {
-      ($matcher:expr, $fn:ident, $params:tt) =>
-      {
+    macro_rules! match_dtype {
+      ($matcher:expr, $fn:ident, $params:tt) => {
         match $matcher {
-          $(<$types>::DTYPE_BYTE => $fn::<$types>$params,)+
-         _ => return PcoError::InvalidType
-      }
+          $(CoreDataType::$names => $fn::<$types>$params,)+
+        }
       }
     }
   }
 }
 
-ffi_types!(
+impl_dtypes!(
   U32 => u32,
   U64 => u64,
   I32 => i32,
@@ -55,25 +48,24 @@ ffi_types!(
 );
 
 #[repr(C)]
-pub struct PcoVec {
+pub struct PcoFfiVec {
   ptr: *const c_void,
   len: c_uint,
   raw_box: *const c_void,
 }
 
-impl PcoVec {
+impl PcoFfiVec {
   fn init_from_vec<T>(&mut self, v: Vec<T>)
   where
-    T: Sized,
-    Vec<T>: IntoFfiVec,
+    Vec<T>: Into<DynTypedVec>,
   {
     self.ptr = v.as_ptr() as *const c_void;
     self.len = v.len() as c_uint;
-    self.raw_box = Box::into_raw(Box::new(v.into_ffi_vec())) as *const c_void;
+    self.raw_box = Box::into_raw(Box::new(v.into())) as *const c_void;
   }
 
   fn free(&self) {
-    unsafe { drop(Box::from_raw(self.raw_box as *mut FfiVec)) }
+    unsafe { drop(Box::from_raw(self.raw_box as *mut DynTypedVec)) }
   }
 }
 
@@ -81,30 +73,29 @@ fn _auto_compress<T: NumberLike>(
   nums: *const c_void,
   len: c_uint,
   level: c_uint,
-  pco_vec: *mut c_void,
+  ffi_vec_ptr: *mut c_void,
 ) -> PcoError {
   let slice = unsafe { std::slice::from_raw_parts(nums as *const T, len as usize) };
-  let c_struct: &mut PcoVec = unsafe { &mut *(pco_vec as *mut PcoVec) };
+  let ffi_vec: &mut PcoFfiVec = unsafe { &mut *(ffi_vec_ptr as *mut PcoFfiVec) };
   let v = pco::standalone::auto_compress(slice, level as usize);
-  c_struct.init_from_vec(v);
+  ffi_vec.init_from_vec(v);
   PcoError::Success
 }
 
 fn _auto_decompress<T: NumberLike>(
   compressed: *const c_void,
   len: c_uint,
-  pco_vec: *mut c_void,
+  ffi_vec_ptr: *mut c_void,
 ) -> PcoError
 where
-  T: Sized,
-  Vec<T>: IntoFfiVec,
+  Vec<T>: Into<DynTypedVec>,
 {
   let slice = unsafe { std::slice::from_raw_parts(compressed as *const u8, len as usize) };
-  let c_struct: &mut PcoVec = unsafe { &mut *(pco_vec as *mut PcoVec) };
+  let ffi_vec: &mut PcoFfiVec = unsafe { &mut *(ffi_vec_ptr as *mut PcoFfiVec) };
   match pco::standalone::auto_decompress::<T>(slice) {
     Err(_) => PcoError::DecompressionError,
     Ok(v) => {
-      c_struct.init_from_vec(v);
+      ffi_vec.init_from_vec(v);
       PcoError::Success
     }
   }
@@ -116,12 +107,16 @@ pub extern "C" fn auto_compress(
   len: c_uint,
   dtype: c_uchar,
   level: c_uint,
-  pco_vec: *mut c_void,
+  dst: *mut c_void,
 ) -> PcoError {
-  ffi_switch!(
+  let Some(dtype) = CoreDataType::from_byte(dtype) else {
+    return InvalidType;
+  };
+
+  match_dtype!(
     dtype,
     _auto_compress,
-    (nums, len, level, pco_vec)
+    (nums, len, level, dst)
   )
 }
 
@@ -130,17 +125,21 @@ pub extern "C" fn auto_decompress(
   compressed: *const c_void,
   len: c_uint,
   dtype: c_uchar,
-  pco_vec: *mut c_void,
+  dst: *mut c_void,
 ) -> PcoError {
-  ffi_switch!(
+  let Some(dtype) = CoreDataType::from_byte(dtype) else {
+    return InvalidType;
+  };
+
+  match_dtype!(
     dtype,
     _auto_decompress,
-    (compressed, len, pco_vec)
+    (compressed, len, dst)
   )
 }
 
 #[no_mangle]
-pub extern "C" fn free_pcovec(pco_vec: *mut PcoVec) -> PcoError {
-  unsafe { (*pco_vec).free() };
+pub extern "C" fn free_pcovec(ffi_vec: *mut PcoFfiVec) -> PcoError {
+  unsafe { (*ffi_vec).free() };
   PcoError::Success
 }
