@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use libc::{c_uchar, c_uint, c_void};
 
 use pco::data_types::{CoreDataType, NumberLike};
@@ -18,13 +20,13 @@ macro_rules! impl_dtypes {
       $($names(Vec<$types>),)+
     }
 
-    impl Into<DynTypedVec> for Vec<u8> {
-      fn into(self) -> DynTypedVec { DynTypedVec::U8(self) }
+    impl From<Vec<u8>> for DynTypedVec {
+      fn from(vec: Vec<u8>) -> DynTypedVec { DynTypedVec::U8(vec) }
     }
 
     $(
-      impl Into<DynTypedVec> for Vec<$types> {
-        fn into(self) -> DynTypedVec { DynTypedVec::$names(self) }
+      impl From<Vec<$types>> for DynTypedVec {
+        fn from(vec: Vec<$types>) -> DynTypedVec { DynTypedVec::$names(vec) }
       }
     )+
 
@@ -139,7 +141,7 @@ pub extern "C" fn auto_decompress(
 }
 
 #[no_mangle]
-pub extern "C" fn free_pcovec(ffi_vec: *mut PcoFfiVec) -> PcoError {
+pub unsafe extern "C" fn free_pcovec(ffi_vec: *mut PcoFfiVec) -> PcoError {
   unsafe { (*ffi_vec).free() };
   PcoError::Success
 }
