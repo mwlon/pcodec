@@ -67,7 +67,11 @@ impl PcoFfiVec {
   }
 
   fn free(&self) {
-    unsafe { drop(Box::from_raw(self.raw_box as *mut DynTypedVec)) }
+    unsafe {
+      drop(Box::from_raw(
+        self.raw_box as *mut DynTypedVec,
+      ))
+    }
   }
 }
 
