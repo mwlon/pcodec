@@ -18,6 +18,12 @@ macro_rules! impl_core_dtypes {
         }
       }
     }
+
+    pub macro_rules! dyn_typed_enum {
+      ($name:ty, $($wrapped_ty:ty)?) => {
+        $($names$((<$wrapped_ty>::<$types>))?)+
+      }
+    }
   };
 }
 
@@ -29,3 +35,6 @@ impl_core_dtypes!(
   F32 => f32,
   F64 => f64,
 );
+
+dyn_typed_enum!(Asdf);
+dyn_typed_enum!(Asdf2, Vec);
