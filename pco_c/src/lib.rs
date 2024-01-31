@@ -1,5 +1,7 @@
 #![allow(clippy::missing_safety_doc)]
 
+use std::ptr;
+
 use libc::{c_uchar, c_uint, c_void};
 
 use pco::data_types::{CoreDataType, NumberLike};
@@ -66,12 +68,15 @@ impl PcoFfiVec {
     self.raw_box = Box::into_raw(Box::new(v.into())) as *const c_void;
   }
 
-  fn free(&self) {
+  fn free(&mut self) {
     unsafe {
       drop(Box::from_raw(
         self.raw_box as *mut DynTypedVec,
-      ))
+      ));
     }
+    self.ptr = ptr::null();
+    self.len = 0;
+    self.raw_box = ptr::null();
   }
 }
 
@@ -79,29 +84,27 @@ fn _auto_compress<T: NumberLike>(
   nums: *const c_void,
   len: c_uint,
   level: c_uint,
-  ffi_vec_ptr: *mut c_void,
+  ffi_vec_ptr: *mut PcoFfiVec,
 ) -> PcoError {
   let slice = unsafe { std::slice::from_raw_parts(nums as *const T, len as usize) };
-  let ffi_vec: &mut PcoFfiVec = unsafe { &mut *(ffi_vec_ptr as *mut PcoFfiVec) };
   let v = pco::standalone::auto_compress(slice, level as usize);
-  ffi_vec.init_from_vec(v);
+  unsafe { (*ffi_vec_ptr).init_from_vec(v) };
   PcoError::Success
 }
 
 fn _auto_decompress<T: NumberLike>(
   compressed: *const c_void,
   len: c_uint,
-  ffi_vec_ptr: *mut c_void,
+  ffi_vec_ptr: *mut PcoFfiVec,
 ) -> PcoError
 where
   Vec<T>: Into<DynTypedVec>,
 {
   let slice = unsafe { std::slice::from_raw_parts(compressed as *const u8, len as usize) };
-  let ffi_vec: &mut PcoFfiVec = unsafe { &mut *(ffi_vec_ptr as *mut PcoFfiVec) };
   match pco::standalone::auto_decompress::<T>(slice) {
     Err(_) => PcoError::DecompressionError,
     Ok(v) => {
-      ffi_vec.init_from_vec(v);
+      unsafe { (*ffi_vec_ptr).init_from_vec(v) };
       PcoError::Success
     }
   }
@@ -113,7 +116,7 @@ pub extern "C" fn auto_compress(
   len: c_uint,
   dtype: c_uchar,
   level: c_uint,
-  dst: *mut c_void,
+  dst: *mut PcoFfiVec,
 ) -> PcoError {
   let Some(dtype) = CoreDataType::from_byte(dtype) else {
     return InvalidType;
@@ -131,7 +134,7 @@ pub extern "C" fn auto_decompress(
   compressed: *const c_void,
   len: c_uint,
   dtype: c_uchar,
-  dst: *mut c_void,
+  dst: *mut PcoFfiVec,
 ) -> PcoError {
   let Some(dtype) = CoreDataType::from_byte(dtype) else {
     return InvalidType;

@@ -14,11 +14,11 @@ enum PcoError auto_compress(const void *nums,
                             unsigned int len,
                             unsigned char dtype,
                             unsigned int level,
-                            void *dst);
+                            struct PcoFfiVec *dst);
 
 enum PcoError auto_decompress(const void *compressed,
                               unsigned int len,
                               unsigned char dtype,
-                              void *dst);
+                              struct PcoFfiVec *dst);
 
 enum PcoError free_pcovec(struct PcoFfiVec *ffi_vec);
