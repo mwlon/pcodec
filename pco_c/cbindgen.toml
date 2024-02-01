@@ -1,0 +1,5 @@
+no_includes = true
+language = "C"
+
+[parse.expand]
+crates = ["cpcodec"]
