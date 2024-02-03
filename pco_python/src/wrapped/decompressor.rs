@@ -6,7 +6,6 @@ use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction, PyObject, PyResult, 
 
 use pco::wrapped::{ChunkCompressor, FileCompressor, FileDecompressor};
 
-use crate::array_handler::array_to_handler;
 use crate::wrapped::compressor::PyWrappedFc;
 use crate::{pco_err_to_py, DynTypedPyArrayDyn};
 

@@ -5,7 +5,6 @@ use pyo3::{pyclass, PyErr};
 
 use pco::errors::PcoError;
 
-mod array_handler;
 pub mod standalone;
 pub mod wrapped;
 

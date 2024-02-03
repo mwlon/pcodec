@@ -1,13 +1,12 @@
-use numpy::{Element, IntoPyArray, PyArray1};
+use numpy::{Element, IntoPyArray, PyArray1, PyArrayDyn};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::types::{PyBytes, PyModule, PyNone};
 use pyo3::{pyfunction, wrap_pyfunction, PyObject, PyResult, Python};
 
 use pco::data_types::NumberLike;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
+use pco::{standalone, with_core_dtypes, ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
 
-use crate::array_handler::array_to_handler;
 use crate::{pco_err_to_py, DynTypedPyArrayDyn, Progress};
 
 fn decompress_chunks<'py, T: NumberLike + Element>(
@@ -34,6 +33,33 @@ fn decompress_chunks<'py, T: NumberLike + Element>(
   }
   let py_array = res.into_pyarray(py);
   Ok(py_array)
+}
+
+fn simple_compress_generic<'py, T: NumberLike + Element>(
+  py: Python<'py>,
+  arr: &'py PyArrayDyn<T>,
+  config: &ChunkConfig,
+) -> PyResult<PyObject> {
+  let arr_ro = arr.readonly();
+  let src = arr_ro.as_slice()?;
+  let compressed = standalone::simple_compress(src, config).map_err(pco_err_to_py)?;
+  // TODO apparently all the places we use PyBytes::new() copy the data.
+  // Maybe there's a zero-copy way to do this.
+  Ok(PyBytes::new(py, &compressed).into())
+}
+
+fn simple_decompress_into_generic<T: NumberLike + Element>(
+  compressed: &PyBytes,
+  arr: &PyArrayDyn<T>,
+) -> PyResult<Progress> {
+  let mut out_rw = arr.readwrite();
+  let dst = out_rw.as_slice_mut()?;
+  let src = compressed.as_bytes();
+  let progress = standalone::simple_decompress_into(src, dst).map_err(pco_err_to_py)?;
+  Ok(Progress {
+    n_processed: progress.n_processed,
+    finished: progress.finished,
+  })
 }
 
 pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
@@ -105,7 +131,14 @@ pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
       .with_float_mult_spec(float_mult_spec)
       .with_paging_spec(PagingSpec::EqualPagesUpTo(max_page_n));
 
-    array_to_handler(nums).standalone_simple_compress(py, &config)
+    macro_rules! match_py_array {
+      {$($name:ident($uname:ident) => $t:ty,)+} => {
+        match nums {
+          $(DynTypedPyArrayDyn::$name(arr) => simple_compress_generic(py, arr, &config),)+
+        }
+      }
+    }
+    with_core_dtypes!(match_py_array)
   }
   m.add_function(wrap_pyfunction!(auto_compress, m)?)?;
 
@@ -124,7 +157,14 @@ pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   /// :raises: TypeError, RuntimeError
   #[pyfunction]
   fn simple_decompress_into(compressed: &PyBytes, dst: DynTypedPyArrayDyn) -> PyResult<Progress> {
-    array_to_handler(dst).standalone_simple_decompress_into(compressed)
+    macro_rules! match_py_array {
+      {$($name:ident($uname:ident) => $t:ty,)+} => {
+        match dst {
+          $(DynTypedPyArrayDyn::$name(arr) => simple_decompress_into_generic(compressed, arr),)+
+        }
+      }
+    }
+    with_core_dtypes!(match_py_array)
   }
   m.add_function(wrap_pyfunction!(simple_decompress_into, m)?)?;
 
@@ -148,19 +188,19 @@ pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     let dtype = file_decompressor
       .peek_dtype_or_termination(src)
       .map_err(pco_err_to_py)?;
-    match dtype {
-      Known(F32) => Ok(decompress_chunks::<f32>(py, src, file_decompressor)?.into()),
-      Known(F64) => Ok(decompress_chunks::<f64>(py, src, file_decompressor)?.into()),
-      Known(I32) => Ok(decompress_chunks::<i32>(py, src, file_decompressor)?.into()),
-      Known(I64) => Ok(decompress_chunks::<i64>(py, src, file_decompressor)?.into()),
-      Known(U32) => Ok(decompress_chunks::<u32>(py, src, file_decompressor)?.into()),
-      Known(U64) => Ok(decompress_chunks::<u64>(py, src, file_decompressor)?.into()),
-      Termination => Ok(PyNone::get(py).into()),
-      Unknown(other) => Err(PyRuntimeError::new_err(format!(
-        "unrecognized dtype byte {:?}",
-        other,
-      ))),
+    macro_rules! match_dtype {
+      {$($name:ident($uname:ident) => $t:ty,)+} => {
+        match dtype {
+          $(Known($name) => Ok(decompress_chunks::<$t>(py, src, file_decompressor)?.into()),)+
+          Termination => Ok(PyNone::get(py).into()),
+          Unknown(other) => Err(PyRuntimeError::new_err(format!(
+            "unrecognized dtype byte {:?}",
+            other,
+          ))),
+        }
+      }
     }
+    with_core_dtypes!(match_dtype)
   }
   m.add_function(wrap_pyfunction!(auto_decompress, m)?)?;
 
