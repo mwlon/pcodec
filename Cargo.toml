@@ -5,6 +5,7 @@ members = [
   "bench",
   "better_io",
   "pco",
+  "pco_c",
   "pco_cli",
   "pco_python",
   "quantile-compression/ffi",

@@ -1,0 +1,12 @@
+[package]
+name = "cpcodec"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+name = "cpcodec"
+crate-type = ["dylib"]
+
+[dependencies]
+libc = "0.2.132"
+pco = {version = "0.1.0", path = "../pco" }
