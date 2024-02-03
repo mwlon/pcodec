@@ -3,7 +3,8 @@ use numpy::{Element, PyArrayDyn};
 use pco::data_types::NumberLike;
 use pco::standalone::{simple_compress, simple_decompress_into};
 
-use crate::wrapped::PyWrappedCc;
+use crate::r#mod::PyWrappedCc;
+use crate::wrapped::compressor::PyWrappedCc;
 use pco::{wrapped, ChunkConfig};
 use pyo3::types::PyBytes;
 use pyo3::{PyObject, PyResult, Python};
@@ -41,13 +42,13 @@ impl<'py, T: NumberLike + Element> ArrayHandler<'py> for &'py PyArrayDyn<T> {
     })
   }
 
-  fn wrapped_chunk_compressor(&self, fc: &wrapped::FileCompressor) -> PyResult<PyObject> {
+  fn wrapped_chunk_compressor(&self, fc: &wrapped::FileCompressor) -> PyResult<PyWrappedCc> {
     let arr_ro = self.readonly();
     let src = arr_ro.as_slice()?;
     let cc = fc
       .chunk_compressor(src, &ChunkConfig::default())
       .map_err(pco_err_to_py)?;
-    Ok(PyWrappedCc { inner: cc }.into())
+    Ok(cc.into())
   }
 }
 

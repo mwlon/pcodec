@@ -7,40 +7,8 @@ use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction, PyObject, PyResult, 
 use pco::wrapped::{ChunkCompressor, FileCompressor, FileDecompressor};
 
 use crate::array_handler::array_to_handler;
+use crate::wrapped::compressor::PyWrappedFc;
 use crate::{pco_err_to_py, DynTypedPyArrayDyn};
-
-#[pyclass]
-pub struct PyWrappedFc {
-  inner: FileCompressor,
-}
-
-macro_rules! impl_cc {
-  {$($names:ident => $types:ty,)+} => {
-    #[pyclass]
-    pub enum PyWrappedCc {
-      $($names(ChunkCompressor<$types>),)+
-    }
-  }
-}
-with_core_dtypes!(impl_cc);
-
-#[pymethods]
-impl PyWrappedFc {
-  fn header(&self, py: Python) -> PyResult<PyObject> {
-    let mut res = Vec::new();
-    self.inner.write_header(&mut res).map_err(pco_err_to_py)?;
-    Ok(PyBytes::new(py, &res).into())
-  }
-
-  fn chunk_compressor<'py>(
-    &self,
-    py: Python<'py>,
-    nums: DynTypedPyArrayDyn<'py>,
-    // config: PyChunkConfig,
-  ) -> PyResult<PyWrappedCc> {
-    array_to_handler(nums).wrapped_chunk_compressor(py, &self.inner)
-  }
-}
 
 #[pyclass]
 pub struct PyWrappedFd {
@@ -50,15 +18,6 @@ pub struct PyWrappedFd {
 }
 
 pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-  #[pyfunction]
-  pub fn file_compressor() -> PyWrappedFc {
-    let py_fc = PyWrappedFc {
-      inner: FileCompressor::default(),
-    };
-    py_fc.into()
-  }
-  m.add_function(wrap_pyfunction!(file_compressor, m)?)?;
-
   #[pyfunction]
   pub fn file_decompressor(compressed: &PyBytes) -> PyResult<PyWrappedFd> {
     let compressed = compressed.as_bytes();

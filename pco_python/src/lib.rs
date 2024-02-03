@@ -6,8 +6,8 @@ use pyo3::{pyclass, PyErr};
 use pco::errors::PcoError;
 
 mod array_handler;
-mod standalone;
-mod wrapped;
+pub mod standalone;
+pub mod wrapped;
 
 #[pyclass(get_all)]
 pub struct Progress {

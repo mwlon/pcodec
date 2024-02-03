@@ -35,7 +35,4 @@ macro_rules! with_core_dtypes {
   }
 }
 
-#[macro_export]
-macro_rules!
-
 with_core_dtypes!(impl_core_dtypes);
