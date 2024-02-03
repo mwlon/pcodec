@@ -1,4 +1,5 @@
 use pco::data_types::NumberLike;
+use pco::with_core_dtypes;
 use pyo3::buffer::Element;
 use pyo3::types::{PyBytes, PyModule};
 use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction, PyObject, PyResult, Python};
@@ -13,10 +14,15 @@ pub struct PyWrappedFc {
   inner: FileCompressor,
 }
 
-#[pyclass]
-pub struct PyWrappedCc {
-  pub inner: Box<dyn Asdf>,
+macro_rules! impl_cc {
+  {$($names:ident => $types:ty,)+} => {
+    #[pyclass]
+    pub enum PyWrappedCc {
+      $($names(ChunkCompressor<$types>),)+
+    }
+  }
 }
+with_core_dtypes!(impl_cc);
 
 #[pymethods]
 impl PyWrappedFc {

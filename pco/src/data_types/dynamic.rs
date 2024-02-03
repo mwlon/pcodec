@@ -18,23 +18,24 @@ macro_rules! impl_core_dtypes {
         }
       }
     }
-
-    pub macro_rules! dyn_typed_enum {
-      ($name:ty, $($wrapped_ty:ty)?) => {
-        $($names$((<$wrapped_ty>::<$types>))?)+
-      }
-    }
   };
 }
 
-impl_core_dtypes!(
-  U32 => u32,
-  U64 => u64,
-  I32 => i32,
-  I64 => i64,
-  F32 => f32,
-  F64 => f64,
-);
+#[macro_export]
+macro_rules! with_core_dtypes {
+  ($inner:tt) => {
+    $inner!(
+      U32 => u32,
+      U64 => u64,
+      I32 => i32,
+      I64 => i64,
+      F32 => f32,
+      F64 => f64,
+    );
+  }
+}
 
-dyn_typed_enum!(Asdf);
-dyn_typed_enum!(Asdf2, Vec);
+#[macro_export]
+macro_rules!
+
+with_core_dtypes!(impl_core_dtypes);
