@@ -7,7 +7,7 @@ use pyo3::{pyfunction, wrap_pyfunction, PyObject, PyResult, Python};
 
 use pco::data_types::NumberLike;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{standalone, with_core_dtypes, ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
+use pco::{standalone, with_core_dtypes, ChunkConfig};
 
 use crate::{pco_err_to_py, DynTypedPyArrayDyn, PyChunkConfig, PyProgress};
 

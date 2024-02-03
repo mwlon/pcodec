@@ -1,6 +1,6 @@
 use numpy::PyArrayDyn;
 use pco::data_types::CoreDataType;
-use pco::{with_core_dtypes, ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec, Progress};
+use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec, Progress};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyResult, Python};
 use pyo3::{pyclass, pymethods, PyErr};

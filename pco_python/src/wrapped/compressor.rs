@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use numpy::{Element, PyArrayDyn};
 use pyo3::types::{PyBytes, PyModule};
-use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction, PyObject, PyResult, Python};
+use pyo3::{pyclass, pymethods, PyObject, PyResult, Python};
 
 use pco::data_types::{NumberLike, UnsignedLike};
 use pco::wrapped::{ChunkCompressor, FileCompressor};

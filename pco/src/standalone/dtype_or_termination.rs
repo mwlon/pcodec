@@ -19,9 +19,9 @@ pub enum DataTypeOrTermination {
   Unknown(u8),
 }
 
-impl Into<u8> for DataTypeOrTermination {
-  fn into(self) -> u8 {
-    match self {
+impl From<DataTypeOrTermination> for u8 {
+  fn from(dtype_or_termination: DataTypeOrTermination) -> u8 {
+    match dtype_or_termination {
       Termination => MAGIC_TERMINATION_BYTE,
       Known(core) => core as u8,
       Unknown(byte) => byte,

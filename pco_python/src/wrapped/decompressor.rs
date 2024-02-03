@@ -1,9 +1,8 @@
-use numpy::Element;
-use pco::data_types::{CoreDataType, NumberLike};
+use pco::data_types::CoreDataType;
 use pco::with_core_dtypes;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::types::{PyBytes, PyModule};
-use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction, PyResult, Python};
+use pyo3::{pyclass, pymethods, PyResult, Python};
 
 use pco::wrapped::{ChunkDecompressor, FileDecompressor};
 
@@ -91,7 +90,7 @@ impl PyCd {
               self.dtype
             )))
           }
-        };
+        }
       }
     }
     let (progress, rest) = with_core_dtypes!(match_cd_and_dst);
