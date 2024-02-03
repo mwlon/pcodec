@@ -1,15 +1,17 @@
-use crate::{pco_err_to_py, DynTypedPyArrayDyn};
+use std::convert::TryInto;
+
 use numpy::{Element, PyArrayDyn};
+use pyo3::types::{PyBytes, PyModule};
+use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction, PyObject, PyResult, Python};
+
 use pco::data_types::{NumberLike, UnsignedLike};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
 use pco::{with_core_dtypes, with_core_unsigneds, ChunkConfig};
-use pyo3::types::{PyBytes, PyModule};
-use pyo3::{
-  pyclass, pyfunction, pymethods, wrap_pyfunction, FromPyObject, PyObject, PyResult, Python,
-};
 
-#[pyclass]
-pub struct PyWrappedFc {
+use crate::{pco_err_to_py, DynTypedPyArrayDyn, PyChunkConfig};
+
+#[pyclass(name = "FileCompressor")]
+struct PyFc {
   inner: FileCompressor,
 }
 
@@ -19,10 +21,10 @@ enum DynCc {
 }
 
 // can't pass inner directly since pyo3 only supports unit variant enums
-#[pyclass]
-pub struct PyWrappedCc(DynCc);
+#[pyclass(name = "ChunkCompressor")]
+struct PyCc(DynCc);
 
-impl PyWrappedFc {
+impl PyFc {
   fn chunk_compressor_generic<T: NumberLike + Element>(
     &self,
     arr: &PyArrayDyn<T>,
@@ -38,19 +40,22 @@ impl PyWrappedFc {
 }
 
 #[pymethods]
-impl PyWrappedFc {
-  fn header(&self, py: Python) -> PyResult<PyObject> {
+impl PyFc {
+  #[new]
+  pub fn new() -> PyFc {
+    PyFc {
+      inner: FileCompressor::default(),
+    }
+  }
+
+  fn write_header(&self, py: Python) -> PyResult<PyObject> {
     let mut res = Vec::new();
     self.inner.write_header(&mut res).map_err(pco_err_to_py)?;
     Ok(PyBytes::new(py, &res).into())
   }
 
-  fn chunk_compressor(
-    &self,
-    nums: DynTypedPyArrayDyn,
-    // config: PyChunkConfig,
-  ) -> PyResult<PyWrappedCc> {
-    let config = ChunkConfig::default();
+  fn chunk_compressor(&self, nums: DynTypedPyArrayDyn, config: &PyChunkConfig) -> PyResult<PyCc> {
+    let config = config.try_into()?;
     macro_rules! match_nums {
       {$($name:ident($uname:ident) => $t:ty,)+} => {
         match nums {
@@ -59,7 +64,7 @@ impl PyWrappedFc {
       }
     }
     let dyn_cc = with_core_dtypes!(match_nums);
-    Ok(PyWrappedCc(dyn_cc))
+    Ok(PyCc(dyn_cc))
   }
 }
 
@@ -80,7 +85,7 @@ pub fn page_py<U: UnsignedLike>(
 }
 
 #[pymethods]
-impl PyWrappedCc {
+impl PyCc {
   fn write_chunk_meta(&self, py: Python) -> PyResult<PyObject> {
     let dyn_cc = &self.0;
     macro_rules! match_cc {
@@ -107,14 +112,8 @@ impl PyWrappedCc {
 }
 
 pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-  #[pyfunction]
-  pub fn file_compressor() -> PyWrappedFc {
-    let py_fc = PyWrappedFc {
-      inner: FileCompressor::default(),
-    };
-    py_fc.into()
-  }
-  m.add_function(wrap_pyfunction!(file_compressor, m)?)?;
+  m.add_class::<PyFc>()?;
+  m.add_class::<PyCc>()?;
 
   Ok(())
 }
