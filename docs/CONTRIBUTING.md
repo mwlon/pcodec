@@ -26,3 +26,19 @@ Looking for ideas on what to contribute? Grep through the repo for concrete
 TODOs, or look at our
 [project ideas](https://github.com/mwlon/pcodec/wiki/pcodec-project-ideas)
 for harder, underspecified problems.
+
+# Deploying Packages
+
+This is entirely managed by @mwlon right now, but just for reference:
+
+## Rust
+
+`pco` and `pco_cli` are manually deployed with `cargo publish` from a local
+clone of the repo.
+
+## Python
+
+`pco_python` is packaged by a Github workflow whenever the release name
+contains "Python". This runs a lot of maturin builds, each of which produces
+a dynamic library for a targets (in the sense of OS / hardware tuples). Each
+such package is published to PyPi.
