@@ -5,7 +5,7 @@ Github issue.
 
 **If you have a feature request or general question**, it's best to
 [join our Discord](https://discord.gg/f6eRXgMP8w) for a quick response. If
-you're opposed to creating a Discord account, Github issues are acceptable though.
+you're opposed to creating a Discord account, Github issues also work.
 
 # Code Contribution
 
@@ -31,14 +31,15 @@ for harder, underspecified problems.
 
 This is entirely managed by @mwlon right now, but just for reference:
 
-## Rust
+## Rust / Crates.io
 
 `pco` and `pco_cli` are manually deployed with `cargo publish` from a local
 clone of the repo.
 
-## Python
+## Python / PyPi
 
-`pco_python` is packaged by a Github workflow whenever the release name
-contains "Python". This runs a lot of maturin builds, each of which produces
-a dynamic library for a targets (in the sense of OS / hardware tuples). Each
-such package is published to PyPi.
+`pco_python` is packaged by
+[a Github workflow](../.github/workflows/python_ci.yml)
+whenever the release name contains "Python". This runs a lot of maturin builds,
+each of which produces a dynamic library for a targets (in the sense of OS /
+hardware tuples). Each such package is automatically published to PyPi.
