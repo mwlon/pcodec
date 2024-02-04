@@ -3,7 +3,7 @@ use pco::data_types::CoreDataType;
 use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec, Progress};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyResult, Python};
-use pyo3::{pyclass, pymethods, PyErr};
+use pyo3::{py_run, pyclass, pymethods, PyErr};
 
 use pco::errors::PcoError;
 
@@ -184,13 +184,25 @@ fn pcodec(py: Python<'_>, m: &PyModule) -> PyResult<()> {
   )?;
 
   // =========== STANDALONE ===========
-  let standalone_module = PyModule::new(py, "standalone")?;
+  let standalone_module = PyModule::new(py, "pcodec.standalone")?;
   standalone::register(py, standalone_module)?;
+  // hackery from https://github.com/PyO3/pyo3/issues/1517#issuecomment-808664021
+  // to make modules work nicely
+  py_run!(
+    py,
+    standalone_module,
+    "import sys; sys.modules['pcodec.standalone'] = standalone_module"
+  );
   m.add_submodule(standalone_module)?;
 
   // =========== WRAPPED ===========
-  let wrapped_module = PyModule::new(py, "wrapped")?;
+  let wrapped_module = PyModule::new(py, "pcodec.wrapped")?;
   wrapped::register(py, wrapped_module)?;
+  py_run!(
+    py,
+    wrapped_module,
+    "import sys; sys.modules['pcodec.wrapped'] = wrapped_module"
+  );
   m.add_submodule(wrapped_module)?;
 
   Ok(())

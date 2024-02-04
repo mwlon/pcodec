@@ -74,7 +74,7 @@ pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   ///
   /// :raises: TypeError, RuntimeError
   #[pyfunction]
-  fn auto_compress<'py>(
+  fn simple_compress<'py>(
     py: Python<'py>,
     nums: DynTypedPyArrayDyn<'py>,
     config: &PyChunkConfig,
@@ -89,7 +89,7 @@ pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     }
     with_core_dtypes!(match_py_array)
   }
-  m.add_function(wrap_pyfunction!(auto_compress, m)?)?;
+  m.add_function(wrap_pyfunction!(simple_compress, m)?)?;
 
   /// Decompresses pcodec compressed bytes into a pre-existing array.
   ///
@@ -128,7 +128,7 @@ pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   ///
   /// :raises: TypeError, RuntimeError
   #[pyfunction]
-  fn auto_decompress(py: Python, compressed: &PyBytes) -> PyResult<PyObject> {
+  fn simple_decompress(py: Python, compressed: &PyBytes) -> PyResult<PyObject> {
     use pco::data_types::CoreDataType::*;
     use pco::standalone::DataTypeOrTermination::*;
 
@@ -151,7 +151,7 @@ pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     }
     with_core_dtypes!(match_dtype)
   }
-  m.add_function(wrap_pyfunction!(auto_decompress, m)?)?;
+  m.add_function(wrap_pyfunction!(simple_decompress, m)?)?;
 
   Ok(())
 }

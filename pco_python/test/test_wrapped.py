@@ -1,5 +1,6 @@
 import numpy as np
-from pcodec import ChunkConfig, wrapped, PagingSpec
+from pcodec import ChunkConfig, PagingSpec
+from pcodec.wrapped import FileCompressor, FileDecompressor
 import pytest
 
 np.random.seed(12345)
@@ -12,7 +13,7 @@ def test_compress(dtype):
   page_sizes = [6, 4] # so there are 2 pages
 
   # compress
-  fc = wrapped.FileCompressor()
+  fc = FileCompressor()
   header = fc.write_header()
   cc = fc.chunk_compressor(
     data,
@@ -26,10 +27,10 @@ def test_compress(dtype):
     cc.write_page(2)
 
   # decompress
-  fd, n_bytes_read = wrapped.FileDecompressor.from_header(header)
+  fd, n_bytes_read = FileDecompressor.from_header(header)
   assert n_bytes_read == len(header)
   # check that undershooting is fine
-  _, n_bytes_read = wrapped.FileDecompressor.from_header(header + b'foo')
+  _, n_bytes_read = FileDecompressor.from_header(header + b'foo')
   assert n_bytes_read == len(header)
   cd, n_bytes_read = fd.read_chunk_meta(chunk_meta, pco_dtype)
   assert n_bytes_read == len(chunk_meta)
