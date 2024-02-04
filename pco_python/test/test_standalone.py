@@ -1,5 +1,5 @@
 import numpy as np
-from pcodec import standalone, ChunkConfig
+from pcodec import standalone, ChunkConfig, PagingSpec
 import pytest
 
 np.random.seed(12345)
@@ -30,7 +30,7 @@ def test_round_trip_decompress_into(shape, dtype):
 @pytest.mark.parametrize("dtype", all_dtypes)
 def test_round_trip_auto_decompress(shape, dtype):
   data = np.random.uniform(0, 1000, size=shape).astype(dtype)
-  compressed = standalone.auto_compress(data, ChunkConfig(max_page_n=300))
+  compressed = standalone.auto_compress(data, ChunkConfig(paging_spec=PagingSpec.equal_pages_up_to(300)))
   out = standalone.auto_decompress(compressed)
   # data are decompressed into a 1D array; ensure it can be reshaped to the original shape
   out.shape = shape
@@ -99,6 +99,6 @@ def test_compression_options():
       delta_encoding_order=1,
       int_mult_spec='disabled',
       float_mult_spec='DISABLED',
-      max_page_n=77,
+      paging_spec=PagingSpec.equal_pages_up_to(77),
     )
   )) > default_size

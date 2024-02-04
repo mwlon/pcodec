@@ -46,17 +46,42 @@ pub fn pco_err_to_py(pco: PcoError) -> PyErr {
   PyRuntimeError::new_err(format!("pco error: {}", pco))
 }
 
+#[pyclass(name = "PagingSpec")]
+#[derive(Clone, Default)]
+pub struct PyPagingSpec(PagingSpec);
+
+/// Determines how pcodec splits a chunk into pages. In
+/// standalone.simple_compress, this instead controls how pcodec splits a file
+/// into chunks.
+#[pymethods]
+impl PyPagingSpec {
+  /// :returns: a PagingSpec configuring a roughly count of numbers in each
+  /// page.
+  #[staticmethod]
+  fn equal_pages_up_to(n: usize) -> Self {
+    Self(PagingSpec::EqualPagesUpTo(n))
+  }
+
+  /// :returns: a PagingSpec with the exact, provided count of numbers in each
+  /// page.
+  #[staticmethod]
+  fn exact_page_sizes(sizes: Vec<usize>) -> Self {
+    Self(PagingSpec::ExactPageSizes(sizes))
+  }
+}
+
 #[pyclass(get_all, set_all, name = "ChunkConfig")]
 pub struct PyChunkConfig {
   compression_level: usize,
   delta_encoding_order: Option<usize>,
   int_mult_spec: String,
   float_mult_spec: String,
-  max_page_n: usize,
+  paging_spec: PyPagingSpec,
 }
 
 #[pymethods]
 impl PyChunkConfig {
+  // TODO: when pco 0.1.4 is released, use pco::DEFAULT_MAX_PAGE_N
   /// Creates a ChunkConfig.
   ///
   /// :param compression_level: a compression level from 0-12, where 12 takes
@@ -70,8 +95,8 @@ impl PyChunkConfig {
   /// :param float_mult_spec: either 'enabled' or 'disabled'. If enabled, pcodec
   /// will consider using float mult mode, which can substantially improve
   /// compression ratio but decrease speed in some cases for float types.
-  /// :param max_page_n: the maximum number of values to encoder per pcodec
-  /// page. If set too high or too low, pcodec's compression ratio may drop.
+  /// :param paging_spec: a PagingSpec describing how many numbers should
+  /// go into each page.
   ///
   /// :returns: A new ChunkConfig object.
   #[new]
@@ -80,21 +105,21 @@ impl PyChunkConfig {
     delta_encoding_order=None,
     int_mult_spec="enabled".to_string(),
     float_mult_spec="enabled".to_string(),
-    max_page_n=262144,
+    paging_spec=PyPagingSpec::default(),
   ))]
   fn new(
     compression_level: usize,
     delta_encoding_order: Option<usize>,
     int_mult_spec: String,
     float_mult_spec: String,
-    max_page_n: usize,
+    paging_spec: PyPagingSpec,
   ) -> Self {
     Self {
       compression_level,
       delta_encoding_order,
       int_mult_spec,
       float_mult_spec,
-      max_page_n,
+      paging_spec,
     }
   }
 }
@@ -128,9 +153,7 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
       .with_delta_encoding_order(py_config.delta_encoding_order)
       .with_int_mult_spec(int_mult_spec)
       .with_float_mult_spec(float_mult_spec)
-      .with_paging_spec(PagingSpec::EqualPagesUpTo(
-        py_config.max_page_n,
-      ));
+      .with_paging_spec(py_config.paging_spec.0.clone());
     Ok(res)
   }
 }
@@ -153,6 +176,7 @@ pub enum DynTypedPyArrayDyn<'py> {
 fn pcodec(py: Python<'_>, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
   m.add_class::<PyProgress>()?;
+  m.add_class::<PyPagingSpec>()?;
   m.add_class::<PyChunkConfig>()?;
   m.add(
     "DEFAULT_COMPRESSION_LEVEL",

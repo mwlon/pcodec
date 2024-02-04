@@ -62,7 +62,6 @@ fn simple_decompress_into_generic<T: NumberLike + Element>(
 }
 
 pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-  // TODO: when pco 0.1.4 is released, use pco::DEFAULT_MAX_PAGE_N
   /// Compresses an array into a standalone format.
   ///
   /// :param nums: numpy array to compress. This may have any shape.

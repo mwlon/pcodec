@@ -27,8 +27,17 @@ struct PyCd {
   dtype: CoreDataType,
 }
 
+/// The top-level object for decompressing wrapped pcodec files.
 #[pymethods]
 impl PyFd {
+  /// The way to create a FileDecompressor.
+  ///
+  /// :param header: a bytes object containing the encoded header
+  ///
+  /// :returns: a tuple containing a FileDecompressor and the number of bytes
+  /// read
+  ///
+  /// :raises: TypeError, RuntimeError
   #[staticmethod]
   fn from_header(header: &PyBytes) -> PyResult<(Self, usize)> {
     let src = header.as_bytes();
@@ -39,6 +48,15 @@ impl PyFd {
     Ok((py_fd, n_bytes_read))
   }
 
+  /// Creates a ChunkDecompressor by reading encoded chunk metadata.
+  ///
+  /// :param chunk_meta: a bytes object containing the encoded chunk metadata
+  /// :param dtype: a data type supported by pcodec; e.g. 'f32' or 'i64'
+  ///
+  /// :returns: a tuple containing a ChunkDecompressor and the number of bytes
+  /// read
+  ///
+  /// :raises: TypeError, RuntimeError
   fn read_chunk_meta(&self, chunk_meta: &PyBytes, dtype: &str) -> PyResult<(PyCd, usize)> {
     let src = chunk_meta.as_bytes();
     let inner = &self.0;
@@ -66,6 +84,25 @@ impl PyFd {
 
 #[pymethods]
 impl PyCd {
+  // TODO find a way to reuse docstring content
+  /// Decompresses a page into the provided array. If dst is shorter than
+  /// page_n, writes as much as possible and leaves the rest
+  /// untouched. If dst is longer, fills dst and does nothing with the
+  /// remaining data.
+  ///
+  /// :param page: the encoded page
+  /// :param page_n: the total count of numbers in the encoded page. It is
+  /// expected that the wrapping format provides this information.
+  /// :param dst: a numpy array to fill with the decompressed values. Must be
+  /// contiguous, and its length must either be
+  /// * >= page_n, or
+  /// * a multiple of 256.
+  ///
+  /// :returns: a tuple containing progress and the number of bytes read.
+  /// Progress is an object with a count of elements written and
+  /// whether the compressed data was finished.
+  ///
+  /// :raises: TypeError, RuntimeError
   fn read_page_into(
     &self,
     page: &PyBytes,
