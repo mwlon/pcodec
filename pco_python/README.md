@@ -27,3 +27,6 @@ compressed to 6946316 bytes
 ```
 
 For pcodec's uses, design, and benchmarks, [see the main repo](https://github.com/mwlon/pcodec).
+
+At the moment, we don't have sphinx + a website set up, so run `help(pcodec)`
+(or whatever module name) in Python to read pcodec's documentation.
