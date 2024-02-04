@@ -61,15 +61,13 @@ It supports batched decompression only; no nullability, multiple
 columns, random access, seeking, or other niceties.
 It is mainly useful for quick proofs of concept and benchmarking.
 
-## Contributing
-
-[see CONTRIBUTING.md](./docs/CONTRIBUTING.md)
-
 ## Extra
+
+[contributing guide](./docs/CONTRIBUTING.md)
 
 [join the Discord](https://discord.gg/f6eRXgMP8w)
 
 [terminology](./docs/terminology.md)
 
-[Quantile Compression](./quantile-compression/README.md)
+[Quantile Compression](./quantile-compression/README.md) (pcodec's predecessor)
 

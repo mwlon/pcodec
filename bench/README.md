@@ -71,6 +71,14 @@ TL;DR (`cd`'d into the repo):
 * `python bench/generate_randoms.py` (with numpy installed)
 * `cargo run --release --bin bench`
 
+The benchmarks support many things!
+* different codecs
+* all sorts of configurations on those codecs
+* multiple datasets
+  * synthetic, theoretically understood ones
+  * arbitrary Parquet files
+* measurement for compressed size, compression time, and decompression time
+
 The script to generate the data uses python, so set up a python3
 environment with `numpy` installed.
 In that environment, run
