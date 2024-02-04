@@ -8,19 +8,22 @@
 Pcodec is a codec for numerical sequences. Example usage:
 
 ```python
-import pcodec
-import numpy as np
+>>> from pcodec import standalone, ChunkConfig
+>>> import numpy as np
+>>> 
+>>> np.random.seed(0)
+>>> nums = np.random.normal(size=1000000)
+>>> 
+>>> # compress
+>>> compressed = standalone.auto_compress(nums, ChunkConfig())
+>>> print(f'compressed to {len(compressed)} bytes')
+compressed to 6946316 bytes
+>>> 
+>>> # decompress
+>>> recovered = standalone.auto_decompress(compressed)
+>>> 
+>>> np.testing.assert_array_equal(recovered, nums)
 
-nums = np.random.normal(size=1000000)
-
-# compress
-compressed = pcodec.auto_compress(nums)
-print(f'compressed to {len(compressed)} bytes')
-
-# decompress
-recovered = pcodec.auto_decompress(compressed)
-
-np.testing.assert_array_equal(recovered, nums)
 ```
 
 For pcodec's uses, design, and benchmarks, [see the main repo](https://github.com/mwlon/pcodec).
