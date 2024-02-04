@@ -152,7 +152,7 @@ impl PyCc {
   }
 }
 
-pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
   m.add_class::<PyFc>()?;
   m.add_class::<PyCc>()?;
 

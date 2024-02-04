@@ -15,12 +15,12 @@ Pcodec is a codec for numerical sequences. Example usage:
 >>> nums = np.random.normal(size=1000000)
 >>> 
 >>> # compress
->>> compressed = standalone.auto_compress(nums, ChunkConfig())
+>>> compressed = standalone.simple_compress(nums, ChunkConfig())
 >>> print(f'compressed to {len(compressed)} bytes')
 compressed to 6946316 bytes
 >>> 
 >>> # decompress
->>> recovered = standalone.auto_decompress(compressed)
+>>> recovered = standalone.simple_decompress(compressed)
 >>> 
 >>> np.testing.assert_array_equal(recovered, nums)
 

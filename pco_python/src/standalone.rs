@@ -61,7 +61,7 @@ fn simple_decompress_into_generic<T: NumberLike + Element>(
   Ok(PyProgress::from(progress))
 }
 
-pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
   /// Compresses an array into a standalone format.
   ///
   /// :param nums: numpy array to compress. This may have any shape.

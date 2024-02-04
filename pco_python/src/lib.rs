@@ -173,7 +173,7 @@ pub enum DynTypedPyArrayDyn<'py> {
 
 /// Pcodec is a codec for numerical sequences.
 #[pymodule]
-fn pcodec(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
   m.add_class::<PyProgress>()?;
   m.add_class::<PyPagingSpec>()?;

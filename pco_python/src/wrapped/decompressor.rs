@@ -137,7 +137,7 @@ impl PyCd {
   }
 }
 
-pub fn register(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
   m.add_class::<PyFd>()?;
   m.add_class::<PyCd>()?;
 
