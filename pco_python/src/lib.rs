@@ -81,7 +81,6 @@ pub struct PyChunkConfig {
 
 #[pymethods]
 impl PyChunkConfig {
-  // TODO: when pco 0.1.4 is released, use pco::DEFAULT_MAX_PAGE_N
   /// Creates a ChunkConfig.
   ///
   /// :param compression_level: a compression level from 0-12, where 12 takes
