@@ -69,7 +69,7 @@ pub fn encode_in_place<U: UnsignedLike>(mut latents: &mut [U], order: usize) -> 
 
   let mut page_moments = Vec::with_capacity(order);
   for _ in 0..order {
-    page_moments.push(latents.get(0).copied().unwrap_or(U::ZERO));
+    page_moments.push(latents.first().copied().unwrap_or(U::ZERO));
 
     first_order_encode_in_place(latents);
     let truncated_len = latents.len().saturating_sub(1);

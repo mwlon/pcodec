@@ -1,59 +1,89 @@
-use numpy::{Element, IntoPyArray, PyArray1, PyArrayDyn};
+use numpy::PyArrayDyn;
+use pco::data_types::CoreDataType;
+use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec, Progress};
 use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyObject, PyResult, Python};
-use pyo3::types::{PyBytes, PyNone};
-use pyo3::{pyclass, PyErr};
+use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyResult, Python};
+use pyo3::{py_run, pyclass, pymethods, PyErr};
 
-use pco::data_types::NumberLike;
 use pco::errors::PcoError;
-use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
 
-use crate::array_handler::array_to_handler;
+pub mod standalone;
+pub mod wrapped;
 
-mod array_handler;
+pub fn core_dtype_from_str(s: &str) -> PyResult<CoreDataType> {
+  match s.to_uppercase().as_str() {
+    "F32" => Ok(CoreDataType::F32),
+    "F64" => Ok(CoreDataType::F64),
+    "I32" => Ok(CoreDataType::I32),
+    "I64" => Ok(CoreDataType::I64),
+    "U32" => Ok(CoreDataType::U32),
+    "U64" => Ok(CoreDataType::U64),
+    _ => Err(PyRuntimeError::new_err(format!(
+      "unknown data type: {}",
+      s,
+    ))),
+  }
+}
 
-#[pyclass(get_all)]
-pub struct Progress {
+#[pyclass(get_all, name = "Progress")]
+pub struct PyProgress {
   /// count of decompressed numbers.
   n_processed: usize,
   /// whether the compressed data was finished.
   finished: bool,
 }
 
+impl From<Progress> for PyProgress {
+  fn from(progress: Progress) -> Self {
+    Self {
+      n_processed: progress.n_processed,
+      finished: progress.finished,
+    }
+  }
+}
+
 pub fn pco_err_to_py(pco: PcoError) -> PyErr {
   PyRuntimeError::new_err(format!("pco error: {}", pco))
 }
 
-// The Numpy crate recommends using this type of enum to write functions that accept different Numpy dtypes
-// https://github.com/PyO3/rust-numpy/blob/32740b33ec55ef0b7ebec726288665837722841d/examples/simple/src/lib.rs#L113
-// The first dyn refers to dynamic dtype; the second to dynamic shape
-#[derive(FromPyObject)]
-pub enum DynTypedPyArrayDyn<'py> {
-  F32(&'py PyArrayDyn<f32>),
-  F64(&'py PyArrayDyn<f64>),
-  I32(&'py PyArrayDyn<i32>),
-  I64(&'py PyArrayDyn<i64>),
-  U32(&'py PyArrayDyn<u32>),
-  U64(&'py PyArrayDyn<u64>),
+#[pyclass(name = "PagingSpec")]
+#[derive(Clone, Default)]
+pub struct PyPagingSpec(PagingSpec);
+
+/// Determines how pcodec splits a chunk into pages. In
+/// standalone.simple_compress, this instead controls how pcodec splits a file
+/// into chunks.
+#[pymethods]
+impl PyPagingSpec {
+  /// :returns: a PagingSpec configuring a roughly count of numbers in each
+  /// page.
+  #[staticmethod]
+  fn equal_pages_up_to(n: usize) -> Self {
+    Self(PagingSpec::EqualPagesUpTo(n))
+  }
+
+  /// :returns: a PagingSpec with the exact, provided count of numbers in each
+  /// page.
+  #[staticmethod]
+  fn exact_page_sizes(sizes: Vec<usize>) -> Self {
+    Self(PagingSpec::ExactPageSizes(sizes))
+  }
 }
 
-/// Pcodec is a codec for numerical sequences.
-#[pymodule]
-fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-  m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-  m.add_class::<Progress>()?;
-  m.add(
-    "DEFAULT_COMPRESSION_LEVEL",
-    pco::DEFAULT_COMPRESSION_LEVEL,
-  )?;
+#[pyclass(get_all, set_all, name = "ChunkConfig")]
+pub struct PyChunkConfig {
+  compression_level: usize,
+  delta_encoding_order: Option<usize>,
+  int_mult_spec: String,
+  float_mult_spec: String,
+  paging_spec: PyPagingSpec,
+}
 
+#[pymethods]
+impl PyChunkConfig {
   // TODO: when pco 0.1.4 is released, use pco::DEFAULT_MAX_PAGE_N
-  /// Compresses an array into a standalone format.
+  /// Creates a ChunkConfig.
   ///
-  /// :param nums: numpy array to compress. This may have any shape.
-  /// However, it must be contiguous, and only the following data types are
-  /// supported: float32, float64, int32, int64, uint32, uint64.
   /// :param compression_level: a compression level from 0-12, where 12 takes
   /// the longest and compresses the most.
   /// :param delta_encoding_order: either a delta encoding level from 0-7 or
@@ -65,31 +95,40 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
   /// :param float_mult_spec: either 'enabled' or 'disabled'. If enabled, pcodec
   /// will consider using float mult mode, which can substantially improve
   /// compression ratio but decrease speed in some cases for float types.
-  /// :param max_page_n: the maximum number of values to encoder per pcodec
-  /// page. If set too high or too low, pcodec's compression ratio may drop.
+  /// :param paging_spec: a PagingSpec describing how many numbers should
+  /// go into each page.
   ///
-  /// :returns: compressed bytes for an entire standalone file
-  ///
-  /// :raises: TypeError, RuntimeError
+  /// :returns: A new ChunkConfig object.
+  #[new]
   #[pyo3(signature = (
-    nums,
     compression_level=pco::DEFAULT_COMPRESSION_LEVEL,
     delta_encoding_order=None,
-    int_mult_spec="enabled",
-    float_mult_spec="enabled",
-    max_page_n=262144,
+    int_mult_spec="enabled".to_string(),
+    float_mult_spec="enabled".to_string(),
+    paging_spec=PyPagingSpec::default(),
   ))]
-  #[pyfn(m)]
-  fn auto_compress<'py>(
-    py: Python<'py>,
-    nums: DynTypedPyArrayDyn<'py>,
+  fn new(
     compression_level: usize,
     delta_encoding_order: Option<usize>,
-    int_mult_spec: &str,
-    float_mult_spec: &str,
-    max_page_n: usize,
-  ) -> PyResult<PyObject> {
-    let int_mult_spec = match int_mult_spec.to_lowercase().as_str() {
+    int_mult_spec: String,
+    float_mult_spec: String,
+    paging_spec: PyPagingSpec,
+  ) -> Self {
+    Self {
+      compression_level,
+      delta_encoding_order,
+      int_mult_spec,
+      float_mult_spec,
+      paging_spec,
+    }
+  }
+}
+
+impl TryFrom<&PyChunkConfig> for ChunkConfig {
+  type Error = PyErr;
+
+  fn try_from(py_config: &PyChunkConfig) -> Result<Self, Self::Error> {
+    let int_mult_spec = match py_config.int_mult_spec.to_lowercase().as_str() {
       "enabled" => IntMultSpec::Enabled,
       "disabled" => IntMultSpec::Disabled,
       other => {
@@ -99,7 +138,7 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         )))
       }
     };
-    let float_mult_spec = match float_mult_spec.to_lowercase().as_str() {
+    let float_mult_spec = match py_config.float_mult_spec.to_lowercase().as_str() {
       "enabled" => FloatMultSpec::Enabled,
       "disabled" => FloatMultSpec::Disabled,
       other => {
@@ -109,94 +148,62 @@ fn pcodec(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         )))
       }
     };
-    let config = ChunkConfig::default()
-      .with_compression_level(compression_level)
-      .with_delta_encoding_order(delta_encoding_order)
+    let res = ChunkConfig::default()
+      .with_compression_level(py_config.compression_level)
+      .with_delta_encoding_order(py_config.delta_encoding_order)
       .with_int_mult_spec(int_mult_spec)
       .with_float_mult_spec(float_mult_spec)
-      .with_paging_spec(PagingSpec::EqualPagesUpTo(max_page_n));
-
-    array_to_handler(nums).simple_compress(py, &config)
+      .with_paging_spec(py_config.paging_spec.0.clone());
+    Ok(res)
   }
+}
 
-  /// Decompresses pcodec compressed bytes into a pre-existing array.
-  ///
-  /// :param compressed: a bytes object a full standalone file of compressed data.
-  /// :param dst: a numpy array to fill with the decompressed values. May have
-  /// any shape, but must be contiguous.
-  ///
-  /// :returns: progress, an object with a count of elements written and
-  /// whether the compressed data was finished. If dst is shorter than the
-  /// numbers in compressed, writes as much as possible and leaves the rest
-  /// untouched. If dst is longer, fills dst and does nothing with the
-  /// remaining data.
-  ///
-  /// :raises: TypeError, RuntimeError
-  #[pyfn(m)]
-  fn simple_decompress_into(compressed: &PyBytes, dst: DynTypedPyArrayDyn) -> PyResult<Progress> {
-    array_to_handler(dst).simple_decompress_into(compressed)
-  }
+// The Numpy crate recommends using this type of enum to write functions that accept different Numpy dtypes
+// https://github.com/PyO3/rust-numpy/blob/32740b33ec55ef0b7ebec726288665837722841d/examples/simple/src/lib.rs#L113
+// The first dyn refers to dynamic dtype; the second to dynamic shape
+#[derive(Debug, FromPyObject)]
+pub enum DynTypedPyArrayDyn<'py> {
+  F32(&'py PyArrayDyn<f32>),
+  F64(&'py PyArrayDyn<f64>),
+  I32(&'py PyArrayDyn<i32>),
+  I64(&'py PyArrayDyn<i64>),
+  U32(&'py PyArrayDyn<u32>),
+  U64(&'py PyArrayDyn<u64>),
+}
 
-  /// Decompresses pcodec compressed bytes into a new Numpy array.
-  ///
-  /// :param compressed: a bytes object a full standalone file of compressed data.
-  ///
-  /// :returns: data, either a 1D numpy array of the decompressed values or, in
-  /// the event that there are no values, a None.
-  /// The array's data type will be set appropriately based on the contents of
-  /// the file header.
-  ///
-  /// :raises: TypeError, RuntimeError
-  #[pyfn(m)]
-  fn auto_decompress(py: Python, compressed: &PyBytes) -> PyResult<PyObject> {
-    use pco::data_types::CoreDataType::*;
-    use pco::standalone::DataTypeOrTermination::*;
+/// Pcodec is a codec for numerical sequences.
+#[pymodule]
+fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
+  m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+  m.add_class::<PyProgress>()?;
+  m.add_class::<PyPagingSpec>()?;
+  m.add_class::<PyChunkConfig>()?;
+  m.add(
+    "DEFAULT_COMPRESSION_LEVEL",
+    pco::DEFAULT_COMPRESSION_LEVEL,
+  )?;
 
-    let src = compressed.as_bytes();
-    let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
-    let dtype = file_decompressor
-      .peek_dtype_or_termination(src)
-      .map_err(pco_err_to_py)?;
-    match dtype {
-      Known(F32) => Ok(decompress_chunks::<f32>(py, src, file_decompressor)?.into()),
-      Known(F64) => Ok(decompress_chunks::<f64>(py, src, file_decompressor)?.into()),
-      Known(I32) => Ok(decompress_chunks::<i32>(py, src, file_decompressor)?.into()),
-      Known(I64) => Ok(decompress_chunks::<i64>(py, src, file_decompressor)?.into()),
-      Known(U32) => Ok(decompress_chunks::<u32>(py, src, file_decompressor)?.into()),
-      Known(U64) => Ok(decompress_chunks::<u64>(py, src, file_decompressor)?.into()),
-      Termination => Ok(PyNone::get(py).into()),
-      Unknown(other) => Err(PyRuntimeError::new_err(format!(
-        "unrecognized dtype byte {:?}",
-        other,
-      ))),
-    }
-  }
+  // =========== STANDALONE ===========
+  let standalone_module = PyModule::new(py, "pcodec.standalone")?;
+  standalone::register(py, standalone_module)?;
+  // hackery from https://github.com/PyO3/pyo3/issues/1517#issuecomment-808664021
+  // to make modules work nicely
+  py_run!(
+    py,
+    standalone_module,
+    "import sys; sys.modules['pcodec.standalone'] = standalone_module"
+  );
+  m.add_submodule(standalone_module)?;
 
-  fn decompress_chunks<'py, T: NumberLike + Element>(
-    py: Python<'py>,
-    mut src: &[u8],
-    file_decompressor: FileDecompressor,
-  ) -> PyResult<&'py PyArray1<T>> {
-    let n_hint = file_decompressor.n_hint();
-    let mut res: Vec<T> = Vec::with_capacity(n_hint);
-    while let MaybeChunkDecompressor::Some(mut chunk_decompressor) = file_decompressor
-      .chunk_decompressor::<T, &[u8]>(src)
-      .map_err(pco_err_to_py)?
-    {
-      let initial_len = res.len(); // probably always zero to start, since we just created res
-      let remaining = chunk_decompressor.n();
-      unsafe {
-        res.set_len(initial_len + remaining);
-      }
-      let progress = chunk_decompressor
-        .decompress(&mut res[initial_len..])
-        .map_err(pco_err_to_py)?;
-      assert!(progress.finished);
-      src = chunk_decompressor.into_src();
-    }
-    let py_array = res.into_pyarray(py);
-    Ok(py_array)
-  }
+  // =========== WRAPPED ===========
+  let wrapped_module = PyModule::new(py, "pcodec.wrapped")?;
+  wrapped::register(py, wrapped_module)?;
+  py_run!(
+    py,
+    wrapped_module,
+    "import sys; sys.modules['pcodec.wrapped'] = wrapped_module"
+  );
+  m.add_submodule(wrapped_module)?;
 
   Ok(())
 }

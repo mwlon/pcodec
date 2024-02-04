@@ -100,6 +100,7 @@ pub fn simple_decompress_into<T: NumberLike>(src: &[u8], mut dst: &mut [T]) -> P
 }
 
 // TODO in 0.2 make this return an error instead of panic
+// TODO in 0.2 get rid of "auto_" and just have "simple_" functions
 /// Compresses the numbers using the given compression level and an otherwise
 /// default configuration.
 ///
