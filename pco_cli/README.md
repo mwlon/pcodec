@@ -7,7 +7,7 @@
 
 ## Setup
 
-You can compress, decompress, and inspect standalone .pco files using our simple CLI.
+You can compress, decompress, and inspect standalone .pco files using the CLI.
 Follow this setup:
 
 1. Install Rust: https://www.rust-lang.org/tools/install
@@ -69,9 +69,3 @@ Examples:
 ```shell
 % pcodec inspect in.pco
 ```
-
-## Versioning
-
-The major and minor semver versions of this crate are meant to match that of
-`pco`.
-However, the patch version is not related to `pco`'s patch version.
