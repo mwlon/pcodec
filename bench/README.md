@@ -21,17 +21,17 @@ accessible in download size:
 
 <div style="text-align:center">
   <img
-    alt="bar charts showing better compression for pco than zstd.parquet"
+    alt="bar charts showing better compression for Pco than zstd.parquet"
     src="../images/real_world_compression_ratio.svg"
     width="700px"
   >
   <img
-    alt="bar charts showing similar compression speed for pco and zstd.parquet"
+    alt="bar charts showing similar compression speed for Pco and zstd.parquet"
     src="../images/real_world_compression_speed.svg"
     width="700px"
   >
   <img
-    alt="bar charts showing faster decompression speed for pco than zstd.parquet"
+    alt="bar charts showing faster decompression speed for Pco than zstd.parquet"
     src="../images/real_world_decompression_speed.svg"
     width="700px"
   >
@@ -96,7 +96,7 @@ For instance,
 ```
 shows floats sampled from a standard normal distribution.
 
-Then to run pco and decompression on each dataset, run
+Then to run Pco and decompression on each dataset, run
 `cargo run --release --bin bench`.
 This will show the compressed size and how long
 it took to compress and decompress each dataset.

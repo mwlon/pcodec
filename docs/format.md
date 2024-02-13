@@ -1,6 +1,6 @@
-# Pcodec Format Spec
+# Pco Format Spec
 
-This document aims to describe the pcodec format exactly.
+This document aims to describe the Pco format exactly.
 
 All values encoded are unsigned integers.
 All bit packing (and thus integer encoding) is done in a little-endian fashion.
@@ -12,22 +12,22 @@ via [its `from_unsigned` function](#numbers---latents).
 
 ## Wrapped Format Components
 
-<img alt="pco wrapped format diagram" title="pco wrapped format" src="../images/wrapped_format.svg" />
+<img alt="Pco wrapped format diagram" title="Pco wrapped format" src="../images/wrapped_format.svg" />
 
 The wrapped format consists of 3 components: header, chunk metadata, and data
 pages.
 Wrapping formats may encode these components any place they wish.
 
-Pcodec is designed to have one header per file, possibly multiple chunks per
+Pco is designed to have one header per file, possibly multiple chunks per
 header, and possibly multiple data pages per chunk.
 
 ### Header
 
-The pcodec format is versioned.
+The Pco format is versioned.
 It is typically expected that changes are made in a backwards-compatible way,
-so that decompressors can decompress any version of pcodec up to their own
+so that decompressors can decompress any version of Pco up to their own
 version.
-This enables pcodec to make small format changes in the future if necessary.
+This enables Pco to make small format changes in the future if necessary.
 The header simply consists of
 
 * [8 bits] the format version
@@ -120,7 +120,7 @@ It consists of
 
 ## Processing Formulas
 
-<img alt="pco compression and decompression steps" title="compression and decompression steps" src="../images/processing.svg" />
+<img alt="Pco compression and decompression steps" title="compression and decompression steps" src="../images/processing.svg" />
 
 ### Numbers <-> Latents
 

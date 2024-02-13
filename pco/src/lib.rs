@@ -1,5 +1,4 @@
-//! For crate-level documentation, see either
-//! <https://crates.io/crates/pco> or
+//! For crate-level documentation, see
 //! <https://github.com/mwlon/pcodec/tree/main/pco>.
 #![allow(clippy::uninit_vec)]
 
