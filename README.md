@@ -52,7 +52,7 @@ Pco represents each (delta-encoded) latent variable as an approximate,
 entropy-coded bin paired an exact offset into that bin.
 This nears the Shannon entropy of any smooth distribution very efficiently.
 
-These 3 steps cohesively capture the entropy of numerical data without waste.
+These 3 steps cohesively capture most entropy of numerical data without waste.
 
 In contrast, LZ compressors are only effective for patterns like repeating
 exact sequences of numbers.
