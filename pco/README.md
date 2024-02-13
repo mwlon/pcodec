@@ -3,9 +3,7 @@
 [crates-badge]: https://img.shields.io/crates/v/pco.svg
 [crates-url]: https://crates.io/crates/pco
 
-# `pco`
-
-## Quick Start
+# Quick Start
 
 ```rust
 use pco::standalone::{auto_compress, auto_decompress};
@@ -18,9 +16,7 @@ fn main() {
     my_ints.push(i as i64);
   }
 
-  // Here we let the library choose a configuration with default compression
-  // level. If you know about the data you're compressing, you can compress
-  // faster by creating a `CompressorConfig`.
+  // compress
   let compressed: Vec<u8> = auto_compress(&my_ints, DEFAULT_COMPRESSION_LEVEL);
   println!("compressed down to {} bytes", compressed.len());
 
@@ -33,36 +29,22 @@ fn main() {
 To run something right away, try
 [the benchmarks](../bench/README.md).
 
-## Standalone vs Wrapped
+For information about Pco in general, see [the main README](../README.md).
 
-Pco can be used as a standalone format (as in the above example).
-Good reasons to do so:
-* a quick proof of concept for the compression ratio or performance
-* all you need to do is transmit a long list of numbers
+For documentation, [docs.rs has the best examples and API details](https://docs.rs/pco/).
 
-However, the standalone format is quite limited, so it is expected that most
-use cases will wrap pco in a different format (imagine, say, Parquet).
-This could unlock things like
-* nullability
-* fast seeking through the file
-* fast filtering
-* a schema or key:value metadata
+# API Notes
 
-In either case,
-[docs.rs has more examples and API details](https://docs.rs/pco/).
-
-## Important API Notes
-
-* In some places, pco methods accept a destination (either W: Write or &mut [T: NumberLike]).
-If pco returns an error, it is possible both the destination and the struct
+* In some places, Pco methods accept a destination (either W: Write or &mut [T: NumberLike]).
+If Pco returns an error, it is possible both the destination and the struct
 have been modified.
 * Pco will always try to process all numbers, and it will fail if insufficient bytes are
-available. For instance, during decompression pco will try to fill the entire `&mut [T]`
+available. For instance, during decompression Pco will try to fill the entire `&mut [T]`
 passed in, returning an insufficient data error if the `&[u8]` passed in is not long enough.
 
-## Advanced
+# Advanced
 
-### Custom Data Types
+## Custom Data Types
 
 Small data types can be efficiently compressed in expansion:
 for example, compressing `u16` data as a sequence of `u32`

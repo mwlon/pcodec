@@ -3,11 +3,9 @@
 [crates-badge]: https://img.shields.io/crates/v/pco_cli.svg
 [crates-url]: https://crates.io/crates/pco_cli
 
-# `pcodec` CLI 
+# Setup
 
-## Setup
-
-You can compress, decompress, and inspect standalone .pco files using our simple CLI.
+You can compress, decompress, and inspect standalone .pco files using the CLI.
 Follow this setup:
 
 1. Install Rust: https://www.rust-lang.org/tools/install
@@ -15,11 +13,11 @@ Follow this setup:
 
 This provides you with the `pcodec` command.
 
-## Command Info
+# Command Info
 
 You can always get help, e.g. `pcodec`, `pcodec compress --help`.
 
-### Compress
+## Compress
 
 This command compresses a single column of a .csv or .parquet file into a .pco
 file.
@@ -50,7 +48,7 @@ pcodec compress \
   out.pco
 ```
 
-### Decompress
+## Decompress
 
 This command prints numbers in a .pco file to stdout.
 
@@ -60,7 +58,7 @@ Examples:
 pcodec decompress --limit 256 in.pco
 ```
 
-### Inspect
+## Inspect
 
 This command prints out information about a .pco file.
 
@@ -69,9 +67,3 @@ Examples:
 ```shell
 % pcodec inspect in.pco
 ```
-
-## Versioning
-
-The major and minor semver versions of this crate are meant to match that of
-`pco`.
-However, the patch version is not related to `pco`'s patch version.

@@ -2,13 +2,13 @@
 
 <div style="text-align:center">
   <img
-    alt="bar charts showing better compression for pco than zstd.parquet"
+    alt="bar charts showing better compression for Pco than zstd parquet or blosc"
     src="images/real_world_compression_ratio.svg"
     width="700px"
   >
 </div>
 
-Pcodec (or pco, pronounced "pico") losslessly compresses and decompresses
+Pcodec (or Pco, pronounced "pico") losslessly compresses and decompresses
 numerical sequences with
 [high compression ratio and fast speed](./bench/README.md).
 
@@ -21,11 +21,6 @@ numerical sequences with
 **Data types:**
 `u32`, `u64`, `i32`, `i64`, `f32`, `f64`
 
-It is also possible to implement your own data type via `NumberLike` and (if
-necessary) `UnsignedLike` and `FloatLike`.
-For timestamps or smaller integers, it is probably best to simply cast to one
-of the natively supported data types.
-
 ## Get Started
 
 [Use the CLI](./pco_cli/README.md)
@@ -34,40 +29,75 @@ of the natively supported data types.
 
 [Use the Python API](./pco_python/README.md)
 
-## Performance and Compression Ratio
+## How is Pco so much better than alternatives?
 
-See [the benchmarks](./bench/README.md) to run the benchmark suite
-or see its results.
+Pco is designed specifically for numerical data, whereas alternatives rely on
+general-purpose (LZ) compressors that were designed for string or binary data.
+Pco uses holistic, 3-step approach:
 
-## File Format
+* **modes**.
+Pco identifies an approximate structure of the numbers called a
+mode and then applies it to all the numbers.
+As an example, if all numbers are approximately multiples of 777, int mult mode
+decomposes each number `x` into latent variables `l_0` and
+`l_1` such that `x = 777 * l_0 + l_1`.
+Most natural data uses classic mode, which simply matches `x = l_0`.
+* **delta enoding**.
+Pco identifies whether certain latent variables would be better compressed as
+consecutive deltas (or deltas of deltas, or so forth).
+If so, it takes consecutive differences.
+* **binning**.
+This is the heart and most novel part of Pco.
+Pco represents each (delta-encoded) latent variable as an approximate,
+entropy-coded bin paired an exact offset into that bin.
+This nears the Shannon entropy of any smooth distribution very efficiently.
 
-See [format.md](./docs/format.md) for a full description of the file format.
+These 3 steps cohesively capture most entropy of numerical data without waste.
 
-The core idea of pco is to represent numbers as approximate, entropy-coded bins
-paired with exact offsets into those bins.
+In contrast, LZ compressors are only effective for patterns like repeating
+exact sequences of numbers.
+Such patterns constitute just a small fraction of most numerical data's
+entropy.
 
-Pco is mainly meant to be wrapped into another format for production use cases.
-It has a hierarchy of multiple batches per page; multiple pages per chunk; and
+## Two ways to use it: wrapped or standalone
+
+Pco is designed to be easily wrapped into another format.
+It provides a powerful wrapped API with the building blocks to interleave it
+with the wrapping format.
+This is useful if the wrapping format needs to support things like nullability,
+multiple columns, random access or seeking.
+
+The standalone format is a minimal implementation of a wrapped format.
+It supports batched decompression only with no other niceties.
+It is mainly recommended for quick proofs of concept and benchmarking.
+
+### Granularity
+
+Pco has a hierarchy of multiple batches per page; multiple pages per chunk; and
 multiple chunks per file.
 
 |       | unit of ___                     | size for good compression |
 |-------|---------------------------------|---------------------------|
-| chunk | compression                     | \>20k numbers             |
+| chunk | compression                     | \>10k numbers             |
 | page  | interleaving w/ wrapping format | \>1k numbers              |
 | batch | decompression                   | 256 numbers (fixed)       |
 
-The standalone format is a minimal implementation of a wrapped format.
-It supports batched decompression only; no nullability, multiple
-columns, random access, seeking, or other niceties.
-It is mainly useful for quick proofs of concept and benchmarking.
 
 ## Extra
 
-[contributing guide](./docs/CONTRIBUTING.md)
+### Docs
 
-[join the Discord](https://discord.gg/f6eRXgMP8w)
+[benchmarks: see the results or run your own](./bench/README.md)
+
+[format specification](./docs/format.md)
 
 [terminology](./docs/terminology.md)
 
-[Quantile Compression](./quantile-compression/README.md) (pcodec's predecessor)
+[Quantile Compression: Pcodec's predecessor](./quantile-compression/README.md)
+
+[contributing guide](./docs/CONTRIBUTING.md)
+
+### Community
+
+[join the Discord](https://discord.gg/f6eRXgMP8w)
 
