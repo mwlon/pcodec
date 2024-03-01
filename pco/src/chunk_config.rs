@@ -18,6 +18,10 @@ pub enum IntMultSpec {
   Disabled,
   #[default]
   Enabled,
+  /// If you know all your ints are roughly multiples of `base` (or have a
+  /// simple distribution modulo `base`), you can provide `base` here to
+  /// ensure it gets used and save compression time.
+  Provided(u64),
 }
 
 /// Configures whether float multiplier detection is enabled.
@@ -37,8 +41,7 @@ pub enum FloatMultSpec {
   #[default]
   Enabled,
   /// If you know all your floats are roughly multiples of `base`, you can
-  /// provide `base` here to save ensure it gets used and save compression
-  /// time.
+  /// provide `base` here to ensure it gets used and save compression time.
   Provided(f64),
   // TODO support a LossyEnabled mode that always drops the ULPs latent var
 }

@@ -336,10 +336,17 @@ fn choose_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T::Unsig
     _ => (),
   }
 
-  if matches!(config.int_mult_spec, IntMultSpec::Enabled) && !T::IS_FLOAT {
-    if let Some(base) = int_mult_utils::choose_base(nums) {
+  match (T::IS_FLOAT, config.int_mult_spec) {
+    (false, IntMultSpec::Enabled) => {
+      if let Some(base) = int_mult_utils::choose_base(nums) {
+        return Mode::IntMult(base);
+      }
+    }
+    (false, IntMultSpec::Provided(base_u64)) => {
+      let base = <T::Unsigned as UnsignedLike>::from_u64(base_u64);
       return Mode::IntMult(base);
     }
+    _ => (),
   }
 
   Mode::Classic
