@@ -1,4 +1,5 @@
 use std::cmp::{max, min};
+use std::mem;
 
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
@@ -68,8 +69,7 @@ pub fn split_latents<T: NumberLike>(
   vec![primary, adjustments]
 }
 
-// # of bins before classic can't memorize them anymore, even if it tried
-const NEAR_ZERO_MACHINE_EPSILON_BITS: Bitlen = 6;
+const REQUIRED_PRECISION_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
 const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 // We require that using adj bits (as opposed to full offsets between
@@ -79,9 +79,8 @@ const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
 const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.2;
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
-  let significant_precision_bits =
-    F::PRECISION_BITS.saturating_sub(NEAR_ZERO_MACHINE_EPSILON_BITS) as i32;
-  x * F::from_f64(2.0_f64.powi(-significant_precision_bits))
+  let spare_precision_bits = F::PRECISION_BITS.saturating_sub(REQUIRED_PRECISION_BITS) as i32;
+  x * F::exp2(-spare_precision_bits)
 }
 
 fn is_approx_zero<F: FloatLike>(small: F, big: F) -> bool {
@@ -89,7 +88,11 @@ fn is_approx_zero<F: FloatLike>(small: F, big: F) -> bool {
 }
 
 fn is_small_remainder<F: FloatLike>(remainder: F, original: F) -> bool {
-  remainder <= original * F::from_f64(2.0_f64.powi(-16))
+  remainder <= original * F::exp2(-16)
+}
+
+fn is_imprecise<F: FloatLike>(value: F, err: F) -> bool {
+  value <= err * F::exp2(REQUIRED_PRECISION_BITS as i32)
 }
 
 fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -> Option<F> {
@@ -102,62 +105,38 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
   #[derive(Clone, Copy, Debug)]
   struct PairMult<F: FloatLike> {
     value: F,
-    abs_value: F,
-    mult0: F,
-    mult1: F,
+    err: F,
   }
 
-  // TODO is this actually more numerically stable than the obvious algorithm?
+  let relative_err = F::exp2(-(F::PRECISION_BITS as i32));
   let rem_assign = |lhs: &mut PairMult<F>, rhs: &PairMult<F>| {
     let ratio = (lhs.value / rhs.value).round();
-    lhs.mult0 -= ratio * rhs.mult0;
-    lhs.mult1 -= ratio * rhs.mult1;
-    lhs.value = lhs.mult0 * greater + lhs.mult1 * lesser;
-    lhs.abs_value = lhs.value.abs()
+    lhs.err += ratio * rhs.err + lhs.value * relative_err;
+    lhs.value = (lhs.value - ratio * rhs.value).abs();
   };
 
   let mut pair0 = PairMult {
     value: greater,
-    abs_value: greater,
-    mult0: F::ONE,
-    mult1: F::ZERO,
+    err: F::ZERO,
   };
   let mut pair1 = PairMult {
     value: lesser,
-    abs_value: lesser,
-    mult0: F::ZERO,
-    mult1: F::ONE,
+    err: F::ZERO,
   };
+  println!(".");
 
   loop {
-    let prev = pair0.abs_value;
+    let prev = pair0.value;
     rem_assign(&mut pair0, &pair1);
-    if is_small_remainder(pair0.abs_value, prev) {
-      return Some(pair1.abs_value);
+    if is_small_remainder(pair0.value, prev) || pair0.value < pair0.err {
+      return Some(pair1.value);
     }
 
-    // for numerical stability, we need the following to be accurate:
-    // |pair0.mult0 * greater - pair1.mult1 * lesser|
-    // (that's pair0.abs_value)
-    if is_approx_zero(
-      pair0.abs_value,
-      F::max(median, (pair0.mult0 * greater).abs()),
-    ) {
+    if is_approx_zero(pair0.value, median) || is_imprecise(pair0.value, pair0.err) {
       return None;
     }
 
-    let prev = pair1.abs_value;
-    rem_assign(&mut pair1, &pair0);
-    if is_small_remainder(pair1.abs_value, prev) {
-      return Some(pair0.abs_value);
-    }
-
-    if is_approx_zero(
-      pair1.abs_value,
-      F::max(median, (pair1.mult1 * lesser).abs()),
-    ) {
-      return None;
-    }
+    mem::swap(&mut pair0, &mut pair1);
   }
 }
 
@@ -386,14 +365,7 @@ mod test {
       "10^-4",
     );
 
-    let nums = vec![
-      0.0,
-      2.0_f32.powi(-100),
-      0.0037,
-      1.0001,
-      1.000_333_3,
-      f32::MAX,
-    ];
+    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, 1.000_666, f32::MAX];
     assert_eq!(approx_sample_gcd(&nums), None);
 
     let nums = vec![1.0, E, TAU];

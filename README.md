@@ -33,7 +33,7 @@ numerical sequences with
 
 Pco is designed specifically for numerical data, whereas alternatives rely on
 general-purpose (LZ) compressors that were designed for string or binary data.
-Pco uses holistic, 3-step approach:
+Pco uses a holistic, 3-step approach:
 
 * **modes**.
 Pco identifies an approximate structure of the numbers called a

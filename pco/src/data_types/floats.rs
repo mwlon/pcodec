@@ -30,6 +30,11 @@ macro_rules! impl_float_number {
       }
 
       #[inline]
+      fn exp2(power: i32) -> Self {
+        Self::exp2(power as Self)
+      }
+
+      #[inline]
       fn from_f64(x: f64) -> Self {
         x as Self
       }
