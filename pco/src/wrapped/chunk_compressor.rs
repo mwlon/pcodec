@@ -9,7 +9,7 @@ use crate::constants::{
   Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_UNOPTIMIZED_BINS_LOG,
   MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
 };
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
@@ -320,14 +320,20 @@ fn choose_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T::Unsig
   // * Use float mult if enabled and an appropriate base is found
   // * Otherwise, use int mult if enabled and an appropriate int mult is found
   // * Otherwise, use Classic
-  if matches!(
-    config.float_mult_spec,
-    FloatMultSpec::Enabled
-  ) && T::IS_FLOAT
-  {
-    if let Some(config) = float_mult_utils::choose_config(nums) {
-      return Mode::FloatMult(config);
+  match (T::IS_FLOAT, config.float_mult_spec) {
+    (true, FloatMultSpec::Enabled) => {
+      if let Some(config) = float_mult_utils::choose_config(nums) {
+        return Mode::FloatMult(config);
+      }
     }
+    (true, FloatMultSpec::Provided(base_f64)) => {
+      let base = <T::Unsigned as UnsignedLike>::Float::from_f64(base_f64);
+      return Mode::FloatMult(FloatMultConfig {
+        base,
+        inv_base: base.inv(),
+      });
+    }
+    _ => (),
   }
 
   if matches!(config.int_mult_spec, IntMultSpec::Enabled) && !T::IS_FLOAT {
