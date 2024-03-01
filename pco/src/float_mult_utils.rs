@@ -123,7 +123,6 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
     value: lesser,
     err: F::ZERO,
   };
-  println!(".");
 
   loop {
     let prev = pair0.value;
