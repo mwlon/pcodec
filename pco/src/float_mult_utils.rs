@@ -228,8 +228,14 @@ fn uses_few_enough_adj_bits<U: UnsignedLike>(inv_base: U::Float, nums: &[U::Floa
     let approx = (mult * base).to_unsigned();
     let abs_adj = max(u, approx) - min(u, approx);
     let adj_bits = U::BITS - (abs_adj << 1).leading_zeros();
-    let inter_base_bits =
-      (U::Float::PRECISION_BITS as usize).saturating_sub(max(mult.exponent(), 0) as usize);
+    let inter_base_bits = if x == U::Float::ZERO {
+      // For the float 0.0, we shouldn't pretend like we're saving a
+      // full PRECISION_BITS. Zero is a multiple of every possible base and
+      // would get memorized by Classic if common.
+      0
+    } else {
+      (U::Float::PRECISION_BITS as usize).saturating_sub(max(mult.exponent(), 0) as usize)
+    };
     total_bits_saved += inter_base_bits.saturating_sub(adj_bits as usize);
     total_inter_base_bits += inter_base_bits;
   }
