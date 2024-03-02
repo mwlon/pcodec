@@ -92,7 +92,7 @@ const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 // consecutive multiples of the base) saves at least this proportion of the
 // full offsets (relative) or full uncompressed size (absolute).
 const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
-const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.2;
+const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.05;
 // When looking for an approximate GCD, we'll allow up to this proportion
 // of the sample not matching the GCD
 const SAMPLE_ALLOWED_STRIKES_PROPORTION: f64 = 0.01;
@@ -500,7 +500,7 @@ mod test {
 
       let nums = (0..n)
         .into_iter()
-        .map(|x| (x + 200000) as f32 * 0.1)
+        .map(|x| (x + 4_000_000) as f32 * 0.1)
         .collect::<Vec<_>>();
       assert!(
         !better_compression_than_classic::<u32>(10.0, &nums, &nums),
