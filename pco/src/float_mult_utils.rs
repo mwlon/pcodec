@@ -165,12 +165,10 @@ fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
   for &x in sample {
     if let Some(new_gcd) = approx_pair_gcd_uncorrected(x, gcd, median) {
       gcd = new_gcd;
+    } else if n_strikes == 0 {
+      return None;
     } else {
-      if n_strikes == 0 {
-        return None;
-      } else {
-        n_strikes -= 1;
-      }
+      n_strikes -= 1;
     }
   }
 
