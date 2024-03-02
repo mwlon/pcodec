@@ -69,6 +69,22 @@ pub fn split_latents<T: NumberLike>(
   vec![primary, adjustments]
 }
 
+// The rest of this file concerns automatically detecting the float `base`
+// such that `x = mult * base + adj * ULP` usefully splits a delta `x` into
+// latent variables `mult` and `adj` (if such a `base` exists).
+//
+// Somewhat different from int mult, we simplistically model that each `x` is
+// a multiple of `base` with floating point errors; we would identify `base`
+// for the numbers e, 2e, 3e; but if we add 1 to all the numbers, even
+// though `base=e` would be just as useful in either case.
+// As a result, we can think of the "loss" of an error from a multiple of base
+// as O(ln|error|).
+//
+// I (Martin) thought about using an FFT here, but I'm not sure how to pull it
+// off computationally efficiently when the frequency of interest could be in
+// such a large range and must be determined so precisely.
+// So instead we use an approximate Euclidean algorithm on pairs of floats.
+
 const REQUIRED_PRECISION_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
 const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
@@ -77,6 +93,9 @@ const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 // full offsets (relative) or full uncompressed size (absolute).
 const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
 const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.2;
+// When looking for an approximate GCD, we'll allow up to this proportion
+// of the sample not matching the GCD
+const SAMPLE_ALLOWED_STRIKES_PROPORTION: f64 = 0.01;
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
   let spare_precision_bits = F::PRECISION_BITS.saturating_sub(REQUIRED_PRECISION_BITS) as i32;
@@ -127,7 +146,7 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
   loop {
     let prev = pair0.value;
     rem_assign(&mut pair0, &pair1);
-    if is_small_remainder(pair0.value, prev) || pair0.value < pair0.err {
+    if is_small_remainder(pair0.value, prev) || pair0.value <= pair0.err {
       return Some(pair1.value);
     }
 
@@ -140,29 +159,44 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
 }
 
 fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
-  let mut maybe_gcd = Some(F::ZERO);
+  let mut gcd = F::ZERO;
+  let mut n_strikes = (sample.len() as f64 * SAMPLE_ALLOWED_STRIKES_PROPORTION) as usize;
   let median = sample[sample.len() / 2];
   for &x in sample {
-    if let Some(gcd) = maybe_gcd {
-      maybe_gcd = approx_pair_gcd_uncorrected(x, gcd, median);
+    if let Some(new_gcd) = approx_pair_gcd_uncorrected(x, gcd, median) {
+      gcd = new_gcd;
     } else {
-      break;
+      if n_strikes == 0 {
+        return None;
+      } else {
+        n_strikes -= 1;
+      }
     }
   }
-  maybe_gcd
+
+  if gcd == F::ZERO {
+    None
+  } else {
+    Some(gcd)
+  }
 }
 
 fn center_sample_gcd<F: FloatLike>(gcd: F, sample: &[F]) -> F {
+  // Go back through the sample, holding all mults fixed, and adjust the gcd to
+  // minimize the average deviation from mult * gcd, weighting by mult.
+  // Ideally we would tweak by something between the weighted median and mode
+  // of the individual tweaks, since we model loss as porportional to
+  // sum[log|error|], but doing so would be computationally harder.
   let inv_gcd = gcd.inv();
-  let mut min_tweak = F::MAX;
-  let mut max_tweak = F::MIN;
+  let mut tweak_sum = F::ZERO;
+  let mut tweak_weight = F::ZERO;
   for &x in sample {
     let mult = (x * inv_gcd).round();
     let overshoot = (mult * gcd) - x;
-    min_tweak = F::min(min_tweak, overshoot / mult);
-    max_tweak = F::max(max_tweak, overshoot / mult);
+    tweak_sum += overshoot;
+    tweak_weight += mult;
   }
-  gcd - (min_tweak + max_tweak) / F::from_f64(2.0_f64)
+  gcd - tweak_sum / tweak_weight
 }
 
 fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
