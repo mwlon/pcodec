@@ -297,6 +297,7 @@ pub fn choose_config<T: NumberLike>(
 
 #[cfg(test)]
 mod test {
+  use rand::{Rng, SeedableRng};
   use std::f32::consts::{E, TAU};
 
   use super::*;
@@ -507,6 +508,19 @@ mod test {
         n
       );
     }
+  }
+
+  #[test]
+  fn test_float_mult_worse_than_classic_zeros() {
+    let mut nums = vec![0.0_f32; 1000];
+    let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
+    let inv_gcd = 1E7;
+    for _ in 0..1000 {
+      nums.push(rng.gen_range(0.0..1.0));
+    }
+    assert!(!better_compression_than_classic::<u32>(
+      inv_gcd, &nums, &nums
+    ));
   }
 
   #[test]
