@@ -93,9 +93,9 @@ const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 // full offsets (relative) or full uncompressed size (absolute).
 const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
 const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.05;
+const INTERESTING_TRAILING_ZEROS: u32 = 5;
 const REQUIRED_TRAILING_ZEROS_FREQUENCY: f64 = 0.5;
 const REQUIRED_GCD_PAIR_FREQUENCY: f64 = 0.001;
-const INTERESTING_TRAILING_ZEROS: u32 = 5;
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
   let spare_precision_bits = F::PRECISION_BITS.saturating_sub(REQUIRED_PRECISION_BITS) as i32;
@@ -125,10 +125,10 @@ fn approx_pair_gcd<F: FloatLike>(greater: F, lesser: F) -> Option<F> {
     err: F,
   }
 
-  let relative_err = F::exp2(-(F::PRECISION_BITS as i32));
+  let machine_eps = F::exp2(-(F::PRECISION_BITS as i32));
   let rem_assign = |lhs: &mut PairMult<F>, rhs: &PairMult<F>| {
     let ratio = (lhs.value / rhs.value).round();
-    lhs.err += ratio * rhs.err + lhs.value * relative_err;
+    lhs.err += ratio * rhs.err + lhs.value * machine_eps;
     lhs.value = (lhs.value - ratio * rhs.value).abs();
   };
 
@@ -181,17 +181,20 @@ fn choose_candidate_base_by_trailing_zeros<U: UnsignedLike>(
   }
 
   let mut int_sample = Vec::new();
-  let lshift = U::BITS - precision_bits;
+  let lshift = U::BITS - precision_bits - 1;
+  let explicit_mantissa = U::MID;
   for x in sample {
-    let power_of_2 = x.exponent() - (precision_bits.saturating_sub(x.trailing_zeros())) as i32;
-    if power_of_2 >= min_power_of_2 && power_of_2 < min_power_of_2 + U::BITS as i32 {
-      let rshift = U::BITS - 1 - (power_of_2 - min_power_of_2) as u32;
-      int_sample.push((U::from_float_bits(*x) << lshift) >> rshift);
+    let exponent = x.exponent();
+    let power_of_2 = exponent - (precision_bits.saturating_sub(x.trailing_zeros())) as i32;
+    if power_of_2 >= min_power_of_2 && exponent < min_power_of_2 + U::BITS as i32 {
+      let rshift = U::BITS - 1 - (exponent - min_power_of_2) as u32;
+      let lshifted_w_explicit_mantissa = (U::from_float_bits(*x) << lshift) | explicit_mantissa;
+      int_sample.push(lshifted_w_explicit_mantissa >> rshift);
     }
   }
 
   if int_sample.len() >= required_samples {
-    let int_base = int_mult_utils::choose_candidate_gcd(&mut int_sample).unwrap_or(U::ONE);
+    let int_base = int_mult_utils::choose_candidate_base(&mut int_sample).unwrap_or(U::ONE);
     let base = int_base.to_float() * U::Float::exp2(min_power_of_2);
     Some(FloatMultConfig::from_base(base))
   } else {
@@ -280,7 +283,6 @@ fn snap_to_int_reciprocal<F: FloatLike>(base: F) -> FloatMultConfig<F> {
   }
 }
 
-// TODO there is redundant work between this and split_latents
 #[inline(never)]
 fn uses_few_enough_adj_bits<U: UnsignedLike>(
   config: FloatMultConfig<U::Float>,
@@ -381,11 +383,11 @@ mod test {
 
   use super::*;
 
-  fn assert_almost_equal_me(a: f32, b: f32, machine_epsilon_tolerance: u32, desc: &str) {
+  fn assert_almost_equal_ulps(a: f32, b: f32, ulps_tolerance: u32, desc: &str) {
     let (a, b) = (a.to_unsigned(), b.to_unsigned());
     let udiff = max(a, b) - min(a, b);
     assert!(
-      udiff <= machine_epsilon_tolerance,
+      udiff <= ulps_tolerance,
       "{} far from {}; {}",
       a,
       b,
@@ -425,6 +427,17 @@ mod test {
   }
 
   #[test]
+  fn test_trailing_zeros() {
+    assert_eq!(
+      choose_candidate_base_by_trailing_zeros::<u32>(
+        &[0.0, 3.0, 6.0, 21.0, f32::exp2(100.0)].repeat(5)
+      )
+      .unwrap(),
+      FloatMultConfig::from_base(3.0),
+    )
+  }
+
+  #[test]
   fn test_approx_pair_gcd() {
     assert_eq!(approx_pair_gcd(0.0, 0.0), None);
     assert_eq!(approx_pair_gcd(1.0, 0.0), None);
@@ -436,7 +449,7 @@ mod test {
       Some(0.009999999999999787)
     );
     assert_eq!(approx_pair_gcd(2.0_f32.powi(100), 3.0), None);
-    assert_almost_equal_me(
+    assert_almost_equal_ulps(
       approx_pair_gcd(1.0 / 3.0, 1.0 / 4.0).unwrap(),
       1.0 / 12.0,
       1,
