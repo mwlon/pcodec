@@ -93,8 +93,7 @@ const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 // full offsets (relative) or full uncompressed size (absolute).
 const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
 const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.05;
-const EST_GCD_PERCENTILE: f64 = 0.3;
-const REQUIRED_GCD_FREQUENCY: f64 = 0.01;
+const REQUIRED_GCD_FREQUENCY: f64 = 0.001;
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
   let spare_precision_bits = F::PRECISION_BITS.saturating_sub(REQUIRED_PRECISION_BITS) as i32;
@@ -173,16 +172,18 @@ fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
 
   // safe because we filtered out poorly-behaved floats
   gcds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-  let est_gcd = gcds[(EST_GCD_PERCENTILE * gcds.len() as f64) as usize];
-  let similar_gcd_count = gcds
-    .iter()
-    .filter(|&&gcd| (gcd - est_gcd).abs() < F::from_f64(0.01) * est_gcd)
-    .count();
-  if similar_gcd_count < required_pairs_with_common_gcd {
-    None
-  } else {
-    Some(est_gcd)
+  // we check a few GCDs in the middle and see if they show up frequently enough
+  for percentile in [0.1, 0.3, 0.5] {
+    let est_gcd = gcds[(percentile * gcds.len() as f64) as usize];
+    let similar_gcd_count = gcds
+      .iter()
+      .filter(|&&gcd| (gcd - est_gcd).abs() < F::from_f64(0.01) * est_gcd)
+      .count();
+    if similar_gcd_count >= required_pairs_with_common_gcd {
+      return Some(est_gcd);
+    }
   }
+  return None;
 }
 
 fn center_sample_gcd<F: FloatLike>(gcd: F, sample: &[F]) -> F {
