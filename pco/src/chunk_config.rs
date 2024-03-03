@@ -88,7 +88,7 @@ pub struct ChunkConfig {
   ///
   /// If you would like to automatically choose this once and reuse it for all
   /// chunks,
-  /// [`auto_compressor_config()`][crate::auto_delta_encoding_order] can help.
+  /// [`auto_delta_encoding_order`][crate::auto_delta_encoding_order] can help.
   pub delta_encoding_order: Option<usize>,
   /// Integer multiplier mode improves compression ratio in cases where many
   /// numbers are congruent modulo an integer `base`

@@ -83,7 +83,7 @@ impl CodecInternal for PcoConfig {
   }
 
   fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {
-    let v = pco::standalone::auto_decompress::<T::Pco>(bytes).expect("could not decompress");
+    let v = pco::standalone::simple_decompress::<T::Pco>(bytes).expect("could not decompress");
     T::vec_from_pco(v)
   }
 }

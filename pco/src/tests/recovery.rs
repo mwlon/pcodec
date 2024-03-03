@@ -6,7 +6,7 @@ use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::float_mult_utils::FloatMultConfig;
-use crate::standalone::{auto_decompress, simple_compress, FileCompressor};
+use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
 use crate::{ChunkMeta, Mode};
 
 fn compress_w_meta<T: NumberLike>(
@@ -58,7 +58,7 @@ fn assert_recovers<T: NumberLike>(
       ..Default::default()
     };
     let compressed = simple_compress(&nums, &config)?;
-    let decompressed = auto_decompress(&compressed)?;
+    let decompressed = simple_decompress(&compressed)?;
     assert_nums_eq(
       &decompressed,
       &nums,
@@ -187,7 +187,7 @@ fn test_multi_chunk() -> PcoResult<()> {
     .write_chunk(&mut compressed)?;
   fc.write_footer(&mut compressed)?;
 
-  let res = auto_decompress::<i64>(&compressed)?;
+  let res = simple_decompress::<i64>(&compressed)?;
   assert_nums_eq(
     &res,
     &vec![1, 2, 3, 11, 12, 13],
@@ -211,7 +211,7 @@ fn recover_with_alternating_nums(offset_bits: Bitlen, name: &str) -> PcoResult<(
   assert_eq!(latent_var.bins.len(), 1);
   let bin = latent_var.bins[0];
   assert_eq!(bin.offset_bits, offset_bits);
-  let decompressed = auto_decompress(&compressed)?;
+  let decompressed = simple_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, name)
 }
 
@@ -245,7 +245,7 @@ fn test_with_int_mult() -> PcoResult<()> {
     },
   )?;
   assert_eq!(meta.mode, Mode::IntMult(8_u32));
-  let decompressed = auto_decompress(&compressed)?;
+  let decompressed = simple_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, "sparse w gcd")?;
   Ok(())
 }
@@ -313,7 +313,7 @@ fn test_trivial_first_latent_var() -> PcoResult<()> {
       inv_base: 1.0
     })
   );
-  let decompressed = auto_decompress(&compressed)?;
+  let decompressed = simple_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, "trivial_first_latent")?;
   Ok(())
 }

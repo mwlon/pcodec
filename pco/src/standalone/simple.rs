@@ -99,8 +99,6 @@ pub fn simple_decompress_into<T: NumberLike>(src: &[u8], mut dst: &mut [T]) -> P
   Ok(progress)
 }
 
-// TODO in 0.2 make this return an error instead of panic
-// TODO in 0.2 get rid of "auto_" and just have "simple_" functions
 /// Compresses the numbers using the given compression level and an otherwise
 /// default configuration.
 ///
@@ -108,19 +106,19 @@ pub fn simple_decompress_into<T: NumberLike>(src: &[u8], mut dst: &mut [T]) -> P
 /// [`ChunkConfig`][crate::ChunkConfig] for an explanation of compression
 /// levels).
 /// This wraps [`simple_compress`].
-pub fn auto_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> Vec<u8> {
+pub fn simpler_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> PcoResult<Vec<u8>> {
   let config = ChunkConfig {
     compression_level,
     ..Default::default()
   };
-  simple_compress(nums, &config).unwrap()
+  simple_compress(nums, &config)
 }
 
 /// Takes in compressed bytes and returns a vector of numbers.
 ///
 /// Will return an error if there are any compatibility, corruption,
 /// or insufficient data issues.
-pub fn auto_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
+pub fn simple_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
   let (file_decompressor, mut src) = FileDecompressor::new(src)?;
 
   let mut res = Vec::with_capacity(file_decompressor.n_hint());

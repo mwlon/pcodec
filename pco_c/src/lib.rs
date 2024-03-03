@@ -12,7 +12,9 @@ use crate::PcoError::InvalidType;
 pub enum PcoError {
   Success,
   InvalidType,
-  DecompressionError, // TODO split this into the actual error kinds
+  // TODO split this into the actual error kinds
+  CompressionError,
+  DecompressionError,
 }
 
 macro_rules! impl_dtypes {
@@ -80,19 +82,23 @@ impl PcoFfiVec {
   }
 }
 
-fn _auto_compress<T: NumberLike>(
+fn _simpler_compress<T: NumberLike>(
   nums: *const c_void,
   len: c_uint,
   level: c_uint,
   ffi_vec_ptr: *mut PcoFfiVec,
 ) -> PcoError {
   let slice = unsafe { std::slice::from_raw_parts(nums as *const T, len as usize) };
-  let v = pco::standalone::auto_compress(slice, level as usize);
-  unsafe { (*ffi_vec_ptr).init_from_vec(v) };
-  PcoError::Success
+  match pco::standalone::simpler_compress(slice, level as usize) {
+    Err(_) => PcoError::CompressionError,
+    Ok(v) => {
+      unsafe { (*ffi_vec_ptr).init_from_vec(v) };
+      PcoError::Success
+    }
+  }
 }
 
-fn _auto_decompress<T: NumberLike>(
+fn _simple_decompress<T: NumberLike>(
   compressed: *const c_void,
   len: c_uint,
   ffi_vec_ptr: *mut PcoFfiVec,
@@ -101,7 +107,7 @@ where
   Vec<T>: Into<DynTypedVec>,
 {
   let slice = unsafe { std::slice::from_raw_parts(compressed as *const u8, len as usize) };
-  match pco::standalone::auto_decompress::<T>(slice) {
+  match pco::standalone::simple_decompress::<T>(slice) {
     Err(_) => PcoError::DecompressionError,
     Ok(v) => {
       unsafe { (*ffi_vec_ptr).init_from_vec(v) };
@@ -110,6 +116,7 @@ where
   }
 }
 
+// TODO rename this simple[r] instead of auto
 #[no_mangle]
 pub extern "C" fn auto_compress(
   nums: *const c_void,
@@ -124,7 +131,7 @@ pub extern "C" fn auto_compress(
 
   match_dtype!(
     dtype,
-    _auto_compress,
+    _simpler_compress,
     (nums, len, level, dst)
   )
 }
@@ -142,7 +149,7 @@ pub extern "C" fn auto_decompress(
 
   match_dtype!(
     dtype,
-    _auto_decompress,
+    _simple_decompress,
     (compressed, len, dst)
   )
 }

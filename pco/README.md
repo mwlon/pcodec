@@ -6,10 +6,11 @@
 # Quick Start
 
 ```rust
-use pco::standalone::{auto_compress, auto_decompress};
+use pco::standalone::{simpler_compress, simple_decompress};
 use pco::DEFAULT_COMPRESSION_LEVEL;
+use pco::errors::PcoResult;
 
-fn main() {
+fn main() -> PcoResult<()>{
   // your data
   let mut my_ints = Vec::new();
   for i in 0..100000 {
@@ -17,12 +18,13 @@ fn main() {
   }
 
   // compress
-  let compressed: Vec<u8> = auto_compress(&my_ints, DEFAULT_COMPRESSION_LEVEL);
+  let compressed: Vec<u8> = simpler_compress(&my_ints, DEFAULT_COMPRESSION_LEVEL)?;
   println!("compressed down to {} bytes", compressed.len());
 
   // decompress
-  let recovered = auto_decompress::<i64>(&compressed).expect("failed to decompress");
+  let recovered = simple_decompress::<i64>(&compressed)?;
   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
+  Ok(())
 }
 ```
 
