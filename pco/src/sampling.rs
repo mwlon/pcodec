@@ -30,6 +30,7 @@ fn shuffle_sample<U: Copy>(sample: &mut [U]) {
   }
 }
 
+#[inline(never)]
 pub fn choose_sample<T, S: Copy, Filter: Fn(&T) -> Option<S>>(
   nums: &[T],
   filter: Filter,
@@ -42,13 +43,13 @@ pub fn choose_sample<T, S: Copy, Filter: Fn(&T) -> Option<S>>(
   let slope = n as f64 / sample_n as f64;
   let sin_rate = std::f64::consts::TAU / (SAMPLE_SIN_PERIOD as f64);
   let sins: [f64; SAMPLE_SIN_PERIOD] = core::array::from_fn(|i| (i as f64 * sin_rate).sin() * 0.5);
-  let mut res = (0..sample_n)
-    .flat_map(|i| {
-      let idx = ((i as f64 + sins[i % 16]) * slope) as usize;
-
-      filter(&nums[min(idx, n - 1)])
-    })
-    .collect::<Vec<_>>();
+  let mut res = Vec::with_capacity(sample_n);
+  for i in 0..sample_n {
+    let idx = ((i as f64 + sins[i % 16]) * slope) as usize;
+    if let Some(x) = filter(&nums[min(idx, n - 1)]) {
+      res.push(x);
+    }
+  }
 
   if res.len() > MIN_SAMPLE {
     shuffle_sample(&mut res);
@@ -58,6 +59,7 @@ pub fn choose_sample<T, S: Copy, Filter: Fn(&T) -> Option<S>>(
   }
 }
 
+#[inline(never)]
 pub fn has_enough_infrequent_ints<U: UnsignedLike, S: Copy, F: Fn(S) -> U>(
   sample: &[S],
   mult_fn: F,
