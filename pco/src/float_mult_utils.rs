@@ -208,6 +208,7 @@ fn choose_candidate_base_by_euclidean<F: FloatLike>(sample: &[F]) -> Option<F> {
     }
   }
 
+  // println!("A {} {}", sample.len(), gcds.len());
   let required_pairs_with_common_gcd =
     (sample.len() as f64 * REQUIRED_GCD_PAIR_FREQUENCY).ceil() as usize;
   if gcds.len() < required_pairs_with_common_gcd {
@@ -223,10 +224,16 @@ fn choose_candidate_base_by_euclidean<F: FloatLike>(sample: &[F]) -> Option<F> {
       .iter()
       .filter(|&&gcd| (gcd - candidate).abs() < F::from_f64(0.01) * candidate)
       .count();
+    // println!(
+    //   "p {} {} {}",
+    //   percentile, candidate, similar_gcd_count
+    // );
 
     if similar_gcd_count >= required_pairs_with_common_gcd {
       let base = center_sample_base(candidate, sample);
-      return Some(snap_to_int_reciprocal(base));
+      let base = snap_to_int_reciprocal(base);
+      // println!("ret {}", base);
+      return Some(base);
     }
   }
 
@@ -239,11 +246,11 @@ fn center_sample_base<F: FloatLike>(base: F, sample: &[F]) -> F {
   // Ideally we would tweak by something between the weighted median and mode
   // of the individual tweaks, since we model loss as porportional to
   // sum[log|error|], but doing so would be computationally harder.
-  let inv_gcd = base.inv();
+  let inv_base = base.inv();
   let mut tweak_sum = F::ZERO;
   let mut tweak_weight = F::ZERO;
   for &x in sample {
-    let mult = (x * inv_gcd).round();
+    let mult = (x * inv_base).round();
     let overshoot = (mult * base) - x;
     tweak_sum += overshoot;
     tweak_weight += mult;
@@ -257,7 +264,7 @@ fn snap_to_int_reciprocal<F: FloatLike>(base: F) -> F {
   let decimal_inv_base = F::from_f64(10.0_f64.powf(inv_base.to_f64().log10().round()));
   // check if relative error is below a threshold
   if (inv_base - round_inv_base).abs() < F::from_f64(SNAP_THRESHOLD_ABSOLUTE) {
-    round_inv_base
+    round_inv_base.inv()
   } else if (inv_base - decimal_inv_base).abs() / inv_base
     < F::from_f64(SNAP_THRESHOLD_DECIMAL_RELATIVE)
   {
