@@ -2,7 +2,7 @@ use crate::chunk_config::ChunkConfig;
 use crate::chunk_meta::ChunkMeta;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
-use crate::standalone::{auto_decompress, FileCompressor};
+use crate::standalone::{simple_decompress, FileCompressor};
 use crate::IntMultSpec;
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::Unsigned>> {
@@ -20,7 +20,7 @@ fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::Unsi
   fc.write_footer(&mut compressed)?;
 
   for i in 0..compressed.len() - 1 {
-    match auto_decompress::<T>(&compressed[0..i]) {
+    match simple_decompress::<T>(&compressed[0..i]) {
       Err(e) if matches!(e.kind, ErrorKind::InsufficientData) => (), // good
       Ok(_) => panic!("expected decompressor to notice insufficient data (got Ok)"),
       Err(e) => panic!(

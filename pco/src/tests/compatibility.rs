@@ -38,7 +38,7 @@ fn assert_compatible<T: NumberLike>(version: &str, name: &str, expected: &[T]) -
   let pco_path = get_pco_path(version, name);
 
   let compressed = fs::read(pco_path)?;
-  let decompressed = standalone::auto_decompress::<T>(&compressed)?;
+  let decompressed = standalone::simple_decompress::<T>(&compressed)?;
 
   assert_nums_eq(&decompressed, &expected);
   Ok(())
