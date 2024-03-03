@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::data_types::UnsignedLike;
 
-const MIN_SAMPLE: usize = 10;
+pub const MIN_SAMPLE: usize = 10;
 // 1 in this many nums get put into sample
 const SAMPLE_RATIO: usize = 40;
 const SAMPLE_SIN_PERIOD: usize = 16;

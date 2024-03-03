@@ -53,6 +53,7 @@ pub trait FloatLike:
   /// Returns the float's exponent. For instance, for f32 this should be
   /// between -126 and +127.
   fn exponent(&self) -> i32;
+  fn trailing_zeros(&self) -> u32;
   fn max(a: Self, b: Self) -> Self;
   fn min(a: Self, b: Self) -> Self;
 }
@@ -120,6 +121,8 @@ pub trait UnsignedLike:
   fn to_float_bits(self) -> Self::Float;
   /// This should use something like [`f32::to_bits()`]
   fn from_float_bits(float: Self::Float) -> Self;
+
+  fn to_float(self) -> Self::Float;
 }
 
 /// *unstable API* Trait for data types supported for compression/decompression.

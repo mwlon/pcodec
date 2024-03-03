@@ -83,6 +83,11 @@ macro_rules! impl_unsigned {
       fn from_float_bits(float: Self::Float) -> Self {
         float.to_bits()
       }
+
+      #[inline]
+      fn to_float(self) -> Self::Float {
+        self as $float
+      }
     }
   };
 }

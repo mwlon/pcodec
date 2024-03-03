@@ -5,7 +5,7 @@ use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
 use crate::wrapped::SecondaryLatents;
 use crate::wrapped::SecondaryLatents::{Constant, Nonconstant};
-use crate::{delta, sampling};
+use crate::{delta, int_mult_utils, sampling};
 
 const ARITH_CHUNK_SIZE: usize = 512;
 
@@ -93,7 +93,9 @@ const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 // full offsets (relative) or full uncompressed size (absolute).
 const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
 const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.05;
-const REQUIRED_GCD_FREQUENCY: f64 = 0.001;
+const REQUIRED_TRAILING_ZEROS_FREQUENCY: f64 = 0.5;
+const REQUIRED_GCD_PAIR_FREQUENCY: f64 = 0.001;
+const INTERESTING_TRAILING_ZEROS: u32 = 5;
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
   let spare_precision_bits = F::PRECISION_BITS.saturating_sub(REQUIRED_PRECISION_BITS) as i32;
@@ -154,7 +156,49 @@ fn approx_pair_gcd<F: FloatLike>(greater: F, lesser: F) -> Option<F> {
   }
 }
 
-fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
+fn choose_candidate_base_by_trailing_zeros<U: UnsignedLike>(
+  sample: &[U::Float],
+) -> Option<U::Float> {
+  let precision_bits = U::Float::PRECISION_BITS;
+  let mut min_power_of_2 = i32::MAX;
+  let mut count = 0;
+  for x in sample {
+    let trailing_zeros = x.trailing_zeros();
+    if *x != U::Float::ZERO && trailing_zeros >= INTERESTING_TRAILING_ZEROS {
+      let power_of_2 = x.exponent() - (precision_bits.saturating_sub(trailing_zeros)) as i32;
+      count += 1;
+      min_power_of_2 = min(min_power_of_2, power_of_2);
+    }
+  }
+
+  let required_samples = max(
+    (sample.len() as f64 * REQUIRED_TRAILING_ZEROS_FREQUENCY).ceil() as usize,
+    sampling::MIN_SAMPLE,
+  );
+  if count < required_samples {
+    return None;
+  }
+
+  let mut int_sample = Vec::new();
+  let lshift = U::BITS - precision_bits;
+  for x in sample {
+    let power_of_2 = x.exponent() - (precision_bits.saturating_sub(x.trailing_zeros())) as i32;
+    if power_of_2 >= min_power_of_2 && power_of_2 < min_power_of_2 + U::BITS as i32 {
+      let rshift = U::BITS - 1 - (power_of_2 - min_power_of_2) as u32;
+      int_sample.push((U::from_float_bits(*x) << lshift) >> rshift);
+    }
+  }
+
+  if int_sample.len() >= required_samples {
+    let int_base = int_mult_utils::choose_candidate_gcd(&mut int_sample).unwrap_or(U::ONE);
+    let res = int_base.to_float() * U::Float::exp2(min_power_of_2);
+    Some(res)
+  } else {
+    None
+  }
+}
+
+fn choose_candidate_base_by_euclidean<F: FloatLike>(sample: &[F]) -> Option<F> {
   let mut gcds = Vec::new();
   for i in (0..sample.len() - 1).step_by(2) {
     let a = sample[i];
@@ -165,7 +209,7 @@ fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
   }
 
   let required_pairs_with_common_gcd =
-    (sample.len() as f64 * REQUIRED_GCD_FREQUENCY).ceil() as usize;
+    (sample.len() as f64 * REQUIRED_GCD_PAIR_FREQUENCY).ceil() as usize;
   if gcds.len() < required_pairs_with_common_gcd {
     return None;
   }
@@ -174,56 +218,58 @@ fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
   gcds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
   // we check a few GCDs in the middle and see if they show up frequently enough
   for percentile in [0.1, 0.3, 0.5] {
-    let est_gcd = gcds[(percentile * gcds.len() as f64) as usize];
+    let candidate = gcds[(percentile * gcds.len() as f64) as usize];
     let similar_gcd_count = gcds
       .iter()
-      .filter(|&&gcd| (gcd - est_gcd).abs() < F::from_f64(0.01) * est_gcd)
+      .filter(|&&gcd| (gcd - candidate).abs() < F::from_f64(0.01) * candidate)
       .count();
+
     if similar_gcd_count >= required_pairs_with_common_gcd {
-      return Some(est_gcd);
+      let base = center_sample_base(candidate, sample);
+      return Some(snap_to_int_reciprocal(base));
     }
   }
+
   return None;
 }
 
-fn center_sample_gcd<F: FloatLike>(gcd: F, sample: &[F]) -> F {
+fn center_sample_base<F: FloatLike>(base: F, sample: &[F]) -> F {
   // Go back through the sample, holding all mults fixed, and adjust the gcd to
   // minimize the average deviation from mult * gcd, weighting by mult.
   // Ideally we would tweak by something between the weighted median and mode
   // of the individual tweaks, since we model loss as porportional to
   // sum[log|error|], but doing so would be computationally harder.
-  let inv_gcd = gcd.inv();
+  let inv_gcd = base.inv();
   let mut tweak_sum = F::ZERO;
   let mut tweak_weight = F::ZERO;
   for &x in sample {
     let mult = (x * inv_gcd).round();
-    let overshoot = (mult * gcd) - x;
+    let overshoot = (mult * base) - x;
     tweak_sum += overshoot;
     tweak_weight += mult;
   }
-  gcd - tweak_sum / tweak_weight
+  base - tweak_sum / tweak_weight
 }
 
-fn snap_to_int_reciprocal<F: FloatLike>(gcd: F) -> (F, F) {
-  // returns (gcd, gcd^-1)
-  let inv_gcd = gcd.inv();
-  let round_inv_gcd = inv_gcd.round();
-  let decimal_inv_gcd = F::from_f64(10.0_f64.powf(inv_gcd.to_f64().log10().round()));
+fn snap_to_int_reciprocal<F: FloatLike>(base: F) -> F {
+  let inv_base = base.inv();
+  let round_inv_base = inv_base.round();
+  let decimal_inv_base = F::from_f64(10.0_f64.powf(inv_base.to_f64().log10().round()));
   // check if relative error is below a threshold
-  if (inv_gcd - round_inv_gcd).abs() < F::from_f64(SNAP_THRESHOLD_ABSOLUTE) {
-    (round_inv_gcd.inv(), round_inv_gcd)
-  } else if (inv_gcd - decimal_inv_gcd).abs() / inv_gcd
+  if (inv_base - round_inv_base).abs() < F::from_f64(SNAP_THRESHOLD_ABSOLUTE) {
+    round_inv_base
+  } else if (inv_base - decimal_inv_base).abs() / inv_base
     < F::from_f64(SNAP_THRESHOLD_DECIMAL_RELATIVE)
   {
-    (decimal_inv_gcd.inv(), decimal_inv_gcd)
+    decimal_inv_base.inv()
   } else {
-    (gcd, inv_gcd)
+    base
   }
 }
 
 // TODO there is redundant work between this and split_latents
-fn uses_few_enough_adj_bits<U: UnsignedLike>(inv_base: U::Float, nums: &[U::Float]) -> bool {
-  let base = inv_base.inv();
+fn uses_few_enough_adj_bits<U: UnsignedLike>(base: U::Float, nums: &[U::Float]) -> bool {
+  let inv_base = base.inv();
   let total_uncompressed_size = nums.len() * U::BITS as usize;
   let mut total_bits_saved = 0;
   let mut total_inter_base_bits = 0;
@@ -245,18 +291,30 @@ fn uses_few_enough_adj_bits<U: UnsignedLike>(inv_base: U::Float, nums: &[U::Floa
     total_inter_base_bits += inter_base_bits;
   }
   let total_bits_saved = total_bits_saved as f64;
+  // println!(
+  //   "Z {} {} {}",
+  //   total_bits_saved, total_inter_base_bits, total_uncompressed_size
+  // );
   total_bits_saved > total_inter_base_bits as f64 * ADJ_BITS_RELATIVE_SAVINGS_THRESH
     && total_bits_saved > total_uncompressed_size as f64 * ADJ_BITS_ABSOLUTE_SAVINGS_THRESH
 }
 
 fn better_compression_than_classic<U: UnsignedLike>(
-  inv_gcd: U::Float,
+  base: U::Float,
   sample: &[U::Float],
   nums: &[U::Float],
 ) -> bool {
+  let inv_base = base.inv();
+  // println!(
+  //   "{} {}",
+  //   sampling::has_enough_infrequent_ints(sample, |x| {
+  //     U::from_int_float((x * inv_base).round())
+  //   }),
+  //   uses_few_enough_adj_bits::<U>(base, nums)
+  // );
   sampling::has_enough_infrequent_ints(sample, |x| {
-    U::from_int_float((x * inv_gcd).round())
-  }) && uses_few_enough_adj_bits::<U>(inv_gcd, nums)
+    U::from_int_float((x * inv_base).round())
+  }) && uses_few_enough_adj_bits::<U>(base, nums)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -269,17 +327,15 @@ fn choose_config_w_sample<U: UnsignedLike>(
   sample: &[U::Float],
   nums: &[U::Float],
 ) -> Option<FloatMultConfig<U::Float>> {
-  let gcd = approx_sample_gcd(sample)?;
-  let gcd = center_sample_gcd(gcd, sample);
-  let (gcd, inv_gcd) = snap_to_int_reciprocal(gcd);
-
-  if !better_compression_than_classic::<U>(inv_gcd, sample, nums) {
+  let base = choose_candidate_base_by_trailing_zeros::<U>(sample)
+    .or_else(|| choose_candidate_base_by_euclidean(sample))?;
+  if !better_compression_than_classic::<U>(base, sample, nums) {
     return None;
   }
 
   Some(FloatMultConfig {
-    base: gcd,
-    inv_base: inv_gcd,
+    base,
+    inv_base: base.inv(),
   })
 }
 
@@ -288,7 +344,7 @@ pub fn choose_config<T: NumberLike>(
 ) -> Option<FloatMultConfig<<T::Unsigned as UnsignedLike>::Float>> {
   let nums = T::assert_float(nums);
   // We can compress infinities, nans, and baby floats, but we can't learn
-  // the GCD from them.
+  // the base from them.
   let sample = sampling::choose_sample(nums, |num| {
     if num.is_finite_and_normal() {
       Some(num.abs())
@@ -374,7 +430,7 @@ mod test {
   fn test_approx_sample_gcd() {
     let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX];
     assert_almost_equal(
-      approx_sample_gcd(&nums).unwrap(),
+      choose_candidate_base_by_euclidean(&nums).unwrap(),
       1.0E-4,
       1.0E-6,
       "10^-4 adverse",
@@ -382,46 +438,28 @@ mod test {
 
     let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 0.0049, 1.0001, f32::MAX];
     assert_almost_equal(
-      approx_sample_gcd(&nums).unwrap(),
+      choose_candidate_base_by_euclidean(&nums).unwrap(),
       1.0E-4,
       1.0E-9,
       "10^-4",
     );
 
     let nums = vec![1.0, E, TAU];
-    assert_eq!(approx_sample_gcd(&nums), None);
+    assert_eq!(
+      choose_candidate_base_by_euclidean(&nums),
+      None
+    );
   }
 
   #[test]
   fn test_center_gcd() {
     let nums = vec![6.0 / 7.0 - 1E-4, 16.0 / 7.0 + 1E-4, 18.0 / 7.0 - 1E-4];
     assert_almost_equal(
-      center_sample_gcd(0.28, &nums),
+      center_sample_base(0.28, &nums),
       2.0 / 7.0,
       1E-4,
       "center",
     )
-  }
-
-  #[test]
-  fn test_snap() {
-    assert_eq!(
-      snap_to_int_reciprocal(0.01000333),
-      (0.01, 100.0)
-    );
-    assert_eq!(
-      snap_to_int_reciprocal(0.009999666),
-      (0.01, 100.0)
-    );
-    assert_eq!(
-      snap_to_int_reciprocal(0.143),
-      (1.0 / 7.0, 7.0)
-    );
-    assert_eq!(
-      snap_to_int_reciprocal(0.0105),
-      (0.0105, 1.0 / 0.0105)
-    );
-    assert_eq!(snap_to_int_reciprocal(TAU).0, TAU);
   }
 
   #[test]

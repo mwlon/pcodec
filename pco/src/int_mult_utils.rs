@@ -144,32 +144,32 @@ fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) 
   Some(candidate_gcd)
 }
 
-fn candidate_gcd_w_sample<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
+pub fn choose_candidate_gcd<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
   let triple_gcds = sample
     .chunks_exact(3)
     .map(calc_triple_gcd)
     .filter(|&gcd| gcd > U::ONE)
     .collect::<Vec<_>>();
 
-  let candidate_gcd = most_prominent_gcd(&triple_gcds, sample.len() / 3)?;
-
-  if !sampling::has_enough_infrequent_ints(sample, |x| x / candidate_gcd) {
-    return None;
-  }
-
-  Some(candidate_gcd)
+  most_prominent_gcd(&triple_gcds, sample.len() / 3)
 }
 
 pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_unsigned()))?;
-  let candidate = candidate_gcd_w_sample(&mut sample)?;
+  let candidate = choose_candidate_gcd(&mut sample)?;
+
   // TODO validate adj distribution on entire `nums` is simple enough?
-  Some(candidate)
+  if sampling::has_enough_infrequent_ints(&sample, |x| x / candidate) {
+    Some(candidate)
+  } else {
+    None
+  }
 }
 
 #[cfg(test)]
 mod tests {
   use rand::Rng;
+  use rand_xoshiro::rand_core::SeedableRng;
 
   use super::*;
 
@@ -223,25 +223,25 @@ mod tests {
   fn test_calc_candidate_gcd() {
     // not significant enough
     assert_eq!(
-      candidate_gcd_w_sample(&mut vec![0_u32, 4, 8]),
+      choose_candidate_gcd(&mut vec![0_u32, 4, 8]),
       None,
     );
     assert_eq!(
-      candidate_gcd_w_sample(&mut vec![
+      choose_candidate_gcd(&mut vec![
         0_u32, 4, 8, 10, 14, 18, 20, 24, 28
       ]),
       Some(4),
     );
     // 2 out of 3 triples have a rare congruency
     assert_eq!(
-      candidate_gcd_w_sample(&mut vec![
+      choose_candidate_gcd(&mut vec![
         1_u32, 11, 21, 31, 41, 51, 61, 71, 82
       ]),
       Some(10),
     );
     // 1 out of 3 triples has a rare congruency
     assert_eq!(
-      candidate_gcd_w_sample(&mut vec![
+      choose_candidate_gcd(&mut vec![
         1_u32, 11, 22, 31, 41, 51, 61, 71, 82
       ]),
       None,
@@ -251,6 +251,6 @@ mod tests {
     let mut twos = (0_u32..100)
       .map(|_| rng.gen_range(0_u32..1000) * 2)
       .collect::<Vec<_>>();
-    assert_eq!(candidate_gcd_w_sample(&mut twos), Some(2));
+    assert_eq!(choose_candidate_gcd(&mut twos), Some(2));
   }
 }
