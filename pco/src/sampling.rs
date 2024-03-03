@@ -1,17 +1,22 @@
-use std::cmp::{max, min};
+use crate::bits::ceil_div;
+use rand_xoshiro::rand_core::{RngCore, SeedableRng};
+use std::cmp::max;
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use crate::data_types::UnsignedLike;
 
-const MIN_SAMPLE: usize = 10;
+pub const MIN_SAMPLE: usize = 10;
 // 1 in this many nums get put into sample
 const SAMPLE_RATIO: usize = 40;
-const SAMPLE_SIN_PERIOD: usize = 16;
 // Int mults will be considered infrequent if they occur less than 1/this of
 // the time.
 const CLASSIC_MEMORIZATION_THRESH: f64 = 256.0;
 // what proportion of numbers must come from infrequent mults
-const INFREQUENT_MULT_WEIGHT_THRESH: f64 = 0.05;
+const INFREQUENT_MULT_WEIGHT_THRESH: f64 = 0.04;
+// how many times over to try collecting samples without replacement before
+// giving up
+const SAMPLING_PERSISTENCE: usize = 4;
 
 fn calc_sample_n(n: usize) -> Option<usize> {
   if n >= MIN_SAMPLE {
@@ -21,33 +26,45 @@ fn calc_sample_n(n: usize) -> Option<usize> {
   }
 }
 
-pub fn choose_sample<T, S, Filter: Fn(&T) -> Option<S>>(
+#[inline(never)]
+pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
   nums: &[T],
   filter: Filter,
 ) -> Option<Vec<S>> {
-  // pick evenly-spaced nums
-  let n = nums.len();
-  let sample_n = calc_sample_n(n)?;
+  // We can't modify the list, and copying it may be expensive, but we want to
+  // sample a small fraction from it without replacement, so we keep a
+  // bitpacked vector representing whether each one is used yet and just keep
+  // resampling.
+  // Maybe this is a bad idea, but it works for now.
+  let target_sample_size = calc_sample_n(nums.len())?;
 
-  // we avoid cyclic sampling by throwing in another frequency
-  let slope = n as f64 / sample_n as f64;
-  let sin_rate = std::f64::consts::TAU / (SAMPLE_SIN_PERIOD as f64);
-  let sins: [f64; SAMPLE_SIN_PERIOD] = core::array::from_fn(|i| (i as f64 * sin_rate).sin() * 0.5);
-  let res = (0..sample_n)
-    .flat_map(|i| {
-      let idx = ((i as f64 + sins[i % 16]) * slope) as usize;
+  let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
+  let mut visited = vec![0_u8; ceil_div(nums.len(), 8)];
+  let mut res = Vec::with_capacity(target_sample_size);
+  let mut n_iters = 0;
+  while res.len() < target_sample_size && n_iters < SAMPLING_PERSISTENCE * target_sample_size {
+    let rand_idx = rng.next_u64() as usize % nums.len();
+    let visited_idx = rand_idx / 8;
+    let visited_bit = rand_idx % 8;
+    let mask = 1 << visited_bit;
+    let is_visited = visited[visited_idx] & mask;
+    if is_visited == 0 {
+      if let Some(x) = filter(&nums[rand_idx]) {
+        res.push(x);
+      }
+      visited[visited_idx] |= mask;
+    }
+    n_iters += 1;
+  }
 
-      filter(&nums[min(idx, n - 1)])
-    })
-    .collect::<Vec<_>>();
-
-  if res.len() > MIN_SAMPLE {
+  if res.len() >= MIN_SAMPLE {
     Some(res)
   } else {
     None
   }
 }
 
+#[inline(never)]
 pub fn has_enough_infrequent_ints<U: UnsignedLike, S: Copy, F: Fn(S) -> U>(
   sample: &[S],
   mult_fn: F,
@@ -90,7 +107,7 @@ mod tests {
     for i in 0..150 {
       nums.push(-i as f32);
     }
-    let sample = choose_sample(&nums, |&num| {
+    let mut sample = choose_sample(&nums, |&num| {
       if num == 0.0 {
         None
       } else {
@@ -98,7 +115,8 @@ mod tests {
       }
     })
     .unwrap();
-    assert_eq!(sample.len(), 12);
-    assert_eq!(&sample[0..3], &[-13.0, -27.0, -39.0]);
+    sample.sort_unstable_by(f32::total_cmp);
+    assert_eq!(sample.len(), 13);
+    assert_eq!(&sample[0..3], &[-147.0, -142.0, -119.0]);
   }
 }

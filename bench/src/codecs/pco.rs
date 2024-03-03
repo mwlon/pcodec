@@ -53,14 +53,20 @@ impl CodecInternal for PcoConfig {
         self.chunk_config.int_mult_spec = match value.as_str() {
           "enabled" => IntMultSpec::Enabled,
           "disabled" => IntMultSpec::Disabled,
-          other => return Err(anyhow!("cannot parse gcd: {}", other,)),
+          other => match other.parse::<u64>() {
+            Ok(mult) => IntMultSpec::Provided(mult),
+            _ => return Err(anyhow!("cannot parse int mult: {}", other)),
+          },
         }
       }
       "float_mult" => {
         self.chunk_config.float_mult_spec = match value.as_str() {
           "enabled" => FloatMultSpec::Enabled,
           "disabled" => FloatMultSpec::Disabled,
-          other => return Err(anyhow!("cannot parse float mult: {}", other,)),
+          other => match other.parse::<f64>() {
+            Ok(mult) => FloatMultSpec::Provided(mult),
+            _ => return Err(anyhow!("cannot parse float mult: {}", other)),
+          },
         }
       }
       "chunk_size" => {

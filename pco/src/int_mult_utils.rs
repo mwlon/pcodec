@@ -1,13 +1,12 @@
 use std::cmp::min;
 use std::collections::HashMap;
-
-use rand_xoshiro::rand_core::{RngCore, SeedableRng};
+use std::f64::consts::PI;
 
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::sampling;
 use crate::wrapped::SecondaryLatents;
 
-const SMALL_INTS: [u64; 4] = [1, 2, 3, 4];
+const ZETA_OF_2: f64 = PI * PI / 6.0; // riemann zeta function
 
 pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> Vec<Vec<T::Unsigned>> {
   let mut mults = Vec::with_capacity(nums.len());
@@ -55,14 +54,6 @@ fn calc_gcd<U: UnsignedLike>(mut x: U, mut y: U) -> U {
   }
 }
 
-fn shuffle_sample<U: Copy>(sample: &mut [U]) {
-  let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
-  for i in 0..sample.len() {
-    let rand_idx = i + (rng.next_u64() as usize - i) % (sample.len() - i);
-    sample.swap(i, rand_idx);
-  }
-}
-
 fn calc_triple_gcd<U: UnsignedLike>(triple: &[U]) -> U {
   let a = triple[0];
   let b = triple[1];
@@ -99,7 +90,7 @@ fn score_triple_gcd<U: UnsignedLike>(
   let gcd_f64 = min(gcd, U::from_u64(u64::MAX)).to_u64() as f64;
 
   // check if the GCD has statistical evidence
-  let natural_prob_per_triple = 1.0 / (gcd_f64 * gcd_f64);
+  let natural_prob_per_triple = 1.0 / (ZETA_OF_2 * gcd_f64 * gcd_f64);
   let stdev = (natural_prob_per_triple * (1.0 - natural_prob_per_triple) / total_triples).sqrt();
   let z_score = (prob_per_triple - natural_prob_per_triple) / stdev;
   let implied_prob_per_num = prob_per_triple.sqrt();
@@ -108,7 +99,7 @@ fn score_triple_gcd<U: UnsignedLike>(
   }
 
   // heuristic for when the GCD is useless, even if true
-  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (1.0 + 0.1 * gcd_f64) {
+  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (1.3 + 0.15 * gcd_f64) {
     return None;
   }
 
@@ -131,19 +122,7 @@ fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) 
     *raw_counts.entry(gcd).or_insert(0) += 1;
   }
 
-  let mut counts_accounting_for_small_multiples = HashMap::new();
-  for (&gcd, &count) in raw_counts.iter() {
-    for divisor in SMALL_INTS {
-      let divisor = U::from_u64(divisor);
-      if gcd % divisor == U::ZERO && gcd != divisor {
-        *counts_accounting_for_small_multiples
-          .entry(gcd / divisor)
-          .or_insert(0) += count;
-      }
-    }
-  }
-
-  let (candidate_gcd, _) = counts_accounting_for_small_multiples
+  let (candidate_gcd, _) = raw_counts //counts_accounting_for_small_multiples
     .iter()
     .filter_map(|(&gcd, &count)| {
       let score = score_triple_gcd(gcd, count, total_triples)?;
@@ -154,38 +133,32 @@ fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) 
   Some(candidate_gcd)
 }
 
-fn calc_candidate_base<U: UnsignedLike>(sample: &[U]) -> Option<U> {
+pub fn choose_candidate_base<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
   let triple_gcds = sample
     .chunks_exact(3)
     .map(calc_triple_gcd)
     .filter(|&gcd| gcd > U::ONE)
     .collect::<Vec<_>>();
 
-  let candidate_gcd = most_prominent_gcd(&triple_gcds, sample.len() / 3)?;
-
-  if !sampling::has_enough_infrequent_ints(sample, |x| x / candidate_gcd) {
-    return None;
-  }
-
-  Some(candidate_gcd)
-}
-
-fn candidate_gcd_w_sample<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
-  // should we switch sample to use a deterministic RNG so that we don't need to shuffle here?
-  shuffle_sample(sample);
-  calc_candidate_base(sample)
+  most_prominent_gcd(&triple_gcds, sample.len() / 3)
 }
 
 pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_unsigned()))?;
-  let candidate = candidate_gcd_w_sample(&mut sample)?;
+  let candidate = choose_candidate_base(&mut sample)?;
+
   // TODO validate adj distribution on entire `nums` is simple enough?
-  Some(candidate)
+  if sampling::has_enough_infrequent_ints(&sample, |x| x / candidate) {
+    Some(candidate)
+  } else {
+    None
+  }
 }
 
 #[cfg(test)]
 mod tests {
   use rand::Rng;
+  use rand_xoshiro::rand_core::SeedableRng;
 
   use super::*;
 
@@ -239,25 +212,25 @@ mod tests {
   fn test_calc_candidate_gcd() {
     // not significant enough
     assert_eq!(
-      calc_candidate_base(&mut vec![0_u32, 4, 8]),
+      choose_candidate_base(&mut vec![0_u32, 4, 8]),
       None,
     );
     assert_eq!(
-      calc_candidate_base(&mut vec![
+      choose_candidate_base(&mut vec![
         0_u32, 4, 8, 10, 14, 18, 20, 24, 28
       ]),
       Some(4),
     );
     // 2 out of 3 triples have a rare congruency
     assert_eq!(
-      calc_candidate_base(&mut vec![
+      choose_candidate_base(&mut vec![
         1_u32, 11, 21, 31, 41, 51, 61, 71, 82
       ]),
       Some(10),
     );
     // 1 out of 3 triples has a rare congruency
     assert_eq!(
-      calc_candidate_base(&mut vec![
+      choose_candidate_base(&mut vec![
         1_u32, 11, 22, 31, 41, 51, 61, 71, 82
       ]),
       None,
@@ -267,6 +240,6 @@ mod tests {
     let mut twos = (0_u32..100)
       .map(|_| rng.gen_range(0_u32..1000) * 2)
       .collect::<Vec<_>>();
-    assert_eq!(calc_candidate_base(&mut twos), Some(2));
+    assert_eq!(choose_candidate_base(&mut twos), Some(2));
   }
 }

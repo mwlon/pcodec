@@ -30,6 +30,11 @@ macro_rules! impl_float_number {
       }
 
       #[inline]
+      fn exp2(power: i32) -> Self {
+        Self::exp2(power as Self)
+      }
+
+      #[inline]
       fn from_f64(x: f64) -> Self {
         x as Self
       }
@@ -47,6 +52,11 @@ macro_rules! impl_float_number {
       #[inline]
       fn exponent(&self) -> i32 {
         (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 + $exp_offset
+      }
+
+      #[inline]
+      fn trailing_zeros(&self) -> u32 {
+        self.to_bits().trailing_zeros()
       }
 
       #[inline]
@@ -106,11 +116,12 @@ macro_rules! impl_float_number {
   };
 }
 
-impl_float_number!(f32, u32, 32, 1_u32 << 31, 5, -126);
-impl_float_number!(f64, u64, 64, 1_u64 << 63, 6, -1022);
+impl_float_number!(f32, u32, 32, 1_u32 << 31, 5, -127);
+impl_float_number!(f64, u64, 64, 1_u64 << 63, 6, -1023);
 
 #[cfg(test)]
 mod tests {
+  use super::*;
   use crate::data_types::NumberLike;
 
   #[test]
@@ -118,5 +129,15 @@ mod tests {
     assert!(f32::NEG_INFINITY.to_unsigned() < (-0.0_f32).to_unsigned());
     assert!((-0.0_f32).to_unsigned() < (0.0_f32).to_unsigned());
     assert!((0.0_f32).to_unsigned() < f32::INFINITY.to_unsigned());
+  }
+
+  #[test]
+  fn test_exp() {
+    assert_eq!(1.0_f32.exponent(), 0);
+    assert_eq!(1.0_f64.exponent(), 0);
+    assert_eq!(2.0_f32.exponent(), 1);
+    assert_eq!(3.3333_f32.exponent(), 1);
+    assert_eq!(0.3333_f32.exponent(), -2);
+    assert_eq!(31.0_f32.exponent(), 4);
   }
 }

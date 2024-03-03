@@ -192,12 +192,12 @@ fn handle_parquet_column(
   };
 
   let dtype = num_vec.dtype_str();
-  if !opt.includes_dtype(dtype) {
+  let dataset = format!("{}_{}", dtype, pq_col.name());
+  if !opt.includes_dtype(dtype) || !opt.includes_dataset(&dataset) {
     return vec![];
   }
 
   let mut stats = Vec::new();
-  let dataset = format!("{}_{}", dtype, pq_col.name());
   for codec in &opt.codecs {
     stats.push(handle(
       &num_vec,
