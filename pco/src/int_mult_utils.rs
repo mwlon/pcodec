@@ -1,8 +1,6 @@
 use std::cmp::min;
 use std::collections::HashMap;
 
-use rand_xoshiro::rand_core::{RngCore, SeedableRng};
-
 use crate::data_types::{NumberLike, UnsignedLike};
 use crate::sampling;
 use crate::wrapped::SecondaryLatents;
@@ -52,14 +50,6 @@ fn calc_gcd<U: UnsignedLike>(mut x: U, mut y: U) -> U {
 
     x %= y;
     std::mem::swap(&mut x, &mut y);
-  }
-}
-
-fn shuffle_sample<U: Copy>(sample: &mut [U]) {
-  let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
-  for i in 0..sample.len() {
-    let rand_idx = i + (rng.next_u64() as usize - i) % (sample.len() - i);
-    sample.swap(i, rand_idx);
   }
 }
 
@@ -154,7 +144,7 @@ fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) 
   Some(candidate_gcd)
 }
 
-fn calc_candidate_base<U: UnsignedLike>(sample: &[U]) -> Option<U> {
+fn candidate_gcd_w_sample<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
   let triple_gcds = sample
     .chunks_exact(3)
     .map(calc_triple_gcd)
@@ -168,12 +158,6 @@ fn calc_candidate_base<U: UnsignedLike>(sample: &[U]) -> Option<U> {
   }
 
   Some(candidate_gcd)
-}
-
-fn candidate_gcd_w_sample<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
-  // should we switch sample to use a deterministic RNG so that we don't need to shuffle here?
-  shuffle_sample(sample);
-  calc_candidate_base(sample)
 }
 
 pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
@@ -239,25 +223,25 @@ mod tests {
   fn test_calc_candidate_gcd() {
     // not significant enough
     assert_eq!(
-      calc_candidate_base(&mut vec![0_u32, 4, 8]),
+      candidate_gcd_w_sample(&mut vec![0_u32, 4, 8]),
       None,
     );
     assert_eq!(
-      calc_candidate_base(&mut vec![
+      candidate_gcd_w_sample(&mut vec![
         0_u32, 4, 8, 10, 14, 18, 20, 24, 28
       ]),
       Some(4),
     );
     // 2 out of 3 triples have a rare congruency
     assert_eq!(
-      calc_candidate_base(&mut vec![
+      candidate_gcd_w_sample(&mut vec![
         1_u32, 11, 21, 31, 41, 51, 61, 71, 82
       ]),
       Some(10),
     );
     // 1 out of 3 triples has a rare congruency
     assert_eq!(
-      calc_candidate_base(&mut vec![
+      candidate_gcd_w_sample(&mut vec![
         1_u32, 11, 22, 31, 41, 51, 61, 71, 82
       ]),
       None,
@@ -267,6 +251,6 @@ mod tests {
     let mut twos = (0_u32..100)
       .map(|_| rng.gen_range(0_u32..1000) * 2)
       .collect::<Vec<_>>();
-    assert_eq!(calc_candidate_base(&mut twos), Some(2));
+    assert_eq!(candidate_gcd_w_sample(&mut twos), Some(2));
   }
 }

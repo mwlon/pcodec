@@ -93,9 +93,8 @@ const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
 // full offsets (relative) or full uncompressed size (absolute).
 const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
 const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.05;
-// When looking for an approximate GCD, we'll allow up to this proportion
-// of the sample not matching the GCD
-const SAMPLE_ALLOWED_STRIKES_PROPORTION: f64 = 0.01;
+const EST_GCD_PERCENTILE: f64 = 0.3;
+const REQUIRED_GCD_FREQUENCY: f64 = 0.01;
 
 fn insignificant_float_to<F: FloatLike>(x: F) -> F {
   let spare_precision_bits = F::PRECISION_BITS.saturating_sub(REQUIRED_PRECISION_BITS) as i32;
@@ -114,11 +113,9 @@ fn is_imprecise<F: FloatLike>(value: F, err: F) -> bool {
   value <= err * F::exp2(REQUIRED_PRECISION_BITS as i32)
 }
 
-fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -> Option<F> {
-  if is_approx_zero(lesser, median) {
-    return Some(greater);
-  } else if is_approx_zero(lesser, greater) {
-    return Some(lesser);
+fn approx_pair_gcd<F: FloatLike>(greater: F, lesser: F) -> Option<F> {
+  if is_approx_zero(lesser, greater) || lesser == greater {
+    return None;
   }
 
   #[derive(Clone, Copy, Debug)]
@@ -150,7 +147,7 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
       return Some(pair1.value);
     }
 
-    if is_approx_zero(pair0.value, median) || is_imprecise(pair0.value, pair0.err) {
+    if is_approx_zero(pair0.value, greater) || is_imprecise(pair0.value, pair0.err) {
       return None;
     }
 
@@ -159,23 +156,32 @@ fn approx_pair_gcd_uncorrected<F: FloatLike>(greater: F, lesser: F, median: F) -
 }
 
 fn approx_sample_gcd<F: FloatLike>(sample: &[F]) -> Option<F> {
-  let mut gcd = F::ZERO;
-  let mut n_strikes = (sample.len() as f64 * SAMPLE_ALLOWED_STRIKES_PROPORTION) as usize;
-  let median = sample[sample.len() / 2];
-  for &x in sample {
-    if let Some(new_gcd) = approx_pair_gcd_uncorrected(x, gcd, median) {
-      gcd = new_gcd;
-    } else if n_strikes == 0 {
-      return None;
-    } else {
-      n_strikes -= 1;
+  let mut gcds = Vec::new();
+  for i in (0..sample.len() - 1).step_by(2) {
+    let a = sample[i];
+    let b = sample[i + 1];
+    if let Some(gcd) = approx_pair_gcd(F::max(a, b), F::min(a, b)) {
+      gcds.push(gcd);
     }
   }
 
-  if gcd == F::ZERO {
+  let required_pairs_with_common_gcd =
+    (sample.len() as f64 * REQUIRED_GCD_FREQUENCY).ceil() as usize;
+  if gcds.len() < required_pairs_with_common_gcd {
+    return None;
+  }
+
+  // safe because we filtered out poorly-behaved floats
+  gcds.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+  let est_gcd = gcds[(EST_GCD_PERCENTILE * gcds.len() as f64) as usize];
+  let similar_gcd_count = gcds
+    .iter()
+    .filter(|&&gcd| (gcd - est_gcd).abs() < F::from_f64(0.01) * est_gcd)
+    .count();
+  if similar_gcd_count < required_pairs_with_common_gcd {
     None
   } else {
-    Some(gcd)
+    Some(est_gcd)
   }
 }
 
@@ -282,7 +288,7 @@ pub fn choose_config<T: NumberLike>(
   let nums = T::assert_float(nums);
   // We can compress infinities, nans, and baby floats, but we can't learn
   // the GCD from them.
-  let mut sample = sampling::choose_sample(nums, |num| {
+  let sample = sampling::choose_sample(nums, |num| {
     if num.is_finite_and_normal() {
       Some(num.abs())
     } else {
@@ -290,8 +296,6 @@ pub fn choose_config<T: NumberLike>(
     }
   })?;
 
-  // this is valid since all the x's are well behaved
-  sample.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
   choose_config_w_sample::<T::Unsigned>(&sample, nums)
 }
 
@@ -347,38 +351,18 @@ mod test {
 
   #[test]
   fn test_approx_pair_gcd() {
+    assert_eq!(approx_pair_gcd(0.0, 0.0), None);
+    assert_eq!(approx_pair_gcd(1.0, 0.0), None);
+    assert_eq!(approx_pair_gcd(1.0, 1.0), None);
+    assert_eq!(approx_pair_gcd(1.0, 2.0), Some(1.0));
+    assert_eq!(approx_pair_gcd(6.0, 3.0), Some(3.0));
     assert_eq!(
-      approx_pair_gcd_uncorrected(0.0, 0.0, 1.0),
-      Some(0.0)
-    );
-    assert_eq!(
-      approx_pair_gcd_uncorrected(1.0, 0.0, 1.0),
-      Some(1.0)
-    );
-    assert_eq!(
-      approx_pair_gcd_uncorrected(1.0, 1.0, 1.0),
-      Some(1.0)
-    );
-    assert_eq!(
-      approx_pair_gcd_uncorrected(6.0, 3.0, 1.0),
-      Some(3.0)
-    );
-    assert_eq!(
-      approx_pair_gcd_uncorrected(10.01_f64, 0.009999999999999787_f64, 1.0_f64),
+      approx_pair_gcd(10.01_f64, 0.009999999999999787_f64),
       Some(0.009999999999999787)
     );
-    // 2^100 is not a multiple of 3, but it's certainly within machine epsilon of one
-    assert_eq!(
-      approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 1.0),
-      Some(3.0)
-    );
-    // in this case, the median is big, so assume the lhs of 3 is just a numerical error
-    assert_eq!(
-      approx_pair_gcd_uncorrected(2.0_f32.powi(100), 3.0, 2.0_f32.powi(99)),
-      Some(2.0_f32.powi(100))
-    );
+    assert_eq!(approx_pair_gcd(2.0_f32.powi(100), 3.0), None);
     assert_almost_equal_me(
-      approx_pair_gcd_uncorrected(1.0 / 3.0, 1.0 / 4.0, 1.0).unwrap(),
+      approx_pair_gcd(1.0 / 3.0, 1.0 / 4.0).unwrap(),
       1.0 / 12.0,
       1,
       "1/3 gcd 1/4",
@@ -402,9 +386,6 @@ mod test {
       1.0E-9,
       "10^-4",
     );
-
-    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, 1.000_666, f32::MAX];
-    assert_eq!(approx_sample_gcd(&nums), None);
 
     let nums = vec![1.0, E, TAU];
     assert_eq!(approx_sample_gcd(&nums), None);

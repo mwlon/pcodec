@@ -1,3 +1,4 @@
+use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 
@@ -21,7 +22,15 @@ fn calc_sample_n(n: usize) -> Option<usize> {
   }
 }
 
-pub fn choose_sample<T, S, Filter: Fn(&T) -> Option<S>>(
+fn shuffle_sample<U: Copy>(sample: &mut [U]) {
+  let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
+  for i in 0..sample.len() {
+    let rand_idx = i + (rng.next_u64() as usize - i) % (sample.len() - i);
+    sample.swap(i, rand_idx);
+  }
+}
+
+pub fn choose_sample<T, S: Copy, Filter: Fn(&T) -> Option<S>>(
   nums: &[T],
   filter: Filter,
 ) -> Option<Vec<S>> {
@@ -33,7 +42,7 @@ pub fn choose_sample<T, S, Filter: Fn(&T) -> Option<S>>(
   let slope = n as f64 / sample_n as f64;
   let sin_rate = std::f64::consts::TAU / (SAMPLE_SIN_PERIOD as f64);
   let sins: [f64; SAMPLE_SIN_PERIOD] = core::array::from_fn(|i| (i as f64 * sin_rate).sin() * 0.5);
-  let res = (0..sample_n)
+  let mut res = (0..sample_n)
     .flat_map(|i| {
       let idx = ((i as f64 + sins[i % 16]) * slope) as usize;
 
@@ -42,6 +51,7 @@ pub fn choose_sample<T, S, Filter: Fn(&T) -> Option<S>>(
     .collect::<Vec<_>>();
 
   if res.len() > MIN_SAMPLE {
+    shuffle_sample(&mut res);
     Some(res)
   } else {
     None
@@ -90,7 +100,7 @@ mod tests {
     for i in 0..150 {
       nums.push(-i as f32);
     }
-    let sample = choose_sample(&nums, |&num| {
+    let mut sample = choose_sample(&nums, |&num| {
       if num == 0.0 {
         None
       } else {
@@ -98,7 +108,8 @@ mod tests {
       }
     })
     .unwrap();
+    sample.sort_unstable_by(f32::total_cmp);
     assert_eq!(sample.len(), 12);
-    assert_eq!(&sample[0..3], &[-13.0, -27.0, -39.0]);
+    assert_eq!(&sample[0..3], &[-132.0, -121.0, -111.0]);
   }
 }
