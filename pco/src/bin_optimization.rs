@@ -20,27 +20,26 @@ fn bin_bit_cost<U: UnsignedLike>(
   bin_meta_cost + (ans_cost + offset_cost) * count
 }
 
-// this is an exact optimal strategy
-pub fn optimize_bins<U: UnsignedLike>(
-  bins: Vec<BinCompressionInfo<U>>,
+fn choose_optimized_partitioning<U: UnsignedLike>(
+  bins: &[BinCompressionInfo<U>],
   ans_size_log: Bitlen,
-  total_count: Weight,
-) -> Vec<BinCompressionInfo<U>> {
+) -> Vec<(usize, usize)> {
   let mut c = 0;
   let mut cum_count = Vec::with_capacity(bins.len() + 1);
   cum_count.push(0);
-  for bin in &bins {
+  for bin in bins {
     c += bin.weight;
     cum_count.push(c);
   }
+  let total_count = c;
   let lowers = bins.iter().map(|bin| bin.lower).collect::<Vec<_>>();
   let uppers = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
-  let total_count_log2 = (total_count as f32).log2();
+  let total_count_log2 = (c as f32).log2();
 
   let mut best_costs = Vec::with_capacity(bins.len() + 1);
-  let mut best_paths = Vec::with_capacity(bins.len() + 1);
+  let mut best_partitionings = Vec::with_capacity(bins.len() + 1);
   best_costs.push(0.0);
-  best_paths.push(Vec::new());
+  best_partitionings.push(Vec::new());
 
   let bits_to_encode_weight = ans_size_log;
   let bin_meta_cost = bits_to_encode_weight as f32 +
@@ -70,10 +69,10 @@ pub fn optimize_bins<U: UnsignedLike>(
     }
 
     best_costs.push(best_cost);
-    let mut best_path = Vec::with_capacity(best_paths[best_j].len() + 1);
-    best_path.extend(&best_paths[best_j]);
+    let mut best_path = Vec::with_capacity(best_partitionings[best_j].len() + 1);
+    best_path.extend(&best_partitionings[best_j]);
     best_path.push((best_j, i));
-    best_paths.push(best_path);
+    best_partitionings.push(best_path);
   }
 
   let single_bin_path = vec![(0_usize, bins.len() - 1)];
@@ -85,16 +84,21 @@ pub fn optimize_bins<U: UnsignedLike>(
     total_count_log2,
   );
   let best_cost = best_costs.last().unwrap();
-  let path = if single_bin_cost
-    < best_cost + SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM * total_count as f32
-  {
-    &single_bin_path
+  if single_bin_cost < best_cost + SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM * total_count as f32 {
+    single_bin_path
   } else {
-    best_paths.last().unwrap()
-  };
+    best_partitionings.last().unwrap().clone()
+  }
+}
 
-  let mut res = Vec::with_capacity(path.len());
-  for (token, &(j, i)) in path.iter().enumerate() {
+// this is an exact optimal strategy
+pub fn optimize_bins<U: UnsignedLike>(
+  bins: &[BinCompressionInfo<U>],
+  ans_size_log: Bitlen,
+) -> Vec<BinCompressionInfo<U>> {
+  let partitioning = choose_optimized_partitioning(bins, ans_size_log);
+  let mut res = Vec::with_capacity(partitioning.len());
+  for (token, &(j, i)) in partitioning.iter().enumerate() {
     let mut count = 0;
     for bin in bins.iter().take(i + 1).skip(j).rev() {
       count += bin.weight;
@@ -136,7 +140,7 @@ mod tests {
       make_info(100, 65, 74), // same density as next bin (but different from previous ones)
       make_info(50, 75, 79),
     ];
-    let optimized = optimize_bins(infos, 10, 450);
+    let optimized = optimize_bins(&infos, 10);
     assert_eq!(
       optimized,
       vec![
@@ -171,7 +175,7 @@ mod tests {
     // bits), but it's disadvantageous to combine them because the 2nd bin has
     // so much higher density
     let infos = vec![make_info(1000, 0, 150), make_info(1000, 200, 200)];
-    let optimized = optimize_bins(infos, 10, 2000);
+    let optimized = optimize_bins(&infos, 10);
     assert_eq!(
       optimized,
       vec![
