@@ -20,6 +20,10 @@ fn bin_bit_cost<U: UnsignedLike>(
   bin_meta_cost + (ans_cost + offset_cost) * count
 }
 
+// Combines consecutive unoptimized bins and returns a vec of (j, i) where
+// j and i are the inclusive indices of a group of bins to combine together.
+// This algorithm is exactly optimal, assuming our cost estimates (measured in
+// total bit size) are correct.
 fn choose_optimized_partitioning<U: UnsignedLike>(
   bins: &[BinCompressionInfo<U>],
   ans_size_log: Bitlen,
@@ -91,7 +95,6 @@ fn choose_optimized_partitioning<U: UnsignedLike>(
   }
 }
 
-// this is an exact optimal strategy
 pub fn optimize_bins<U: UnsignedLike>(
   bins: &[BinCompressionInfo<U>],
   ans_size_log: Bitlen,
@@ -99,10 +102,7 @@ pub fn optimize_bins<U: UnsignedLike>(
   let partitioning = choose_optimized_partitioning(bins, ans_size_log);
   let mut res = Vec::with_capacity(partitioning.len());
   for (token, &(j, i)) in partitioning.iter().enumerate() {
-    let mut count = 0;
-    for bin in bins.iter().take(i + 1).skip(j).rev() {
-      count += bin.weight;
-    }
+    let count = bins.iter().take(i + 1).skip(j).map(|bin| bin.weight).sum();
     let optimized_bin = BinCompressionInfo {
       weight: count,
       lower: bins[j].lower,
