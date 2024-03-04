@@ -4,8 +4,7 @@ use crate::bits;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::UnsignedLike;
 
-// TODO if the optimal binning is only 0.x% better than a single bin, just use
-// a single bin for better performance?
+const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 
 // using f32 instead of f64 because the .log2() is faster
 fn bin_bit_cost<U: UnsignedLike>(
@@ -77,7 +76,23 @@ pub fn optimize_bins<U: UnsignedLike>(
     best_paths.push(best_path);
   }
 
-  let path = best_paths.last().unwrap();
+  let single_bin_path = vec![(0_usize, bins.len() - 1)];
+  let single_bin_cost = bin_bit_cost(
+    bin_meta_cost,
+    lowers[0],
+    uppers[bins.len() - 1],
+    total_count,
+    total_count_log2,
+  );
+  let best_cost = best_costs.last().unwrap();
+  let path = if single_bin_cost
+    < best_cost + SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM * total_count as f32
+  {
+    &single_bin_path
+  } else {
+    best_paths.last().unwrap()
+  };
+
   let mut res = Vec::with_capacity(path.len());
   for (token, &(j, i)) in path.iter().enumerate() {
     let mut count = 0;
