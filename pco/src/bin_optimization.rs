@@ -69,13 +69,13 @@ fn choose_optimized_partitioning<U: UnsignedLike>(
     }
 
     best_costs.push(best_cost);
-    let mut best_path = Vec::with_capacity(best_partitionings[best_j].len() + 1);
-    best_path.extend(&best_partitionings[best_j]);
-    best_path.push((best_j, i));
-    best_partitionings.push(best_path);
+    let mut best_partitioning = Vec::with_capacity(best_partitionings[best_j].len() + 1);
+    best_partitioning.extend(&best_partitionings[best_j]);
+    best_partitioning.push((best_j, i));
+    best_partitionings.push(best_partitioning);
   }
 
-  let single_bin_path = vec![(0_usize, bins.len() - 1)];
+  let single_bin_partitioning = vec![(0_usize, bins.len() - 1)];
   let single_bin_cost = bin_bit_cost(
     bin_meta_cost,
     lowers[0],
@@ -85,7 +85,7 @@ fn choose_optimized_partitioning<U: UnsignedLike>(
   );
   let best_cost = best_costs.last().unwrap();
   if single_bin_cost < best_cost + SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM * total_count as f32 {
-    single_bin_path
+    single_bin_partitioning
   } else {
     best_partitionings.last().unwrap().clone()
   }
