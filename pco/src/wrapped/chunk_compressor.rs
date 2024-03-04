@@ -166,11 +166,8 @@ fn train_infos<U: UnsignedLike>(
     n_log_ceil,
   );
 
-  let mut optimized_infos = bin_optimization::optimize_bins(
-    unoptimized_bins,
-    estimated_ans_size_log,
-    n_unsigneds as Weight,
-  );
+  let mut optimized_infos =
+    bin_optimization::optimize_bins(&unoptimized_bins, estimated_ans_size_log);
 
   let ans_size_log = quantize_weights(
     &mut optimized_infos,
