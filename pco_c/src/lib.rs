@@ -6,15 +6,15 @@ use libc::{c_uchar, c_uint, c_void};
 
 use pco::data_types::{CoreDataType, NumberLike};
 
-use crate::PcoError::InvalidType;
+use crate::PcoError::PcoInvalidType;
 
 #[repr(C)]
 pub enum PcoError {
-  Success,
-  InvalidType,
+  PcoSuccess,
+  PcoInvalidType,
   // TODO split this into the actual error kinds
-  CompressionError,
-  DecompressionError,
+  PcoCompressionError,
+  PcoDecompressionError,
 }
 
 macro_rules! impl_dtypes {
@@ -90,10 +90,10 @@ fn _simpler_compress<T: NumberLike>(
 ) -> PcoError {
   let slice = unsafe { std::slice::from_raw_parts(nums as *const T, len as usize) };
   match pco::standalone::simpler_compress(slice, level as usize) {
-    Err(_) => PcoError::CompressionError,
+    Err(_) => PcoError::PcoCompressionError,
     Ok(v) => {
       unsafe { (*ffi_vec_ptr).init_from_vec(v) };
-      PcoError::Success
+      PcoError::PcoSuccess
     }
   }
 }
@@ -108,17 +108,16 @@ where
 {
   let slice = unsafe { std::slice::from_raw_parts(compressed as *const u8, len as usize) };
   match pco::standalone::simple_decompress::<T>(slice) {
-    Err(_) => PcoError::DecompressionError,
+    Err(_) => PcoError::PcoDecompressionError,
     Ok(v) => {
       unsafe { (*ffi_vec_ptr).init_from_vec(v) };
-      PcoError::Success
+      PcoError::PcoSuccess
     }
   }
 }
 
-// TODO rename this simple[r] instead of auto
 #[no_mangle]
-pub extern "C" fn auto_compress(
+pub extern "C" fn pco_simpler_compress(
   nums: *const c_void,
   len: c_uint,
   dtype: c_uchar,
@@ -126,7 +125,7 @@ pub extern "C" fn auto_compress(
   dst: *mut PcoFfiVec,
 ) -> PcoError {
   let Some(dtype) = CoreDataType::from_byte(dtype) else {
-    return InvalidType;
+    return PcoInvalidType;
   };
 
   match_dtype!(
@@ -137,14 +136,14 @@ pub extern "C" fn auto_compress(
 }
 
 #[no_mangle]
-pub extern "C" fn auto_decompress(
+pub extern "C" fn pco_simple_decompress(
   compressed: *const c_void,
   len: c_uint,
   dtype: c_uchar,
   dst: *mut PcoFfiVec,
 ) -> PcoError {
   let Some(dtype) = CoreDataType::from_byte(dtype) else {
-    return InvalidType;
+    return PcoInvalidType;
   };
 
   match_dtype!(
@@ -155,7 +154,7 @@ pub extern "C" fn auto_decompress(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn free_pcovec(ffi_vec: *mut PcoFfiVec) -> PcoError {
+pub unsafe extern "C" fn pco_free_pcovec(ffi_vec: *mut PcoFfiVec) -> PcoError {
   unsafe { (*ffi_vec).free() };
-  PcoError::Success
+  PcoError::PcoSuccess
 }

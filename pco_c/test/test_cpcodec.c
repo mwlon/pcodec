@@ -11,8 +11,8 @@ int main() {
   int retcode = 0;
 
   struct PcoFfiVec cvec;
-  enum PcoError res = auto_compress(&input, num_elems, PCO_TYPE_F32, 8, &cvec);
-  if (res != Success) {
+  enum PcoError res = pco_auto_compress(&input, num_elems, PCO_TYPE_F32, 8, &cvec);
+  if (res != PcoSuccess) {
     printf("Error compressing: %d\n", res);
     retcode = 1;
     goto cleanup_none;
@@ -20,10 +20,10 @@ int main() {
   printf("Compressed %d floats to %d bytes\n", num_elems, cvec.len);
 
   struct PcoFfiVec dvec;
-  res = auto_decompress(cvec.ptr, cvec.len, PCO_TYPE_F32, &dvec);
-  if (res != Success) {
+  res = pco_auto_decompress(cvec.ptr, cvec.len, PCO_TYPE_F32, &dvec);
+  if (res != PcoSuccess) {
     printf("Error decompressing: %d\n", res);
-    free_pcovec(&cvec);
+    pco_free_pcovec(&cvec);
     retcode = 1;
     goto cleanup_cvec;
   }
@@ -44,13 +44,13 @@ int main() {
   printf("Values match\n");
 
 cleanup_all:
-  free_pcovec(&dvec);
+  pco_free_pcovec(&dvec);
   if (!is_empty(&dvec)) {
     printf("Decompression vector not freed!!!\n");
     retcode = 1;
   }
 cleanup_cvec:
-  free_pcovec(&cvec);
+  pco_free_pcovec(&cvec);
   if (!is_empty(&cvec)) {
     printf("Compression vector not freed!!!\n");
     retcode = 1;

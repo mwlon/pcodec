@@ -1,3 +1,7 @@
+#if defined (__cplusplus)
+extern "C" {
+#endif
+
 #include "cpcodec_generated.h"
 
 // cbindgen can only handle literal constants, which isn't helpful when these
@@ -8,3 +12,7 @@
 #define PCO_TYPE_I64 4
 #define PCO_TYPE_F32 5
 #define PCO_TYPE_F64 6
+
+#if defined (__cplusplus)
+}
+#endif
