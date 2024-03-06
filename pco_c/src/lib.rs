@@ -116,9 +116,8 @@ where
   }
 }
 
-// TODO rename this simple[r] instead of auto
 #[no_mangle]
-pub extern "C" fn pco_auto_compress(
+pub extern "C" fn pco_simpler_compress(
   nums: *const c_void,
   len: c_uint,
   dtype: c_uchar,
@@ -137,7 +136,7 @@ pub extern "C" fn pco_auto_compress(
 }
 
 #[no_mangle]
-pub extern "C" fn pco_auto_decompress(
+pub extern "C" fn pco_simple_decompress(
   compressed: *const c_void,
   len: c_uint,
   dtype: c_uchar,
