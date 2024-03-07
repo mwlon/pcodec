@@ -286,7 +286,7 @@ fn uses_few_enough_adj_bits<U: UnsignedLike>(
   let mut total_inter_base_bits = 0;
   for &x in nums {
     let mult = (x * inv_base).round();
-    if !(mult == U::Float::ZERO) {
+    if mult != U::Float::ZERO {
       let u = x.to_unsigned();
       // For the float 0.0, we shouldn't pretend like we're saving a
       // full PRECISION_BITS. Zero is a multiple of every possible base and
