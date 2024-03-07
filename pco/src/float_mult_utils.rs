@@ -7,9 +7,6 @@ use crate::wrapped::SecondaryLatents;
 use crate::wrapped::SecondaryLatents::{Constant, Nonconstant};
 use crate::{delta, int_mult_utils, sampling};
 
-const ARITH_CHUNK_SIZE: usize = 512;
-
-// PageDecompressor is already doing batching, so we don't need to here
 #[inline(never)]
 pub(crate) fn join_latents<U: UnsignedLike>(
   base: U::Float,
@@ -34,7 +31,6 @@ pub(crate) fn join_latents<U: UnsignedLike>(
   }
 }
 
-// compressor doesn't batch, so we do that ourselves for efficiency
 pub fn split_latents<T: NumberLike>(
   page_nums: &[T],
   base: <T::Unsigned as UnsignedLike>::Float,
@@ -49,22 +45,18 @@ pub fn split_latents<T: NumberLike>(
   };
   let mut primary = uninit_vec();
   let mut adjustments = uninit_vec();
-  let mut mults = [<T::Unsigned as UnsignedLike>::Float::ZERO; ARITH_CHUNK_SIZE];
-  let mut base_i = 0;
-  for chunk in page_nums.chunks(ARITH_CHUNK_SIZE) {
-    for i in 0..chunk.len() {
-      mults[i] = (chunk[i] * inv_base).round();
-    }
-    for i in 0..chunk.len() {
-      primary[base_i + i] = T::Unsigned::from_int_float(mults[i]);
-    }
-    for i in 0..chunk.len() {
-      adjustments[base_i + i] = chunk[i]
-        .to_unsigned()
-        .wrapping_sub((mults[i] * base).to_unsigned());
-    }
-    delta::toggle_center_in_place(&mut adjustments[base_i..base_i + chunk.len()]);
-    base_i += ARITH_CHUNK_SIZE;
+  for (&num, (primary_dst, adj_dst)) in page_nums
+    .iter()
+    .zip(primary.iter_mut().zip(adjustments.iter_mut()))
+  {
+    let mult = (num * inv_base).round();
+    *primary_dst = T::Unsigned::from_int_float(mult);
+    *adj_dst = num
+      .to_unsigned()
+      .wrapping_sub((mult * base).to_unsigned())
+      // ULP adjustments are naturally signed quantities, so we toggle them so
+      // that 0 is in the middle of the range
+      .wrapping_add(T::Unsigned::MID);
   }
   vec![primary, adjustments]
 }
