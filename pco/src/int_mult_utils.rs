@@ -8,13 +8,20 @@ use crate::wrapped::SecondaryLatents;
 
 const ZETA_OF_2: f64 = PI * PI / 6.0; // riemann zeta function
 
+#[inline(never)]
 pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> Vec<Vec<T::Unsigned>> {
-  let mut mults = Vec::with_capacity(nums.len());
-  let mut adjs = Vec::with_capacity(nums.len());
-  for num in nums {
+  let n = nums.len();
+  let mut mults = Vec::with_capacity(n);
+  let mut adjs = Vec::with_capacity(n);
+  unsafe {
+    mults.set_len(n);
+    adjs.set_len(n);
+  }
+  for (&num, (mult_dst, adj_dst)) in nums.iter().zip(mults.iter_mut().zip(adjs.iter_mut())) {
     let u = num.to_unsigned();
-    mults.push(u / base);
-    adjs.push(u % base);
+    // Maybe one day we could do a libdivide approach for these
+    *mult_dst = u / base;
+    *adj_dst = u % base;
   }
   vec![mults, adjs]
 }
