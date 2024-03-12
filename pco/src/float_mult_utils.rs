@@ -26,15 +26,15 @@ pub fn join_latents<F: FloatLike>(
           unadjusted
             .to_latent_ordered()
             .wrapping_add(adj)
-            .wrapping_add(F::L::MID),
-        )
+            .toggle_center(),
+        );
       }
     }
     Constant(adj) => {
-      let centered_adj = adj.wrapping_add(F::L::MID);
+      let centered_adj = adj.toggle_center();
       for (&mult, dst) in primary_dst.iter().zip(dst.iter_mut()) {
         let unadjusted = F::int_float_from_latent(mult) * base;
-        *dst = F::from_latent_ordered(unadjusted.to_latent_ordered().wrapping_add(centered_adj))
+        *dst = F::from_latent_ordered(unadjusted.to_latent_ordered().wrapping_add(centered_adj));
       }
     }
   }
@@ -60,7 +60,7 @@ pub fn split_latents<F: FloatLike>(page_nums: &[F], base: F, inv_base: F) -> Vec
       .wrapping_sub((mult * base).to_latent_ordered())
       // ULP adjustments are naturally signed quantities, so we toggle them so
       // that 0 is in the middle of the range
-      .wrapping_add(F::L::MID);
+      .toggle_center();
   }
   vec![primary, adjustments]
 }

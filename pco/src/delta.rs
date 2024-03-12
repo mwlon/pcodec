@@ -41,19 +41,19 @@ impl<U: Latent> DeltaMoments<U> {
 // * unsigned deltas -> (effectively) signed deltas; encoding
 // * signed deltas -> unsigned deltas; decoding
 #[inline(never)]
-pub fn toggle_center_in_place<U: Latent>(unsigneds: &mut [U]) {
-  for u in unsigneds.iter_mut() {
-    *u = u.wrapping_add(U::MID);
+pub fn toggle_center_in_place<U: Latent>(latents: &mut [U]) {
+  for l in latents.iter_mut() {
+    *l = l.toggle_center();
   }
 }
 
-fn first_order_encode_in_place<U: Latent>(unsigneds: &mut [U]) {
-  if unsigneds.is_empty() {
+fn first_order_encode_in_place<U: Latent>(latents: &mut [U]) {
+  if latents.is_empty() {
     return;
   }
 
-  for i in 0..unsigneds.len() - 1 {
-    unsigneds[i] = unsigneds[i + 1].wrapping_sub(unsigneds[i]);
+  for i in 0..latents.len() - 1 {
+    latents[i] = latents[i + 1].wrapping_sub(latents[i]);
   }
 }
 
@@ -80,8 +80,8 @@ pub fn encode_in_place<U: Latent>(mut latents: &mut [U], order: usize) -> DeltaM
   DeltaMoments::new(page_moments)
 }
 
-fn first_order_decode_in_place<U: Latent>(moment: &mut U, unsigneds: &mut [U]) {
-  for delta in unsigneds.iter_mut() {
+fn first_order_decode_in_place<U: Latent>(moment: &mut U, latents: &mut [U]) {
+  for delta in latents.iter_mut() {
     let tmp = *delta;
     *delta = *moment;
     *moment = moment.wrapping_add(tmp);
@@ -90,15 +90,15 @@ fn first_order_decode_in_place<U: Latent>(moment: &mut U, unsigneds: &mut [U]) {
 
 // used for a single batch, so we mutate the delta moments
 #[inline(never)]
-pub fn decode_in_place<U: Latent>(delta_moments: &mut DeltaMoments<U>, unsigneds: &mut [U]) {
+pub fn decode_in_place<U: Latent>(delta_moments: &mut DeltaMoments<U>, latents: &mut [U]) {
   if delta_moments.order() == 0 {
     // exit early so we don't toggle to signed values
     return;
   }
 
-  toggle_center_in_place(unsigneds);
+  toggle_center_in_place(latents);
   for moment in delta_moments.moments.iter_mut().rev() {
-    first_order_decode_in_place(moment, unsigneds);
+    first_order_decode_in_place(moment, latents);
   }
 }
 
@@ -108,8 +108,8 @@ mod tests {
 
   #[test]
   fn test_delta_encode_decode() {
-    let orig_unsigneds: Vec<u32> = vec![2, 2, 1, u32::MAX, 0];
-    let mut deltas = orig_unsigneds.to_vec();
+    let orig_latents: Vec<u32> = vec![2, 2, 1, u32::MAX, 0];
+    let mut deltas = orig_latents.to_vec();
     let order = 2;
     let zero_delta = u32::MID;
     let mut moments = encode_in_place(&mut deltas, order);
@@ -120,9 +120,9 @@ mod tests {
     }
 
     decode_in_place::<u32>(&mut moments, &mut deltas[..3]);
-    assert_eq!(&deltas[..3], &orig_unsigneds[..3]);
+    assert_eq!(&deltas[..3], &orig_latents[..3]);
 
     decode_in_place::<u32>(&mut moments, &mut deltas[3..]);
-    assert_eq!(&deltas[3..5], &orig_unsigneds[3..5]);
+    assert_eq!(&deltas[3..5], &orig_latents[3..5]);
   }
 }

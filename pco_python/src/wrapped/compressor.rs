@@ -6,7 +6,7 @@ use pyo3::{pyclass, pymethods, PyObject, PyResult, Python};
 
 use pco::data_types::{Latent, NumberLike};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
-use pco::{with_core_dtypes, with_core_unsigneds, ChunkConfig};
+use pco::{with_core_dtypes, with_core_latents, ChunkConfig};
 
 use crate::{pco_err_to_py, DynTypedPyArrayDyn, PyChunkConfig};
 
@@ -114,7 +114,7 @@ impl PyCc {
         }
       }
     }
-    with_core_unsigneds!(match_cc)
+    with_core_latents!(match_cc)
   }
 
   /// :returns: a list containing the count of numbers in each page.
@@ -127,7 +127,7 @@ impl PyCc {
         }
       }
     }
-    with_core_unsigneds!(match_cc)
+    with_core_latents!(match_cc)
   }
 
   /// :param page_idx: an int for which page you want to write.
@@ -144,7 +144,7 @@ impl PyCc {
         }
       }
     }
-    with_core_unsigneds!(match_cc)
+    with_core_latents!(match_cc)
   }
 }
 
