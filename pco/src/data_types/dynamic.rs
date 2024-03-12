@@ -26,11 +26,10 @@ macro_rules! impl_core_dtypes {
 ///
 /// Accepts a macro of a particular format. For example:
 /// ```
-///
-/// use pco::data_types::{CoreDataType, NumberLike, UnsignedLike};
+/// use pco::data_types::{CoreDataType, NumberLike, Latent};
 /// use pco::with_core_dtypes;
-/// fn generic_fn<T: NumberLike>() -> u64 {
-///   T::default().to_unsigned().to_u64()
+/// fn generic_fn<T: NumberLike>() -> String {
+///   T::default().to_string()
 /// }
 ///
 ///

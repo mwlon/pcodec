@@ -8,7 +8,7 @@ use crate::bit_reader::BitReaderBuilder;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
-use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
+use crate::data_types::{FloatLike, Latent, NumberLike};
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::format_version::FormatVersion;
@@ -23,7 +23,7 @@ use crate::Mode;
 ///
 /// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ChunkLatentVarMeta<U: UnsignedLike> {
+pub struct ChunkLatentVarMeta<U: Latent> {
   /// The log2 of the number of the number of states in this chunk's tANS
   /// table.
   ///
@@ -34,7 +34,7 @@ pub struct ChunkLatentVarMeta<U: UnsignedLike> {
   pub bins: Vec<Bin<U>>,
 }
 
-impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
+impl<U: Latent> ChunkLatentVarMeta<U> {
   pub(crate) fn max_bits_per_offset(&self) -> Bitlen {
     self
       .bins
@@ -57,7 +57,7 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
   }
 }
 
-fn parse_bin_batch<U: UnsignedLike, R: BetterBufRead>(
+fn parse_bin_batch<U: Latent, R: BetterBufRead>(
   reader_builder: &mut BitReaderBuilder<R>,
   ans_size_log: Bitlen,
   batch_size: usize,
@@ -91,7 +91,7 @@ fn parse_bin_batch<U: UnsignedLike, R: BetterBufRead>(
   Ok(())
 }
 
-impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
+impl<U: Latent> ChunkLatentVarMeta<U> {
   fn parse_from<R: BetterBufRead>(reader_builder: &mut BitReaderBuilder<R>) -> PcoResult<Self> {
     let (ans_size_log, n_bins) = reader_builder.with_reader(|reader| {
       let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
@@ -149,7 +149,7 @@ impl<U: UnsignedLike> ChunkLatentVarMeta<U> {
 /// The metadata of a pco chunk.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
-pub struct ChunkMeta<U: UnsignedLike> {
+pub struct ChunkMeta<U: Latent> {
   /// The formula `pco` used to compress each number at a low level.
   pub mode: Mode<U>,
   /// How many times delta encoding was applied during compression.
@@ -163,7 +163,7 @@ pub struct ChunkMeta<U: UnsignedLike> {
   pub per_latent_var: Vec<ChunkLatentVarMeta<U>>,
 }
 
-fn write_bins<U: UnsignedLike, W: Write>(
+fn write_bins<U: Latent, W: Write>(
   bins: &[Bin<U>],
   ans_size_log: Bitlen,
   writer: &mut BitWriter<W>,
@@ -181,7 +181,7 @@ fn write_bins<U: UnsignedLike, W: Write>(
   Ok(())
 }
 
-impl<U: UnsignedLike> ChunkMeta<U> {
+impl<U: Latent> ChunkMeta<U> {
   pub(crate) fn new(
     mode: Mode<U>,
     delta_encoding_order: usize,
@@ -212,11 +212,8 @@ impl<U: UnsignedLike> ChunkMeta<U> {
           Ok(Mode::IntMult(base))
         }
         2 => {
-          let base = U::Float::from_unsigned(reader.read_uint::<U>(U::BITS));
-          Ok(Mode::FloatMult(FloatMultConfig {
-            base,
-            inv_base: base.inv(),
-          }))
+          let base_latent = reader.read_uint::<U>(U::BITS);
+          Ok(Mode::FloatMult(base_latent))
         }
         value => Err(PcoError::corruption(format!(
           "unknown mode value {}",
@@ -262,8 +259,8 @@ impl<U: UnsignedLike> ChunkMeta<U> {
       Mode::IntMult(base) => {
         writer.write_uint(base, U::BITS);
       }
-      Mode::FloatMult(config) => {
-        writer.write_uint(config.base.to_unsigned(), U::BITS);
+      Mode::FloatMult(base_latent) => {
+        writer.write_uint(base_latent, U::BITS);
       }
     };
 

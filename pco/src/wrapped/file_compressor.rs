@@ -70,7 +70,7 @@ impl FileCompressor {
     &self,
     nums: &[T],
     config: &ChunkConfig,
-  ) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+  ) -> PcoResult<ChunkCompressor<T::L>> {
     chunk_compressor::new(nums, config)
   }
 }

@@ -43,20 +43,3 @@ have been modified.
 * Pco will always try to process all numbers, and it will fail if insufficient bytes are
 available. For instance, during decompression Pco will try to fill the entire `&mut [T]`
 passed in, returning an insufficient data error if the `&[u8]` passed in is not long enough.
-
-# Advanced
-
-## Custom Data Types
-
-Small data types can be efficiently compressed in expansion:
-for example, compressing `u16` data as a sequence of `u32`
-values.  The only cost to using a larger datatype is a very small
-increase in chunk metadata size.
-
-When necessary, you can implement your own data type via
-`pco::data_types::NumberLike` and (if the existing
-implementations are insufficient)
-`pco::data_types::UnsignedLike` and
-`pco::data_types::FloatLike`.
-
-The maximum legal precision of a custom data type is currently 128 bits.

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::data_types::UnsignedLike;
+use crate::data_types::{FloatLike, Latent};
 use crate::float_mult_utils::FloatMultConfig;
 
 // Internally, here's how we should model each mode:
@@ -22,7 +22,7 @@ use crate::float_mult_utils::FloatMultConfig;
 
 /// A variation of how pco serializes and deserializes numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Mode<U: UnsignedLike> {
+pub enum Mode<U: Latent> {
   /// Each number is compressed as
   /// * which bin it's in and
   /// * the offset in that bin.
@@ -38,6 +38,7 @@ pub enum Mode<U: UnsignedLike> {
   ///
   /// Formula: (bin.lower + offset) * mode.base + adj_bin.lower + adj_bin.offset
   IntMult(U),
+  // TODO explain or provide a conversion function to make sense of this latent
   /// Each number is compressed as
   /// * which bin it's in,
   /// * the approximate offset in that bin as a multiplier of the base,
@@ -46,14 +47,16 @@ pub enum Mode<U: UnsignedLike> {
   ///
   /// Formula: (bin.lower + offset) * mode.base +
   /// (adj_bin.lower + adj_bin.offset) * machine_epsilon
-  FloatMult(FloatMultConfig<U::Float>),
+  FloatMult(U),
 }
 
-impl<U: UnsignedLike> Mode<U> {
+impl<L: Latent> Mode<L> {
   pub(crate) fn n_latent_vars(&self) -> usize {
+    use Mode::*;
+
     match self {
-      Mode::Classic => 1,
-      Mode::FloatMult(_) | Mode::IntMult(_) => 2,
+      Classic => 1,
+      FloatMult(_) | IntMult(_) => 2,
     }
   }
 
@@ -62,13 +65,19 @@ impl<U: UnsignedLike> Mode<U> {
     latent_var_idx: usize,
     delta_order: usize,
   ) -> usize {
+    use Mode::*;
+
     match (self, latent_var_idx) {
-      (Mode::Classic, 0) | (Mode::FloatMult(_), 0) | (Mode::IntMult(_), 0) => delta_order,
-      (Mode::FloatMult(_), 1) | (Mode::IntMult(_), 1) => 0,
+      (Classic, 0) | (FloatMult(_), 0) | (IntMult(_), 0) => delta_order,
+      (FloatMult(_), 1) | (IntMult(_), 1) => 0,
       _ => panic!(
         "should be unreachable; unknown latent {:?}/{}",
         self, latent_var_idx
       ),
     }
+  }
+
+  pub(crate) fn float_mult<F: FloatLike<L = L>>(base: F) -> Self {
+    Self::FloatMult(base.to_latent_ordered())
   }
 }

@@ -1,14 +1,14 @@
 use crate::bin::BinCompressionInfo;
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 
 #[derive(Debug, Clone)]
-pub struct CompressionTable<U: UnsignedLike> {
+pub struct CompressionTable<U: Latent> {
   pub search_size_log: usize,
   pub search_lowers: Vec<U>,
   pub infos: Vec<BinCompressionInfo<U>>,
 }
 
-impl<U: UnsignedLike> From<Vec<BinCompressionInfo<U>>> for CompressionTable<U> {
+impl<U: Latent> From<Vec<BinCompressionInfo<U>>> for CompressionTable<U> {
   fn from(mut infos: Vec<BinCompressionInfo<U>>) -> Self {
     infos.sort_unstable_by_key(|info| info.lower);
 

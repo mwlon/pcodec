@@ -6,7 +6,7 @@ use better_io::BetterBufRead;
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
@@ -21,10 +21,11 @@ use crate::{delta, float_mult_utils};
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
 
 #[derive(Clone, Debug)]
-pub struct State<U: UnsignedLike> {
+pub struct State<U: Latent> {
   n_processed: usize,
   latent_batch_decompressors: Vec<LatentBatchDecompressor<U>>,
   delta_momentss: Vec<DeltaMoments<U>>, // one per latent variable
+  primary_latents: [U; FULL_BATCH_N],
   secondary_latents: [U; FULL_BATCH_N],
 }
 
@@ -32,36 +33,21 @@ pub struct State<U: UnsignedLike> {
 pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   // immutable
   n: usize,
-  mode: Mode<T::Unsigned>,
-  maybe_constant_secondary: Option<T::Unsigned>,
+  mode: Mode<T::L>,
+  maybe_constant_secondary: Option<T::L>,
   phantom: PhantomData<T>,
 
   // mutable
   reader_builder: BitReaderBuilder<R>,
-  state: State<T::Unsigned>,
+  state: State<T::L>,
 }
 
-#[inline(never)]
-fn unsigneds_to_nums_in_place<T: NumberLike>(dst: &mut [T::Unsigned]) {
-  for u in dst.iter_mut() {
-    *u = T::transmute_to_unsigned(T::from_unsigned(*u));
-  }
-}
-
-pub(crate) enum SecondaryLatents<'a, U: UnsignedLike> {
-  Nonconstant(&'a mut [U]),
+pub(crate) enum SecondaryLatents<'a, U: Latent> {
+  Nonconstant(&'a [U]),
   Constant(U),
 }
 
-fn join_latents<U: UnsignedLike>(mode: Mode<U>, primary: &mut [U], secondary: SecondaryLatents<U>) {
-  match mode {
-    Classic => (), // we already wrote the nums to the primary dst
-    FloatMult(config) => float_mult_utils::join_latents(config.base, primary, secondary),
-    IntMult(gcd) => int_mult_utils::join_latents(gcd, primary, secondary),
-  }
-}
-
-fn decompress_latents_w_delta<U: UnsignedLike>(
+fn decompress_latents_w_delta<U: Latent>(
   reader: &mut BitReader,
   delta_moments: &mut DeltaMoments<U>,
   lbd: &mut LatentBatchDecompressor<U>,
@@ -78,12 +64,12 @@ fn decompress_latents_w_delta<U: UnsignedLike>(
 }
 
 impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
-  pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta<T::Unsigned>, n: usize) -> PcoResult<Self> {
+  pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta<T::L>, n: usize) -> PcoResult<Self> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
 
-    let page_meta = reader_builder
-      .with_reader(|reader| PageMeta::<T::Unsigned>::parse_from(reader, chunk_meta))?;
+    let page_meta =
+      reader_builder.with_reader(|reader| PageMeta::<T::L>::parse_from(reader, chunk_meta))?;
 
     let mode = chunk_meta.mode;
     let delta_momentss = page_meta
@@ -126,24 +112,27 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
         n_processed: 0,
         latent_batch_decompressors,
         delta_momentss,
-        secondary_latents: [T::Unsigned::default(); FULL_BATCH_N],
+        primary_latents: [T::L::default(); FULL_BATCH_N],
+        secondary_latents: [T::L::default(); FULL_BATCH_N],
       },
     })
   }
 
-  fn decompress_batch(&mut self, primary_dst: &mut [T]) -> PcoResult<()> {
-    let batch_n = primary_dst.len();
-    let primary_latents = T::transmute_to_unsigned_slice(primary_dst);
+  fn decompress_batch(&mut self, dst: &mut [T]) -> PcoResult<()> {
+    let batch_n = dst.len();
+    // let primary_latents = T::transmute_to_unsigned_slice(primary_dst);
     let n = self.n;
     let mode = self.mode;
     let State {
       latent_batch_decompressors,
       delta_momentss,
+      primary_latents,
       secondary_latents,
       n_processed,
       ..
     } = &mut self.state;
 
+    let primary_latents = &mut primary_latents[..batch_n];
     let secondary_latents = &mut secondary_latents[..batch_n];
     let n_latents = latent_batch_decompressors.len();
 
@@ -173,8 +162,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       None => Nonconstant(secondary_latents),
     };
 
-    join_latents(mode, primary_latents, secondary);
-    unsigneds_to_nums_in_place::<T>(primary_latents);
+    T::join_latents(mode, primary_latents, secondary, dst);
 
     *n_processed += batch_n;
     if *n_processed == n {

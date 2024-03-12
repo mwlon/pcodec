@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use pco::data_types::{NumberLike, UnsignedLike};
+use pco::data_types::{Latent, NumberLike};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::{Bin, ChunkLatentVarMeta, ChunkMeta, Mode};
 
@@ -17,7 +17,7 @@ pub trait InspectHandler {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum NumDisplay<U: UnsignedLike> {
+enum NumDisplay<U: Latent> {
   Unsigned,
   Delta,
   IntFloat,
@@ -25,7 +25,7 @@ enum NumDisplay<U: UnsignedLike> {
   IntMultAdj(U),
 }
 
-fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], display: NumDisplay<T::Unsigned>) {
+fn print_bins<T: NumberLike>(bins: &[Bin<T::L>], display: NumDisplay<T::L>) {
   for bin in bins {
     let lower = bin.lower;
     let lower_str = match display {
@@ -33,10 +33,10 @@ fn print_bins<T: NumberLike>(bins: &[Bin<T::Unsigned>], display: NumDisplay<T::U
       Delta => {
         // deltas are "centered" around U::MID, so we want to uncenter and
         // display easily-readable signed numbers
-        if lower < T::Unsigned::MID {
-          format!("-{}", T::Unsigned::MID - lower)
+        if lower < T::L::MID {
+          format!("-{}", T::L::MID - lower)
         } else {
-          (lower - T::Unsigned::MID).to_string()
+          (lower - T::L::MID).to_string()
         }
       }
       IntFloat => lower.to_int_float().to_string(),
@@ -69,8 +69,8 @@ fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
 
 fn display_latent_var<T: NumberLike>(
   latent_idx: usize,
-  meta: &ChunkMeta<T::Unsigned>,
-  latent: &ChunkLatentVarMeta<T::Unsigned>,
+  meta: &ChunkMeta<T::L>,
+  latent: &ChunkLatentVarMeta<T::L>,
 ) {
   let latent_name = match (meta.mode, latent_idx) {
     (Mode::Classic, 0) => "primary".to_string(),
@@ -157,7 +157,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     println!("number of chunks: {}", metas.len());
     let total_n: usize = chunk_ns.iter().sum();
     println!("total n: {}", total_n);
-    let uncompressed_size = <P::Num as NumberLike>::Unsigned::BITS as usize / 8 * total_n;
+    let uncompressed_size = <P::Num as NumberLike>::L::BITS as usize / 8 * total_n;
     println!(
       "uncompressed byte size: {}",
       uncompressed_size

@@ -2,16 +2,16 @@ use std::io::Write;
 
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 use crate::errors::PcoResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct DeltaMoments<U: UnsignedLike> {
+pub struct DeltaMoments<U: Latent> {
   // length = delta encoding order
   pub moments: Vec<U>,
 }
 
-impl<U: UnsignedLike> DeltaMoments<U> {
+impl<U: Latent> DeltaMoments<U> {
   fn new(moments: Vec<U>) -> Self {
     Self { moments }
   }
@@ -41,13 +41,13 @@ impl<U: UnsignedLike> DeltaMoments<U> {
 // * unsigned deltas -> (effectively) signed deltas; encoding
 // * signed deltas -> unsigned deltas; decoding
 #[inline(never)]
-pub fn toggle_center_in_place<U: UnsignedLike>(unsigneds: &mut [U]) {
+pub fn toggle_center_in_place<U: Latent>(unsigneds: &mut [U]) {
   for u in unsigneds.iter_mut() {
     *u = u.wrapping_add(U::MID);
   }
 }
 
-fn first_order_encode_in_place<U: UnsignedLike>(unsigneds: &mut [U]) {
+fn first_order_encode_in_place<U: Latent>(unsigneds: &mut [U]) {
   if unsigneds.is_empty() {
     return;
   }
@@ -59,7 +59,7 @@ fn first_order_encode_in_place<U: UnsignedLike>(unsigneds: &mut [U]) {
 
 // used for a single page, so we return the delta moments
 #[inline(never)]
-pub fn encode_in_place<U: UnsignedLike>(mut latents: &mut [U], order: usize) -> DeltaMoments<U> {
+pub fn encode_in_place<U: Latent>(mut latents: &mut [U], order: usize) -> DeltaMoments<U> {
   // TODO this function could be made faster by doing all steps on mini batches
   // of ~512 at a time
   if order == 0 {
@@ -80,7 +80,7 @@ pub fn encode_in_place<U: UnsignedLike>(mut latents: &mut [U], order: usize) -> 
   DeltaMoments::new(page_moments)
 }
 
-fn first_order_decode_in_place<U: UnsignedLike>(moment: &mut U, unsigneds: &mut [U]) {
+fn first_order_decode_in_place<U: Latent>(moment: &mut U, unsigneds: &mut [U]) {
   for delta in unsigneds.iter_mut() {
     let tmp = *delta;
     *delta = *moment;
@@ -90,7 +90,7 @@ fn first_order_decode_in_place<U: UnsignedLike>(moment: &mut U, unsigneds: &mut 
 
 // used for a single batch, so we mutate the delta moments
 #[inline(never)]
-pub fn decode_in_place<U: UnsignedLike>(delta_moments: &mut DeltaMoments<U>, unsigneds: &mut [U]) {
+pub fn decode_in_place<U: Latent>(delta_moments: &mut DeltaMoments<U>, unsigneds: &mut [U]) {
   if delta_moments.order() == 0 {
     // exit early so we don't toggle to signed values
     return;

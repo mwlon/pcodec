@@ -4,7 +4,7 @@ use numpy::{Element, PyArrayDyn};
 use pyo3::types::{PyBytes, PyModule};
 use pyo3::{pyclass, pymethods, PyObject, PyResult, Python};
 
-use pco::data_types::{NumberLike, UnsignedLike};
+use pco::data_types::{Latent, NumberLike};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
 use pco::{with_core_dtypes, with_core_unsigneds, ChunkConfig};
 
@@ -31,7 +31,7 @@ impl PyFc {
     &self,
     arr: &PyArrayDyn<T>,
     config: &ChunkConfig,
-  ) -> PyResult<ChunkCompressor<T::Unsigned>> {
+  ) -> PyResult<ChunkCompressor<T::L>> {
     let arr_ro = arr.readonly();
     let src = arr_ro.as_slice()?;
     self
@@ -88,17 +88,13 @@ impl PyFc {
   }
 }
 
-fn chunk_meta_py<U: UnsignedLike>(py: Python, cc: &ChunkCompressor<U>) -> PyResult<PyObject> {
+fn chunk_meta_py<U: Latent>(py: Python, cc: &ChunkCompressor<U>) -> PyResult<PyObject> {
   let mut res = Vec::new();
   cc.write_chunk_meta(&mut res).map_err(pco_err_to_py)?;
   Ok(PyBytes::new(py, &res).into())
 }
 
-fn page_py<U: UnsignedLike>(
-  py: Python,
-  cc: &ChunkCompressor<U>,
-  page_idx: usize,
-) -> PyResult<PyObject> {
+fn page_py<U: Latent>(py: Python, cc: &ChunkCompressor<U>, page_idx: usize) -> PyResult<PyObject> {
   let mut res = Vec::new();
   cc.write_page(page_idx, &mut res).map_err(pco_err_to_py)?;
   Ok(PyBytes::new(py, &res).into())

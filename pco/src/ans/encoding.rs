@@ -3,7 +3,7 @@ use std::cmp::max;
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
 use crate::constants::{Bitlen, Weight};
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::Bin;
 
@@ -28,7 +28,7 @@ pub struct Encoder {
 }
 
 impl Encoder {
-  pub fn from_bins<U: UnsignedLike>(size_log: Bitlen, bins: &[Bin<U>]) -> PcoResult<Self> {
+  pub fn from_bins<U: Latent>(size_log: Bitlen, bins: &[Bin<U>]) -> PcoResult<Self> {
     let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
     let spec = Spec::from_weights(size_log, weights)?;
     Ok(Self::new(&spec))

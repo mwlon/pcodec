@@ -4,13 +4,13 @@ use crate::ans::AnsState;
 use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::page_meta::PageLatentVarMeta;
 use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta};
 
 #[derive(Clone, Debug)]
-struct State<U: UnsignedLike> {
+struct State<U: Latent> {
   // scratch needs no backup
   offset_bits_csum_scratch: [Bitlen; FULL_BATCH_N],
   offset_bits_scratch: [Bitlen; FULL_BATCH_N],
@@ -18,7 +18,7 @@ struct State<U: UnsignedLike> {
   state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
-impl<U: UnsignedLike> State<U> {
+impl<U: Latent> State<U> {
   #[inline]
   fn set_scratch(&mut self, i: usize, offset_bit_idx: Bitlen, info: &BinDecompressionInfo<U>) {
     unsafe {
@@ -31,7 +31,7 @@ impl<U: UnsignedLike> State<U> {
 
 // LatentBatchDecompressor does the main work of decoding bytes into UnsignedLikes
 #[derive(Clone, Debug)]
-pub struct LatentBatchDecompressor<U: UnsignedLike> {
+pub struct LatentBatchDecompressor<U: Latent> {
   // known information about this latent variable
   u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<U>>,
@@ -43,7 +43,7 @@ pub struct LatentBatchDecompressor<U: UnsignedLike> {
   state: State<U>,
 }
 
-impl<U: UnsignedLike> LatentBatchDecompressor<U> {
+impl<U: Latent> LatentBatchDecompressor<U> {
   pub fn new(
     chunk_latent_var_meta: &ChunkLatentVarMeta<U>,
     page_latent_var_meta: &PageLatentVarMeta<U>,

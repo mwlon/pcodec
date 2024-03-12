@@ -4,10 +4,10 @@ use crate::ans::{AnsState, Token};
 use crate::compression_intermediates::DissectedPageVar;
 use crate::compression_table::CompressionTable;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 use crate::{ans, bits};
 
-pub struct LatentBatchDissector<'a, U: UnsignedLike> {
+pub struct LatentBatchDissector<'a, U: Latent> {
   // immutable
   table: &'a CompressionTable<U>,
   encoder: &'a ans::Encoder,
@@ -17,7 +17,7 @@ pub struct LatentBatchDissector<'a, U: UnsignedLike> {
   token_scratch: [Token; FULL_BATCH_N],
 }
 
-impl<'a, U: UnsignedLike> LatentBatchDissector<'a, U> {
+impl<'a, U: Latent> LatentBatchDissector<'a, U> {
   pub fn new(table: &'a CompressionTable<U>, encoder: &'a ans::Encoder) -> Self {
     Self {
       table,

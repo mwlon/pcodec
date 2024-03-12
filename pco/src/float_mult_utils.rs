@@ -2,44 +2,48 @@ use std::cmp::{max, min};
 use std::mem;
 
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
+use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
 use crate::wrapped::SecondaryLatents;
 use crate::wrapped::SecondaryLatents::{Constant, Nonconstant};
 use crate::{delta, int_mult_utils, sampling};
 
 #[inline(never)]
-pub(crate) fn join_latents<U: UnsignedLike>(
-  base: U::Float,
-  primary_dst: &mut [U],
-  secondary: SecondaryLatents<U>,
+pub fn join_latents<F: FloatLike>(
+  base: F,
+  primary_dst: &[F::L],
+  secondary: SecondaryLatents<F::L>,
+  dst: &mut [F],
 ) {
   match secondary {
     Nonconstant(adjustments) => {
-      delta::toggle_center_in_place(adjustments);
-      for (u, &adj) in primary_dst.iter_mut().zip(adjustments.iter()) {
-        let unadjusted = u.to_int_float() * base;
-        *u = unadjusted.to_unsigned().wrapping_add(adj)
+      for ((&mult, &adj), dst) in primary_dst
+        .iter()
+        .zip(adjustments.iter())
+        .zip(dst.iter_mut())
+      {
+        let unadjusted = F::int_float_from_latent(mult) * base;
+        *dst = F::from_latent_ordered(
+          unadjusted
+            .to_latent_ordered()
+            .wrapping_add(adj)
+            .wrapping_add(F::L::MID),
+        )
       }
     }
     Constant(adj) => {
-      let adj = adj.wrapping_add(U::MID);
-      for u in primary_dst.iter_mut() {
-        let unadjusted = u.to_int_float() * base;
-        *u = unadjusted.to_unsigned().wrapping_add(adj)
+      let centered_adj = adj.wrapping_add(F::L::MID);
+      for (&mult, dst) in primary_dst.iter().zip(dst.iter_mut()) {
+        let unadjusted = F::int_float_from_latent(mult) * base;
+        *dst = F::from_latent_ordered(unadjusted.to_latent_ordered().wrapping_add(centered_adj))
       }
     }
   }
 }
 
-pub fn split_latents<T: NumberLike>(
-  page_nums: &[T],
-  base: <T::Unsigned as UnsignedLike>::Float,
-  inv_base: <T::Unsigned as UnsignedLike>::Float,
-) -> Vec<Vec<T::Unsigned>> {
-  let page_nums = T::assert_float(page_nums);
+pub fn split_latents<F: FloatLike>(page_nums: &[F], base: F, inv_base: F) -> Vec<Vec<F::L>> {
   let n = page_nums.len();
   let uninit_vec = || unsafe {
-    let mut res = Vec::<T::Unsigned>::with_capacity(n);
+    let mut res = Vec::<F::L>::with_capacity(n);
     res.set_len(n);
     res
   };
@@ -50,13 +54,13 @@ pub fn split_latents<T: NumberLike>(
     .zip(primary.iter_mut().zip(adjustments.iter_mut()))
   {
     let mult = (num * inv_base).round();
-    *primary_dst = T::Unsigned::from_int_float(mult);
+    *primary_dst = F::int_float_to_latent(mult);
     *adj_dst = num
-      .to_unsigned()
-      .wrapping_sub((mult * base).to_unsigned())
+      .to_latent_ordered()
+      .wrapping_sub((mult * base).to_latent_ordered())
       // ULP adjustments are naturally signed quantities, so we toggle them so
       // that 0 is in the middle of the range
-      .wrapping_add(T::Unsigned::MID);
+      .wrapping_add(F::L::MID);
   }
   vec![primary, adjustments]
 }
@@ -149,18 +153,22 @@ fn approx_pair_gcd<F: FloatLike>(greater: F, lesser: F) -> Option<F> {
 }
 
 #[inline(never)]
-fn choose_candidate_base_by_trailing_zeros<U: UnsignedLike>(
-  sample: &[U::Float],
-) -> Option<FloatMultConfig<U::Float>> {
-  let precision_bits = U::Float::PRECISION_BITS;
-  let mut min_power_of_2 = i32::MAX;
+fn choose_candidate_base_by_trailing_zeros<F: FloatLike>(
+  sample: &[F],
+) -> Option<FloatMultConfig<F>> {
+  let precision_bits = F::PRECISION_BITS;
+  let calc_power_of_2_divisor =
+    |exponent, trailing_zeros| exponent - (precision_bits.saturating_sub(trailing_zeros)) as i32;
+
+  // the greatest k such that 2^k divides all the floats exactly
+  let mut k = i32::MAX;
   let mut count = 0;
   for x in sample {
     let trailing_zeros = x.trailing_zeros();
-    if *x != U::Float::ZERO && trailing_zeros >= INTERESTING_TRAILING_ZEROS {
-      let power_of_2 = x.exponent() - (precision_bits.saturating_sub(trailing_zeros)) as i32;
+    if *x != F::ZERO && trailing_zeros >= INTERESTING_TRAILING_ZEROS {
+      let k_prime = calc_power_of_2_divisor(x.exponent(), trailing_zeros);
       count += 1;
-      min_power_of_2 = min(min_power_of_2, power_of_2);
+      k = min(k, k_prime);
     }
   }
 
@@ -173,21 +181,23 @@ fn choose_candidate_base_by_trailing_zeros<U: UnsignedLike>(
   }
 
   let mut int_sample = Vec::new();
-  let lshift = U::BITS - precision_bits - 1;
-  let explicit_mantissa = U::MID;
+  let lshift = F::L::BITS - precision_bits - 1;
+  let explicit_mantissa = F::L::MID;
   for x in sample {
     let exponent = x.exponent();
-    let power_of_2 = exponent - (precision_bits.saturating_sub(x.trailing_zeros())) as i32;
-    if power_of_2 >= min_power_of_2 && exponent < min_power_of_2 + U::BITS as i32 {
-      let rshift = U::BITS - 1 - (exponent - min_power_of_2) as u32;
-      let lshifted_w_explicit_mantissa = (U::from_float_bits(*x) << lshift) | explicit_mantissa;
-      int_sample.push(lshifted_w_explicit_mantissa >> rshift);
+    // the greatest k' such that 2^k' divides this float exactly
+    let k_prime = calc_power_of_2_divisor(x.exponent(), x.trailing_zeros());
+    if k_prime >= k && exponent < k + F::L::BITS as i32 {
+      let rshift = F::L::BITS - 1 - (exponent - k) as u32;
+      let lshifted_w_explicit_mantissa = (x.to_latent_bits() << lshift) | explicit_mantissa;
+      let multiple_of_k = lshifted_w_explicit_mantissa >> rshift;
+      int_sample.push(multiple_of_k);
     }
   }
 
   if int_sample.len() >= required_samples {
-    let int_base = int_mult_utils::choose_candidate_base(&mut int_sample).unwrap_or(U::ONE);
-    let base = int_base.to_float() * U::Float::exp2(min_power_of_2);
+    let int_base = int_mult_utils::choose_candidate_base(&mut int_sample).unwrap_or(F::L::ONE);
+    let base = F::from_latent_numerical(int_base) * F::exp2(k);
     Some(FloatMultConfig::from_base(base))
   } else {
     None
@@ -276,26 +286,22 @@ fn snap_to_int_reciprocal<F: FloatLike>(base: F) -> FloatMultConfig<F> {
 }
 
 #[inline(never)]
-fn uses_few_enough_adj_bits<U: UnsignedLike>(
-  config: FloatMultConfig<U::Float>,
-  nums: &[U::Float],
-) -> bool {
+fn uses_few_enough_adj_bits<F: FloatLike>(config: FloatMultConfig<F>, nums: &[F]) -> bool {
   let FloatMultConfig { base, inv_base } = config;
-  let total_uncompressed_size = nums.len() * U::BITS as usize;
+  let total_uncompressed_size = nums.len() * F::BITS as usize;
   let mut total_bits_saved = 0;
   let mut total_inter_base_bits = 0;
   for &x in nums {
     let mult = (x * inv_base).round();
-    if mult != U::Float::ZERO {
-      let u = x.to_unsigned();
+    if mult != F::ZERO {
+      let u = x.to_latent_ordered();
       // For the float 0.0, we shouldn't pretend like we're saving a
       // full PRECISION_BITS. Zero is a multiple of every possible base and
       // would get memorized by Classic if common.
-      let approx = (mult * base).to_unsigned();
+      let approx = (mult * base).to_latent_ordered();
       let abs_adj = max(u, approx) - min(u, approx);
-      let adj_bits = U::BITS - (abs_adj << 1).leading_zeros();
-      let inter_base_bits =
-        (U::Float::PRECISION_BITS as usize).saturating_sub(mult.exponent() as usize);
+      let adj_bits = F::L::BITS - (abs_adj << 1).leading_zeros();
+      let inter_base_bits = (F::PRECISION_BITS as usize).saturating_sub(mult.exponent() as usize);
       total_bits_saved += inter_base_bits.saturating_sub(adj_bits as usize);
       total_inter_base_bits += inter_base_bits;
     };
@@ -305,14 +311,14 @@ fn uses_few_enough_adj_bits<U: UnsignedLike>(
     && total_bits_saved > total_uncompressed_size as f64 * ADJ_BITS_ABSOLUTE_SAVINGS_THRESH
 }
 
-fn better_compression_than_classic<U: UnsignedLike>(
-  config: FloatMultConfig<U::Float>,
-  sample: &[U::Float],
-  nums: &[U::Float],
+fn better_compression_than_classic<F: FloatLike>(
+  config: FloatMultConfig<F>,
+  sample: &[F],
+  nums: &[F],
 ) -> bool {
   sampling::has_enough_infrequent_ints(sample, |x| {
-    U::from_int_float((x * config.inv_base).round())
-  }) && uses_few_enough_adj_bits::<U>(config, nums)
+    ((x * config.inv_base).round()).int_float_to_latent()
+  }) && uses_few_enough_adj_bits(config, nums)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -337,13 +343,10 @@ impl<F: FloatLike> FloatMultConfig<F> {
   }
 }
 
-fn choose_config_w_sample<U: UnsignedLike>(
-  sample: &[U::Float],
-  nums: &[U::Float],
-) -> Option<FloatMultConfig<U::Float>> {
-  let config = choose_candidate_base_by_trailing_zeros::<U>(sample)
+fn choose_config_w_sample<F: FloatLike>(sample: &[F], nums: &[F]) -> Option<FloatMultConfig<F>> {
+  let config = choose_candidate_base_by_trailing_zeros(sample)
     .or_else(|| choose_candidate_base_by_euclidean(sample))?;
-  if better_compression_than_classic::<U>(config, sample, nums) {
+  if better_compression_than_classic(config, sample, nums) {
     Some(config)
   } else {
     None
@@ -351,10 +354,7 @@ fn choose_config_w_sample<U: UnsignedLike>(
 }
 
 #[inline(never)]
-pub fn choose_config<T: NumberLike>(
-  nums: &[T],
-) -> Option<FloatMultConfig<<T::Unsigned as UnsignedLike>::Float>> {
-  let nums = T::assert_float(nums);
+pub fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<F>> {
   // We can compress infinities, nans, and baby floats, but we can't learn
   // the base from them.
   let sample = sampling::choose_sample(nums, |num| {
@@ -365,7 +365,7 @@ pub fn choose_config<T: NumberLike>(
     }
   })?;
 
-  choose_config_w_sample::<T::Unsigned>(&sample, nums)
+  choose_config_w_sample(&sample, nums)
 }
 
 #[cfg(test)]
@@ -376,7 +376,7 @@ mod test {
   use super::*;
 
   fn assert_almost_equal_ulps(a: f32, b: f32, ulps_tolerance: u32, desc: &str) {
-    let (a, b) = (a.to_unsigned(), b.to_unsigned());
+    let (a, b) = (a.to_latent_ordered(), b.to_latent_ordered());
     let udiff = max(a, b) - min(a, b);
     assert!(
       udiff <= ulps_tolerance,
@@ -399,7 +399,7 @@ mod test {
   }
 
   fn plus_epsilons(a: f32, epsilons: i32) -> f32 {
-    f32::from_unsigned(a.to_unsigned().wrapping_add(epsilons as u32))
+    f32::from_latent_ordered(a.to_latent_ordered().wrapping_add(epsilons as u32))
   }
 
   #[test]
@@ -421,10 +421,8 @@ mod test {
   #[test]
   fn test_trailing_zeros() {
     assert_eq!(
-      choose_candidate_base_by_trailing_zeros::<u32>(
-        &[0.0, 3.0, 6.0, 21.0, f32::exp2(100.0)].repeat(5)
-      )
-      .unwrap(),
+      choose_candidate_base_by_trailing_zeros(&[0.0, 3.0, 6.0, 21.0, f32::exp2(100.0)].repeat(5))
+        .unwrap(),
       FloatMultConfig::from_base(3.0),
     )
   }
@@ -546,7 +544,7 @@ mod test {
       f32::NAN,
       f32::INFINITY,
     ];
-    assert!(better_compression_than_classic::<u32>(
+    assert!(better_compression_than_classic(
       config, &nums, &nums
     ));
 
@@ -556,7 +554,7 @@ mod test {
         .map(|x| plus_epsilons((x as f32) * 0.1, x % 2))
         .collect::<Vec<_>>();
       assert!(
-        better_compression_than_classic::<u32>(config, &nums, &nums),
+        better_compression_than_classic(config, &nums, &nums),
         "n={}",
         n
       );
@@ -569,7 +567,7 @@ mod test {
     for n in [10, 1000] {
       let nums = vec![0.1; n];
       assert!(
-        !better_compression_than_classic::<u32>(config, &nums, &nums),
+        !better_compression_than_classic(config, &nums, &nums),
         "n={}",
         n
       );
@@ -579,7 +577,7 @@ mod test {
         .map(|x| (x as f32) * 0.77)
         .collect::<Vec<_>>();
       assert!(
-        !better_compression_than_classic::<u32>(config, &nums, &nums),
+        !better_compression_than_classic(config, &nums, &nums),
         "n={}",
         n
       );
@@ -590,7 +588,7 @@ mod test {
         .map(|x| (x + 5_000_000) as f32 * 0.1)
         .collect::<Vec<_>>();
       assert!(
-        !better_compression_than_classic::<u32>(config, &nums, &nums),
+        !better_compression_than_classic(config, &nums, &nums),
         "n={}",
         n
       );
@@ -605,7 +603,7 @@ mod test {
     for _ in 0..1000 {
       nums.push(rng.gen_range(0.0..1.0));
     }
-    assert!(!better_compression_than_classic::<u32>(
+    assert!(!better_compression_than_classic(
       concig, &nums, &nums
     ));
   }

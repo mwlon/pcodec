@@ -3,7 +3,7 @@ use rand_xoshiro::rand_core::SeedableRng;
 
 use crate::chunk_config::ChunkConfig;
 use crate::constants::Bitlen;
-use crate::data_types::NumberLike;
+use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
 use crate::errors::PcoResult;
 use crate::float_mult_utils::FloatMultConfig;
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
@@ -12,7 +12,7 @@ use crate::{ChunkMeta, Mode};
 fn compress_w_meta<T: NumberLike>(
   nums: &[T],
   config: &ChunkConfig,
-) -> PcoResult<(Vec<u8>, ChunkMeta<T::Unsigned>)> {
+) -> PcoResult<(Vec<u8>, ChunkMeta<T::L>)> {
   let mut compressed = Vec::new();
   let fc = FileCompressor::default();
   fc.write_header(&mut compressed)?;
@@ -35,9 +35,8 @@ fn assert_nums_eq<T: NumberLike>(decompressed: &[T], expected: &[T], name: &str)
     debug_info
   );
   for (i, (x, y)) in decompressed.iter().zip(expected).enumerate() {
-    assert_eq!(
-      x.to_unsigned(),
-      y.to_unsigned(),
+    assert!(
+      x.is_identical(*y),
       "at {}; {}",
       i,
       debug_info,
@@ -271,7 +270,7 @@ fn test_decimals() -> PcoResult<()> {
   let n = 300;
 
   pub fn plus_epsilons(a: f64, epsilons: i64) -> f64 {
-    f64::from_unsigned(a.to_unsigned().wrapping_add(epsilons as u64))
+    f64::from_latent_ordered(a.to_latent_ordered().wrapping_add(epsilons as u64))
   }
 
   for _ in 0..n {
@@ -287,13 +286,7 @@ fn test_decimals() -> PcoResult<()> {
   let overhead_bytes = 100;
   let (compressed, meta) = compress_w_meta(&nums, &ChunkConfig::default())?;
   assert!(compressed.len() < (9 * n + 3 * n) / 8 + overhead_bytes);
-  assert_eq!(
-    meta.mode,
-    Mode::FloatMult(FloatMultConfig {
-      base: 1.0 / 100.0,
-      inv_base: 100.0
-    })
-  );
+  assert_eq!(meta.mode, Mode::float_mult(1.0 / 100.0));
 
   assert_recovers(&nums, 2, "decimals")
 }
@@ -306,13 +299,7 @@ fn test_trivial_first_latent_var() -> PcoResult<()> {
   }
   nums[77] += 0.0001;
   let (compressed, meta) = compress_w_meta(&nums, &ChunkConfig::default())?;
-  assert_eq!(
-    meta.mode,
-    Mode::FloatMult(FloatMultConfig {
-      base: 1.0,
-      inv_base: 1.0
-    })
-  );
+  assert_eq!(meta.mode, Mode::float_mult(1.0_f32));
   let decompressed = simple_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, "trivial_first_latent")?;
   Ok(())

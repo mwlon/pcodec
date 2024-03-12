@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{Latent, NumberLike};
 use crate::errors::PcoResult;
 use crate::standalone::constants::{
   BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_STANDALONE_VERSION, CURRENT_STANDALONE_VERSION,
@@ -84,7 +84,7 @@ impl FileCompressor {
     &self,
     nums: &[T],
     config: &ChunkConfig,
-  ) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+  ) -> PcoResult<ChunkCompressor<T::L>> {
     let mut config = config.clone();
     config.paging_spec = PagingSpec::ExactPageSizes(vec![nums.len()]);
 
@@ -107,12 +107,12 @@ impl FileCompressor {
 
 /// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
-pub struct ChunkCompressor<U: UnsignedLike> {
+pub struct ChunkCompressor<U: Latent> {
   inner: wrapped::ChunkCompressor<U>,
   dtype_byte: u8,
 }
 
-impl<U: UnsignedLike> ChunkCompressor<U> {
+impl<U: Latent> ChunkCompressor<U> {
   /// Returns pre-computed information about the chunk.
   pub fn meta(&self) -> &ChunkMeta<U> {
     self.inner.meta()

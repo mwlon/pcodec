@@ -2,12 +2,12 @@ use crate::ans::Token;
 use crate::bin::BinCompressionInfo;
 use crate::bits;
 use crate::constants::{Bitlen, Weight};
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 
 // using f32 instead of f64 because the .log2() is faster
-fn bin_bit_cost<U: UnsignedLike>(
+fn bin_bit_cost<U: Latent>(
   bin_meta_cost: f32,
   lower: U,
   upper: U,
@@ -24,7 +24,7 @@ fn bin_bit_cost<U: UnsignedLike>(
 // j and i are the inclusive indices of a group of bins to combine together.
 // This algorithm is exactly optimal, assuming our cost estimates (measured in
 // total bit size) are correct.
-fn choose_optimized_partitioning<U: UnsignedLike>(
+fn choose_optimized_partitioning<U: Latent>(
   bins: &[BinCompressionInfo<U>],
   ans_size_log: Bitlen,
 ) -> Vec<(usize, usize)> {
@@ -95,7 +95,7 @@ fn choose_optimized_partitioning<U: UnsignedLike>(
   }
 }
 
-pub fn optimize_bins<U: UnsignedLike>(
+pub fn optimize_bins<U: Latent>(
   bins: &[BinCompressionInfo<U>],
   ans_size_log: Bitlen,
 ) -> Vec<BinCompressionInfo<U>> {

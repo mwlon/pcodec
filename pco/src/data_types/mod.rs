@@ -5,26 +5,35 @@ use std::ops::{
   RemAssign, Shl, Shr, Sub, SubAssign,
 };
 
+use crate::{ChunkConfig, Mode};
 pub use dynamic::CoreDataType;
 
 use crate::constants::Bitlen;
+use crate::float_mult_utils::FloatMultConfig;
+use crate::wrapped::SecondaryLatents;
 
 mod dynamic;
 mod floats;
 mod signeds;
 mod unsigneds;
 
-/// *unstable API* Trait for data types that behave like floats.
-///
+pub(crate) trait OrderedLatentConvert: Copy {
+  type L: Latent;
+
+  fn from_latent_ordered(l: Self::L) -> Self;
+  fn to_latent_ordered(self) -> Self::L;
+}
+
 /// This is used internally for compressing and decompressing with
 /// [`FloatMultMode`][`crate::Mode::FloatMult`].
-pub trait FloatLike:
+pub(crate) trait FloatLike:
   Add<Output = Self>
   + AddAssign
   + Copy
   + Debug
   + Display
   + Mul<Output = Self>
+  + OrderedLatentConvert
   + PartialOrd
   + RemAssign
   + Send
@@ -33,16 +42,15 @@ pub trait FloatLike:
   + SubAssign
   + Div<Output = Self>
 {
+  const BITS: Bitlen;
   /// Number of bits that aren't used for exponent or sign.
   /// E.g. for f32 this should be 23.
   const PRECISION_BITS: Bitlen;
-  /// The largest positive int `x` expressible in this float such that
-  /// `x - 1.0` is also exactly representable as this float.
-  const GREATEST_PRECISE_INT: Self;
   const ZERO: Self;
   const ONE: Self;
   const MIN: Self;
   const MAX: Self;
+
   fn abs(self) -> Self;
   fn inv(self) -> Self;
   fn round(self) -> Self;
@@ -51,11 +59,24 @@ pub trait FloatLike:
   fn to_f64(self) -> f64;
   fn is_finite_and_normal(&self) -> bool;
   /// Returns the float's exponent. For instance, for f32 this should be
-  /// between -126 and +127.
+  /// between -127 and +126.
   fn exponent(&self) -> i32;
   fn trailing_zeros(&self) -> u32;
   fn max(a: Self, b: Self) -> Self;
   fn min(a: Self, b: Self) -> Self;
+
+  // /// This should use something like [`f32::from_bits()`]
+  // fn from_latent_bits(l: Self::L) -> Self;
+  /// This should use something like [`f32::to_bits()`]
+  fn to_latent_bits(self) -> Self::L;
+  /// This should surjectively map the unsigned to the set of integers in its
+  /// floating point type. E.g. 3.0, Inf, and NaN are int floats, but 3.5 is
+  /// not.
+  fn int_float_from_latent(l: Self::L) -> Self;
+  /// This should be the inverse of `int_float_from_unsigned`.
+  fn int_float_to_latent(self) -> Self::L;
+  /// This should map from e.g. 7_u32 -> 7.0_f32
+  fn from_latent_numerical(l: Self::L) -> Self;
 }
 
 /// *unstable API* Trait for data types that behave like unsigned integers.
@@ -66,7 +87,7 @@ pub trait FloatLike:
 /// Under the hood, when numbers are encoded or decoded, they go through their
 /// corresponding `UnsignedLike` representation.
 /// Metadata stores numbers as their unsigned representations.
-pub trait UnsignedLike:
+pub trait Latent:
   Add<Output = Self>
   + AddAssign
   + BitAnd<Output = Self>
@@ -78,7 +99,7 @@ pub trait UnsignedLike:
   + Hash
   + Mul<Output = Self>
   + MulAssign
-  + NumberLike<Unsigned = Self>
+  + NumberLike<L = Self>
   + Ord
   + PartialOrd
   + Rem<Output = Self>
@@ -95,9 +116,6 @@ pub trait UnsignedLike:
   const MAX: Self;
   const BITS: Bitlen;
 
-  /// The floating point type with the same number of bits.
-  type Float: FloatLike + NumberLike<Unsigned = Self>;
-
   /// Converts a `usize` into this type. Panics if the conversion is
   /// impossible.
   fn from_u64(x: u64) -> Self;
@@ -109,20 +127,6 @@ pub trait UnsignedLike:
 
   fn wrapping_add(self, other: Self) -> Self;
   fn wrapping_sub(self, other: Self) -> Self;
-
-  /// This should surjectively map the unsigned to the set of integers in its
-  /// floating point type. E.g. 3.0, Inf, and NaN are int floats, but 3.5 is
-  /// not.
-  fn to_int_float(self) -> Self::Float;
-  /// This should be the inverse of to_int_float.
-  fn from_int_float(float: Self::Float) -> Self;
-
-  /// This should use something like [`f32::from_bits()`]
-  fn to_float_bits(self) -> Self::Float;
-  /// This should use something like [`f32::to_bits()`]
-  fn from_float_bits(float: Self::Float) -> Self;
-
-  fn to_float(self) -> Self::Float;
 }
 
 /// *unstable API* Trait for data types supported for compression/decompression.
@@ -147,40 +151,26 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// To choose a header byte for a new data type, review all header bytes in
   /// the library and pick an unused one. For instance, as of writing, bytes
   /// 1 through 6 are used, so 7 would be a good choice for another
-  /// `pco` data type implementation, and 255 would be a good choice for a
-  /// custom data type.
+  /// `pco` data type implementation.
   const DTYPE_BYTE: u8;
-  /// The number of bits in the number's uncompressed representation.
-  /// This must match the number of bytes in the `to_bytes` and `from_bytes`
-  /// implementations.
-  /// Note that booleans have 8 physical bits (not 1).
-  const IS_FLOAT: bool = false;
 
   /// The unsigned integer this type can convert between to do
   /// bitwise logic and such.
-  type Unsigned: UnsignedLike;
+  type L: Latent;
 
-  /// If IS_FLOAT = true, this must be reimplemented as an identity function.
-  fn assert_float(_nums: &[Self]) -> &[<Self::Unsigned as UnsignedLike>::Float] {
-    panic!("bug; not a float")
-  }
+  /// Returns whether the two numbers have the exact same bit representation
+  /// or not.
+  fn is_identical(self, other: Self) -> bool;
 
-  /// Used during compression to convert to an unsigned integer in a way that
-  /// preserves ordering.
-  fn to_unsigned(self) -> Self::Unsigned;
-
-  /// Used during decompression to convert back from an unsigned integer in a
-  /// way that preserves ordering.
-  fn from_unsigned(off: Self::Unsigned) -> Self;
-
-  // These transmute functions do not preserve ordering.
-  // Their purpose is to allow certain operations in-place, relying on the fact
-  // that each NumberLike should have the same size as its UnsignedLike.
-  /// Used during decompression to share memory for this type and its
-  /// corresponding UnsignedLike.
-  fn transmute_to_unsigned_slice(slice: &mut [Self]) -> &mut [Self::Unsigned];
-
-  /// Used during decompression to share memory for this type and its
-  /// corresponding UnsignedLike.
-  fn transmute_to_unsigned(self) -> Self::Unsigned;
+  fn choose_mode_and_split_latents(
+    nums: &[Self],
+    config: &ChunkConfig,
+  ) -> (Mode<Self::L>, Vec<Vec<Self::L>>);
+  fn join_latents(
+    mode: Mode<Self::L>,
+    primary: &mut [Self::L],
+    secondary: SecondaryLatents<Self::L>,
+    dst: &mut [Self],
+  );
+  // TODO add mode validation
 }

@@ -9,7 +9,7 @@ use crate::constants::{
   Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_UNOPTIMIZED_BINS_LOG,
   MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
 };
-use crate::data_types::{FloatLike, NumberLike, UnsignedLike};
+use crate::data_types::{FloatLike, Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
@@ -28,7 +28,7 @@ const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
 
-struct BinBuffer<'a, U: UnsignedLike> {
+struct BinBuffer<'a, U: Latent> {
   pub seq: Vec<BinCompressionInfo<U>>,
   bin_idx: usize,
   max_n_bin: usize,
@@ -37,7 +37,7 @@ struct BinBuffer<'a, U: UnsignedLike> {
   pub target_j: usize,
 }
 
-impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
+impl<'a, U: Latent> BinBuffer<'a, U> {
   fn calc_target_j(&mut self) {
     self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
   }
@@ -81,7 +81,7 @@ impl<'a, U: UnsignedLike> BinBuffer<'a, U> {
 }
 
 #[inline(never)]
-fn choose_unoptimized_bins<U: UnsignedLike>(
+fn choose_unoptimized_bins<U: Latent>(
   sorted: &[U],
   unoptimized_bins_log: usize,
 ) -> Vec<BinCompressionInfo<U>> {
@@ -113,7 +113,7 @@ fn choose_unoptimized_bins<U: UnsignedLike>(
 }
 
 // returns table size log
-fn quantize_weights<U: UnsignedLike>(
+fn quantize_weights<U: Latent>(
   infos: &mut [BinCompressionInfo<U>],
   n_unsigneds: usize,
   estimated_ans_size_log: Bitlen,
@@ -128,12 +128,12 @@ fn quantize_weights<U: UnsignedLike>(
 }
 
 #[derive(Default)]
-struct TrainedBins<U: UnsignedLike> {
+struct TrainedBins<U: Latent> {
   infos: Vec<BinCompressionInfo<U>>,
   ans_size_log: Bitlen,
 }
 
-fn train_infos<U: UnsignedLike>(
+fn train_infos<U: Latent>(
   unsigneds: Vec<U>,
   unoptimized_bins_log: usize,
 ) -> PcoResult<TrainedBins<U>> {
@@ -238,7 +238,7 @@ fn write_uints<U: ReadWriteUint, const MAX_U64S: usize>(
   (stale_byte_idx, bits_past_byte)
 }
 
-fn write_dissected_batch_var<U: UnsignedLike, W: Write>(
+fn write_dissected_batch_var<U: Latent, W: Write>(
   dissected_page_var: &DissectedPageVar<U>,
   var_policy: &LatentVarPolicy<U>,
   batch_start: usize,
@@ -288,7 +288,7 @@ fn write_dissected_batch_var<U: UnsignedLike, W: Write>(
 }
 
 #[derive(Clone, Debug)]
-struct LatentVarPolicy<U: UnsignedLike> {
+struct LatentVarPolicy<U: Latent> {
   table: CompressionTable<U>,
   encoder: ans::Encoder,
   avg_bits_per_delta: f64,
@@ -299,7 +299,7 @@ struct LatentVarPolicy<U: UnsignedLike> {
 
 /// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
-pub struct ChunkCompressor<U: UnsignedLike> {
+pub struct ChunkCompressor<U: Latent> {
   meta: ChunkMeta<U>,
   latent_var_policies: Vec<LatentVarPolicy<U>>,
   page_infos: Vec<PageInfo>,
@@ -309,56 +309,8 @@ pub struct ChunkCompressor<U: UnsignedLike> {
   delta_moments: Vec<Vec<DeltaMoments<U>>>,
 }
 
-fn bins_from_compression_infos<U: UnsignedLike>(infos: &[BinCompressionInfo<U>]) -> Vec<Bin<U>> {
+fn bins_from_compression_infos<U: Latent>(infos: &[BinCompressionInfo<U>]) -> Vec<Bin<U>> {
   infos.iter().cloned().map(Bin::from).collect()
-}
-
-fn choose_mode<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> Mode<T::Unsigned> {
-  // * Use float mult if enabled and an appropriate base is found
-  // * Otherwise, use int mult if enabled and an appropriate int mult is found
-  // * Otherwise, use Classic
-  match (T::IS_FLOAT, config.float_mult_spec) {
-    (true, FloatMultSpec::Enabled) => {
-      if let Some(config) = float_mult_utils::choose_config(nums) {
-        return Mode::FloatMult(config);
-      }
-    }
-    (true, FloatMultSpec::Provided(base_f64)) => {
-      let base = <T::Unsigned as UnsignedLike>::Float::from_f64(base_f64);
-      return Mode::FloatMult(FloatMultConfig {
-        base,
-        inv_base: base.inv(),
-      });
-    }
-    _ => (),
-  }
-
-  match (T::IS_FLOAT, config.int_mult_spec) {
-    (false, IntMultSpec::Enabled) => {
-      if let Some(base) = int_mult_utils::choose_base(nums) {
-        return Mode::IntMult(base);
-      }
-    }
-    (false, IntMultSpec::Provided(base_u64)) => {
-      let base = <T::Unsigned as UnsignedLike>::from_u64(base_u64);
-      return Mode::IntMult(base);
-    }
-    _ => (),
-  }
-
-  Mode::Classic
-}
-
-// returns a long vec of latents per latent variable
-#[inline(never)]
-fn split_latents<T: NumberLike>(mode: Mode<T::Unsigned>, page_nums: &[T]) -> Vec<Vec<T::Unsigned>> {
-  match mode {
-    Mode::Classic => vec![page_nums.iter().map(|x| x.to_unsigned()).collect()],
-    Mode::FloatMult(FloatMultConfig { base, inv_base }) => {
-      float_mult_utils::split_latents(page_nums, base, inv_base)
-    }
-    Mode::IntMult(base) => int_mult_utils::split_latents(page_nums, base),
-  }
 }
 
 fn validate_config(config: &ChunkConfig) -> PcoResult<()> {
@@ -399,7 +351,7 @@ fn validate_chunk_size(n: usize) -> PcoResult<()> {
 }
 
 #[inline(never)]
-fn collect_contiguous_deltas<U: UnsignedLike>(
+fn collect_contiguous_deltas<U: Latent>(
   deltas: &[U],
   page_infos: &[PageInfo],
   latent_idx: usize,
@@ -411,7 +363,7 @@ fn collect_contiguous_deltas<U: UnsignedLike>(
   res
 }
 
-fn unsigned_new_w_delta_order<U: UnsignedLike>(
+fn unsigned_new_w_delta_order<U: Latent>(
   mut latents: Vec<Vec<U>>, // start out plain, gets delta encoded in place
   paging_spec: &PagingSpec,
   mode: Mode<U>,
@@ -508,7 +460,7 @@ fn unsigned_new_w_delta_order<U: UnsignedLike>(
   })
 }
 
-fn choose_delta_sample<U: UnsignedLike>(
+fn choose_delta_sample<U: Latent>(
   primary_latents: &[U],
   group_size: usize,
   n_extra_groups: usize,
@@ -537,7 +489,7 @@ fn choose_delta_sample<U: UnsignedLike>(
 // modes apply deltas to secondary latents. Might want to change this
 // eventually?
 #[inline(never)]
-fn choose_delta_encoding_order<U: UnsignedLike>(
+fn choose_delta_encoding_order<U: Latent>(
   primary_latents: &[U],
   unoptimized_bins_log: usize,
 ) -> PcoResult<usize> {
@@ -582,7 +534,7 @@ fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> usize {
 
 // We pull this stuff out of `new` because it only depends on the unsigned type
 // and we don't need a specialization for each full dtype.
-fn unsigned_new<U: UnsignedLike>(
+fn unsigned_new<U: Latent>(
   latents: Vec<Vec<U>>,
   config: &ChunkConfig,
   mode: Mode<U>,
@@ -608,18 +560,17 @@ fn unsigned_new<U: UnsignedLike>(
 pub(crate) fn new<T: NumberLike>(
   nums: &[T],
   config: &ChunkConfig,
-) -> PcoResult<ChunkCompressor<T::Unsigned>> {
+) -> PcoResult<ChunkCompressor<T::L>> {
   validate_config(config)?;
   let n = nums.len();
   validate_chunk_size(n)?;
 
-  let mode = choose_mode(nums, config);
-  let latents = split_latents(mode, nums);
+  let (mode, latents) = T::choose_mode_and_split_latents(nums, config);
 
   unsigned_new(latents, config, mode)
 }
 
-impl<U: UnsignedLike> ChunkCompressor<U> {
+impl<U: Latent> ChunkCompressor<U> {
   fn page_moments(&self, page_idx: usize, latent_var_idx: usize) -> &DeltaMoments<U> {
     &self.delta_moments[page_idx][latent_var_idx]
   }

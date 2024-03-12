@@ -9,18 +9,18 @@ use crate::ChunkMeta;
 /// Holds metadata about a chunk and can produce page decompressors.
 #[derive(Clone, Debug)]
 pub struct ChunkDecompressor<T: NumberLike> {
-  pub(crate) meta: ChunkMeta<T::Unsigned>,
+  pub(crate) meta: ChunkMeta<T::L>,
 }
 
-impl<T: NumberLike> From<ChunkMeta<T::Unsigned>> for ChunkDecompressor<T> {
-  fn from(meta: ChunkMeta<T::Unsigned>) -> Self {
+impl<T: NumberLike> From<ChunkMeta<T::L>> for ChunkDecompressor<T> {
+  fn from(meta: ChunkMeta<T::L>) -> Self {
     Self { meta }
   }
 }
 
 impl<T: NumberLike> ChunkDecompressor<T> {
   /// Returns pre-computed information about the chunk.
-  pub fn meta(&self) -> &ChunkMeta<T::Unsigned> {
+  pub fn meta(&self) -> &ChunkMeta<T::L> {
     &self.meta
   }
 

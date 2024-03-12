@@ -4,18 +4,18 @@ use crate::ans::AnsState;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, ANS_INTERLEAVING};
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 use crate::delta::DeltaMoments;
 use crate::errors::PcoResult;
 use crate::ChunkMeta;
 
 #[derive(Clone, Debug)]
-pub struct PageLatentVarMeta<U: UnsignedLike> {
+pub struct PageLatentVarMeta<U: Latent> {
   pub delta_moments: DeltaMoments<U>,
   pub ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
 }
 
-impl<U: UnsignedLike> PageLatentVarMeta<U> {
+impl<U: Latent> PageLatentVarMeta<U> {
   pub fn write_to<W: Write>(&self, ans_size_log: Bitlen, writer: &mut BitWriter<W>) {
     self.delta_moments.write_to(writer);
 
@@ -48,11 +48,11 @@ impl<U: UnsignedLike> PageLatentVarMeta<U> {
 // chunk metadata parsing step (standalone mode) OR from the wrapping format
 // (wrapped mode).
 #[derive(Clone, Debug)]
-pub struct PageMeta<U: UnsignedLike> {
+pub struct PageMeta<U: Latent> {
   pub per_var: Vec<PageLatentVarMeta<U>>,
 }
 
-impl<U: UnsignedLike> PageMeta<U> {
+impl<U: Latent> PageMeta<U> {
   pub fn write_to<I: Iterator<Item = Bitlen>, W: Write>(
     &self,
     ans_size_logs: I,

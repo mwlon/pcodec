@@ -1,7 +1,7 @@
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Token};
 use crate::constants::Bitlen;
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::ChunkLatentVarMeta;
 
@@ -42,7 +42,7 @@ impl Decoder {
     Self { nodes }
   }
 
-  pub fn from_chunk_latent_var_meta<U: UnsignedLike>(
+  pub fn from_chunk_latent_var_meta<U: Latent>(
     latent_meta: &ChunkLatentVarMeta<U>,
   ) -> PcoResult<Self> {
     let weights = latent_meta

@@ -1,12 +1,12 @@
 use crate::ans::Token;
 use crate::constants::{Bitlen, Weight};
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 
 /// Part of [`ChunkLatentVarMeta`][`crate::ChunkLatentVarMeta`] representing
 /// a numerical range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct Bin<U: UnsignedLike> {
+pub struct Bin<U: Latent> {
   /// The number of occurrences of this bin in the asymmetric numeral system
   /// table.
   pub weight: Weight,
@@ -17,7 +17,7 @@ pub struct Bin<U: UnsignedLike> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct BinCompressionInfo<U: UnsignedLike> {
+pub struct BinCompressionInfo<U: Latent> {
   // weight and upper are only used up through bin optimization, not dissection or writing
   pub weight: Weight,
   pub lower: U,
@@ -27,7 +27,7 @@ pub struct BinCompressionInfo<U: UnsignedLike> {
   pub token: Token,
 }
 
-impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
+impl<U: Latent> From<BinCompressionInfo<U>> for Bin<U> {
   fn from(info: BinCompressionInfo<U>) -> Self {
     Bin {
       weight: info.weight,
@@ -37,7 +37,7 @@ impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
   }
 }
 
-impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
+impl<U: Latent> Default for BinCompressionInfo<U> {
   fn default() -> Self {
     BinCompressionInfo {
       weight: 0,
@@ -52,12 +52,12 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
 // Default here is meaningless and should only be used to fill in empty
 // vectors.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct BinDecompressionInfo<U: UnsignedLike> {
+pub struct BinDecompressionInfo<U: Latent> {
   pub lower: U,
   pub offset_bits: Bitlen,
 }
 
-impl<U: UnsignedLike> From<&Bin<U>> for BinDecompressionInfo<U> {
+impl<U: Latent> From<&Bin<U>> for BinDecompressionInfo<U> {
   fn from(bin: &Bin<U>) -> Self {
     Self {
       lower: bin.lower,

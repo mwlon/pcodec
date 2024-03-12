@@ -4,7 +4,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 
 pub const MIN_SAMPLE: usize = 10;
 // 1 in this many nums get put into sample
@@ -65,7 +65,7 @@ pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
 }
 
 #[inline(never)]
-pub fn has_enough_infrequent_ints<U: UnsignedLike, S: Copy, F: Fn(S) -> U>(
+pub fn has_enough_infrequent_ints<U: Latent, S: Copy, F: Fn(S) -> U>(
   sample: &[S],
   mult_fn: F,
 ) -> bool {
