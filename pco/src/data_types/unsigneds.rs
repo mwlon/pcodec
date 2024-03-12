@@ -4,7 +4,7 @@ use crate::data_types::{Latent, NumberLike, OrderedLatentConvert};
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
 use std::fmt::Display;
 
-pub fn latent_to_string<T: OrderedLatentConvert + Display>(
+pub fn latent_to_string<T: OrderedLatentConvert + Display + Default>(
   l: T::L,
   mode: Mode<T::L>,
   latent_var_idx: usize,
@@ -17,12 +17,37 @@ pub fn latent_to_string<T: OrderedLatentConvert + Display>(
       format!("-{}", T::L::MID - l)
     }
   };
+  //   IntMult(base) => {
+  //     let unsigned_0 = T::default().to_unsigned();
+  //     let relative_to_0 = lower.wrapping_sub(unsigned_0 / base);
+  //     T::from_unsigned(unsigned_0.wrapping_add(relative_to_0)).to_string()
+  //   }
+  //   IntMultAdj(base) => {
+  //     let unsigned_0_rem = T::default().to_unsigned() % base;
+  //     if lower < unsigned_0_rem {
+  //       format!("-{}", unsigned_0_rem - lower)
+  //     } else {
+  //       (lower - unsigned_0_rem).to_string()
+  //     }
+  //   }
 
   use Mode::*;
   match (mode, latent_var_idx, delta_encoding_order) {
-    (Classic, 0, 0) | (IntMult(_), 0, 0) => T::from_latent_ordered(l).to_string(),
+    (Classic, 0, 0) => T::from_latent_ordered(l).to_string(),
+    (IntMult(base), 0, 0) => {
+      let unsigned_0 = T::default().to_latent_ordered();
+      let relative_to_0 = l.wrapping_sub(unsigned_0 / base);
+      T::from_latent_ordered(unsigned_0.wrapping_add(relative_to_0)).to_string()
+    }
     (Classic, 0, _) | (IntMult(_), 0, _) => format_as_signed(),
-    (IntMult(_), 1, _) => l.to_string(),
+    (IntMult(base), 1, _) => {
+      let unsigned_0_rem = T::default().to_latent_ordered() % base;
+      if l < unsigned_0_rem {
+        format!("-{}", unsigned_0_rem - l)
+      } else {
+        (l - unsigned_0_rem).to_string()
+      }
+    }
     _ => panic!("invalid context for latent"),
   }
 }
