@@ -94,9 +94,6 @@ macro_rules! impl_float_number {
       const BITS: Bitlen = $bits;
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
       const ZERO: Self = 0.0;
-      const ONE: Self = 1.0;
-      const MIN: Self = Self::MIN;
-      const MAX: Self = Self::MAX;
 
       #[inline]
       fn abs(self) -> Self {

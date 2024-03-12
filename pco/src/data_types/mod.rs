@@ -45,9 +45,6 @@ pub(crate) trait FloatLike:
   /// E.g. for f32 this should be 23.
   const PRECISION_BITS: Bitlen;
   const ZERO: Self;
-  const ONE: Self;
-  const MIN: Self;
-  const MAX: Self;
 
   fn abs(self) -> Self;
   fn inv(self) -> Self;
@@ -63,8 +60,6 @@ pub(crate) trait FloatLike:
   fn max(a: Self, b: Self) -> Self;
   fn min(a: Self, b: Self) -> Self;
 
-  // /// This should use something like [`f32::from_bits()`]
-  // fn from_latent_bits(l: Self::L) -> Self;
   /// This should use something like [`f32::to_bits()`]
   fn to_latent_bits(self) -> Self::L;
   /// This should surjectively map the unsigned to the set of integers in its
