@@ -6,17 +6,17 @@ use better_io::BetterBufRead;
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
+use crate::data_types::SecondaryLatents::Constant;
+use crate::data_types::SecondaryLatents::Nonconstant;
 use crate::data_types::{Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::page_meta::PageMeta;
 use crate::progress::Progress;
-use crate::wrapped::page_decompressor::SecondaryLatents::Nonconstant;
-use crate::wrapped::SecondaryLatents::Constant;
 
+use crate::delta;
 use crate::{bit_reader, ChunkMeta, Mode};
-use crate::{delta};
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
 
@@ -40,11 +40,6 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   // mutable
   reader_builder: BitReaderBuilder<R>,
   state: State<T::L>,
-}
-
-pub(crate) enum SecondaryLatents<'a, U: Latent> {
-  Nonconstant(&'a [U]),
-  Constant(U),
 }
 
 fn decompress_latents_w_delta<U: Latent>(

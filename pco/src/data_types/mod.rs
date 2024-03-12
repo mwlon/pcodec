@@ -10,8 +10,6 @@ pub use dynamic::CoreDataType;
 
 use crate::constants::Bitlen;
 
-use crate::wrapped::SecondaryLatents;
-
 mod dynamic;
 mod floats;
 mod signeds;
@@ -173,4 +171,9 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
     dst: &mut [Self],
   );
   // TODO add mode validation
+}
+
+pub enum SecondaryLatents<'a, U: Latent> {
+  Nonconstant(&'a [U]),
+  Constant(U),
 }

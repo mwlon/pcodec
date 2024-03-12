@@ -1,6 +1,6 @@
 use super::unsigneds;
+use crate::data_types::SecondaryLatents;
 use crate::data_types::{NumberLike, OrderedLatentConvert};
-use crate::wrapped::SecondaryLatents;
 use crate::{ChunkConfig, Mode};
 
 macro_rules! impl_signed {

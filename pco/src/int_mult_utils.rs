@@ -2,9 +2,9 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
+use crate::data_types::SecondaryLatents;
 use crate::data_types::{Latent, OrderedLatentConvert};
 use crate::sampling;
-use crate::wrapped::SecondaryLatents;
 
 const ZETA_OF_2: f64 = PI * PI / 6.0; // riemann zeta function
 

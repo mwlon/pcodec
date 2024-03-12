@@ -2,9 +2,9 @@ use std::cmp::{max, min};
 use std::mem;
 
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent, OrderedLatentConvert};
-use crate::wrapped::SecondaryLatents;
-use crate::wrapped::SecondaryLatents::{Constant, Nonconstant};
+use crate::data_types::SecondaryLatents;
+use crate::data_types::SecondaryLatents::{Constant, Nonconstant};
+use crate::data_types::{FloatLike, Latent};
 use crate::{int_mult_utils, sampling};
 
 #[inline(never)]
@@ -370,6 +370,7 @@ pub fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<F>> {
 
 #[cfg(test)]
 mod test {
+  use crate::data_types::OrderedLatentConvert;
   use rand::{Rng, SeedableRng};
   use std::f32::consts::{E, TAU};
 
@@ -383,7 +384,7 @@ mod test {
       "{} far from {}; {}",
       a,
       b,
-      desc
+      desc,
     );
   }
 
@@ -394,7 +395,7 @@ mod test {
       "{} far from {}; {}",
       a,
       b,
-      desc
+      desc,
     );
   }
 

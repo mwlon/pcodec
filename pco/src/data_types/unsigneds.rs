@@ -1,6 +1,6 @@
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
-use crate::wrapped::SecondaryLatents;
+use crate::data_types::SecondaryLatents;
+use crate::data_types::{Latent, NumberLike, OrderedLatentConvert};
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
 
 pub fn choose_mode_and_split_latents<T: OrderedLatentConvert>(

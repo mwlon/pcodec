@@ -9,7 +9,7 @@ use crate::constants::{
   Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_UNOPTIMIZED_BINS_LOG,
   MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
 };
-use crate::data_types::{FloatLike, Latent, NumberLike};
+use crate::data_types::{Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 
@@ -17,9 +17,8 @@ use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::read_write_uint::ReadWriteUint;
 use crate::{
-  ans, bin_optimization, bit_reader, bit_writer, bits, delta,
-  read_write_uint, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta,
-  Mode, PagingSpec, FULL_BATCH_N,
+  ans, bin_optimization, bit_reader, bit_writer, bits, delta, read_write_uint, Bin, ChunkConfig,
+  ChunkLatentVarMeta, ChunkMeta, Mode, PagingSpec, FULL_BATCH_N,
 };
 
 // if it looks like the average page of size n will use k bits, hint that it

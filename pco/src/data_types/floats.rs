@@ -1,7 +1,7 @@
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
 
-use crate::wrapped::SecondaryLatents;
+use crate::data_types::SecondaryLatents;
 
 use crate::{float_mult_utils, ChunkConfig, FloatMultSpec, Mode};
 
@@ -236,7 +236,6 @@ impl_float_number!(f64, u64, 64, 1_u64 << 63, 6, -1023);
 #[cfg(test)]
 mod tests {
   use super::*;
-  
 
   #[test]
   fn test_float_ordering() {
