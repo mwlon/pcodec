@@ -22,17 +22,17 @@ pub fn latent_to_string<T: OrderedLatentConvert + Display + Default>(
   match (mode, latent_var_idx, delta_encoding_order) {
     (Classic, 0, 0) => T::from_latent_ordered(l).to_string(),
     (IntMult(base), 0, 0) => {
-      let unsigned_0 = T::default().to_latent_ordered();
-      let relative_to_0 = l.wrapping_sub(unsigned_0 / base);
-      T::from_latent_ordered(unsigned_0.wrapping_add(relative_to_0)).to_string()
+      let latent_0 = T::default().to_latent_ordered();
+      let relative_to_0 = l.wrapping_sub(latent_0 / base);
+      T::from_latent_ordered(latent_0.wrapping_add(relative_to_0)).to_string()
     }
     (Classic, 0, _) | (IntMult(_), 0, _) => format_as_signed(),
     (IntMult(base), 1, _) => {
-      let unsigned_0_rem = T::default().to_latent_ordered() % base;
-      if l < unsigned_0_rem {
-        format!("-{}", unsigned_0_rem - l)
+      let latent_0_rem = T::default().to_latent_ordered() % base;
+      if l < latent_0_rem {
+        format!("-{}", latent_0_rem - l)
       } else {
-        (l - unsigned_0_rem).to_string()
+        (l - latent_0_rem).to_string()
       }
     }
     _ => panic!("invalid context for latent"),

@@ -107,14 +107,14 @@ impl FileCompressor {
 
 /// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
-pub struct ChunkCompressor<U: Latent> {
-  inner: wrapped::ChunkCompressor<U>,
+pub struct ChunkCompressor<L: Latent> {
+  inner: wrapped::ChunkCompressor<L>,
   dtype_byte: u8,
 }
 
-impl<U: Latent> ChunkCompressor<U> {
+impl<L: Latent> ChunkCompressor<L> {
   /// Returns pre-computed information about the chunk.
-  pub fn meta(&self) -> &ChunkMeta<U> {
+  pub fn meta(&self) -> &ChunkMeta<L> {
     self.inner.meta()
   }
 

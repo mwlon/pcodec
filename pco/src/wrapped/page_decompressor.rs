@@ -21,12 +21,12 @@ use crate::{bit_reader, ChunkMeta, Mode};
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
 
 #[derive(Clone, Debug)]
-pub struct State<U: Latent> {
+pub struct State<L: Latent> {
   n_processed: usize,
-  latent_batch_decompressors: Vec<LatentBatchDecompressor<U>>,
-  delta_momentss: Vec<DeltaMoments<U>>, // one per latent variable
-  primary_latents: [U; FULL_BATCH_N],
-  secondary_latents: [U; FULL_BATCH_N],
+  latent_batch_decompressors: Vec<LatentBatchDecompressor<L>>,
+  delta_momentss: Vec<DeltaMoments<L>>, // one per latent variable
+  primary_latents: [L; FULL_BATCH_N],
+  secondary_latents: [L; FULL_BATCH_N],
 }
 
 /// Holds metadata about a page and supports decompression.
@@ -42,11 +42,11 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   state: State<T::L>,
 }
 
-fn decompress_latents_w_delta<U: Latent>(
+fn decompress_latents_w_delta<L: Latent>(
   reader: &mut BitReader,
-  delta_moments: &mut DeltaMoments<U>,
-  lbd: &mut LatentBatchDecompressor<U>,
-  dst: &mut [U],
+  delta_moments: &mut DeltaMoments<L>,
+  lbd: &mut LatentBatchDecompressor<L>,
+  dst: &mut [L],
   n_remaining: usize,
 ) -> PcoResult<()> {
   let pre_delta_len = min(

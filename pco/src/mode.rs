@@ -2,7 +2,6 @@ use std::fmt::Debug;
 
 use crate::data_types::{FloatLike, Latent};
 
-
 // Internally, here's how we should model each mode:
 //
 // Classic: The data is drawn from a smooth distribution.
@@ -22,7 +21,7 @@ use crate::data_types::{FloatLike, Latent};
 
 /// A variation of how pco serializes and deserializes numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Mode<U: Latent> {
+pub enum Mode<L: Latent> {
   /// Each number is compressed as
   /// * which bin it's in and
   /// * the offset in that bin.
@@ -37,7 +36,7 @@ pub enum Mode<U: Latent> {
   /// * the offset in that adjustment bin.
   ///
   /// Formula: (bin.lower + offset) * mode.base + adj_bin.lower + adj_bin.offset
-  IntMult(U),
+  IntMult(L),
   // TODO explain or provide a conversion function to make sense of this latent
   /// Each number is compressed as
   /// * which bin it's in,
@@ -47,7 +46,7 @@ pub enum Mode<U: Latent> {
   ///
   /// Formula: (bin.lower + offset) * mode.base +
   /// (adj_bin.lower + adj_bin.offset) * machine_epsilon
-  FloatMult(U),
+  FloatMult(L),
 }
 
 impl<L: Latent> Mode<L> {

@@ -6,27 +6,27 @@ use crate::data_types::Latent;
 use crate::errors::PcoResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct DeltaMoments<U: Latent> {
+pub struct DeltaMoments<L: Latent> {
   // length = delta encoding order
-  pub moments: Vec<U>,
+  pub moments: Vec<L>,
 }
 
-impl<U: Latent> DeltaMoments<U> {
-  fn new(moments: Vec<U>) -> Self {
+impl<L: Latent> DeltaMoments<L> {
+  fn new(moments: Vec<L>) -> Self {
     Self { moments }
   }
 
   pub fn parse_from(reader: &mut BitReader, order: usize) -> PcoResult<Self> {
     let mut moments = Vec::new();
     for _ in 0..order {
-      moments.push(reader.read_uint::<U>(U::BITS));
+      moments.push(reader.read_uint::<L>(L::BITS));
     }
     Ok(DeltaMoments { moments })
   }
 
   pub fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
     for &moment in &self.moments {
-      writer.write_uint(moment, U::BITS);
+      writer.write_uint(moment, L::BITS);
     }
   }
 
@@ -41,13 +41,13 @@ impl<U: Latent> DeltaMoments<U> {
 // * unsigned deltas -> (effectively) signed deltas; encoding
 // * signed deltas -> unsigned deltas; decoding
 #[inline(never)]
-pub fn toggle_center_in_place<U: Latent>(latents: &mut [U]) {
+pub fn toggle_center_in_place<L: Latent>(latents: &mut [L]) {
   for l in latents.iter_mut() {
     *l = l.toggle_center();
   }
 }
 
-fn first_order_encode_in_place<U: Latent>(latents: &mut [U]) {
+fn first_order_encode_in_place<L: Latent>(latents: &mut [L]) {
   if latents.is_empty() {
     return;
   }
@@ -59,7 +59,7 @@ fn first_order_encode_in_place<U: Latent>(latents: &mut [U]) {
 
 // used for a single page, so we return the delta moments
 #[inline(never)]
-pub fn encode_in_place<U: Latent>(mut latents: &mut [U], order: usize) -> DeltaMoments<U> {
+pub fn encode_in_place<L: Latent>(mut latents: &mut [L], order: usize) -> DeltaMoments<L> {
   // TODO this function could be made faster by doing all steps on mini batches
   // of ~512 at a time
   if order == 0 {
@@ -69,7 +69,7 @@ pub fn encode_in_place<U: Latent>(mut latents: &mut [U], order: usize) -> DeltaM
 
   let mut page_moments = Vec::with_capacity(order);
   for _ in 0..order {
-    page_moments.push(latents.first().copied().unwrap_or(U::ZERO));
+    page_moments.push(latents.first().copied().unwrap_or(L::ZERO));
 
     first_order_encode_in_place(latents);
     let truncated_len = latents.len().saturating_sub(1);
@@ -80,7 +80,7 @@ pub fn encode_in_place<U: Latent>(mut latents: &mut [U], order: usize) -> DeltaM
   DeltaMoments::new(page_moments)
 }
 
-fn first_order_decode_in_place<U: Latent>(moment: &mut U, latents: &mut [U]) {
+fn first_order_decode_in_place<L: Latent>(moment: &mut L, latents: &mut [L]) {
   for delta in latents.iter_mut() {
     let tmp = *delta;
     *delta = *moment;
@@ -90,7 +90,7 @@ fn first_order_decode_in_place<U: Latent>(moment: &mut U, latents: &mut [U]) {
 
 // used for a single batch, so we mutate the delta moments
 #[inline(never)]
-pub fn decode_in_place<U: Latent>(delta_moments: &mut DeltaMoments<U>, latents: &mut [U]) {
+pub fn decode_in_place<L: Latent>(delta_moments: &mut DeltaMoments<L>, latents: &mut [L]) {
   if delta_moments.order() == 0 {
     // exit early so we don't toggle to signed values
     return;

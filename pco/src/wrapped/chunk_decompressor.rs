@@ -5,7 +5,6 @@ use crate::errors::PcoResult;
 use crate::wrapped::PageDecompressor;
 use crate::ChunkMeta;
 
-// TODO in 0.2 make this only generic over UnsignedLike
 /// Holds metadata about a chunk and can produce page decompressors.
 #[derive(Clone, Debug)]
 pub struct ChunkDecompressor<T: NumberLike> {

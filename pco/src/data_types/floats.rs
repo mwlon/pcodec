@@ -57,10 +57,7 @@ fn join_latents<F: FloatLike>(
     _ => panic!("should be unreachable"),
   }
 }
-// Note that in all conversions between float and unsigned int, we are using
-// the unsigned int to indicate an offset.
-// For instance, since f32 has 23 fraction bits, here we want 1.0 + 3_u32 to be
-// 1.0 + (3.0 * 2.0 ^ -23).
+
 macro_rules! impl_float_number {
   ($t: ty, $latent: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
     impl OrderedLatentConvert for $t {

@@ -7,28 +7,28 @@ use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
 use crate::{ans, bits};
 
-pub struct LatentBatchDissector<'a, U: Latent> {
+pub struct LatentBatchDissector<'a, L: Latent> {
   // immutable
-  table: &'a CompressionTable<U>,
+  table: &'a CompressionTable<L>,
   encoder: &'a ans::Encoder,
 
   // mutable
-  lower_scratch: [U; FULL_BATCH_N],
+  lower_scratch: [L; FULL_BATCH_N],
   token_scratch: [Token; FULL_BATCH_N],
 }
 
-impl<'a, U: Latent> LatentBatchDissector<'a, U> {
-  pub fn new(table: &'a CompressionTable<U>, encoder: &'a ans::Encoder) -> Self {
+impl<'a, L: Latent> LatentBatchDissector<'a, L> {
+  pub fn new(table: &'a CompressionTable<L>, encoder: &'a ans::Encoder) -> Self {
     Self {
       table,
       encoder,
-      lower_scratch: [U::ZERO; FULL_BATCH_N],
+      lower_scratch: [L::ZERO; FULL_BATCH_N],
       token_scratch: [0; FULL_BATCH_N],
     }
   }
 
   #[inline(never)]
-  fn binary_search(&self, latents: &[U]) -> [usize; FULL_BATCH_N] {
+  fn binary_search(&self, latents: &[L]) -> [usize; FULL_BATCH_N] {
     let mut search_idxs = [0; FULL_BATCH_N];
 
     // we do this as `size_log` SIMD loops over the batch
@@ -60,7 +60,7 @@ impl<'a, U: Latent> LatentBatchDissector<'a, U> {
   }
 
   #[inline(never)]
-  fn set_offsets(&self, latents: &[U], offsets: &mut [U]) {
+  fn set_offsets(&self, latents: &[L], offsets: &mut [L]) {
     for (offset, (&latent, &lower)) in offsets
       .iter_mut()
       .zip(latents.iter().zip(self.lower_scratch.iter()))
@@ -106,9 +106,9 @@ impl<'a, U: Latent> LatentBatchDissector<'a, U> {
 
   pub fn dissect_latent_batch(
     &mut self,
-    latents: &[U],
+    latents: &[L],
     base_i: usize,
-    dst: &mut DissectedPageVar<U>,
+    dst: &mut DissectedPageVar<L>,
   ) {
     let DissectedPageVar {
       ans_vals,

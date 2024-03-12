@@ -22,12 +22,12 @@ pub const fn ceil_div(x: usize, divisor: usize) -> usize {
   (x + divisor - 1) / divisor
 }
 
-pub fn bits_to_encode_offset<U: Latent>(max_offset: U) -> Bitlen {
-  U::BITS - max_offset.leading_zeros()
+pub fn bits_to_encode_offset<L: Latent>(max_offset: L) -> Bitlen {
+  L::BITS - max_offset.leading_zeros()
 }
 
-pub const fn bits_to_encode_offset_bits<U: Latent>() -> Bitlen {
-  (Bitlen::BITS - U::BITS.leading_zeros()) as Bitlen
+pub const fn bits_to_encode_offset_bits<L: Latent>() -> Bitlen {
+  (Bitlen::BITS - L::BITS.leading_zeros()) as Bitlen
 }
 
 #[cfg(test)]

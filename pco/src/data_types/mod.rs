@@ -62,11 +62,11 @@ pub(crate) trait FloatLike:
 
   /// This should use something like [`f32::to_bits()`]
   fn to_latent_bits(self) -> Self::L;
-  /// This should surjectively map the unsigned to the set of integers in its
+  /// This should surjectively map the latent to the set of integers in its
   /// floating point type. E.g. 3.0, Inf, and NaN are int floats, but 3.5 is
   /// not.
   fn int_float_from_latent(l: Self::L) -> Self;
-  /// This should be the inverse of `int_float_from_unsigned`.
+  /// This should be the inverse of `int_float_from_latent`.
   fn int_float_to_latent(self) -> Self::L;
   /// This should map from e.g. 7_u32 -> 7.0_f32
   fn from_latent_numerical(l: Self::L) -> Self;
@@ -78,8 +78,8 @@ pub(crate) trait FloatLike:
 /// operations like `>>` and `|=` are available and that certain properties
 /// hold.
 /// Under the hood, when numbers are encoded or decoded, they go through their
-/// corresponding `UnsignedLike` representation.
-/// Metadata stores numbers as their unsigned representations.
+/// corresponding `Latent` representation.
+/// Metadata stores numbers as their latent representations.
 pub trait Latent:
   Add<Output = Self>
   + AddAssign
@@ -116,7 +116,7 @@ pub trait Latent:
 
   fn leading_zeros(self) -> Bitlen;
 
-  /// Converts the unsigned integer to a usize, truncating higher bits if necessary.
+  /// Converts the latent to a usize, truncating higher bits if necessary.
   fn to_u64(self) -> u64;
 
   fn wrapping_add(self, other: Self) -> Self;
@@ -132,9 +132,9 @@ pub trait Latent:
 /// If you have a new data type you would like to add to the library or
 /// implement as custom in your own, these are the questions you need to
 /// answer:
-/// * What is the corresponding unsigned integer type? This is probably the
+/// * What is the corresponding latent type? This is probably the
 /// smallest unsigned integer with enough bits to represent the number.
-/// * How can I convert to this unsigned representation and back
+/// * How can I convert to this latent representation and back
 /// in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
 /// wouldn't preserve ordering and would cause pco to fail. In this example,
 /// one needs to flip the sign bit and, if negative, the rest of the bits.
@@ -152,7 +152,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// `pco` data type implementation.
   const DTYPE_BYTE: u8;
 
-  /// The unsigned integer this type can convert between to do
+  /// The latent this type can convert between to do
   /// bitwise logic and such.
   type L: Latent;
 
@@ -179,7 +179,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   // TODO add mode validation
 }
 
-pub enum SecondaryLatents<'a, U: Latent> {
-  Nonconstant(&'a [U]),
-  Constant(U),
+pub enum SecondaryLatents<'a, L: Latent> {
+  Nonconstant(&'a [L]),
+  Constant(L),
 }

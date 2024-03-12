@@ -7,10 +7,10 @@ use crate::data_types::Latent;
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 
 // using f32 instead of f64 because the .log2() is faster
-fn bin_bit_cost<U: Latent>(
+fn bin_bit_cost<L: Latent>(
   bin_meta_cost: f32,
-  lower: U,
-  upper: U,
+  lower: L,
+  upper: L,
   count: Weight,
   total_count_log2: f32,
 ) -> f32 {
@@ -24,8 +24,8 @@ fn bin_bit_cost<U: Latent>(
 // j and i are the inclusive indices of a group of bins to combine together.
 // This algorithm is exactly optimal, assuming our cost estimates (measured in
 // total bit size) are correct.
-fn choose_optimized_partitioning<U: Latent>(
-  bins: &[BinCompressionInfo<U>],
+fn choose_optimized_partitioning<L: Latent>(
+  bins: &[BinCompressionInfo<L>],
   ans_size_log: Bitlen,
 ) -> Vec<(usize, usize)> {
   let mut c = 0;
@@ -47,8 +47,8 @@ fn choose_optimized_partitioning<U: Latent>(
 
   let bits_to_encode_weight = ans_size_log;
   let bin_meta_cost = bits_to_encode_weight as f32 +
-    U::BITS as f32 + // lower bound
-    bits::bits_to_encode_offset_bits::<U>() as f32;
+    L::BITS as f32 + // lower bound
+    bits::bits_to_encode_offset_bits::<L>() as f32;
 
   for i in 0..bins.len() {
     let mut best_cost = f32::MAX;
@@ -59,7 +59,7 @@ fn choose_optimized_partitioning<U: Latent>(
       let lower = lowers[j];
 
       let cost = best_costs[j]
-        + bin_bit_cost::<U>(
+        + bin_bit_cost::<L>(
           bin_meta_cost,
           lower,
           upper,
@@ -95,10 +95,10 @@ fn choose_optimized_partitioning<U: Latent>(
   }
 }
 
-pub fn optimize_bins<U: Latent>(
-  bins: &[BinCompressionInfo<U>],
+pub fn optimize_bins<L: Latent>(
+  bins: &[BinCompressionInfo<L>],
   ans_size_log: Bitlen,
-) -> Vec<BinCompressionInfo<U>> {
+) -> Vec<BinCompressionInfo<L>> {
   let partitioning = choose_optimized_partitioning(bins, ans_size_log);
   let mut res = Vec::with_capacity(partitioning.len());
   for (token, &(j, i)) in partitioning.iter().enumerate() {

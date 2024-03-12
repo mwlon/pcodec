@@ -23,7 +23,7 @@ use crate::Mode;
 ///
 /// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ChunkLatentVarMeta<U: Latent> {
+pub struct ChunkLatentVarMeta<L: Latent> {
   /// The log2 of the number of the number of states in this chunk's tANS
   /// table.
   ///
@@ -31,10 +31,10 @@ pub struct ChunkLatentVarMeta<U: Latent> {
   pub ans_size_log: Bitlen,
   /// How the numbers or deltas are encoded, depending on their numerical
   /// range.
-  pub bins: Vec<Bin<U>>,
+  pub bins: Vec<Bin<L>>,
 }
 
-impl<U: Latent> ChunkLatentVarMeta<U> {
+impl<L: Latent> ChunkLatentVarMeta<L> {
   pub(crate) fn max_bits_per_offset(&self) -> Bitlen {
     self
       .bins
@@ -57,25 +57,25 @@ impl<U: Latent> ChunkLatentVarMeta<U> {
   }
 }
 
-fn parse_bin_batch<U: Latent, R: BetterBufRead>(
+fn parse_bin_batch<L: Latent, R: BetterBufRead>(
   reader_builder: &mut BitReaderBuilder<R>,
   ans_size_log: Bitlen,
   batch_size: usize,
-  dst: &mut Vec<Bin<U>>,
+  dst: &mut Vec<Bin<L>>,
 ) -> PcoResult<()> {
   reader_builder.with_reader(|reader| {
-    let offset_bits_bits = bits_to_encode_offset_bits::<U>();
+    let offset_bits_bits = bits_to_encode_offset_bits::<L>();
     for _ in 0..batch_size {
       let weight = reader.read_uint::<Weight>(ans_size_log) + 1;
-      let lower = reader.read_uint::<U>(U::BITS);
+      let lower = reader.read_uint::<L>(L::BITS);
 
       let offset_bits = reader.read_bitlen(offset_bits_bits);
-      if offset_bits > U::BITS {
+      if offset_bits > L::BITS {
         reader.check_in_bounds()?;
         return Err(PcoError::corruption(format!(
           "offset bits of {} exceeds data type of {} bits",
           offset_bits,
-          U::BITS,
+          L::BITS,
         )));
       }
 
@@ -91,7 +91,7 @@ fn parse_bin_batch<U: Latent, R: BetterBufRead>(
   Ok(())
 }
 
-impl<U: Latent> ChunkLatentVarMeta<U> {
+impl<L: Latent> ChunkLatentVarMeta<L> {
   fn parse_from<R: BetterBufRead>(reader_builder: &mut BitReaderBuilder<R>) -> PcoResult<Self> {
     let (ans_size_log, n_bins) = reader_builder.with_reader(|reader| {
       let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
@@ -149,9 +149,9 @@ impl<U: Latent> ChunkLatentVarMeta<U> {
 /// The metadata of a pco chunk.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
-pub struct ChunkMeta<U: Latent> {
+pub struct ChunkMeta<L: Latent> {
   /// The formula `pco` used to compress each number at a low level.
-  pub mode: Mode<U>,
+  pub mode: Mode<L>,
   /// How many times delta encoding was applied during compression.
   /// This is between 0 and 7, inclusive.
   ///
@@ -160,20 +160,20 @@ pub struct ChunkMeta<U: Latent> {
   /// Metadata about the interleaved streams needed by `pco` to
   /// compress/decompress the inputs
   /// according to the formula used by `mode`.
-  pub per_latent_var: Vec<ChunkLatentVarMeta<U>>,
+  pub per_latent_var: Vec<ChunkLatentVarMeta<L>>,
 }
 
-fn write_bins<U: Latent, W: Write>(
-  bins: &[Bin<U>],
+fn write_bins<L: Latent, W: Write>(
+  bins: &[Bin<L>],
   ans_size_log: Bitlen,
   writer: &mut BitWriter<W>,
 ) -> PcoResult<()> {
   writer.write_usize(bins.len(), BITS_TO_ENCODE_N_BINS);
-  let offset_bits_bits = bits_to_encode_offset_bits::<U>();
+  let offset_bits_bits = bits_to_encode_offset_bits::<L>();
   for bin_batch in bins.chunks(FULL_BIN_BATCH_SIZE) {
     for bin in bin_batch {
       writer.write_uint(bin.weight - 1, ans_size_log);
-      writer.write_uint(bin.lower, U::BITS);
+      writer.write_uint(bin.lower, L::BITS);
       writer.write_bitlen(bin.offset_bits, offset_bits_bits);
     }
     writer.flush()?;
@@ -181,11 +181,11 @@ fn write_bins<U: Latent, W: Write>(
   Ok(())
 }
 
-impl<U: Latent> ChunkMeta<U> {
+impl<L: Latent> ChunkMeta<L> {
   pub(crate) fn new(
-    mode: Mode<U>,
+    mode: Mode<L>,
     delta_encoding_order: usize,
-    per_latent_var: Vec<ChunkLatentVarMeta<U>>,
+    per_latent_var: Vec<ChunkLatentVarMeta<L>>,
   ) -> Self {
     ChunkMeta {
       mode,
@@ -208,11 +208,11 @@ impl<U: Latent> ChunkMeta<U> {
             ));
           }
 
-          let base = reader.read_uint::<U>(U::BITS);
+          let base = reader.read_uint::<L>(L::BITS);
           Ok(Mode::IntMult(base))
         }
         2 => {
-          let base_latent = reader.read_uint::<U>(U::BITS);
+          let base_latent = reader.read_uint::<L>(L::BITS);
           Ok(Mode::FloatMult(base_latent))
         }
         value => Err(PcoError::corruption(format!(
@@ -257,10 +257,10 @@ impl<U: Latent> ChunkMeta<U> {
     match self.mode {
       Mode::Classic => (),
       Mode::IntMult(base) => {
-        writer.write_uint(base, U::BITS);
+        writer.write_uint(base, L::BITS);
       }
       Mode::FloatMult(base_latent) => {
-        writer.write_uint(base_latent, U::BITS);
+        writer.write_uint(base_latent, L::BITS);
       }
     };
 

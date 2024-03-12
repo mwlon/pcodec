@@ -65,11 +65,11 @@ pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
 }
 
 #[inline(never)]
-pub fn has_enough_infrequent_ints<U: Latent, S: Copy, F: Fn(S) -> U>(
+pub fn has_enough_infrequent_ints<L: Latent, S: Copy, F: Fn(S) -> L>(
   sample: &[S],
   mult_fn: F,
 ) -> bool {
-  let mut mult_counts = HashMap::<U, usize>::with_capacity(sample.len());
+  let mut mult_counts = HashMap::<L, usize>::with_capacity(sample.len());
   for &x in sample {
     let mult = mult_fn(x);
     *mult_counts.entry(mult).or_default() += 1;

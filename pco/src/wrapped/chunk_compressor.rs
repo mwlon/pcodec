@@ -27,26 +27,26 @@ const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
 
-struct BinBuffer<'a, U: Latent> {
-  pub seq: Vec<BinCompressionInfo<U>>,
+struct BinBuffer<'a, L: Latent> {
+  pub seq: Vec<BinCompressionInfo<L>>,
   bin_idx: usize,
   max_n_bin: usize,
-  n_unsigneds: usize,
-  sorted: &'a [U],
+  n_latents: usize,
+  sorted: &'a [L],
   pub target_j: usize,
 }
 
-impl<'a, U: Latent> BinBuffer<'a, U> {
+impl<'a, L: Latent> BinBuffer<'a, L> {
   fn calc_target_j(&mut self) {
-    self.target_j = ((self.bin_idx + 1) * self.n_unsigneds) / self.max_n_bin
+    self.target_j = ((self.bin_idx + 1) * self.n_latents) / self.max_n_bin
   }
 
-  fn new(max_n_bin: usize, n_unsigneds: usize, sorted: &'a [U]) -> Self {
+  fn new(max_n_bin: usize, n_latents: usize, sorted: &'a [L]) -> Self {
     let mut res = Self {
       seq: Vec::with_capacity(max_n_bin),
       bin_idx: 0,
       max_n_bin,
-      n_unsigneds,
+      n_latents,
       sorted,
       target_j: 0,
     };
@@ -56,12 +56,12 @@ impl<'a, U: Latent> BinBuffer<'a, U> {
 
   fn push_bin(&mut self, i: usize, j: usize) {
     let sorted = self.sorted;
-    let n_unsigneds = self.n_unsigneds;
+    let n_latents = self.n_latents;
 
     let count = j - i;
     let new_bin_idx = max(
       self.bin_idx + 1,
-      (j * self.max_n_bin) / n_unsigneds,
+      (j * self.max_n_bin) / n_latents,
     );
     let lower = sorted[i];
     let upper = sorted[j - 1];
@@ -80,18 +80,18 @@ impl<'a, U: Latent> BinBuffer<'a, U> {
 }
 
 #[inline(never)]
-fn choose_unoptimized_bins<U: Latent>(
-  sorted: &[U],
+fn choose_unoptimized_bins<L: Latent>(
+  sorted: &[L],
   unoptimized_bins_log: usize,
-) -> Vec<BinCompressionInfo<U>> {
-  let n_unsigneds = sorted.len();
-  let max_n_bins = min(1 << unoptimized_bins_log, n_unsigneds);
+) -> Vec<BinCompressionInfo<L>> {
+  let n_latents = sorted.len();
+  let max_n_bins = min(1 << unoptimized_bins_log, n_latents);
 
   let mut i = 0;
   let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<U>::new(max_n_bins, n_unsigneds, sorted);
+  let mut bin_buffer = BinBuffer::<L>::new(max_n_bins, n_latents, sorted);
 
-  for j in 1..n_unsigneds {
+  for j in 1..n_latents {
     let target_j = bin_buffer.target_j;
     if sorted[j] == sorted[j - 1] {
       if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
@@ -106,19 +106,19 @@ fn choose_unoptimized_bins<U: Latent>(
       }
     }
   }
-  bin_buffer.push_bin(i, n_unsigneds);
+  bin_buffer.push_bin(i, n_latents);
 
   bin_buffer.seq
 }
 
 // returns table size log
-fn quantize_weights<U: Latent>(
-  infos: &mut [BinCompressionInfo<U>],
-  n_unsigneds: usize,
+fn quantize_weights<L: Latent>(
+  infos: &mut [BinCompressionInfo<L>],
+  n_latents: usize,
   estimated_ans_size_log: Bitlen,
 ) -> Bitlen {
   let counts = infos.iter().map(|info| info.weight).collect::<Vec<_>>();
-  let (ans_size_log, weights) = ans::quantize_weights(counts, n_unsigneds, estimated_ans_size_log);
+  let (ans_size_log, weights) = ans::quantize_weights(counts, n_latents, estimated_ans_size_log);
 
   for (i, weight) in weights.into_iter().enumerate() {
     infos[i].weight = weight;
@@ -127,30 +127,30 @@ fn quantize_weights<U: Latent>(
 }
 
 #[derive(Default)]
-struct TrainedBins<U: Latent> {
-  infos: Vec<BinCompressionInfo<U>>,
+struct TrainedBins<L: Latent> {
+  infos: Vec<BinCompressionInfo<L>>,
   ans_size_log: Bitlen,
 }
 
-fn train_infos<U: Latent>(
-  unsigneds: Vec<U>,
+fn train_infos<L: Latent>(
+  latents: Vec<L>,
   unoptimized_bins_log: usize,
-) -> PcoResult<TrainedBins<U>> {
-  if unsigneds.is_empty() {
+) -> PcoResult<TrainedBins<L>> {
+  if latents.is_empty() {
     return Ok(TrainedBins::default());
   }
 
-  let n_unsigneds = unsigneds.len();
+  let n_latents = latents.len();
   let unoptimized_bins = {
-    let mut sorted = unsigneds;
+    let mut sorted = latents;
     sorted.sort_unstable();
     choose_unoptimized_bins(&sorted, unoptimized_bins_log)
   };
 
-  let n_log_ceil = if n_unsigneds <= 1 {
+  let n_log_ceil = if n_latents <= 1 {
     0
   } else {
-    (n_unsigneds - 1).ilog2() + 1
+    (n_latents - 1).ilog2() + 1
   };
   // We cap the ANS table size so that it fits into L1 (or at least L2) cache
   // and has predictably small bitlengths for fast decompression.
@@ -170,7 +170,7 @@ fn train_infos<U: Latent>(
 
   let ans_size_log = quantize_weights(
     &mut optimized_infos,
-    n_unsigneds,
+    n_latents,
     estimated_ans_size_log,
   );
 
@@ -237,9 +237,9 @@ fn write_uints<U: ReadWriteUint, const MAX_U64S: usize>(
   (stale_byte_idx, bits_past_byte)
 }
 
-fn write_dissected_batch_var<U: Latent, W: Write>(
-  dissected_page_var: &DissectedPageVar<U>,
-  var_policy: &LatentVarPolicy<U>,
+fn write_dissected_batch_var<L: Latent, W: Write>(
+  dissected_page_var: &DissectedPageVar<L>,
+  var_policy: &LatentVarPolicy<L>,
   batch_start: usize,
   writer: &mut BitWriter<W>,
 ) {
@@ -261,21 +261,21 @@ fn write_dissected_batch_var<U: Latent, W: Write>(
   // write offsets
   (writer.stale_byte_idx, writer.bits_past_byte) = match var_policy.max_u64s_per_offset {
     0 => (writer.stale_byte_idx, writer.bits_past_byte),
-    1 => write_short_uints::<U>(
+    1 => write_short_uints::<L>(
       &dissected_page_var.offsets[batch_start..],
       &dissected_page_var.offset_bits[batch_start..],
       writer.stale_byte_idx,
       writer.bits_past_byte,
       &mut writer.buf,
     ),
-    2 => write_uints::<U, 2>(
+    2 => write_uints::<L, 2>(
       &dissected_page_var.offsets[batch_start..],
       &dissected_page_var.offset_bits[batch_start..],
       writer.stale_byte_idx,
       writer.bits_past_byte,
       &mut writer.buf,
     ),
-    3 => write_uints::<U, 3>(
+    3 => write_uints::<L, 3>(
       &dissected_page_var.offsets[batch_start..],
       &dissected_page_var.offset_bits[batch_start..],
       writer.stale_byte_idx,
@@ -287,8 +287,8 @@ fn write_dissected_batch_var<U: Latent, W: Write>(
 }
 
 #[derive(Clone, Debug)]
-struct LatentVarPolicy<U: Latent> {
-  table: CompressionTable<U>,
+struct LatentVarPolicy<L: Latent> {
+  table: CompressionTable<L>,
   encoder: ans::Encoder,
   avg_bits_per_delta: f64,
   is_trivial: bool,
@@ -298,17 +298,17 @@ struct LatentVarPolicy<U: Latent> {
 
 /// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
-pub struct ChunkCompressor<U: Latent> {
-  meta: ChunkMeta<U>,
-  latent_var_policies: Vec<LatentVarPolicy<U>>,
+pub struct ChunkCompressor<L: Latent> {
+  meta: ChunkMeta<L>,
+  latent_var_policies: Vec<LatentVarPolicy<L>>,
   page_infos: Vec<PageInfo>,
   // n_latent_vars x n_deltas
-  deltas: Vec<Vec<U>>,
+  deltas: Vec<Vec<L>>,
   // n_pages x n_latent_vars
-  delta_moments: Vec<Vec<DeltaMoments<U>>>,
+  delta_moments: Vec<Vec<DeltaMoments<L>>>,
 }
 
-fn bins_from_compression_infos<U: Latent>(infos: &[BinCompressionInfo<U>]) -> Vec<Bin<U>> {
+fn bins_from_compression_infos<L: Latent>(infos: &[BinCompressionInfo<L>]) -> Vec<Bin<L>> {
   infos.iter().cloned().map(Bin::from).collect()
 }
 
@@ -350,11 +350,11 @@ fn validate_chunk_size(n: usize) -> PcoResult<()> {
 }
 
 #[inline(never)]
-fn collect_contiguous_deltas<U: Latent>(
-  deltas: &[U],
+fn collect_contiguous_deltas<L: Latent>(
+  deltas: &[L],
   page_infos: &[PageInfo],
   latent_idx: usize,
-) -> Vec<U> {
+) -> Vec<L> {
   let mut res = Vec::with_capacity(deltas.len());
   for page in page_infos {
     res.extend(&deltas[page.start_idx..page.end_idx_per_var[latent_idx]]);
@@ -362,13 +362,13 @@ fn collect_contiguous_deltas<U: Latent>(
   res
 }
 
-fn unsigned_new_w_delta_order<U: Latent>(
-  mut latents: Vec<Vec<U>>, // start out plain, gets delta encoded in place
+fn latent_new_w_delta_order<L: Latent>(
+  mut latents: Vec<Vec<L>>, // start out plain, gets delta encoded in place
   paging_spec: &PagingSpec,
-  mode: Mode<U>,
+  mode: Mode<L>,
   delta_order: usize,
   unoptimized_bins_log: usize,
-) -> PcoResult<ChunkCompressor<U>> {
+) -> PcoResult<ChunkCompressor<L>> {
   let chunk_n = latents[0].len();
   let n_per_page = paging_spec.n_per_page(chunk_n)?;
   let n_pages = n_per_page.len();
@@ -459,11 +459,11 @@ fn unsigned_new_w_delta_order<U: Latent>(
   })
 }
 
-fn choose_delta_sample<U: Latent>(
-  primary_latents: &[U],
+fn choose_delta_sample<L: Latent>(
+  primary_latents: &[L],
   group_size: usize,
   n_extra_groups: usize,
-) -> Vec<U> {
+) -> Vec<L> {
   let n = primary_latents.len();
   let nominal_sample_size = (n_extra_groups + 1) * group_size;
   let mut sample = Vec::with_capacity(nominal_sample_size);
@@ -488,8 +488,8 @@ fn choose_delta_sample<U: Latent>(
 // modes apply deltas to secondary latents. Might want to change this
 // eventually?
 #[inline(never)]
-fn choose_delta_encoding_order<U: Latent>(
-  primary_latents: &[U],
+fn choose_delta_encoding_order<L: Latent>(
+  primary_latents: &[L],
   unoptimized_bins_log: usize,
 ) -> PcoResult<usize> {
   let sample = choose_delta_sample(
@@ -501,7 +501,7 @@ fn choose_delta_encoding_order<U: Latent>(
   let mut best_order = usize::MAX;
   let mut best_size = usize::MAX;
   for delta_encoding_order in 0..MAX_DELTA_ENCODING_ORDER + 1 {
-    let sample_cc = unsigned_new_w_delta_order(
+    let sample_cc = latent_new_w_delta_order(
       vec![sample.clone()],
       &PagingSpec::ExactPageSizes(vec![sample.len()]),
       Mode::Classic,
@@ -531,13 +531,13 @@ fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> usize {
   }
 }
 
-// We pull this stuff out of `new` because it only depends on the unsigned type
+// We pull this stuff out of `new` because it only depends on the latent type
 // and we don't need a specialization for each full dtype.
-fn unsigned_new<U: Latent>(
-  latents: Vec<Vec<U>>,
+fn latent_new<L: Latent>(
+  latents: Vec<Vec<L>>,
   config: &ChunkConfig,
-  mode: Mode<U>,
-) -> PcoResult<ChunkCompressor<U>> {
+  mode: Mode<L>,
+) -> PcoResult<ChunkCompressor<L>> {
   let unoptimized_bins_log =
     choose_unoptimized_bins_log(config.compression_level, latents[0].len());
   let delta_order = if let Some(delta_order) = config.delta_encoding_order {
@@ -546,7 +546,7 @@ fn unsigned_new<U: Latent>(
     choose_delta_encoding_order(&latents[0], unoptimized_bins_log)?
   };
 
-  unsigned_new_w_delta_order(
+  latent_new_w_delta_order(
     latents,
     &config.paging_spec,
     mode,
@@ -566,11 +566,11 @@ pub(crate) fn new<T: NumberLike>(
 
   let (mode, latents) = T::choose_mode_and_split_latents(nums, config);
 
-  unsigned_new(latents, config, mode)
+  latent_new(latents, config, mode)
 }
 
-impl<U: Latent> ChunkCompressor<U> {
-  fn page_moments(&self, page_idx: usize, latent_var_idx: usize) -> &DeltaMoments<U> {
+impl<L: Latent> ChunkCompressor<L> {
+  fn page_moments(&self, page_idx: usize, latent_var_idx: usize) -> &DeltaMoments<L> {
     &self.delta_moments[page_idx][latent_var_idx]
   }
 
@@ -580,7 +580,7 @@ impl<U: Latent> ChunkCompressor<U> {
   }
 
   /// Returns pre-computed information about the chunk.
-  pub fn meta(&self) -> &ChunkMeta<U> {
+  pub fn meta(&self) -> &ChunkMeta<L> {
     &self.meta
   }
 
@@ -590,7 +590,7 @@ impl<U: Latent> ChunkCompressor<U> {
   /// you can `.reserve()` ahead of time.
   pub fn chunk_meta_size_hint(&self) -> usize {
     let mut size = 32;
-    let bytes_per_num = U::BITS / 8;
+    let bytes_per_num = L::BITS / 8;
     for latent_meta in &self.meta.per_latent_var {
       size += latent_meta.bins.len() * (4 + 2 * bytes_per_num as usize)
     }
@@ -606,7 +606,7 @@ impl<U: Latent> ChunkCompressor<U> {
     Ok(writer.into_inner())
   }
 
-  fn dissect_page(&self, page_idx: usize) -> PcoResult<DissectedPage<U>> {
+  fn dissect_page(&self, page_idx: usize) -> PcoResult<DissectedPage<L>> {
     let Self {
       latent_var_policies,
       deltas,
@@ -681,7 +681,7 @@ impl<U: Latent> ChunkCompressor<U> {
       .zip(&page_info.end_idx_per_var)
     {
       let page_n_deltas = end_idx - page_info.start_idx;
-      let meta_bit_size = self.meta.delta_encoding_order * U::BITS as usize
+      let meta_bit_size = self.meta.delta_encoding_order * L::BITS as usize
         + ANS_INTERLEAVING * var_meta.ans_size_log as usize;
       // We're probably reserving more than necessary sometimes, because
       // max_bits_per_latent is quite a loose upper bound.
@@ -697,7 +697,7 @@ impl<U: Latent> ChunkCompressor<U> {
   #[inline(never)]
   fn write_dissected_page<W: Write>(
     &self,
-    dissected_page: DissectedPage<U>,
+    dissected_page: DissectedPage<L>,
     writer: &mut BitWriter<W>,
   ) -> PcoResult<()> {
     let mut batch_start = 0;

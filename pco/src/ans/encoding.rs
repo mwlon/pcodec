@@ -28,7 +28,7 @@ pub struct Encoder {
 }
 
 impl Encoder {
-  pub fn from_bins<U: Latent>(size_log: Bitlen, bins: &[Bin<U>]) -> PcoResult<Self> {
+  pub fn from_bins<L: Latent>(size_log: Bitlen, bins: &[Bin<L>]) -> PcoResult<Self> {
     let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
     let spec = Spec::from_weights(size_log, weights)?;
     Ok(Self::new(&spec))

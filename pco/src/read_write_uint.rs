@@ -61,7 +61,7 @@ impl ReadWriteUint for usize {
   }
 }
 
-impl<U: Latent> ReadWriteUint for U {
+impl<L: Latent> ReadWriteUint for L {
   const ZERO: Self = <Self as Latent>::ZERO;
   const ONE: Self = <Self as Latent>::ONE;
   const BITS: Bitlen = <Self as Latent>::BITS;
