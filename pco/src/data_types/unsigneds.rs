@@ -2,6 +2,30 @@ use crate::constants::Bitlen;
 use crate::data_types::SecondaryLatents;
 use crate::data_types::{Latent, NumberLike, OrderedLatentConvert};
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
+use std::fmt::Display;
+
+pub fn latent_to_string<T: OrderedLatentConvert + Display>(
+  l: T::L,
+  mode: Mode<T::L>,
+  latent_var_idx: usize,
+  delta_encoding_order: usize,
+) -> String {
+  let format_as_signed = || {
+    if l >= T::L::MID {
+      (l - T::L::MID).to_string()
+    } else {
+      format!("-{}", T::L::MID - l)
+    }
+  };
+
+  use Mode::*;
+  match (mode, latent_var_idx, delta_encoding_order) {
+    (Classic, 0, 0) | (IntMult(_), 0, 0) => T::from_latent_ordered(l).to_string(),
+    (Classic, 0, _) | (IntMult(_), 0, _) => format_as_signed(),
+    (IntMult(_), 1, _) => l.to_string(),
+    _ => panic!("invalid context for latent"),
+  }
+}
 
 pub fn choose_mode_and_split_latents<T: OrderedLatentConvert>(
   nums: &[T],
@@ -115,6 +139,14 @@ macro_rules! impl_unsigned_number {
       #[inline]
       fn is_identical(self, other: Self) -> bool {
         self == other
+      }
+      fn latent_to_string(
+        l: Self::L,
+        mode: Mode<Self::L>,
+        latent_var_idx: usize,
+        delta_encoding_order: usize,
+      ) -> String {
+        latent_to_string::<Self>(l, mode, latent_var_idx, delta_encoding_order)
       }
 
       fn choose_mode_and_split_latents(

@@ -28,6 +28,14 @@ macro_rules! impl_signed {
       fn is_identical(self, other: Self) -> bool {
         self == other
       }
+      fn latent_to_string(
+        l: Self::L,
+        mode: Mode<Self::L>,
+        latent_var_idx: usize,
+        delta_encoding_order: usize,
+      ) -> String {
+        unsigneds::latent_to_string::<Self>(l, mode, latent_var_idx, delta_encoding_order)
+      }
 
       fn choose_mode_and_split_latents(
         nums: &[Self],

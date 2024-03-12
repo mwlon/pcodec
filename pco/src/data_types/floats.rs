@@ -211,6 +211,22 @@ macro_rules! impl_float_number {
       fn is_identical(self, other: Self) -> bool {
         self.to_bits() == other.to_bits()
       }
+      fn latent_to_string(
+        l: Self::L,
+        mode: Mode<Self::L>,
+        latent_var_idx: usize,
+        delta_encoding_order: usize,
+      ) -> String {
+        use Mode::*;
+        match (mode, latent_var_idx, delta_encoding_order) {
+          (Classic, 0, 0) => Self::from_latent_ordered(l).to_string(),
+          (Classic, 0, _) => format!("{} ULPs", l.toggle_center()),
+          (FloatMult(_), 0, 0) => Self::int_float_from_latent(l).to_string(),
+          (FloatMult(_), 0, _) => l.toggle_center().to_string(),
+          (FloatMult(_), 1, _) => format!("{} ULPs", l.toggle_center()),
+          _ => panic!("invalid context for latent"),
+        }
+      }
 
       fn choose_mode_and_split_latents(
         nums: &[Self],

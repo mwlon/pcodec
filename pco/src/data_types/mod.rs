@@ -92,6 +92,7 @@ pub trait Latent:
   + BitOr<Output = Self>
   + BitAndAssign
   + BitOrAssign
+  + Display
   + Div<Output = Self>
   + DivAssign
   + Hash
@@ -125,6 +126,10 @@ pub trait Latent:
 
   fn wrapping_add(self, other: Self) -> Self;
   fn wrapping_sub(self, other: Self) -> Self;
+
+  fn toggle_center(self) -> Self {
+    self.wrapping_add(Self::MID)
+  }
 }
 
 /// *unstable API* Trait for data types supported for compression/decompression.
@@ -159,6 +164,12 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// Returns whether the two numbers have the exact same bit representation
   /// or not.
   fn is_identical(self, other: Self) -> bool;
+  fn latent_to_string(
+    l: Self::L,
+    mode: Mode<Self::L>,
+    latent_var_idx: usize,
+    delta_encoding_order: usize,
+  ) -> String;
 
   fn choose_mode_and_split_latents(
     nums: &[Self],

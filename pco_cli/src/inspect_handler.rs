@@ -2,10 +2,9 @@ use anyhow::Result;
 
 use pco::data_types::{Latent, NumberLike};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{Bin, ChunkLatentVarMeta, ChunkMeta, Mode};
+use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
 
 use crate::handlers::HandlerImpl;
-use crate::inspect_handler::NumDisplay::{Delta, IntFloat, IntMult, IntMultAdj, Unsigned};
 use crate::number_like_arrow::NumberLikeArrow;
 use crate::opt::InspectOpt;
 use crate::utils;
@@ -16,51 +15,6 @@ pub trait InspectHandler {
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()>;
 }
 
-#[derive(Clone, Copy, Debug)]
-enum NumDisplay<U: Latent> {
-  Unsigned,
-  Delta,
-  IntFloat,
-  IntMult(U),
-  IntMultAdj(U),
-}
-
-fn print_bins<T: NumberLike>(bins: &[Bin<T::L>], display: NumDisplay<T::L>) {
-  for bin in bins {
-    let lower = bin.lower;
-    let lower_str = match display {
-      Unsigned => T::from_unsigned(lower).to_string(),
-      Delta => {
-        // deltas are "centered" around U::MID, so we want to uncenter and
-        // display easily-readable signed numbers
-        if lower < T::L::MID {
-          format!("-{}", T::L::MID - lower)
-        } else {
-          (lower - T::L::MID).to_string()
-        }
-      }
-      IntFloat => lower.to_int_float().to_string(),
-      IntMult(base) => {
-        let unsigned_0 = T::default().to_unsigned();
-        let relative_to_0 = lower.wrapping_sub(unsigned_0 / base);
-        T::from_unsigned(unsigned_0.wrapping_add(relative_to_0)).to_string()
-      }
-      IntMultAdj(base) => {
-        let unsigned_0_rem = T::default().to_unsigned() % base;
-        if lower < unsigned_0_rem {
-          format!("-{}", unsigned_0_rem - lower)
-        } else {
-          (lower - unsigned_0_rem).to_string()
-        }
-      }
-    };
-    println!(
-      "{}weight: {} lower: {} offset bits: {}",
-      INDENT, bin.weight, lower_str, bin.offset_bits
-    );
-  }
-}
-
 fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
   let res = *prev_src_len - src.len();
   *prev_src_len = src.len();
@@ -68,41 +22,43 @@ fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
 }
 
 fn display_latent_var<T: NumberLike>(
-  latent_idx: usize,
+  latent_var_idx: usize,
   meta: &ChunkMeta<T::L>,
   latent: &ChunkLatentVarMeta<T::L>,
 ) {
-  let latent_name = match (meta.mode, latent_idx) {
+  let latent_var_name = match (meta.mode, latent_var_idx) {
     (Mode::Classic, 0) => "primary".to_string(),
-    (Mode::FloatMult(config), 0) => format!("multiplier [x{}]", config.base),
+    (Mode::FloatMult(base_latent), 0) => format!(
+      "multiplier [x{}]",
+      T::latent_to_string(base_latent, Mode::Classic, 0, 0)
+    ),
     (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
     (Mode::IntMult(base), 0) => format!("multiplier [x{}]", base),
     (Mode::IntMult(_), 1) => "adjustment".to_string(),
     _ => panic!(
       "unknown latent: {:?}/{}",
-      meta.mode, latent_idx
+      meta.mode, latent_var_idx
     ),
   };
-  let display = match (
-    meta.mode,
-    latent_idx,
-    meta.delta_encoding_order,
-  ) {
-    // so far delta order only applies to 0th latent var
-    (_, 0, order) if order > 0 => Delta,
-    (Mode::FloatMult(_), 0, _) => IntFloat,
-    (Mode::FloatMult(_), 1, _) => Delta,
-    (Mode::IntMult(base), 0, _) => IntMult(base),
-    (Mode::IntMult(base), 1, _) => IntMultAdj(base),
-    _ => Unsigned,
-  };
   println!(
-    "latent: {} n_bins: {} ANS size log: {}",
-    latent_name,
+    "latent var: {} n_bins: {} ANS size log: {}",
+    latent_var_name,
     latent.bins.len(),
     latent.ans_size_log,
   );
-  print_bins::<T>(&latent.bins, display);
+
+  for bin in &latent.bins {
+    let lower_str = T::latent_to_string(
+      bin.lower,
+      meta.mode,
+      latent_var_idx,
+      meta.delta_encoding_order,
+    );
+    println!(
+      "{}weight: {} lower: {} offset bits: {}",
+      INDENT, bin.weight, lower_str, bin.offset_bits
+    );
+  }
 }
 
 impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
