@@ -17,19 +17,6 @@ pub fn latent_to_string<T: OrderedLatentConvert + Display + Default>(
       format!("-{}", T::L::MID - l)
     }
   };
-  //   IntMult(base) => {
-  //     let unsigned_0 = T::default().to_unsigned();
-  //     let relative_to_0 = lower.wrapping_sub(unsigned_0 / base);
-  //     T::from_unsigned(unsigned_0.wrapping_add(relative_to_0)).to_string()
-  //   }
-  //   IntMultAdj(base) => {
-  //     let unsigned_0_rem = T::default().to_unsigned() % base;
-  //     if lower < unsigned_0_rem {
-  //       format!("-{}", unsigned_0_rem - lower)
-  //     } else {
-  //       (lower - unsigned_0_rem).to_string()
-  //     }
-  //   }
 
   use Mode::*;
   match (mode, latent_var_idx, delta_encoding_order) {
