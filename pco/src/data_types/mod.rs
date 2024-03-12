@@ -179,6 +179,11 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   // TODO add mode validation
 }
 
+/// Either a slice of secondary latents or a constant value for all of them.
+///
+/// Used in joining latents to recover the original numbers.
+/// We could always just work with a slice, but sometimes we know all secondary
+/// latents are identical, and with this knowledge we can decompress faster.
 pub enum SecondaryLatents<'a, L: Latent> {
   Nonconstant(&'a [L]),
   Constant(L),
