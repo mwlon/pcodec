@@ -2,10 +2,10 @@ use std::cmp::{max, min};
 use std::mem;
 
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
+use crate::data_types::{FloatLike, Latent, OrderedLatentConvert};
 use crate::wrapped::SecondaryLatents;
 use crate::wrapped::SecondaryLatents::{Constant, Nonconstant};
-use crate::{delta, int_mult_utils, sampling};
+use crate::{int_mult_utils, sampling};
 
 #[inline(never)]
 pub fn join_latents<F: FloatLike>(

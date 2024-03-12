@@ -5,7 +5,7 @@ use crate::chunk_config::ChunkConfig;
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
 use crate::errors::PcoResult;
-use crate::float_mult_utils::FloatMultConfig;
+
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
 use crate::{ChunkMeta, Mode};
 

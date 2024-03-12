@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
-use crate::data_types::{Latent, NumberLike, OrderedLatentConvert};
+use crate::data_types::{Latent, OrderedLatentConvert};
 use crate::sampling;
 use crate::wrapped::SecondaryLatents;
 

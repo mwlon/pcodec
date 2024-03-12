@@ -14,9 +14,9 @@ use crate::page_meta::PageMeta;
 use crate::progress::Progress;
 use crate::wrapped::page_decompressor::SecondaryLatents::Nonconstant;
 use crate::wrapped::SecondaryLatents::Constant;
-use crate::Mode::*;
-use crate::{bit_reader, int_mult_utils, ChunkMeta, Mode};
-use crate::{delta, float_mult_utils};
+
+use crate::{bit_reader, ChunkMeta, Mode};
+use crate::{delta};
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
 

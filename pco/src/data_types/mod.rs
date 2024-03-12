@@ -9,7 +9,7 @@ use crate::{ChunkConfig, Mode};
 pub use dynamic::CoreDataType;
 
 use crate::constants::Bitlen;
-use crate::float_mult_utils::FloatMultConfig;
+
 use crate::wrapped::SecondaryLatents;
 
 mod dynamic;

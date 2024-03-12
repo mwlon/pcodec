@@ -1,8 +1,8 @@
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
-use crate::float_mult_utils::FloatMultConfig;
+
 use crate::wrapped::SecondaryLatents;
-use crate::Mode::FloatMult;
+
 use crate::{float_mult_utils, ChunkConfig, FloatMultSpec, Mode};
 
 fn choose_mode_and_split_latents<F: FloatLike>(
@@ -236,7 +236,7 @@ impl_float_number!(f64, u64, 64, 1_u64 << 63, 6, -1023);
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::data_types::NumberLike;
+  
 
   #[test]
   fn test_float_ordering() {

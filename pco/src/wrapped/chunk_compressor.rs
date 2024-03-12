@@ -12,13 +12,13 @@ use crate::constants::{
 use crate::data_types::{FloatLike, Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
-use crate::float_mult_utils::FloatMultConfig;
+
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::read_write_uint::ReadWriteUint;
 use crate::{
-  ans, bin_optimization, bit_reader, bit_writer, bits, delta, float_mult_utils, int_mult_utils,
-  read_write_uint, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta, FloatMultSpec, IntMultSpec,
+  ans, bin_optimization, bit_reader, bit_writer, bits, delta,
+  read_write_uint, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta,
   Mode, PagingSpec, FULL_BATCH_N,
 };
 

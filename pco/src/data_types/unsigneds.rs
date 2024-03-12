@@ -3,37 +3,34 @@ use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
 use crate::wrapped::SecondaryLatents;
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
 
-fn choose_mode<T: OrderedLatentConvert>(nums: &[T], config: &ChunkConfig) -> Mode<T::L> {
-  use IntMultSpec::*;
-  match config.int_mult_spec {
-    Enabled => {
-      if let Some(base) = int_mult_utils::choose_base(nums) {
-        Mode::IntMult(base)
-      } else {
-        Mode::Classic
-      }
-    }
-    Provided(base_u64) => Mode::IntMult(T::L::from_u64(base_u64)),
-    Disabled => Mode::Classic,
-  }
-}
-
-fn split_latents<T: OrderedLatentConvert>(mode: Mode<T::L>, nums: &[T]) -> Vec<Vec<T::L>> {
-  use Mode::*;
-  match mode {
-    IntMult(base) => int_mult_utils::split_latents(nums, base),
-    Classic => vec![nums.iter().map(|x| x.to_latent_ordered()).collect()],
-    _ => panic!("should be unreachable"),
-  }
-}
-
 pub fn choose_mode_and_split_latents<T: OrderedLatentConvert>(
   nums: &[T],
   config: &ChunkConfig,
 ) -> (Mode<T::L>, Vec<Vec<T::L>>) {
-  let mode = choose_mode(nums, config);
-  let latents = split_latents(mode, nums);
-  (mode, latents)
+  use IntMultSpec::*;
+  let classic = || {
+    let latents = vec![nums.iter().map(|x| x.to_latent_ordered()).collect()];
+    (Mode::Classic, latents)
+  };
+
+  match config.int_mult_spec {
+    Enabled => {
+      if let Some(base) = int_mult_utils::choose_base(nums) {
+        let mode = Mode::IntMult(base);
+        let latents = int_mult_utils::split_latents(nums, base);
+        (mode, latents)
+      } else {
+        classic()
+      }
+    }
+    Provided(base_u64) => {
+      let base = T::L::from_u64(base_u64);
+      let mode = Mode::IntMult(base);
+      let latents = int_mult_utils::split_latents(nums, base);
+      (mode, latents)
+    }
+    Disabled => classic(),
+  }
 }
 
 pub fn join_latents<T: OrderedLatentConvert>(

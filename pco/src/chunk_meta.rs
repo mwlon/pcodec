@@ -8,9 +8,9 @@ use crate::bit_reader::BitReaderBuilder;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
-use crate::data_types::{FloatLike, Latent, NumberLike};
+use crate::data_types::{FloatLike, Latent};
 use crate::errors::{PcoError, PcoResult};
-use crate::float_mult_utils::FloatMultConfig;
+
 use crate::format_version::FormatVersion;
 use crate::Mode;
 

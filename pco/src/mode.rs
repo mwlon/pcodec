@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::data_types::{FloatLike, Latent};
-use crate::float_mult_utils::FloatMultConfig;
+
 
 // Internally, here's how we should model each mode:
 //
