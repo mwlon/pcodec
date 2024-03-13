@@ -58,6 +58,14 @@ fn join_latents<F: FloatLike>(
   }
 }
 
+fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
+  if adj >= L::MID {
+    format!("{}{}", adj - L::MID, suffix)
+  } else {
+    format!("-{}{}", L::MID - adj, suffix)
+  }
+}
+
 macro_rules! impl_float_number {
   ($t: ty, $latent: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
     impl OrderedLatentConvert for $t {
@@ -214,10 +222,10 @@ macro_rules! impl_float_number {
         use Mode::*;
         match (mode, latent_var_idx, delta_encoding_order) {
           (Classic, 0, 0) => Self::from_latent_ordered(l).to_string(),
-          (Classic, 0, _) => format!("{} ULPs", l.toggle_center()),
-          (FloatMult(_), 0, 0) => Self::int_float_from_latent(l).to_string(),
-          (FloatMult(_), 0, _) => l.toggle_center().to_string(),
-          (FloatMult(_), 1, _) => format!("{} ULPs", l.toggle_center()),
+          (Classic, 0, _) => format_delta(l, " ULPs"),
+          (FloatMult(_), 0, 0) => format!("{}x", Self::int_float_from_latent(l)),
+          (FloatMult(_), 0, _) => format_delta(l, "x"),
+          (FloatMult(_), 1, _) => format_delta(l, " ULPs"),
           _ => panic!("invalid context for latent"),
         }
       }
