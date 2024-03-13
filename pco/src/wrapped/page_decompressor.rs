@@ -6,9 +6,7 @@ use better_io::BetterBufRead;
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
-use crate::data_types::SecondaryLatents::Constant;
-use crate::data_types::SecondaryLatents::Nonconstant;
-use crate::data_types::{Latent, NumberLike};
+use crate::data_types::{Latent, NumberLike, SecondaryLatents};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
@@ -115,7 +113,6 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
   fn decompress_batch(&mut self, dst: &mut [T]) -> PcoResult<()> {
     let batch_n = dst.len();
-    // let primary_latents = T::transmute_to_unsigned_slice(primary_dst);
     let n = self.n;
     let mode = self.mode;
     let State {
@@ -157,8 +154,8 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       })?;
     }
     let secondary = match self.maybe_constant_secondary {
-      Some(u) => Constant(u),
-      None => Nonconstant(secondary_latents),
+      Some(u) => SecondaryLatents::Constant(u),
+      None => SecondaryLatents::Nonconstant(secondary_latents),
     };
 
     T::join_latents(mode, primary_latents, secondary, dst);
