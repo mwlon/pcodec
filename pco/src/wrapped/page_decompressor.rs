@@ -131,6 +131,10 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     let secondary_latents = &mut secondary_latents[..batch_n];
     let n_latents = latent_batch_decompressors.len();
 
+    // TODO we previously passed in the destination here instead of writing to
+    // the primary_latents buffer.
+    // Doing so again would be a 3% speedup in general and 7% for unsigneds in
+    // classic mode, where joining is a no-op.
     self.reader_builder.with_reader(|reader| {
       decompress_latents_w_delta(
         reader,
