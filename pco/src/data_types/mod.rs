@@ -166,6 +166,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
     delta_encoding_order: usize,
   ) -> String;
 
+  fn mode_is_valid(mode: Mode<Self::L>) -> bool;
   fn choose_mode_and_split_latents(
     nums: &[Self],
     config: &ChunkConfig,

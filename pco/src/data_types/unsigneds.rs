@@ -161,13 +161,19 @@ macro_rules! impl_unsigned_number {
         latent_to_string::<Self>(l, mode, latent_var_idx, delta_encoding_order)
       }
 
+      fn mode_is_valid(mode: Mode<Self::L>) -> bool {
+        match mode {
+          Mode::Classic => true,
+          Mode::IntMult(_) => true,
+          _ => false,
+        }
+      }
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
       ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
         choose_mode_and_split_latents(nums, config)
       }
-
       fn join_latents(
         mode: Mode<Self::L>,
         primary: &mut [Self::L],

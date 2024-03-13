@@ -222,6 +222,15 @@ macro_rules! impl_float_number {
         }
       }
 
+      fn mode_is_valid(mode: Mode<Self::L>) -> bool {
+        match mode {
+          Mode::Classic => true,
+          Mode::FloatMult(base_latent) => {
+            Self::from_latent_ordered(base_latent).is_finite_and_normal()
+          }
+          _ => false,
+        }
+      }
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,

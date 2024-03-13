@@ -37,6 +37,13 @@ macro_rules! impl_signed {
         unsigneds::latent_to_string::<Self>(l, mode, latent_var_idx, delta_encoding_order)
       }
 
+      fn mode_is_valid(mode: Mode<Self::L>) -> bool {
+        match mode {
+          Mode::Classic => true,
+          Mode::IntMult(_) => true,
+          _ => false,
+        }
+      }
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,

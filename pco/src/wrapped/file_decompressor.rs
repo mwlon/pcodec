@@ -50,7 +50,7 @@ impl FileDecompressor {
     bit_reader::ensure_buf_read_capacity(&mut src, CHUNK_META_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, CHUNK_META_PADDING, 0);
     let chunk_meta = ChunkMeta::<T::L>::parse_from(&mut reader_builder, &self.format_version)?;
-    let cd = ChunkDecompressor::from(chunk_meta);
+    let cd = ChunkDecompressor::new(chunk_meta)?;
     Ok((cd, reader_builder.into_inner()))
   }
 }
