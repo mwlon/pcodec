@@ -111,8 +111,7 @@ It consists of
 * [0-7 bits] 0s until byte-aligned
 * a wrapped header
 * per chunk,
-  * [8 bits] a byte for the data type. Up to 127 is reserved for built-in
-    data types, and 128-255 are reserved for custom data types.
+  * [8 bits] a byte for the data type
   * [24 bits] 1 less than `chunk_n`, the count of numbers in the chunk
   * a wrapped chunk metadata
   * a wrapped data page of `chunk_n` numbers

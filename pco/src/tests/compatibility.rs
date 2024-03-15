@@ -24,8 +24,8 @@ fn assert_nums_eq<T: NumberLike>(x: &[T], y: &[T]) {
   assert_eq!(x.len(), y.len());
   for (i, (x, y)) in x.iter().zip(y).enumerate() {
     assert_eq!(
-      x.to_unsigned(),
-      y.to_unsigned(),
+      x.to_latent_ordered(),
+      y.to_latent_ordered(),
       "{} != {} at {}",
       x,
       y,

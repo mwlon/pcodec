@@ -2,14 +2,13 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
-use crate::data_types::{NumberLike, UnsignedLike};
+use crate::data_types::{Latent, NumberLike};
 use crate::sampling;
-use crate::wrapped::SecondaryLatents;
 
 const ZETA_OF_2: f64 = PI * PI / 6.0; // riemann zeta function
 
 #[inline(never)]
-pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> Vec<Vec<T::Unsigned>> {
+pub fn split_latents<T: NumberLike>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
   let n = nums.len();
   let mut mults = Vec::with_capacity(n);
   let mut adjs = Vec::with_capacity(n);
@@ -18,7 +17,7 @@ pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> Vec<Vec<T:
     adjs.set_len(n);
   }
   for (&num, (mult_dst, adj_dst)) in nums.iter().zip(mults.iter_mut().zip(adjs.iter_mut())) {
-    let u = num.to_unsigned();
+    let u = num.to_latent_ordered();
     // Maybe one day we could do a libdivide approach for these
     *mult_dst = u / base;
     *adj_dst = u % base;
@@ -27,32 +26,19 @@ pub fn split_latents<T: NumberLike>(nums: &[T], base: T::Unsigned) -> Vec<Vec<T:
 }
 
 #[inline(never)]
-pub(crate) fn join_latents<U: UnsignedLike>(
-  base: U,
-  primary_dst: &mut [U],
-  secondary: SecondaryLatents<U>,
-) {
-  match secondary {
-    SecondaryLatents::Nonconstant(adjustments) => {
-      for (u, &adj) in primary_dst.iter_mut().zip(adjustments.iter()) {
-        *u = (*u * base).wrapping_add(adj)
-      }
-    }
-    SecondaryLatents::Constant(adj) => {
-      for u in primary_dst.iter_mut() {
-        *u = (*u * base).wrapping_add(adj)
-      }
-    }
+pub(crate) fn join_latents<L: Latent>(base: L, primary: &mut [L], secondary: &[L]) {
+  for (mult_and_dst, &adj) in primary.iter_mut().zip(secondary.iter()) {
+    *mult_and_dst = (*mult_and_dst * base).wrapping_add(adj);
   }
 }
 
-fn calc_gcd<U: UnsignedLike>(mut x: U, mut y: U) -> U {
-  if x == U::ZERO {
+fn calc_gcd<L: Latent>(mut x: L, mut y: L) -> L {
+  if x == L::ZERO {
     return y;
   }
 
   loop {
-    if y == U::ZERO {
+    if y == L::ZERO {
       return x;
     }
 
@@ -61,7 +47,7 @@ fn calc_gcd<U: UnsignedLike>(mut x: U, mut y: U) -> U {
   }
 }
 
-fn calc_triple_gcd<U: UnsignedLike>(triple: &[U]) -> U {
+fn calc_triple_gcd<L: Latent>(triple: &[L]) -> L {
   let a = triple[0];
   let b = triple[1];
   let c = triple[2];
@@ -80,11 +66,7 @@ fn calc_triple_gcd<U: UnsignedLike>(triple: &[U]) -> U {
   calc_gcd(x - lower, y - lower)
 }
 
-fn score_triple_gcd<U: UnsignedLike>(
-  gcd: U,
-  triples_w_gcd: usize,
-  total_triples: usize,
-) -> Option<f64> {
+fn score_triple_gcd<L: Latent>(gcd: L, triples_w_gcd: usize, total_triples: usize) -> Option<f64> {
   if triples_w_gcd <= 1 {
     // not enough to make any claims
     return None;
@@ -94,7 +76,7 @@ fn score_triple_gcd<U: UnsignedLike>(
   let total_triples = total_triples as f64;
   // defining rarity as 1 / probability
   let prob_per_triple = triples_w_gcd / total_triples;
-  let gcd_f64 = min(gcd, U::from_u64(u64::MAX)).to_u64() as f64;
+  let gcd_f64 = min(gcd, L::from_u64(u64::MAX)).to_u64() as f64;
 
   // check if the GCD has statistical evidence
   let natural_prob_per_triple = 1.0 / (ZETA_OF_2 * gcd_f64 * gcd_f64);
@@ -123,7 +105,7 @@ fn score_triple_gcd<U: UnsignedLike>(
   }
 }
 
-fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) -> Option<U> {
+fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Option<L> {
   let mut raw_counts = HashMap::new();
   for &gcd in triple_gcds {
     *raw_counts.entry(gcd).or_insert(0) += 1;
@@ -135,23 +117,23 @@ fn most_prominent_gcd<U: UnsignedLike>(triple_gcds: &[U], total_triples: usize) 
       let score = score_triple_gcd(gcd, count, total_triples)?;
       Some((gcd, score))
     })
-    .max_by_key(|(_, score)| score.to_unsigned())?;
+    .max_by_key(|(_, score)| score.to_latent_ordered())?;
 
   Some(candidate_gcd)
 }
 
-pub fn choose_candidate_base<U: UnsignedLike>(sample: &mut [U]) -> Option<U> {
+pub fn choose_candidate_base<L: Latent>(sample: &mut [L]) -> Option<L> {
   let triple_gcds = sample
     .chunks_exact(3)
     .map(calc_triple_gcd)
-    .filter(|&gcd| gcd > U::ONE)
+    .filter(|&gcd| gcd > L::ONE)
     .collect::<Vec<_>>();
 
   most_prominent_gcd(&triple_gcds, sample.len() / 3)
 }
 
-pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::Unsigned> {
-  let mut sample = sampling::choose_sample(nums, |num| Some(num.to_unsigned()))?;
+pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
+  let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
   let candidate = choose_candidate_base(&mut sample)?;
 
   // TODO validate adj distribution on entire `nums` is simple enough?
@@ -172,28 +154,18 @@ mod tests {
   #[test]
   fn test_split_join_latents() {
     // SPLIT
-    let nums = vec![-3, 1, 5];
-    let latents = split_latents(&nums, 4_u32);
+    let nums = vec![8_u32, 1, 5];
+    let base = 4_u32;
+    let latents = split_latents(&nums, base);
     assert_eq!(latents.len(), 2);
-    assert_eq!(
-      latents[0],
-      vec![536870911_u32, 536870912, 536870913]
-    );
-    assert_eq!(latents[1], vec![1, 1, 1]);
+    assert_eq!(latents[0], vec![2_u32, 0, 1]);
+    assert_eq!(latents[1], vec![0_u32, 1, 1]);
 
     // JOIN
-    let mut primary = latents[0].clone();
-    let mut secondary = latents[1].clone();
-    join_latents(
-      4,
-      &mut primary,
-      SecondaryLatents::Nonconstant(&mut secondary),
-    );
+    let mut primary_and_dst = latents[0].to_vec();
+    join_latents(base, &mut primary_and_dst, &latents[1]);
 
-    assert_eq!(
-      primary,
-      nums.iter().map(|num| num.to_unsigned()).collect::<Vec<_>>()
-    );
+    assert_eq!(primary_and_dst, nums);
   }
 
   #[test]

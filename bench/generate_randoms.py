@@ -29,6 +29,13 @@ def write_i32(arr, name):
   full_name = f'i32_{name}'
   write_generic(strs, arr, full_name)
 
+def write_u32(arr, name):
+  if arr.dtype != np.uint32:
+    arr = np.floor(arr).astype(np.uint32)
+  strs = [str(x) for x in arr]
+  full_name = f'u32_{name}'
+  write_generic(strs, arr, full_name)
+
 def write_i64(arr, name):
   if arr.dtype != np.int64:
     arr = np.floor(arr).astype(np.int64)
@@ -72,6 +79,7 @@ def fixed_median_lomax(a, median):
 np.random.seed(0)
 lomax05 = fixed_median_lomax(0.5, 1000)
 write_i32(lomax05, 'lomax05_reg')
+write_u32(lomax05, 'lomax05_reg')
 write_i64(lomax05, 'lomax05_reg')
 write_i64(lomax05[:mini_n], 'lomax05_mini')
 np.random.seed(0)

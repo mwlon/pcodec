@@ -1,34 +1,34 @@
 use crate::ans::Token;
 use crate::constants::{Bitlen, Weight};
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 
 /// Part of [`ChunkLatentVarMeta`][`crate::ChunkLatentVarMeta`] representing
 /// a numerical range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct Bin<U: UnsignedLike> {
+pub struct Bin<L: Latent> {
   /// The number of occurrences of this bin in the asymmetric numeral system
   /// table.
   pub weight: Weight,
   /// The lower bound for this bin's numerical range.
-  pub lower: U,
+  pub lower: L,
   /// The log of the size of this bin's (inclusive) numerical range.
   pub offset_bits: Bitlen,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct BinCompressionInfo<U: UnsignedLike> {
+pub struct BinCompressionInfo<L: Latent> {
   // weight and upper are only used up through bin optimization, not dissection or writing
   pub weight: Weight,
-  pub lower: U,
-  pub upper: U,
+  pub lower: L,
+  pub upper: L,
   pub offset_bits: Bitlen,
   // token is also the index of this in the list of optimized compression infos
   pub token: Token,
 }
 
-impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
-  fn from(info: BinCompressionInfo<U>) -> Self {
+impl<L: Latent> From<BinCompressionInfo<L>> for Bin<L> {
+  fn from(info: BinCompressionInfo<L>) -> Self {
     Bin {
       weight: info.weight,
       lower: info.lower,
@@ -37,13 +37,13 @@ impl<U: UnsignedLike> From<BinCompressionInfo<U>> for Bin<U> {
   }
 }
 
-impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
+impl<L: Latent> Default for BinCompressionInfo<L> {
   fn default() -> Self {
     BinCompressionInfo {
       weight: 0,
-      lower: U::ZERO,
-      upper: U::MAX,
-      offset_bits: U::BITS,
+      lower: L::ZERO,
+      upper: L::MAX,
+      offset_bits: L::BITS,
       token: Token::MAX,
     }
   }
@@ -52,13 +52,13 @@ impl<U: UnsignedLike> Default for BinCompressionInfo<U> {
 // Default here is meaningless and should only be used to fill in empty
 // vectors.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct BinDecompressionInfo<U: UnsignedLike> {
-  pub lower: U,
+pub struct BinDecompressionInfo<L: Latent> {
+  pub lower: L,
   pub offset_bits: Bitlen,
 }
 
-impl<U: UnsignedLike> From<&Bin<U>> for BinDecompressionInfo<U> {
-  fn from(bin: &Bin<U>) -> Self {
+impl<L: Latent> From<&Bin<L>> for BinDecompressionInfo<L> {
+  fn from(bin: &Bin<L>) -> Self {
     Self {
       lower: bin.lower,
       offset_bits: bin.offset_bits,

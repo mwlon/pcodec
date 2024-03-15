@@ -1,6 +1,6 @@
 use crate::ans::AnsState;
 use crate::constants::{Bitlen, ANS_INTERLEAVING};
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 
 #[derive(Clone, Debug)]
 pub struct PageInfo {
@@ -10,18 +10,18 @@ pub struct PageInfo {
 }
 
 #[derive(Clone, Debug)]
-pub struct DissectedPageVar<U: UnsignedLike> {
+pub struct DissectedPageVar<L: Latent> {
   // These vecs should have the same length.
   pub ans_vals: Vec<AnsState>,
   pub ans_bits: Vec<Bitlen>,
-  pub offsets: Vec<U>,
+  pub offsets: Vec<L>,
   pub offset_bits: Vec<Bitlen>,
 
   pub ans_final_states: [AnsState; ANS_INTERLEAVING],
 }
 
 #[derive(Clone, Debug)]
-pub struct DissectedPage<U: UnsignedLike> {
+pub struct DissectedPage<L: Latent> {
   pub page_n: usize,
-  pub per_var: Vec<DissectedPageVar<U>>, // one per latent variable
+  pub per_var: Vec<DissectedPageVar<L>>, // one per latent variable
 }

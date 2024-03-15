@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Shl, Shr, Sub};
 
 use crate::constants::Bitlen;
-use crate::data_types::UnsignedLike;
+use crate::data_types::Latent;
 
 pub const fn calc_max_u64s(precision: Bitlen) -> usize {
   // See bit_reader::read_uint_at for an explanation of these thresholds.
@@ -61,23 +61,23 @@ impl ReadWriteUint for usize {
   }
 }
 
-impl<U: UnsignedLike> ReadWriteUint for U {
-  const ZERO: Self = <Self as UnsignedLike>::ZERO;
-  const ONE: Self = <Self as UnsignedLike>::ONE;
-  const BITS: Bitlen = <Self as UnsignedLike>::BITS;
+impl<L: Latent> ReadWriteUint for L {
+  const ZERO: Self = <Self as Latent>::ZERO;
+  const ONE: Self = <Self as Latent>::ONE;
+  const BITS: Bitlen = <Self as Latent>::BITS;
 
   #[inline]
   fn from_u64(x: u64) -> Self {
-    <Self as UnsignedLike>::from_u64(x)
+    <Self as Latent>::from_u64(x)
   }
 
   #[inline]
   fn to_u64(self) -> u64 {
-    <Self as UnsignedLike>::to_u64(self)
+    <Self as Latent>::to_u64(self)
   }
 
   #[inline]
   fn wrapping_sub(self, other: Self) -> Self {
-    <Self as UnsignedLike>::wrapping_sub(self, other)
+    <Self as Latent>::wrapping_sub(self, other)
   }
 }

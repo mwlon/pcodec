@@ -3,7 +3,6 @@ pub use chunk_decompressor::ChunkDecompressor;
 pub use file_compressor::FileCompressor;
 pub use file_decompressor::FileDecompressor;
 pub use page_decompressor::PageDecompressor;
-pub(crate) use page_decompressor::SecondaryLatents;
 
 mod chunk_compressor;
 mod chunk_decompressor;

@@ -5,7 +5,7 @@ use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{simple_decompress, FileCompressor};
 use crate::IntMultSpec;
 
-fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::Unsigned>> {
+fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::L>> {
   let fc = FileCompressor::default();
   let config = ChunkConfig {
     int_mult_spec: IntMultSpec::Disabled,

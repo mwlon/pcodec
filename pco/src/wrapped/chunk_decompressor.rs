@@ -1,26 +1,30 @@
 use better_io::BetterBufRead;
 
 use crate::data_types::NumberLike;
-use crate::errors::PcoResult;
+use crate::errors::{PcoError, PcoResult};
 use crate::wrapped::PageDecompressor;
 use crate::ChunkMeta;
 
-// TODO in 0.2 make this only generic over UnsignedLike
 /// Holds metadata about a chunk and can produce page decompressors.
 #[derive(Clone, Debug)]
 pub struct ChunkDecompressor<T: NumberLike> {
-  pub(crate) meta: ChunkMeta<T::Unsigned>,
-}
-
-impl<T: NumberLike> From<ChunkMeta<T::Unsigned>> for ChunkDecompressor<T> {
-  fn from(meta: ChunkMeta<T::Unsigned>) -> Self {
-    Self { meta }
-  }
+  pub(crate) meta: ChunkMeta<T::L>,
 }
 
 impl<T: NumberLike> ChunkDecompressor<T> {
+  pub(crate) fn new(meta: ChunkMeta<T::L>) -> PcoResult<Self> {
+    if T::mode_is_valid(meta.mode) {
+      Ok(Self { meta })
+    } else {
+      Err(PcoError::corruption(format!(
+        "invalid mode for data type: {:?}",
+        meta.mode
+      )))
+    }
+  }
+
   /// Returns pre-computed information about the chunk.
-  pub fn meta(&self) -> &ChunkMeta<T::Unsigned> {
+  pub fn meta(&self) -> &ChunkMeta<T::L> {
     &self.meta
   }
 

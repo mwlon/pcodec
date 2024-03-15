@@ -1,10 +1,11 @@
-use crate::bits::ceil_div;
-use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use crate::data_types::UnsignedLike;
+use rand_xoshiro::rand_core::{RngCore, SeedableRng};
+
+use crate::bits::ceil_div;
+use crate::data_types::Latent;
 
 pub const MIN_SAMPLE: usize = 10;
 // 1 in this many nums get put into sample
@@ -65,11 +66,11 @@ pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
 }
 
 #[inline(never)]
-pub fn has_enough_infrequent_ints<U: UnsignedLike, S: Copy, F: Fn(S) -> U>(
+pub fn has_enough_infrequent_ints<L: Latent, S: Copy, F: Fn(S) -> L>(
   sample: &[S],
   mult_fn: F,
 ) -> bool {
-  let mut mult_counts = HashMap::<U, usize>::with_capacity(sample.len());
+  let mut mult_counts = HashMap::<L, usize>::with_capacity(sample.len());
   for &x in sample {
     let mult = mult_fn(x);
     *mult_counts.entry(mult).or_default() += 1;

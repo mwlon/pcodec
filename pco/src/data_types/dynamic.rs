@@ -26,24 +26,23 @@ macro_rules! impl_core_dtypes {
 ///
 /// Accepts a macro of a particular format. For example:
 /// ```
-///
-/// use pco::data_types::{CoreDataType, NumberLike, UnsignedLike};
+/// use pco::data_types::{CoreDataType, NumberLike, Latent};
 /// use pco::with_core_dtypes;
-/// fn generic_fn<T: NumberLike>() -> u64 {
-///   T::default().to_unsigned().to_u64()
+/// fn generic_fn<T: NumberLike>() -> String {
+///   T::default().to_string()
 /// }
 ///
 ///
 /// let dtype = CoreDataType::U32;
-/// macro_rules! get_dtype_byte {
+/// macro_rules! dynamic_pattern {
 ///   {$($name:ident($uname:ident) => $t:ty,)+} => {
 ///     match dtype {
 ///       $(CoreDataType::$name => generic_fn::<$t>(),)+
 ///     }
 ///   }
 /// }
-/// let output = with_core_dtypes!(get_dtype_byte);
-/// println!("generic_fn run on {:?}: {}", dtype, output)
+/// let dynamic_output = with_core_dtypes!(dynamic_pattern);
+/// println!("generic_fn run on {:?}: {}", dtype, dynamic_output)
 /// ```
 #[macro_export]
 macro_rules! with_core_dtypes {
@@ -59,10 +58,10 @@ macro_rules! with_core_dtypes {
   }
 }
 
-/// Similar to with_core_dtypes, but only for core unsigned types.
+/// Similar to with_core_dtypes, but only for core latent types.
 /// Accepts a macro over a repeated list of `$($name => $t,)+`.
 #[macro_export]
-macro_rules! with_core_unsigneds {
+macro_rules! with_core_latents {
   ($inner:ident) => {
     $inner!(
       U32 => u32,
