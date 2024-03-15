@@ -161,10 +161,6 @@ macro_rules! impl_float_number {
 
       type L = $latent;
 
-      #[inline]
-      fn is_identical(self, other: Self) -> bool {
-        self.to_bits() == other.to_bits()
-      }
       fn latent_to_string(
         l: Self::L,
         mode: Mode<Self::L>,

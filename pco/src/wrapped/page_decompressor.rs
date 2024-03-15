@@ -170,11 +170,6 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       })?;
     }
 
-    // let secondary = match self.maybe_constant_secondary {
-    //   Some(u) => SecondaryLatents::Constant(u),
-    //   None => SecondaryLatents::Nonconstant(secondary_latents),
-    // };
-
     if T::TRANSMUTABLE_TO_LATENT {
       T::join_latents(
         mode,

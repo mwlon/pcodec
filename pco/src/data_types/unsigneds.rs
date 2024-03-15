@@ -3,7 +3,6 @@ use crate::constants::Bitlen;
 use crate::data_types::{Latent, NumberLike};
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
 
-
 pub fn latent_to_string<T: NumberLike>(
   l: T::L,
   mode: Mode<T::L>,
@@ -117,10 +116,6 @@ macro_rules! impl_unsigned_number {
 
       type L = Self;
 
-      #[inline]
-      fn is_identical(self, other: Self) -> bool {
-        self == other
-      }
       fn latent_to_string(
         l: Self::L,
         mode: Mode<Self::L>,

@@ -155,9 +155,6 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// bitwise logic and such.
   type L: Latent;
 
-  /// Returns whether the two numbers have the exact same bit representation
-  /// or not.
-  fn is_identical(self, other: Self) -> bool;
   fn latent_to_string(
     l: Self::L,
     mode: Mode<Self::L>,
@@ -181,14 +178,4 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   fn transmute_to_latent(self) -> Self::L {
     panic!("should be unreachable; transmutable numbers must reimplement this");
   }
-}
-
-/// Either a slice of secondary latents or a constant value for all of them.
-///
-/// Used in joining latents to recover the original numbers.
-/// We could always just work with a slice, but sometimes we know all secondary
-/// latents are identical, and with this knowledge we can decompress faster.
-pub enum SecondaryLatents<'a, L: Latent> {
-  Nonconstant(&'a [L]),
-  Constant(L),
 }

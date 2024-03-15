@@ -12,10 +12,6 @@ macro_rules! impl_signed {
 
       type L = $latent;
 
-      #[inline]
-      fn is_identical(self, other: Self) -> bool {
-        self == other
-      }
       fn latent_to_string(
         l: Self::L,
         mode: Mode<Self::L>,

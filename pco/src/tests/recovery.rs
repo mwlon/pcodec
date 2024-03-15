@@ -35,8 +35,9 @@ fn assert_nums_eq<T: NumberLike>(decompressed: &[T], expected: &[T], name: &str)
     debug_info
   );
   for (i, (x, y)) in decompressed.iter().zip(expected).enumerate() {
-    assert!(
-      x.is_identical(*y),
+    assert_eq!(
+      x.to_latent_ordered(),
+      y.to_latent_ordered(),
       "at {}; {}",
       i,
       debug_info,
