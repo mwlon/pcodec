@@ -1,5 +1,4 @@
 use crate::constants::Bitlen;
-
 use crate::data_types::{Latent, NumberLike};
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
 

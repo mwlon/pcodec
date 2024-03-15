@@ -2,7 +2,6 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
-
 use crate::data_types::{Latent, NumberLike};
 use crate::sampling;
 

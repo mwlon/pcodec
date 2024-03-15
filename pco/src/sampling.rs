@@ -1,9 +1,10 @@
-use crate::bits::ceil_div;
-use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use rand_xoshiro::rand_core::{RngCore, SeedableRng};
+
+use crate::bits::ceil_div;
 use crate::data_types::Latent;
 
 pub const MIN_SAMPLE: usize = 10;

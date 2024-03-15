@@ -2,8 +2,6 @@ use std::cmp::{max, min};
 use std::mem;
 
 use crate::constants::Bitlen;
-
-
 use crate::data_types::{FloatLike, Latent};
 use crate::{int_mult_utils, sampling};
 
@@ -348,9 +346,11 @@ pub fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<F>> {
 
 #[cfg(test)]
 mod test {
-  use crate::data_types::NumberLike;
-  use rand::{Rng, SeedableRng};
   use std::f32::consts::{E, TAU};
+
+  use rand::{Rng, SeedableRng};
+
+  use crate::data_types::NumberLike;
 
   use super::*;
 
