@@ -6,7 +6,7 @@ use better_io::BetterBufRead;
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
-use crate::data_types::{Latent, NumberLike, SecondaryLatents};
+use crate::data_types::{Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
@@ -144,7 +144,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
     self.reader_builder.with_reader(|reader| {
       let primary_dst = if T::TRANSMUTABLE_TO_LATENT {
-        unsafe { T::transmute_to_latents(dst) }
+        T::transmute_to_latents(dst)
       } else {
         &mut primary_latents[..batch_n]
       };

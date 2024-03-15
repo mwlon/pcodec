@@ -1,8 +1,8 @@
 use crate::constants::Bitlen;
-use crate::data_types::SecondaryLatents;
+
 use crate::data_types::{Latent, NumberLike};
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
-use std::fmt::Display;
+
 
 pub fn latent_to_string<T: NumberLike>(
   l: T::L,

@@ -1,6 +1,6 @@
 use std::mem;
 
-use crate::data_types::{unsigneds, NumberLike, SecondaryLatents};
+use crate::data_types::{unsigneds, NumberLike};
 use crate::int_mult_utils;
 use crate::{ChunkConfig, Mode};
 

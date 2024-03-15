@@ -2,8 +2,8 @@ use std::cmp::{max, min};
 use std::mem;
 
 use crate::constants::Bitlen;
-use crate::data_types::SecondaryLatents;
-use crate::data_types::SecondaryLatents::{Constant, Nonconstant};
+
+
 use crate::data_types::{FloatLike, Latent};
 use crate::{int_mult_utils, sampling};
 
