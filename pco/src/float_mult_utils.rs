@@ -8,35 +8,13 @@ use crate::data_types::{FloatLike, Latent};
 use crate::{int_mult_utils, sampling};
 
 #[inline(never)]
-pub fn join_latents<F: FloatLike>(
-  base: F,
-  primary_dst: &[F::L],
-  secondary: SecondaryLatents<F::L>,
-  dst: &mut [F],
-) {
-  match secondary {
-    Nonconstant(adjustments) => {
-      for ((&mult, &adj), dst) in primary_dst
-        .iter()
-        .zip(adjustments.iter())
-        .zip(dst.iter_mut())
-      {
-        let unadjusted = F::int_float_from_latent(mult) * base;
-        *dst = F::from_latent_ordered(
-          unadjusted
-            .to_latent_ordered()
-            .wrapping_add(adj)
-            .toggle_center(),
-        );
-      }
-    }
-    Constant(adj) => {
-      let centered_adj = adj.toggle_center();
-      for (&mult, dst) in primary_dst.iter().zip(dst.iter_mut()) {
-        let unadjusted = F::int_float_from_latent(mult) * base;
-        *dst = F::from_latent_ordered(unadjusted.to_latent_ordered().wrapping_add(centered_adj));
-      }
-    }
+pub fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondary: &[F::L]) {
+  for (mult_and_dst, &adj) in primary.iter_mut().zip(secondary.iter()) {
+    let unadjusted = F::int_float_from_latent(*mult_and_dst) * base;
+    *mult_and_dst = unadjusted
+      .to_latent_ordered()
+      .wrapping_add(adj)
+      .toggle_center();
   }
 }
 
@@ -370,7 +348,7 @@ pub fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<F>> {
 
 #[cfg(test)]
 mod test {
-  use crate::data_types::OrderedLatentConvert;
+  use crate::data_types::NumberLike;
   use rand::{Rng, SeedableRng};
   use std::f32::consts::{E, TAU};
 

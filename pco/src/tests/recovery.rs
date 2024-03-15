@@ -3,7 +3,7 @@ use rand_xoshiro::rand_core::SeedableRng;
 
 use crate::chunk_config::ChunkConfig;
 use crate::constants::Bitlen;
-use crate::data_types::{NumberLike, OrderedLatentConvert};
+use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};

@@ -1,8 +1,7 @@
+use std::mem;
+
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent, NumberLike, OrderedLatentConvert};
-
-use crate::data_types::SecondaryLatents;
-
+use crate::data_types::{FloatLike, Latent, NumberLike};
 use crate::{float_mult_utils, ChunkConfig, FloatMultSpec, Mode};
 
 fn choose_mode_and_split_latents<F: FloatLike>(
@@ -37,27 +36,6 @@ fn choose_mode_and_split_latents<F: FloatLike>(
   }
 }
 
-fn join_latents<F: FloatLike>(
-  mode: Mode<F::L>,
-  primary: &mut [F::L],
-  secondary: SecondaryLatents<F::L>,
-  dst: &mut [F],
-) {
-  use Mode::*;
-  match mode {
-    FloatMult(base_latent) => {
-      let base = F::from_latent_ordered(base_latent);
-      float_mult_utils::join_latents(base, primary, secondary, dst)
-    }
-    Classic => {
-      for (&l, dst) in primary.iter().zip(dst.iter_mut()) {
-        *dst = F::from_latent_ordered(l);
-      }
-    }
-    _ => panic!("should be unreachable"),
-  }
-}
-
 fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
   if adj >= L::MID {
     format!("{}{}", adj - L::MID, suffix)
@@ -68,33 +46,6 @@ fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
 
 macro_rules! impl_float_number {
   ($t: ty, $latent: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
-    impl OrderedLatentConvert for $t {
-      type L = $latent;
-
-      #[inline]
-      fn from_latent_ordered(l: Self::L) -> Self {
-        if l & $sign_bit_mask > 0 {
-          // positive float
-          Self::from_bits(l ^ $sign_bit_mask)
-        } else {
-          // negative float
-          Self::from_bits(!l)
-        }
-      }
-
-      #[inline]
-      fn to_latent_ordered(self) -> Self::L {
-        let mem_layout = self.to_bits();
-        if mem_layout & $sign_bit_mask > 0 {
-          // negative float
-          !mem_layout
-        } else {
-          // positive float
-          mem_layout ^ $sign_bit_mask
-        }
-      }
-    }
-
     impl FloatLike for $t {
       const BITS: Bitlen = $bits;
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
@@ -206,6 +157,7 @@ macro_rules! impl_float_number {
 
     impl NumberLike for $t {
       const DTYPE_BYTE: u8 = $header_byte;
+      const TRANSMUTABLE_TO_LATENT: bool = true;
 
       type L = $latent;
 
@@ -245,13 +197,44 @@ macro_rules! impl_float_number {
       ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
         choose_mode_and_split_latents(nums, config)
       }
-      fn join_latents(
-        mode: Mode<Self::L>,
-        primary: &mut [Self::L],
-        secondary: SecondaryLatents<Self::L>,
-        dst: &mut [Self],
-      ) {
-        join_latents(mode, primary, secondary, dst)
+
+      #[inline]
+      fn from_latent_ordered(l: Self::L) -> Self {
+        if l & $sign_bit_mask > 0 {
+          // positive float
+          Self::from_bits(l ^ $sign_bit_mask)
+        } else {
+          // negative float
+          Self::from_bits(!l)
+        }
+      }
+      #[inline]
+      fn to_latent_ordered(self) -> Self::L {
+        let mem_layout = self.to_bits();
+        if mem_layout & $sign_bit_mask > 0 {
+          // negative float
+          !mem_layout
+        } else {
+          // positive float
+          mem_layout ^ $sign_bit_mask
+        }
+      }
+      fn join_latents(mode: Mode<Self::L>, primary: &mut [Self::L], secondary: &[Self::L]) {
+        match mode {
+          Mode::Classic => (),
+          Mode::FloatMult(base_latent) => {
+            let base = Self::from_latent_ordered(base_latent);
+            float_mult_utils::join_latents(base, primary, secondary)
+          }
+          _ => panic!("should be unreachable"),
+        }
+      }
+
+      fn transmute_to_latents(slice: &mut [Self]) -> &mut [Self::L] {
+        unsafe { mem::transmute(slice) }
+      }
+      fn transmute_to_latent(self) -> Self::L {
+        self.to_bits()
       }
     }
   };

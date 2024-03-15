@@ -1,26 +1,14 @@
-use super::unsigneds;
-use crate::data_types::SecondaryLatents;
-use crate::data_types::{NumberLike, OrderedLatentConvert};
+use std::mem;
+
+use crate::data_types::{unsigneds, NumberLike, SecondaryLatents};
+use crate::int_mult_utils;
 use crate::{ChunkConfig, Mode};
 
 macro_rules! impl_signed {
   ($t: ty, $latent: ty, $header_byte: expr) => {
-    impl OrderedLatentConvert for $t {
-      type L = $latent;
-
-      #[inline]
-      fn from_latent_ordered(l: Self::L) -> Self {
-        (l as Self).wrapping_add(Self::MIN)
-      }
-
-      #[inline]
-      fn to_latent_ordered(self) -> Self::L {
-        self.wrapping_sub(Self::MIN) as $latent
-      }
-    }
-
     impl NumberLike for $t {
       const DTYPE_BYTE: u8 = $header_byte;
+      const TRANSMUTABLE_TO_LATENT: bool = true;
 
       type L = $latent;
 
@@ -50,13 +38,28 @@ macro_rules! impl_signed {
       ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
         unsigneds::choose_mode_and_split_latents(&nums, config)
       }
-      fn join_latents(
-        mode: Mode<Self::L>,
-        primary: &mut [Self::L],
-        secondary: SecondaryLatents<Self::L>,
-        dst: &mut [Self],
-      ) {
-        unsigneds::join_latents(mode, primary, secondary, dst)
+
+      #[inline]
+      fn from_latent_ordered(l: Self::L) -> Self {
+        (l as Self).wrapping_add(Self::MIN)
+      }
+      #[inline]
+      fn to_latent_ordered(self) -> Self::L {
+        self.wrapping_sub(Self::MIN) as $latent
+      }
+      fn join_latents(mode: Mode<Self::L>, primary: &mut [Self::L], secondary: &[Self::L]) {
+        match mode {
+          Mode::Classic => (),
+          Mode::IntMult(base) => int_mult_utils::join_latents(base, primary, secondary),
+          _ => panic!("should be unreachable"),
+        }
+      }
+
+      fn transmute_to_latents(slice: &mut [Self]) -> &mut [Self::L] {
+        unsafe { mem::transmute(slice) }
+      }
+      fn transmute_to_latent(self) -> Self::L {
+        unsafe { mem::transmute(self) }
       }
     }
   };

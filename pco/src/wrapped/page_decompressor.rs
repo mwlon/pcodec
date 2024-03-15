@@ -56,6 +56,20 @@ fn decompress_latents_w_delta<L: Latent>(
   Ok(())
 }
 
+fn convert_from_latents_transmutable<T: NumberLike>(dst: &mut [T]) {
+  // we wrote the joined latents to dst, so we can convert them in place
+  for l_and_dst in dst {
+    *l_and_dst = T::from_latent_ordered(l_and_dst.transmute_to_latent());
+  }
+}
+
+fn convert_from_latents_nontransmutable<T: NumberLike>(primary: &[T::L], dst: &mut [T]) {
+  // we wrote the joined latents to primary, so we need to move them over
+  for (&l, dst) in primary.iter().zip(dst.iter_mut()) {
+    *dst = T::from_latent_ordered(l);
+  }
+}
+
 impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
   pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta<T::L>, n: usize) -> PcoResult<Self> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
@@ -95,6 +109,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       };
 
     // we don't store the whole ChunkMeta because it can get large due to bins
+    let secondary_default = maybe_constant_secondary.unwrap_or(T::L::default());
     Ok(Self {
       n,
       mode,
@@ -106,7 +121,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
         latent_batch_decompressors,
         delta_momentss,
         primary_latents: [T::L::default(); FULL_BATCH_N],
-        secondary_latents: [T::L::default(); FULL_BATCH_N],
+        secondary_latents: [secondary_default; FULL_BATCH_N],
       },
     })
   }
@@ -124,22 +139,23 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       ..
     } = &mut self.state;
 
-    let primary_latents = &mut primary_latents[..batch_n];
     let secondary_latents = &mut secondary_latents[..batch_n];
     let n_latents = latent_batch_decompressors.len();
 
-    // TODO we previously passed in the destination here instead of writing to
-    // the primary_latents buffer.
-    // Doing so again would be a 3% speedup in general and 7% for unsigneds in
-    // classic mode, where joining is a no-op.
     self.reader_builder.with_reader(|reader| {
+      let primary_dst = if T::TRANSMUTABLE_TO_LATENT {
+        unsafe { T::transmute_to_latents(dst) }
+      } else {
+        &mut primary_latents[..batch_n]
+      };
       decompress_latents_w_delta(
         reader,
         &mut delta_momentss[0],
         &mut latent_batch_decompressors[0],
-        primary_latents,
+        primary_dst,
         n - *n_processed,
-      )
+      )?;
+      Ok(())
     })?;
 
     if n_latents >= 2 && self.maybe_constant_secondary.is_none() {
@@ -153,12 +169,24 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
         )
       })?;
     }
-    let secondary = match self.maybe_constant_secondary {
-      Some(u) => SecondaryLatents::Constant(u),
-      None => SecondaryLatents::Nonconstant(secondary_latents),
-    };
 
-    T::join_latents(mode, primary_latents, secondary, dst);
+    // let secondary = match self.maybe_constant_secondary {
+    //   Some(u) => SecondaryLatents::Constant(u),
+    //   None => SecondaryLatents::Nonconstant(secondary_latents),
+    // };
+
+    if T::TRANSMUTABLE_TO_LATENT {
+      T::join_latents(
+        mode,
+        T::transmute_to_latents(dst),
+        secondary_latents,
+      );
+      convert_from_latents_transmutable(dst);
+    } else {
+      let primary = &mut primary_latents[..batch_n];
+      T::join_latents(mode, primary, secondary_latents);
+      convert_from_latents_nontransmutable(primary, dst);
+    }
 
     *n_processed += batch_n;
     if *n_processed == n {

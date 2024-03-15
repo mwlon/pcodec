@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use std::f64::consts::PI;
 
 use crate::data_types::SecondaryLatents;
-use crate::data_types::{Latent, OrderedLatentConvert};
+use crate::data_types::{Latent, NumberLike};
 use crate::sampling;
 
 const ZETA_OF_2: f64 = PI * PI / 6.0; // riemann zeta function
 
 #[inline(never)]
-pub fn split_latents<T: OrderedLatentConvert>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
+pub fn split_latents<T: NumberLike>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
   let n = nums.len();
   let mut mults = Vec::with_capacity(n);
   let mut adjs = Vec::with_capacity(n);
@@ -27,23 +27,9 @@ pub fn split_latents<T: OrderedLatentConvert>(nums: &[T], base: T::L) -> Vec<Vec
 }
 
 #[inline(never)]
-pub(crate) fn join_latents<T: OrderedLatentConvert>(
-  base: T::L,
-  primary: &[T::L],
-  secondary: SecondaryLatents<T::L>,
-  dst: &mut [T],
-) {
-  match secondary {
-    SecondaryLatents::Nonconstant(adjustments) => {
-      for ((&mult, &adj), dst) in primary.iter().zip(adjustments.iter()).zip(dst.iter_mut()) {
-        *dst = T::from_latent_ordered((mult * base).wrapping_add(adj))
-      }
-    }
-    SecondaryLatents::Constant(adj) => {
-      for (&mult, dst) in primary.iter().zip(dst.iter_mut()) {
-        *dst = T::from_latent_ordered((mult * base).wrapping_add(adj));
-      }
-    }
+pub(crate) fn join_latents<L: Latent>(base: L, primary: &mut [L], secondary: &[L]) {
+  for (mult_and_dst, &adj) in primary.iter_mut().zip(secondary.iter()) {
+    *mult_and_dst = (*mult_and_dst * base).wrapping_add(adj);
   }
 }
 
@@ -147,7 +133,7 @@ pub fn choose_candidate_base<L: Latent>(sample: &mut [L]) -> Option<L> {
   most_prominent_gcd(&triple_gcds, sample.len() / 3)
 }
 
-pub fn choose_base<T: OrderedLatentConvert>(nums: &[T]) -> Option<T::L> {
+pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
   let candidate = choose_candidate_base(&mut sample)?;
 
@@ -169,26 +155,18 @@ mod tests {
   #[test]
   fn test_split_join_latents() {
     // SPLIT
-    let nums = vec![-3, 1, 5];
+    let nums = vec![8_u32, 1, 5];
     let base = 4_u32;
     let latents = split_latents(&nums, base);
     assert_eq!(latents.len(), 2);
-    assert_eq!(
-      latents[0],
-      vec![536870911_u32, 536870912, 536870913]
-    );
-    assert_eq!(latents[1], vec![1_u32, 1, 1]);
+    assert_eq!(latents[0], vec![2_u32, 0, 1]);
+    assert_eq!(latents[1], vec![0_u32, 1, 1]);
 
     // JOIN
-    let mut recovered = vec![0; latents[0].len()];
-    join_latents(
-      base,
-      &latents[0],
-      SecondaryLatents::Nonconstant(&latents[1]),
-      &mut recovered,
-    );
+    let mut primary_and_dst = latents[0].to_vec();
+    join_latents(base, &mut primary_and_dst, &latents[1]);
 
-    assert_eq!(recovered, nums);
+    assert_eq!(primary_and_dst, nums);
   }
 
   #[test]

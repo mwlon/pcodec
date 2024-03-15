@@ -1,10 +1,10 @@
 use crate::constants::Bitlen;
 use crate::data_types::SecondaryLatents;
-use crate::data_types::{Latent, NumberLike, OrderedLatentConvert};
+use crate::data_types::{Latent, NumberLike};
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
 use std::fmt::Display;
 
-pub fn latent_to_string<T: OrderedLatentConvert + Display + Default>(
+pub fn latent_to_string<T: NumberLike>(
   l: T::L,
   mode: Mode<T::L>,
   latent_var_idx: usize,
@@ -39,7 +39,7 @@ pub fn latent_to_string<T: OrderedLatentConvert + Display + Default>(
   }
 }
 
-pub fn choose_mode_and_split_latents<T: OrderedLatentConvert>(
+pub fn choose_mode_and_split_latents<T: NumberLike>(
   nums: &[T],
   config: &ChunkConfig,
 ) -> (Mode<T::L>, Vec<Vec<T::L>>) {
@@ -66,24 +66,6 @@ pub fn choose_mode_and_split_latents<T: OrderedLatentConvert>(
       (mode, latents)
     }
     Disabled => classic(),
-  }
-}
-
-pub fn join_latents<T: OrderedLatentConvert>(
-  mode: Mode<T::L>,
-  primary: &mut [T::L],
-  secondary: SecondaryLatents<T::L>,
-  dst: &mut [T],
-) {
-  use Mode::*;
-  match mode {
-    IntMult(base) => int_mult_utils::join_latents::<T>(base, primary, secondary, dst),
-    Classic => {
-      for (&l, dst) in primary.iter().zip(dst.iter_mut()) {
-        *dst = T::from_latent_ordered(l);
-      }
-    }
-    _ => panic!("should be unreachable"),
   }
 }
 
@@ -129,22 +111,9 @@ impl_latent!(u64);
 
 macro_rules! impl_unsigned_number {
   ($t: ty, $header_byte: expr) => {
-    impl OrderedLatentConvert for $t {
-      type L = Self;
-
-      #[inline]
-      fn from_latent_ordered(l: Self::L) -> Self {
-        l
-      }
-
-      #[inline]
-      fn to_latent_ordered(self) -> Self::L {
-        self
-      }
-    }
-
     impl NumberLike for $t {
       const DTYPE_BYTE: u8 = $header_byte;
+      const TRANSMUTABLE_TO_LATENT: bool = true;
 
       type L = Self;
 
@@ -174,13 +143,28 @@ macro_rules! impl_unsigned_number {
       ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
         choose_mode_and_split_latents(nums, config)
       }
-      fn join_latents(
-        mode: Mode<Self::L>,
-        primary: &mut [Self::L],
-        secondary: SecondaryLatents<Self::L>,
-        dst: &mut [Self],
-      ) {
-        join_latents(mode, primary, secondary, dst)
+
+      #[inline]
+      fn from_latent_ordered(l: Self::L) -> Self {
+        l
+      }
+      #[inline]
+      fn to_latent_ordered(self) -> Self::L {
+        self
+      }
+      fn join_latents(mode: Mode<Self::L>, primary: &mut [Self::L], secondary: &[Self::L]) {
+        match mode {
+          Mode::Classic => (),
+          Mode::IntMult(base) => int_mult_utils::join_latents(base, primary, secondary),
+          _ => panic!("should be unreachable"),
+        }
+      }
+
+      fn transmute_to_latents(slice: &mut [Self]) -> &mut [Self::L] {
+        slice
+      }
+      fn transmute_to_latent(self) -> Self::L {
+        self
       }
     }
   };
