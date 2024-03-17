@@ -7,4 +7,5 @@ mod compressor;
 mod constants;
 mod decompressor;
 mod dtype_or_termination;
+pub mod guarantee;
 mod simple;
