@@ -4,16 +4,12 @@ use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
 use crate::data_types::{Latent, NumberLike};
 use crate::errors::PcoResult;
-use crate::standalone::constants::{
-  BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_STANDALONE_VERSION, CURRENT_STANDALONE_VERSION,
-  MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
-  STANDALONE_HEADER_PADDING,
-};
+use crate::standalone::constants::*;
 use crate::{bits, wrapped, ChunkConfig, ChunkMeta};
 
 fn write_varint<W: Write>(n: u64, writer: &mut BitWriter<W>) {
   let power = if n == 0 { 1 } else { n.ilog2() + 1 };
-  writer.write_uint(power - 1, 6);
+  writer.write_uint(power - 1, BITS_TO_ENCODE_VARINT_POWER);
   writer.write_uint(bits::lowest_bits(n, power), power);
 }
 

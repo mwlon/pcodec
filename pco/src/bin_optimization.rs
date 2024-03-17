@@ -1,13 +1,13 @@
 use crate::ans::Token;
 use crate::bin::BinCompressionInfo;
-use crate::bits;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
+use crate::{bits, chunk_meta};
 
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 
 // using f32 instead of f64 because the .log2() is faster
-fn bin_bit_cost<L: Latent>(
+fn bin_cost<L: Latent>(
   bin_meta_cost: f32,
   lower: L,
   upper: L,
@@ -45,10 +45,7 @@ fn choose_optimized_partitioning<L: Latent>(
   best_costs.push(0.0);
   best_partitionings.push(Vec::new());
 
-  let bits_to_encode_weight = ans_size_log;
-  let bin_meta_cost = bits_to_encode_weight as f32 +
-    L::BITS as f32 + // lower bound
-    bits::bits_to_encode_offset_bits::<L>() as f32;
+  let bin_meta_cost = chunk_meta::bin_exact_bit_size::<L>(ans_size_log) as f32;
 
   for i in 0..bins.len() {
     let mut best_cost = f32::MAX;
@@ -59,7 +56,7 @@ fn choose_optimized_partitioning<L: Latent>(
       let lower = lowers[j];
 
       let cost = best_costs[j]
-        + bin_bit_cost::<L>(
+        + bin_cost::<L>(
           bin_meta_cost,
           lower,
           upper,
@@ -80,7 +77,7 @@ fn choose_optimized_partitioning<L: Latent>(
   }
 
   let single_bin_partitioning = vec![(0_usize, bins.len() - 1)];
-  let single_bin_cost = bin_bit_cost(
+  let single_bin_cost = bin_cost(
     bin_meta_cost,
     lowers[0],
     uppers[bins.len() - 1],

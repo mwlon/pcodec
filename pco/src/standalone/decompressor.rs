@@ -5,16 +5,12 @@ use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
 use crate::progress::Progress;
-use crate::standalone::constants::{
-  BITS_TO_ENCODE_N_ENTRIES, BITS_TO_ENCODE_STANDALONE_VERSION, CURRENT_STANDALONE_VERSION,
-  MAGIC_HEADER, MAGIC_TERMINATION_BYTE, STANDALONE_CHUNK_PREAMBLE_PADDING,
-  STANDALONE_HEADER_PADDING,
-};
+use crate::standalone::constants::*;
 use crate::standalone::DataTypeOrTermination;
 use crate::{bit_reader, wrapped, ChunkMeta};
 
 fn read_varint(reader: &mut BitReader) -> PcoResult<u64> {
-  let power = 1 + reader.read_uint::<Bitlen>(6);
+  let power = 1 + reader.read_uint::<Bitlen>(BITS_TO_ENCODE_VARINT_POWER);
   let res = reader.read_uint(power);
   reader.drain_empty_byte("standalone size hint")?;
   Ok(res)

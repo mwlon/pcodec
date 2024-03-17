@@ -63,7 +63,7 @@ mod tests {
   }
 
   #[test]
-  fn ans_encoder_decoder() -> PcoResult<()> {
+  fn ans_encoder_decoder_dense() -> PcoResult<()> {
     let spec = Spec {
       size_log: 3,
       state_tokens: vec![0, 1, 2, 0, 1, 2, 0, 1],

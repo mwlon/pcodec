@@ -11,7 +11,11 @@ use crate::constants::*;
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
 use crate::format_version::FormatVersion;
-use crate::Mode;
+use crate::{bits, Mode};
+
+pub(crate) fn bin_exact_bit_size<L: Latent>(ans_size_log: Bitlen) -> Bitlen {
+  ans_size_log + L::BITS + bits_to_encode_offset_bits::<L>()
+}
 
 /// Part of [`ChunkMeta`][crate::ChunkMeta] that describes a latent
 /// variable interleaved into the compressed data.
@@ -143,6 +147,12 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
   pub(crate) fn is_trivial(&self) -> bool {
     self.bins.is_empty() || (self.bins.len() == 1 && self.bins[0].offset_bits == 0)
   }
+
+  fn exact_bit_size(&self) -> usize {
+    BITS_TO_ENCODE_ANS_SIZE_LOG as usize
+      + BITS_TO_ENCODE_N_BINS as usize
+      + self.bins.len() * bin_exact_bit_size::<L>(self.ans_size_log) as usize
+  }
 }
 
 /// The metadata of a pco chunk.
@@ -191,6 +201,40 @@ impl<L: Latent> ChunkMeta<L> {
       delta_encoding_order,
       per_latent_var,
     }
+  }
+
+  // TODO test
+  pub(crate) fn exact_size(&self) -> usize {
+    let extra_bits_for_mode = match self.mode {
+      Mode::Classic => 0,
+      Mode::IntMult(_) => L::BITS,
+      Mode::FloatMult(_) => L::BITS,
+    };
+    let bits_for_latent_vars: usize = self
+      .per_latent_var
+      .iter()
+      .map(ChunkLatentVarMeta::exact_bit_size)
+      .sum();
+    let n_bits = BITS_TO_ENCODE_MODE as usize
+      + extra_bits_for_mode as usize
+      + BITS_TO_ENCODE_DELTA_ENCODING_ORDER as usize
+      + bits_for_latent_vars;
+    bits::ceil_div(n_bits, 8)
+  }
+
+  pub(crate) fn exact_page_meta_size(&self) -> usize {
+    let bit_size = self
+      .per_latent_var
+      .iter()
+      .enumerate()
+      .map(|(latent_var_idx, latent_var)| {
+        let delta_order = self
+          .mode
+          .delta_order_for_latent_var(latent_var_idx, self.delta_encoding_order);
+        latent_var.ans_size_log as usize * ANS_INTERLEAVING + L::BITS as usize * delta_order
+      })
+      .sum();
+    bits::ceil_div(bit_size, 8)
   }
 
   pub(crate) fn parse_from<R: BetterBufRead>(
@@ -282,5 +326,124 @@ impl<L: Latent> ChunkMeta<L> {
     self
       .mode
       .delta_order_for_latent_var(latent_idx, self.delta_encoding_order)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::delta::DeltaMoments;
+  use crate::page_meta::{PageLatentVarMeta, PageMeta};
+
+  fn check_exact_sizes<L: Latent>(meta: &ChunkMeta<L>) -> PcoResult<()> {
+    let buffer_size = 8192;
+    let mut dst = Vec::new();
+    let mut writer = BitWriter::new(&mut dst, buffer_size);
+    meta.write_to(&mut writer)?;
+    writer.flush()?;
+    assert_eq!(meta.exact_size(), dst.len());
+
+    // page meta size
+    let mut dst = Vec::new();
+    let mut writer = BitWriter::new(&mut dst, buffer_size);
+    let page_meta = PageMeta {
+      per_var: (0..meta.per_latent_var.len())
+        .map(|latent_var_idx| {
+          let delta_order = meta
+            .mode
+            .delta_order_for_latent_var(latent_var_idx, meta.delta_encoding_order);
+          PageLatentVarMeta {
+            delta_moments: DeltaMoments {
+              moments: vec![L::ZERO; delta_order],
+            },
+            ans_final_state_idxs: [0; ANS_INTERLEAVING],
+          }
+        })
+        .collect(),
+    };
+    page_meta.write_to(
+      meta
+        .per_latent_var
+        .iter()
+        .map(|var_meta| var_meta.ans_size_log),
+      &mut writer,
+    );
+    writer.flush()?;
+    assert_eq!(meta.exact_page_meta_size(), dst.len());
+    Ok(())
+  }
+
+  #[test]
+  fn exact_size_binless() -> PcoResult<()> {
+    let meta = ChunkMeta::<u32> {
+      mode: Mode::Classic,
+      delta_encoding_order: 5,
+      per_latent_var: vec![ChunkLatentVarMeta {
+        ans_size_log: 0,
+        bins: vec![],
+      }],
+    };
+
+    check_exact_sizes(&meta)
+  }
+
+  #[test]
+  fn exact_size_trivial() -> PcoResult<()> {
+    let meta = ChunkMeta::<u64> {
+      mode: Mode::Classic,
+      delta_encoding_order: 0,
+      per_latent_var: vec![ChunkLatentVarMeta {
+        ans_size_log: 0,
+        bins: vec![Bin {
+          weight: 1,
+          lower: 77,
+          offset_bits: 0,
+        }],
+      }],
+    };
+
+    check_exact_sizes(&meta)
+  }
+
+  #[test]
+  fn exact_size_float_mult() -> PcoResult<()> {
+    let meta = ChunkMeta::<u32> {
+      mode: Mode::FloatMult(777_u32),
+      delta_encoding_order: 3,
+      per_latent_var: vec![
+        ChunkLatentVarMeta {
+          ans_size_log: 7,
+          bins: vec![
+            Bin {
+              weight: 11,
+              lower: 0,
+              offset_bits: 0,
+            },
+            Bin {
+              weight: 117,
+              lower: 1,
+              offset_bits: 0,
+            },
+          ],
+        },
+        ChunkLatentVarMeta {
+          ans_size_log: 3,
+          bins: vec![
+            Bin {
+              weight: 3,
+              lower: 0,
+              offset_bits: 0,
+            },
+            Bin {
+              weight: 5,
+              lower: 1,
+              offset_bits: 0,
+            },
+          ],
+        },
+      ],
+    };
+
+    check_exact_sizes(&meta)
   }
 }

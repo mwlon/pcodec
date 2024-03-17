@@ -15,9 +15,10 @@ use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::read_write_uint::ReadWriteUint;
+use crate::wrapped::guarantee;
 use crate::{
-  ans, bin_optimization, bit_reader, bit_writer, bits, delta, read_write_uint, Bin, ChunkConfig,
-  ChunkLatentVarMeta, ChunkMeta, Mode, PagingSpec, FULL_BATCH_N,
+  ans, bin_optimization, bit_reader, bit_writer, bits, data_types, delta, read_write_uint, Bin,
+  ChunkConfig, ChunkLatentVarMeta, ChunkMeta, Mode, PagingSpec, FULL_BATCH_N,
 };
 
 // if it looks like the average page of size n will use k bits, hint that it
@@ -129,6 +130,7 @@ fn quantize_weights<L: Latent>(
 struct TrainedBins<L: Latent> {
   infos: Vec<BinCompressionInfo<L>>,
   ans_size_log: Bitlen,
+  counts: Vec<Weight>,
 }
 
 fn train_infos<L: Latent>(
@@ -167,6 +169,10 @@ fn train_infos<L: Latent>(
   let mut optimized_infos =
     bin_optimization::optimize_bins(&unoptimized_bins, estimated_ans_size_log);
 
+  let counts = optimized_infos
+    .iter()
+    .map(|info| info.weight)
+    .collect::<Vec<_>>();
   let ans_size_log = quantize_weights(
     &mut optimized_infos,
     n_latents,
@@ -176,6 +182,7 @@ fn train_infos<L: Latent>(
   Ok(TrainedBins {
     infos: optimized_infos,
     ans_size_log,
+    counts,
   })
 }
 
@@ -361,18 +368,13 @@ fn collect_contiguous_deltas<L: Latent>(
   res
 }
 
-fn latent_new_w_delta_order<L: Latent>(
-  mut latents: Vec<Vec<L>>, // start out plain, gets delta encoded in place
-  paging_spec: &PagingSpec,
+fn build_page_infos_and_delta_moments<L: Latent>(
   mode: Mode<L>,
   delta_order: usize,
-  unoptimized_bins_log: usize,
-) -> PcoResult<ChunkCompressor<L>> {
-  let chunk_n = latents[0].len();
-  let n_per_page = paging_spec.n_per_page(chunk_n)?;
+  n_per_page: &[usize],
+  latents: &mut [Vec<L>],
+) -> (Vec<PageInfo>, Vec<Vec<DeltaMoments<L>>>) {
   let n_pages = n_per_page.len();
-  let n_latents = mode.n_latent_vars();
-
   let mut page_infos = Vec::with_capacity(n_pages);
   let mut delta_moments = vec![Vec::new(); n_pages];
 
@@ -396,11 +398,29 @@ fn latent_new_w_delta_order<L: Latent>(
 
     start_idx += page_n;
   }
+
+  (page_infos, delta_moments)
+}
+
+fn new_candidate_w_split_and_delta_order<L: Latent>(
+  mut latents: Vec<Vec<L>>, // start out plain, gets delta encoded in place
+  paging_spec: &PagingSpec,
+  mode: Mode<L>,
+  delta_order: usize,
+  unoptimized_bins_log: usize,
+) -> PcoResult<(ChunkCompressor<L>, Vec<Vec<Weight>>)> {
+  let chunk_n = latents[0].len();
+  let n_per_page = paging_spec.n_per_page(chunk_n)?;
+  let n_latent_vars = mode.n_latent_vars();
+
+  let (page_infos, delta_moments) =
+    build_page_infos_and_delta_moments(mode, delta_order, &n_per_page, &mut latents);
   let deltas = latents;
 
   // training bins
-  let mut var_metas = Vec::with_capacity(n_latents);
-  let mut var_policies = Vec::with_capacity(n_latents);
+  let mut var_metas = Vec::with_capacity(n_latent_vars);
+  let mut var_policies = Vec::with_capacity(n_latent_vars);
+  let mut bin_counts = Vec::with_capacity(n_latent_vars);
   for (latent_idx, deltas) in deltas.iter().enumerate() {
     // secondary latents should be compressed faster
     let unoptimized_bins_log = if latent_idx == 0 {
@@ -429,12 +449,7 @@ fn latent_new_w_delta_order<L: Latent>(
     let avg_bits_per_delta = latent_meta.avg_bits_per_delta();
     let is_trivial = latent_meta.is_trivial();
 
-    let mut max_u64s_per_offset = read_write_uint::calc_max_u64s(max_bits_per_offset);
-    // We need to be slightly more conservative about max_u64s_per_offset than
-    // normal due to how write_short_uints is implemented.
-    if max_u64s_per_offset == 1 && max_bits_per_offset > 56 {
-      max_u64s_per_offset = 2;
-    }
+    let max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(max_bits_per_offset);
 
     var_metas.push(latent_meta);
     var_policies.push(LatentVarPolicy {
@@ -445,17 +460,19 @@ fn latent_new_w_delta_order<L: Latent>(
       needs_ans,
       max_u64s_per_offset,
     });
+    bin_counts.push(trained.counts);
   }
 
   let meta = ChunkMeta::new(mode, delta_order, var_metas);
-
-  Ok(ChunkCompressor {
+  let chunk_compressor = ChunkCompressor {
     meta,
     latent_var_policies: var_policies,
     page_infos,
     deltas,
     delta_moments,
-  })
+  };
+
+  Ok((chunk_compressor, bin_counts))
 }
 
 fn choose_delta_sample<L: Latent>(
@@ -500,7 +517,7 @@ fn choose_delta_encoding_order<L: Latent>(
   let mut best_order = usize::MAX;
   let mut best_size = usize::MAX;
   for delta_encoding_order in 0..MAX_DELTA_ENCODING_ORDER + 1 {
-    let sample_cc = latent_new_w_delta_order(
+    let (sample_cc, _) = new_candidate_w_split_and_delta_order(
       vec![sample.clone()],
       &PagingSpec::ExactPageSizes(vec![sample.len()]),
       Mode::Classic,
@@ -532,11 +549,13 @@ fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> usize {
 
 // We pull this stuff out of `new` because it only depends on the latent type
 // and we don't need a specialization for each full dtype.
-fn latent_new<L: Latent>(
+// Returns a chunk compressor and the counts (per latent var) of numbers in
+// each bin.
+fn new_candidate_w_split<L: Latent>(
+  mode: Mode<L>,
   latents: Vec<Vec<L>>,
   config: &ChunkConfig,
-  mode: Mode<L>,
-) -> PcoResult<ChunkCompressor<L>> {
+) -> PcoResult<(ChunkCompressor<L>, Vec<Vec<Weight>>)> {
   let unoptimized_bins_log =
     choose_unoptimized_bins_log(config.compression_level, latents[0].len());
   let delta_order = if let Some(delta_order) = config.delta_encoding_order {
@@ -545,13 +564,82 @@ fn latent_new<L: Latent>(
     choose_delta_encoding_order(&latents[0], unoptimized_bins_log)?
   };
 
-  latent_new_w_delta_order(
+  new_candidate_w_split_and_delta_order(
     latents,
     &config.paging_spec,
     mode,
     delta_order,
     unoptimized_bins_log,
   )
+}
+
+fn should_fallback<L: Latent>(
+  n: usize,
+  candidate: &ChunkCompressor<L>,
+  bin_counts_per_latent_var: Vec<Vec<Weight>>,
+) -> bool {
+  let meta = &candidate.meta;
+  if meta.delta_encoding_order == 0 && matches!(meta.mode, Mode::Classic) {
+    // we already have a size guarantee in this case
+    return false;
+  }
+
+  let n_pages = candidate.page_infos.len();
+
+  // worst case trailing bytes after bit packing
+  let mut worst_case_body_bit_size = 7 * n_pages;
+  for (latent_var_meta, bin_counts) in meta
+    .per_latent_var
+    .iter()
+    .zip(bin_counts_per_latent_var.iter())
+  {
+    for (bin, &count) in latent_var_meta.bins.iter().zip(bin_counts) {
+      worst_case_body_bit_size +=
+        count as usize * bin.worst_case_bits_per_delta(latent_var_meta.ans_size_log) as usize;
+    }
+  }
+
+  let worst_case_size = meta.exact_size()
+    + n_pages * meta.exact_page_meta_size()
+    + bits::ceil_div(worst_case_body_bit_size, 8);
+  let baseline_size = guarantee::chunk_size::<L>(n);
+  worst_case_size > baseline_size
+}
+
+fn fallback_chunk_compressor<L: Latent>(
+  mut latents: Vec<Vec<L>>,
+  config: &ChunkConfig,
+) -> PcoResult<ChunkCompressor<L>> {
+  let n_per_page = config.paging_spec.n_per_page(latents[0].len())?;
+  let (page_infos, delta_moments) =
+    build_page_infos_and_delta_moments(Mode::Classic, 0, &n_per_page, &mut latents);
+  let infos = vec![BinCompressionInfo::<L> {
+    weight: 1,
+    token: 0,
+    ..Default::default()
+  }];
+  let ans_size_log = 0;
+  let bins = bins_from_compression_infos(&infos);
+  let table = CompressionTable::from(infos);
+  let encoder = ans::Encoder::from_bins(ans_size_log, &bins)?;
+  let offset_bits = L::BITS;
+  let max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(offset_bits);
+
+  let policy = LatentVarPolicy {
+    table,
+    encoder,
+    avg_bits_per_delta: offset_bits as f64,
+    is_trivial: false,
+    needs_ans: false,
+    max_u64s_per_offset,
+  };
+  Ok(ChunkCompressor {
+    meta: guarantee::baseline_chunk_meta::<L>(),
+    latent_var_policies: vec![policy],
+    page_infos,
+    deltas: latents,
+    delta_moments,
+  })
 }
 
 // Should this take nums as a slice of slices instead of having a config.paging_spec?
@@ -565,7 +653,13 @@ pub(crate) fn new<T: NumberLike>(
 
   let (mode, latents) = T::choose_mode_and_split_latents(nums, config);
 
-  latent_new(latents, config, mode)
+  let (candidate, bin_counts) = new_candidate_w_split(mode, latents, config)?;
+  if should_fallback(n, &candidate, bin_counts) {
+    let latents = data_types::split_latents_classic(nums);
+    return fallback_chunk_compressor(latents, config);
+  }
+
+  Ok(candidate)
 }
 
 impl<L: Latent> ChunkCompressor<L> {
@@ -588,12 +682,7 @@ impl<L: Latent> ChunkCompressor<L> {
   /// This can be useful when building the file as a `Vec<u8>` in memory;
   /// you can `.reserve()` ahead of time.
   pub fn chunk_meta_size_hint(&self) -> usize {
-    let mut size = 32;
-    let bytes_per_num = L::BITS / 8;
-    for latent_meta in &self.meta.per_latent_var {
-      size += latent_meta.bins.len() * (4 + 2 * bytes_per_num as usize)
-    }
-    size
+    self.meta.exact_size()
   }
 
   /// Writes the chunk metadata to the destination.
@@ -669,28 +758,18 @@ impl<L: Latent> ChunkCompressor<L> {
   }
 
   fn page_size_hint_inner(&self, page_idx: usize, page_size_overestimation: f64) -> usize {
-    // TODO share logic between this and bin optimization
     let page_info = &self.page_infos[page_idx];
-    let mut bit_size = 0;
-    for ((var_meta, var_policy), &end_idx) in self
-      .meta
-      .per_latent_var
+    let mut body_bit_size = 0;
+    for (var_policy, &end_idx) in self
+      .latent_var_policies
       .iter()
-      .zip(&self.latent_var_policies)
       .zip(&page_info.end_idx_per_var)
     {
       let page_n_deltas = end_idx - page_info.start_idx;
-      let meta_bit_size = self.meta.delta_encoding_order * L::BITS as usize
-        + ANS_INTERLEAVING * var_meta.ans_size_log as usize;
-      // We're probably reserving more than necessary sometimes, because
-      // max_bits_per_latent is quite a loose upper bound.
-      // But most datasets have multiple pages, and if we really wanted to
-      // improve performance for standalone files too, we'd need a whole-file
-      // compressed size estimate.
       let nums_bit_size = page_n_deltas as f64 * var_policy.avg_bits_per_delta;
-      bit_size += meta_bit_size + (nums_bit_size * page_size_overestimation).ceil() as usize;
+      body_bit_size += (nums_bit_size * page_size_overestimation).ceil() as usize;
     }
-    bits::ceil_div(bit_size, 8)
+    self.meta.exact_page_meta_size() + bits::ceil_div(body_bit_size, 8)
   }
 
   #[inline(never)]

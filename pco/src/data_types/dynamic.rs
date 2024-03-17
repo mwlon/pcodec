@@ -3,7 +3,7 @@ use CoreDataType::*;
 use crate::data_types::NumberLike;
 
 macro_rules! impl_core_dtypes {
-  {$($name:ident($uname:ident) => $t:ty,)+} => {
+  {$($name:ident($lname:ident) => $t:ty,)+} => {
     /// A dynamic value representing one of the core data types implemented in
     /// pco.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,7 +35,7 @@ macro_rules! impl_core_dtypes {
 ///
 /// let dtype = CoreDataType::U32;
 /// macro_rules! dynamic_pattern {
-///   {$($name:ident($uname:ident) => $t:ty,)+} => {
+///   {$($name:ident($lname:ident) => $t:ty,)+} => {
 ///     match dtype {
 ///       $(CoreDataType::$name => generic_fn::<$t>(),)+
 ///     }

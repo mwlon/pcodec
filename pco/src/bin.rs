@@ -16,6 +16,13 @@ pub struct Bin<L: Latent> {
   pub offset_bits: Bitlen,
 }
 
+impl<L: Latent> Bin<L> {
+  #[inline]
+  pub(crate) fn worst_case_bits_per_delta(&self, ans_size_log: Bitlen) -> Bitlen {
+    self.offset_bits + ans_size_log - self.weight.ilog2()
+  }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BinCompressionInfo<L: Latent> {
   // weight and upper are only used up through bin optimization, not dissection or writing

@@ -8,4 +8,7 @@ mod chunk_compressor;
 mod chunk_decompressor;
 mod file_compressor;
 mod file_decompressor;
+/// Functions for guaranteed byte size upper bounds of components
+/// like header and chunk metadata.
+pub mod guarantee;
 mod page_decompressor;

@@ -1,5 +1,6 @@
 use crate::constants::Bitlen;
-use crate::data_types::{Latent, NumberLike};
+use crate::data_types::{split_latents_classic, Latent, NumberLike};
+use crate::Mode::Classic;
 use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
 
 pub fn latent_to_string<T: NumberLike>(
@@ -42,10 +43,6 @@ pub fn choose_mode_and_split_latents<T: NumberLike>(
   config: &ChunkConfig,
 ) -> (Mode<T::L>, Vec<Vec<T::L>>) {
   use IntMultSpec::*;
-  let classic = || {
-    let latents = vec![nums.iter().map(|x| x.to_latent_ordered()).collect()];
-    (Mode::Classic, latents)
-  };
 
   match config.int_mult_spec {
     Enabled => {
@@ -54,7 +51,7 @@ pub fn choose_mode_and_split_latents<T: NumberLike>(
         let latents = int_mult_utils::split_latents(nums, base);
         (mode, latents)
       } else {
-        classic()
+        (Classic, split_latents_classic(nums))
       }
     }
     Provided(base_u64) => {
@@ -63,7 +60,7 @@ pub fn choose_mode_and_split_latents<T: NumberLike>(
       let latents = int_mult_utils::split_latents(nums, base);
       (mode, latents)
     }
-    Disabled => classic(),
+    Disabled => (Classic, split_latents_classic(nums)),
   }
 }
 

@@ -1,21 +1,13 @@
 use std::mem;
 
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent, NumberLike};
+use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
 use crate::{float_mult_utils, ChunkConfig, FloatMultSpec, Mode};
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
 ) -> (Mode<F::L>, Vec<Vec<F::L>>) {
-  let classic = || {
-    let primary = nums
-      .iter()
-      .map(|&x| x.to_latent_ordered())
-      .collect::<Vec<_>>();
-    (Mode::Classic, vec![primary])
-  };
-
   match chunk_config.float_mult_spec {
     FloatMultSpec::Enabled => {
       if let Some(fm_config) = float_mult_utils::choose_config(nums) {
@@ -23,7 +15,7 @@ fn choose_mode_and_split_latents<F: FloatLike>(
         let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
         (mode, latents)
       } else {
-        classic()
+        (Mode::Classic, split_latents_classic(nums))
       }
     }
     FloatMultSpec::Provided(base_f64) => {
@@ -32,7 +24,7 @@ fn choose_mode_and_split_latents<F: FloatLike>(
       let latents = float_mult_utils::split_latents(nums, base, base.inv());
       (mode, latents)
     }
-    FloatMultSpec::Disabled => classic(),
+    FloatMultSpec::Disabled => (Mode::Classic, split_latents_classic(nums)),
   }
 }
 

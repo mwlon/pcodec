@@ -56,11 +56,11 @@ fn assert_recovers<T: NumberLike>(
       delta_encoding_order: Some(delta_encoding_order),
       ..Default::default()
     };
-    let compressed = simple_compress(&nums, &config)?;
+    let compressed = simple_compress(nums, &config)?;
     let decompressed = simple_decompress(&compressed)?;
     assert_nums_eq(
       &decompressed,
-      &nums,
+      nums,
       &format!(
         "{} delta order={}",
         name, delta_encoding_order
@@ -72,19 +72,11 @@ fn assert_recovers<T: NumberLike>(
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
-  assert_recovers(
-    &vec![u64::MIN, u64::MAX],
-    0,
-    "int extremes 0",
-  )?;
-  assert_recovers(
-    &vec![f64::MIN, f64::MAX],
-    0,
-    "float extremes 0",
-  )?;
-  assert_recovers(&vec![1.2_f32], 0, "float 0")?;
-  assert_recovers(&vec![1.2_f32], 1, "float 1")?;
-  assert_recovers(&vec![1.2_f32], 2, "float 2")?;
+  assert_recovers(&[u64::MIN, u64::MAX], 0, "int extremes 0")?;
+  assert_recovers(&[f64::MIN, f64::MAX], 0, "float extremes 0")?;
+  assert_recovers(&[1.2_f32], 0, "float 0")?;
+  assert_recovers(&[1.2_f32], 1, "float 1")?;
+  assert_recovers(&[1.2_f32], 2, "float 2")?;
   assert_recovers(&Vec::<u32>::new(), 6, "empty 6")?;
   assert_recovers(&Vec::<u32>::new(), 0, "empty 0")
 }
@@ -112,18 +104,18 @@ fn test_sparse() -> PcoResult<()> {
 
 #[test]
 fn test_u32_codec() -> PcoResult<()> {
-  assert_recovers(&vec![0_u32, u32::MAX, 3, 4, 5], 1, "u32s")
+  assert_recovers(&[0_u32, u32::MAX, 3, 4, 5], 1, "u32s")
 }
 
 #[test]
 fn test_u64_codec() -> PcoResult<()> {
-  assert_recovers(&vec![0_u64, u64::MAX, 3, 4, 5], 1, "u64s")
+  assert_recovers(&[0_u64, u64::MAX, 3, 4, 5], 1, "u64s")
 }
 
 #[test]
 fn test_i32_codec() -> PcoResult<()> {
   assert_recovers(
-    &vec![0_i32, -1, i32::MAX, i32::MIN, 7],
+    &[0_i32, -1, i32::MAX, i32::MIN, 7],
     1,
     "i32s",
   )
@@ -132,7 +124,7 @@ fn test_i32_codec() -> PcoResult<()> {
 #[test]
 fn test_i64_codec() -> PcoResult<()> {
   assert_recovers(
-    &vec![0_i64, -1, i64::MAX, i64::MIN, 7],
+    &[0_i64, -1, i64::MAX, i64::MIN, 7],
     1,
     "i64s",
   )
@@ -141,7 +133,7 @@ fn test_i64_codec() -> PcoResult<()> {
 #[test]
 fn test_f32_codec() -> PcoResult<()> {
   assert_recovers(
-    &vec![
+    &[
       f32::MAX,
       f32::MIN,
       f32::NAN,
@@ -159,7 +151,7 @@ fn test_f32_codec() -> PcoResult<()> {
 #[test]
 fn test_f64_codec() -> PcoResult<()> {
   assert_recovers(
-    &vec![
+    &[
       f64::MAX,
       f64::MIN,
       f64::NAN,
@@ -187,16 +179,12 @@ fn test_multi_chunk() -> PcoResult<()> {
   fc.write_footer(&mut compressed)?;
 
   let res = simple_decompress::<i64>(&compressed)?;
-  assert_nums_eq(
-    &res,
-    &vec![1, 2, 3, 11, 12, 13],
-    "multi chunk",
-  )?;
+  assert_nums_eq(&res, &[1, 2, 3, 11, 12, 13], "multi chunk")?;
   Ok(())
 }
 
 fn recover_with_alternating_nums(offset_bits: Bitlen, name: &str) -> PcoResult<()> {
-  let nums = vec![0_u64, 1 << (offset_bits - 1)].repeat(50);
+  let nums = [0_u64, 1 << (offset_bits - 1)].repeat(50);
   let (compressed, meta) = compress_w_meta(
     &nums,
     &ChunkConfig {

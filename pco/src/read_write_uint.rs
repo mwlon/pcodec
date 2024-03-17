@@ -4,11 +4,26 @@ use std::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign, Shl, Shr, Sub};
 use crate::constants::Bitlen;
 use crate::data_types::Latent;
 
+// this applies to reading and also works for byte-aligned precisions
 pub const fn calc_max_u64s(precision: Bitlen) -> usize {
   // See bit_reader::read_uint_at for an explanation of these thresholds.
   if precision == 0 {
     0
   } else if precision <= 57 {
+    1
+  } else if precision <= 113 {
+    2
+  } else {
+    3
+  }
+}
+
+pub const fn calc_max_u64s_for_writing(precision: Bitlen) -> usize {
+  // We need to be slightly more conservative during writing
+  // due to how write_short_uints is implemented.
+  if precision == 0 {
+    0
+  } else if precision <= 56 {
     1
   } else if precision <= 113 {
     2
