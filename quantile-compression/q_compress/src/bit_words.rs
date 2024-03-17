@@ -80,10 +80,10 @@ mod tests {
   #[test]
   fn test_extend() {
     let mut words = BitWords::default();
-    words.extend_bytes(&[0, 1, 2, 3, 4, 5, 6, 7]);
-    words.extend_bytes(&[8]);
-    words.extend_bytes(&[9, 10]);
-    words.extend_bytes(&[11, 12, 13, 14, 15, 16]);
+    words.extend_bytes([0, 1, 2, 3, 4, 5, 6, 7]);
+    words.extend_bytes([8]);
+    words.extend_bytes([9, 10]);
+    words.extend_bytes([11, 12, 13, 14, 15, 16]);
 
     let mut reader = BitReader::from(&words);
     for i in 0_u32..17 {

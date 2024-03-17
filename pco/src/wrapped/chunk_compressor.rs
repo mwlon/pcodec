@@ -449,7 +449,7 @@ fn new_candidate_w_split_and_delta_order<L: Latent>(
     let avg_bits_per_delta = latent_meta.avg_bits_per_delta();
     let is_trivial = latent_meta.is_trivial();
 
-    let mut max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(max_bits_per_offset);
+    let max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(max_bits_per_offset);
 
     var_metas.push(latent_meta);
     var_policies.push(LatentVarPolicy {
@@ -623,7 +623,7 @@ fn fallback_chunk_compressor<L: Latent>(
   let table = CompressionTable::from(infos);
   let encoder = ans::Encoder::from_bins(ans_size_log, &bins)?;
   let offset_bits = L::BITS;
-  let mut max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(offset_bits);
+  let max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(offset_bits);
 
   let policy = LatentVarPolicy {
     table,

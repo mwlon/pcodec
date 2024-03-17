@@ -1,7 +1,6 @@
-use crate::constants::MAX_ANS_BITS;
-use crate::data_types::{Latent, NumberLike};
-use crate::page_meta::PageMeta;
-use crate::{bits, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta, Mode};
+use crate::data_types::Latent;
+
+use crate::{bits, Bin, ChunkLatentVarMeta, ChunkMeta, Mode};
 
 pub fn header_size() -> usize {
   1
@@ -35,9 +34,10 @@ mod tests {
   use rand_xoshiro::Xoroshiro128PlusPlus;
 
   use crate::bit_writer::BitWriter;
+  use crate::data_types::NumberLike;
   use crate::errors::PcoResult;
   use crate::wrapped::FileCompressor;
-  use crate::{FloatMultSpec, PagingSpec};
+  use crate::{ChunkConfig, FloatMultSpec, PagingSpec};
 
   use super::*;
 

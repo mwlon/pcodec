@@ -146,7 +146,7 @@ mod tests {
       delta_moments: DeltaMoments::default(),
     };
 
-    for bad_metadata in vec![metadata_missing_prefix, metadata_duplicating_prefix] {
+    for bad_metadata in [metadata_missing_prefix, metadata_duplicating_prefix] {
       let result = BodyDecompressor::new(
         &bad_metadata.prefix_metadata,
         bad_metadata.n,

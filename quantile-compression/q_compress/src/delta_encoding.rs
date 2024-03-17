@@ -117,7 +117,7 @@ mod tests {
   #[test]
   fn test_nth_order_deltas() {
     let nums: Vec<u16> = vec![2, 2, 1, u16::MAX, 0, 1];
-    let (deltas, moments) = nth_order_deltas(&nums, 2, &vec![0, 3]);
+    let (deltas, moments) = nth_order_deltas(&nums, 2, &[0, 3]);
     assert_eq!(deltas, vec![-1, -1, 3, 0]);
     assert_eq!(
       moments,
