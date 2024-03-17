@@ -38,7 +38,6 @@ mod tests {
   use rand_xoshiro::rand_core::SeedableRng;
   use rand_xoshiro::Xoroshiro128PlusPlus;
 
-  use crate::bit_writer::BitWriter;
   use crate::data_types::NumberLike;
   use crate::errors::PcoResult;
   use crate::standalone::{simple_compress, FileCompressor};
@@ -63,7 +62,7 @@ mod tests {
 
   #[test]
   fn test_file_guarantee_empty() -> PcoResult<()> {
-    let mut nums = Vec::<i32>::new();
+    let nums = Vec::<i32>::new();
     check_file_guarantee(&nums, &ChunkConfig::default())
   }
 
@@ -71,7 +70,7 @@ mod tests {
   fn test_file_guarantee_antagonistic() -> PcoResult<()> {
     let mut rng = Xoroshiro128PlusPlus::seed_from_u64(0);
     let mut nums = Vec::new();
-    for i in 0..300 {
+    for _i in 0..300 {
       nums.push(rng.gen_range(-1.0_f32..1.0));
     }
     let config = ChunkConfig {

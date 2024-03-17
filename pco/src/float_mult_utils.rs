@@ -529,7 +529,6 @@ mod test {
 
     for n in [10, 1000] {
       let nums = (0..n)
-        .into_iter()
         .map(|x| plus_epsilons((x as f32) * 0.1, x % 2))
         .collect::<Vec<_>>();
       assert!(
@@ -551,10 +550,7 @@ mod test {
         n
       );
 
-      let nums = (0..n)
-        .into_iter()
-        .map(|x| (x as f32) * 0.77)
-        .collect::<Vec<_>>();
+      let nums = (0..n).map(|x| (x as f32) * 0.77).collect::<Vec<_>>();
       assert!(
         !better_compression_than_classic(config, &nums, &nums),
         "n={}",
@@ -562,7 +558,6 @@ mod test {
       );
 
       let nums = (0..n)
-        .into_iter()
         // at this magnitude, each increment of `base` is only ~2 bits
         .map(|x| (x + 5_000_000) as f32 * 0.1)
         .collect::<Vec<_>>();

@@ -191,27 +191,21 @@ mod tests {
   fn test_calc_candidate_gcd() {
     // not significant enough
     assert_eq!(
-      choose_candidate_base(&mut vec![0_u32, 4, 8]),
+      choose_candidate_base(&mut [0_u32, 4, 8]),
       None,
     );
     assert_eq!(
-      choose_candidate_base(&mut vec![
-        0_u32, 4, 8, 10, 14, 18, 20, 24, 28
-      ]),
+      choose_candidate_base(&mut [0_u32, 4, 8, 10, 14, 18, 20, 24, 28]),
       Some(4),
     );
     // 2 out of 3 triples have a rare congruency
     assert_eq!(
-      choose_candidate_base(&mut vec![
-        1_u32, 11, 21, 31, 41, 51, 61, 71, 82
-      ]),
+      choose_candidate_base(&mut [1_u32, 11, 21, 31, 41, 51, 61, 71, 82]),
       Some(10),
     );
     // 1 out of 3 triples has a rare congruency
     assert_eq!(
-      choose_candidate_base(&mut vec![
-        1_u32, 11, 22, 31, 41, 51, 61, 71, 82
-      ]),
+      choose_candidate_base(&mut [1_u32, 11, 22, 31, 41, 51, 61, 71, 82]),
       None,
     );
     // even just evens can be useful if the signal is strong enough

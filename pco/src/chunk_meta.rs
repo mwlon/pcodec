@@ -334,7 +334,6 @@ mod tests {
   use super::*;
   use crate::delta::DeltaMoments;
   use crate::page_meta::{PageLatentVarMeta, PageMeta};
-  use std::ops::Index;
 
   fn check_exact_sizes<L: Latent>(meta: &ChunkMeta<L>) -> PcoResult<()> {
     let buffer_size = 8192;

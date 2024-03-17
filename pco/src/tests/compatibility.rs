@@ -15,7 +15,7 @@ fn get_asset_dir() -> PathBuf {
 fn get_pco_path(version: &str, name: &str) -> PathBuf {
   get_asset_dir().join(format!(
     "v{}_{}.pco",
-    version.replace(".", "_"),
+    version.replace('.', "_"),
     name,
   ))
 }
@@ -40,7 +40,7 @@ fn assert_compatible<T: NumberLike>(version: &str, name: &str, expected: &[T]) -
   let compressed = fs::read(pco_path)?;
   let decompressed = standalone::simple_decompress::<T>(&compressed)?;
 
-  assert_nums_eq(&decompressed, &expected);
+  assert_nums_eq(&decompressed, expected);
   Ok(())
 }
 
