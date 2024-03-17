@@ -758,28 +758,23 @@ impl<L: Latent> ChunkCompressor<L> {
   }
 
   fn page_size_hint_inner(&self, page_idx: usize, page_size_overestimation: f64) -> usize {
-    // TODO share logic between this and bin optimization
     let page_info = &self.page_infos[page_idx];
-    let mut bit_size = 0;
-    for ((var_meta, var_policy), &end_idx) in self
-      .meta
-      .per_latent_var
+    let mut body_bit_size = 0;
+    for (var_policy, &end_idx) in self
+      .latent_var_policies
       .iter()
-      .zip(&self.latent_var_policies)
       .zip(&page_info.end_idx_per_var)
     {
       let page_n_deltas = end_idx - page_info.start_idx;
-      let meta_bit_size = self.meta.delta_encoding_order * L::BITS as usize
-        + ANS_INTERLEAVING * var_meta.ans_size_log as usize;
       // We're probably reserving more than necessary sometimes, because
       // max_bits_per_latent is quite a loose upper bound.
       // But most datasets have multiple pages, and if we really wanted to
       // improve performance for standalone files too, we'd need a whole-file
       // compressed size estimate.
       let nums_bit_size = page_n_deltas as f64 * var_policy.avg_bits_per_delta;
-      bit_size += meta_bit_size + (nums_bit_size * page_size_overestimation).ceil() as usize;
+      body_bit_size += (nums_bit_size * page_size_overestimation).ceil() as usize;
     }
-    bits::ceil_div(bit_size, 8)
+    self.meta.exact_page_meta_size() + bits::ceil_div(bit_size, 8)
   }
 
   #[inline(never)]
