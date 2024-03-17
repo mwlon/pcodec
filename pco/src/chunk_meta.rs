@@ -342,7 +342,7 @@ mod tests {
     let mut writer = BitWriter::new(&mut dst, buffer_size);
     meta.write_to(&mut writer)?;
     writer.flush()?;
-    assert_eq!(dst.len(), meta.exact_size());
+    assert_eq!(meta.exact_size(), dst.len());
 
     // page meta size
     let mut dst = Vec::new();
@@ -370,7 +370,7 @@ mod tests {
       &mut writer,
     );
     writer.flush()?;
-    assert_eq!(dst.len(), meta.exact_page_meta_size());
+    assert_eq!(meta.exact_page_meta_size(), dst.len());
     Ok(())
   }
 
