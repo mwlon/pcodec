@@ -179,3 +179,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
     panic!("should be unreachable; transmutable numbers must reimplement this");
   }
 }
+
+pub(crate) fn split_latents_classic<T: NumberLike>(nums: &[T]) -> Vec<Vec<T::L>> {
+  vec![nums.iter().map(|&x| x.to_latent_ordered()).collect()]
+}

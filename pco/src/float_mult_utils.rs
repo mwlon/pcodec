@@ -6,7 +6,7 @@ use crate::data_types::{FloatLike, Latent};
 use crate::{int_mult_utils, sampling};
 
 #[inline(never)]
-pub fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondary: &[F::L]) {
+pub(crate) fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondary: &[F::L]) {
   for (mult_and_dst, &adj) in primary.iter_mut().zip(secondary.iter()) {
     let unadjusted = F::int_float_from_latent(*mult_and_dst) * base;
     *mult_and_dst = unadjusted
@@ -16,7 +16,7 @@ pub fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondary: &[F:
   }
 }
 
-pub fn split_latents<F: FloatLike>(page_nums: &[F], base: F, inv_base: F) -> Vec<Vec<F::L>> {
+pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], base: F, inv_base: F) -> Vec<Vec<F::L>> {
   let n = page_nums.len();
   let uninit_vec = || unsafe {
     let mut res = Vec::<F::L>::with_capacity(n);
@@ -298,8 +298,8 @@ fn better_compression_than_classic<F: FloatLike>(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FloatMultConfig<F: FloatLike> {
-  pub base: F,
+pub(crate) struct FloatMultConfig<F: FloatLike> {
+  pub(crate) base: F,
   pub(crate) inv_base: F,
 }
 
@@ -330,7 +330,7 @@ fn choose_config_w_sample<F: FloatLike>(sample: &[F], nums: &[F]) -> Option<Floa
 }
 
 #[inline(never)]
-pub fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<F>> {
+pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<F>> {
   // We can compress infinities, nans, and baby floats, but we can't learn
   // the base from them.
   let sample = sampling::choose_sample(nums, |num| {
