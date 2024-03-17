@@ -774,7 +774,7 @@ impl<L: Latent> ChunkCompressor<L> {
       let nums_bit_size = page_n_deltas as f64 * var_policy.avg_bits_per_delta;
       body_bit_size += (nums_bit_size * page_size_overestimation).ceil() as usize;
     }
-    self.meta.exact_page_meta_size() + bits::ceil_div(bit_size, 8)
+    self.meta.exact_page_meta_size() + bits::ceil_div(body_bit_size, 8)
   }
 
   #[inline(never)]
