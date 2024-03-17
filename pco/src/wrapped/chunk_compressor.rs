@@ -766,11 +766,6 @@ impl<L: Latent> ChunkCompressor<L> {
       .zip(&page_info.end_idx_per_var)
     {
       let page_n_deltas = end_idx - page_info.start_idx;
-      // We're probably reserving more than necessary sometimes, because
-      // max_bits_per_latent is quite a loose upper bound.
-      // But most datasets have multiple pages, and if we really wanted to
-      // improve performance for standalone files too, we'd need a whole-file
-      // compressed size estimate.
       let nums_bit_size = page_n_deltas as f64 * var_policy.avg_bits_per_delta;
       body_bit_size += (nums_bit_size * page_size_overestimation).ceil() as usize;
     }
