@@ -1,6 +1,4 @@
-use std::cmp::max;
 use std::io::Write;
-use std::mem;
 
 use crate::bit_reader::u64_at;
 use crate::bits;
@@ -55,7 +53,7 @@ pub struct BitWriter<W: Write> {
 impl<W: Write> BitWriter<W> {
   pub fn new(dst: W, size: usize) -> Self {
     Self {
-      buf: vec![0; max(size, mem::size_of::<usize>())],
+      buf: vec![0; size],
       stale_byte_idx: 0,
       bits_past_byte: 0,
       dst,

@@ -18,7 +18,9 @@ pub enum PcoError {
 }
 
 macro_rules! impl_dtypes {
-  {$($names:ident => $types:ty,)+} => {
+  {$($names:ident($lname:ident) => $types:ty,)+} => {
+    // tell rust to ignore these warnings because we rely on the memory layout in C
+    #[allow(dead_code)]
     enum DynTypedVec {
       U8(Vec<u8>),
       $($names(Vec<$types>),)+
@@ -44,14 +46,7 @@ macro_rules! impl_dtypes {
   }
 }
 
-impl_dtypes!(
-  U32 => u32,
-  U64 => u64,
-  I32 => i32,
-  I64 => i64,
-  F32 => f32,
-  F64 => f64,
-);
+pco::with_core_dtypes!(impl_dtypes);
 
 #[repr(C)]
 pub struct PcoFfiVec {

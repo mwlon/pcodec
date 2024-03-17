@@ -77,9 +77,9 @@ impl PyFc {
   fn chunk_compressor(&self, nums: DynTypedPyArrayDyn, config: &PyChunkConfig) -> PyResult<PyCc> {
     let config = config.try_into()?;
     macro_rules! match_nums {
-      {$($name:ident($uname:ident) => $t:ty,)+} => {
+      {$($name:ident($lname:ident) => $t:ty,)+} => {
         match nums {
-          $(DynTypedPyArrayDyn::$name(arr) => DynCc::$uname(self.chunk_compressor_generic::<$t>(arr, &config)?),)+
+          $(DynTypedPyArrayDyn::$name(arr) => DynCc::$lname(self.chunk_compressor_generic::<$t>(arr, &config)?),)+
         }
       }
     }

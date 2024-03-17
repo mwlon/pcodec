@@ -12,7 +12,7 @@ use crate::{core_dtype_from_str, pco_err_to_py, DynTypedPyArrayDyn, PyProgress};
 struct PyFd(FileDecompressor);
 
 macro_rules! impl_dyn_cd {
-  {$($name:ident($uname:ident) => $t:ty,)+} => {
+  {$($name:ident($lname:ident) => $t:ty,)+} => {
     #[derive(Debug)]
     enum DynCd {
       $($name(ChunkDecompressor<$t>),)+
@@ -63,7 +63,7 @@ impl PyFd {
     let dtype = core_dtype_from_str(dtype)?;
 
     macro_rules! match_dtype {
-      {$($name:ident($uname:ident) => $t:ty,)+} => {
+      {$($name:ident($lname:ident) => $t:ty,)+} => {
         match dtype {
           $(CoreDataType::$name => {
             let (generic_cd, rest) = inner
@@ -112,7 +112,7 @@ impl PyCd {
     let src = page.as_bytes();
     let inner = &self.inner;
     macro_rules! match_cd_and_dst {
-      {$($name:ident($uname:ident) => $t:ty,)+} => {
+      {$($name:ident($lname:ident) => $t:ty,)+} => {
         match (inner, dst) {
           $((DynCd::$name(cd), DynTypedPyArrayDyn::$name(arr)) => {
             let mut arr_rw = arr.readwrite();

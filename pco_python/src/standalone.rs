@@ -81,7 +81,7 @@ pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
   ) -> PyResult<PyObject> {
     let config: ChunkConfig = config.try_into()?;
     macro_rules! match_py_array {
-      {$($name:ident($uname:ident) => $t:ty,)+} => {
+      {$($name:ident($lname:ident) => $t:ty,)+} => {
         match nums {
           $(DynTypedPyArrayDyn::$name(arr) => simple_compress_generic(py, arr, &config),)+
         }
@@ -107,7 +107,7 @@ pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
   #[pyfunction]
   fn simple_decompress_into(compressed: &PyBytes, dst: DynTypedPyArrayDyn) -> PyResult<PyProgress> {
     macro_rules! match_py_array {
-      {$($name:ident($uname:ident) => $t:ty,)+} => {
+      {$($name:ident($lname:ident) => $t:ty,)+} => {
         match dst {
           $(DynTypedPyArrayDyn::$name(arr) => simple_decompress_into_generic(compressed, arr),)+
         }
@@ -138,7 +138,7 @@ pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
       .peek_dtype_or_termination(src)
       .map_err(pco_err_to_py)?;
     macro_rules! match_dtype {
-      {$($name:ident($uname:ident) => $t:ty,)+} => {
+      {$($name:ident($lname:ident) => $t:ty,)+} => {
         match dtype {
           $(Known($name) => Ok(decompress_chunks::<$t>(py, src, file_decompressor)?.into()),)+
           Termination => Ok(PyNone::get(py).into()),
