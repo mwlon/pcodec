@@ -1,4 +1,4 @@
-use crate::ans::Token;
+use crate::ans::Symbol;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 
@@ -30,8 +30,8 @@ pub struct BinCompressionInfo<L: Latent> {
   pub lower: L,
   pub upper: L,
   pub offset_bits: Bitlen,
-  // token is also the index of this in the list of optimized compression infos
-  pub token: Token,
+  // symbol is also the index of this in the list of optimized compression infos
+  pub symbol: Symbol,
 }
 
 impl<L: Latent> From<BinCompressionInfo<L>> for Bin<L> {
@@ -51,7 +51,7 @@ impl<L: Latent> Default for BinCompressionInfo<L> {
       lower: L::ZERO,
       upper: L::MAX,
       offset_bits: L::BITS,
-      token: Token::MAX,
+      symbol: Symbol::MAX,
     }
   }
 }

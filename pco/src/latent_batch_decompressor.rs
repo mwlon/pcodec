@@ -95,9 +95,9 @@ impl<L: Latent> LatentBatchDecompressor<L> {
 
   // This implementation handles only a full batch, but is faster.
   #[inline(never)]
-  fn decompress_full_ans_tokens(&mut self, reader: &mut BitReader) {
+  fn decompress_full_ans_symbols(&mut self, reader: &mut BitReader) {
     // At each iteration, this loads a single u64 and has all ANS decoders
-    // read a single token from it.
+    // read a single symbol from it.
     // Therefore it requires that ANS_INTERLEAVING * MAX_BITS_PER_ANS <= 57.
     // Additionally, we're unpacking all ANS states using the fact that
     // ANS_INTERLEAVING == 4.
@@ -117,22 +117,22 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       // performance gain. If I use a [AnsState; 4] for the state_idxs instead
       // of separate identifiers, it tries to repeatedly load and write to
       // the array instead of keeping the states in registers.
-      macro_rules! handle_single_token {
+      macro_rules! handle_single_symbol {
         ($j: expr, $state_idx: ident) => {
           let i = base_i + $j;
           let node = unsafe { ans_nodes.get_unchecked($state_idx as usize) };
           let ans_val = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
-          let info = unsafe { infos.get_unchecked(node.token as usize) };
+          let info = unsafe { infos.get_unchecked(node.symbol as usize) };
           self.state.set_scratch(i, offset_bit_idx, info);
           bits_past_byte += node.bits_to_read;
           offset_bit_idx += info.offset_bits;
           $state_idx = node.next_state_idx_base + ans_val;
         };
       }
-      handle_single_token!(0, state_idx_0);
-      handle_single_token!(1, state_idx_1);
-      handle_single_token!(2, state_idx_2);
-      handle_single_token!(3, state_idx_3);
+      handle_single_symbol!(0, state_idx_0);
+      handle_single_symbol!(1, state_idx_1);
+      handle_single_symbol!(2, state_idx_2);
+      handle_single_symbol!(3, state_idx_3);
     }
 
     reader.stale_byte_idx = stale_byte_idx;
@@ -143,7 +143,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
   // This implementation handles arbitrary batch size and looks simpler, but is
   // slower, so we only use it at the end of the page.
   #[inline(never)]
-  fn decompress_ans_tokens(&mut self, reader: &mut BitReader, batch_n: usize) {
+  fn decompress_ans_symbols(&mut self, reader: &mut BitReader, batch_n: usize) {
     let src = reader.src;
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
@@ -156,7 +156,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       let packed = bit_reader::u64_at(src, stale_byte_idx);
       let node = unsafe { self.decoder.nodes.get_unchecked(state_idxs[j] as usize) };
       let ans_val = (packed >> bits_past_byte) as AnsState & ((1 << node.bits_to_read) - 1);
-      let info = &self.infos[node.token as usize];
+      let info = &self.infos[node.symbol as usize];
       self.state.set_scratch(i, offset_bit_idx, info);
       bits_past_byte += node.bits_to_read;
       offset_bit_idx += info.offset_bits;
@@ -217,9 +217,9 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       assert!(batch_n <= FULL_BATCH_N);
 
       if batch_n == FULL_BATCH_N {
-        self.decompress_full_ans_tokens(reader);
+        self.decompress_full_ans_symbols(reader);
       } else {
-        self.decompress_ans_tokens(reader, batch_n);
+        self.decompress_ans_symbols(reader, batch_n);
       }
     }
 

@@ -1,5 +1,4 @@
 use crate::data_types::Latent;
-
 use crate::{bits, Bin, ChunkLatentVarMeta, ChunkMeta, Mode};
 
 /// Returns the maximum possible byte size of a wrapped header.

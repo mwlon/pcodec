@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-use crate::ans::{AnsState, Token};
+use crate::ans::{AnsState, Symbol};
 use crate::compression_intermediates::DissectedPageVar;
 use crate::compression_table::CompressionTable;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
@@ -14,7 +14,7 @@ pub struct LatentBatchDissector<'a, L: Latent> {
 
   // mutable
   lower_scratch: [L; FULL_BATCH_N],
-  token_scratch: [Token; FULL_BATCH_N],
+  symbol_scratch: [Symbol; FULL_BATCH_N],
 }
 
 impl<'a, L: Latent> LatentBatchDissector<'a, L> {
@@ -23,7 +23,7 @@ impl<'a, L: Latent> LatentBatchDissector<'a, L> {
       table,
       encoder,
       lower_scratch: [L::ZERO; FULL_BATCH_N],
-      token_scratch: [0; FULL_BATCH_N],
+      symbol_scratch: [0; FULL_BATCH_N],
     }
   }
 
@@ -54,7 +54,7 @@ impl<'a, L: Latent> LatentBatchDissector<'a, L> {
     for (i, &search_idx) in search_idxs.iter().enumerate() {
       let info = &self.table.infos[search_idx];
       self.lower_scratch[i] = info.lower;
-      self.token_scratch[i] = info.token;
+      self.symbol_scratch[i] = info.symbol;
       dst_offset_bits[i] = info.offset_bits;
     }
   }
@@ -84,7 +84,7 @@ impl<'a, L: Latent> LatentBatchDissector<'a, L> {
       let i = final_base_i + j;
       let (new_state, bitlen) = self
         .encoder
-        .encode(ans_final_states[j], self.token_scratch[i]);
+        .encode(ans_final_states[j], self.symbol_scratch[i]);
       ans_vals[i] = bits::lowest_bits_fast(ans_final_states[j], bitlen);
       ans_bits[i] = bitlen;
       ans_final_states[j] = new_state;
@@ -96,7 +96,7 @@ impl<'a, L: Latent> LatentBatchDissector<'a, L> {
         let i = base_i + j;
         let (new_state, bitlen) = self
           .encoder
-          .encode(ans_final_states[j], self.token_scratch[i]);
+          .encode(ans_final_states[j], self.symbol_scratch[i]);
         ans_vals[i] = bits::lowest_bits_fast(ans_final_states[j], bitlen);
         ans_bits[i] = bitlen;
         ans_final_states[j] = new_state;

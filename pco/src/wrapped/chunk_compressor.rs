@@ -615,7 +615,7 @@ fn fallback_chunk_compressor<L: Latent>(
     build_page_infos_and_delta_moments(Mode::Classic, 0, &n_per_page, &mut latents);
   let infos = vec![BinCompressionInfo::<L> {
     weight: 1,
-    token: 0,
+    symbol: 0,
     ..Default::default()
   }];
   let ans_size_log = 0;

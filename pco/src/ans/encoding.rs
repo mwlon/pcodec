@@ -1,20 +1,20 @@
 use std::cmp::max;
 
 use crate::ans::spec::Spec;
-use crate::ans::{AnsState, Token};
+use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::Bin;
 
 #[derive(Clone, Debug)]
-struct TokenInfo {
+struct SymbolInfo {
   renorm_bit_cutoff: AnsState,
   min_renorm_bits: Bitlen,
   next_states: Vec<AnsState>,
 }
 
-impl TokenInfo {
+impl SymbolInfo {
   #[inline]
   fn next_state_for(&self, x_s: AnsState) -> AnsState {
     self.next_states[x_s as usize - self.next_states.len()]
@@ -23,7 +23,7 @@ impl TokenInfo {
 
 #[derive(Clone, Debug)]
 pub struct Encoder {
-  token_infos: Vec<TokenInfo>,
+  symbol_infos: Vec<SymbolInfo>,
   size_log: Bitlen,
 }
 
@@ -37,11 +37,11 @@ impl Encoder {
   pub fn new(spec: &Spec) -> Self {
     let table_size = spec.table_size();
 
-    let mut token_infos = spec
-      .token_weights
+    let mut symbol_infos = spec
+      .symbol_weights
       .iter()
       .map(|&weight| {
-        // e.g. If the token count is 3 and table size is 16, so the x_s values
+        // e.g. If the symbol count is 3 and table size is 16, so the x_s values
         // are in [3, 6).
         // We find the power of 2 in this range (4), then compare its log to 16
         // to find the min renormalization bits (4 - 2 = 2).
@@ -49,7 +49,7 @@ impl Encoder {
         let max_x_s = 2 * weight - 1;
         let min_renorm_bits = spec.size_log - max_x_s.ilog2() as Bitlen;
         let renorm_bit_cutoff = (2 * weight * (1 << min_renorm_bits)) as AnsState;
-        TokenInfo {
+        SymbolInfo {
           renorm_bit_cutoff,
           min_renorm_bits,
           next_states: Vec::with_capacity(weight as usize),
@@ -57,8 +57,8 @@ impl Encoder {
       })
       .collect::<Vec<_>>();
 
-    for (state_idx, &token) in spec.state_tokens.iter().enumerate() {
-      token_infos[token as usize]
+    for (state_idx, &symbol) in spec.state_symbols.iter().enumerate() {
+      symbol_infos[symbol as usize]
         .next_states
         .push((table_size + state_idx) as AnsState);
     }
@@ -66,8 +66,8 @@ impl Encoder {
     Self {
       // We choose the initial state from [table_size, 2 * table_size)
       // to be the minimum as this tends to require fewer bits to encode
-      // the first token.
-      token_infos,
+      // the first symbol.
+      symbol_infos,
       size_log: spec.size_log,
     }
   }
@@ -78,15 +78,15 @@ impl Encoder {
   // We don't write to a BitWriter directly because ANS operates in a LIFO
   // manner. We need to write these in reverse order.
   #[inline]
-  pub fn encode(&self, state: AnsState, token: Token) -> (AnsState, Bitlen) {
-    let token_info = &self.token_infos[token as usize];
-    let renorm_bits = if state >= token_info.renorm_bit_cutoff {
-      token_info.min_renorm_bits + 1
+  pub fn encode(&self, state: AnsState, symbol: Symbol) -> (AnsState, Bitlen) {
+    let symbol_info = &self.symbol_infos[symbol as usize];
+    let renorm_bits = if state >= symbol_info.renorm_bit_cutoff {
+      symbol_info.min_renorm_bits + 1
     } else {
-      token_info.min_renorm_bits
+      symbol_info.min_renorm_bits
     };
     (
-      token_info.next_state_for(state >> renorm_bits),
+      symbol_info.next_state_for(state >> renorm_bits),
       renorm_bits,
     )
   }

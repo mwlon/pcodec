@@ -1,4 +1,4 @@
-use crate::ans::Token;
+use crate::ans::Symbol;
 use crate::bin::BinCompressionInfo;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
@@ -98,13 +98,13 @@ pub fn optimize_bins<L: Latent>(
 ) -> Vec<BinCompressionInfo<L>> {
   let partitioning = choose_optimized_partitioning(bins, ans_size_log);
   let mut res = Vec::with_capacity(partitioning.len());
-  for (token, &(j, i)) in partitioning.iter().enumerate() {
+  for (symbol, &(j, i)) in partitioning.iter().enumerate() {
     let count = bins.iter().take(i + 1).skip(j).map(|bin| bin.weight).sum();
     let optimized_bin = BinCompressionInfo {
       weight: count,
       lower: bins[j].lower,
       upper: bins[i].upper,
-      token: token as Token,
+      symbol: symbol as Symbol,
       offset_bits: bits::bits_to_encode_offset(bins[i].upper - bins[j].lower),
     };
     res.push(optimized_bin);
@@ -124,7 +124,7 @@ mod tests {
       lower,
       upper,
       offset_bits: 0, // not used
-      token: 0,       // not used
+      symbol: 0,      // not used
     }
   }
 
@@ -146,21 +146,21 @@ mod tests {
           lower: 1,
           upper: 16,
           offset_bits: 4,
-          token: 0,
+          symbol: 0,
         },
         BinCompressionInfo {
           weight: 200,
           lower: 33,
           upper: 64,
           offset_bits: 5,
-          token: 1,
+          symbol: 1,
         },
         BinCompressionInfo {
           weight: 150,
           lower: 65,
           upper: 79,
           offset_bits: 4,
-          token: 2,
+          symbol: 2,
         },
       ]
     )
@@ -181,14 +181,14 @@ mod tests {
           lower: 0,
           upper: 150,
           offset_bits: 8,
-          token: 0,
+          symbol: 0,
         },
         BinCompressionInfo {
           weight: 1000,
           lower: 200,
           upper: 200,
           offset_bits: 0,
-          token: 1,
+          symbol: 1,
         },
       ]
     )
