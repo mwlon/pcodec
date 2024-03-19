@@ -60,7 +60,7 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
   }
 }
 
-fn parse_bin_batch<L: Latent, R: BetterBufRead>(
+unsafe fn parse_bin_batch<L: Latent, R: BetterBufRead>(
   reader_builder: &mut BitReaderBuilder<R>,
   ans_size_log: Bitlen,
   batch_size: usize,
@@ -95,7 +95,9 @@ fn parse_bin_batch<L: Latent, R: BetterBufRead>(
 }
 
 impl<L: Latent> ChunkLatentVarMeta<L> {
-  fn parse_from<R: BetterBufRead>(reader_builder: &mut BitReaderBuilder<R>) -> PcoResult<Self> {
+  unsafe fn parse_from<R: BetterBufRead>(
+    reader_builder: &mut BitReaderBuilder<R>,
+  ) -> PcoResult<Self> {
     let (ans_size_log, n_bins) = reader_builder.with_reader(|reader| {
       let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
       let n_bins = reader.read_usize(BITS_TO_ENCODE_N_BINS);
@@ -135,7 +137,7 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
     Ok(Self { bins, ans_size_log })
   }
 
-  fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
+  unsafe fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
     writer.write_bitlen(
       self.ans_size_log,
       BITS_TO_ENCODE_ANS_SIZE_LOG,
@@ -172,7 +174,7 @@ pub struct ChunkMeta<L: Latent> {
   pub per_latent_var: Vec<ChunkLatentVarMeta<L>>,
 }
 
-fn write_bins<L: Latent, W: Write>(
+unsafe fn write_bins<L: Latent, W: Write>(
   bins: &[Bin<L>],
   ans_size_log: Bitlen,
   writer: &mut BitWriter<W>,
@@ -237,7 +239,7 @@ impl<L: Latent> ChunkMeta<L> {
     bits::ceil_div(bit_size, 8)
   }
 
-  pub(crate) fn parse_from<R: BetterBufRead>(
+  pub(crate) unsafe fn parse_from<R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
     version: &FormatVersion,
   ) -> PcoResult<Self> {
@@ -290,7 +292,7 @@ impl<L: Latent> ChunkMeta<L> {
     })
   }
 
-  pub(crate) fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
+  pub(crate) unsafe fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
     let mode_value = match self.mode {
       Mode::Classic => 0,
       Mode::IntMult(_) => 1,
@@ -340,7 +342,7 @@ mod tests {
     let buffer_size = 8192;
     let mut dst = Vec::new();
     let mut writer = BitWriter::new(&mut dst, buffer_size);
-    meta.write_to(&mut writer)?;
+    unsafe { meta.write_to(&mut writer)? };
     writer.flush()?;
     assert_eq!(meta.exact_size(), dst.len());
 
@@ -362,13 +364,15 @@ mod tests {
         })
         .collect(),
     };
-    page_meta.write_to(
-      meta
-        .per_latent_var
-        .iter()
-        .map(|var_meta| var_meta.ans_size_log),
-      &mut writer,
-    );
+    unsafe {
+      page_meta.write_to(
+        meta
+          .per_latent_var
+          .iter()
+          .map(|var_meta| var_meta.ans_size_log),
+        &mut writer,
+      )
+    };
     writer.flush()?;
     assert_eq!(meta.exact_page_meta_size(), dst.len());
     Ok(())

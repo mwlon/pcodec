@@ -95,7 +95,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
 
   // This implementation handles only a full batch, but is faster.
   #[inline(never)]
-  fn decompress_full_ans_symbols(&mut self, reader: &mut BitReader) {
+  unsafe fn decompress_full_ans_symbols(&mut self, reader: &mut BitReader) {
     // At each iteration, this loads a single u64 and has all ANS decoders
     // read a single symbol from it.
     // Therefore it requires that ANS_INTERLEAVING * MAX_BITS_PER_ANS <= 57.
@@ -143,7 +143,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
   // This implementation handles arbitrary batch size and looks simpler, but is
   // slower, so we only use it at the end of the page.
   #[inline(never)]
-  fn decompress_ans_symbols(&mut self, reader: &mut BitReader, batch_n: usize) {
+  unsafe fn decompress_ans_symbols(&mut self, reader: &mut BitReader, batch_n: usize) {
     let src = reader.src;
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
@@ -169,7 +169,11 @@ impl<L: Latent> LatentBatchDecompressor<L> {
   }
 
   #[inline(never)]
-  fn decompress_offsets<const MAX_U64S: usize>(&mut self, reader: &mut BitReader, dst: &mut [L]) {
+  unsafe fn decompress_offsets<const MAX_U64S: usize>(
+    &mut self,
+    reader: &mut BitReader,
+    dst: &mut [L],
+  ) {
     let base_bit_idx = reader.bit_idx();
     let src = reader.src;
     let state = &mut self.state;
@@ -203,7 +207,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
   // May contaminate dst.
-  pub fn decompress_latent_batch(
+  pub unsafe fn decompress_latent_batch(
     &mut self,
     reader: &mut BitReader,
     dst: &mut [L],

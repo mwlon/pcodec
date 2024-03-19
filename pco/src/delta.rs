@@ -16,7 +16,7 @@ impl<L: Latent> DeltaMoments<L> {
     Self { moments }
   }
 
-  pub fn parse_from(reader: &mut BitReader, order: usize) -> PcoResult<Self> {
+  pub unsafe fn parse_from(reader: &mut BitReader, order: usize) -> PcoResult<Self> {
     let mut moments = Vec::new();
     for _ in 0..order {
       moments.push(reader.read_uint::<L>(L::BITS));
@@ -24,7 +24,7 @@ impl<L: Latent> DeltaMoments<L> {
     Ok(DeltaMoments { moments })
   }
 
-  pub fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
+  pub unsafe fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
     for &moment in &self.moments {
       writer.write_uint(moment, L::BITS);
     }

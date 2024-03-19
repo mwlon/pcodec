@@ -34,9 +34,9 @@ mod tests {
     }
 
     let mut compressed = Vec::new();
-    let mut writer = BitWriter::new(&mut compressed, 5);
+    let mut writer = BitWriter::new(&mut compressed, 10);
     for (val, bitlen) in to_write.into_iter().rev() {
-      writer.write_uint(bits::lowest_bits_fast(val, bitlen), bitlen);
+      unsafe { writer.write_uint(bits::lowest_bits_fast(val, bitlen), bitlen) };
       writer.flush()?;
     }
     writer.finish_byte();
@@ -55,7 +55,8 @@ mod tests {
     for _ in 0..symbols.len() {
       let node = &decoder.nodes[state_idx as usize];
       decoded.push(node.symbol);
-      state_idx = node.next_state_idx_base + reader.read_uint::<AnsState>(node.bits_to_read);
+      state_idx =
+        node.next_state_idx_base + unsafe { reader.read_uint::<AnsState>(node.bits_to_read) };
     }
 
     assert_eq!(decoded, symbols);

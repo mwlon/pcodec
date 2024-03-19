@@ -6,8 +6,8 @@ use crate::bit_writer::BitWriter;
 use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageInfo};
 use crate::compression_table::CompressionTable;
 use crate::constants::{
-  Bitlen, Weight, ANS_INTERLEAVING, CHUNK_META_PADDING, LIMITED_UNOPTIMIZED_BINS_LOG,
-  MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, PAGE_PADDING,
+  Bitlen, Weight, ANS_INTERLEAVING, LIMITED_UNOPTIMIZED_BINS_LOG, MAX_COMPRESSION_LEVEL,
+  MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
 };
 use crate::data_types::{Latent, NumberLike};
 use crate::delta::DeltaMoments;
@@ -201,7 +201,7 @@ fn uninit_vec<T>(n: usize) -> Vec<T> {
 // a write exceeds 56 bits, we may need to shift target_u64 by 64 bits, which
 // would be an overflow panic.
 #[inline(never)]
-fn write_short_uints<U: ReadWriteUint>(
+unsafe fn write_short_uints<U: ReadWriteUint>(
   vals: &[U],
   bitlens: &[Bitlen],
   mut stale_byte_idx: usize,
@@ -227,7 +227,7 @@ fn write_short_uints<U: ReadWriteUint>(
 }
 
 #[inline(never)]
-fn write_uints<U: ReadWriteUint, const MAX_U64S: usize>(
+unsafe fn write_uints<U: ReadWriteUint, const MAX_U64S: usize>(
   vals: &[U],
   bitlens: &[Bitlen],
   mut stale_byte_idx: usize,
@@ -248,48 +248,57 @@ fn write_dissected_batch_var<L: Latent, W: Write>(
   var_policy: &LatentVarPolicy<L>,
   batch_start: usize,
   writer: &mut BitWriter<W>,
-) {
+) -> PcoResult<()> {
+  assert!(writer.buf.len() >= PAGE_PADDING);
+  writer.flush()?;
+
   if batch_start >= dissected_page_var.offsets.len() {
-    return;
+    return Ok(());
   }
 
   // write ANS
   if var_policy.needs_ans {
-    (writer.stale_byte_idx, writer.bits_past_byte) = write_short_uints(
-      &dissected_page_var.ans_vals[batch_start..],
-      &dissected_page_var.ans_bits[batch_start..],
-      writer.stale_byte_idx,
-      writer.bits_past_byte,
-      &mut writer.buf,
-    );
+    (writer.stale_byte_idx, writer.bits_past_byte) = unsafe {
+      write_short_uints(
+        &dissected_page_var.ans_vals[batch_start..],
+        &dissected_page_var.ans_bits[batch_start..],
+        writer.stale_byte_idx,
+        writer.bits_past_byte,
+        &mut writer.buf,
+      )
+    };
   }
 
   // write offsets
-  (writer.stale_byte_idx, writer.bits_past_byte) = match var_policy.max_u64s_per_offset {
-    0 => (writer.stale_byte_idx, writer.bits_past_byte),
-    1 => write_short_uints::<L>(
-      &dissected_page_var.offsets[batch_start..],
-      &dissected_page_var.offset_bits[batch_start..],
-      writer.stale_byte_idx,
-      writer.bits_past_byte,
-      &mut writer.buf,
-    ),
-    2 => write_uints::<L, 2>(
-      &dissected_page_var.offsets[batch_start..],
-      &dissected_page_var.offset_bits[batch_start..],
-      writer.stale_byte_idx,
-      writer.bits_past_byte,
-      &mut writer.buf,
-    ),
-    3 => write_uints::<L, 3>(
-      &dissected_page_var.offsets[batch_start..],
-      &dissected_page_var.offset_bits[batch_start..],
-      writer.stale_byte_idx,
-      writer.bits_past_byte,
-      &mut writer.buf,
-    ),
-    _ => panic!("[ChunkCompressor] data type is too large"),
+  (writer.stale_byte_idx, writer.bits_past_byte) = unsafe {
+    match var_policy.max_u64s_per_offset {
+      0 => (writer.stale_byte_idx, writer.bits_past_byte),
+      1 => write_short_uints::<L>(
+        &dissected_page_var.offsets[batch_start..],
+        &dissected_page_var.offset_bits[batch_start..],
+        writer.stale_byte_idx,
+        writer.bits_past_byte,
+        &mut writer.buf,
+      ),
+      2 => write_uints::<L, 2>(
+        &dissected_page_var.offsets[batch_start..],
+        &dissected_page_var.offset_bits[batch_start..],
+        writer.stale_byte_idx,
+        writer.bits_past_byte,
+        &mut writer.buf,
+      ),
+      3 => write_uints::<L, 3>(
+        &dissected_page_var.offsets[batch_start..],
+        &dissected_page_var.offset_bits[batch_start..],
+        writer.stale_byte_idx,
+        writer.bits_past_byte,
+        &mut writer.buf,
+      ),
+      _ => panic!("[ChunkCompressor] data type is too large"),
+    }
   };
+
+  Ok(())
 }
 
 #[derive(Clone, Debug)]
@@ -689,8 +698,11 @@ impl<L: Latent> ChunkCompressor<L> {
   ///
   /// Will return an error if the provided `Write` errors.
   pub fn write_chunk_meta<W: Write>(&self, dst: W) -> PcoResult<W> {
-    let mut writer = BitWriter::new(dst, CHUNK_META_PADDING);
-    self.meta.write_to(&mut writer)?;
+    let mut writer = BitWriter::new(
+      dst,
+      self.meta.exact_size() + OVERSHOOT_PADDING,
+    );
+    unsafe { self.meta.write_to(&mut writer)? };
     Ok(writer.into_inner())
   }
 
@@ -792,8 +804,7 @@ impl<L: Latent> ChunkCompressor<L> {
           policy,
           batch_start,
           writer,
-        );
-        writer.flush()?;
+        )?;
       }
       batch_start = batch_end;
     }
@@ -840,8 +851,7 @@ impl<L: Latent> ChunkCompressor<L> {
       .iter()
       .map(|config| config.encoder.size_log());
 
-    page_meta.write_to(ans_size_logs, &mut writer);
-    writer.flush()?;
+    unsafe { page_meta.write_to(ans_size_logs, &mut writer) };
 
     self.write_dissected_page(dissected_page, &mut writer)?;
 
