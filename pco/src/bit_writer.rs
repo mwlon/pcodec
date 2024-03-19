@@ -13,15 +13,13 @@ use crate::read_write_uint::ReadWriteUint;
 // BitWriter (wrapping BitBuffer, generic to W) to reduce binary size
 
 #[inline]
-pub fn write_u64_to(x: u64, byte_idx: usize, dst: &mut [u8]) {
-  unsafe {
-    let target = dst.as_mut_ptr().add(byte_idx) as *mut [u8; 8];
-    *target = x.to_le_bytes();
-  };
+pub unsafe fn write_u64_to(x: u64, byte_idx: usize, dst: &mut [u8]) {
+  let target = dst.as_mut_ptr().add(byte_idx) as *mut [u8; 8];
+  *target = x.to_le_bytes();
 }
 
 #[inline]
-pub fn write_uint_to<U: ReadWriteUint, const MAX_U64S: usize>(
+pub unsafe fn write_uint_to<U: ReadWriteUint, const MAX_U64S: usize>(
   val: U,
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
@@ -93,7 +91,7 @@ impl<W: Write> BitWriter<W> {
     Ok(())
   }
 
-  pub fn write_uint<U: ReadWriteUint>(&mut self, x: U, n: Bitlen) {
+  pub unsafe fn write_uint<U: ReadWriteUint>(&mut self, x: U, n: Bitlen) {
     self.refill();
     match U::MAX_U64S {
       1 => write_uint_to::<U, 1>(
@@ -123,11 +121,11 @@ impl<W: Write> BitWriter<W> {
     self.consume(n);
   }
 
-  pub fn write_usize(&mut self, x: usize, n: Bitlen) {
+  pub unsafe fn write_usize(&mut self, x: usize, n: Bitlen) {
     self.write_uint(x, n)
   }
 
-  pub fn write_bitlen(&mut self, x: Bitlen, n: Bitlen) {
+  pub unsafe fn write_bitlen(&mut self, x: Bitlen, n: Bitlen) {
     self.write_uint(x, n)
   }
 
@@ -169,21 +167,23 @@ mod tests {
   fn test_long_uint_writes() -> PcoResult<()> {
     let mut dst = Vec::new();
     let mut writer = BitWriter::new(&mut dst, 30);
-    writer.write_uint::<u32>((1 << 8) + 1, 9);
-    // 10000000 1
-    writer.write_uint::<u32>((1 << 16) + (1 << 5), 17);
-    // 10000000 10000010 00000000 01
-    writer.write_uint::<u32>(1 << 1, 17);
-    // 10000000 10000010 00000000 01010000 00000000
-    // 000
-    writer.flush()?;
-    writer.write_uint::<u32>(1 << 1, 13);
-    // 10000000 10000010 00000000 01010000 00000000
-    // 00001000 00000000
-    writer.flush()?;
-    writer.write_uint::<u32>((1 << 23) + (1 << 15), 24);
-    // 10000000 10000010 00000000 01010000 00000000
-    // 00001000 00000000 00000000 00000001 00000001
+    unsafe {
+      writer.write_uint::<u32>((1 << 8) + 1, 9);
+      // 10000000 1
+      writer.write_uint::<u32>((1 << 16) + (1 << 5), 17);
+      // 10000000 10000010 00000000 01
+      writer.write_uint::<u32>(1 << 1, 17);
+      // 10000000 10000010 00000000 01010000 00000000
+      // 000
+      writer.flush()?;
+      writer.write_uint::<u32>(1 << 1, 13);
+      // 10000000 10000010 00000000 01010000 00000000
+      // 00001000 00000000
+      writer.flush()?;
+      writer.write_uint::<u32>((1 << 23) + (1 << 15), 24);
+      // 10000000 10000010 00000000 01010000 00000000
+      // 00001000 00000000 00000000 00000001 00000001
+    }
     writer.flush()?;
 
     assert_eq!(

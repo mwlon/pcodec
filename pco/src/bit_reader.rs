@@ -13,13 +13,13 @@ use crate::read_write_uint::ReadWriteUint;
 //    can do few-cycle/SIMD ops on). e.g. even 32-bit wasm has 64-bit ints and
 //    opcodes.
 #[inline]
-pub fn u64_at(src: &[u8], byte_idx: usize) -> u64 {
-  let raw_bytes = unsafe { *(src.as_ptr().add(byte_idx) as *const [u8; 8]) };
+pub unsafe fn u64_at(src: &[u8], byte_idx: usize) -> u64 {
+  let raw_bytes = *(src.as_ptr().add(byte_idx) as *const [u8; 8]);
   u64::from_le_bytes(raw_bytes)
 }
 
 #[inline]
-pub fn read_uint_at<U: ReadWriteUint, const MAX_U64S: usize>(
+pub unsafe fn read_uint_at<U: ReadWriteUint, const MAX_U64S: usize>(
   src: &[u8],
   mut byte_idx: usize,
   bits_past_byte: Bitlen,
@@ -119,7 +119,7 @@ impl<'a> BitReader<'a> {
     Ok(&self.src[byte_idx..new_byte_idx])
   }
 
-  pub fn read_uint<U: ReadWriteUint>(&mut self, n: Bitlen) -> U {
+  pub unsafe fn read_uint<U: ReadWriteUint>(&mut self, n: Bitlen) -> U {
     self.refill();
     let res = match U::MAX_U64S {
       1 => read_uint_at::<U, 1>(
@@ -149,11 +149,11 @@ impl<'a> BitReader<'a> {
     self.consume(n);
     res
   }
-  pub fn read_usize(&mut self, n: Bitlen) -> usize {
+  pub unsafe fn read_usize(&mut self, n: Bitlen) -> usize {
     self.read_uint(n)
   }
 
-  pub fn read_bitlen(&mut self, n: Bitlen) -> Bitlen {
+  pub unsafe fn read_bitlen(&mut self, n: Bitlen) -> Bitlen {
     self.read_uint(n)
   }
 
@@ -295,13 +295,15 @@ mod tests {
     let src = vec![137, 38, 255, 65, 0, 0, 0, 0];
     let mut reader = BitReader::new(&src, 5, 0);
 
-    assert_eq!(reader.read_bitlen(4), 9);
-    assert!(reader.read_aligned_bytes(1).is_err());
-    assert_eq!(reader.read_bitlen(4), 8);
-    assert_eq!(reader.read_aligned_bytes(1)?, vec![38]);
-    assert_eq!(reader.read_usize(15), 255 + 65 * 256);
-    reader.drain_empty_byte("should be empty")?;
-    assert_eq!(reader.aligned_byte_idx()?, 4);
+    unsafe {
+      assert_eq!(reader.read_bitlen(4), 9);
+      assert!(reader.read_aligned_bytes(1).is_err());
+      assert_eq!(reader.read_bitlen(4), 8);
+      assert_eq!(reader.read_aligned_bytes(1)?, vec![38]);
+      assert_eq!(reader.read_usize(15), 255 + 65 * 256);
+      reader.drain_empty_byte("should be empty")?;
+      assert_eq!(reader.aligned_byte_idx()?, 4);
+    }
     Ok(())
   }
 
@@ -309,13 +311,13 @@ mod tests {
   fn test_bit_reader_builder() -> PcoResult<()> {
     let src = (0..7).collect::<Vec<_>>();
     let mut reader_builder = BitReaderBuilder::new(src.as_slice(), 4, 1);
-    reader_builder.with_reader(|reader| {
+    reader_builder.with_reader(|reader| unsafe {
       assert_eq!(&reader.src[0..4], &vec![0, 1, 2, 3]);
       assert_eq!(reader.bit_idx(), 1);
       assert_eq!(reader.read_usize(16), 1 << 7); // not 1 << 8, because we started at bit_idx 1
       Ok(())
     })?;
-    reader_builder.with_reader(|reader| {
+    reader_builder.with_reader(|reader| unsafe {
       assert_eq!(&reader.src[0..4], &vec![2, 3, 4, 5]);
       assert_eq!(reader.bit_idx(), 1);
       assert_eq!(reader.read_usize(7), 1);
@@ -324,7 +326,7 @@ mod tests {
       Ok(())
     })?;
     let err = reader_builder
-      .with_reader(|reader| {
+      .with_reader(|reader| unsafe {
         assert!(reader.src.len() >= 4); // because of padding
         reader.read_usize(9); // this overshoots the end of the data by 1 bit
         Ok(())

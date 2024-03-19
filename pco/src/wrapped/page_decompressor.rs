@@ -39,7 +39,7 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   state: State<T::L>,
 }
 
-fn decompress_latents_w_delta<L: Latent>(
+unsafe fn decompress_latents_w_delta<L: Latent>(
   reader: &mut BitReader,
   delta_moments: &mut DeltaMoments<L>,
   lbd: &mut LatentBatchDecompressor<L>,
@@ -74,8 +74,8 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
 
-    let page_meta =
-      reader_builder.with_reader(|reader| PageMeta::<T::L>::parse_from(reader, chunk_meta))?;
+    let page_meta = reader_builder
+      .with_reader(|reader| unsafe { PageMeta::<T::L>::parse_from(reader, chunk_meta) })?;
 
     let mode = chunk_meta.mode;
     let delta_momentss = page_meta
@@ -147,18 +147,19 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       } else {
         &mut primary_latents[..batch_n]
       };
-      decompress_latents_w_delta(
-        reader,
-        &mut delta_momentss[0],
-        &mut latent_batch_decompressors[0],
-        primary_dst,
-        n - *n_processed,
-      )?;
-      Ok(())
+      unsafe {
+        decompress_latents_w_delta(
+          reader,
+          &mut delta_momentss[0],
+          &mut latent_batch_decompressors[0],
+          primary_dst,
+          n - *n_processed,
+        )
+      }
     })?;
 
     if n_latents >= 2 && self.maybe_constant_secondary.is_none() {
-      self.reader_builder.with_reader(|reader| {
+      self.reader_builder.with_reader(|reader| unsafe {
         decompress_latents_w_delta(
           reader,
           &mut delta_momentss[1],

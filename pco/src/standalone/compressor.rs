@@ -7,7 +7,7 @@ use crate::errors::PcoResult;
 use crate::standalone::constants::*;
 use crate::{bits, wrapped, ChunkConfig, ChunkMeta};
 
-fn write_varint<W: Write>(n: u64, writer: &mut BitWriter<W>) {
+unsafe fn write_varint<W: Write>(n: u64, writer: &mut BitWriter<W>) {
   let power = if n == 0 { 1 } else { n.ilog2() + 1 };
   writer.write_uint(power - 1, BITS_TO_ENCODE_VARINT_POWER);
   writer.write_uint(bits::lowest_bits(n, power), power);
@@ -58,11 +58,13 @@ impl FileCompressor {
   pub fn write_header<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, STANDALONE_HEADER_PADDING);
     writer.write_aligned_bytes(&MAGIC_HEADER)?;
-    writer.write_usize(
-      CURRENT_STANDALONE_VERSION,
-      BITS_TO_ENCODE_STANDALONE_VERSION,
-    );
-    write_varint(self.n_hint as u64, &mut writer);
+    unsafe {
+      writer.write_usize(
+        CURRENT_STANDALONE_VERSION,
+        BITS_TO_ENCODE_STANDALONE_VERSION,
+      );
+      write_varint(self.n_hint as u64, &mut writer);
+    }
     writer.finish_byte();
     writer.flush()?;
     let dst = writer.into_inner();
@@ -131,7 +133,9 @@ impl<L: Latent> ChunkCompressor<L> {
     let mut writer = BitWriter::new(dst, STANDALONE_CHUNK_PREAMBLE_PADDING);
     writer.write_aligned_bytes(&[self.dtype_byte])?;
     let n = self.inner.n_per_page()[0];
-    writer.write_usize(n - 1, BITS_TO_ENCODE_N_ENTRIES);
+    unsafe {
+      writer.write_usize(n - 1, BITS_TO_ENCODE_N_ENTRIES);
+    }
 
     writer.flush()?;
     let dst = writer.into_inner();

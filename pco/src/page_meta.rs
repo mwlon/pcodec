@@ -16,7 +16,7 @@ pub struct PageLatentVarMeta<L: Latent> {
 }
 
 impl<L: Latent> PageLatentVarMeta<L> {
-  pub fn write_to<W: Write>(&self, ans_size_log: Bitlen, writer: &mut BitWriter<W>) {
+  pub unsafe fn write_to<W: Write>(&self, ans_size_log: Bitlen, writer: &mut BitWriter<W>) {
     self.delta_moments.write_to(writer);
 
     // write the final ANS state, moving it down the range [0, table_size)
@@ -25,7 +25,7 @@ impl<L: Latent> PageLatentVarMeta<L> {
     }
   }
 
-  pub fn parse_from(
+  pub unsafe fn parse_from(
     reader: &mut BitReader,
     delta_order: usize,
     ans_size_log: Bitlen,
@@ -53,7 +53,7 @@ pub struct PageMeta<L: Latent> {
 }
 
 impl<L: Latent> PageMeta<L> {
-  pub fn write_to<I: Iterator<Item = Bitlen>, W: Write>(
+  pub unsafe fn write_to<I: Iterator<Item = Bitlen>, W: Write>(
     &self,
     ans_size_logs: I,
     writer: &mut BitWriter<W>,
@@ -64,7 +64,7 @@ impl<L: Latent> PageMeta<L> {
     writer.finish_byte();
   }
 
-  pub fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMeta<L>) -> PcoResult<Self> {
+  pub unsafe fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMeta<L>) -> PcoResult<Self> {
     let mut per_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
     for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
       per_var.push(PageLatentVarMeta::parse_from(
