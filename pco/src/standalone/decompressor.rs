@@ -76,20 +76,18 @@ impl FileDecompressor {
       )));
     }
 
-    let (standalone_version, n_hint) = reader_builder.with_reader(|reader| {
-      unsafe {
-        let standalone_version = reader.read_usize(BITS_TO_ENCODE_STANDALONE_VERSION);
-        let n_hint = if standalone_version >= 2 {
-          read_varint(reader)? as usize
-        } else {
-          // These versions only had wrapped version; we need to rewind so they can
-          // reuse it.
-          reader.bits_past_byte -= BITS_TO_ENCODE_STANDALONE_VERSION;
-          0
-        };
+    let (standalone_version, n_hint) = reader_builder.with_reader(|reader| unsafe {
+      let standalone_version = reader.read_usize(BITS_TO_ENCODE_STANDALONE_VERSION);
+      let n_hint = if standalone_version >= 2 {
+        read_varint(reader)? as usize
+      } else {
+        // These versions only had wrapped version; we need to rewind so they can
+        // reuse it.
+        reader.bits_past_byte -= BITS_TO_ENCODE_STANDALONE_VERSION;
+        0
+      };
 
-        Ok((standalone_version, n_hint))
-      }
+      Ok((standalone_version, n_hint))
     })?;
 
     if standalone_version > CURRENT_STANDALONE_VERSION {
@@ -151,9 +149,8 @@ impl FileDecompressor {
       )));
     }
 
-    let n = unsafe {
-      reader_builder.with_reader(|reader| Ok(reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1))?
-    };
+    let n = reader_builder
+      .with_reader(|reader| unsafe { Ok(reader.read_usize(BITS_TO_ENCODE_N_ENTRIES) + 1) })?;
     let src = reader_builder.into_inner();
     let (inner_cd, src) = self.inner.chunk_decompressor::<T, R>(src)?;
     let inner_pd = inner_cd.page_decompressor(src, n)?;
