@@ -281,6 +281,7 @@ pub fn ensure_buf_read_capacity<R: BetterBufRead>(src: &mut R, required: usize) 
 
 #[cfg(test)]
 mod tests {
+  use crate::constants::OVERSHOOT_PADDING;
   use crate::errors::{ErrorKind, PcoResult};
 
   use super::*;
@@ -292,7 +293,8 @@ mod tests {
   #[test]
   fn test_bit_reader() -> PcoResult<()> {
     // 10010001 01100100 00000000 11111111 10000010
-    let src = vec![137, 38, 255, 65, 0, 0, 0, 0];
+    let mut src = vec![137, 38, 255, 65];
+    src.resize(20, 0);
     let mut reader = BitReader::new(&src, 5, 0);
 
     unsafe {
@@ -310,7 +312,7 @@ mod tests {
   #[test]
   fn test_bit_reader_builder() -> PcoResult<()> {
     let src = (0..7).collect::<Vec<_>>();
-    let mut reader_builder = BitReaderBuilder::new(src.as_slice(), 4, 1);
+    let mut reader_builder = BitReaderBuilder::new(src.as_slice(), 4 + OVERSHOOT_PADDING, 1);
     reader_builder.with_reader(|reader| unsafe {
       assert_eq!(&reader.src[0..4], &vec![0, 1, 2, 3]);
       assert_eq!(reader.bit_idx(), 1);

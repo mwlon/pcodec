@@ -46,12 +46,18 @@ unsafe fn decompress_latents_w_delta<L: Latent>(
   dst: &mut [L],
   n_remaining: usize,
 ) -> PcoResult<()> {
-  let pre_delta_len = min(
-    dst.len(),
-    n_remaining.saturating_sub(delta_moments.order()),
-  );
+  let n_remaining_pre_delta = n_remaining.saturating_sub(delta_moments.order());
+  let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
+    dst.len()
+  } else {
+    // If we're at the end, LatentBatchdDecompressor won't initialize the last
+    // few elements before delta decoding them, so we do that manually here to
+    // satisfy MIRI. This step isn't really necessary.
+    dst[n_remaining_pre_delta..].fill(L::default());
+    n_remaining_pre_delta
+  };
   lbd.decompress_latent_batch(reader, &mut dst[..pre_delta_len])?;
-  delta::decode_in_place(delta_moments, &mut dst[..]);
+  delta::decode_in_place(delta_moments, dst);
   Ok(())
 }
 

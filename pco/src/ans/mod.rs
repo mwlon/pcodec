@@ -34,7 +34,7 @@ mod tests {
     }
 
     let mut compressed = Vec::new();
-    let mut writer = BitWriter::new(&mut compressed, 5);
+    let mut writer = BitWriter::new(&mut compressed, 10);
     for (val, bitlen) in to_write.into_iter().rev() {
       unsafe { writer.write_uint(bits::lowest_bits_fast(val, bitlen), bitlen) };
       writer.flush()?;

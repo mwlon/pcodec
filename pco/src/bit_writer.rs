@@ -166,7 +166,7 @@ mod tests {
   #[test]
   fn test_long_uint_writes() -> PcoResult<()> {
     let mut dst = Vec::new();
-    let mut writer = BitWriter::new(&mut dst, 30);
+    let mut writer = BitWriter::new(&mut dst, 50);
     unsafe {
       writer.write_uint::<u32>((1 << 8) + 1, 9);
       // 10000000 1
