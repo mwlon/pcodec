@@ -18,7 +18,7 @@ Pcodec is a codec for numerical sequences. Example usage:
 >>> # compress
 >>> compressed = standalone.simple_compress(nums, ChunkConfig())
 >>> print(f'compressed to {len(compressed)} bytes')
-compressed to 6946318 bytes
+compressed to 6946316 bytes
 >>> 
 >>> # decompress
 >>> recovered = standalone.simple_decompress(compressed)
