@@ -84,7 +84,7 @@ impl FileCompressor {
     config: &ChunkConfig,
   ) -> PcoResult<ChunkCompressor<T::L>> {
     let mut config = config.clone();
-    config.paging_spec = PagingSpec::ExactPageSizes(vec![nums.len()]);
+    config.paging_spec = PagingSpec::Exact(vec![nums.len()]);
 
     Ok(ChunkCompressor {
       inner: self.inner.chunk_compressor(nums, &config)?,

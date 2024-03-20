@@ -167,7 +167,7 @@ pub enum PagingSpec {
   ///
   /// Will return an InvalidArgument error during compression if
   /// any of the counts are 0 or the sum does not equal the chunk count.
-  ExactPageSizes(Vec<usize>),
+  Exact(Vec<usize>),
 }
 
 impl Default for PagingSpec {
@@ -199,7 +199,7 @@ impl PagingSpec {
         }
         res
       }
-      PagingSpec::ExactPageSizes(n_per_page) => n_per_page.to_vec(),
+      PagingSpec::Exact(n_per_page) => n_per_page.to_vec(),
     };
 
     let summed_n: usize = n_per_page.iter().sum();
