@@ -55,7 +55,6 @@ pub struct PyPagingSpec(PagingSpec);
 /// into chunks.
 #[pymethods]
 impl PyPagingSpec {
-  // TODO in 0.2 rename these to match the main library
   /// :returns: a PagingSpec configuring a roughly count of numbers in each
   /// page.
   #[staticmethod]
