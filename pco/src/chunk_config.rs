@@ -1,4 +1,4 @@
-use crate::constants::DEFAULT_MAX_PAGE_N;
+use crate::constants::DEFAULT_PAGE_N_LIMIT;
 use crate::errors::{PcoError, PcoResult};
 use crate::DEFAULT_COMPRESSION_LEVEL;
 
@@ -117,7 +117,7 @@ impl Default for ChunkConfig {
       delta_encoding_order: None,
       int_mult_spec: IntMultSpec::Enabled,
       float_mult_spec: FloatMultSpec::Enabled,
-      paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
+      paging_spec: PagingSpec::FillPagesOf(DEFAULT_PAGE_N_LIMIT),
     }
   }
 }
@@ -158,41 +158,40 @@ impl ChunkConfig {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum PagingSpec {
-  /// Divide the chunk into equal pages of up to this many numbers.
+  /// Greedily divide the chunk into pages of up to this many numbers.
   ///
-  /// For example, with equal pages up to 100,000, a chunk of 150,000
-  /// numbers would be divided into 2 pages, each of 75,000 numbers.
-  EqualPagesUpTo(usize),
+  /// For example, with equal pages up to 128,000, a chunk of 300,000
+  /// numbers would be divided into 3 pages: two of 128,000 numbers and one
+  /// of 44,000 numbers.
+  /// It is recommended that the argument is a multiple of 256 (pco's batch
+  /// size) for performance reasons.
+  FillPagesOf(usize),
   /// Divide the chunk into the exactly provided counts.
   ///
-  /// Will return an InvalidArgument error during compression if
-  /// any of the counts are 0 or the sum does not equal the chunk count.
-  ExactPageSizes(Vec<usize>),
+  /// Will cause an InvalidArgument error during compression if
+  /// any of the counts are 0 or the sum does not equal the count of numbers
+  /// in the chunk.
+  Exact(Vec<usize>),
 }
 
 impl Default for PagingSpec {
   fn default() -> Self {
-    Self::EqualPagesUpTo(DEFAULT_MAX_PAGE_N)
+    Self::FillPagesOf(DEFAULT_PAGE_N_LIMIT)
   }
 }
 
 impl PagingSpec {
   pub(crate) fn n_per_page(&self, n: usize) -> PcoResult<Vec<usize>> {
     let n_per_page = match self {
-      // TODO in 0.2 make this error if max_size isn't a multiple of full batch size
-      // and try to make all but one page a multiple of full batch size
-      PagingSpec::EqualPagesUpTo(max_page_n) => {
-        let n_pages = n.div_ceil(*max_page_n);
-        let mut res = Vec::new();
-        let mut start = 0;
-        for i in 0..n_pages {
-          let end = ((i + 1) * n) / n_pages;
-          res.push(end - start);
-          start = end;
+      &PagingSpec::FillPagesOf(page_n_limit) => {
+        let mut res = vec![page_n_limit; n / page_n_limit];
+        let rem = n % page_n_limit;
+        if rem != 0 {
+          res.push(rem);
         }
         res
       }
-      PagingSpec::ExactPageSizes(n_per_page) => n_per_page.to_vec(),
+      PagingSpec::Exact(n_per_page) => n_per_page.to_vec(),
     };
 
     let summed_n: usize = n_per_page.iter().sum();

@@ -73,7 +73,7 @@ mod tests {
       nums.push(rng.gen_range(0_u32..u32::MAX));
     }
     let config = ChunkConfig {
-      paging_spec: PagingSpec::EqualPagesUpTo(10),
+      paging_spec: PagingSpec::FillPagesOf(10),
       ..Default::default()
     };
     check_chunk_guarantee(&nums, &config)
@@ -89,7 +89,7 @@ mod tests {
     let config = ChunkConfig {
       float_mult_spec: FloatMultSpec::Provided(0.1),
       delta_encoding_order: Some(5),
-      paging_spec: PagingSpec::EqualPagesUpTo(10),
+      paging_spec: PagingSpec::FillPagesOf(10),
       ..Default::default()
     };
     check_chunk_guarantee(&nums, &config)
