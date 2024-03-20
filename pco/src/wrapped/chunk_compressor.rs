@@ -528,7 +528,7 @@ fn choose_delta_encoding_order<L: Latent>(
   for delta_encoding_order in 0..MAX_DELTA_ENCODING_ORDER + 1 {
     let (sample_cc, _) = new_candidate_w_split_and_delta_order(
       vec![sample.clone()],
-      &PagingSpec::Exact(vec![sample.len()]),
+      &PagingSpec::ExactPageSizes(vec![sample.len()]),
       Mode::Classic,
       delta_encoding_order,
       unoptimized_bins_log,

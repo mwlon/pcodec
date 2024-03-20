@@ -67,7 +67,7 @@ impl PyPagingSpec {
   /// page.
   #[staticmethod]
   fn exact_page_sizes(sizes: Vec<usize>) -> Self {
-    Self(PagingSpec::Exact(sizes))
+    Self(PagingSpec::ExactPageSizes(sizes))
   }
 }
 

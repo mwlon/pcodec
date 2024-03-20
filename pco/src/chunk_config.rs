@@ -1,7 +1,6 @@
 use crate::constants::DEFAULT_MAX_PAGE_N;
 use crate::errors::{PcoError, PcoResult};
-use crate::{DEFAULT_COMPRESSION_LEVEL, FULL_BATCH_N};
-use std::cmp::{max, min};
+use crate::DEFAULT_COMPRESSION_LEVEL;
 
 /// Configures whether integer multiplier detection is enabled.
 ///
@@ -159,22 +158,16 @@ impl ChunkConfig {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum PagingSpec {
-  /// Divide the chunk by whole batches into roughly equal-sized pages of up to
-  /// this many numbers.
+  /// Divide the chunk into equal pages of up to this many numbers.
   ///
-  /// The limit must be a multiple of 256 (pco's batch size) or else an error
-  /// will be caused during compression.
-  /// Only the last page may be jagged.
-  /// For example, with equal pages up to 4,096, a chunk of 5,000
-  /// numbers would be divided into 2 pages: one with 2,560 and another with
-  /// 2,440.
+  /// For example, with equal pages up to 100,000, a chunk of 150,000
+  /// numbers would be divided into 2 pages, each of 75,000 numbers.
   EqualPagesUpTo(usize),
   /// Divide the chunk into the exactly provided counts.
   ///
-  /// Will cause an InvalidArgument error during compression if
-  /// any of the counts are 0 or the sum does not equal the count of numbers
-  /// in the chunk.
-  Exact(Vec<usize>),
+  /// Will return an InvalidArgument error during compression if
+  /// any of the counts are 0 or the sum does not equal the chunk count.
+  ExactPageSizes(Vec<usize>),
 }
 
 impl Default for PagingSpec {
@@ -186,29 +179,27 @@ impl Default for PagingSpec {
 impl PagingSpec {
   pub(crate) fn n_per_page(&self, n: usize) -> PcoResult<Vec<usize>> {
     let n_per_page = match self {
-      &PagingSpec::EqualPagesUpTo(max_page_n) => {
-        if max_page_n % 256 != 0 {
-          return Err(PcoError::invalid_argument(format!(
-            "page size limit must be a multiple of {} when paging by equal pages (was {})",
-            FULL_BATCH_N, max_page_n,
-          )));
-        }
-
-        let n_pages = n.div_ceil(max_page_n);
-        let n_batches = n / FULL_BATCH_N;
-        let min_n_per_page = FULL_BATCH_N * (n_batches / max(n_pages, 1));
-        let mut undershoot = n - n_pages * min_n_per_page;
-        let mut res = vec![min_n_per_page; n_pages];
-        let mut i = 0;
-        while undershoot > 0 {
-          let increment = min(FULL_BATCH_N, undershoot);
-          res[i] += increment;
-          undershoot -= increment;
-          i += 1;
+      // You might think it would be beneficial to do either of these:
+      // * greedily fill pages since compressed chunk size seems like a concave
+      //   function of chunk_n
+      // * limit most pages to full batches for efficiency
+      //
+      // But in practice compressed chunk size has an inflection point upward
+      // at some point, so the first idea doesn't work.
+      // And the 2nd idea has only shown mixed/negative results, so I'm leaving
+      // this as-is.
+      PagingSpec::EqualPagesUpTo(max_page_n) => {
+        let n_pages = n.div_ceil(*max_page_n);
+        let mut res = Vec::new();
+        let mut start = 0;
+        for i in 0..n_pages {
+          let end = ((i + 1) * n) / n_pages;
+          res.push(end - start);
+          start = end;
         }
         res
       }
-      PagingSpec::Exact(n_per_page) => n_per_page.to_vec(),
+      PagingSpec::ExactPageSizes(n_per_page) => n_per_page.to_vec(),
     };
 
     let summed_n: usize = n_per_page.iter().sum();
@@ -228,35 +219,5 @@ impl PagingSpec {
     }
 
     Ok(n_per_page)
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use crate::errors::PcoResult;
-  use crate::PagingSpec;
-
-  fn equal_page_sizes(n: usize, max_page_n: usize) -> PcoResult<Vec<usize>> {
-    PagingSpec::EqualPagesUpTo(max_page_n).n_per_page(n)
-  }
-  #[test]
-  fn test_equal_pages_up_to() -> PcoResult<()> {
-    assert_eq!(equal_page_sizes(0, 512)?, vec![]);
-    assert_eq!(equal_page_sizes(1, 512)?, vec![1]);
-    assert_eq!(equal_page_sizes(512, 512)?, vec![512]);
-    assert_eq!(equal_page_sizes(513, 512)?, vec![257, 256]);
-    assert_eq!(
-      equal_page_sizes(1025, 512)?,
-      vec![512, 257, 256]
-    );
-    assert_eq!(
-      equal_page_sizes(2048, 512)?,
-      vec![512, 512, 512, 512]
-    );
-    assert_eq!(
-      equal_page_sizes(2100, 512)?,
-      vec![512, 512, 512, 308, 256]
-    );
-    Ok(())
   }
 }
