@@ -4,7 +4,6 @@ use std::fmt::Debug;
 
 use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 
-use crate::bits::ceil_div;
 use crate::data_types::Latent;
 
 pub const MIN_SAMPLE: usize = 10;
@@ -40,7 +39,7 @@ pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
   let target_sample_size = calc_sample_n(nums.len())?;
 
   let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
-  let mut visited = vec![0_u8; ceil_div(nums.len(), 8)];
+  let mut visited = vec![0_u8; nums.len().div_ceil(8)];
   let mut res = Vec::with_capacity(target_sample_size);
   let mut n_iters = 0;
   while res.len() < target_sample_size && n_iters < SAMPLING_PERSISTENCE * target_sample_size {

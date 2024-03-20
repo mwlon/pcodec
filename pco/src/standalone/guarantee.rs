@@ -5,23 +5,20 @@ use crate::standalone::constants::{
   MAGIC_HEADER,
 };
 use crate::wrapped::guarantee as wrapped_guarantee;
-use crate::{bits, PagingSpec};
+use crate::PagingSpec;
 
 /// Returns the maximum possible byte size of a standalone header.
 pub fn header_size() -> usize {
   let max_varint_bits = BITS_TO_ENCODE_VARINT_POWER + 64;
   MAGIC_HEADER.len()
-    + bits::ceil_div(
-      (max_varint_bits + BITS_TO_ENCODE_STANDALONE_VERSION) as usize,
-      8,
-    )
+    + (max_varint_bits + BITS_TO_ENCODE_STANDALONE_VERSION).div_ceil(8) as usize
     + wrapped_guarantee::header_size()
 }
 
 /// Returns the maximum possible byte size of a standalone chunk for a given
 /// latent type (e.g. u32 or u64) and count of numbers.
 pub fn chunk_size<L: Latent>(n: usize) -> usize {
-  1 + bits::ceil_div(BITS_TO_ENCODE_N_ENTRIES as usize, 8) + wrapped_guarantee::chunk_size::<L>(n)
+  1 + BITS_TO_ENCODE_N_ENTRIES.div_ceil(8) as usize + wrapped_guarantee::chunk_size::<L>(n)
 }
 
 /// Returns the maximum possible byte size of a standalone file given a

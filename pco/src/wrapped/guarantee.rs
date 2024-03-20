@@ -1,5 +1,5 @@
 use crate::data_types::Latent;
-use crate::{bits, Bin, ChunkLatentVarMeta, ChunkMeta, Mode};
+use crate::{Bin, ChunkLatentVarMeta, ChunkMeta, Mode};
 
 /// Returns the maximum possible byte size of a wrapped header.
 pub fn header_size() -> usize {
@@ -26,7 +26,7 @@ pub(crate) fn baseline_chunk_meta<L: Latent>() -> ChunkMeta<L> {
 pub fn chunk_size<L: Latent>(n: usize) -> usize {
   // TODO if we ever add NumberLikes that are smaller than their Latents, we
   // may want to make this more generic
-  baseline_chunk_meta::<L>().exact_size() + n * bits::ceil_div(L::BITS as usize, 8)
+  baseline_chunk_meta::<L>().exact_size() + n * L::BITS.div_ceil(8) as usize
 }
 
 #[cfg(test)]

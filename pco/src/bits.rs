@@ -17,11 +17,6 @@ pub fn lowest_bits<U: ReadWriteUint>(x: U, n: Bitlen) -> U {
   }
 }
 
-// TODO upgrade to rust 1.73 and delete this
-pub const fn ceil_div(x: usize, divisor: usize) -> usize {
-  (x + divisor - 1) / divisor
-}
-
 pub fn bits_to_encode_offset<L: Latent>(max_offset: L) -> Bitlen {
   L::BITS - max_offset.leading_zeros()
 }

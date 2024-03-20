@@ -136,7 +136,6 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
   let candidate = choose_candidate_base(&mut sample)?;
 
-  // TODO validate adj distribution on entire `nums` is simple enough?
   if sampling::has_enough_infrequent_ints(&sample, |x| x / candidate) {
     Some(candidate)
   } else {
