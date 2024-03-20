@@ -33,7 +33,7 @@ pub const PAGE_PADDING: usize =
 
 // cutoffs and legal parameter values
 pub const MAX_ANS_BITS: Bitlen = 14;
-pub const MAX_ANS_BYTES: usize = bits::ceil_div(MAX_ANS_BITS as usize, 8);
+pub const MAX_ANS_BYTES: usize = MAX_ANS_BITS.div_ceil(8) as usize;
 pub const LIMITED_UNOPTIMIZED_BINS_LOG: usize = 6;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
 pub const MAX_DELTA_ENCODING_ORDER: usize = 7;

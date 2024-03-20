@@ -121,7 +121,7 @@ impl<L: Latent> ChunkCompressor<L> {
   /// This can be useful when building the file as a `Vec<u8>` in memory;
   /// you can `.reserve(chunk_compressor.chunk_size_hint())` ahead of time.
   pub fn chunk_size_hint(&self) -> usize {
-    1 + bits::ceil_div(BITS_TO_ENCODE_N_ENTRIES as usize, 8)
+    1 + BITS_TO_ENCODE_N_ENTRIES.div_ceil(8) as usize
       + self.inner.chunk_meta_size_hint()
       + self.inner.page_size_hint(0)
   }

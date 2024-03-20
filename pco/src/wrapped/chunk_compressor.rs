@@ -610,7 +610,7 @@ fn should_fallback<L: Latent>(
 
   let worst_case_size = meta.exact_size()
     + n_pages * meta.exact_page_meta_size()
-    + bits::ceil_div(worst_case_body_bit_size, 8);
+    + worst_case_body_bit_size.div_ceil(8);
   let baseline_size = guarantee::chunk_size::<L>(n);
   worst_case_size > baseline_size
 }
@@ -781,7 +781,7 @@ impl<L: Latent> ChunkCompressor<L> {
       let nums_bit_size = page_n_deltas as f64 * var_policy.avg_bits_per_delta;
       body_bit_size += (nums_bit_size * page_size_overestimation).ceil() as usize;
     }
-    self.meta.exact_page_meta_size() + bits::ceil_div(body_bit_size, 8)
+    self.meta.exact_page_meta_size() + body_bit_size.div_ceil(8)
   }
 
   #[inline(never)]

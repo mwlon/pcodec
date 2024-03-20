@@ -130,7 +130,7 @@ impl<W: Write> BitWriter<W> {
   }
 
   pub fn finish_byte(&mut self) {
-    self.stale_byte_idx += bits::ceil_div(self.bits_past_byte as usize, 8);
+    self.stale_byte_idx += self.bits_past_byte.div_ceil(8) as usize;
     self.bits_past_byte = 0;
   }
 

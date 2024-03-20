@@ -182,7 +182,7 @@ impl PagingSpec {
       // TODO in 0.2 make this error if max_size isn't a multiple of full batch size
       // and try to make all but one page a multiple of full batch size
       PagingSpec::EqualPagesUpTo(max_page_n) => {
-        let n_pages = bits::ceil_div(n, *max_page_n);
+        let n_pages = n.div_ceil(*max_page_n);
         let mut res = Vec::new();
         let mut start = 0;
         for i in 0..n_pages {

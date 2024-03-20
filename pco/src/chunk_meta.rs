@@ -205,7 +205,6 @@ impl<L: Latent> ChunkMeta<L> {
     }
   }
 
-  // TODO test
   pub(crate) fn exact_size(&self) -> usize {
     let extra_bits_for_mode = match self.mode {
       Mode::Classic => 0,
@@ -221,11 +220,11 @@ impl<L: Latent> ChunkMeta<L> {
       + extra_bits_for_mode as usize
       + BITS_TO_ENCODE_DELTA_ENCODING_ORDER as usize
       + bits_for_latent_vars;
-    bits::ceil_div(n_bits, 8)
+    n_bits.div_ceil(8)
   }
 
   pub(crate) fn exact_page_meta_size(&self) -> usize {
-    let bit_size = self
+    let bit_size: usize = self
       .per_latent_var
       .iter()
       .enumerate()
@@ -236,7 +235,7 @@ impl<L: Latent> ChunkMeta<L> {
         latent_var.ans_size_log as usize * ANS_INTERLEAVING + L::BITS as usize * delta_order
       })
       .sum();
-    bits::ceil_div(bit_size, 8)
+    bit_size.div_ceil(8)
   }
 
   pub(crate) unsafe fn parse_from<R: BetterBufRead>(

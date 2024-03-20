@@ -37,7 +37,6 @@ pub enum Mode<L: Latent> {
   ///
   /// Formula: (bin.lower + offset) * mode.base + adj_bin.lower + adj_bin.offset
   IntMult(L),
-  // TODO explain or provide a conversion function to make sense of this latent
   /// Each number is compressed as
   /// * which bin it's in,
   /// * the approximate offset in that bin as a multiplier of the base,
