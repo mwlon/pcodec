@@ -137,7 +137,7 @@ fn handle_synthetic(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
   let (dataset, dtype) = get_dataset_and_dtype(path);
 
   let raw_bytes = fs::read(path).expect("could not read");
-  let num_vec = NumVec::new(&dtype, raw_bytes);
+  let num_vec = NumVec::new(&dtype, raw_bytes, opt.limit);
   handle(&num_vec, dataset, config, opt)
 }
 

@@ -26,7 +26,7 @@ impl CodecInternal for PcoConfig {
       "gcd" => format!("{:?}", self.chunk_config.int_mult_spec),
       "float_mult" => format!("{:?}", self.chunk_config.float_mult_spec),
       "chunk_n" => match self.chunk_config.paging_spec {
-        PagingSpec::FillPagesOf(page_size) => page_size.to_string(),
+        PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
         _ => panic!("unexpected paging spec"),
       },
       _ => panic!("bad conf"),
@@ -69,7 +69,9 @@ impl CodecInternal for PcoConfig {
           },
         }
       }
-      "chunk_n" => self.chunk_config.paging_spec = PagingSpec::FillPagesOf(value.parse().unwrap()),
+      "chunk_n" => {
+        self.chunk_config.paging_spec = PagingSpec::EqualPagesUpTo(value.parse().unwrap())
+      }
       _ => return Err(anyhow!("unknown conf: {}", key)),
     }
     Ok(())

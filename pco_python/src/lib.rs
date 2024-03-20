@@ -60,7 +60,7 @@ impl PyPagingSpec {
   /// page.
   #[staticmethod]
   fn equal_pages_up_to(n: usize) -> Self {
-    Self(PagingSpec::FillPagesOf(n))
+    Self(PagingSpec::EqualPagesUpTo(n))
   }
 
   /// :returns: a PagingSpec with the exact, provided count of numbers in each

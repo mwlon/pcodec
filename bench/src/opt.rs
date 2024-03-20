@@ -36,6 +36,9 @@ pub struct Opt {
   /// The median duration is kept.
   #[arg(long, short, default_value = "10")]
   pub iters: usize,
+  /// How many numbers to limit each dataset to.
+  #[arg(long, short)]
+  pub limit: Option<usize>,
   #[command(flatten)]
   pub handler_opt: HandlerOpt,
 }

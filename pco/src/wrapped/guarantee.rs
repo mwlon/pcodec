@@ -69,11 +69,11 @@ mod tests {
   fn test_chunk_guarantee_uniform() -> PcoResult<()> {
     let mut rng = Xoroshiro128PlusPlus::seed_from_u64(0);
     let mut nums = Vec::new();
-    for _ in 0..100 {
+    for _ in 0..1000 {
       nums.push(rng.gen_range(0_u32..u32::MAX));
     }
     let config = ChunkConfig {
-      paging_spec: PagingSpec::FillPagesOf(10),
+      paging_spec: PagingSpec::EqualPagesUpTo(256),
       ..Default::default()
     };
     check_chunk_guarantee(&nums, &config)
@@ -83,13 +83,13 @@ mod tests {
   fn test_chunk_guarantee_antagonistic() -> PcoResult<()> {
     let mut rng = Xoroshiro128PlusPlus::seed_from_u64(0);
     let mut nums = Vec::new();
-    for _ in 0..300 {
+    for _ in 0..1000 {
       nums.push(rng.gen_range(-1.0..1.0));
     }
     let config = ChunkConfig {
       float_mult_spec: FloatMultSpec::Provided(0.1),
       delta_encoding_order: Some(5),
-      paging_spec: PagingSpec::FillPagesOf(10),
+      paging_spec: PagingSpec::EqualPagesUpTo(256),
       ..Default::default()
     };
     check_chunk_guarantee(&nums, &config)

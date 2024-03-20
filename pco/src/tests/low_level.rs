@@ -102,7 +102,7 @@ fn test_low_level_wrapped() -> PcoResult<()> {
       nums: (0..1700).collect::<Vec<_>>(),
       config: ChunkConfig {
         delta_encoding_order: Some(0),
-        paging_spec: PagingSpec::FillPagesOf(600),
+        paging_spec: PagingSpec::EqualPagesUpTo(512),
         ..Default::default()
       },
     },
@@ -121,7 +121,7 @@ fn test_low_level_wrapped() -> PcoResult<()> {
     Chunk {
       nums: vec![1, 2, 3],
       config: ChunkConfig {
-        paging_spec: PagingSpec::FillPagesOf(1),
+        paging_spec: PagingSpec::Exact(vec![1, 1, 1]),
         ..Default::default()
       },
     },

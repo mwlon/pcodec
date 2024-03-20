@@ -17,10 +17,13 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.71"
-arrow = {version = "49.0.0", features = ["csv"], default-features=false}
-clap = {version = "4.3.11", features = ["derive"]}
-parquet = {version = "49.0.0", features = ["arrow", "base64", "snap", "zstd"], default-features=false}
-pco = {version = "0.2", path = "../pco" }
+arrow = { version = "49.0.0", features = ["csv"], default-features = false }
+clap = { version = "4.5.3", features = ["derive"] }
+parquet = { version = "49.0.0", features = ["arrow", "base64", "snap", "zstd"], default-features = false }
+pco = { version = "0.2", path = "../pco" }
+toml = "0.8.12"
+tabled = "0.15.0"
+serde = { version = "1.0.197", features = ["derive"] }
 
 [dev-dependencies]
 enum-iterator = "1.4.1"

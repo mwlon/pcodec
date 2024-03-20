@@ -3,16 +3,65 @@ use anyhow::Result;
 use pco::data_types::{Latent, NumberLike};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
+use serde::Serialize;
+use tabled::settings::object::Columns;
+use tabled::settings::{Alignment, Modify, Style};
+use tabled::{Table, Tabled};
 
 use crate::handlers::HandlerImpl;
 use crate::number_like_arrow::NumberLikeArrow;
 use crate::opt::InspectOpt;
 use crate::utils;
 
-const INDENT: &str = "  ";
-
 pub trait InspectHandler {
   fn inspect(&self, opt: &InspectOpt, bytes: &[u8]) -> Result<()>;
+}
+
+#[derive(Serialize)]
+struct CompressionSummary {
+  ratio: f64,
+  total_size: usize,
+  header_size: usize,
+  meta_size: usize,
+  page_size: usize,
+  footer_size: usize,
+  unknown_trailing_bytes: usize,
+}
+
+#[derive(Tabled)]
+struct BinSummary {
+  weight: u32,
+  lower: String,
+  offset_bits: u32,
+}
+
+#[derive(Serialize)]
+struct LatentVarSummary {
+  name: String,
+  n_bins: usize,
+  ans_size_log: u32,
+  bins: String,
+}
+
+#[derive(Serialize)]
+struct ChunkSummary {
+  idx: usize,
+  n: usize,
+  mode: String,
+  delta_order: usize,
+  latent_var: Vec<LatentVarSummary>,
+}
+
+#[derive(Serialize)]
+struct Output {
+  filename: String,
+  data_type: String,
+  format_version: u8,
+  n: usize,
+  n_chunks: usize,
+  uncompressed_size: usize,
+  compressed: CompressionSummary,
+  chunk: Vec<ChunkSummary>,
 }
 
 fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
@@ -21,12 +70,12 @@ fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
   res
 }
 
-fn display_latent_var<T: NumberLike>(
+fn build_latent_var_summary<T: NumberLike>(
   latent_var_idx: usize,
   meta: &ChunkMeta<T::L>,
-  latent: &ChunkLatentVarMeta<T::L>,
-) {
-  let latent_var_name = match (meta.mode, latent_var_idx) {
+  latent_var: &ChunkLatentVarMeta<T::L>,
+) -> LatentVarSummary {
+  let name = match (meta.mode, latent_var_idx) {
     (Mode::Classic, 0) => "primary".to_string(),
     (Mode::FloatMult(base_latent), 0) => format!(
       "multiplier [x{}]",
@@ -40,24 +89,31 @@ fn display_latent_var<T: NumberLike>(
       meta.mode, latent_var_idx
     ),
   };
-  println!(
-    "latent var: {} n_bins: {} ANS size log: {}",
-    latent_var_name,
-    latent.bins.len(),
-    latent.ans_size_log,
-  );
 
-  for bin in &latent.bins {
-    let lower_str = T::latent_to_string(
-      bin.lower,
-      meta.mode,
-      latent_var_idx,
-      meta.delta_encoding_order,
-    );
-    println!(
-      "{}weight: {} lower: {} offset bits: {}",
-      INDENT, bin.weight, lower_str, bin.offset_bits
-    );
+  let mut bins = Vec::new();
+  for bin in &latent_var.bins {
+    bins.push(BinSummary {
+      weight: bin.weight,
+      lower: T::latent_to_string(
+        bin.lower,
+        meta.mode,
+        latent_var_idx,
+        meta.delta_encoding_order,
+      ),
+      offset_bits: bin.offset_bits,
+    });
+  }
+
+  let bins_table = Table::new(bins)
+    .with(Style::rounded())
+    .with(Modify::new(Columns::new(0..3)).with(Alignment::right()))
+    .to_string();
+
+  LatentVarSummary {
+    name,
+    n_bins: latent_var.bins.len(),
+    ans_size_log: latent_var.ans_size_log,
+    bins: bins_table.to_string(),
   }
 }
 
@@ -65,17 +121,8 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
   fn inspect(&self, opt: &InspectOpt, src: &[u8]) -> Result<()> {
     let mut prev_src_len_val = src.len();
     let prev_src_len = &mut prev_src_len_val;
-    println!("inspecting {:?}", opt.path);
     let (fd, mut src) = FileDecompressor::new(src)?;
     let header_size = measure_bytes_read(src, prev_src_len);
-
-    let version = fd.format_version();
-    println!("=================\n");
-    println!(
-      "data type: {}",
-      utils::dtype_name::<P::Num>()
-    );
-    println!("format version: {}", version,);
 
     let mut meta_size = 0;
     let mut page_size = 0;
@@ -110,42 +157,50 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
       }
     }
 
-    println!("number of chunks: {}", metas.len());
-    let total_n: usize = chunk_ns.iter().sum();
-    println!("total n: {}", total_n);
-    let uncompressed_size = <P::Num as NumberLike>::L::BITS as usize / 8 * total_n;
-    println!(
-      "uncompressed byte size: {}",
-      uncompressed_size
-    );
+    let n: usize = chunk_ns.iter().sum();
+    let uncompressed_size = <P::Num as NumberLike>::L::BITS as usize / 8 * n;
     let compressed_size = header_size + meta_size + page_size + footer_size;
-    println!(
-      "compressed byte size: {} (ratio: {})",
-      compressed_size,
-      uncompressed_size as f64 / compressed_size as f64,
-    );
-    println!("{}header size: {}", INDENT, header_size);
-    println!(
-      "{}chunk metadata size: {}",
-      INDENT, meta_size
-    );
-    println!("{}page size: {}", INDENT, page_size,);
-    println!("{}footer size: {}", INDENT, footer_size);
-    println!(
-      "{}unknown trailing bytes: {}",
-      INDENT,
-      src.len(),
-    );
+    let unknown_trailing_bytes = src.len();
 
+    let mut chunk = Vec::new();
     for (i, meta) in metas.iter().enumerate() {
-      println!(
-        "\nchunk: {} n: {} delta order: {} mode: {:?}",
-        i, chunk_ns[i], meta.delta_encoding_order, meta.mode,
-      );
+      let mut latent_var = Vec::new();
       for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
-        display_latent_var::<P::Num>(latent_var_idx, meta, latent_var_meta);
+        latent_var.push(build_latent_var_summary::<P::Num>(
+          latent_var_idx,
+          meta,
+          latent_var_meta,
+        ));
       }
+      chunk.push(ChunkSummary {
+        idx: i,
+        n: chunk_ns[i],
+        mode: format!("{:?}", meta.mode),
+        delta_order: meta.delta_encoding_order,
+        latent_var,
+      })
     }
+
+    let output = Output {
+      filename: opt.path.to_str().unwrap().to_string(),
+      data_type: utils::dtype_name::<P::Num>(),
+      format_version: fd.format_version(),
+      n,
+      n_chunks: metas.len(),
+      uncompressed_size,
+      compressed: CompressionSummary {
+        ratio: uncompressed_size as f64 / compressed_size as f64,
+        total_size: compressed_size,
+        header_size,
+        meta_size,
+        page_size,
+        footer_size,
+        unknown_trailing_bytes,
+      },
+      chunk,
+    };
+
+    println!("{}", toml::to_string_pretty(&output)?);
 
     Ok(())
   }
