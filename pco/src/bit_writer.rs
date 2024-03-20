@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::bit_reader::u64_at;
-use crate::bits;
+
 use crate::constants::Bitlen;
 use crate::errors::{PcoError, PcoResult};
 use crate::read_write_uint::ReadWriteUint;

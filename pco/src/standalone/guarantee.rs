@@ -5,7 +5,7 @@ use crate::standalone::constants::{
   MAGIC_HEADER,
 };
 use crate::wrapped::guarantee as wrapped_guarantee;
-use crate::{bits, PagingSpec};
+use crate::PagingSpec;
 
 /// Returns the maximum possible byte size of a standalone header.
 pub fn header_size() -> usize {

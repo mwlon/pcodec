@@ -1,6 +1,6 @@
 use crate::constants::DEFAULT_MAX_PAGE_N;
 use crate::errors::{PcoError, PcoResult};
-use crate::{bits, DEFAULT_COMPRESSION_LEVEL};
+use crate::DEFAULT_COMPRESSION_LEVEL;
 
 /// Configures whether integer multiplier detection is enabled.
 ///

@@ -11,7 +11,7 @@ use crate::constants::*;
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
 use crate::format_version::FormatVersion;
-use crate::{bits, Mode};
+use crate::Mode;
 
 pub(crate) fn bin_exact_bit_size<L: Latent>(ans_size_log: Bitlen) -> Bitlen {
   ans_size_log + L::BITS + bits_to_encode_offset_bits::<L>()
