@@ -1,6 +1,7 @@
 [![Crates.io][crates-badge]][crates-url]
 
 [crates-badge]: https://img.shields.io/pypi/v/pcodec.svg
+
 [crates-url]: https://pypi.org/project/pcodec/
 
 # Pcodec Python API
@@ -17,7 +18,7 @@ Pcodec is a codec for numerical sequences. Example usage:
 >>> # compress
 >>> compressed = standalone.simple_compress(nums, ChunkConfig())
 >>> print(f'compressed to {len(compressed)} bytes')
-compressed to 6946316 bytes
+compressed to 6946318 bytes
 >>> 
 >>> # decompress
 >>> recovered = standalone.simple_decompress(compressed)
