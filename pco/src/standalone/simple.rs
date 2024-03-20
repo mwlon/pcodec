@@ -28,7 +28,7 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
   let mut hinted_size = false;
   for &page_n in &n_per_page {
     let end = start + page_n;
-    this_chunk_config.paging_spec = PagingSpec::ExactPageSizes(vec![page_n]);
+    this_chunk_config.paging_spec = PagingSpec::Exact(vec![page_n]);
     let chunk_compressor =
       file_compressor.chunk_compressor(&nums[start..end], &this_chunk_config)?;
 
@@ -144,7 +144,7 @@ mod tests {
       &ChunkConfig {
         compression_level: 0,
         delta_encoding_order: Some(0),
-        paging_spec: PagingSpec::ExactPageSizes(vec![300, 300]),
+        paging_spec: PagingSpec::Exact(vec![300, 300]),
         ..Default::default()
       },
     )?;

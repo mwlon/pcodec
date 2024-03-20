@@ -110,7 +110,7 @@ fn test_low_level_wrapped() -> PcoResult<()> {
       nums: (0..500).collect::<Vec<_>>(),
       config: ChunkConfig {
         delta_encoding_order: Some(2),
-        paging_spec: PagingSpec::ExactPageSizes(vec![1, 499]),
+        paging_spec: PagingSpec::Exact(vec![1, 499]),
         ..Default::default()
       },
     },

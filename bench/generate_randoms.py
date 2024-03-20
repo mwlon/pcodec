@@ -5,7 +5,6 @@ import numpy as np
 from datetime import datetime
 import os
 
-mini_n = 3000
 n = 1000000
 max_n = 2 ** 24 - 1
 
@@ -78,15 +77,14 @@ def fixed_median_lomax(a, median):
   return np.random.pareto(a=a, size=n) / unscaled_median * median
 np.random.seed(0)
 lomax05 = fixed_median_lomax(0.5, 1000)
-write_i32(lomax05, 'lomax05_reg')
-write_u32(lomax05, 'lomax05_reg')
-write_i64(lomax05, 'lomax05_reg')
-write_i64(lomax05[:mini_n], 'lomax05_mini')
+write_i32(lomax05, 'lomax05')
+write_u32(lomax05, 'lomax05')
+write_i64(lomax05, 'lomax05')
 np.random.seed(0)
 
 np.random.seed(0)
 uniform = np.random.randint(-2**63, 2**63, size=max_n)
-write_i64(uniform[:n], 'uniform_reg')
+write_i64(uniform[:n], 'uniform')
 # disable the following by default because it's kinda a waste of disk:
 # write_i64(uniform, 'uniform_xl')
 
@@ -202,5 +200,4 @@ diablo = np.array(diablo[:n]).astype(np.float64)
 diablo /= 100.0
 machine_eps = 1.0E-52
 diablo *= np.random.uniform(1 - 2 * machine_eps, 1 + 3 * machine_eps, size=n)
-write_f64(diablo, 'diablo_reg')
-write_f64(diablo[:mini_n], 'diablo_mini')
+write_f64(diablo, 'diablo')

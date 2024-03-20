@@ -167,7 +167,7 @@ pub enum PagingSpec {
   ///
   /// Will return an InvalidArgument error during compression if
   /// any of the counts are 0 or the sum does not equal the chunk count.
-  ExactPageSizes(Vec<usize>),
+  Exact(Vec<usize>),
 }
 
 impl Default for PagingSpec {
@@ -179,8 +179,15 @@ impl Default for PagingSpec {
 impl PagingSpec {
   pub(crate) fn n_per_page(&self, n: usize) -> PcoResult<Vec<usize>> {
     let n_per_page = match self {
-      // TODO in 0.2 make this error if max_size isn't a multiple of full batch size
-      // and try to make all but one page a multiple of full batch size
+      // You might think it would be beneficial to do either of these:
+      // * greedily fill pages since compressed chunk size seems like a concave
+      //   function of chunk_n
+      // * limit most pages to full batches for efficiency
+      //
+      // But in practice compressed chunk size has an inflection point upward
+      // at some point, so the first idea doesn't work.
+      // And the 2nd idea has only shown mixed/negative results, so I'm leaving
+      // this as-is.
       PagingSpec::EqualPagesUpTo(max_page_n) => {
         let n_pages = n.div_ceil(*max_page_n);
         let mut res = Vec::new();
@@ -192,7 +199,7 @@ impl PagingSpec {
         }
         res
       }
-      PagingSpec::ExactPageSizes(n_per_page) => n_per_page.to_vec(),
+      PagingSpec::Exact(n_per_page) => n_per_page.to_vec(),
     };
 
     let summed_n: usize = n_per_page.iter().sum();
