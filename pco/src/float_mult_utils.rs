@@ -336,8 +336,8 @@ pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<
   let sample = sampling::choose_sample(nums, |num| {
     if num.is_finite_and_normal() {
       let abs = num.abs();
-      if abs <= F::MAX * F::from_f64(0.5) {
-        return Some(num.abs());
+      if abs <= F::MAX_FOR_SAMPLING {
+        return Some(abs);
       }
     }
 
@@ -421,6 +421,17 @@ mod test {
       Some(0.009999999999999787)
     );
     assert_eq!(approx_pair_gcd(2.0_f32.powi(100), 3.0), None);
+    assert_eq!(
+      approx_pair_gcd(
+        f32::MAX_FOR_SAMPLING,
+        f32::MAX_FOR_SAMPLING * 0.6
+      ),
+      Some(f32::MAX_FOR_SAMPLING * 0.2)
+    );
+    assert_eq!(
+      approx_pair_gcd(f32::MAX_FOR_SAMPLING, 0.0000000000001),
+      None
+    );
     assert_almost_equal_ulps(
       approx_pair_gcd(1.0 / 3.0, 1.0 / 4.0).unwrap(),
       1.0 / 12.0,
