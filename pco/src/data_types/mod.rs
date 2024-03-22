@@ -38,6 +38,7 @@ pub(crate) trait FloatLike:
   /// E.g. for f32 this should be 23.
   const PRECISION_BITS: Bitlen;
   const ZERO: Self;
+  const MAX: Self;
 
   fn abs(self) -> Self;
   fn inv(self) -> Self;

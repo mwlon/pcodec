@@ -104,27 +104,27 @@ fn approx_pair_gcd<F: FloatLike>(greater: F, lesser: F) -> Option<F> {
     lhs.value = (lhs.value - ratio * rhs.value).abs();
   };
 
-  let mut pair0 = PairMult {
+  let mut p_greater = PairMult {
     value: greater,
     err: F::ZERO,
   };
-  let mut pair1 = PairMult {
+  let mut p_lesser = PairMult {
     value: lesser,
     err: F::ZERO,
   };
 
   loop {
-    let prev = pair0.value;
-    rem_assign(&mut pair0, &pair1);
-    if is_small_remainder(pair0.value, prev) || pair0.value <= pair0.err {
-      return Some(pair1.value);
+    let prev = p_greater.value;
+    rem_assign(&mut p_greater, &p_lesser);
+    if is_small_remainder(p_greater.value, prev) || p_greater.value <= p_greater.err {
+      return Some(p_lesser.value);
     }
 
-    if is_approx_zero(pair0.value, greater) || is_imprecise(pair0.value, pair0.err) {
+    if is_approx_zero(p_greater.value, greater) || is_imprecise(p_greater.value, p_greater.err) {
       return None;
     }
 
-    mem::swap(&mut pair0, &mut pair1);
+    mem::swap(&mut p_greater, &mut p_lesser);
   }
 }
 
@@ -335,10 +335,13 @@ pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<
   // the base from them.
   let sample = sampling::choose_sample(nums, |num| {
     if num.is_finite_and_normal() {
-      Some(num.abs())
-    } else {
-      None
+      let abs = num.abs();
+      if abs <= F::MAX * F::from_f64(0.5) {
+        return Some(num.abs());
+      }
     }
+
+    None
   })?;
 
   choose_config_w_sample(&sample, nums)
@@ -614,5 +617,9 @@ mod test {
       })
     );
     assert_eq!(choose_config(&junk), None);
+    // just check this last one terminates
+    let mut big_nums = vec![f32::MAX; 10];
+    big_nums.resize(20, f32::MAX * 0.6);
+    choose_config(&big_nums);
   }
 }
