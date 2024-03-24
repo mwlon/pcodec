@@ -94,6 +94,11 @@ fn calc_bin_idx(i: usize, precomputed: &Precomputed) -> usize {
   (((i as u64) << precomputed.n_bins_log) / precomputed.n as u64) as usize
 }
 
+// the inverse of calc_bin_idx
+fn calc_slice_idx(bin_idx: usize, precomputed: &Precomputed) -> usize {
+  ((bin_idx as u64 * precomputed.n as u64) >> precomputed.n_bins_log) as usize
+}
+
 fn make_info<L: Latent>(count: usize, lower: L, upper: L) -> BinCompressionInfo<L> {
   BinCompressionInfo {
     weight: count as Weight,
@@ -359,7 +364,11 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
 // idea from https://drops.dagstuhl.de/storage/00lipics/lipics-vol057-esa2016/LIPIcs.ESA.2016.38/LIPIcs.ESA.2016.38.pdf
 // TODO if I keep this, write it better
 // TODO try to make this more like highway and optionally target a percentile
-fn choose_pivot<L: Latent>(latents: &[L], lower: L) -> Option<L> {
+fn choose_pivot<L: Latent>(latents: &[L], lower: L, loose_upper: L) -> Option<L> {
+  if lower == loose_upper {
+    return None;
+  }
+
   let a = latents[0];
   let b = latents[latents.len() / 2];
   let c = latents[latents.len() - 1];
@@ -501,10 +510,24 @@ impl<L: Latent> State<L> {
 
     // TODO case when there are only a few latents
 
-    let Some(pivot) = choose_pivot(latents, args.tight_lower) else {
+    let Some(pivot) = choose_pivot(latents, args.tight_lower, args.loose_upper) else {
       // everything is constant
-      self.merge_incomplete(latents, args.tight_lower);
-      self.finish_incomplete_bin();
+      if args.max_bin_idx - args.min_bin_idx >= 2 {
+        self.finish_incomplete_bin();
+        self.merge_incomplete(latents, args.tight_lower);
+        self.finish_incomplete_bin();
+      } else {
+        let target_count = calc_slice_idx(args.max_bin_idx, precomputed);
+        if args.c_count + latents.len() - target_count > target_count - args.c_count {
+          // better to emit what we have
+          self.finish_incomplete_bin();
+          self.merge_incomplete(latents, args.tight_lower);
+        } else {
+          // better to add this constant run first
+          self.merge_incomplete(latents, args.tight_lower);
+          self.finish_incomplete_bin();
+        }
+      }
       return;
     };
     let (lhs_count, _) = partition(latents, pivot);
