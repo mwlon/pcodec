@@ -12,6 +12,7 @@ use crate::constants::{
 use crate::data_types::{Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
+use crate::exclusive_binning::exclusive_bins;
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::read_write_uint::ReadWriteUint;
@@ -134,8 +135,8 @@ struct TrainedBins<L: Latent> {
 }
 
 fn train_infos<L: Latent>(
-  latents: Vec<L>,
-  unoptimized_bins_log: usize,
+  mut latents: Vec<L>,
+  unoptimized_bins_log: Bitlen,
 ) -> PcoResult<TrainedBins<L>> {
   if latents.is_empty() {
     return Ok(TrainedBins::default());
@@ -143,9 +144,10 @@ fn train_infos<L: Latent>(
 
   let n_latents = latents.len();
   let unoptimized_bins = {
-    let mut sorted = latents;
-    sorted.sort_unstable();
-    choose_unoptimized_bins(&sorted, unoptimized_bins_log)
+    exclusive_bins(&mut latents, unoptimized_bins_log as Bitlen)
+    // let mut sorted = latents;
+    // sorted.sort_unstable();
+    // choose_unoptimized_bins(&sorted, unoptimized_bins_log)
   };
 
   let n_log_ceil = if n_latents <= 1 {
@@ -416,7 +418,7 @@ fn new_candidate_w_split_and_delta_order<L: Latent>(
   paging_spec: &PagingSpec,
   mode: Mode<L>,
   delta_order: usize,
-  unoptimized_bins_log: usize,
+  unoptimized_bins_log: Bitlen,
 ) -> PcoResult<(ChunkCompressor<L>, Vec<Vec<Weight>>)> {
   let chunk_n = latents[0].len();
   let n_per_page = paging_spec.n_per_page(chunk_n)?;
@@ -515,7 +517,7 @@ fn choose_delta_sample<L: Latent>(
 #[inline(never)]
 fn choose_delta_encoding_order<L: Latent>(
   primary_latents: &[L],
-  unoptimized_bins_log: usize,
+  unoptimized_bins_log: Bitlen,
 ) -> PcoResult<usize> {
   let sample = choose_delta_sample(
     primary_latents,
@@ -546,8 +548,9 @@ fn choose_delta_encoding_order<L: Latent>(
   Ok(best_order)
 }
 
-fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> usize {
-  let log_n = (n as f64).log2().floor() as usize;
+fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> Bitlen {
+  let compression_level = compression_level as Bitlen;
+  let log_n = (n as f64).log2().floor() as Bitlen;
   let fast_unoptimized_bins_log = log_n.saturating_sub(4);
   if compression_level <= fast_unoptimized_bins_log {
     compression_level

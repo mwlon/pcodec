@@ -34,6 +34,7 @@ mod compression_intermediates;
 mod compression_table;
 mod constants;
 mod delta;
+mod exclusive_binning;
 mod float_mult_utils;
 mod format_version;
 mod int_mult_utils;
