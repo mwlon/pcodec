@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::io::Write;
 
 use crate::bin::BinCompressionInfo;
@@ -18,7 +18,7 @@ use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::read_write_uint::ReadWriteUint;
 use crate::wrapped::guarantee;
 use crate::{
-  ans, bin_optimization, bit_reader, bit_writer, bits, data_types, delta, read_write_uint, Bin,
+  ans, bin_optimization, bit_reader, bit_writer, data_types, delta, read_write_uint, Bin,
   ChunkConfig, ChunkLatentVarMeta, ChunkMeta, Mode, PagingSpec, FULL_BATCH_N,
 };
 
@@ -27,90 +27,6 @@ use crate::{
 const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
-
-struct BinBuffer<'a, L: Latent> {
-  pub seq: Vec<BinCompressionInfo<L>>,
-  bin_idx: usize,
-  max_n_bin: usize,
-  n_latents: usize,
-  sorted: &'a [L],
-  pub target_j: usize,
-}
-
-impl<'a, L: Latent> BinBuffer<'a, L> {
-  fn calc_target_j(&mut self) {
-    self.target_j = ((self.bin_idx + 1) * self.n_latents) / self.max_n_bin
-  }
-
-  fn new(max_n_bin: usize, n_latents: usize, sorted: &'a [L]) -> Self {
-    let mut res = Self {
-      seq: Vec::with_capacity(max_n_bin),
-      bin_idx: 0,
-      max_n_bin,
-      n_latents,
-      sorted,
-      target_j: 0,
-    };
-    res.calc_target_j();
-    res
-  }
-
-  fn push_bin(&mut self, i: usize, j: usize) {
-    let sorted = self.sorted;
-    let n_latents = self.n_latents;
-
-    let count = j - i;
-    let new_bin_idx = max(
-      self.bin_idx + 1,
-      (j * self.max_n_bin) / n_latents,
-    );
-    let lower = sorted[i];
-    let upper = sorted[j - 1];
-
-    let bin = BinCompressionInfo {
-      weight: count as Weight,
-      lower,
-      upper,
-      offset_bits: bits::bits_to_encode_offset(upper - lower),
-      ..Default::default()
-    };
-    self.seq.push(bin);
-    self.bin_idx = new_bin_idx;
-    self.calc_target_j();
-  }
-}
-
-#[inline(never)]
-fn choose_unoptimized_bins<L: Latent>(
-  sorted: &[L],
-  unoptimized_bins_log: usize,
-) -> Vec<BinCompressionInfo<L>> {
-  let n_latents = sorted.len();
-  let max_n_bins = min(1 << unoptimized_bins_log, n_latents);
-
-  let mut i = 0;
-  let mut backup_j = 0_usize;
-  let mut bin_buffer = BinBuffer::<L>::new(max_n_bins, n_latents, sorted);
-
-  for j in 1..n_latents {
-    let target_j = bin_buffer.target_j;
-    if sorted[j] == sorted[j - 1] {
-      if j >= target_j && j - target_j >= target_j - backup_j && backup_j > i {
-        bin_buffer.push_bin(i, backup_j);
-        i = backup_j;
-      }
-    } else {
-      backup_j = j;
-      if j >= target_j {
-        bin_buffer.push_bin(i, j);
-        i = j;
-      }
-    }
-  }
-  bin_buffer.push_bin(i, n_latents);
-
-  bin_buffer.seq
-}
 
 // returns table size log
 fn quantize_weights<L: Latent>(
