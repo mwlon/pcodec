@@ -4,9 +4,74 @@ use std::{cmp, mem, ptr};
 
 use crate::data_types::Latent;
 
+pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
+  // Minimum length to choose the median-of-medians method.
+  // Shorter slices use the simple median-of-three method.
+  const SHORTEST_MEDIAN_OF_MEDIANS: usize = 50;
+  // Maximum number of swaps that can be performed in this function.
+  const MAX_SWAPS: usize = 4 * 3;
+
+  let len = latents.len();
+
+  // Three indices near which we are going to choose a pivot.
+  let mut a = len / 4;
+  let mut b = len / 2;
+  let mut c = (len * 3) / 4;
+
+  // Counts the total number of swaps we are about to perform while sorting indices.
+  let mut swaps = 0;
+
+  if len >= 8 {
+    // Swaps indices so that `v[a] <= v[b]`.
+    // SAFETY: `len >= 8` so there are at least two elements in the neighborhoods of
+    // `a`, `b` and `c`. This means the three calls to `sort_adjacent` result in
+    // corresponding calls to `sort3` with valid 3-item neighborhoods around each
+    // pointer, which in turn means the calls to `sort2` are done with valid
+    // references. Thus the `v.get_unchecked` calls are safe, as is the `ptr::swap`
+    // call.
+    let mut sort2 = |a: &mut usize, b: &mut usize| unsafe {
+      if *latents.get_unchecked(*b) < *latents.get_unchecked(*a) {
+        ptr::swap(a, b);
+        swaps += 1;
+      }
+    };
+
+    // Swaps indices so that `v[a] <= v[b] <= v[c]`.
+    let mut sort3 = |a: &mut usize, b: &mut usize, c: &mut usize| {
+      sort2(a, b);
+      sort2(b, c);
+      sort2(a, b);
+    };
+
+    if len >= SHORTEST_MEDIAN_OF_MEDIANS {
+      // Finds the median of `v[a - 1], v[a], v[a + 1]` and stores the index into `a`.
+      let mut sort_adjacent = |a: &mut usize| {
+        let tmp = *a;
+        sort3(&mut (tmp - 1), a, &mut (tmp + 1));
+      };
+
+      // Find medians in the neighborhoods of `a`, `b`, and `c`.
+      sort_adjacent(&mut a);
+      sort_adjacent(&mut b);
+      sort_adjacent(&mut c);
+    }
+
+    // Find the median among `a`, `b`, and `c`.
+    sort3(&mut a, &mut b, &mut c);
+  }
+
+  if swaps < MAX_SWAPS {
+    (latents[b], swaps == 0)
+  } else {
+    // The maximum number of swaps was performed. Chances are the slice is descending or mostly
+    // descending, so reversing will probably help sort it faster.
+    latents.reverse();
+    (latents[len - 1 - b], true)
+  }
+}
 fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
   // Number of elements in a typical block.
-  const BLOCK: usize = 128;
+  const BLOCK: usize = 256;
 
   // The partitioning algorithm repeats the following steps until completion:
   //
@@ -255,44 +320,28 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
 }
 
 pub fn partition<L: Latent>(latents: &mut [L], pivot: L) -> (usize, bool) {
-  let (mid, was_partitioned) = {
-    // Place the pivot at the beginning of slice.
-    // latents.swap(0, pivot);
-    // let (pivot, v) = latents.split_at_mut(1);
-    // let pivot = pivot[0];
+  // Find the first pair of out-of-order elements.
+  let mut l = 0;
+  let mut r = latents.len();
 
-    // Find the first pair of out-of-order elements.
-    let mut l = 0;
-    let mut r = latents.len();
-
-    // SAFETY: The unsafety below involves indexing an array.
-    // For the first one: We already do the bounds checking here with `l < r`.
-    // For the second one: We initially have `l == 0` and `r == v.len()` and we checked that `l < r` at every indexing operation.
-    //                     From here we know that `r` must be at least `r == l` which was shown to be valid from the first one.
-    unsafe {
-      // Find the first element greater than or equal to the pivot.
-      while l < r && *latents.get_unchecked(l) < pivot {
-        l += 1;
-      }
-
-      // Find the last element smaller that the pivot.
-      while l < r && *latents.get_unchecked(r - 1) >= pivot {
-        r -= 1;
-      }
+  // SAFETY: The unsafety below involves indexing an array.
+  // For the first one: We already do the bounds checking here with `l < r`.
+  // For the second one: We initially have `l == 0` and `r == v.len()` and we checked that `l < r` at every indexing operation.
+  //                     From here we know that `r` must be at least `r == l` which was shown to be valid from the first one.
+  unsafe {
+    // Find the first element greater than or equal to the pivot.
+    while l < r && *latents.get_unchecked(l) < pivot {
+      l += 1;
     }
 
-    (
-      l + partition_in_blocks(&mut latents[l..r], pivot),
-      l >= r,
-    )
+    // Find the last element smaller that the pivot.
+    while l < r && *latents.get_unchecked(r - 1) >= pivot {
+      r -= 1;
+    }
+  }
 
-    // `_pivot_guard` goes out of scope and writes the pivot (which is a stack-allocated
-    // variable) back into the slice where it originally was. This step is critical in ensuring
-    // safety!
-  };
-
-  // Place the pivot between the two partitions.
-  // latents.swap(0, mid);
-
-  (mid, was_partitioned)
+  (
+    l + partition_in_blocks(&mut latents[l..r], pivot),
+    l >= r,
+  )
 }

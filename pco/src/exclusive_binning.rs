@@ -3,14 +3,10 @@ use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::{bits, sort_utils};
 use std::cmp::{max, min};
+use std::mem;
 
-// struct Bound<L: Latent> {
-//   is_tight: bool,
-//   value: L,
-// }
-//
 struct Precomputed {
-  n: usize,
+  n: u64,
   n_bins_log: Bitlen,
 }
 
@@ -33,23 +29,8 @@ struct RecurseArgs<L: Latent> {
   loose_upper: L,
   min_bin_idx: usize,
   max_bin_idx: usize,
+  last_pivot: Option<L>,
 }
-
-// impl<L: Latent> Bound<L> {
-//   fn loose(value: L) -> Self {
-//     Self {
-//       is_tight: false,
-//       value,
-//     }
-//   }
-//
-//   fn tight(value: L) -> Self {
-//     Self {
-//       is_tight: true,
-//       value,
-//     }
-//   }
-// }
 
 fn calc_min<L: Latent>(latents: &[L]) -> L {
   let mut min0 = L::MAX;
@@ -77,14 +58,13 @@ fn calc_max<L: Latent>(latents: &[L]) -> L {
   max(max0, max1)
 }
 
-fn calc_bin_idx(i: usize, precomputed: &Precomputed) -> usize {
+fn bin_idx_from_c_count(i: usize, precomputed: &Precomputed) -> usize {
   // 64-bit arithmetic here because otherwise it would go OOB on 32-bit arches
-  (((i as u64) << precomputed.n_bins_log) / precomputed.n as u64) as usize
+  (((i as u64) << precomputed.n_bins_log) / precomputed.n) as usize
 }
 
-// the inverse of calc_bin_idx
-fn calc_slice_idx(bin_idx: usize, precomputed: &Precomputed) -> usize {
-  ((bin_idx as u64 * precomputed.n as u64) >> precomputed.n_bins_log) as usize
+fn c_count_from_bin_idx(bin_idx: usize, precomputed: &Precomputed) -> usize {
+  ((bin_idx as u64 * precomputed.n) >> precomputed.n_bins_log) as usize
 }
 
 fn make_info<L: Latent>(count: usize, lower: L, upper: L) -> BinCompressionInfo<L> {
@@ -94,43 +74,6 @@ fn make_info<L: Latent>(count: usize, lower: L, upper: L) -> BinCompressionInfo<
     upper,
     offset_bits: bits::bits_to_encode_offset(upper - lower),
     ..Default::default()
-  }
-}
-
-// median of first, middle, last
-// idea from https://drops.dagstuhl.de/storage/00lipics/lipics-vol057-esa2016/LIPIcs.ESA.2016.38/LIPIcs.ESA.2016.38.pdf
-// TODO if I keep this, write it better
-// TODO try to make this more like highway and optionally target a percentile
-fn choose_pivot<L: Latent>(latents: &[L], lower: L, loose_upper: L) -> Option<L> {
-  if lower == loose_upper {
-    return None;
-  }
-
-  let a = latents[0];
-  let b = latents[latents.len() / 2];
-  let c = latents[latents.len() - 1];
-
-  let bc_max = max(b, c);
-  let candidate = if a >= bc_max {
-    bc_max
-  } else {
-    let bc_min = min(b, c);
-    if a >= bc_min {
-      a
-    } else {
-      bc_min
-    }
-  };
-
-  if candidate == lower {
-    for &l in latents {
-      if l != lower {
-        return Some(l);
-      }
-    }
-    None
-  } else {
-    Some(candidate)
   }
 }
 
@@ -198,22 +141,26 @@ impl<L: Latent> State<L> {
     precomputed: &Precomputed,
     args: RecurseArgs<L>,
   ) {
-    if args.min_bin_idx == args.max_bin_idx {
+    let next_target_c_count = c_count_from_bin_idx(args.min_bin_idx + 1, precomputed);
+    let next_c_count = args.c_count + latents.len();
+    if next_c_count <= next_target_c_count {
       self.merge_incomplete(latents, args.tight_lower);
+      if next_c_count == next_target_c_count {
+        self.finish_incomplete_bin();
+      }
       return;
     }
 
     // TODO case when there are only a few latents
 
-    let Some(pivot) = choose_pivot(latents, args.tight_lower, args.loose_upper) else {
+    if args.tight_lower == args.loose_upper {
       // everything is constant
       if args.max_bin_idx - args.min_bin_idx >= 2 {
         self.finish_incomplete_bin();
         self.merge_incomplete(latents, args.tight_lower);
         self.finish_incomplete_bin();
       } else {
-        let target_count = calc_slice_idx(args.max_bin_idx, precomputed);
-        if args.c_count + latents.len() - target_count > target_count - args.c_count {
+        if next_c_count - next_target_c_count > next_target_c_count - args.c_count {
           // better to emit what we have
           self.finish_incomplete_bin();
           self.merge_incomplete(latents, args.tight_lower);
@@ -224,11 +171,26 @@ impl<L: Latent> State<L> {
         }
       }
       return;
-    };
+    }
+
+    let (mut pivot, is_likely_sorted) = sort_utils::choose_pivot(latents);
+    match args.last_pivot {
+      Some(last) if last == pivot => {
+        // TODO fix this hack
+        pivot = last + L::ONE;
+      }
+      _ => (),
+    }
+    println!(
+      "pivot {} vs {:?} ({})",
+      pivot,
+      args.last_pivot,
+      latents.len()
+    );
     let (lhs_count, _) = sort_utils::partition(latents, pivot);
 
     let pivot_c_count = args.c_count + lhs_count;
-    let pivot_bin_idx = calc_bin_idx(pivot_c_count, precomputed);
+    let pivot_bin_idx = bin_idx_from_c_count(pivot_c_count, precomputed);
 
     self.exclusive_bins_quicksort_recurse(
       &mut latents[..lhs_count],
@@ -239,6 +201,7 @@ impl<L: Latent> State<L> {
         loose_upper: pivot,
         min_bin_idx: args.min_bin_idx,
         max_bin_idx: pivot_bin_idx,
+        last_pivot: None,
       },
     );
     self.exclusive_bins_quicksort_recurse(
@@ -250,6 +213,7 @@ impl<L: Latent> State<L> {
         loose_upper: args.loose_upper,
         min_bin_idx: pivot_bin_idx,
         max_bin_idx: args.max_bin_idx,
+        last_pivot: Some(pivot),
       },
     );
   }
@@ -264,7 +228,7 @@ pub fn exclusive_bins<L: Latent>(
   }
 
   let precomputed = Precomputed {
-    n: latents.len(),
+    n: latents.len() as u64,
     n_bins_log,
   };
 
@@ -279,6 +243,7 @@ pub fn exclusive_bins<L: Latent>(
       loose_upper: L::MAX,
       min_bin_idx: 0,
       max_bin_idx: 1 << n_bins_log,
+      last_pivot: None,
     },
   );
   state.dst
