@@ -10,8 +10,8 @@ use arrow::record_batch::RecordBatch;
 use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
 
-use pco::ChunkConfig;
 use pco::standalone::FileCompressor;
+use pco::ChunkConfig;
 
 use crate::arrow_handlers::ArrowHandlerImpl;
 use crate::dtypes::ArrowNumberLike;

@@ -7,9 +7,9 @@ use arrow::csv;
 use arrow::datatypes::{Field, Schema};
 use parquet::file::reader::{FileReader, SerializedFileReader};
 
-use crate::{arrow_handlers, utils};
 use crate::dtypes;
 use crate::opt::CompressOpt;
+use crate::{arrow_handlers, utils};
 
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 

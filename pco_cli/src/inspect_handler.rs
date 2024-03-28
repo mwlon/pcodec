@@ -1,12 +1,12 @@
 use anyhow::Result;
 use serde::Serialize;
-use tabled::{Table, Tabled};
-use tabled::settings::{Alignment, Modify, Style};
 use tabled::settings::object::Columns;
+use tabled::settings::{Alignment, Modify, Style};
+use tabled::{Table, Tabled};
 
-use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
 use pco::data_types::{Latent, NumberLike};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
+use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
 
 use crate::core_handlers::CoreHandlerImpl;
 use crate::dtypes::PcoNumberLike;

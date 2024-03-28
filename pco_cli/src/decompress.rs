@@ -2,8 +2,8 @@ use std::fs;
 
 use anyhow::Result;
 
-use crate::{core_handlers, utils};
 use crate::opt::DecompressOpt;
+use crate::{core_handlers, utils};
 
 pub fn decompress(opt: DecompressOpt) -> Result<()> {
   let bytes = fs::read(&opt.pco_path)?;

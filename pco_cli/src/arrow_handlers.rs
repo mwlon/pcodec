@@ -27,9 +27,9 @@ pub fn from_dtype(dtype: &DataType) -> Result<Box<dyn ArrowHandler>> {
   match_dtype!(
     Float32 => Float32Type,
     Float64 => Float64Type,
+    Int32 => Int32Type,
     Int64 => Int64Type,
-    Int64 => Int64Type,
-    UInt32 => UInt64Type,
+    UInt32 => UInt32Type,
     UInt64 => UInt64Type,
     Timestamp(TimeUnit::Microsecond, _) => TimestampMicrosecondType,
     Timestamp(TimeUnit::Nanosecond, _) => TimestampNanosecondType,

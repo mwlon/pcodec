@@ -1,11 +1,8 @@
-use std::convert::TryFrom;
-use std::str::FromStr;
-
 use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes as arrow_dtypes;
-use arrow::datatypes::{ArrowPrimitiveType, DataType};
 use arrow::datatypes::DataType as ArrowDataType;
+use arrow::datatypes::{ArrowPrimitiveType, DataType};
 
 use pco::data_types::{CoreDataType, NumberLike};
 

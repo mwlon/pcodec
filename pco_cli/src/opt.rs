@@ -4,8 +4,8 @@ use anyhow::anyhow;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use pco::{FloatMultSpec, IntMultSpec};
 use pco::data_types::CoreDataType;
+use pco::{FloatMultSpec, IntMultSpec};
 
 #[derive(Clone, Debug, Parser)]
 #[command(about = "compress, decompress, and inspect .pco files")]
