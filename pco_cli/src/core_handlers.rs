@@ -3,9 +3,9 @@ use std::marker::PhantomData;
 use pco::data_types::CoreDataType;
 use pco::with_core_dtypes;
 
-use crate::decompress_handler::DecompressHandler;
+use crate::decompress::decompress_handler::DecompressHandler;
 use crate::dtypes::PcoNumberLike;
-use crate::inspect_handler::InspectHandler;
+use crate::inspect::inspect_handler::InspectHandler;
 
 fn new_boxed_handler<T: PcoNumberLike>() -> Box<dyn CoreHandler> {
   Box::new(CoreHandlerImpl {

@@ -11,6 +11,8 @@ use crate::dtypes;
 use crate::opt::CompressOpt;
 use crate::{arrow_handlers, utils};
 
+pub mod compress_handler;
+
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 
 fn infer_csv_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {

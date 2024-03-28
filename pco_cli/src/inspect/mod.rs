@@ -5,9 +5,11 @@ use anyhow::Result;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 
 use crate::core_handlers;
-use crate::inspect_handler::{CompressionSummary, Output};
+use crate::inspect::inspect_handler::{CompressionSummary, Output};
 use crate::opt::InspectOpt;
 use crate::utils;
+
+pub mod inspect_handler;
 
 fn trivial_inspect(opt: &InspectOpt, src: &[u8]) -> Result<()> {
   let start_len = src.len();

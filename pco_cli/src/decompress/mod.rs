@@ -5,6 +5,8 @@ use anyhow::Result;
 use crate::opt::DecompressOpt;
 use crate::{core_handlers, utils};
 
+pub mod decompress_handler;
+
 pub fn decompress(opt: DecompressOpt) -> Result<()> {
   let bytes = fs::read(&opt.pco_path)?;
   let Some(dtype) = utils::get_standalone_dtype(&bytes)? else {
