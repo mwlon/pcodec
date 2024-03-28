@@ -10,11 +10,11 @@ use arrow::record_batch::RecordBatch;
 use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
 
+use pco::ChunkConfig;
 use pco::standalone::FileCompressor;
-use pco::{ChunkConfig, IntMultSpec};
 
-use crate::handlers::HandlerImpl;
-use crate::number_like_arrow::NumberLikeArrow;
+use crate::arrow_handlers::ArrowHandlerImpl;
+use crate::dtypes::ArrowNumberLike;
 use crate::opt::CompressOpt;
 use crate::utils;
 
@@ -22,7 +22,7 @@ pub trait CompressHandler {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()>;
 }
 
-impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
+impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()> {
     let mut open_options = OpenOptions::new();
     open_options.write(true);
@@ -37,16 +37,13 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
     let config = ChunkConfig::default()
       .with_compression_level(opt.level)
       .with_delta_encoding_order(opt.delta_encoding_order)
-      .with_int_mult_spec(if opt.disable_int_mult {
-        IntMultSpec::Disabled
-      } else {
-        IntMultSpec::Enabled
-      });
+      .with_int_mult_spec(opt.int_mult)
+      .with_float_mult_spec(opt.float_mult);
     let fc = FileCompressor::default();
     fc.write_header(&file)?;
 
     let mut reader = new_column_reader::<P>(schema, opt)?;
-    let mut num_buffer = Vec::<P::Num>::new();
+    let mut num_buffer = Vec::<P::Pco>::new();
     while let Some(batch_result) = reader.next_batch() {
       let batch = batch_result?;
       num_buffer.extend(&batch);
@@ -67,7 +64,7 @@ impl<P: NumberLikeArrow> CompressHandler for HandlerImpl<P> {
   }
 }
 
-fn new_column_reader<P: NumberLikeArrow>(
+fn new_column_reader<P: ArrowNumberLike>(
   schema: &Schema,
   opt: &CompressOpt,
 ) -> Result<Box<dyn ColumnReader<P>>> {
@@ -83,33 +80,33 @@ fn new_column_reader<P: NumberLikeArrow>(
   Ok(res)
 }
 
-trait ColumnReader<P: NumberLikeArrow> {
+trait ColumnReader<P: ArrowNumberLike> {
   fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self>
   where
     Self: Sized;
   fn next_arrow_batch(&mut self) -> Option<arrow::error::Result<RecordBatch>>;
   fn col_idx(&self) -> usize;
 
-  fn next_batch(&mut self) -> Option<Result<Vec<P::Num>>> {
+  fn next_batch(&mut self) -> Option<Result<Vec<P::Pco>>> {
     self.next_arrow_batch().map(|batch_result| {
       let batch = batch_result?;
       let arrow_array = batch.column(self.col_idx());
-      Ok(utils::arrow_to_vec::<P>(arrow_array))
+      Ok(utils::arrow_to_nums::<P>(arrow_array))
     })
   }
 }
 
-struct ParquetColumnReader<T> {
+struct ParquetColumnReader<P> {
   batch_reader: ParquetRecordBatchReader,
-  phantom: PhantomData<T>,
+  phantom: PhantomData<P>,
 }
 
-impl<P: NumberLikeArrow> ColumnReader<P> for ParquetColumnReader<P> {
+impl<P: ArrowNumberLike> ColumnReader<P> for ParquetColumnReader<P> {
   fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self> {
     let file = File::open(path)?;
     let batch_reader_builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
     let parquet_schema = parquet::arrow::arrow_to_parquet_schema(schema)?;
-    let col_idx = utils::find_col_idx(schema, opt);
+    let col_idx = utils::find_col_idx(schema, opt)?;
     let batch_reader = batch_reader_builder
       .with_projection(ProjectionMask::leaves(
         &parquet_schema,
@@ -132,13 +129,13 @@ impl<P: NumberLikeArrow> ColumnReader<P> for ParquetColumnReader<P> {
   }
 }
 
-struct CsvColumnReader<P: NumberLikeArrow> {
+struct CsvColumnReader<P> {
   csv_reader: CsvReader<File>,
   col_idx: usize,
   phantom: PhantomData<P>,
 }
 
-impl<P: NumberLikeArrow> ColumnReader<P> for CsvColumnReader<P> {
+impl<P: ArrowNumberLike> ColumnReader<P> for CsvColumnReader<P> {
   fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self>
   where
     Self: Sized,
@@ -148,7 +145,7 @@ impl<P: NumberLikeArrow> ColumnReader<P> for CsvColumnReader<P> {
       .with_batch_size(opt.chunk_size)
       .with_delimiter(opt.delimiter as u8)
       .build(File::open(path)?)?;
-    let col_idx = utils::find_col_idx(schema, opt);
+    let col_idx = utils::find_col_idx(schema, opt)?;
 
     Ok(Self {
       csv_reader,

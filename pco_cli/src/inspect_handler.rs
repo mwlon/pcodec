@@ -1,15 +1,15 @@
 use anyhow::Result;
+use serde::Serialize;
+use tabled::{Table, Tabled};
+use tabled::settings::{Alignment, Modify, Style};
+use tabled::settings::object::Columns;
 
+use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
 use pco::data_types::{Latent, NumberLike};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
-use serde::Serialize;
-use tabled::settings::object::Columns;
-use tabled::settings::{Alignment, Modify, Style};
-use tabled::{Table, Tabled};
 
-use crate::handlers::HandlerImpl;
-use crate::number_like_arrow::NumberLikeArrow;
+use crate::core_handlers::CoreHandlerImpl;
+use crate::dtypes::PcoNumberLike;
 use crate::opt::InspectOpt;
 use crate::utils;
 
@@ -18,25 +18,25 @@ pub trait InspectHandler {
 }
 
 #[derive(Serialize)]
-struct CompressionSummary {
-  ratio: f64,
-  total_size: usize,
-  header_size: usize,
-  meta_size: usize,
-  page_size: usize,
-  footer_size: usize,
-  unknown_trailing_bytes: usize,
+pub struct CompressionSummary {
+  pub ratio: f64,
+  pub total_size: usize,
+  pub header_size: usize,
+  pub meta_size: usize,
+  pub page_size: usize,
+  pub footer_size: usize,
+  pub unknown_trailing_bytes: usize,
 }
 
 #[derive(Tabled)]
-struct BinSummary {
+pub struct BinSummary {
   weight: u32,
   lower: String,
   offset_bits: u32,
 }
 
 #[derive(Serialize)]
-struct LatentVarSummary {
+pub struct LatentVarSummary {
   name: String,
   n_bins: usize,
   ans_size_log: u32,
@@ -44,7 +44,7 @@ struct LatentVarSummary {
 }
 
 #[derive(Serialize)]
-struct ChunkSummary {
+pub struct ChunkSummary {
   idx: usize,
   n: usize,
   mode: String,
@@ -53,15 +53,15 @@ struct ChunkSummary {
 }
 
 #[derive(Serialize)]
-struct Output {
-  filename: String,
-  data_type: String,
-  format_version: u8,
-  n: usize,
-  n_chunks: usize,
-  uncompressed_size: usize,
-  compressed: CompressionSummary,
-  chunk: Vec<ChunkSummary>,
+pub struct Output {
+  pub filename: String,
+  pub data_type: String,
+  pub format_version: u8,
+  pub n: usize,
+  pub n_chunks: usize,
+  pub uncompressed_size: usize,
+  pub compressed: CompressionSummary,
+  pub chunk: Vec<ChunkSummary>,
 }
 
 fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
@@ -117,7 +117,7 @@ fn build_latent_var_summary<T: NumberLike>(
   }
 }
 
-impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
+impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
   fn inspect(&self, opt: &InspectOpt, src: &[u8]) -> Result<()> {
     let mut prev_src_len_val = src.len();
     let prev_src_len = &mut prev_src_len_val;
@@ -133,7 +133,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     loop {
       // Rather hacky, but first just measure the metadata size,
       // then reread it to measure the page size
-      match fd.chunk_decompressor::<P::Num, _>(src)? {
+      match fd.chunk_decompressor::<T, _>(src)? {
         MaybeChunkDecompressor::Some(cd) => {
           chunk_ns.push(cd.n());
           metas.push(cd.meta().clone());
@@ -146,9 +146,9 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
         }
       }
 
-      match fd.chunk_decompressor::<P::Num, _>(src)? {
+      match fd.chunk_decompressor::<T, _>(src)? {
         MaybeChunkDecompressor::Some(mut cd) => {
-          void.resize(cd.n(), P::Num::default());
+          void.resize(cd.n(), T::default());
           let _ = cd.decompress(&mut void)?;
           src = cd.into_src();
           page_size += measure_bytes_read(src, prev_src_len);
@@ -158,7 +158,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     }
 
     let n: usize = chunk_ns.iter().sum();
-    let uncompressed_size = <P::Num as NumberLike>::L::BITS as usize / 8 * n;
+    let uncompressed_size = <T as NumberLike>::L::BITS as usize / 8 * n;
     let compressed_size = header_size + meta_size + page_size + footer_size;
     let unknown_trailing_bytes = src.len();
 
@@ -166,7 +166,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     for (i, meta) in metas.iter().enumerate() {
       let mut latent_var = Vec::new();
       for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
-        latent_var.push(build_latent_var_summary::<P::Num>(
+        latent_var.push(build_latent_var_summary::<T>(
           latent_var_idx,
           meta,
           latent_var_meta,
@@ -183,7 +183,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
 
     let output = Output {
       filename: opt.path.to_str().unwrap().to_string(),
-      data_type: utils::dtype_name::<P::Num>(),
+      data_type: utils::dtype_name::<T>(),
       format_version: fd.format_version(),
       n,
       n_chunks: metas.len(),

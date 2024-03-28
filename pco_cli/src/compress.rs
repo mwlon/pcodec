@@ -7,10 +7,9 @@ use arrow::csv;
 use arrow::datatypes::{Field, Schema};
 use parquet::file::reader::{FileReader, SerializedFileReader};
 
-use crate::dtype::DType;
-use crate::handlers;
+use crate::{arrow_handlers, utils};
+use crate::dtypes;
 use crate::opt::CompressOpt;
-use crate::utils;
 
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 
@@ -24,9 +23,9 @@ fn infer_csv_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
     opt.csv_has_header()?,
   )?;
 
-  if let Some(dtype) = &opt.dtype {
+  if let Some(dtype) = opt.dtype {
     let mut fields = Vec::new();
-    let arrow_dtype = dtype.to_arrow()?;
+    let arrow_dtype = dtypes::to_arrow(dtype);
     for (col_idx, field) in inferred_schema.fields().iter().enumerate() {
       match (&opt.col_name, &opt.col_idx) {
         (Some(name), None) if name == field.name() => {
@@ -46,9 +45,9 @@ fn infer_csv_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
     }
     Ok(Schema::new(fields))
   } else {
-    let col_idx = utils::find_col_idx(&inferred_schema, opt);
+    let col_idx = utils::find_col_idx(&inferred_schema, opt)?;
     let arrow_dtype = inferred_schema.fields()[col_idx].data_type();
-    let dtype = DType::from_arrow(arrow_dtype)?;
+    let dtype = dtypes::from_arrow(arrow_dtype)?;
     println!(
       "using inferred CSV column data type: {:?}",
       dtype,
@@ -66,10 +65,10 @@ fn infer_parquet_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
     parquet_schema,
     file_meta.key_value_metadata(),
   )?;
-  let col_idx = utils::find_col_idx(&res, opt);
+  let col_idx = utils::find_col_idx(&res, opt)?;
   let field = &res.fields()[col_idx];
   if let Some(dtype) = opt.dtype {
-    let arrow_dtype = dtype.to_arrow()?;
+    let arrow_dtype = dtypes::to_arrow(dtype);
     if field.data_type() != &arrow_dtype {
       return Err(anyhow!(
         "optionally specified dtype {:?} did not match parquet schema {:?}",
@@ -92,14 +91,13 @@ pub fn compress(opt: CompressOpt) -> Result<()> {
       opt.parquet_path,
     )),
   }?;
-  let arrow_dtype = match (&opt.col_idx, &opt.col_name) {
+  let dtype = match (&opt.col_idx, &opt.col_name) {
     (Some(col_idx), None) => Ok(schema.fields()[*col_idx].data_type()),
     (None, Some(col_name)) => Ok(schema.field_with_name(col_name)?.data_type()),
     _ => Err(anyhow!(
       "incomplete or incompatible col name and col idx"
     )),
   }?;
-  let dtype = DType::from_arrow(arrow_dtype)?;
-  let handler = handlers::from_dtype(dtype);
+  let handler = arrow_handlers::from_dtype(dtype)?;
   handler.compress(&opt, &schema)
 }

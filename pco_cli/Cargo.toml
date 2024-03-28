@@ -24,6 +24,3 @@ pco = { version = "0.2", path = "../pco" }
 toml = "0.8.12"
 tabled = "0.15.0"
 serde = { version = "1.0.197", features = ["derive"] }
-
-[dev-dependencies]
-enum-iterator = "1.4.1"

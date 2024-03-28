@@ -2,13 +2,50 @@ use std::fs;
 
 use anyhow::Result;
 
-use crate::handlers;
+use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
+
+use crate::core_handlers;
+use crate::inspect_handler::{CompressionSummary, Output};
 use crate::opt::InspectOpt;
 use crate::utils;
 
+fn trivial_inspect(opt: &InspectOpt, src: &[u8]) -> Result<()> {
+  let start_len = src.len();
+  let (fd, src) = FileDecompressor::new(src)?;
+  let header_size = start_len - src.len();
+  let no_cd = fd.chunk_decompressor::<i32, _>(src)?;
+  let src = match no_cd {
+    MaybeChunkDecompressor::Some(_) => panic!("should be unreachable"),
+    MaybeChunkDecompressor::EndOfData(src) => src,
+  };
+
+  let summary = Output {
+    filename: opt.path.to_str().unwrap().to_string(),
+    data_type: "<none>".to_string(),
+    format_version: fd.format_version(),
+    n: 0,
+    n_chunks: 0,
+    uncompressed_size: 0,
+    compressed: CompressionSummary {
+      ratio: 0.0,
+      total_size: start_len - src.len(),
+      header_size,
+      meta_size: 0,
+      page_size: 0,
+      footer_size: 1,
+      unknown_trailing_bytes: src.len(),
+    },
+    chunk: vec![],
+  };
+  println!("{}", toml::to_string_pretty(&summary)?);
+  Ok(())
+}
+
 pub fn inspect(opt: InspectOpt) -> Result<()> {
   let bytes = fs::read(&opt.path)?;
-  let header_byte = utils::get_header_byte(&bytes)?;
-  let handler = handlers::from_header_byte(header_byte)?;
+  let Some(dtype) = utils::get_standalone_dtype(&bytes)? else {
+    return trivial_inspect(&opt, &bytes);
+  };
+  let handler = core_handlers::from_dtype(dtype);
   handler.inspect(&opt, &bytes)
 }

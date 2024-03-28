@@ -3,15 +3,15 @@ use clap::Parser;
 
 use crate::opt::{Opt, OptWrapper};
 
+mod arrow_handlers;
 mod compress;
 mod compress_handler;
+mod core_handlers;
 mod decompress;
 mod decompress_handler;
-mod dtype;
-mod handlers;
+mod dtypes;
 mod inspect;
 mod inspect_handler;
-mod number_like_arrow;
 mod opt;
 mod utils;
 
