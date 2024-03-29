@@ -1,5 +1,5 @@
 use std::cmp::min;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::marker::PhantomData;
 use std::sync::Arc;
 

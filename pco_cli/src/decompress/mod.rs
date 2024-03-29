@@ -1,5 +1,5 @@
 use std::fs::OpenOptions;
-use std::io::{Read, Seek};
+use std::io::Read;
 
 use anyhow::Result;
 
