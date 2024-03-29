@@ -106,7 +106,7 @@ pub fn reconstruct_nums<T: NumberLike>(
     5 => reconstruct_nums_w_order::<T, 5>(delta_moments, u_deltas, n),
     6 => reconstruct_nums_w_order::<T, 6>(delta_moments, u_deltas, n),
     7 => reconstruct_nums_w_order::<T, 7>(delta_moments, u_deltas, n),
-    _ => panic!("this order should be unreachable"),
+    _ => unreachable!("impossible delta encoding order"),
   }
 }
 

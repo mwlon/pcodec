@@ -57,7 +57,7 @@ fn compression_to_string(compression: &Compression) -> String {
     Compression::UNCOMPRESSED => "uncompressed".to_string(),
     Compression::SNAPPY => "snappy".to_string(),
     Compression::ZSTD(level) => format!("{}{}", ZSTD, level.compression_level()),
-    _ => panic!("should be unreachable"),
+    _ => unreachable!(),
   }
 }
 

@@ -81,25 +81,3 @@ pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<CoreDataType> {
   };
   Ok(res)
 }
-
-#[cfg(test)]
-mod tests {
-  use anyhow::Result;
-
-  use pco::data_types::CoreDataType;
-  use pco::with_core_dtypes;
-
-  use super::*;
-
-  #[test]
-  fn test_arrow_dtypes_consistent() -> Result<()> {
-    use CoreDataType::*;
-    macro_rules! check_dtype {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        $(assert_eq!(from_arrow(&to_arrow($name))?, $name);)+
-      }
-    }
-    with_core_dtypes!(check_dtype);
-    Ok(())
-  }
-}

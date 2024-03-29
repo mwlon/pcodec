@@ -17,7 +17,7 @@ fn trivial_inspect(opt: &InspectOpt, src: &[u8]) -> Result<()> {
   let header_size = start_len - src.len();
   let no_cd = fd.chunk_decompressor::<i32, _>(src)?;
   let src = match no_cd {
-    MaybeChunkDecompressor::Some(_) => panic!("should be unreachable"),
+    MaybeChunkDecompressor::Some(_) => unreachable!("file was supposed to be trivial"),
     MaybeChunkDecompressor::EndOfData(src) => src,
   };
 

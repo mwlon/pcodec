@@ -86,7 +86,7 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
       (NumVec::F32(x), NumVec::F32(y)) => self.compare_nums(x, y),
       (NumVec::F64(x), NumVec::F64(y)) => self.compare_nums(x, y),
       (NumVec::Micros(x), NumVec::Micros(y)) => self.compare_nums(x, y),
-      _ => panic!("should be unreachable"),
+      _ => unreachable!(),
     }
   }
 }
