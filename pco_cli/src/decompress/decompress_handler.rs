@@ -22,7 +22,6 @@ pub trait DecompressHandler {
 }
 
 impl<T: PcoNumberLike> DecompressHandler for CoreHandlerImpl<T> {
-  // TODO read directly from file
   fn decompress(&self, opt: &DecompressOpt) -> Result<()> {
     let file = OpenOptions::new().read(true).open(&opt.pco_path)?;
     let src = BetterBufReader::from_read_simple(file);

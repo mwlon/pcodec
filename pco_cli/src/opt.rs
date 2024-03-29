@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use anyhow::anyhow;
 use anyhow::Result;
+use arrow::datatypes::{DataType, TimeUnit};
 use clap::{Parser, Subcommand};
 
-use pco::data_types::CoreDataType;
 use pco::{FloatMultSpec, IntMultSpec};
 
 #[derive(Clone, Debug, Parser)]
@@ -47,17 +47,39 @@ fn parse_float_mult(s: &str) -> Result<FloatMultSpec> {
   Ok(spec)
 }
 
-fn parse_dtype(s: &str) -> Result<CoreDataType> {
-  let res = match s.to_lowercase().as_str() {
-    "f32" => CoreDataType::F32,
-    "f64" => CoreDataType::F32,
-    "i32" => CoreDataType::I32,
-    "i64" => CoreDataType::I64,
-    "u32" => CoreDataType::U32,
-    "u64" => CoreDataType::U64,
-    other => return Err(anyhow!("invalid core data type: {}", other)),
-  };
-  Ok(res)
+fn parse_dtype(s: &str) -> Result<DataType> {
+  let name_pairs = [
+    ("f32", DataType::Float32),
+    ("f64", DataType::Float64),
+    ("i32", DataType::Int32),
+    ("i64", DataType::Int64),
+    ("u32", DataType::UInt32),
+    ("u64", DataType::UInt64),
+    (
+      "micros",
+      DataType::Timestamp(TimeUnit::Microsecond, None),
+    ),
+    (
+      "nanos",
+      DataType::Timestamp(TimeUnit::Nanosecond, None),
+    ),
+  ];
+
+  let lower = s.to_lowercase();
+  for (name, dtype) in &name_pairs {
+    if name == &lower {
+      return Ok(dtype.clone());
+    }
+  }
+
+  Err(anyhow!(
+    "invalid data type: {}. Expected one of: {:?}",
+    lower,
+    name_pairs
+      .iter()
+      .map(|(name, _)| name.to_string())
+      .collect::<Vec<_>>()
+  ))
 }
 
 #[derive(Clone, Debug, Parser)]
@@ -82,7 +104,7 @@ pub struct CompressOpt {
   #[arg(long, default_value = "Enabled", value_parser = parse_float_mult)]
   pub float_mult: FloatMultSpec,
   #[arg(long, value_parser = parse_dtype)]
-  pub dtype: Option<CoreDataType>,
+  pub dtype: Option<DataType>,
   #[arg(long)]
   pub col_name: Option<String>,
   #[arg(long)]

@@ -25,9 +25,8 @@ fn infer_csv_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
     opt.csv_has_header()?,
   )?;
 
-  if let Some(dtype) = opt.dtype {
+  if let Some(arrow_dtype) = &opt.dtype {
     let mut fields = Vec::new();
-    let arrow_dtype = dtypes::to_arrow(dtype);
     for (col_idx, field) in inferred_schema.fields().iter().enumerate() {
       match (&opt.col_name, &opt.col_idx) {
         (Some(name), None) if name == field.name() => {
@@ -69,9 +68,8 @@ fn infer_parquet_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
   )?;
   let col_idx = utils::find_col_idx(&res, opt)?;
   let field = &res.fields()[col_idx];
-  if let Some(dtype) = opt.dtype {
-    let arrow_dtype = dtypes::to_arrow(dtype);
-    if field.data_type() != &arrow_dtype {
+  if let Some(arrow_dtype) = &opt.dtype {
+    if field.data_type() != arrow_dtype {
       return Err(anyhow!(
         "optionally specified dtype {:?} did not match parquet schema {:?}",
         arrow_dtype,
