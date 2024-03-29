@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::Serialize;
+use std::collections::HashMap;
 use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
@@ -37,7 +38,6 @@ pub struct BinSummary {
 
 #[derive(Serialize)]
 pub struct LatentVarSummary {
-  name: String,
   n_bins: usize,
   ans_size_log: u32,
   bins: String,
@@ -45,11 +45,10 @@ pub struct LatentVarSummary {
 
 #[derive(Serialize)]
 pub struct ChunkSummary {
-  idx: usize,
   n: usize,
   mode: String,
   delta_order: usize,
-  latent_var: Vec<LatentVarSummary>,
+  latent_vars: HashMap<String, LatentVarSummary>,
 }
 
 #[derive(Serialize)]
@@ -61,7 +60,7 @@ pub struct Output {
   pub n_chunks: usize,
   pub uncompressed_size: usize,
   pub compressed: CompressionSummary,
-  pub chunk: Vec<ChunkSummary>,
+  pub chunks: HashMap<String, ChunkSummary>,
 }
 
 fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
@@ -74,7 +73,7 @@ fn build_latent_var_summary<T: NumberLike>(
   latent_var_idx: usize,
   meta: &ChunkMeta<T::L>,
   latent_var: &ChunkLatentVarMeta<T::L>,
-) -> LatentVarSummary {
+) -> (String, LatentVarSummary) {
   let name = match (meta.mode, latent_var_idx) {
     (Mode::Classic, 0) => "primary".to_string(),
     (Mode::FloatMult(base_latent), 0) => format!(
@@ -109,12 +108,12 @@ fn build_latent_var_summary<T: NumberLike>(
     .with(Modify::new(Columns::new(0..3)).with(Alignment::right()))
     .to_string();
 
-  LatentVarSummary {
-    name,
+  let summary = LatentVarSummary {
     n_bins: latent_var.bins.len(),
     ans_size_log: latent_var.ans_size_log,
     bins: bins_table.to_string(),
-  }
+  };
+  (name, summary)
 }
 
 impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
@@ -162,23 +161,22 @@ impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
     let compressed_size = header_size + meta_size + page_size + footer_size;
     let unknown_trailing_bytes = src.len();
 
-    let mut chunk = Vec::new();
-    for (i, meta) in metas.iter().enumerate() {
-      let mut latent_var = Vec::new();
+    let mut chunks = HashMap::new();
+    for (idx, meta) in metas.iter().enumerate() {
+      let mut latent_vars = HashMap::new();
       for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
-        latent_var.push(build_latent_var_summary::<T>(
-          latent_var_idx,
-          meta,
-          latent_var_meta,
-        ));
+        let (name, summary) = build_latent_var_summary::<T>(latent_var_idx, meta, latent_var_meta);
+        latent_vars.insert(name, summary);
       }
-      chunk.push(ChunkSummary {
-        idx: i,
-        n: chunk_ns[i],
-        mode: format!("{:?}", meta.mode),
-        delta_order: meta.delta_encoding_order,
-        latent_var,
-      })
+      chunks.insert(
+        idx.to_string(),
+        ChunkSummary {
+          n: chunk_ns[idx],
+          mode: format!("{:?}", meta.mode),
+          delta_order: meta.delta_encoding_order,
+          latent_vars,
+        },
+      );
     }
 
     let output = Output {
@@ -197,7 +195,7 @@ impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
         footer_size,
         unknown_trailing_bytes,
       },
-      chunk,
+      chunks,
     };
 
     println!("{}", toml::to_string_pretty(&output)?);

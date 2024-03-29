@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 
 use anyhow::Result;
@@ -37,7 +38,7 @@ fn trivial_inspect(opt: &InspectOpt, src: &[u8]) -> Result<()> {
       footer_size: 1,
       unknown_trailing_bytes: src.len(),
     },
-    chunk: vec![],
+    chunks: HashMap::new(),
   };
   println!("{}", toml::to_string_pretty(&summary)?);
   Ok(())

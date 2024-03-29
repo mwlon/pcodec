@@ -60,6 +60,8 @@ trivial!(i32, arrow_dtypes::Int32Type);
 trivial!(i64, arrow_dtypes::Int64Type);
 trivial!(u32, arrow_dtypes::UInt32Type);
 trivial!(u64, arrow_dtypes::UInt64Type);
+extra_arrow!(i32, arrow_dtypes::Int16Type);
+extra_arrow!(u32, arrow_dtypes::UInt16Type);
 extra_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampNanosecondType);
 
@@ -67,8 +69,10 @@ pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<CoreDataType> {
   let res = match arrow_dtype {
     ArrowDataType::Float32 => CoreDataType::F32,
     ArrowDataType::Float64 => CoreDataType::F64,
+    ArrowDataType::Int16 => CoreDataType::I32,
     ArrowDataType::Int32 => CoreDataType::I32,
     ArrowDataType::Int64 => CoreDataType::I64,
+    ArrowDataType::UInt16 => CoreDataType::U32,
     ArrowDataType::UInt32 => CoreDataType::U32,
     ArrowDataType::UInt64 => CoreDataType::U64,
     ArrowDataType::Timestamp(_, _) => CoreDataType::I64,
