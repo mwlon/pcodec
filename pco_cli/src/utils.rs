@@ -1,4 +1,7 @@
 use std::any;
+use std::fs::OpenOptions;
+use std::io::Read;
+use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use arrow::array::{ArrayRef, AsArray};
@@ -10,8 +13,9 @@ use pco::standalone::FileDecompressor;
 use crate::dtypes::ArrowNumberLike;
 use crate::opt::CompressOpt;
 
-pub fn get_standalone_dtype(src: &[u8]) -> Result<Option<CoreDataType>> {
-  let (fd, src) = FileDecompressor::new(src)?;
+pub fn get_standalone_dtype(initial_bytes: &[u8]) -> Result<Option<CoreDataType>> {
+  let (fd, src) = FileDecompressor::new(initial_bytes)?;
+
   use pco::standalone::DataTypeOrTermination::*;
   match fd.peek_dtype_or_termination(src)? {
     Termination => Ok(None),

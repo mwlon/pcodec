@@ -1121,6 +1121,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrow",
+ "better_io",
  "clap",
  "parquet",
  "pco",

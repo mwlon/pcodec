@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::fs::{File, OpenOptions};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -7,6 +8,7 @@ use arrow::array::PrimitiveArray;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
 use arrow::datatypes::{ArrowPrimitiveType, Field, Schema};
 use arrow::record_batch::RecordBatch;
+use better_io::BetterBufReader;
 
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::FULL_BATCH_N;
@@ -16,12 +18,14 @@ use crate::dtypes::PcoNumberLike;
 use crate::opt::DecompressOpt;
 
 pub trait DecompressHandler {
-  fn decompress(&self, opt: &DecompressOpt, bytes: &[u8]) -> Result<()>;
+  fn decompress(&self, opt: &DecompressOpt) -> Result<()>;
 }
 
 impl<T: PcoNumberLike> DecompressHandler for CoreHandlerImpl<T> {
   // TODO read directly from file
-  fn decompress(&self, opt: &DecompressOpt, src: &[u8]) -> Result<()> {
+  fn decompress(&self, opt: &DecompressOpt) -> Result<()> {
+    let file = OpenOptions::new().read(true).open(&opt.pco_path)?;
+    let src = BetterBufReader::from_read_simple(file);
     let (fd, mut src) = FileDecompressor::new(src)?;
 
     let mut writer = new_column_writer::<T>(opt)?;

@@ -50,8 +50,7 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
       if num_buffer.len() >= opt.chunk_size {
         fc.chunk_compressor(&num_buffer[..opt.chunk_size], &config)?
           .write_chunk(&file)?;
-        // this could be made more efficient
-        num_buffer = num_buffer[opt.chunk_size..].to_vec();
+        num_buffer.drain(..opt.chunk_size);
       }
     }
     if !num_buffer.is_empty() {
