@@ -1,6 +1,3 @@
-use anyhow::anyhow;
-use anyhow::Result;
-use arrow::datatypes::{DataType, TimeUnit};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -8,7 +5,6 @@ use crate::bench::BenchOpt;
 use crate::compress::CompressOpt;
 use crate::decompress::DecompressOpt;
 use crate::inspect::InspectOpt;
-use pco::{FloatMultSpec, IntMultSpec};
 
 #[derive(Clone, Debug, Parser)]
 #[command(about = "compress, decompress, and inspect .pco files")]
