@@ -1,5 +1,3 @@
-#![allow(clippy::uninit_vec)]
-
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -7,7 +5,7 @@ use std::ops::AddAssign;
 use std::path::Path;
 use std::time::Duration;
 
-use clap::Parser;
+use anyhow::Result;
 use parquet::basic::Type;
 use parquet::column::reader::get_typed_column_reader;
 use parquet::file::reader::{FileReader, SerializedFileReader};
@@ -15,18 +13,18 @@ use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
-use opt::Opt;
+pub use opt::BenchOpt;
 
-use crate::codecs::CodecConfig;
-use crate::dtypes::Dtype;
-use crate::num_vec::NumVec;
+use crate::bench::codecs::CodecConfig;
+use crate::bench::dtypes::Dtype;
+use crate::bench::num_vec::NumVec;
 
 mod codecs;
 mod dtypes;
 pub mod num_vec;
 mod opt;
 
-const BASE_DIR: &str = "bench/data";
+const DEFAULT_BASE_DIR: &str = "data";
 // if this delta order is specified, use a dataset-specific order
 
 #[derive(Clone, Default)]
@@ -105,7 +103,7 @@ pub struct Precomputed {
   dtype: String,
 }
 
-fn handle(num_vec: &NumVec, dataset: String, config: &CodecConfig, opt: &Opt) -> PrintStat {
+fn handle(num_vec: &NumVec, dataset: String, config: &CodecConfig, opt: &BenchOpt) -> PrintStat {
   println!("\n{} x {}", dataset, config);
   let save_fname = format!(
     "{}{}.{}",
@@ -133,7 +131,7 @@ fn get_dataset_and_dtype(synthetic_path: &Path) -> (String, String) {
   (dataset, dtype)
 }
 
-fn handle_synthetic(path: &Path, config: &CodecConfig, opt: &Opt) -> PrintStat {
+fn handle_synthetic(path: &Path, config: &CodecConfig, opt: &BenchOpt) -> PrintStat {
   let (dataset, dtype) = get_dataset_and_dtype(path);
 
   let raw_bytes = fs::read(path).expect("could not read");
@@ -179,7 +177,7 @@ fn handle_parquet_column(
   pq_reader: &SerializedFileReader<File>,
   col_idx: usize,
   n: usize,
-  opt: &Opt,
+  opt: &BenchOpt,
 ) -> Vec<PrintStat> {
   let pq_meta = pq_reader.metadata();
   let pq_col = pq_meta.file_metadata().schema_descr().column(col_idx);
@@ -210,7 +208,7 @@ fn handle_parquet_column(
   stats
 }
 
-fn handle_parquet_dataset(path: &Path, opt: &Opt) -> Vec<PrintStat> {
+fn handle_parquet_dataset(path: &Path, opt: &BenchOpt) -> Vec<PrintStat> {
   let file = File::open(path).unwrap();
   let pq_reader = SerializedFileReader::new(file).unwrap();
   let pq_meta = pq_reader.metadata();
@@ -233,7 +231,7 @@ fn handle_parquet_dataset(path: &Path, opt: &Opt) -> Vec<PrintStat> {
   stats
 }
 
-fn print_stats(mut stats: Vec<PrintStat>, opt: &Opt) {
+fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
   if stats.is_empty() {
     println!("No datasets found that match filters!");
     return;
@@ -262,11 +260,9 @@ fn print_stats(mut stats: Vec<PrintStat>, opt: &Opt) {
   println!("{}", table);
 }
 
-fn main() {
-  let opt: Opt = Opt::parse();
-
-  let files = fs::read_dir(format!("{}/binary", BASE_DIR)).expect("couldn't read");
-  let synthetic_paths = if opt.parquet_dataset.is_some() {
+pub fn bench(opt: BenchOpt) -> Result<()> {
+  let files = fs::read_dir(format!("{}/binary", DEFAULT_BASE_DIR)).expect("couldn't read");
+  let synthetic_paths = if opt.input.parquet_path.is_some() {
     vec![]
   } else {
     let mut synthetic_paths = files
@@ -288,9 +284,11 @@ fn main() {
     }
   }
 
-  if let Some(parquet_dataset) = opt.parquet_dataset.as_ref() {
+  if let Some(parquet_dataset) = opt.input.parquet_path.as_ref() {
     stats.extend(handle_parquet_dataset(parquet_dataset, &opt));
   }
 
   print_stats(stats, &opt);
+
+  Ok(())
 }

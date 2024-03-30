@@ -2,8 +2,8 @@ use std::convert::TryInto;
 
 use anyhow::{anyhow, Result};
 
-use crate::codecs::{utils, CodecInternal};
-use crate::dtypes::Dtype;
+use crate::bench::codecs::{utils, CodecInternal};
+use crate::bench::dtypes::Dtype;
 
 #[derive(Clone, Debug, Default)]
 pub struct ZstdConfig {

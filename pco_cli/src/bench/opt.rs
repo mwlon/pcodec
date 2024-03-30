@@ -3,10 +3,12 @@ use std::str::FromStr;
 
 use clap::{Args, Parser};
 
-use crate::codecs::CodecConfig;
+use crate::bench::codecs::CodecConfig;
+use crate::opt::InputFileOpt;
 
-#[derive(Parser)]
-pub struct Opt {
+#[derive(Clone, Debug, Parser)]
+pub struct BenchOpt {
+  // TODO explain some way to get the list of keys available
   /// Comma-separated list of codecs to benchmark, optionally with
   /// colon-separated configurations.
   ///
@@ -14,21 +16,22 @@ pub struct Opt {
   /// `zstd,zstd:level=10,pco:level=9:delta_order=0`
   /// will compare 3 codecs: zstd at default compression level (3), zstd at
   /// level 10, and pco at level 9 with 0th order delta encoding.
-  /// See the code in src/codecs/*.rs for configurations available to each
-  /// codec.
   #[arg(long, short, default_value = "pco", value_parser=CodecConfig::from_str, value_delimiter=',')]
   pub codecs: Vec<CodecConfig>,
-  /// Comma-separated substrings of synthetic datasets to benchmark.
-  /// By default all synthetic datasets are run.
+  /// Comma-separated substrings of datasets or column names to benchmark.
+  /// By default all datasets are run.
   #[arg(long, short, default_values_t = Vec::<String>::new(), value_delimiter = ',')]
   pub datasets: Vec<String>,
   /// Path to a parquet file to use as input.
-  /// Only numerical columns in the file will be used.
-  /// Only non-null values will be used.
-  #[arg(long, short)]
-  pub parquet_dataset: Option<PathBuf>,
-  /// Filter down to datasets or columns matching this data type,
-  /// e.g. i32.
+  /// Only numerical columns, non-null values in the file will be used.
+  #[arg(long = "parquet", short)]
+  pub parquet_path: Option<PathBuf>,
+  /// Path to a CSV file to use as input.
+  /// Only numerical columns, non-null values in the file will be used.
+  #[arg(long = "csv")]
+  pub csv_path: Option<PathBuf>,
+  /// Filter down to datasets or columns matching this Arrow data type,
+  /// e.g. i32 or micros.
   #[arg(long, default_values_t = Vec::<String>::new(), value_delimiter = ',')]
   pub dtypes: Vec<String>,
   /// Number of iterations to run each codec x dataset combination for
@@ -40,10 +43,12 @@ pub struct Opt {
   #[arg(long, short)]
   pub limit: Option<usize>,
   #[command(flatten)]
+  pub input: InputFileOpt,
+  #[command(flatten)]
   pub handler_opt: HandlerOpt,
 }
 
-#[derive(Args)]
+#[derive(Clone, Debug, Args)]
 pub struct HandlerOpt {
   #[arg(long)]
   pub no_compress: bool,
@@ -56,7 +61,7 @@ pub struct HandlerOpt {
   pub no_assertions: bool,
 }
 
-impl Opt {
+impl BenchOpt {
   pub fn includes_dtype(&self, dtype: &str) -> bool {
     self.dtypes.is_empty()
       || self

@@ -11,7 +11,7 @@ use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
 
 use crate::core_handlers::CoreHandlerImpl;
 use crate::dtypes::PcoNumberLike;
-use crate::opt::InspectOpt;
+use crate::inspect::InspectOpt;
 use crate::utils;
 
 pub trait InspectHandler {

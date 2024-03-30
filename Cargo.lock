@@ -328,23 +328,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
-name = "bench"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "blosc-src",
- "bytes",
- "clap",
- "parquet",
- "pco",
- "q_compress",
- "snap",
- "tabled",
- "zstd",
- "zstd-sys",
-]
-
-[[package]]
 name = "better_io"
 version = "0.0.0"
 
@@ -1122,12 +1105,18 @@ dependencies = [
  "anyhow",
  "arrow",
  "better_io",
+ "blosc-src",
+ "bytes",
  "clap",
  "parquet",
  "pco",
+ "q_compress",
  "serde",
+ "snap",
  "tabled",
  "toml",
+ "zstd",
+ "zstd-sys",
 ]
 
 [[package]]

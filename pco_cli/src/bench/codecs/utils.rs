@@ -1,6 +1,6 @@
 use std::mem;
 
-use crate::dtypes::Dtype;
+use crate::bench::dtypes::Dtype;
 
 // cursed ways to convert nums to bytes and back without doing work
 pub unsafe fn num_slice_to_bytes<T: Dtype>(slice: &[T]) -> &[u8] {

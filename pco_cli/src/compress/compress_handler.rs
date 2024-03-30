@@ -14,8 +14,8 @@ use pco::standalone::FileCompressor;
 use pco::ChunkConfig;
 
 use crate::arrow_handlers::ArrowHandlerImpl;
+use crate::compress::CompressOpt;
 use crate::dtypes::ArrowNumberLike;
-use crate::opt::CompressOpt;
 use crate::utils;
 
 pub trait CompressHandler {
@@ -67,7 +67,7 @@ fn new_column_reader<P: ArrowNumberLike>(
   schema: &Schema,
   opt: &CompressOpt,
 ) -> Result<Box<dyn ColumnReader<P>>> {
-  let res: Box<dyn ColumnReader<P>> = match (&opt.csv_path, &opt.parquet_path) {
+  let res: Box<dyn ColumnReader<P>> = match (&opt.input.csv_path, &opt.input.parquet_path) {
     (Some(csv_path), None) => Box::new(CsvColumnReader::new(schema, csv_path, opt)?),
     (None, Some(parquet_path)) => Box::new(ParquetColumnReader::new(
       schema,
@@ -142,7 +142,7 @@ impl<P: ArrowNumberLike> ColumnReader<P> for CsvColumnReader<P> {
     let csv_reader = csv::ReaderBuilder::new(SchemaRef::new(schema.clone()))
       .with_header(opt.csv_has_header()?)
       .with_batch_size(opt.chunk_size)
-      .with_delimiter(opt.delimiter as u8)
+      .with_delimiter(opt.input.csv_delimiter as u8)
       .build(File::open(path)?)?;
     let col_idx = utils::find_col_idx(schema, opt)?;
 

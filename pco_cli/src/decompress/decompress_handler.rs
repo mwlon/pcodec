@@ -14,8 +14,8 @@ use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::FULL_BATCH_N;
 
 use crate::core_handlers::CoreHandlerImpl;
+use crate::decompress::DecompressOpt;
 use crate::dtypes::PcoNumberLike;
-use crate::opt::DecompressOpt;
 
 pub trait DecompressHandler {
   fn decompress(&self, opt: &DecompressOpt) -> Result<()>;

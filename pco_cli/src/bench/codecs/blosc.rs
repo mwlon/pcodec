@@ -1,5 +1,5 @@
-use crate::codecs::CodecInternal;
-use crate::dtypes::Dtype;
+use crate::bench::codecs::CodecInternal;
+use crate::bench::dtypes::Dtype;
 use std::ffi::{c_int, c_void, CString};
 
 #[derive(Clone, Debug)]

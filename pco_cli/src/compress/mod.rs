@@ -1,26 +1,73 @@
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
 use anyhow::Result;
 use arrow::csv;
-use arrow::datatypes::{Field, Schema};
+use arrow::datatypes::{DataType, Field, Schema};
+use clap::Parser;
 use parquet::file::reader::{FileReader, SerializedFileReader};
+use pco::{FloatMultSpec, IntMultSpec};
 
 use crate::dtypes;
-use crate::opt::CompressOpt;
+use crate::opt::InputFileOpt;
+use crate::parse;
 use crate::{arrow_handlers, utils};
 
 pub mod compress_handler;
 
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 
+#[derive(Clone, Debug, Parser)]
+#[command(about = "compress from a different format into standalone .pco")]
+pub struct CompressOpt {
+  #[arg(long, default_value = "8")]
+  pub level: usize,
+  #[arg(long = "delta-order")]
+  pub delta_encoding_order: Option<usize>,
+  #[arg(long, default_value = "Enabled", value_parser = parse::int_mult)]
+  pub int_mult: IntMultSpec,
+  #[arg(long, default_value = "Enabled", value_parser = parse::float_mult)]
+  pub float_mult: FloatMultSpec,
+  #[arg(long, value_parser = parse::arrow_dtype)]
+  pub dtype: Option<DataType>,
+  #[arg(long)]
+  pub col_name: Option<String>,
+  #[arg(long)]
+  pub col_idx: Option<usize>,
+  #[arg(long, default_value_t=pco::DEFAULT_MAX_PAGE_N)]
+  pub chunk_size: usize,
+  #[arg(long)]
+  pub overwrite: bool,
+  #[command(flatten)]
+  pub input: InputFileOpt,
+
+  pub pco_path: PathBuf,
+}
+
+impl CompressOpt {
+  pub fn csv_has_header(&self) -> Result<bool> {
+    let res = match (&self.col_name, &self.col_idx) {
+      (Some(_), None) => Ok(true),
+      (None, Some(_)) => Ok(self.input.csv_has_header),
+      (None, None) => Err(anyhow!(
+        "must provide either --col-idx or --col-name",
+      )),
+      _ => Err(anyhow!(
+        "cannot provide both --col-idx and --col-name"
+      )),
+    }?;
+
+    Ok(res)
+  }
+}
+
 fn infer_csv_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
   // arrow API is kinda bad right now, so we have to convert the paths
   // back to strings
   let inferred_schema = csv::infer_schema_from_files(
     &[path.to_str().unwrap().to_string()],
-    opt.delimiter as u8,
+    opt.input.csv_delimiter as u8,
     Some(MAX_INFER_SCHEMA_RECORDS),
     opt.csv_has_header()?,
   )?;
@@ -81,14 +128,15 @@ fn infer_parquet_schema(path: &Path, opt: &CompressOpt) -> Result<Schema> {
 }
 
 pub fn compress(opt: CompressOpt) -> Result<()> {
-  let schema = match (&opt.csv_path, &opt.parquet_path) {
+  let input = &opt.input;
+  let schema = match (&input.csv_path, &input.parquet_path) {
     (Some(csv_path), None) => infer_csv_schema(csv_path, &opt),
     (None, Some(parquet_path)) => infer_parquet_schema(parquet_path, &opt),
     _ => Err(anyhow!(
       "conflicting or incomplete dtype information: dtype={:?}, csv-path={:?}, parquet-path={:?}",
       opt.dtype,
-      opt.csv_path,
-      opt.parquet_path,
+      input.csv_path,
+      input.parquet_path,
     )),
   }?;
   let dtype = match (&opt.col_idx, &opt.col_name) {

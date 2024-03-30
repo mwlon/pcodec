@@ -2,15 +2,22 @@ use std::collections::HashMap;
 use std::fs;
 
 use anyhow::Result;
+use clap::Parser;
 
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
+use std::path::PathBuf;
 
 use crate::core_handlers;
 use crate::inspect::inspect_handler::{CompressionSummary, Output};
-use crate::opt::InspectOpt;
 use crate::utils;
 
 pub mod inspect_handler;
+
+#[derive(Clone, Debug, Parser)]
+#[command(about = "print metadata about a standalone .pco file")]
+pub struct InspectOpt {
+  pub path: PathBuf,
+}
 
 fn trivial_inspect(opt: &InspectOpt, src: &[u8]) -> Result<()> {
   let start_len = src.len();

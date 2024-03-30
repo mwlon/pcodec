@@ -1,7 +1,7 @@
 use q_compress::data_types::TimestampMicros;
 use std::cmp::min;
 
-use crate::dtypes::Dtype;
+use crate::bench::dtypes::Dtype;
 
 pub enum NumVec {
   U32(Vec<u32>),

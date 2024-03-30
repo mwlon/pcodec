@@ -9,8 +9,8 @@ use parquet::file::reader::SerializedFileReader;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::schema::parser::parse_message_type;
 
-use crate::codecs::CodecInternal;
-use crate::dtypes::Dtype;
+use crate::bench::codecs::CodecInternal;
+use crate::bench::dtypes::Dtype;
 
 const ZSTD: &str = "zstd";
 

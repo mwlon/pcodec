@@ -2,7 +2,7 @@ use std::mem;
 
 use parquet::data_type as parq;
 
-use crate::num_vec::NumVec;
+use crate::bench::num_vec::NumVec;
 use pco::data_types::NumberLike as PNumberLike;
 use q_compress::data_types::{NumberLike as QNumberLike, TimestampMicros};
 

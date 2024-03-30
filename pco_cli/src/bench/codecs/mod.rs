@@ -8,16 +8,16 @@ use anyhow::{anyhow, Result};
 
 use q_compress::data_types::TimestampMicros;
 
-use crate::codecs::blosc::BloscConfig;
-use crate::codecs::parquet::ParquetConfig;
-use crate::codecs::pco::PcoConfig;
-use crate::codecs::qco::QcoConfig;
-use crate::codecs::snappy::SnappyConfig;
-use crate::codecs::zstd::ZstdConfig;
-use crate::dtypes::Dtype;
-use crate::num_vec::NumVec;
-use crate::opt::HandlerOpt;
-use crate::{BenchStat, Precomputed, BASE_DIR};
+use crate::bench::codecs::blosc::BloscConfig;
+use crate::bench::codecs::parquet::ParquetConfig;
+use crate::bench::codecs::pco::PcoConfig;
+use crate::bench::codecs::qco::QcoConfig;
+use crate::bench::codecs::snappy::SnappyConfig;
+use crate::bench::codecs::zstd::ZstdConfig;
+use crate::bench::dtypes::Dtype;
+use crate::bench::num_vec::NumVec;
+use crate::bench::opt::HandlerOpt;
+use crate::bench::{BenchStat, Precomputed, DEFAULT_BASE_DIR};
 
 mod blosc;
 mod parquet;
@@ -140,7 +140,7 @@ impl<C: CodecInternal> CodecSurface for C {
     );
 
     // write to disk
-    let output_dir = format!("{}/{}", BASE_DIR, self.name());
+    let output_dir = format!("{}/{}", DEFAULT_BASE_DIR, self.name());
     let output_path = format!("{}/{}", output_dir, fname);
 
     match fs::create_dir(&output_dir) {

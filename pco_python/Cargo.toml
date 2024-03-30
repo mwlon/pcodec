@@ -7,11 +7,11 @@ publish = false
 [lib]
 # The name of the native library. This is the name which will be used in Python to import the
 # library (i.e. `import string_sum`). If you change this, you must also change the name of the
-# `#[pymodule]` in `src/lib.rs`.
+# `#[pymodule]` in `bench/lib.rs`.
 name = "pcodec"
 crate-type = ["cdylib"]
 
 [dependencies]
 numpy = "0.20.0"
-pco = {version = "0.2.0", path = "../pco" }
+pco = { version = "0.2.0", path = "../pco" }
 pyo3 = { version = "0.20.0", features = ["extension-module"] }

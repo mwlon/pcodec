@@ -7,8 +7,8 @@ use arrow::datatypes::Schema;
 use pco::data_types::{CoreDataType, NumberLike};
 use pco::standalone::FileDecompressor;
 
+use crate::compress::CompressOpt;
 use crate::dtypes::ArrowNumberLike;
-use crate::opt::CompressOpt;
 
 pub fn get_standalone_dtype(initial_bytes: &[u8]) -> Result<Option<CoreDataType>> {
   let (fd, src) = FileDecompressor::new(initial_bytes)?;

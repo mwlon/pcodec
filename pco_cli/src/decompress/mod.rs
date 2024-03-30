@@ -2,11 +2,21 @@ use std::fs::OpenOptions;
 use std::io::{ErrorKind, Read};
 
 use anyhow::Result;
+use clap::Parser;
+use std::path::PathBuf;
 
-use crate::opt::DecompressOpt;
 use crate::{core_handlers, utils};
 
 pub mod decompress_handler;
+
+#[derive(Clone, Debug, Parser)]
+#[command(about = "decompress from standalone .pco into stdout")]
+pub struct DecompressOpt {
+  #[arg(long)]
+  pub limit: Option<usize>,
+
+  pub pco_path: PathBuf,
+}
 
 pub fn decompress(opt: DecompressOpt) -> Result<()> {
   let mut initial_bytes = vec![0; pco::standalone::guarantee::header_size() + 1];
