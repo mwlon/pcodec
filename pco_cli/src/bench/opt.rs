@@ -1,10 +1,13 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use anyhow::Result;
+use arrow::datatypes::DataType;
 use clap::{Args, Parser};
 
 use crate::bench::codecs::CodecConfig;
 use crate::opt::InputFileOpt;
+use crate::parse;
 
 #[derive(Clone, Debug, Parser)]
 pub struct BenchOpt {
@@ -16,7 +19,7 @@ pub struct BenchOpt {
   /// `zstd,zstd:level=10,pco:level=9:delta_order=0`
   /// will compare 3 codecs: zstd at default compression level (3), zstd at
   /// level 10, and pco at level 9 with 0th order delta encoding.
-  #[arg(long, short, default_value = "pco", value_parser=CodecConfig::from_str, value_delimiter=',')]
+  #[arg(long, short, default_value = "pco", value_parser = CodecConfig::from_str, value_delimiter = ',')]
   pub codecs: Vec<CodecConfig>,
   /// Comma-separated substrings of datasets or column names to benchmark.
   /// By default all datasets are run.
@@ -32,8 +35,8 @@ pub struct BenchOpt {
   pub csv_path: Option<PathBuf>,
   /// Filter down to datasets or columns matching this Arrow data type,
   /// e.g. i32 or micros.
-  #[arg(long, default_values_t = Vec::<String>::new(), value_delimiter = ',')]
-  pub dtypes: Vec<String>,
+  #[arg(long, default_values_t = Vec::<String>::new(), value_parser = parse::arrow_dtype, value_delimiter = ',')]
+  pub dtypes: Vec<DataType>,
   /// Number of iterations to run each codec x dataset combination for
   /// better estimation of durations.
   /// The median duration is kept.
@@ -62,12 +65,13 @@ pub struct HandlerOpt {
 }
 
 impl BenchOpt {
-  pub fn includes_dtype(&self, dtype: &str) -> bool {
-    self.dtypes.is_empty()
-      || self
-        .dtypes
-        .iter()
-        .any(|allowed_dtype| allowed_dtype == dtype)
+  pub fn includes_dtype_str(&self, dtype_str: &str) -> Result<bool> {
+    let dtype = parse::arrow_dtype(dtype_str)?;
+    if self.dtypes.is_empty() {
+      Ok(true)
+    } else {
+      Ok(self.dtypes.contains(&dtype))
+    }
   }
 
   pub fn includes_dataset(&self, dataset: &str) -> bool {
