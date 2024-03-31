@@ -3,7 +3,6 @@ use anyhow::{anyhow, Result};
 use pco::{FloatMultSpec, IntMultSpec, PagingSpec};
 
 use crate::bench::codecs::CodecInternal;
-use crate::bench::dtypes::Dtype;
 use crate::dtypes::PcoNumberLike;
 
 #[derive(Clone, Debug, Default)]
@@ -93,12 +92,10 @@ impl CodecInternal for PcoConfig {
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
-    let pco_nums = T::slice_to_pco(nums);
-    pco::standalone::simple_compress(pco_nums, &self.chunk_config).expect("invalid config")
+    pco::standalone::simple_compress(nums, &self.chunk_config).expect("invalid config")
   }
 
   fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
-    let v = pco::standalone::simple_decompress::<T::Pco>(bytes).expect("could not decompress");
-    T::vec_from_pco(v)
+    pco::standalone::simple_decompress::<T>(bytes).expect("could not decompress")
   }
 }

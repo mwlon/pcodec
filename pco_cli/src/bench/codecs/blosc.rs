@@ -1,5 +1,4 @@
 use crate::bench::codecs::CodecInternal;
-use crate::bench::dtypes::Dtype;
 use crate::dtypes::PcoNumberLike;
 use std::ffi::{c_int, c_void, CString};
 
@@ -44,7 +43,7 @@ impl CodecInternal for BloscConfig {
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
-    let type_size = T::PHYSICAL_BITS / 8;
+    let type_size = T::BITS / 8;
     let n_bytes = nums.len() * type_size;
     let mut dst = Vec::with_capacity(n_bytes + blosc_src::BLOSC_MAX_OVERHEAD as usize);
     unsafe {
@@ -53,7 +52,7 @@ impl CodecInternal for BloscConfig {
       let compressed_size = blosc_src::blosc_compress_ctx(
         self.clevel,
         blosc_src::BLOSC_SHUFFLE as c_int,
-        T::PHYSICAL_BITS / 8,
+        T::BITS / 8,
         n_bytes,
         src,
         dst.as_mut_ptr() as *mut c_void,
@@ -68,7 +67,7 @@ impl CodecInternal for BloscConfig {
   }
 
   fn decompress<T: PcoNumberLike>(&self, compressed: &[u8]) -> Vec<T> {
-    let type_size = T::PHYSICAL_BITS / 8;
+    let type_size = T::BITS / 8;
 
     let mut uncompressed_size = 0;
     let mut compressed_size = 0_usize;

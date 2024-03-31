@@ -10,7 +10,6 @@ use parquet::file::writer::SerializedFileWriter;
 use parquet::schema::parser::parse_message_type;
 
 use crate::bench::codecs::CodecInternal;
-use crate::bench::dtypes::Dtype;
 use crate::dtypes::PcoNumberLike;
 
 const ZSTD: &str = "zstd";

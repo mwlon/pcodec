@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use crate::bench::handler::BenchHandler;
 use anyhow::{anyhow, Result};
 use arrow::datatypes::*;
 
@@ -36,7 +37,7 @@ pub fn from_dtype(dtype: &DataType) -> Result<Box<dyn ArrowHandler>> {
   )
 }
 
-pub trait ArrowHandler: CompressHandler {}
+pub trait ArrowHandler: CompressHandler + BenchHandler {}
 
 #[derive(Clone, Debug, Default)]
 pub struct ArrowHandlerImpl<P> {

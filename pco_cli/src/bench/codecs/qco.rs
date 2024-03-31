@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 
 use crate::bench::codecs::CodecInternal;
-use crate::bench::dtypes::Dtype;
 use crate::dtypes::PcoNumberLike;
 
 #[derive(Clone, Debug, Default)]

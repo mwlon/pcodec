@@ -4,7 +4,6 @@ use std::io::{Read, Write};
 use anyhow::{anyhow, Result};
 
 use crate::bench::codecs::{utils, CodecInternal};
-use crate::bench::dtypes::Dtype;
 use crate::dtypes::PcoNumberLike;
 
 #[derive(Clone, Debug, Default)]

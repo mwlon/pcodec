@@ -1,23 +1,25 @@
-use q_compress::data_types::TimestampMicros;
 use std::cmp::min;
 
-use crate::bench::dtypes::Dtype;
+use pco::data_types::CoreDataType;
+use pco::data_types::CoreDataType::{F32, F64, U32, U64};
+
+use crate::dtypes::PcoNumberLike;
 
 pub enum NumVec {
-  U32(Vec<u32>),
-  I32(Vec<i32>),
-  I64(Vec<i64>),
   F32(Vec<f32>),
   F64(Vec<f64>),
-  Micros(Vec<TimestampMicros>),
+  I32(Vec<i32>),
+  I64(Vec<i64>),
+  U32(Vec<u32>),
+  U64(Vec<u64>),
 }
 
-fn cast_to_nums<T: Dtype>(bytes: Vec<u8>, limit: Option<usize>) -> Vec<T> {
+fn cast_to_nums<T: PcoNumberLike>(bytes: Vec<u8>, limit: Option<usize>) -> Vec<T> {
   // Here we're assuming the bytes are in the right format for our data type.
   // For instance, chunks of 8 little-endian bytes on most platforms for
   // i64's.
   // This is fast and should work across platforms.
-  let n = bytes.len() / (T::PHYSICAL_BITS / 8);
+  let n = bytes.len() / (T::BITS / 8);
   let nums = unsafe {
     let mut nums = std::mem::transmute::<_, Vec<T>>(bytes);
     nums.set_len(n);
@@ -37,26 +39,27 @@ fn cast_to_nums<T: Dtype>(bytes: Vec<u8>, limit: Option<usize>) -> Vec<T> {
 }
 
 impl NumVec {
-  pub fn new(dtype: &str, raw_bytes: Vec<u8>, limit: Option<usize>) -> Self {
+  pub fn new(dtype: CoreDataType, raw_bytes: Vec<u8>, limit: Option<usize>) -> Self {
+    use CoreDataType::*;
     match dtype {
-      "u32" => NumVec::U32(cast_to_nums(raw_bytes, limit)),
-      "i32" => NumVec::I32(cast_to_nums(raw_bytes, limit)),
-      "i64" => NumVec::I64(cast_to_nums(raw_bytes, limit)),
-      "f32" => NumVec::F32(cast_to_nums(raw_bytes, limit)),
-      "f64" => NumVec::F64(cast_to_nums(raw_bytes, limit)),
-      "micros" => NumVec::Micros(cast_to_nums(raw_bytes, limit)),
-      _ => panic!("unknown dtype {}", dtype),
+      F32 => NumVec::F32(cast_to_nums(raw_bytes, limit)),
+      F64 => NumVec::F64(cast_to_nums(raw_bytes, limit)),
+      I32 => NumVec::I32(cast_to_nums(raw_bytes, limit)),
+      I64 => NumVec::I64(cast_to_nums(raw_bytes, limit)),
+      U32 => NumVec::U32(cast_to_nums(raw_bytes, limit)),
+      U64 => NumVec::U64(cast_to_nums(raw_bytes, limit)),
     }
   }
 
-  pub fn dtype_str(&self) -> &'static str {
+  pub fn dtype(&self) -> CoreDataType {
+    use CoreDataType::*;
     match self {
-      NumVec::U32(_) => "u32",
-      NumVec::I32(_) => "i32",
-      NumVec::I64(_) => "i64",
-      NumVec::F32(_) => "f32",
-      NumVec::F64(_) => "f64",
-      NumVec::Micros(_) => "micros",
+      NumVec::F32(_) => F32,
+      NumVec::F64(_) => F64,
+      NumVec::I32(_) => I32,
+      NumVec::I64(_) => I64,
+      NumVec::U32(_) => U32,
+      NumVec::U64(_) => U64,
     }
   }
 }

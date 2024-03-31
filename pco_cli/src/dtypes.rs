@@ -8,6 +8,7 @@ use pco::data_types::{CoreDataType, NumberLike};
 
 pub trait PcoNumberLike: NumberLike {
   const ARROW_DTYPE: DataType;
+  const BITS: usize;
 
   type Arrow: ArrowPrimitiveType;
 
@@ -26,6 +27,7 @@ macro_rules! trivial {
   ($t: ty, $p: ty) => {
     impl PcoNumberLike for $t {
       const ARROW_DTYPE: DataType = <$p as ArrowPrimitiveType>::DATA_TYPE;
+      const BITS: usize = Self::BITS as usize;
 
       type Arrow = $p;
 
@@ -70,8 +72,6 @@ trivial!(i32, arrow_dtypes::Int32Type);
 trivial!(i64, arrow_dtypes::Int64Type);
 trivial!(u32, arrow_dtypes::UInt32Type);
 trivial!(u64, arrow_dtypes::UInt64Type);
-extra_arrow!(i32, arrow_dtypes::Int16Type);
-extra_arrow!(u32, arrow_dtypes::UInt16Type);
 extra_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampNanosecondType);
 

@@ -4,10 +4,10 @@ use std::fs;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+use ::pco::data_types::CoreDataType;
+use ::pco::data_types::CoreDataType::{F32, F64, U32, U64};
 use anyhow::{anyhow, Result};
 use arrow::array::{Array, ArrayRef};
-
-use q_compress::data_types::TimestampMicros;
 
 use crate::bench::codecs::blosc::BloscConfig;
 use crate::bench::codecs::parquet::ParquetConfig;
@@ -15,7 +15,6 @@ use crate::bench::codecs::pco::PcoConfig;
 use crate::bench::codecs::qco::QcoConfig;
 use crate::bench::codecs::snappy::SnappyConfig;
 use crate::bench::codecs::zstd::ZstdConfig;
-use crate::bench::dtypes::Dtype;
 use crate::bench::num_vec::NumVec;
 use crate::bench::opt::IterOpt;
 use crate::bench::{BenchStat, Precomputed};
@@ -42,35 +41,35 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
 
   // sad manual dynamic dispatch, but at least we don't need all combinations
   // of (dtype x codec)
-  // fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
-  //   match num_vec {
-  //     NumVec::U32(nums) => self.compress(nums),
-  //     NumVec::I32(nums) => self.compress(nums),
-  //     NumVec::I64(nums) => self.compress(nums),
-  //     NumVec::F32(nums) => self.compress(nums),
-  //     NumVec::F64(nums) => self.compress(nums),
-  //     NumVec::Micros(nums) => self.compress(nums),
-  //   }
-  // }
+  fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
+    match num_vec {
+      NumVec::U32(nums) => self.compress(nums),
+      NumVec::U64(nums) => self.compress(nums),
+      NumVec::I32(nums) => self.compress(nums),
+      NumVec::I64(nums) => self.compress(nums),
+      NumVec::F32(nums) => self.compress(nums),
+      NumVec::F64(nums) => self.compress(nums),
+    }
+  }
 
-  // fn decompress_dynamic(&self, dtype: &str, compressed: &[u8]) -> NumVec {
-  //   match dtype {
-  //     "u32" => NumVec::U32(self.decompress::<u32>(compressed)),
-  //     "i32" => NumVec::I32(self.decompress::<i32>(compressed)),
-  //     "i64" => NumVec::I64(self.decompress::<i64>(compressed)),
-  //     "f32" => NumVec::F32(self.decompress::<f32>(compressed)),
-  //     "f64" => NumVec::F64(self.decompress::<f64>(compressed)),
-  //     "micros" => NumVec::Micros(self.decompress::<TimestampMicros>(compressed)),
-  //     _ => panic!("unknown dtype {}", dtype),
-  //   }
-  // }
+  fn decompress_dynamic(&self, dtype: CoreDataType, compressed: &[u8]) -> NumVec {
+    use CoreDataType::*;
+    match dtype {
+      F32 => NumVec::F32(self.decompress::<f32>(compressed)),
+      F64 => NumVec::F64(self.decompress::<f64>(compressed)),
+      I32 => NumVec::I32(self.decompress::<i32>(compressed)),
+      I64 => NumVec::I64(self.decompress::<i64>(compressed)),
+      U32 => NumVec::U32(self.decompress::<u32>(compressed)),
+      U64 => NumVec::U64(self.decompress::<u64>(compressed)),
+    }
+  }
 
   fn compare_nums<T: PcoNumberLike>(&self, recovered: &[T], original: &[T]) {
     assert_eq!(recovered.len(), original.len());
     for (i, (x, y)) in recovered.iter().zip(original.iter()).enumerate() {
       assert_eq!(
-        x.to_unsigned(),
-        y.to_unsigned(),
+        x.to_latent_ordered(),
+        y.to_latent_ordered(),
         "{} != {} at {}",
         x,
         y,
@@ -82,11 +81,11 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
   fn compare_nums_dynamic(&self, recovered: &NumVec, original: &NumVec) {
     match (recovered, original) {
       (NumVec::U32(x), NumVec::U32(y)) => self.compare_nums(x, y),
+      (NumVec::U64(x), NumVec::U64(y)) => self.compare_nums(x, y),
       (NumVec::I32(x), NumVec::I32(y)) => self.compare_nums(x, y),
       (NumVec::I64(x), NumVec::I64(y)) => self.compare_nums(x, y),
       (NumVec::F32(x), NumVec::F32(y)) => self.compare_nums(x, y),
       (NumVec::F64(x), NumVec::F64(y)) => self.compare_nums(x, y),
-      (NumVec::Micros(x), NumVec::Micros(y)) => self.compare_nums(x, y),
       _ => unreachable!(),
     }
   }
@@ -97,15 +96,10 @@ pub trait CodecSurface: Debug + Send + Sync {
   fn set_conf(&mut self, key: &str, value: String) -> Result<()>;
   fn details(&self) -> String;
 
-  fn warmup_iter<T: PcoNumberLike>(
+  fn warmup_iter(&self, nums_vec: &NumVec, dataset: &str, opt: &IterOpt) -> Result<Precomputed>;
+  fn stats_iter(
     &self,
-    nums: &[T],
-    dataset: &str,
-    opt: &IterOpt,
-  ) -> Result<Precomputed>;
-  fn stats_iter<T: PcoNumberLike>(
-    &self,
-    nums: &[T],
+    nums_vec: &NumVec,
     precomputed: &Precomputed,
     opt: &IterOpt,
   ) -> Result<BenchStat>;
@@ -123,26 +117,22 @@ impl<C: CodecInternal> CodecSurface for C {
   }
 
   fn details(&self) -> String {
-    let default_confs: HashMap<String, String> = Self::default().get_confs().into();
+    let default_confs: HashMap<&'static str, String> =
+      Self::default().get_confs().into_iter().collect();
     let mut res = String::new();
     for (k, v) in self.get_confs() {
-      if v != default_confs.get(&k).unwrap() {
+      if &v != default_confs.get(k).unwrap() {
         res.push_str(&format!(":{}={}", k, v,));
       }
     }
     res
   }
 
-  fn warmup_iter<T: PcoNumberLike>(
-    &self,
-    nums: &[T],
-    dataset: &str,
-    opt: &IterOpt,
-  ) -> Result<Precomputed> {
-    let dtype = nums.data_type();
+  fn warmup_iter(&self, num_vec: &NumVec, dataset: &str, opt: &IterOpt) -> Result<Precomputed> {
+    let dtype = num_vec.dtype();
 
     // compress
-    let compressed = self.compress(nums);
+    let compressed = self.compress_dynamic(num_vec);
 
     // write to disk
     if let Some(dir) = opt.save_dir.as_ref() {
@@ -157,29 +147,26 @@ impl<C: CodecInternal> CodecSurface for C {
 
     // decompress
     if !opt.no_decompress {
-      let rec_nums = self.decompress(&compressed);
+      let rec_nums = self.decompress_dynamic(dtype, &compressed);
 
       if !opt.no_assertions {
-        self.compare_nums_dynamic(&rec_nums, nums);
+        self.compare_nums_dynamic(&rec_nums, num_vec);
       }
     }
 
-    Ok(Precomputed {
-      compressed,
-      dtype: dtype.to_string(),
-    })
+    Ok(Precomputed { compressed, dtype })
   }
 
-  fn stats_iter<T: PcoNumberLike>(
+  fn stats_iter(
     &self,
-    nums: &[T],
+    num_vec: &NumVec,
     precomputed: &Precomputed,
     opt: &IterOpt,
-  ) -> BenchStat {
+  ) -> Result<BenchStat> {
     // compress
     let compress_dt = if !opt.no_compress {
       let t = Instant::now();
-      let _ = self.compress(nums);
+      let _ = self.compress_dynamic(num_vec);
       let dt = Instant::now() - t;
       println!("\tcompressed in {:?}", dt);
       dt
@@ -190,7 +177,7 @@ impl<C: CodecInternal> CodecSurface for C {
     // decompress
     let decompress_dt = if !opt.no_decompress {
       let t = Instant::now();
-      let _ = self.decompress(&precomputed.compressed);
+      let _ = self.decompress_dynamic(num_vec.dtype(), &precomputed.compressed);
       let dt = Instant::now() - t;
       println!("\tdecompressed in {:?}", dt);
       dt
@@ -198,11 +185,11 @@ impl<C: CodecInternal> CodecSurface for C {
       Duration::ZERO
     };
 
-    BenchStat {
+    Ok(BenchStat {
       compressed_size: precomputed.compressed.len(),
       compress_dt,
       decompress_dt,
-    }
+    })
   }
 
   fn clone_to_box(&self) -> Box<dyn CodecSurface> {

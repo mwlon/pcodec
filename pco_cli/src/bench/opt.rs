@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use arrow::datatypes::DataType;
 use clap::{Args, Parser};
+use pco::data_types::CoreDataType;
 
 use crate::bench::codecs::CodecConfig;
 use crate::opt::InputFileOpt;
@@ -72,12 +73,11 @@ pub struct IterOpt {
 }
 
 impl BenchOpt {
-  pub fn includes_dtype_str(&self, dtype_str: &str) -> bool {
-    let dtype = parse::arrow_dtype(dtype_str).expect("unsupported dtype string");
+  pub fn includes_dtype(&self, dtype: &DataType) -> bool {
     if self.dtypes.is_empty() {
       true
     } else {
-      self.dtypes.contains(&dtype)
+      self.dtypes.contains(dtype)
     }
   }
 
