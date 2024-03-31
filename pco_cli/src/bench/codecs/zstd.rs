@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 
 use crate::bench::codecs::{utils, CodecInternal};
 use crate::bench::dtypes::Dtype;
+use crate::dtypes::PcoNumberLike;
 
 #[derive(Clone, Debug, Default)]
 pub struct ZstdConfig {
@@ -15,11 +16,8 @@ impl CodecInternal for ZstdConfig {
     "zstd"
   }
 
-  fn get_conf(&self, key: &str) -> String {
-    match key {
-      "level" => self.level.to_string(),
-      _ => panic!("bad conf"),
-    }
+  fn get_confs(&self) -> Vec<(&'static str, String)> {
+    vec![("level", self.level.to_string())]
   }
 
   fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
@@ -30,7 +28,7 @@ impl CodecInternal for ZstdConfig {
     Ok(())
   }
 
-  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
     res.extend((nums.len() as u32).to_le_bytes());
     unsafe {
@@ -44,7 +42,7 @@ impl CodecInternal for ZstdConfig {
     res
   }
 
-  fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
     let len = u32::from_le_bytes(bytes[0..4].try_into().unwrap()) as usize;
     let mut res = Vec::<T>::with_capacity(len);
     unsafe {

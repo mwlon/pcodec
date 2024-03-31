@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::{core_handlers, utils};
 
-pub mod decompress_handler;
+pub mod handler;
 
 #[derive(Clone, Debug, Parser)]
 #[command(about = "decompress from standalone .pco into stdout")]

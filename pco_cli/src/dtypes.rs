@@ -18,6 +18,8 @@ pub trait ArrowNumberLike: ArrowPrimitiveType {
   type Pco: PcoNumberLike;
 
   fn native_to_pco(native: Self::Native) -> Self::Pco;
+
+  fn native_vec_to_pco(native: Vec<Self::Native>) -> Vec<Self::Pco>;
 }
 
 macro_rules! trivial {
@@ -38,6 +40,10 @@ macro_rules! trivial {
       fn native_to_pco(native: Self::Native) -> Self::Pco {
         native as Self::Pco
       }
+
+      fn native_vec_to_pco(native: Vec<Self::Native>) -> Vec<Self::Pco> {
+        native
+      }
     }
   };
 }
@@ -49,6 +55,10 @@ macro_rules! extra_arrow {
 
       fn native_to_pco(native: Self::Native) -> Self::Pco {
         native as Self::Pco
+      }
+
+      fn native_vec_to_pco(native: Vec<Self::Native>) -> Vec<Self::Pco> {
+        native
       }
     }
   };

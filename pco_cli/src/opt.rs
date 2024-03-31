@@ -15,15 +15,14 @@ pub struct OptWrapper {
 
 #[derive(Clone, Debug, Parser)]
 pub struct InputFileOpt {
-  #[arg(long = "csv", help = "path to decompress a column from")]
-  pub csv_path: Option<PathBuf>,
-  #[arg(long = "parquet", short, help = "path to decompress a column from")]
+  /// Path to a Parquet file to use as input.
+  /// Only numerical, non-null values in the file will be used.
+  #[arg(long = "parquet", short)]
   pub parquet_path: Option<PathBuf>,
-  #[arg(
-    long = "binary",
-    help = "path to interpret as a little-endian array of numbers"
-  )]
-  pub binary_path: Option<PathBuf>,
+  /// Path to a CSV file to use as input.
+  /// Only numerical, non-null values in the file will be used.
+  #[arg(long = "csv")]
+  pub csv_path: Option<PathBuf>,
 
   #[arg(long)]
   pub csv_has_header: bool,

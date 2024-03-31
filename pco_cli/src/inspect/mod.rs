@@ -8,10 +8,10 @@ use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use std::path::PathBuf;
 
 use crate::core_handlers;
-use crate::inspect::inspect_handler::{CompressionSummary, Output};
+use crate::inspect::handler::{CompressionSummary, Output};
 use crate::utils;
 
-pub mod inspect_handler;
+pub mod handler;
 
 #[derive(Clone, Debug, Parser)]
 #[command(about = "print metadata about a standalone .pco file")]

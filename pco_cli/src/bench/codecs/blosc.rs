@@ -1,5 +1,6 @@
 use crate::bench::codecs::CodecInternal;
 use crate::bench::dtypes::Dtype;
+use crate::dtypes::PcoNumberLike;
 use std::ffi::{c_int, c_void, CString};
 
 #[derive(Clone, Debug)]
@@ -24,13 +25,12 @@ impl CodecInternal for BloscConfig {
     "blosc"
   }
 
-  fn get_conf(&self, key: &str) -> String {
-    match key {
-      "block_size" => self.block_size.to_string(),
-      "cname" => self.cname.to_string(),
-      "level" => self.clevel.to_string(),
-      _ => panic!("unknown blosc key: {}", key),
-    }
+  fn get_confs(&self) -> Vec<(&'static str, String)> {
+    vec![
+      ("block_size", self.block_size.to_string()),
+      ("cname", self.cname.to_string()),
+      ("level", self.clevel.to_string()),
+    ]
   }
 
   fn set_conf(&mut self, key: &str, value: String) -> anyhow::Result<()> {
@@ -43,7 +43,7 @@ impl CodecInternal for BloscConfig {
     Ok(())
   }
 
-  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
     let type_size = T::PHYSICAL_BITS / 8;
     let n_bytes = nums.len() * type_size;
     let mut dst = Vec::with_capacity(n_bytes + blosc_src::BLOSC_MAX_OVERHEAD as usize);
@@ -67,7 +67,7 @@ impl CodecInternal for BloscConfig {
     dst
   }
 
-  fn decompress<T: Dtype>(&self, compressed: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumberLike>(&self, compressed: &[u8]) -> Vec<T> {
     let type_size = T::PHYSICAL_BITS / 8;
 
     let mut uncompressed_size = 0;

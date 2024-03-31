@@ -4,6 +4,7 @@ use pco::{FloatMultSpec, IntMultSpec, PagingSpec};
 
 use crate::bench::codecs::CodecInternal;
 use crate::bench::dtypes::Dtype;
+use crate::dtypes::PcoNumberLike;
 
 #[derive(Clone, Debug, Default)]
 pub struct PcoConfig {
@@ -15,22 +16,36 @@ impl CodecInternal for PcoConfig {
     "pco"
   }
 
-  fn get_conf(&self, key: &str) -> String {
-    match key {
-      "level" => self.chunk_config.compression_level.to_string(),
-      "delta_order" => self
-        .chunk_config
-        .delta_encoding_order
-        .map(|order| order.to_string())
-        .unwrap_or("auto".to_string()),
-      "gcd" => format!("{:?}", self.chunk_config.int_mult_spec),
-      "float_mult" => format!("{:?}", self.chunk_config.float_mult_spec),
-      "chunk_n" => match self.chunk_config.paging_spec {
-        PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
-        _ => panic!("unexpected paging spec"),
-      },
-      _ => panic!("bad conf"),
-    }
+  fn get_confs(&self) -> Vec<(&'static str, String)> {
+    vec![
+      (
+        "level",
+        self.chunk_config.compression_level.to_string(),
+      ),
+      (
+        "delta_order",
+        self
+          .chunk_config
+          .delta_encoding_order
+          .map(|order| order.to_string())
+          .unwrap_or("auto".to_string()),
+      ),
+      (
+        "gcd",
+        format!("{:?}", self.chunk_config.int_mult_spec),
+      ),
+      (
+        "float_mult",
+        format!("{:?}", self.chunk_config.float_mult_spec),
+      ),
+      (
+        "chunk_n",
+        match self.chunk_config.paging_spec {
+          PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
+          _ => panic!("unexpected paging spec"),
+        },
+      ),
+    ]
   }
 
   fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
@@ -77,12 +92,12 @@ impl CodecInternal for PcoConfig {
     Ok(())
   }
 
-  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
     let pco_nums = T::slice_to_pco(nums);
     pco::standalone::simple_compress(pco_nums, &self.chunk_config).expect("invalid config")
   }
 
-  fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
     let v = pco::standalone::simple_decompress::<T::Pco>(bytes).expect("could not decompress");
     T::vec_from_pco(v)
   }

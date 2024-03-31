@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::Result;
 use arrow::datatypes::DataType;
 use clap::{Args, Parser};
 
@@ -9,6 +8,11 @@ use crate::bench::codecs::CodecConfig;
 use crate::opt::InputFileOpt;
 use crate::parse;
 
+/// Run benchmarks on datasets originating from another format.
+/// The input format does not affect performance; all input numbers are
+/// loaded into memory prior to benchmarking each dataset.
+/// This supports output formats other than pco, if compiled with the
+/// necessary features.
 #[derive(Clone, Debug, Parser)]
 pub struct BenchOpt {
   // TODO explain some way to get the list of keys available
@@ -25,17 +29,9 @@ pub struct BenchOpt {
   /// By default all datasets are run.
   #[arg(long, short, default_values_t = Vec::<String>::new(), value_delimiter = ',')]
   pub datasets: Vec<String>,
-  /// Path to a parquet file to use as input.
-  /// Only numerical columns, non-null values in the file will be used.
-  #[arg(long = "parquet", short)]
-  pub parquet_path: Option<PathBuf>,
-  /// Path to a CSV file to use as input.
-  /// Only numerical columns, non-null values in the file will be used.
-  #[arg(long = "csv")]
-  pub csv_path: Option<PathBuf>,
   /// Filter down to datasets or columns matching this Arrow data type,
   /// e.g. i32 or micros.
-  #[arg(long, default_values_t = Vec::<String>::new(), value_parser = parse::arrow_dtype, value_delimiter = ',')]
+  #[arg(long, default_values_t = Vec::<DataType>::new(), value_parser = parse::arrow_dtype, value_delimiter = ',')]
   pub dtypes: Vec<DataType>,
   /// Number of iterations to run each codec x dataset combination for
   /// better estimation of durations.
@@ -45,14 +41,21 @@ pub struct BenchOpt {
   /// How many numbers to limit each dataset to.
   #[arg(long, short)]
   pub limit: Option<usize>,
+  /// Path to a directory containing binary files to be used as input.
+  /// Each binary file must be prefixed with its data type, e.g.
+  /// `f32_foo.bar`.
+  /// By default, if no inputs are specified, the benchmarks will use the
+  /// relative directory `data/binary/` as input.
+  #[arg(long)]
+  pub binary_dir: Option<PathBuf>,
   #[command(flatten)]
   pub input: InputFileOpt,
   #[command(flatten)]
-  pub handler_opt: HandlerOpt,
+  pub iter_opt: IterOpt,
 }
 
 #[derive(Clone, Debug, Args)]
-pub struct HandlerOpt {
+pub struct IterOpt {
   #[arg(long)]
   pub no_compress: bool,
   #[arg(long)]
@@ -62,15 +65,19 @@ pub struct HandlerOpt {
   /// This does not affect benchmark timing.
   #[arg(long)]
   pub no_assertions: bool,
+  /// Optionally, a directory to save the compressed data to.
+  /// Will overwrite conflicting files.
+  #[arg(long)]
+  pub save_dir: Option<PathBuf>,
 }
 
 impl BenchOpt {
-  pub fn includes_dtype_str(&self, dtype_str: &str) -> Result<bool> {
-    let dtype = parse::arrow_dtype(dtype_str)?;
+  pub fn includes_dtype_str(&self, dtype_str: &str) -> bool {
+    let dtype = parse::arrow_dtype(dtype_str).expect("unsupported dtype string");
     if self.dtypes.is_empty() {
-      Ok(true)
+      true
     } else {
-      Ok(self.dtypes.contains(&dtype))
+      self.dtypes.contains(&dtype)
     }
   }
 

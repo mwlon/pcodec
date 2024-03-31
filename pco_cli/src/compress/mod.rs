@@ -14,7 +14,7 @@ use crate::opt::InputFileOpt;
 use crate::parse;
 use crate::{arrow_handlers, utils};
 
-pub mod compress_handler;
+pub mod handler;
 
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 

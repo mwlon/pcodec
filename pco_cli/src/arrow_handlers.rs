@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use anyhow::{anyhow, Result};
 use arrow::datatypes::*;
 
-use crate::compress::compress_handler::CompressHandler;
+use crate::compress::handler::CompressHandler;
 use crate::dtypes::ArrowNumberLike;
 
 fn new_boxed_handler<P: ArrowNumberLike>() -> Box<dyn ArrowHandler> {
