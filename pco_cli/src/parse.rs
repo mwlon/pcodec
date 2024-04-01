@@ -1,7 +1,6 @@
-use crate::dtypes;
 use anyhow::anyhow;
 use arrow::datatypes::{DataType, TimeUnit};
-use pco::data_types::CoreDataType;
+
 use pco::{FloatMultSpec, IntMultSpec};
 
 pub fn int_mult(s: &str) -> anyhow::Result<IntMultSpec> {
@@ -63,9 +62,4 @@ pub fn arrow_dtype(s: &str) -> anyhow::Result<DataType> {
       .map(|(name, _)| name.to_string())
       .collect::<Vec<_>>()
   ))
-}
-
-pub fn core_dtype(s: &str) -> anyhow::Result<CoreDataType> {
-  let arrow_dtype = arrow_dtype(s)?;
-  dtypes::from_arrow(&arrow_dtype)
 }

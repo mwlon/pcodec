@@ -1,12 +1,14 @@
+use std::mem;
+
 use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes as arrow_dtypes;
 use arrow::datatypes::DataType as ArrowDataType;
 use arrow::datatypes::{ArrowPrimitiveType, DataType};
-use std::mem;
+
+use pco::data_types::{CoreDataType, NumberLike};
 
 use crate::num_vec::NumVec;
-use pco::data_types::{CoreDataType, NumberLike};
 
 pub trait PcoNumberLike: NumberLike {
   const ARROW_DTYPE: DataType;

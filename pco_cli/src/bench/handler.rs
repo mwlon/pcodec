@@ -2,7 +2,7 @@ use anyhow::Result;
 use arrow::array::{ArrayRef, AsArray};
 
 use crate::arrow_handlers::ArrowHandlerImpl;
-use crate::bench::codecs::{CodecConfig, CodecSurface};
+use crate::bench::codecs::CodecConfig;
 use crate::bench::{core_dtype_to_str, BenchOpt, PrintStat};
 use crate::dtypes::{ArrowNumberLike, PcoNumberLike};
 use crate::num_vec::NumVec;
@@ -32,7 +32,7 @@ fn handle_for_codec(
 
   let mut benches = Vec::with_capacity(opt.iters);
   for _ in 0..opt.iters {
-    benches.push(codec.stats_iter(&num_vec, &precomputed, &opt.iter_opt)?);
+    benches.push(codec.stats_iter(num_vec, &precomputed, &opt.iter_opt)?);
   }
   Ok(PrintStat::compute(
     dataset,
@@ -45,7 +45,7 @@ impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
   fn bench(&self, num_vec: &NumVec, name: &str, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
     let mut stats = Vec::new();
     for codec in &opt.codecs {
-      stats.push(handle_for_codec(&num_vec, name, codec, opt)?);
+      stats.push(handle_for_codec(num_vec, name, codec, opt)?);
     }
 
     Ok(stats)

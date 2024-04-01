@@ -1,9 +1,7 @@
-use std::any::type_name;
 use std::cmp::min;
 use std::mem;
 
 use pco::data_types::CoreDataType;
-use pco::data_types::CoreDataType::{F32, F64, U32, U64};
 
 use crate::dtypes::PcoNumberLike;
 

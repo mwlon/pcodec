@@ -7,6 +7,7 @@ use arrow::csv;
 use arrow::datatypes::{DataType, Field, Schema};
 use clap::Parser;
 use parquet::file::reader::{FileReader, SerializedFileReader};
+
 use pco::{FloatMultSpec, IntMultSpec};
 
 use crate::dtypes;

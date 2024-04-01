@@ -4,7 +4,6 @@ use std::any::type_name;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
-use std::io::Read;
 use std::ops::AddAssign;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -14,18 +13,14 @@ use arrow::csv;
 use arrow::datatypes::{DataType, SchemaRef};
 use parquet::arrow::arrow_reader::{ArrowReaderMetadata, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
-use parquet::file::reader::{ChunkReader, FileReader};
 use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
-use codecs::CodecSurface;
 pub use opt::BenchOpt;
 use pco::data_types::CoreDataType;
 use pco::with_core_dtypes;
 
-use crate::bench::codecs::CodecConfig;
-use crate::dtypes::PcoNumberLike;
 use crate::num_vec::NumVec;
 use crate::{arrow_handlers, dtypes, parse};
 
@@ -43,6 +38,10 @@ pub struct BenchStat {
   pub compressed_size: usize,
 }
 
+pub struct Precomputed {
+  compressed: Vec<u8>,
+}
+
 fn median_duration(mut durations: Vec<Duration>) -> Duration {
   durations.sort_unstable();
   let lo = durations[(durations.len() - 1) / 2];
@@ -55,7 +54,7 @@ fn display_duration(duration: &Duration) -> String {
 }
 
 #[derive(Clone, Tabled)]
-struct PrintStat {
+pub struct PrintStat {
   pub dataset: String,
   pub codec: String,
   #[tabled(display_with = "display_duration")]
@@ -119,29 +118,6 @@ fn basename_no_ext(path: &Path) -> String {
   }
 }
 
-pub struct Precomputed {
-  compressed: Vec<u8>,
-  dtype: CoreDataType,
-}
-
-fn handle(
-  num_vec: &NumVec,
-  dataset: String,
-  config: &CodecConfig,
-  opt: &BenchOpt,
-) -> Result<PrintStat> {
-  let precomputed = config.warmup_iter(num_vec, &dataset, &opt.iter_opt)?;
-  let mut benches = Vec::with_capacity(opt.iters);
-  for _ in 0..opt.iters {
-    benches.push(config.stats_iter(num_vec, &precomputed, &opt.iter_opt)?);
-  }
-  Ok(PrintStat::compute(
-    dataset,
-    config.to_string(),
-    &benches,
-  ))
-}
-
 fn get_dtype_and_name(path: &Path) -> Result<(DataType, String)> {
   let no_ext = basename_no_ext(path);
   let mut split = no_ext.split('_');
@@ -152,7 +128,7 @@ fn get_dtype_and_name(path: &Path) -> Result<(DataType, String)> {
     )
   };
   let dtype_str = split.next().ok_or_else(invalid_filename)?;
-  let dtype = parse::arrow_dtype(&dtype_str)?;
+  let dtype = parse::arrow_dtype(dtype_str)?;
   let name = split.collect::<Vec<_>>().join("_");
   Ok((dtype, name))
 }

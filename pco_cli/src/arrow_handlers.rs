@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
 
-use crate::bench::handler::BenchHandler;
 use anyhow::{anyhow, Result};
 use arrow::datatypes::*;
 
+use crate::bench::handler::BenchHandler;
 use crate::compress::handler::CompressHandler;
 use crate::dtypes::ArrowNumberLike;
 

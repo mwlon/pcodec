@@ -3,7 +3,6 @@ use std::str::FromStr;
 
 use arrow::datatypes::DataType;
 use clap::{Args, Parser};
-use pco::data_types::CoreDataType;
 
 use crate::bench::codecs::CodecConfig;
 use crate::opt::InputFileOpt;

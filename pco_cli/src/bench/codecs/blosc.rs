@@ -1,6 +1,7 @@
+use std::ffi::{c_int, c_void, CString};
+
 use crate::bench::codecs::CodecInternal;
 use crate::dtypes::PcoNumberLike;
-use std::ffi::{c_int, c_void, CString};
 
 #[derive(Clone, Debug)]
 pub struct BloscConfig {

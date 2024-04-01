@@ -8,8 +8,8 @@ use arrow::array::PrimitiveArray;
 use arrow::csv::WriterBuilder as CsvWriterBuilder;
 use arrow::datatypes::{ArrowPrimitiveType, Field, Schema};
 use arrow::record_batch::RecordBatch;
-use better_io::BetterBufReader;
 
+use better_io::BetterBufReader;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::FULL_BATCH_N;
 

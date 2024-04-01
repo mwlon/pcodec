@@ -5,20 +5,19 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use ::pco::data_types::CoreDataType;
-use ::pco::data_types::CoreDataType::{F32, F64, U32, U64};
-use ::pco::with_core_dtypes;
 use anyhow::{anyhow, Result};
-use arrow::array::{Array, ArrayRef};
+
+use ::pco::data_types::CoreDataType;
+use ::pco::with_core_dtypes;
 
 use crate::bench::codecs::blosc::BloscConfig;
+use crate::bench::{BenchStat, Precomputed};
 // use crate::bench::codecs::parquet::ParquetConfig;
 use crate::bench::codecs::pco::PcoConfig;
 // use crate::bench::codecs::qco::QcoConfig;
 use crate::bench::codecs::snappy::SnappyConfig;
 use crate::bench::codecs::zstd::ZstdConfig;
 use crate::bench::opt::IterOpt;
-use crate::bench::{BenchStat, Precomputed};
 use crate::dtypes::PcoNumberLike;
 use crate::num_vec::NumVec;
 
@@ -155,7 +154,7 @@ impl<C: CodecInternal> CodecSurface for C {
       }
     }
 
-    Ok(Precomputed { compressed, dtype })
+    Ok(Precomputed { compressed })
   }
 
   fn stats_iter(

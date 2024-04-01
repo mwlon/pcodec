@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
+use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
 
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use std::path::PathBuf;
 
 use crate::core_handlers;
 use crate::inspect::handler::{CompressionSummary, Output};
