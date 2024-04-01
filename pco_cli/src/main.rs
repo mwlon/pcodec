@@ -10,6 +10,7 @@ mod core_handlers;
 mod decompress;
 mod dtypes;
 mod inspect;
+pub mod num_vec;
 mod opt;
 mod parse;
 mod utils;

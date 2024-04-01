@@ -73,19 +73,15 @@ pub struct IterOpt {
 }
 
 impl BenchOpt {
-  pub fn includes_dtype(&self, dtype: &DataType) -> bool {
-    if self.dtypes.is_empty() {
-      true
-    } else {
-      self.dtypes.contains(dtype)
+  pub fn includes_dataset(&self, dtype: &DataType, name: &str) -> bool {
+    if !self.dtypes.is_empty() && self.dtypes.contains(dtype) {
+      return false;
     }
-  }
 
-  pub fn includes_dataset(&self, dataset: &str) -> bool {
     self.datasets.is_empty()
       || self
         .datasets
         .iter()
-        .any(|allowed_substr| dataset.contains(allowed_substr))
+        .any(|allowed_substr| name.contains(allowed_substr))
   }
 }

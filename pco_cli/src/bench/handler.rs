@@ -3,12 +3,12 @@ use arrow::array::{ArrayRef, AsArray};
 
 use crate::arrow_handlers::ArrowHandlerImpl;
 use crate::bench::codecs::{CodecConfig, CodecSurface};
-use crate::bench::num_vec::NumVec;
-use crate::bench::{BenchOpt, core_dtype_to_str, PrintStat};
-use crate::dtypes::ArrowNumberLike;
+use crate::bench::{core_dtype_to_str, BenchOpt, PrintStat};
+use crate::dtypes::{ArrowNumberLike, PcoNumberLike};
+use crate::num_vec::NumVec;
 
 pub trait BenchHandler {
-  fn bench(&self, nums: &NumVec, dataset: &str, opt: &BenchOpt) -> Result<Vec<PrintStat>>;
+  fn bench(&self, nums: &NumVec, name: &str, opt: &BenchOpt) -> Result<Vec<PrintStat>>;
   fn bench_from_arrow(
     &self,
     arrays: &[ArrayRef],
@@ -45,12 +45,7 @@ impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
   fn bench(&self, num_vec: &NumVec, name: &str, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
     let mut stats = Vec::new();
     for codec in &opt.codecs {
-      stats.push(handle_for_codec(
-        &num_vec,
-        name,
-        codec,
-        opt,
-      )?);
+      stats.push(handle_for_codec(&num_vec, name, codec, opt)?);
     }
 
     Ok(stats)
@@ -64,11 +59,11 @@ impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
   ) -> Result<Vec<PrintStat>> {
     let arrow_nums: Vec<P::Native> = arrays
       .iter()
-      .flat_map(|arr| arr.as_primitive::<P>().values().iter())
+      .flat_map(|arr| arr.as_primitive::<P>().values().iter().cloned())
       .collect::<Vec<_>>();
 
     let nums = P::native_vec_to_pco(arrow_nums);
-    let num_vec: NumVec = ;
+    let num_vec = P::Pco::make_num_vec(nums);
 
     self.bench(&num_vec, name, opt)
   }

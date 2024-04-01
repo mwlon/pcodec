@@ -3,7 +3,9 @@ use anyhow::Result;
 use arrow::datatypes as arrow_dtypes;
 use arrow::datatypes::DataType as ArrowDataType;
 use arrow::datatypes::{ArrowPrimitiveType, DataType};
+use std::mem;
 
+use crate::num_vec::NumVec;
 use pco::data_types::{CoreDataType, NumberLike};
 
 pub trait PcoNumberLike: NumberLike {
@@ -13,6 +15,7 @@ pub trait PcoNumberLike: NumberLike {
   type Arrow: ArrowPrimitiveType;
 
   fn to_arrow_native(self) -> <Self::Arrow as ArrowPrimitiveType>::Native;
+  fn make_num_vec(nums: Vec<Self>) -> NumVec;
 }
 
 pub trait ArrowNumberLike: ArrowPrimitiveType {
@@ -24,15 +27,19 @@ pub trait ArrowNumberLike: ArrowPrimitiveType {
 }
 
 macro_rules! trivial {
-  ($t: ty, $p: ty) => {
+  ($t: ty, $name:ident, $p: ty) => {
     impl PcoNumberLike for $t {
       const ARROW_DTYPE: DataType = <$p as ArrowPrimitiveType>::DATA_TYPE;
-      const BITS: usize = Self::BITS as usize;
+      const BITS: usize = mem::size_of::<$p>() * 8;
 
       type Arrow = $p;
 
       fn to_arrow_native(self) -> <Self::Arrow as ArrowPrimitiveType>::Native {
         self as Self
+      }
+
+      fn make_num_vec(nums: Vec<Self>) -> NumVec {
+        NumVec::$name(nums)
       }
     }
 
@@ -66,12 +73,12 @@ macro_rules! extra_arrow {
   };
 }
 
-trivial!(f32, arrow_dtypes::Float32Type);
-trivial!(f64, arrow_dtypes::Float64Type);
-trivial!(i32, arrow_dtypes::Int32Type);
-trivial!(i64, arrow_dtypes::Int64Type);
-trivial!(u32, arrow_dtypes::UInt32Type);
-trivial!(u64, arrow_dtypes::UInt64Type);
+trivial!(f32, F32, arrow_dtypes::Float32Type);
+trivial!(f64, F64, arrow_dtypes::Float64Type);
+trivial!(i32, I32, arrow_dtypes::Int32Type);
+trivial!(i64, I64, arrow_dtypes::Int64Type);
+trivial!(u32, U32, arrow_dtypes::UInt32Type);
+trivial!(u64, U64, arrow_dtypes::UInt64Type);
 extra_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampNanosecondType);
 

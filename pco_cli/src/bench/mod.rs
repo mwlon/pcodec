@@ -4,33 +4,33 @@ use std::any::type_name;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
+use std::io::Read;
 use std::ops::AddAssign;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use arrow::csv;
-use arrow::datatypes::{DataType, FieldRef, SchemaRef};
-use parquet::basic::Type;
-use parquet::column::reader::get_typed_column_reader;
-use parquet::file::reader::{FileReader, SerializedFileReader};
+use arrow::datatypes::{DataType, SchemaRef};
+use parquet::arrow::arrow_reader::{ArrowReaderMetadata, ParquetRecordBatchReaderBuilder};
+use parquet::arrow::ProjectionMask;
+use parquet::file::reader::{ChunkReader, FileReader};
 use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
+use codecs::CodecSurface;
 pub use opt::BenchOpt;
 use pco::data_types::CoreDataType;
+use pco::with_core_dtypes;
 
 use crate::bench::codecs::CodecConfig;
-use crate::bench::num_vec::NumVec;
 use crate::dtypes::PcoNumberLike;
+use crate::num_vec::NumVec;
 use crate::{arrow_handlers, dtypes, parse};
-use codecs::CodecSurface;
-use pco::with_core_dtypes;
 
 mod codecs;
 pub mod handler;
-pub mod num_vec;
 mod opt;
 
 const DEFAULT_BINARY_DIR: &str = "data/binary";
@@ -54,7 +54,7 @@ fn display_duration(duration: &Duration) -> String {
   format!("{:?}", duration)
 }
 
-#[derive(Clone, Default, Tabled)]
+#[derive(Clone, Tabled)]
 struct PrintStat {
   pub dataset: String,
   pub codec: String,
@@ -63,6 +63,18 @@ struct PrintStat {
   #[tabled(display_with = "display_duration")]
   pub decompress_dt: Duration,
   pub compressed_size: usize,
+}
+
+impl Default for PrintStat {
+  fn default() -> Self {
+    Self {
+      dataset: "<sum>".to_string(),
+      codec: "<sum>".to_string(),
+      compress_dt: Duration::default(),
+      decompress_dt: Duration::default(),
+      compressed_size: 0,
+    }
+  }
 }
 
 impl AddAssign for PrintStat {
@@ -121,7 +133,7 @@ fn handle(
   let precomputed = config.warmup_iter(num_vec, &dataset, &opt.iter_opt)?;
   let mut benches = Vec::with_capacity(opt.iters);
   for _ in 0..opt.iters {
-    benches.push(config.stats_iter(num_vec, &precomputed, &opt.iter_opt));
+    benches.push(config.stats_iter(num_vec, &precomputed, &opt.iter_opt)?);
   }
   Ok(PrintStat::compute(
     dataset,
@@ -130,8 +142,9 @@ fn handle(
   ))
 }
 
-fn get_name_and_dtype(path: &Path) -> Result<(String, DataType)> {
-  let mut split = basename_no_ext(path).split('_');
+fn get_dtype_and_name(path: &Path) -> Result<(DataType, String)> {
+  let no_ext = basename_no_ext(path);
+  let mut split = no_ext.split('_');
   let invalid_filename = || {
     anyhow!(
       "filename must be of the format <DTYPE>_<NAME>, but was {:?}",
@@ -140,17 +153,8 @@ fn get_name_and_dtype(path: &Path) -> Result<(String, DataType)> {
   };
   let dtype_str = split.next().ok_or_else(invalid_filename)?;
   let dtype = parse::arrow_dtype(&dtype_str)?;
-  let name = split.next().ok_or_else(invalid_filename)?.to_string();
-  Ok((name, dtype))
-}
-
-fn handle_synthetic(path: &Path, config: &CodecConfig, opt: &BenchOpt) -> Result<PrintStat> {
-  let (dataset, arrow_dtype) = get_name_and_dtype(path)?;
-
-  let raw_bytes = fs::read(path).expect("could not read");
-  let core_dtype = dtypes::from_arrow(&arrow_dtype)?;
-  let num_vec = NumVec::new(core_dtype, raw_bytes, opt.limit);
-  handle(&num_vec, dataset, config, opt)
+  let name = split.collect::<Vec<_>>().join("_");
+  Ok((dtype, name))
 }
 
 fn core_dtype_to_str(dtype: CoreDataType) -> String {
@@ -166,80 +170,30 @@ fn core_dtype_to_str(dtype: CoreDataType) -> String {
   name.to_string()
 }
 
-fn collect_parquet_num_vec<T: PcoNumberLike>(
-  pq_reader: &SerializedFileReader<File>,
-  col_idx: usize,
-  n: usize,
-) -> NumVec {
-  let mut res = Vec::with_capacity(n);
-  let mut def_levels = Vec::with_capacity(n);
-  let mut rep_levels = Vec::with_capacity(n);
-  unsafe {
-    res.set_len(n);
-    def_levels.set_len(n);
-    rep_levels.set_len(n);
-  }
+fn handle_parquet_column(file: File, col_idx: usize, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
+  let arrow_reader_builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+  let schema = arrow_reader_builder.schema().clone();
+  let field = &schema.fields[col_idx];
 
-  let mut start = 0;
-  for i in 0..pq_reader.metadata().num_row_groups() {
-    let row_group_reader = pq_reader.get_row_group(i).unwrap();
-    let mut col_reader =
-      get_typed_column_reader::<T::Parquet>(row_group_reader.get_column_reader(col_idx).unwrap());
-
-    let (n_records_read, _, _) = col_reader
-      .read_records(
-        usize::MAX,
-        Some(&mut def_levels),
-        Some(&mut rep_levels),
-        &mut res[start..],
-      )
-      .unwrap();
-    start += n_records_read
-  }
-
-  T::num_vec(T::vec_from_parquet(res))
-}
-
-fn handle_parquet_column(
-  pq_reader: &SerializedFileReader<File>,
-  col_idx: usize,
-  n: usize,
-  opt: &BenchOpt,
-) -> Result<Vec<PrintStat>> {
-  let pq_meta = pq_reader.metadata();
-  let pq_schema = pq_meta.file_metadata().schema_descr();
-  let pq_col = pq_schema.column(col_idx);
-  let arrow_schema = parquet::arrow::parquet_to_arrow_schema(pq_schema, None)?;
-  let arrow_dtype = arrow_schema.fields[col_idx].data_type();
-  let num_vec = match pq_col.physical_type() {
-    Type::INT32 => collect_parquet_num_vec::<i32>(pq_reader, col_idx, n),
-    Type::INT64 => collect_parquet_num_vec::<i64>(pq_reader, col_idx, n),
-    Type::FLOAT => collect_parquet_num_vec::<f32>(pq_reader, col_idx, n),
-    Type::DOUBLE => collect_parquet_num_vec::<f64>(pq_reader, col_idx, n),
-    _ => return Ok(vec![]),
-  };
-
-  let dtype = num_vec.dtype();
-  let dataset = format!(
-    "{}_{}",
-    core_dtype_to_str(dtype),
-    pq_col.name()
-  );
-  if !opt.includes_dtype(arrow_dtype) || !opt.includes_dataset(&dataset) {
+  if !opt.includes_dataset(field.data_type(), field.name()) {
     return Ok(vec![]);
   }
 
-  let mut stats = Vec::new();
-  for codec in &opt.codecs {
-    stats.push(handle(
-      &num_vec,
-      dataset.to_string(),
-      codec,
-      opt,
-    )?);
+  let schema_desc = arrow_reader_builder
+    .metadata()
+    .file_metadata()
+    .schema_descr();
+  let projection = ProjectionMask::roots(schema_desc, vec![col_idx]);
+  let reader = arrow_reader_builder.with_projection(projection).build()?;
+
+  let mut arrays = Vec::new();
+  for batch_res in reader {
+    let batch = batch_res?;
+    arrays.push(batch.columns()[0].clone());
   }
 
-  Ok(stats)
+  let handler = arrow_handlers::from_dtype(field.data_type())?;
+  handler.bench_from_arrow(&arrays, field.name(), opt)
 }
 
 fn handle_csv_column(
@@ -249,11 +203,11 @@ fn handle_csv_column(
   opt: &BenchOpt,
 ) -> Result<Vec<PrintStat>> {
   let field = &schema.fields[field_idx];
-  if !opt.dtypes.contains(field.data_type()) || !opt.includes_dataset(field.name()) {
+  if !opt.includes_dataset(field.data_type(), field.name()) {
     return Ok(vec![]);
   }
 
-  let mut csv_reader = csv::ReaderBuilder::new(schema)
+  let mut csv_reader = csv::ReaderBuilder::new(schema.clone())
     .with_header(opt.input.csv_has_header)
     .with_delimiter(opt.input.csv_delimiter as u8)
     .build(File::open(path)?)?;
@@ -270,8 +224,8 @@ fn handle_binary(dir: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
   let mut paths = Vec::new();
   for f in fs::read_dir(dir)? {
     let path = f?.path();
-    let (dataset, dtype) = get_name_and_dtype(&path)?;
-    if opt.includes_dtype(&dtype) && opt.includes_dataset(&dataset) {
+    let (dtype, name) = get_dtype_and_name(&path)?;
+    if opt.includes_dataset(&dtype, &name) {
       paths.push(path);
     }
   }
@@ -279,30 +233,31 @@ fn handle_binary(dir: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
 
   let mut stats = Vec::new();
   for path in paths {
-    for config in &opt.codecs {
-      stats.push(handle_synthetic(&path, config, &opt)?);
-    }
+    let (dtype, name) = get_dtype_and_name(&path)?;
+    let handler = arrow_handlers::from_dtype(&dtype)?;
+
+    let raw_bytes = fs::read(path).expect("could not read");
+    let core_dtype = dtypes::from_arrow(&dtype)?;
+    let num_vec = NumVec::new(core_dtype, raw_bytes, opt.limit);
+    stats.extend(handler.bench(&num_vec, &name, opt)?);
   }
   Ok(stats)
 }
 
 fn handle_parquet(path: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
   let file = File::open(path)?;
-  let pq_reader = SerializedFileReader::new(file)?;
-  let pq_meta = pq_reader.metadata();
-  let pq_schema = pq_meta.file_metadata().schema_descr();
-
-  let n_cols = pq_schema.num_columns();
-
-  let mut n = 0;
-  for row_group_meta in pq_meta.row_groups() {
-    n += row_group_meta.num_rows() as usize;
-  }
+  let schema = ArrowReaderMetadata::load(&file, Default::default())?
+    .schema()
+    .clone();
+  let n_cols = schema.fields.len();
+  drop(file);
 
   let mut stats = Vec::new();
   for col_idx in 0..n_cols {
     stats.extend(handle_parquet_column(
-      &pq_reader, col_idx, n, opt,
+      File::open(path)?,
+      col_idx,
+      opt,
     )?);
   }
   Ok(stats)
@@ -319,7 +274,7 @@ fn handle_csv(path: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
   let schema_ref = SchemaRef::new(schema);
 
   let mut stats = Vec::new();
-  for field_idx in 0..schema.fields.len() {
+  for field_idx in 0..schema_ref.fields.len() {
     stats.extend(handle_csv_column(
       path,
       field_idx,
@@ -361,17 +316,17 @@ fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
 
 pub fn bench(opt: BenchOpt) -> Result<()> {
   let stats = match (
-    opt.binary_dir,
-    opt.input.parquet_path,
-    opt.input.csv_path,
+    &opt.binary_dir,
+    &opt.input.parquet_path,
+    &opt.input.csv_path,
   ) {
     (None, None, None) => handle_binary(
       &PathBuf::from(DEFAULT_BINARY_DIR.to_string()),
       &opt,
     ),
-    (Some(dir), None, None) => handle_binary(&dir, &opt),
-    (None, Some(file), None) => handle_parquet(&file, &opt),
-    (None, None, Some(file)) => handle_csv(&file, &opt),
+    (Some(dir), None, None) => handle_binary(dir, &opt),
+    (None, Some(file), None) => handle_parquet(file, &opt),
+    (None, None, Some(file)) => handle_csv(file, &opt),
     _ => Err(anyhow!(
       "cannot use more than 1 of binary_dir, csv, and parquet inputs at once"
     )),

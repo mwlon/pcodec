@@ -1,4 +1,6 @@
+use std::any::type_name;
 use std::cmp::min;
+use std::mem;
 
 use pco::data_types::CoreDataType;
 use pco::data_types::CoreDataType::{F32, F64, U32, U64};
@@ -19,9 +21,9 @@ fn cast_to_nums<T: PcoNumberLike>(bytes: Vec<u8>, limit: Option<usize>) -> Vec<T
   // For instance, chunks of 8 little-endian bytes on most platforms for
   // i64's.
   // This is fast and should work across platforms.
-  let n = bytes.len() / (T::BITS / 8);
+  let n = bytes.len() / mem::size_of::<T>();
   let nums = unsafe {
-    let mut nums = std::mem::transmute::<_, Vec<T>>(bytes);
+    let mut nums = mem::transmute::<_, Vec<T>>(bytes);
     nums.set_len(n);
     nums
   };

@@ -1,29 +1,31 @@
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
+use std::ops::Deref;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use ::pco::data_types::CoreDataType;
 use ::pco::data_types::CoreDataType::{F32, F64, U32, U64};
+use ::pco::with_core_dtypes;
 use anyhow::{anyhow, Result};
 use arrow::array::{Array, ArrayRef};
 
 use crate::bench::codecs::blosc::BloscConfig;
-use crate::bench::codecs::parquet::ParquetConfig;
+// use crate::bench::codecs::parquet::ParquetConfig;
 use crate::bench::codecs::pco::PcoConfig;
-use crate::bench::codecs::qco::QcoConfig;
+// use crate::bench::codecs::qco::QcoConfig;
 use crate::bench::codecs::snappy::SnappyConfig;
 use crate::bench::codecs::zstd::ZstdConfig;
-use crate::bench::num_vec::NumVec;
 use crate::bench::opt::IterOpt;
 use crate::bench::{BenchStat, Precomputed};
 use crate::dtypes::PcoNumberLike;
+use crate::num_vec::NumVec;
 
 mod blosc;
-mod parquet;
+// mod parquet;
 mod pco;
-mod qco;
+// mod qco;
 mod snappy;
 pub mod utils;
 mod zstd;
@@ -42,26 +44,25 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
   // sad manual dynamic dispatch, but at least we don't need all combinations
   // of (dtype x codec)
   fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
-    match num_vec {
-      NumVec::U32(nums) => self.compress(nums),
-      NumVec::U64(nums) => self.compress(nums),
-      NumVec::I32(nums) => self.compress(nums),
-      NumVec::I64(nums) => self.compress(nums),
-      NumVec::F32(nums) => self.compress(nums),
-      NumVec::F64(nums) => self.compress(nums),
+    macro_rules! compress {
+      {$($name:ident($lname:ident) => $t:ty,)+} => {
+        match num_vec {
+          $(NumVec::$name(nums) => self.compress(nums),)+
+        }
+      }
     }
+    with_core_dtypes!(compress)
   }
 
   fn decompress_dynamic(&self, dtype: CoreDataType, compressed: &[u8]) -> NumVec {
-    use CoreDataType::*;
-    match dtype {
-      F32 => NumVec::F32(self.decompress::<f32>(compressed)),
-      F64 => NumVec::F64(self.decompress::<f64>(compressed)),
-      I32 => NumVec::I32(self.decompress::<i32>(compressed)),
-      I64 => NumVec::I64(self.decompress::<i64>(compressed)),
-      U32 => NumVec::U32(self.decompress::<u32>(compressed)),
-      U64 => NumVec::U64(self.decompress::<u64>(compressed)),
+    macro_rules! decompress {
+      {$($name:ident($lname:ident) => $t:ty,)+} => {
+        match dtype {
+          $(CoreDataType::$name => NumVec::$name(self.decompress::<$t>(compressed)),)+
+        }
+      }
     }
+    with_core_dtypes!(decompress)
   }
 
   fn compare_nums<T: PcoNumberLike>(&self, recovered: &[T], original: &[T]) {
@@ -220,10 +221,10 @@ impl FromStr for CodecConfig {
 
     let mut codec: Box<dyn CodecSurface> = match name {
       "p" | "pco" | "pcodec" => Box::<PcoConfig>::default(),
-      "q" | "qco" | "q_compress" => Box::<QcoConfig>::default(),
+      // "q" | "qco" | "q_compress" => Box::<QcoConfig>::default(),
       "zstd" => Box::<ZstdConfig>::default(),
       "snap" | "snappy" => Box::<SnappyConfig>::default(),
-      "parq" | "parquet" => Box::<ParquetConfig>::default(),
+      // "parq" | "parquet" => Box::<ParquetConfig>::default(),
       "blosc" => Box::<BloscConfig>::default(),
       _ => return Err(anyhow!("unknown codec: {}", name)),
     };
@@ -250,8 +251,10 @@ impl Clone for CodecConfig {
   }
 }
 
-impl AsRef<Box<dyn CodecSurface>> for CodecConfig {
-  fn as_ref(&self) -> &Box<dyn CodecSurface> {
+impl Deref for CodecConfig {
+  type Target = Box<dyn CodecSurface>;
+
+  fn deref(&self) -> &Self::Target {
     &self.0
   }
 }
