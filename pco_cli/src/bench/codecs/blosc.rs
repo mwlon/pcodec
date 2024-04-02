@@ -46,7 +46,7 @@ impl CodecInternal for BloscConfig {
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
     let type_size = mem::size_of::<T>();
-    let n_bytes = nums.len() * type_size;
+    let n_bytes = std::mem::size_of_val(nums);
     let mut dst = Vec::with_capacity(n_bytes + blosc_src::BLOSC_MAX_OVERHEAD as usize);
     unsafe {
       let src = nums.as_ptr() as *const c_void;
