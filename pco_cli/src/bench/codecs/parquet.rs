@@ -108,7 +108,7 @@ impl CodecInternal for ParquetConfig {
       let mut col_writer = row_group_writer.next_column().unwrap().unwrap();
       let typed = col_writer.typed::<T::Parquet>();
       typed
-        .write_batch(T::slice_to_parquet(col_chunk), None, None)
+        .write_batch(T::nums_to_parquet(col_chunk), None, None)
         .unwrap();
       col_writer.close().unwrap();
       row_group_writer.close().unwrap();
@@ -144,6 +144,6 @@ impl CodecInternal for ParquetConfig {
       start += n_records_read
     }
 
-    T::vec_from_parquet(res)
+    T::parquet_to_nums(res)
   }
 }

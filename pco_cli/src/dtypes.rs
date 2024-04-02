@@ -10,9 +10,24 @@ use pco::data_types::{CoreDataType, NumberLike};
 
 use crate::num_vec::NumVec;
 
-pub trait PcoNumberLike: NumberLike {
+pub trait Parquetable: Sized {
+  const PARQUET_DTYPE_STR: &'static str;
+
+  type Parquet: parquet::data_type::DataType;
+
+  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T];
+  fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self>;
+}
+
+pub trait QCompressable: Sized {
+  type Qco: q_compress::data_types::NumberLike;
+
+  fn nums_to_qco(nums: &[Self]) -> &[Self::Qco];
+  fn qco_to_nums(vec: Vec<Self::Qco>) -> Vec<Self>;
+}
+
+pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable {
   const ARROW_DTYPE: DataType;
-  const BITS: usize;
 
   type Arrow: ArrowPrimitiveType;
 
@@ -28,11 +43,40 @@ pub trait ArrowNumberLike: ArrowPrimitiveType {
   fn native_vec_to_pco(native: Vec<Self::Native>) -> Vec<Self::Pco>;
 }
 
+macro_rules! parquetable {
+  ($t: ty, $parq: ty, $parq_str: expr) => {
+    impl Parquetable for $t {
+      const PARQUET_DTYPE_STR: &'static str = $parq_str;
+
+      type Parquet = $parq;
+
+      fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+        nums
+      }
+      fn parquet_to_nums(
+        vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>,
+      ) -> Vec<Self> {
+        vec
+      }
+    }
+  };
+}
+
 macro_rules! trivial {
-  ($t: ty, $name:ident, $p: ty) => {
+  ($t: ty, $name: ident, $p: ty) => {
+    impl QCompressable for $t {
+      type Qco = $t;
+
+      fn nums_to_qco(nums: &[Self]) -> &[Self::Qco] {
+        nums
+      }
+      fn qco_to_nums(vec: Vec<Self::Qco>) -> Vec<Self> {
+        vec
+      }
+    }
+
     impl PcoNumberLike for $t {
       const ARROW_DTYPE: DataType = <$p as ArrowPrimitiveType>::DATA_TYPE;
-      const BITS: usize = mem::size_of::<$p>() * 8;
 
       type Arrow = $p;
 
@@ -73,6 +117,39 @@ macro_rules! extra_arrow {
       }
     }
   };
+}
+
+parquetable!(f32, parquet::data_type::FloatType, "FLOAT");
+parquetable!(f64, parquet::data_type::DoubleType, "DOUBLE");
+parquetable!(i32, parquet::data_type::Int32Type, "INT32");
+parquetable!(i64, parquet::data_type::Int64Type, "INT64");
+
+impl Parquetable for u32 {
+  const PARQUET_DTYPE_STR: &'static str = "INT32";
+  type Parquet = parquet::data_type::Int32Type;
+
+  // Parquet doesn't have unsigned integer types, so the best zero-copy thing
+  // we can do is transmute to signed ones.
+  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+    unsafe { mem::transmute(nums) }
+  }
+  fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
+    unsafe { mem::transmute(vec) }
+  }
+}
+
+impl Parquetable for u64 {
+  const PARQUET_DTYPE_STR: &'static str = "INT64";
+  type Parquet = parquet::data_type::Int64Type;
+
+  // Parquet doesn't have unsigned integer types, so the best zero-copy thing
+  // we can do is transmute to signed ones.
+  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+    unsafe { mem::transmute(nums) }
+  }
+  fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
+    unsafe { mem::transmute(vec) }
+  }
 }
 
 trivial!(f32, F32, arrow_dtypes::Float32Type);

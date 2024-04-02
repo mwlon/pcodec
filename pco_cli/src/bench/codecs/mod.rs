@@ -11,20 +11,20 @@ use ::pco::data_types::CoreDataType;
 use ::pco::with_core_dtypes;
 
 use crate::bench::codecs::blosc::BloscConfig;
-use crate::bench::{BenchStat, Precomputed};
-// use crate::bench::codecs::parquet::ParquetConfig;
+use crate::bench::codecs::parquet::ParquetConfig;
 use crate::bench::codecs::pco::PcoConfig;
-// use crate::bench::codecs::qco::QcoConfig;
+use crate::bench::codecs::qco::QcoConfig;
 use crate::bench::codecs::snappy::SnappyConfig;
 use crate::bench::codecs::zstd::ZstdConfig;
 use crate::bench::opt::IterOpt;
+use crate::bench::{BenchStat, Precomputed};
 use crate::dtypes::PcoNumberLike;
 use crate::num_vec::NumVec;
 
 mod blosc;
-// mod parquet;
+mod parquet;
 mod pco;
-// mod qco;
+mod qco;
 mod snappy;
 pub mod utils;
 mod zstd;
@@ -167,9 +167,7 @@ impl<C: CodecInternal> CodecSurface for C {
     let compress_dt = if !opt.no_compress {
       let t = Instant::now();
       let _ = self.compress_dynamic(num_vec);
-      let dt = Instant::now() - t;
-      println!("\tcompressed in {:?}", dt);
-      dt
+      Instant::now() - t
     } else {
       Duration::ZERO
     };
@@ -178,9 +176,7 @@ impl<C: CodecInternal> CodecSurface for C {
     let decompress_dt = if !opt.no_decompress {
       let t = Instant::now();
       let _ = self.decompress_dynamic(num_vec.dtype(), &precomputed.compressed);
-      let dt = Instant::now() - t;
-      println!("\tdecompressed in {:?}", dt);
-      dt
+      Instant::now() - t
     } else {
       Duration::ZERO
     };
@@ -220,10 +216,10 @@ impl FromStr for CodecConfig {
 
     let mut codec: Box<dyn CodecSurface> = match name {
       "p" | "pco" | "pcodec" => Box::<PcoConfig>::default(),
-      // "q" | "qco" | "q_compress" => Box::<QcoConfig>::default(),
+      "q" | "qco" | "q_compress" => Box::<QcoConfig>::default(),
       "zstd" => Box::<ZstdConfig>::default(),
       "snap" | "snappy" => Box::<SnappyConfig>::default(),
-      // "parq" | "parquet" => Box::<ParquetConfig>::default(),
+      "parq" | "parquet" => Box::<ParquetConfig>::default(),
       "blosc" => Box::<BloscConfig>::default(),
       _ => return Err(anyhow!("unknown codec: {}", name)),
     };

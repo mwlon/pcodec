@@ -57,14 +57,17 @@ impl CodecInternal for QcoConfig {
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
     let mut c_config = self.compressor_config.clone();
+    let qco_nums = T::nums_to_qco(nums);
     if !self.use_fixed_delta {
       c_config.delta_encoding_order =
-        q_compress::auto_compressor_config(nums, c_config.compression_level).delta_encoding_order;
+        q_compress::auto_compressor_config(qco_nums, c_config.compression_level)
+          .delta_encoding_order;
     }
-    q_compress::standalone::Compressor::<T>::from_config(c_config).simple_compress(nums)
+    q_compress::standalone::Compressor::<T::Qco>::from_config(c_config).simple_compress(qco_nums)
   }
 
   fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
-    q_compress::auto_decompress::<T>(bytes).expect("could not decompress")
+    let qco_nums = q_compress::auto_decompress::<T::Qco>(bytes).expect("could not decompress");
+    T::qco_to_nums(qco_nums)
   }
 }
