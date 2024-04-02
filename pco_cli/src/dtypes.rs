@@ -19,6 +19,7 @@ pub trait Parquetable: Sized {
   fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self>;
 }
 
+#[cfg(feature = "full_bench")]
 pub trait QCompressable: Sized {
   type Qco: q_compress::data_types::NumberLike;
 
@@ -26,7 +27,18 @@ pub trait QCompressable: Sized {
   fn qco_to_nums(vec: Vec<Self::Qco>) -> Vec<Self>;
 }
 
+#[cfg(feature = "full_bench")]
 pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable {
+  const ARROW_DTYPE: DataType;
+
+  type Arrow: ArrowPrimitiveType;
+
+  fn to_arrow_native(self) -> <Self::Arrow as ArrowPrimitiveType>::Native;
+  fn make_num_vec(nums: Vec<Self>) -> NumVec;
+}
+
+#[cfg(not(feature = "full_bench"))]
+pub trait PcoNumberLike: NumberLike + Parquetable {
   const ARROW_DTYPE: DataType;
 
   type Arrow: ArrowPrimitiveType;
@@ -64,6 +76,7 @@ macro_rules! parquetable {
 
 macro_rules! trivial {
   ($t: ty, $name: ident, $p: ty) => {
+    #[cfg(feature = "full_bench")]
     impl QCompressable for $t {
       type Qco = $t;
 
