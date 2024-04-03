@@ -22,6 +22,7 @@ better_io = { version = "0.0.0", path = "../better_io" }
 blosc-src = { version = "0.3", features = ["zstd"], optional = true }
 bytes = "1.1.0"
 clap = { version = "4.5.3", features = ["derive"] }
+indicatif = "0.17.8"
 parquet = { version = "49.0.0", features = ["arrow", "base64", "snap", "zstd"], default-features = false }
 pco = { version = "0.2", path = "../pco" }
 q_compress = { path = "../quantile-compression/q_compress", optional = true }

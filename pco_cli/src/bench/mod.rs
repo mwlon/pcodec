@@ -11,6 +11,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use arrow::csv;
 use arrow::datatypes::{DataType, SchemaRef};
+use indicatif::{ProgressBar, ProgressStyle};
 use parquet::arrow::arrow_reader::{ArrowReaderMetadata, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
 use tabled::settings::object::Columns;
@@ -40,6 +41,14 @@ pub struct BenchStat {
 
 pub struct Precomputed {
   compressed: Vec<u8>,
+}
+
+fn make_progress_bar(n_columns: usize, opt: &BenchOpt) -> ProgressBar {
+  ProgressBar::new((opt.codecs.len() * n_columns * (opt.iters + 1)) as u64)
+    .with_message("iters")
+    .with_style(
+      ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} {msg} ").unwrap(),
+    )
 }
 
 fn median_duration(mut durations: Vec<Duration>) -> Duration {
@@ -146,14 +155,15 @@ fn core_dtype_to_str(dtype: CoreDataType) -> String {
   name.to_string()
 }
 
-fn handle_parquet_column(file: File, col_idx: usize, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
+fn handle_parquet_column(
+  file: File,
+  col_idx: usize,
+  opt: &BenchOpt,
+  progress_bar: &mut ProgressBar,
+) -> Result<Vec<PrintStat>> {
   let arrow_reader_builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
   let schema = arrow_reader_builder.schema().clone();
   let field = &schema.fields[col_idx];
-
-  if !opt.includes_dataset(field.data_type(), field.name()) {
-    return Ok(vec![]);
-  }
 
   let schema_desc = arrow_reader_builder
     .metadata()
@@ -169,7 +179,7 @@ fn handle_parquet_column(file: File, col_idx: usize, opt: &BenchOpt) -> Result<V
   }
 
   let handler = arrow_handlers::from_dtype(field.data_type())?;
-  handler.bench_from_arrow(&arrays, field.name(), opt)
+  handler.bench_from_arrow(&arrays, field.name(), opt, progress_bar)
 }
 
 fn handle_csv_column(
@@ -177,6 +187,7 @@ fn handle_csv_column(
   field_idx: usize,
   schema: SchemaRef,
   opt: &BenchOpt,
+  progress_bar: &mut ProgressBar,
 ) -> Result<Vec<PrintStat>> {
   let field = &schema.fields[field_idx];
   if !opt.includes_dataset(field.data_type(), field.name()) {
@@ -193,7 +204,12 @@ fn handle_csv_column(
     arrow_arrays.push(batch.column(field_idx).clone());
   }
   let handler = arrow_handlers::from_dtype(field.data_type())?;
-  handler.bench_from_arrow(&arrow_arrays, field.name(), opt)
+  handler.bench_from_arrow(
+    &arrow_arrays,
+    field.name(),
+    opt,
+    progress_bar,
+  )
 }
 
 fn handle_binary(dir: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
@@ -207,6 +223,7 @@ fn handle_binary(dir: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
   }
   paths.sort();
 
+  let mut progress_bar = make_progress_bar(paths.len(), opt);
   let mut stats = Vec::new();
   for path in paths {
     let (dtype, name) = get_dtype_and_name(&path)?;
@@ -214,9 +231,10 @@ fn handle_binary(dir: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
 
     let raw_bytes = fs::read(path).expect("could not read");
     let core_dtype = dtypes::from_arrow(&dtype)?;
-    let num_vec = NumVec::new(core_dtype, raw_bytes, opt.limit);
-    stats.extend(handler.bench(&num_vec, &name, opt)?);
+    let num_vec = NumVec::new(core_dtype, raw_bytes);
+    stats.extend(handler.bench(&num_vec, &name, opt, &mut progress_bar)?);
   }
+  progress_bar.finish_and_clear();
   Ok(stats)
 }
 
@@ -225,17 +243,26 @@ fn handle_parquet(path: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
   let schema = ArrowReaderMetadata::load(&file, Default::default())?
     .schema()
     .clone();
-  let n_cols = schema.fields.len();
   drop(file);
 
+  let col_idxs = (0..schema.fields.len())
+    .filter(|&i| {
+      let field = &schema.fields[i];
+      opt.includes_dataset(field.data_type(), field.name())
+    })
+    .collect::<Vec<_>>();
+  let mut progress_bar = make_progress_bar(col_idxs.len(), opt);
+
   let mut stats = Vec::new();
-  for col_idx in 0..n_cols {
+  for col_idx in col_idxs {
     stats.extend(handle_parquet_column(
       File::open(path)?,
       col_idx,
       opt,
+      &mut progress_bar,
     )?);
   }
+  progress_bar.finish_and_clear();
   Ok(stats)
 }
 
@@ -250,14 +277,24 @@ fn handle_csv(path: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
   let schema_ref = SchemaRef::new(schema);
 
   let mut stats = Vec::new();
-  for field_idx in 0..schema_ref.fields.len() {
+  let col_idxs = (0..schema_ref.fields.len())
+    .filter(|&i| {
+      let field = schema_ref.field(i);
+      opt.includes_dataset(field.data_type(), field.name())
+    })
+    .collect::<Vec<_>>();
+
+  let mut progress_bar = make_progress_bar(col_idxs.len(), opt);
+  for col_idx in col_idxs {
     stats.extend(handle_csv_column(
       path,
-      field_idx,
+      col_idx,
       schema_ref.clone(),
       opt,
+      &mut progress_bar,
     )?);
   }
+  progress_bar.finish_and_clear();
   Ok(stats)
 }
 

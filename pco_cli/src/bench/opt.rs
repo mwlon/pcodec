@@ -6,7 +6,7 @@ use clap::{Args, Parser};
 
 use crate::bench::codecs::CodecConfig;
 use crate::opt::InputFileOpt;
-use crate::parse;
+use crate::{dtypes, parse};
 
 /// Run benchmarks on datasets originating from another format.
 /// The input format does not affect performance; all input numbers are
@@ -73,7 +73,9 @@ pub struct IterOpt {
 
 impl BenchOpt {
   pub fn includes_dataset(&self, dtype: &DataType, name: &str) -> bool {
-    if !self.dtypes.is_empty() && self.dtypes.contains(dtype) {
+    if matches!(dtypes::from_arrow(dtype), Err(_))
+      || (!self.dtypes.is_empty() && !self.dtypes.contains(dtype))
+    {
       return false;
     }
 

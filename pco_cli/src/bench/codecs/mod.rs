@@ -219,12 +219,12 @@ impl FromStr for CodecConfig {
     }
 
     let mut codec: Box<dyn CodecSurface> = match name {
-      "p" | "pco" | "pcodec" => Box::<PcoConfig>::default(),
+      "pco" | "pcodec" => Box::<PcoConfig>::default(),
       #[cfg(feature = "full_bench")]
-      "q" | "qco" | "q_compress" => Box::<QcoConfig>::default(),
-      "zstd" => Box::<ZstdConfig>::default(),
+      "qco" | "q_compress" => Box::<QcoConfig>::default(),
+      "zstd" | "zstandard" => Box::<ZstdConfig>::default(),
       "snap" | "snappy" => Box::<SnappyConfig>::default(),
-      "parq" | "parquet" => Box::<ParquetConfig>::default(),
+      "parquet" => Box::<ParquetConfig>::default(),
       #[cfg(feature = "full_bench")]
       "blosc" => Box::<BloscConfig>::default(),
       _ => {
