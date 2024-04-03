@@ -171,6 +171,8 @@ trivial!(i32, I32, arrow_dtypes::Int32Type);
 trivial!(i64, I64, arrow_dtypes::Int64Type);
 trivial!(u32, U32, arrow_dtypes::UInt32Type);
 trivial!(u64, U64, arrow_dtypes::UInt64Type);
+extra_arrow!(i64, arrow_dtypes::TimestampSecondType);
+extra_arrow!(i64, arrow_dtypes::TimestampMillisecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampNanosecondType);
 

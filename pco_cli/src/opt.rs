@@ -27,8 +27,6 @@ pub struct InputFileOpt {
 
   #[arg(long)]
   pub csv_has_header: bool,
-  #[arg(long, default_value = "%Y-%m-%dT%H:%M:%S%.f%z")]
-  pub csv_timestamp_format: String,
   #[arg(long, default_value = ",")]
   pub csv_delimiter: char,
 }
