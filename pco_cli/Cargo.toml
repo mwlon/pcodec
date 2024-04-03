@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.71"
 arrow = { version = "49.0.0", features = ["csv"], default-features = false }
-better_io = { version = "0.0.0", path = "../better_io" }
+better_io = { version = "0.0.1", path = "../better_io" }
 blosc-src = { version = "0.3", features = ["zstd"], optional = true }
 bytes = "1.1.0"
 clap = { version = "4.5.3", features = ["derive"] }

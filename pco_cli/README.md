@@ -45,7 +45,7 @@ distributions is from the `generate_randoms.py` script in the pcodec
 repository.
 To run it, set up a python3 environment with `numpy` installed.
 In that environment, `cd`'d in to the root of the repo,
-run `python bench/generate_randoms.py`.
+run `python pco_cli/generate_randoms.py`.
 This will populate some human-readable data in `data/txt/` and
 the exact same numerical data as bytes in `data/binary/`.
 

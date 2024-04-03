@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::ffi::{c_int, c_void, CString};
 use std::mem;
 
@@ -39,7 +40,7 @@ impl CodecInternal for BloscConfig {
       "block_size" => self.block_size = value.parse()?,
       "cname" => self.cname = value,
       "level" => self.clevel = value.parse()?,
-      _ => panic!("unknown blosc key: {}", key),
+      _ => return Err(anyhow!("unknown blosc key: {}", key)),
     }
     Ok(())
   }
