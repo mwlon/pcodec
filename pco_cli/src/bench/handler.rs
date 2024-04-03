@@ -55,7 +55,7 @@ fn handle_for_codec(
 impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
   fn bench(
     &self,
-    mut num_vec: &NumVec,
+    num_vec: &NumVec,
     name: &str,
     opt: &BenchOpt,
     progress_bar: &mut ProgressBar,

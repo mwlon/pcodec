@@ -1,4 +1,3 @@
-use std::cmp::min;
 use std::mem;
 
 use pco::data_types::CoreDataType;
