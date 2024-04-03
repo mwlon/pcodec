@@ -19,31 +19,43 @@ pub mod handler;
 
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 
+/// Compress from a different format into standalone .pco
 #[derive(Clone, Debug, Parser)]
-#[command(about = "compress from a different format into standalone .pco")]
 pub struct CompressOpt {
+  /// Compression level.
   #[arg(long, default_value = "8")]
   pub level: usize,
+  /// If specified, uses a fixed delta encoding order. Defaults to automatic detection.
   #[arg(long = "delta-order")]
   pub delta_encoding_order: Option<usize>,
+  /// Can be "Enabled", "Disabled", or a fixed integer to use as the base in
+  /// int mult mode.
   #[arg(long, default_value = "Enabled", value_parser = parse::int_mult)]
   pub int_mult: IntMultSpec,
+  /// Can be "Enabled", "Disabled", or a fixed float to use as the base in
+  /// float mult mode.
   #[arg(long, default_value = "Enabled", value_parser = parse::float_mult)]
   pub float_mult: FloatMultSpec,
+  /// A specific data type to interpret the column as. Only useful for data
+  /// coming from CSVs where the type is ambiguous.
   #[arg(long, value_parser = parse::arrow_dtype)]
   pub dtype: Option<DataType>,
+  /// Either this or col-idx must be specified.
   #[arg(long)]
   pub col_name: Option<String>,
+  /// Either this or col-name must be specified.
   #[arg(long)]
   pub col_idx: Option<usize>,
   #[arg(long, default_value_t=pco::DEFAULT_MAX_PAGE_N)]
   pub chunk_size: usize,
+  /// Overwrite the output path (if it exists) instead of failing.
   #[arg(long)]
   pub overwrite: bool,
   #[command(flatten)]
   pub input: InputFileOpt,
 
-  pub pco_path: PathBuf,
+  /// Output .pco path to write to.
+  pub path: PathBuf,
 }
 
 impl CompressOpt {

@@ -31,7 +31,7 @@ macro_rules! impl_num_vec {
         }
       }
 
-      pub fn len(&self) -> usize {
+      pub fn n(&self) -> usize {
         match self {
           $(NumVec::$name(nums) => nums.len(),)+
         }

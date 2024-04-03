@@ -13,8 +13,8 @@ use crate::utils;
 
 pub mod handler;
 
+/// Print metadata about a standalone .pco file.
 #[derive(Clone, Debug, Parser)]
-#[command(about = "print metadata about a standalone .pco file")]
 pub struct InspectOpt {
   pub path: PathBuf,
 }

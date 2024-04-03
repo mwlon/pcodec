@@ -9,13 +9,14 @@ use crate::opt::InputFileOpt;
 use crate::{dtypes, parse};
 
 /// Run benchmarks on datasets originating from another format.
+///
+/// This supports various input formats, various codecs (add even more with the
+/// full_bench cargo feature), and configurations for each codec.
+///
 /// The input format does not affect performance; all input numbers are
 /// loaded into memory prior to benchmarking each dataset.
-/// This supports output formats other than pco, if compiled with the
-/// necessary features.
 #[derive(Clone, Debug, Parser)]
 pub struct BenchOpt {
-  // TODO explain some way to get the list of keys available
   /// Comma-separated list of codecs to benchmark, optionally with
   /// colon-separated configurations.
   ///
@@ -23,6 +24,8 @@ pub struct BenchOpt {
   /// `zstd,zstd:level=10,pco:level=9:delta_order=0`
   /// will compare 3 codecs: zstd at default compression level (3), zstd at
   /// level 10, and pco at level 9 with 0th order delta encoding.
+  ///
+  /// To see what valid configurations look like, try entering an invalid one.
   #[arg(long, short, default_value = "pco", value_parser = CodecConfig::from_str, value_delimiter = ',')]
   pub codecs: Vec<CodecConfig>,
   /// Comma-separated substrings of datasets or column names to benchmark.
@@ -73,7 +76,7 @@ pub struct IterOpt {
 
 impl BenchOpt {
   pub fn includes_dataset(&self, dtype: &DataType, name: &str) -> bool {
-    if matches!(dtypes::from_arrow(dtype), Err(_))
+    if dtypes::from_arrow(dtype).is_err()
       || (!self.dtypes.is_empty() && !self.dtypes.contains(dtype))
     {
       return false;

@@ -64,7 +64,7 @@ impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
     let limited_num_vec;
     let mut num_vec = num_vec;
     if let Some(limit) = opt.limit {
-      if limit < num_vec.len() {
+      if limit < num_vec.n() {
         limited_num_vec = num_vec.truncated(limit);
         num_vec = &limited_num_vec;
       }

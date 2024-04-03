@@ -5,7 +5,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 use ::pco::data_types::CoreDataType;
 use ::pco::with_core_dtypes;
@@ -98,7 +98,7 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
 pub trait CodecSurface: Debug + Send + Sync {
   fn name(&self) -> &'static str;
   fn set_conf(&mut self, key: &str, value: String) -> Result<()>;
-  fn details(&self) -> String;
+  fn details(&self, explicit: bool) -> String;
 
   fn warmup_iter(&self, nums_vec: &NumVec, dataset: &str, opt: &IterOpt) -> Result<Precomputed>;
   fn stats_iter(
@@ -120,12 +120,12 @@ impl<C: CodecInternal> CodecSurface for C {
     self.set_conf(key, value)
   }
 
-  fn details(&self) -> String {
+  fn details(&self, explicit: bool) -> String {
     let default_confs: HashMap<&'static str, String> =
       Self::default().get_confs().into_iter().collect();
     let mut res = String::new();
     for (k, v) in self.get_confs() {
-      if &v != default_confs.get(k).unwrap() {
+      if explicit || &v != default_confs.get(k).unwrap() {
         res.push_str(&format!(":{}={}", k, v,));
       }
     }
@@ -143,7 +143,7 @@ impl<C: CodecInternal> CodecSurface for C {
       let save_path = dir.join(format!(
         "{}{}.{}",
         &dataset,
-        self.details(),
+        self.details(false),
         self.name(),
       ));
       fs::write(save_path, &compressed)?;
@@ -236,7 +236,13 @@ impl FromStr for CodecConfig {
     };
 
     for (k, v) in &confs {
-      codec.set_conf(k, v.to_string())?;
+      codec.set_conf(k, v.to_string()).with_context(|| {
+        format!(
+          "explicit conf state: {}{}",
+          codec.name(),
+          codec.details(true)
+        )
+      })?;
     }
     let mut confs = confs.into_iter().map(|(k, _v)| k).collect::<Vec<_>>();
     confs.sort_unstable();
@@ -247,7 +253,12 @@ impl FromStr for CodecConfig {
 
 impl Display for CodecConfig {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}{}", self.0.name(), self.0.details(),)
+    write!(
+      f,
+      "{}{}",
+      self.0.name(),
+      self.0.details(false),
+    )
   }
 }
 

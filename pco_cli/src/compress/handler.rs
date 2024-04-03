@@ -32,7 +32,7 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
     } else {
       open_options.create_new(true);
     }
-    let file = open_options.open(&opt.pco_path)?;
+    let file = open_options.open(&opt.path)?;
 
     let config = ChunkConfig::default()
       .with_compression_level(opt.level)

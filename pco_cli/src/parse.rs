@@ -38,6 +38,14 @@ pub fn arrow_dtype(s: &str) -> anyhow::Result<DataType> {
     ("u32", DataType::UInt32),
     ("u64", DataType::UInt64),
     (
+      "seconds",
+      DataType::Timestamp(TimeUnit::Second, None),
+    ),
+    (
+      "millis",
+      DataType::Timestamp(TimeUnit::Millisecond, None),
+    ),
+    (
       "micros",
       DataType::Timestamp(TimeUnit::Microsecond, None),
     ),
