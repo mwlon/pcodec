@@ -1,6 +1,7 @@
 [![Crates.io][crates-badge]][crates-url]
 
 [crates-badge]: https://img.shields.io/crates/v/q_compress.svg
+
 [crates-url]: https://crates.io/crates/q_compress
 
 # `q_compress`
@@ -30,7 +31,7 @@ fn main() {
 ```
 
 To run something right away, try
-[the benchmarks](../../bench/README.md).
+[the benchmarks](../../docs/benchmark_results.md).
 
 For a lower-level standalone API that allows writing/reading one chunk at a time and
 extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compress/latest/q_compress/).
@@ -38,11 +39,12 @@ extracting all metadata, see [the docs.rs documentation](https://docs.rs/q_compr
 ## Usage as a Wrapped Format
 
 To embed/interleave `q_compress` in another data format, it is better to use
-the [wrapped API and format](src/wrapped) than standalone. 
+the [wrapped API and format](src/wrapped) than standalone.
 See the [wrapped time series](examples/wrapped_time_series.rs) example.
 This allows
+
 * fine-level data paging with good compression ratio down to page sizes of >20 numbers
-(as long as the overall chunk has >2k or so)
+  (as long as the overall chunk has >2k or so)
 * less bloat by omitting metadata that the wrapping format must retain
 
 ## Library Changelog
@@ -55,7 +57,7 @@ See [changelog.md](changelog.md)
 
 Small data types can be efficiently compressed in expansion:
 for example, compressing `u8` data as a sequence of `u16`
-values.  The only cost to using a larger datatype is a small
+values. The only cost to using a larger datatype is a small
 increase in chunk metadata size.
 
 When necessary, you can implement your own data type via
@@ -67,6 +69,7 @@ implementations are insufficient)
 ### Seeking and Quantile Statistics
 
 Recall that each chunk has a metadata section containing
+
 * the total count of numbers in the chunk,
 * the ranges for the chunk and count of numbers in each range,
 * and the size in bytes of the compressed body.
