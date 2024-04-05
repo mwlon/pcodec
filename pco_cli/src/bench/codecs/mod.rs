@@ -18,7 +18,7 @@ use crate::bench::codecs::pco::PcoConfig;
 use crate::bench::codecs::qco::QcoConfig;
 use crate::bench::codecs::snappy::SnappyConfig;
 use crate::bench::codecs::zstd::ZstdConfig;
-use crate::bench::opt::IterOpt;
+use crate::bench::IterOpt;
 use crate::bench::{BenchStat, Precomputed};
 use crate::dtypes::PcoNumberLike;
 use crate::num_vec::NumVec;
@@ -66,32 +66,6 @@ trait CodecInternal: Clone + Debug + Send + Sync + Default + 'static {
       }
     }
     with_core_dtypes!(decompress)
-  }
-
-  fn compare_nums<T: PcoNumberLike>(&self, recovered: &[T], original: &[T]) {
-    assert_eq!(recovered.len(), original.len());
-    for (i, (x, y)) in recovered.iter().zip(original.iter()).enumerate() {
-      assert_eq!(
-        x.to_latent_ordered(),
-        y.to_latent_ordered(),
-        "{} != {} at {}",
-        x,
-        y,
-        i
-      );
-    }
-  }
-
-  fn compare_nums_dynamic(&self, recovered: &NumVec, original: &NumVec) {
-    match (recovered, original) {
-      (NumVec::U32(x), NumVec::U32(y)) => self.compare_nums(x, y),
-      (NumVec::U64(x), NumVec::U64(y)) => self.compare_nums(x, y),
-      (NumVec::I32(x), NumVec::I32(y)) => self.compare_nums(x, y),
-      (NumVec::I64(x), NumVec::I64(y)) => self.compare_nums(x, y),
-      (NumVec::F32(x), NumVec::F32(y)) => self.compare_nums(x, y),
-      (NumVec::F64(x), NumVec::F64(y)) => self.compare_nums(x, y),
-      _ => unreachable!(),
-    }
   }
 }
 
@@ -154,7 +128,7 @@ impl<C: CodecInternal> CodecSurface for C {
       let rec_nums = self.decompress_dynamic(dtype, &compressed);
 
       if !opt.no_assertions {
-        self.compare_nums_dynamic(&rec_nums, num_vec);
+        rec_nums.check_equal(num_vec);
       }
     }
 

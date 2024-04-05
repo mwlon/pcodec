@@ -18,6 +18,20 @@ fn cast_to_nums<T: PcoNumberLike>(bytes: Vec<u8>) -> Vec<T> {
   }
 }
 
+fn check_equal<T: PcoNumberLike>(recovered: &[T], original: &[T]) {
+  assert_eq!(recovered.len(), original.len());
+  for (i, (x, y)) in recovered.iter().zip(original.iter()).enumerate() {
+    assert_eq!(
+      x.to_latent_ordered(),
+      y.to_latent_ordered(),
+      "{} != {} at {}",
+      x,
+      y,
+      i
+    );
+  }
+}
+
 macro_rules! impl_num_vec {
   {$($name:ident($lname:ident) => $t:ty,)+} => {
     pub enum NumVec {
@@ -46,6 +60,13 @@ macro_rules! impl_num_vec {
       pub fn dtype(&self) -> CoreDataType {
         match self {
           $(NumVec::$name(_) => CoreDataType::$name,)+
+        }
+      }
+
+      pub fn check_equal(&self, other: &NumVec) {
+        match (self, other) {
+          $((NumVec::$name(x), NumVec::$name(y)) => check_equal(x, y),)+
+          _ => unreachable!(),
         }
       }
     }

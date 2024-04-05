@@ -18,7 +18,7 @@ def write_generic(strs, arr, full_name):
   joined = '\n'.join(strs)
   with open(f'{base_dir}/txt/{full_name}.txt', 'w') as f:
     f.write(joined)
-  with open(f'{base_dir}/binary/{full_name}.bin', 'wb') as f:
+  with open(f'{base_dir}/binary/{full_name}', 'wb') as f:
     f.write(arr.tobytes())
 
 def write_i32(arr, name):

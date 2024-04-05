@@ -9,6 +9,7 @@ mod compress;
 mod core_handlers;
 mod decompress;
 mod dtypes;
+mod input;
 mod inspect;
 pub mod num_vec;
 mod opt;

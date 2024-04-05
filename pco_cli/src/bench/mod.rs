@@ -2,28 +2,25 @@
 
 use std::any::type_name;
 use std::collections::HashMap;
-use std::fs;
-use std::fs::File;
 use std::ops::AddAssign;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
-use arrow::csv;
-use arrow::datatypes::{DataType, SchemaRef};
+use anyhow::Result;
+use arrow::datatypes::{DataType, Schema};
+use clap::{Args, Parser};
 use indicatif::{ProgressBar, ProgressStyle};
-use parquet::arrow::arrow_reader::{ArrowReaderMetadata, ParquetRecordBatchReaderBuilder};
-use parquet::arrow::ProjectionMask;
 use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
-pub use opt::BenchOpt;
 use pco::data_types::CoreDataType;
 use pco::with_core_dtypes;
 
-use crate::num_vec::NumVec;
-use crate::{arrow_handlers, dtypes, parse};
+use crate::bench::codecs::CodecConfig;
+use crate::input::{InputColumnOpt, InputFileOpt};
+use crate::{arrow_handlers, dtypes, input, parse};
 
 mod codecs;
 pub mod handler;
@@ -31,6 +28,83 @@ mod opt;
 
 const DEFAULT_BINARY_DIR: &str = "data/binary";
 // if this delta order is specified, use a dataset-specific order
+
+/// Run benchmarks on datasets originating from another format.
+///
+/// This supports various input formats, various codecs (add even more with the
+/// full_bench cargo feature), and configurations for each codec.
+///
+/// The input format does not affect performance; all input numbers are
+/// loaded into memory prior to benchmarking each dataset.
+/// By default, if no inputs are specified, the bench will use the
+/// relative directory `data/binary/` as binary input.
+#[derive(Clone, Debug, Parser)]
+pub struct BenchOpt {
+  /// Comma-separated list of codecs to benchmark, optionally with
+  /// colon-separated configurations.
+  ///
+  /// For example, setting this to
+  /// `zstd,zstd:level=10,pco:level=9:delta_order=0`
+  /// will compare 3 codecs: zstd at default compression level (3), zstd at
+  /// level 10, and pco at level 9 with 0th order delta encoding.
+  ///
+  /// To see what valid configurations look like, try entering an invalid one.
+  #[arg(long, short, default_value = "pco", value_parser = CodecConfig::from_str, value_delimiter = ',')]
+  pub codecs: Vec<CodecConfig>,
+  /// Comma-separated substrings of datasets or column names to benchmark.
+  /// By default all datasets are run.
+  #[arg(long, short, default_values_t = Vec::<String>::new(), value_delimiter = ',')]
+  pub datasets: Vec<String>,
+  /// Filter down to datasets or columns matching this Arrow data type,
+  /// e.g. i32 or micros.
+  #[arg(long, default_values_t = Vec::<DataType>::new(), value_parser = parse::arrow_dtype, value_delimiter = ',')]
+  pub dtypes: Vec<DataType>,
+  /// Number of iterations to run each codec x dataset combination for
+  /// better estimation of durations.
+  /// The median duration is kept.
+  #[arg(long, short, default_value = "10")]
+  pub iters: usize,
+  /// How many numbers to limit each dataset to.
+  #[arg(long, short)]
+  pub limit: Option<usize>,
+  #[command(flatten)]
+  pub input: InputFileOpt,
+  #[command(flatten)]
+  pub iter_opt: IterOpt,
+}
+
+#[derive(Clone, Debug, Args)]
+pub struct IterOpt {
+  #[arg(long)]
+  pub no_compress: bool,
+  #[arg(long)]
+  pub no_decompress: bool,
+  /// Skip assertions that all the numbers came back bitwise identical.
+  ///
+  /// This does not affect benchmark timing.
+  #[arg(long)]
+  pub no_assertions: bool,
+  /// Optionally, a directory to save the compressed data to.
+  /// Will overwrite conflicting files.
+  #[arg(long)]
+  pub save_dir: Option<PathBuf>,
+}
+
+impl BenchOpt {
+  pub fn includes_dataset(&self, dtype: &DataType, name: &str) -> bool {
+    if dtypes::from_arrow(dtype).is_err()
+      || (!self.dtypes.is_empty() && !self.dtypes.contains(dtype))
+    {
+      return false;
+    }
+
+    self.datasets.is_empty()
+      || self
+        .datasets
+        .iter()
+        .any(|allowed_substr| name.contains(allowed_substr))
+  }
+}
 
 #[derive(Clone, Default)]
 pub struct BenchStat {
@@ -115,33 +189,6 @@ impl PrintStat {
   }
 }
 
-fn basename_no_ext(path: &Path) -> String {
-  let basename = path
-    .file_name()
-    .expect("weird path")
-    .to_str()
-    .expect("not unicode");
-  match basename.find('.') {
-    Some(i) => basename[..i].to_string(),
-    _ => basename.to_string(),
-  }
-}
-
-fn get_dtype_and_name(path: &Path) -> Result<(DataType, String)> {
-  let no_ext = basename_no_ext(path);
-  let mut split = no_ext.split('_');
-  let invalid_filename = || {
-    anyhow!(
-      "filename must be of the format <DTYPE>_<NAME>, but was {:?}",
-      path
-    )
-  };
-  let dtype_str = split.next().ok_or_else(invalid_filename)?;
-  let dtype = parse::arrow_dtype(dtype_str)?;
-  let name = split.collect::<Vec<_>>().join("_");
-  Ok((dtype, name))
-}
-
 fn core_dtype_to_str(dtype: CoreDataType) -> String {
   macro_rules! to_str {
     {$($name:ident($lname:ident) => $t:ty,)+} => {
@@ -155,147 +202,20 @@ fn core_dtype_to_str(dtype: CoreDataType) -> String {
   name.to_string()
 }
 
-fn handle_parquet_column(
-  file: File,
+fn handle_column(
+  schema: &Schema,
   col_idx: usize,
   opt: &BenchOpt,
   progress_bar: &mut ProgressBar,
 ) -> Result<Vec<PrintStat>> {
-  let arrow_reader_builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
-  let schema = arrow_reader_builder.schema().clone();
   let field = &schema.fields[col_idx];
-
-  let schema_desc = arrow_reader_builder
-    .metadata()
-    .file_metadata()
-    .schema_descr();
-  let projection = ProjectionMask::roots(schema_desc, vec![col_idx]);
-  let reader = arrow_reader_builder.with_projection(projection).build()?;
-
+  let mut reader = input::new_column_reader(schema, col_idx, &opt.input)?;
   let mut arrays = Vec::new();
-  for batch_res in reader {
-    let batch = batch_res?;
-    arrays.push(batch.columns()[0].clone());
+  while let Some(array_result) = reader.next() {
+    arrays.push(array_result?);
   }
-
   let handler = arrow_handlers::from_dtype(field.data_type())?;
   handler.bench_from_arrow(&arrays, field.name(), opt, progress_bar)
-}
-
-fn handle_csv_column(
-  path: &Path,
-  field_idx: usize,
-  schema: SchemaRef,
-  opt: &BenchOpt,
-  progress_bar: &mut ProgressBar,
-) -> Result<Vec<PrintStat>> {
-  let field = &schema.fields[field_idx];
-  if !opt.includes_dataset(field.data_type(), field.name()) {
-    return Ok(vec![]);
-  }
-
-  let mut csv_reader = csv::ReaderBuilder::new(schema.clone())
-    .with_header(opt.input.csv_has_header)
-    .with_delimiter(opt.input.csv_delimiter as u8)
-    .build(File::open(path)?)?;
-  let mut arrow_arrays = Vec::new();
-  for batch in &mut csv_reader {
-    let batch = batch?;
-    arrow_arrays.push(batch.column(field_idx).clone());
-  }
-  let handler = arrow_handlers::from_dtype(field.data_type())?;
-  handler.bench_from_arrow(
-    &arrow_arrays,
-    field.name(),
-    opt,
-    progress_bar,
-  )
-}
-
-fn handle_binary(dir: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
-  let mut paths = Vec::new();
-  for f in fs::read_dir(dir)? {
-    let path = f?.path();
-    let (dtype, name) = get_dtype_and_name(&path)?;
-    if opt.includes_dataset(&dtype, &name) {
-      paths.push(path);
-    }
-  }
-  paths.sort();
-
-  let mut progress_bar = make_progress_bar(paths.len(), opt);
-  let mut stats = Vec::new();
-  for path in paths {
-    let (dtype, name) = get_dtype_and_name(&path)?;
-    let handler = arrow_handlers::from_dtype(&dtype)?;
-
-    let raw_bytes = fs::read(path).expect("could not read");
-    let core_dtype = dtypes::from_arrow(&dtype)?;
-    let num_vec = NumVec::new(core_dtype, raw_bytes);
-    stats.extend(handler.bench(&num_vec, &name, opt, &mut progress_bar)?);
-  }
-  progress_bar.finish_and_clear();
-  Ok(stats)
-}
-
-fn handle_parquet(path: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
-  let file = File::open(path)?;
-  let schema = ArrowReaderMetadata::load(&file, Default::default())?
-    .schema()
-    .clone();
-  drop(file);
-
-  let col_idxs = (0..schema.fields.len())
-    .filter(|&i| {
-      let field = &schema.fields[i];
-      opt.includes_dataset(field.data_type(), field.name())
-    })
-    .collect::<Vec<_>>();
-  let mut progress_bar = make_progress_bar(col_idxs.len(), opt);
-
-  let mut stats = Vec::new();
-  for col_idx in col_idxs {
-    stats.extend(handle_parquet_column(
-      File::open(path)?,
-      col_idx,
-      opt,
-      &mut progress_bar,
-    )?);
-  }
-  progress_bar.finish_and_clear();
-  Ok(stats)
-}
-
-fn handle_csv(path: &Path, opt: &BenchOpt) -> Result<Vec<PrintStat>> {
-  let input = &opt.input;
-  let schema = csv::infer_schema_from_files(
-    &[path.to_str().unwrap().to_string()],
-    input.csv_delimiter as u8,
-    None,
-    input.csv_has_header,
-  )?;
-  let schema_ref = SchemaRef::new(schema);
-
-  let mut stats = Vec::new();
-  let col_idxs = (0..schema_ref.fields.len())
-    .filter(|&i| {
-      let field = schema_ref.field(i);
-      opt.includes_dataset(field.data_type(), field.name())
-    })
-    .collect::<Vec<_>>();
-
-  let mut progress_bar = make_progress_bar(col_idxs.len(), opt);
-  for col_idx in col_idxs {
-    stats.extend(handle_csv_column(
-      path,
-      col_idx,
-      schema_ref.clone(),
-      opt,
-      &mut progress_bar,
-    )?);
-  }
-  progress_bar.finish_and_clear();
-  Ok(stats)
 }
 
 fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
@@ -327,23 +247,37 @@ fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
   println!("{}", table);
 }
 
-pub fn bench(opt: BenchOpt) -> Result<()> {
-  let stats = match (
-    &opt.binary_dir,
-    &opt.input.parquet_path,
-    &opt.input.csv_path,
-  ) {
-    (None, None, None) => handle_binary(
-      &PathBuf::from(DEFAULT_BINARY_DIR.to_string()),
+pub fn bench(mut opt: BenchOpt) -> Result<()> {
+  let input = &mut opt.input;
+  if input.binary_dir.is_none() && input.csv_path.is_none() && input.parquet_path.is_none() {
+    input.binary_dir = Some(PathBuf::from(DEFAULT_BINARY_DIR));
+  }
+
+  let schema = input::get_schema(&InputColumnOpt::default(), input)?;
+
+  let col_idxs = schema
+    .fields
+    .iter()
+    .enumerate()
+    .filter_map(|(i, field)| {
+      if opt.includes_dataset(field.data_type(), field.name()) {
+        Some(i)
+      } else {
+        None
+      }
+    })
+    .collect::<Vec<_>>();
+  let mut progress_bar = make_progress_bar(col_idxs.len(), &opt);
+  let mut stats = Vec::new();
+  for col_idx in col_idxs {
+    stats.extend(handle_column(
+      &schema,
+      col_idx,
       &opt,
-    ),
-    (Some(dir), None, None) => handle_binary(dir, &opt),
-    (None, Some(file), None) => handle_parquet(file, &opt),
-    (None, None, Some(file)) => handle_csv(file, &opt),
-    _ => Err(anyhow!(
-      "cannot use more than 1 of binary_dir, csv, and parquet inputs at once"
-    )),
-  }?;
+      &mut progress_bar,
+    )?);
+  }
+  progress_bar.finish_and_clear();
 
   print_stats(stats, &opt);
 

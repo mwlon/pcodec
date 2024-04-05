@@ -7,7 +7,6 @@ use arrow::datatypes::Schema;
 use pco::data_types::{CoreDataType, NumberLike};
 use pco::standalone::FileDecompressor;
 
-use crate::compress::CompressOpt;
 use crate::dtypes::ArrowNumberLike;
 
 pub fn get_standalone_dtype(initial_bytes: &[u8]) -> Result<Option<CoreDataType>> {
@@ -21,9 +20,13 @@ pub fn get_standalone_dtype(initial_bytes: &[u8]) -> Result<Option<CoreDataType>
   }
 }
 
-pub fn find_col_idx(schema: &Schema, opt: &CompressOpt) -> Result<usize> {
-  match (&opt.col_idx, &opt.col_name) {
-    (Some(col_idx), _) => Ok(*col_idx),
+pub fn find_col_idx(
+  schema: &Schema,
+  col_idx: Option<usize>,
+  col_name: &Option<String>,
+) -> Result<usize> {
+  match (col_idx, col_name) {
+    (Some(col_idx), _) => Ok(col_idx),
     (_, Some(col_name)) => schema
       .fields()
       .iter()
@@ -43,7 +46,7 @@ pub fn dtype_name<T: NumberLike>() -> String {
   any::type_name::<T>().split(':').last().unwrap().to_string()
 }
 
-pub fn arrow_to_nums<P: ArrowNumberLike>(arrow_array: &ArrayRef) -> Vec<P::Pco> {
+pub fn arrow_to_nums<P: ArrowNumberLike>(arrow_array: ArrayRef) -> Vec<P::Pco> {
   arrow_array
     .as_primitive::<P>()
     .values()

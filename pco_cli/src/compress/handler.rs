@@ -1,14 +1,7 @@
-use std::fs::{File, OpenOptions};
-use std::marker::PhantomData;
-use std::path::Path;
+use std::fs::OpenOptions;
 
 use anyhow::Result;
-use arrow::csv;
-use arrow::csv::Reader as CsvReader;
-use arrow::datatypes::{Schema, SchemaRef};
-use arrow::record_batch::RecordBatch;
-use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
-use parquet::arrow::ProjectionMask;
+use arrow::datatypes::Schema;
 
 use pco::standalone::FileCompressor;
 use pco::ChunkConfig;
@@ -16,7 +9,7 @@ use pco::ChunkConfig;
 use crate::arrow_handlers::ArrowHandlerImpl;
 use crate::compress::CompressOpt;
 use crate::dtypes::ArrowNumberLike;
-use crate::utils;
+use crate::{input, utils};
 
 pub trait CompressHandler {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()>;
@@ -42,11 +35,16 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
     let fc = FileCompressor::default();
     fc.write_header(&file)?;
 
-    let mut reader = new_column_reader::<P>(schema, opt)?;
+    let col_idx = utils::find_col_idx(
+      schema,
+      opt.input_column.col_idx,
+      &opt.input_column.col_name,
+    )?;
+    let mut reader = input::new_column_reader(schema, col_idx, &opt.input_file)?;
     let mut num_buffer = Vec::<P::Pco>::new();
-    while let Some(batch_result) = reader.next_batch() {
-      let batch = batch_result?;
-      num_buffer.extend(&batch);
+    while let Some(array_result) = reader.next() {
+      let array = array_result?;
+      num_buffer.extend(utils::arrow_to_nums::<P>(array));
       if num_buffer.len() >= opt.chunk_size {
         fc.chunk_compressor(&num_buffer[..opt.chunk_size], &config)?
           .write_chunk(&file)?;
@@ -60,104 +58,5 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
 
     fc.write_footer(&file)?;
     Ok(())
-  }
-}
-
-fn new_column_reader<P: ArrowNumberLike>(
-  schema: &Schema,
-  opt: &CompressOpt,
-) -> Result<Box<dyn ColumnReader<P>>> {
-  let res: Box<dyn ColumnReader<P>> = match (&opt.input.csv_path, &opt.input.parquet_path) {
-    (Some(csv_path), None) => Box::new(CsvColumnReader::new(schema, csv_path, opt)?),
-    (None, Some(parquet_path)) => Box::new(ParquetColumnReader::new(
-      schema,
-      parquet_path,
-      opt,
-    )?),
-    _ => unreachable!("should have already checked that file is uniquely specified"),
-  };
-  Ok(res)
-}
-
-trait ColumnReader<P: ArrowNumberLike> {
-  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self>
-  where
-    Self: Sized;
-  fn next_arrow_batch(&mut self) -> Option<arrow::error::Result<RecordBatch>>;
-  fn col_idx(&self) -> usize;
-
-  fn next_batch(&mut self) -> Option<Result<Vec<P::Pco>>> {
-    self.next_arrow_batch().map(|batch_result| {
-      let batch = batch_result?;
-      let arrow_array = batch.column(self.col_idx());
-      Ok(utils::arrow_to_nums::<P>(arrow_array))
-    })
-  }
-}
-
-struct ParquetColumnReader<P> {
-  batch_reader: ParquetRecordBatchReader,
-  phantom: PhantomData<P>,
-}
-
-impl<P: ArrowNumberLike> ColumnReader<P> for ParquetColumnReader<P> {
-  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self> {
-    let file = File::open(path)?;
-    let batch_reader_builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
-    let parquet_schema = parquet::arrow::arrow_to_parquet_schema(schema)?;
-    let col_idx = utils::find_col_idx(schema, opt)?;
-    let batch_reader = batch_reader_builder
-      .with_projection(ProjectionMask::leaves(
-        &parquet_schema,
-        vec![col_idx],
-      ))
-      .build()?;
-    Ok(Self {
-      batch_reader,
-      phantom: PhantomData,
-    })
-  }
-
-  fn next_arrow_batch(&mut self) -> Option<arrow::error::Result<RecordBatch>> {
-    self.batch_reader.next()
-  }
-
-  fn col_idx(&self) -> usize {
-    // 0 because we told arrow to only read the exact column we want
-    0
-  }
-}
-
-struct CsvColumnReader<P> {
-  csv_reader: CsvReader<File>,
-  col_idx: usize,
-  phantom: PhantomData<P>,
-}
-
-impl<P: ArrowNumberLike> ColumnReader<P> for CsvColumnReader<P> {
-  fn new(schema: &Schema, path: &Path, opt: &CompressOpt) -> Result<Self>
-  where
-    Self: Sized,
-  {
-    let csv_reader = csv::ReaderBuilder::new(SchemaRef::new(schema.clone()))
-      .with_header(opt.csv_has_header()?)
-      .with_batch_size(opt.chunk_size)
-      .with_delimiter(opt.input.csv_delimiter as u8)
-      .build(File::open(path)?)?;
-    let col_idx = utils::find_col_idx(schema, opt)?;
-
-    Ok(Self {
-      csv_reader,
-      col_idx,
-      phantom: PhantomData,
-    })
-  }
-
-  fn next_arrow_batch(&mut self) -> Option<arrow::error::Result<RecordBatch>> {
-    self.csv_reader.next()
-  }
-
-  fn col_idx(&self) -> usize {
-    self.col_idx
   }
 }

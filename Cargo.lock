@@ -1151,6 +1151,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrow",
+ "arrow-buffer",
  "better_io",
  "blosc-src",
  "bytes",

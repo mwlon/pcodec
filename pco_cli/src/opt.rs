@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use clap::{Parser, Subcommand};
 
 use crate::bench::BenchOpt;
@@ -12,23 +10,6 @@ use crate::inspect::InspectOpt;
 pub struct OptWrapper {
   #[command(subcommand)]
   pub opt: Opt,
-}
-
-#[derive(Clone, Debug, Parser)]
-pub struct InputFileOpt {
-  /// Path to a Parquet file to use as input.
-  /// Only numerical, non-null values in the file will be used.
-  #[arg(long = "parquet", short)]
-  pub parquet_path: Option<PathBuf>,
-  /// Path to a CSV file to use as input.
-  /// Only numerical, non-null values in the file will be used.
-  #[arg(long = "csv")]
-  pub csv_path: Option<PathBuf>,
-
-  #[arg(long)]
-  pub csv_has_header: bool,
-  #[arg(long, default_value = ",")]
-  pub csv_delimiter: char,
 }
 
 #[derive(Subcommand, Clone, Debug)]

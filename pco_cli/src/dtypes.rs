@@ -3,8 +3,8 @@ use std::mem;
 use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes as arrow_dtypes;
-use arrow::datatypes::DataType as ArrowDataType;
 use arrow::datatypes::{ArrowPrimitiveType, DataType};
+use arrow::datatypes::{DataType as ArrowDataType, Int16Type, UInt16Type};
 
 use pco::data_types::{CoreDataType, NumberLike};
 
@@ -171,6 +171,30 @@ trivial!(i32, I32, arrow_dtypes::Int32Type);
 trivial!(i64, I64, arrow_dtypes::Int64Type);
 trivial!(u32, U32, arrow_dtypes::UInt32Type);
 trivial!(u64, U64, arrow_dtypes::UInt64Type);
+
+impl ArrowNumberLike for Int16Type {
+  type Pco = i32;
+
+  fn native_to_pco(native: Self::Native) -> Self::Pco {
+    native as Self::Pco
+  }
+
+  fn native_vec_to_pco(native: Vec<Self::Native>) -> Vec<Self::Pco> {
+    native.into_iter().map(|x| x as Self::Pco).collect()
+  }
+}
+impl ArrowNumberLike for UInt16Type {
+  type Pco = u32;
+
+  fn native_to_pco(native: Self::Native) -> Self::Pco {
+    native as Self::Pco
+  }
+
+  fn native_vec_to_pco(native: Vec<Self::Native>) -> Vec<Self::Pco> {
+    native.into_iter().map(|x| x as Self::Pco).collect()
+  }
+}
+
 extra_arrow!(i64, arrow_dtypes::TimestampSecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampMillisecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);
