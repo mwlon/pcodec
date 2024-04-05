@@ -2,7 +2,6 @@
 resolver = "2"
 
 members = [
-  "bench",
   "better_io",
   "pco",
   "pco_c",

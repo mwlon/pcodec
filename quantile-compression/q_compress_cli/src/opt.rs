@@ -56,20 +56,6 @@ pub struct CompressOpt {
   pub qco_path: PathBuf,
 }
 
-impl CompressOpt {
-  pub fn csv_has_header(&self) -> Result<bool> {
-    let res = match (&self.col_name, &self.col_idx) {
-      (Some(_), None) => Ok(true),
-      (None, Some(_)) => Ok(self.has_csv_header),
-      _ => Err(anyhow!(
-        "conflicting or incomplete CSV column information"
-      )),
-    }?;
-
-    Ok(res)
-  }
-}
-
 #[derive(Clone, Debug, StructOpt)]
 pub struct DecompressOpt {
   #[structopt(long)]

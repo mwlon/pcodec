@@ -174,10 +174,10 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   fn join_latents(mode: Mode<Self::L>, primary: &mut [Self::L], secondary: &[Self::L]);
 
   fn transmute_to_latents(_slice: &mut [Self]) -> &mut [Self::L] {
-    panic!("should be unreachable; transmutable numbers must reimplement this");
+    unimplemented!("transmutable numbers must reimplement this");
   }
   fn transmute_to_latent(self) -> Self::L {
-    panic!("should be unreachable; transmutable numbers must reimplement this");
+    unimplemented!("transmutable numbers must reimplement this");
   }
 }
 

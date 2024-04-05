@@ -215,7 +215,7 @@ macro_rules! impl_float_number {
             let base = Self::from_latent_ordered(base_latent);
             float_mult_utils::join_latents(base, primary, secondary)
           }
-          _ => panic!("should be unreachable"),
+          _ => unreachable!("impossible mode for floats"),
         }
       }
 

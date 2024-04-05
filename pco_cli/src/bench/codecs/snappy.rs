@@ -3,8 +3,8 @@ use std::io::{Read, Write};
 
 use anyhow::{anyhow, Result};
 
-use crate::codecs::{utils, CodecInternal};
-use crate::dtypes::Dtype;
+use crate::bench::codecs::{utils, CodecInternal};
+use crate::dtypes::PcoNumberLike;
 
 #[derive(Clone, Debug, Default)]
 pub struct SnappyConfig {}
@@ -14,15 +14,15 @@ impl CodecInternal for SnappyConfig {
     "snappy"
   }
 
-  fn get_conf(&self, _key: &str) -> String {
-    panic!("bad conf")
+  fn get_confs(&self) -> Vec<(&'static str, String)> {
+    vec![]
   }
 
   fn set_conf(&mut self, key: &str, _value: String) -> Result<()> {
     Err(anyhow!("unknown conf: {}", key))
   }
 
-  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
     res.extend((nums.len() as u32).to_le_bytes());
 
@@ -34,7 +34,7 @@ impl CodecInternal for SnappyConfig {
     res
   }
 
-  fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
     let len = u32::from_le_bytes(bytes[0..4].try_into().unwrap()) as usize;
     let mut res = Vec::<T>::with_capacity(len);
     let mut rdr = snap::read::FrameDecoder::new(&bytes[4..]);

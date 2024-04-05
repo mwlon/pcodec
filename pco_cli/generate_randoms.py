@@ -8,7 +8,7 @@ import os
 n = 1000000
 max_n = 2 ** 24 - 1
 
-base_dir = 'bench/data'
+base_dir = 'data'
 
 os.makedirs(f'{base_dir}/txt', exist_ok=True)
 os.makedirs(f'{base_dir}/binary', exist_ok=True)

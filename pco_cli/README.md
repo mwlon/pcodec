@@ -1,6 +1,7 @@
 [![Crates.io][crates-badge]][crates-url]
 
 [crates-badge]: https://img.shields.io/crates/v/pco_cli.svg
+
 [crates-url]: https://crates.io/crates/pco_cli
 
 # Setup
@@ -17,13 +18,44 @@ This provides you with the `pcodec` command.
 
 You can always get help, e.g. `pcodec`, `pcodec compress --help`.
 
+## Bench
+
+This command runs benchmarks, taking in data you provide and printing out
+compression time, decompression time, and compression ratio for whatever
+codecs you request.
+
+```shell
+pcodec bench --parquet my_input_data.parquet
+pcodec bench \
+  --csv my_input_data.csv \
+  --csv-has-header \
+  --codecs pco:level=9,parquet:compression=zstd4 \
+  --dtypes f32 \
+  --datasets foo,bar \
+  --iters 7 \
+  --limit 999999 \
+  --save-dir ./tmp
+pcodec bench --binary-dir ./data
+```
+
+### Setting up synthetic data
+
+One way to generate test data from a wide variety of processes and
+distributions is from the `generate_randoms.py` script in the pcodec
+repository.
+To run it, set up a python3 environment with `numpy` installed.
+In that environment, `cd`'d in to the root of the repo,
+run `python pco_cli/generate_randoms.py`.
+This will populate some human-readable data in `data/txt/` and
+the exact same numerical data as bytes in `data/binary/`.
+
+Unless other input is provided, `pcodec bench` will search the
+`./data/binary/` path.
+
 ## Compress
 
 This command compresses a single column of a .csv or .parquet file into a .pco
 file.
-If delta encoding order (`--delta-order`) is not specified, the default
-behavior is to use the first numbers and make an educated guess for the best
-delta encoding order.
 
 Examples:
 

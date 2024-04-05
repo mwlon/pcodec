@@ -1,6 +1,7 @@
 [![Crates.io][crates-badge]][crates-url]
 
 [crates-badge]: https://img.shields.io/crates/v/pco.svg
+
 [crates-url]: https://crates.io/crates/pco
 
 # Quick Start
@@ -10,7 +11,7 @@ use pco::standalone::{simpler_compress, simple_decompress};
 use pco::DEFAULT_COMPRESSION_LEVEL;
 use pco::errors::PcoResult;
 
-fn main() -> PcoResult<()>{
+fn main() -> PcoResult<()> {
   // your data
   let mut my_ints = Vec::new();
   for i in 0..100000 {
@@ -29,7 +30,7 @@ fn main() -> PcoResult<()>{
 ```
 
 To run something right away, try
-[the benchmarks](../bench/README.md).
+[the benchmarks](../docs/benchmark_results.md).
 
 For information about Pco in general, see [the main README](../README.md).
 
@@ -38,8 +39,8 @@ For documentation, [docs.rs has the best examples and API details](https://docs.
 # API Notes
 
 * In some places, Pco methods accept a destination (either W: Write or &mut [T: NumberLike]).
-If Pco returns an error, it is possible both the destination and the struct
-have been modified.
+  If Pco returns an error, it is possible both the destination and the struct
+  have been modified.
 * Pco will always try to process all numbers, and it will fail if insufficient bytes are
-available. For instance, during decompression Pco will try to fill the entire `&mut [T]`
-passed in, returning an insufficient data error if the `&[u8]` passed in is not long enough.
+  available. For instance, during decompression Pco will try to fill the entire `&mut [T]`
+  passed in, returning an insufficient data error if the `&[u8]` passed in is not long enough.

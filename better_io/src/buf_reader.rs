@@ -3,6 +3,8 @@ use std::io::{BufReader, Error, ErrorKind, Read};
 
 use crate::buf_read::BetterBufRead;
 
+const DEFAULT_CAPACITY: usize = 8192;
+
 /// An implementation of [`BetterBufRead`][crate::BetterBufRead] that wraps a
 /// generic `Read`.
 ///
@@ -103,6 +105,12 @@ impl<R: Read> BetterBufReader<R> {
       pos: 0,
       filled,
     }
+  }
+
+  /// Creates a `BetterBufReader` based on a `Reader`, supplying sensible
+  /// defaults.
+  pub fn from_read_simple(inner: R) -> Self {
+    Self::new(&[], inner, DEFAULT_CAPACITY)
   }
 
   /// Creates a `BetterBufReader` based on a `BufReader`.
