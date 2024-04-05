@@ -46,9 +46,11 @@ pub struct LatentVarSummary {
 
 #[derive(Serialize)]
 pub struct ChunkSummary {
+  idx: usize,
   n: usize,
   mode: String,
   delta_order: usize,
+  // using BTreeMaps to preserve ordering
   latent_vars: BTreeMap<String, LatentVarSummary>,
 }
 
@@ -61,8 +63,7 @@ pub struct Output {
   pub n_chunks: usize,
   pub uncompressed_size: usize,
   pub compressed: CompressionSummary,
-  // using BTreeMaps to preserve ordering
-  pub chunks: BTreeMap<String, ChunkSummary>,
+  pub chunks: Vec<ChunkSummary>,
 }
 
 fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
@@ -163,22 +164,20 @@ impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
     let compressed_size = header_size + meta_size + page_size + footer_size;
     let unknown_trailing_bytes = src.len();
 
-    let mut chunks = BTreeMap::new();
+    let mut chunks = Vec::new();
     for (idx, meta) in metas.iter().enumerate() {
       let mut latent_vars = BTreeMap::new();
       for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
         let (name, summary) = build_latent_var_summary::<T>(latent_var_idx, meta, latent_var_meta);
         latent_vars.insert(name, summary);
       }
-      chunks.insert(
-        idx.to_string(),
-        ChunkSummary {
-          n: chunk_ns[idx],
-          mode: format!("{:?}", meta.mode),
-          delta_order: meta.delta_encoding_order,
-          latent_vars,
-        },
-      );
+      chunks.push(ChunkSummary {
+        idx,
+        n: chunk_ns[idx],
+        mode: format!("{:?}", meta.mode),
+        delta_order: meta.delta_encoding_order,
+        latent_vars,
+      });
     }
 
     let output = Output {
