@@ -214,7 +214,7 @@ fn handle_column(
     arrays.push(array_result?);
   }
   let handler = arrow_handlers::from_dtype(field.data_type())?;
-  handler.bench_from_arrow(&arrays, field.name(), opt, progress_bar)
+  handler.bench(&arrays, field.name(), opt, progress_bar)
 }
 
 fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {

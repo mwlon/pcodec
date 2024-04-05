@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap};
 use std::fs;
 use std::path::PathBuf;
 
@@ -45,7 +45,7 @@ fn trivial_inspect(opt: &InspectOpt, src: &[u8]) -> Result<()> {
       footer_size: 1,
       unknown_trailing_bytes: src.len(),
     },
-    chunks: HashMap::new(),
+    chunks: BTreeMap::new(),
   };
   println!("{}", toml::to_string_pretty(&summary)?);
   Ok(())

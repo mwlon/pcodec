@@ -11,13 +11,6 @@ use crate::num_vec::NumVec;
 pub trait BenchHandler {
   fn bench(
     &self,
-    nums: &NumVec,
-    name: &str,
-    opt: &BenchOpt,
-    progress_bar: &mut ProgressBar,
-  ) -> Result<Vec<PrintStat>>;
-  fn bench_from_arrow(
-    &self,
     arrays: &[ArrayRef],
     name: &str,
     opt: &BenchOpt,
@@ -55,35 +48,6 @@ fn handle_for_codec(
 impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
   fn bench(
     &self,
-    num_vec: &NumVec,
-    name: &str,
-    opt: &BenchOpt,
-    progress_bar: &mut ProgressBar,
-  ) -> Result<Vec<PrintStat>> {
-    let mut stats = Vec::new();
-    let limited_num_vec;
-    let mut num_vec = num_vec;
-    if let Some(limit) = opt.limit {
-      if limit < num_vec.n() {
-        limited_num_vec = num_vec.truncated(limit);
-        num_vec = &limited_num_vec;
-      }
-    }
-    for codec in &opt.codecs {
-      stats.push(handle_for_codec(
-        num_vec,
-        name,
-        codec,
-        opt,
-        progress_bar,
-      )?);
-    }
-
-    Ok(stats)
-  }
-
-  fn bench_from_arrow(
-    &self,
     arrays: &[ArrayRef],
     name: &str,
     opt: &BenchOpt,
@@ -97,6 +61,25 @@ impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
     let nums = P::native_vec_to_pco(arrow_nums);
     let num_vec = P::Pco::make_num_vec(nums);
 
-    self.bench(&num_vec, name, opt, progress_bar)
+    let mut stats = Vec::new();
+    let limited_num_vec;
+    let mut num_vec_ref = &num_vec;
+    if let Some(limit) = opt.limit {
+      if limit < num_vec.n() {
+        limited_num_vec = num_vec.truncated(limit);
+        num_vec_ref = &limited_num_vec;
+      }
+    }
+    for codec in &opt.codecs {
+      stats.push(handle_for_codec(
+        num_vec_ref,
+        name,
+        codec,
+        opt,
+        progress_bar,
+      )?);
+    }
+
+    Ok(stats)
   }
 }

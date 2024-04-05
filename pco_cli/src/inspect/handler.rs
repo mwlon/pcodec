@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap};
 
 use anyhow::Result;
 use serde::Serialize;
@@ -49,7 +49,7 @@ pub struct ChunkSummary {
   n: usize,
   mode: String,
   delta_order: usize,
-  latent_vars: HashMap<String, LatentVarSummary>,
+  latent_vars: BTreeMap<String, LatentVarSummary>,
 }
 
 #[derive(Serialize)]
@@ -61,7 +61,8 @@ pub struct Output {
   pub n_chunks: usize,
   pub uncompressed_size: usize,
   pub compressed: CompressionSummary,
-  pub chunks: HashMap<String, ChunkSummary>,
+  // using BTreeMaps to preserve ordering
+  pub chunks: BTreeMap<String, ChunkSummary>,
 }
 
 fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
@@ -162,9 +163,9 @@ impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
     let compressed_size = header_size + meta_size + page_size + footer_size;
     let unknown_trailing_bytes = src.len();
 
-    let mut chunks = HashMap::new();
+    let mut chunks = BTreeMap::new();
     for (idx, meta) in metas.iter().enumerate() {
-      let mut latent_vars = HashMap::new();
+      let mut latent_vars = BTreeMap::new();
       for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
         let (name, summary) = build_latent_var_summary::<T>(latent_var_idx, meta, latent_var_meta);
         latent_vars.insert(name, summary);

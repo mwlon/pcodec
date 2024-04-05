@@ -208,9 +208,10 @@ impl BinaryColumnReader {
     let bytes = fs::read(&self.col_path)?;
     let n_bytes = bytes.len();
     let buffer = Buffer::from_vec(bytes);
+
     let array_data = ArrayData::builder(self.dtype.clone())
       .add_buffer(buffer)
-      .len(n_bytes / DataType::size(&self.dtype))
+      .len(n_bytes / self.dtype.primitive_width().unwrap())
       .build()?;
     let array = arrow::array::make_array(array_data);
 
