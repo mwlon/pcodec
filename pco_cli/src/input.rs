@@ -14,7 +14,6 @@ use clap::Parser;
 use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
 
-use crate::dtypes::ArrowNumberLike;
 use crate::{parse, utils};
 
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;

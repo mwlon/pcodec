@@ -40,9 +40,9 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
       opt.input_column.col_idx,
       &opt.input_column.col_name,
     )?;
-    let mut reader = input::new_column_reader(schema, col_idx, &opt.input_file)?;
+    let reader = input::new_column_reader(schema, col_idx, &opt.input_file)?;
     let mut num_buffer = Vec::<P::Pco>::new();
-    while let Some(array_result) = reader.next() {
+    for array_result in reader {
       let array = array_result?;
       num_buffer.extend(utils::arrow_to_nums::<P>(array));
       if num_buffer.len() >= opt.chunk_size {

@@ -209,9 +209,9 @@ fn handle_column(
   progress_bar: &mut ProgressBar,
 ) -> Result<Vec<PrintStat>> {
   let field = &schema.fields[col_idx];
-  let mut reader = input::new_column_reader(schema, col_idx, &opt.input)?;
+  let reader = input::new_column_reader(schema, col_idx, &opt.input)?;
   let mut arrays = Vec::new();
-  while let Some(array_result) = reader.next() {
+  for array_result in reader {
     arrays.push(array_result?);
   }
   let handler = arrow_handlers::from_dtype(field.data_type())?;

@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use anyhow::anyhow;
 use anyhow::Result;
 use clap::Parser;
-use parquet::file::reader::FileReader;
 
 use pco::{FloatMultSpec, IntMultSpec};
 
