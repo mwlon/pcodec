@@ -1,6 +1,7 @@
-use anyhow::anyhow;
 use std::ffi::{c_int, c_void, CString};
 use std::mem;
+
+use anyhow::anyhow;
 
 use crate::bench::codecs::CodecInternal;
 use crate::dtypes::PcoNumberLike;

@@ -24,7 +24,6 @@ use crate::{arrow_handlers, dtypes, input, parse};
 
 mod codecs;
 pub mod handler;
-mod opt;
 
 const DEFAULT_BINARY_DIR: &str = "data/binary";
 // if this delta order is specified, use a dataset-specific order
