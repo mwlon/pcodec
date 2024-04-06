@@ -1,6 +1,6 @@
 [package]
 name = "pco"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
@@ -13,7 +13,7 @@ repository = "https://github.com/mwlon/pcodec"
 rust-version = "1.73.0"
 
 [dependencies]
-better_io = { version = "0.0.0", path = "../better_io" }
+better_io = { version = "0.1.0", path = "../better_io" }
 rand_xoshiro = { version = "0.6.0" }
 
 [dev-dependencies]

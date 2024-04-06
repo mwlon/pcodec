@@ -10,9 +10,10 @@
 
 Pcodec (or Pco, pronounced "pico") losslessly compresses and decompresses
 numerical sequences with
-[high compression ratio and fast speed](./bench/README.md).
+[high compression ratio and fast speed](docs/benchmark_results.md).
 
 **Use cases include:**
+
 * columnar data
 * long-term time series data
 * serving numerical data to web clients
@@ -36,21 +37,21 @@ general-purpose (LZ) compressors that were designed for string or binary data.
 Pco uses a holistic, 3-step approach:
 
 * **modes**.
-Pco identifies an approximate structure of the numbers called a
-mode and then applies it to all the numbers.
-As an example, if all numbers are approximately multiples of 777, int mult mode
-decomposes each number `x` into latent variables `l_0` and
-`l_1` such that `x = 777 * l_0 + l_1`.
-Most natural data uses classic mode, which simply matches `x = l_0`.
+  Pco identifies an approximate structure of the numbers called a
+  mode and then applies it to all the numbers.
+  As an example, if all numbers are approximately multiples of 777, int mult mode
+  decomposes each number `x` into latent variables `l_0` and
+  `l_1` such that `x = 777 * l_0 + l_1`.
+  Most natural data uses classic mode, which simply matches `x = l_0`.
 * **delta enoding**.
-Pco identifies whether certain latent variables would be better compressed as
-consecutive deltas (or deltas of deltas, or so forth).
-If so, it takes consecutive differences.
+  Pco identifies whether certain latent variables would be better compressed as
+  consecutive deltas (or deltas of deltas, or so forth).
+  If so, it takes consecutive differences.
 * **binning**.
-This is the heart and most novel part of Pco.
-Pco represents each (delta-encoded) latent variable as an approximate,
-entropy-coded bin paired an exact offset into that bin.
-This nears the Shannon entropy of any smooth distribution very efficiently.
+  This is the heart and most novel part of Pco.
+  Pco represents each (delta-encoded) latent variable as an approximate,
+  entropy-coded bin paired an exact offset into that bin.
+  This nears the Shannon entropy of any smooth distribution very efficiently.
 
 These 3 steps cohesively capture most entropy of numerical data without waste.
 
@@ -82,12 +83,11 @@ multiple chunks per file.
 | page  | interleaving w/ wrapping format | \>1k numbers              |
 | batch | decompression                   | 256 numbers (fixed)       |
 
-
 ## Extra
 
 ### Docs
 
-[benchmarks: see the results or run your own](./bench/README.md)
+[benchmarks: see the results or run your own](docs/benchmark_results.md)
 
 [format specification](./docs/format.md)
 

@@ -68,8 +68,8 @@ impl<L: Latent> Mode<L> {
     match (self, latent_var_idx) {
       (Classic, 0) | (FloatMult(_), 0) | (IntMult(_), 0) => delta_order,
       (FloatMult(_), 1) | (IntMult(_), 1) => 0,
-      _ => panic!(
-        "should be unreachable; unknown latent {:?}/{}",
+      _ => unreachable!(
+        "unknown latent {:?}/{}",
         self, latent_var_idx
       ),
     }

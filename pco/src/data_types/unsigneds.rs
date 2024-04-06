@@ -147,7 +147,7 @@ macro_rules! impl_unsigned_number {
         match mode {
           Mode::Classic => (),
           Mode::IntMult(base) => int_mult_utils::join_latents(base, primary, secondary),
-          _ => panic!("should be unreachable"),
+          _ => unreachable!("impossible mode for unsigned ints"),
         }
       }
 

@@ -9,8 +9,8 @@ use parquet::file::reader::SerializedFileReader;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::schema::parser::parse_message_type;
 
-use crate::codecs::CodecInternal;
-use crate::dtypes::Dtype;
+use crate::bench::codecs::CodecInternal;
+use crate::dtypes::PcoNumberLike;
 
 const ZSTD: &str = "zstd";
 
@@ -57,7 +57,7 @@ fn compression_to_string(compression: &Compression) -> String {
     Compression::UNCOMPRESSED => "uncompressed".to_string(),
     Compression::SNAPPY => "snappy".to_string(),
     Compression::ZSTD(level) => format!("{}{}", ZSTD, level.compression_level()),
-    _ => panic!("should be unreachable"),
+    _ => unreachable!(),
   }
 }
 
@@ -67,12 +67,14 @@ impl CodecInternal for ParquetConfig {
     "parquet"
   }
 
-  fn get_conf(&self, key: &str) -> String {
-    match key {
-      "compression" => compression_to_string(&self.compression),
-      "group_size" => self.group_size.to_string(),
-      _ => panic!("bad conf"),
-    }
+  fn get_confs(&self) -> Vec<(&'static str, String)> {
+    vec![
+      (
+        "compression",
+        compression_to_string(&self.compression),
+      ),
+      ("group_size", self.group_size.to_string()),
+    ]
   }
 
   fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
@@ -84,7 +86,7 @@ impl CodecInternal for ParquetConfig {
     Ok(())
   }
 
-  fn compress<T: Dtype>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
     let message_type = format!(
       "message schema {{ REQUIRED {} nums; }}",
@@ -106,7 +108,7 @@ impl CodecInternal for ParquetConfig {
       let mut col_writer = row_group_writer.next_column().unwrap().unwrap();
       let typed = col_writer.typed::<T::Parquet>();
       typed
-        .write_batch(T::slice_to_parquet(col_chunk), None, None)
+        .write_batch(T::nums_to_parquet(col_chunk), None, None)
         .unwrap();
       col_writer.close().unwrap();
       row_group_writer.close().unwrap();
@@ -116,7 +118,7 @@ impl CodecInternal for ParquetConfig {
     res
   }
 
-  fn decompress<T: Dtype>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
     // couldn't find a way to make a parquet reader without a fully copy of the compressed bytes;
     // maybe this can be improved
     let reader = SerializedFileReader::new(bytes::Bytes::from(bytes.to_vec())).unwrap();
@@ -142,6 +144,6 @@ impl CodecInternal for ParquetConfig {
       start += n_records_read
     }
 
-    T::vec_from_parquet(res)
+    T::parquet_to_nums(res)
   }
 }

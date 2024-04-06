@@ -1,16 +1,18 @@
-use anyhow::Result;
+use std::collections::BTreeMap;
 
-use pco::data_types::{Latent, NumberLike};
-use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
+use anyhow::Result;
 use serde::Serialize;
 use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
-use crate::handlers::HandlerImpl;
-use crate::number_like_arrow::NumberLikeArrow;
-use crate::opt::InspectOpt;
+use pco::data_types::{Latent, NumberLike};
+use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
+use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
+
+use crate::core_handlers::CoreHandlerImpl;
+use crate::dtypes::PcoNumberLike;
+use crate::inspect::InspectOpt;
 use crate::utils;
 
 pub trait InspectHandler {
@@ -18,50 +20,50 @@ pub trait InspectHandler {
 }
 
 #[derive(Serialize)]
-struct CompressionSummary {
-  ratio: f64,
-  total_size: usize,
-  header_size: usize,
-  meta_size: usize,
-  page_size: usize,
-  footer_size: usize,
-  unknown_trailing_bytes: usize,
+pub struct CompressionSummary {
+  pub ratio: f64,
+  pub total_size: usize,
+  pub header_size: usize,
+  pub meta_size: usize,
+  pub page_size: usize,
+  pub footer_size: usize,
+  pub unknown_trailing_bytes: usize,
 }
 
 #[derive(Tabled)]
-struct BinSummary {
+pub struct BinSummary {
   weight: u32,
   lower: String,
   offset_bits: u32,
 }
 
 #[derive(Serialize)]
-struct LatentVarSummary {
-  name: String,
+pub struct LatentVarSummary {
   n_bins: usize,
   ans_size_log: u32,
   bins: String,
 }
 
 #[derive(Serialize)]
-struct ChunkSummary {
+pub struct ChunkSummary {
   idx: usize,
   n: usize,
   mode: String,
   delta_order: usize,
-  latent_var: Vec<LatentVarSummary>,
+  // using BTreeMaps to preserve ordering
+  latent_vars: BTreeMap<String, LatentVarSummary>,
 }
 
 #[derive(Serialize)]
-struct Output {
-  filename: String,
-  data_type: String,
-  format_version: u8,
-  n: usize,
-  n_chunks: usize,
-  uncompressed_size: usize,
-  compressed: CompressionSummary,
-  chunk: Vec<ChunkSummary>,
+pub struct Output {
+  pub filename: String,
+  pub data_type: String,
+  pub format_version: u8,
+  pub n: usize,
+  pub n_chunks: usize,
+  pub uncompressed_size: usize,
+  pub compressed: CompressionSummary,
+  pub chunks: Vec<ChunkSummary>,
 }
 
 fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
@@ -74,7 +76,7 @@ fn build_latent_var_summary<T: NumberLike>(
   latent_var_idx: usize,
   meta: &ChunkMeta<T::L>,
   latent_var: &ChunkLatentVarMeta<T::L>,
-) -> LatentVarSummary {
+) -> (String, LatentVarSummary) {
   let name = match (meta.mode, latent_var_idx) {
     (Mode::Classic, 0) => "primary".to_string(),
     (Mode::FloatMult(base_latent), 0) => format!(
@@ -109,15 +111,15 @@ fn build_latent_var_summary<T: NumberLike>(
     .with(Modify::new(Columns::new(0..3)).with(Alignment::right()))
     .to_string();
 
-  LatentVarSummary {
-    name,
+  let summary = LatentVarSummary {
     n_bins: latent_var.bins.len(),
     ans_size_log: latent_var.ans_size_log,
     bins: bins_table.to_string(),
-  }
+  };
+  (name, summary)
 }
 
-impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
+impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
   fn inspect(&self, opt: &InspectOpt, src: &[u8]) -> Result<()> {
     let mut prev_src_len_val = src.len();
     let prev_src_len = &mut prev_src_len_val;
@@ -133,7 +135,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     loop {
       // Rather hacky, but first just measure the metadata size,
       // then reread it to measure the page size
-      match fd.chunk_decompressor::<P::Num, _>(src)? {
+      match fd.chunk_decompressor::<T, _>(src)? {
         MaybeChunkDecompressor::Some(cd) => {
           chunk_ns.push(cd.n());
           metas.push(cd.meta().clone());
@@ -146,9 +148,9 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
         }
       }
 
-      match fd.chunk_decompressor::<P::Num, _>(src)? {
+      match fd.chunk_decompressor::<T, _>(src)? {
         MaybeChunkDecompressor::Some(mut cd) => {
-          void.resize(cd.n(), P::Num::default());
+          void.resize(cd.n(), T::default());
           let _ = cd.decompress(&mut void)?;
           src = cd.into_src();
           page_size += measure_bytes_read(src, prev_src_len);
@@ -158,32 +160,29 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
     }
 
     let n: usize = chunk_ns.iter().sum();
-    let uncompressed_size = <P::Num as NumberLike>::L::BITS as usize / 8 * n;
+    let uncompressed_size = <T as NumberLike>::L::BITS as usize / 8 * n;
     let compressed_size = header_size + meta_size + page_size + footer_size;
     let unknown_trailing_bytes = src.len();
 
-    let mut chunk = Vec::new();
-    for (i, meta) in metas.iter().enumerate() {
-      let mut latent_var = Vec::new();
+    let mut chunks = Vec::new();
+    for (idx, meta) in metas.iter().enumerate() {
+      let mut latent_vars = BTreeMap::new();
       for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
-        latent_var.push(build_latent_var_summary::<P::Num>(
-          latent_var_idx,
-          meta,
-          latent_var_meta,
-        ));
+        let (name, summary) = build_latent_var_summary::<T>(latent_var_idx, meta, latent_var_meta);
+        latent_vars.insert(name, summary);
       }
-      chunk.push(ChunkSummary {
-        idx: i,
-        n: chunk_ns[i],
+      chunks.push(ChunkSummary {
+        idx,
+        n: chunk_ns[idx],
         mode: format!("{:?}", meta.mode),
         delta_order: meta.delta_encoding_order,
-        latent_var,
-      })
+        latent_vars,
+      });
     }
 
     let output = Output {
       filename: opt.path.to_str().unwrap().to_string(),
-      data_type: utils::dtype_name::<P::Num>(),
+      data_type: utils::dtype_name::<T>(),
       format_version: fd.format_version(),
       n,
       n_chunks: metas.len(),
@@ -197,7 +196,7 @@ impl<P: NumberLikeArrow> InspectHandler for HandlerImpl<P> {
         footer_size,
         unknown_trailing_bytes,
       },
-      chunk,
+      chunks,
     };
 
     println!("{}", toml::to_string_pretty(&output)?);
