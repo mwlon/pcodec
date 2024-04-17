@@ -248,7 +248,11 @@ fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
 
 pub fn bench(mut opt: BenchOpt) -> Result<()> {
   let input = &mut opt.input;
-  if input.binary_dir.is_none() && input.csv_path.is_none() && input.parquet_path.is_none() {
+  if input.binary_dir.is_none()
+    && input.csv_path.is_none()
+    && input.parquet_path.is_none()
+    && input.wav_path.is_none()
+  {
     input.binary_dir = Some(PathBuf::from(DEFAULT_BINARY_DIR));
   }
 
