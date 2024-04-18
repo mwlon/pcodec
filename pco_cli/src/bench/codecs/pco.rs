@@ -30,7 +30,7 @@ impl CodecInternal for PcoConfig {
           .unwrap_or("auto".to_string()),
       ),
       (
-        "gcd",
+        "int_mult",
         format!("{:?}", self.chunk_config.int_mult_spec),
       ),
       (
@@ -63,7 +63,7 @@ impl CodecInternal for PcoConfig {
           ));
         }
       }
-      "gcd" => {
+      "int_mult" => {
         self.chunk_config.int_mult_spec = match value.as_str() {
           "enabled" => IntMultSpec::Enabled,
           "disabled" => IntMultSpec::Disabled,

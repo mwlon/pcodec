@@ -16,6 +16,9 @@ use parquet::arrow::ProjectionMask;
 
 use crate::{parse, utils};
 
+#[cfg(feature = "audio")]
+mod audio;
+
 const MAX_INFER_SCHEMA_RECORDS: usize = 1000;
 
 #[derive(Clone, Debug, Default, Parser)]
@@ -48,11 +51,27 @@ pub struct InputFileOpt {
   /// Only numerical, non-null values in the file will be used.
   #[arg(long = "csv")]
   pub csv_path: Option<PathBuf>,
+  /// Path to a directory containing wav files to be used as input.
+  #[arg(long = "wav")]
+  pub wav_dir: Option<PathBuf>,
 
   #[arg(long)]
   pub csv_has_header: bool,
   #[arg(long, default_value = ",")]
   pub csv_delimiter: char,
+}
+
+fn schema_from_field_paths(mut field_paths: Vec<(Field, PathBuf)>) -> Result<Schema> {
+  field_paths.sort_by_key(|(field, _)| field.name().to_string());
+  let mut metadata = HashMap::new();
+  for (i, (_, path)) in field_paths.iter().enumerate() {
+    metadata.insert(
+      i.to_string(),
+      path.to_str().unwrap().to_string(),
+    );
+  }
+  let fields = field_paths.into_iter().map(|(f, _)| f).collect::<Vec<_>>();
+  Ok(Schema::new_with_metadata(fields, metadata))
 }
 
 fn get_binary_field(path: &Path) -> Result<Field> {
@@ -80,16 +99,7 @@ fn infer_binary_schema(dir: &Path) -> Result<Schema> {
     let path = f?.path();
     field_paths.push((get_binary_field(&path)?, path));
   }
-  field_paths.sort_by_key(|(field, _)| field.name().to_string());
-  let mut metadata = HashMap::new();
-  for (i, (_, path)) in field_paths.iter().enumerate() {
-    metadata.insert(
-      i.to_string(),
-      path.to_str().unwrap().to_string(),
-    );
-  }
-  let fields = field_paths.into_iter().map(|(f, _)| f).collect::<Vec<_>>();
-  Ok(Schema::new_with_metadata(fields, metadata))
+  schema_from_field_paths(field_paths)
 }
 
 fn infer_csv_schema(col_opt: &InputColumnOpt, file_opt: &InputFileOpt) -> Result<Schema> {
@@ -143,22 +153,53 @@ fn infer_parquet_schema(col_opt: &InputColumnOpt, path: &Path) -> Result<Schema>
   Ok(schema)
 }
 
+#[cfg(feature = "audio")]
+fn infer_wav_schema(path: &Path) -> Result<Schema> {
+  audio::infer_wav_schema(path)
+}
+
+#[cfg(not(feature = "audio"))]
+fn infer_wav_schema(_path: &Path) -> Result<Schema> {
+  Err(anyhow!("not compiled with audio feature"))
+}
+
 pub fn get_schema(col_opt: &InputColumnOpt, file_opt: &InputFileOpt) -> Result<Schema> {
   match (
     &file_opt.binary_dir,
     &file_opt.csv_path,
     &file_opt.parquet_path,
+    &file_opt.wav_dir,
   ) {
-    (Some(path), None, None) => infer_binary_schema(path),
-    (None, Some(_), None) => infer_csv_schema(col_opt, file_opt),
-    (None, None, Some(path)) => infer_parquet_schema(col_opt, path),
-    (None, None, None) => Err(anyhow!(
+    // maybe one day I should structure this better
+    (Some(path), None, None, None) => infer_binary_schema(path),
+    (None, Some(_), None, None) => infer_csv_schema(col_opt, file_opt),
+    (None, None, Some(path), None) => infer_parquet_schema(col_opt, path),
+    (None, None, None, Some(path)) => infer_wav_schema(path),
+    (None, None, None, None) => Err(anyhow!(
       "no input file or directory was specified"
     )),
     _ => Err(anyhow!(
       "multiple input files or directories were specified"
     )),
   }
+}
+
+#[cfg(feature = "audio")]
+fn new_wav_reader(
+  schema: &Schema,
+  col_idx: usize,
+) -> Result<Box<dyn Iterator<Item = Result<ArrayRef>>>> {
+  Ok(Box::new(audio::WavColumnReader::new(
+    schema, col_idx,
+  )?))
+}
+
+#[cfg(not(feature = "audio"))]
+fn new_wav_reader(
+  _schema: &Schema,
+  _col_idx: usize,
+) -> Result<Box<dyn Iterator<Item = Result<ArrayRef>>>> {
+  Err(anyhow!("not compiled with audio feature"))
 }
 
 pub fn new_column_reader(
@@ -170,16 +211,18 @@ pub fn new_column_reader(
     &opt.binary_dir,
     &opt.csv_path,
     &opt.parquet_path,
+    &opt.wav_dir,
   ) {
-    (Some(_), None, None) => Box::new(BinaryColumnReader::new(schema, col_idx)?),
-    (None, Some(csv_path), None) => Box::new(CsvColumnReader::new(
+    (Some(_), None, None, None) => Box::new(BinaryColumnReader::new(schema, col_idx)?),
+    (None, Some(csv_path), None, None) => Box::new(CsvColumnReader::new(
       schema, csv_path, col_idx, opt,
     )?),
-    (None, None, Some(parquet_path)) => Box::new(ParquetColumnReader::new(
+    (None, None, Some(parquet_path), None) => Box::new(ParquetColumnReader::new(
       schema,
       parquet_path,
       col_idx,
     )?),
+    (None, None, None, Some(_)) if cfg!(feature = "audio") => new_wav_reader(schema, col_idx)?,
     _ => unreachable!("should have already checked that file is uniquely specified"),
   };
   Ok(res)
