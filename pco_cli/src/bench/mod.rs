@@ -251,7 +251,7 @@ pub fn bench(mut opt: BenchOpt) -> Result<()> {
   if input.binary_dir.is_none()
     && input.csv_path.is_none()
     && input.parquet_path.is_none()
-    && input.wav_path.is_none()
+    && input.wav_dir.is_none()
   {
     input.binary_dir = Some(PathBuf::from(DEFAULT_BINARY_DIR));
   }
