@@ -25,8 +25,8 @@ pub fn find_col_idx(
   col_idx: Option<usize>,
   col_name: &Option<String>,
 ) -> Result<usize> {
-  match (col_idx, col_name) {
-    (Some(col_idx), _) => Ok(col_idx),
+  let col_idx = match (col_idx, col_name) {
+    (Some(col_idx), _) => col_idx,
     (_, Some(col_name)) => schema
       .fields()
       .iter()
@@ -37,9 +37,18 @@ pub fn find_col_idx(
           col_name,
           schema.fields.iter().map(|f| f.name()).collect::<Vec<_>>()
         )
-      }),
-    _ => unreachable!(),
-  }
+      })?,
+    _ => {
+      if schema.fields.len() == 1 {
+        0
+      } else {
+        return Err(anyhow!(
+          "incomplete or incompatible col name and col idx"
+        ));
+      }
+    }
+  };
+  Ok(col_idx)
 }
 
 pub fn dtype_name<T: NumberLike>() -> String {

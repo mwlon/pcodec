@@ -2,9 +2,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use arrow::array::{ArrayData, ArrayRef};
+use arrow::array::{
+  ArrayData, ArrayRef, Float32Array, Float64Array, Int32Array, Int64Array, UInt32Array, UInt64Array,
+};
 use arrow::buffer::Buffer;
 use arrow::csv;
 use arrow::csv::Reader as CsvReader;
@@ -14,7 +17,10 @@ use clap::Parser;
 use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
 
-use crate::{parse, utils};
+use pco::data_types::CoreDataType;
+use pco::standalone::simple_decompress;
+
+use crate::{dtypes, parse, utils};
 
 #[cfg(feature = "audio")]
 mod audio;
@@ -35,30 +41,53 @@ pub struct InputColumnOpt {
   pub col_idx: Option<usize>,
 }
 
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Parser)]
+pub enum Format {
+  Binary,
+  Csv,
+  Parquet,
+  Pco,
+  Wav,
+}
+
 #[derive(Clone, Debug, Parser)]
 pub struct InputFileOpt {
-  /// Path to a directory containing binary files to be used as input.
-  /// Each binary file must be prefixed with its data type, e.g.
-  /// `i32_foo.bar` will be read as a flat buffer of 32-bit signed ints, using
-  /// system native memory layout.
+  /// File or directory to be used as input.
+  #[arg(short, long)]
+  pub input: Option<PathBuf>,
   #[arg(long)]
-  pub binary_dir: Option<PathBuf>,
-  /// Path to a Parquet file to use as input.
-  /// Only numerical, non-null values in the file will be used.
-  #[arg(long = "parquet", short)]
-  pub parquet_path: Option<PathBuf>,
-  /// Path to a CSV file to use as input.
-  /// Only numerical, non-null values in the file will be used.
-  #[arg(long = "csv")]
-  pub csv_path: Option<PathBuf>,
-  /// Path to a directory containing wav files to be used as input.
-  #[arg(long = "wav")]
-  pub wav_dir: Option<PathBuf>,
+  pub input_format: Option<Format>,
 
   #[arg(long)]
   pub csv_has_header: bool,
   #[arg(long, default_value = ",")]
   pub csv_delimiter: char,
+}
+
+impl InputFileOpt {
+  fn format(&self) -> Result<Format> {
+    if let Some(format) = self.input_format {
+      return Ok(format);
+    }
+
+    let ext = self
+      .input
+      .as_ref()
+      .and_then(|path| path.extension())
+      .and_then(|ext| ext.to_str());
+    let format = match ext {
+      Some("csv") => Format::Csv,
+      Some("parquet") => Format::Parquet,
+      Some("pco") => Format::Pco,
+      Some("wav") => Format::Wav,
+      _ => {
+        return Err(anyhow!(
+          "unable to infer input format; consider passing --input-format"
+        ))
+      }
+    };
+    Ok(format)
+  }
 }
 
 fn schema_from_field_paths(mut field_paths: Vec<(Field, PathBuf)>) -> Result<Schema> {
@@ -74,10 +103,37 @@ fn schema_from_field_paths(mut field_paths: Vec<(Field, PathBuf)>) -> Result<Sch
   Ok(Schema::new_with_metadata(fields, metadata))
 }
 
-fn get_binary_field(path: &Path) -> Result<Field> {
+fn single_column_or_filtered_dir_schema<F: Fn(&Path) -> Result<Option<Field>>>(
+  path: &Path,
+  get_field: F,
+) -> Result<Schema> {
+  let mut field_paths = Vec::new();
+
+  if path.is_file() {
+    if let Some(field) = get_field(path)? {
+      field_paths.push((field, path.to_path_buf()));
+    }
+  } else {
+    for entry in fs::read_dir(path)? {
+      let file = entry?.path();
+
+      if !file.is_file() {
+        continue;
+      }
+
+      if let Some(field) = get_field(&file)? {
+        field_paths.push((field, file));
+      }
+    }
+  }
+
+  schema_from_field_paths(field_paths)
+}
+
+fn get_binary_field(path: &Path) -> Result<Option<Field>> {
   let no_ext = path
     .file_stem()
-    .expect("weird file name")
+    .unwrap()
     .to_str()
     .expect("somehow not unicode");
   let mut split = no_ext.split('_');
@@ -90,16 +146,11 @@ fn get_binary_field(path: &Path) -> Result<Field> {
   let dtype_str = split.next().ok_or_else(invalid_filename)?;
   let dtype = parse::arrow_dtype(dtype_str)?;
   let name = split.collect::<Vec<_>>().join("_");
-  Ok(Field::new(name, dtype, false))
+  Ok(Some(Field::new(name, dtype, false)))
 }
 
 fn infer_binary_schema(dir: &Path) -> Result<Schema> {
-  let mut field_paths = Vec::new();
-  for f in fs::read_dir(dir)? {
-    let path = f?.path();
-    field_paths.push((get_binary_field(&path)?, path));
-  }
-  schema_from_field_paths(field_paths)
+  single_column_or_filtered_dir_schema(dir, get_binary_field)
 }
 
 fn infer_csv_schema(col_opt: &InputColumnOpt, file_opt: &InputFileOpt) -> Result<Schema> {
@@ -107,8 +158,8 @@ fn infer_csv_schema(col_opt: &InputColumnOpt, file_opt: &InputFileOpt) -> Result
   // back to strings
   let inferred_schema = csv::infer_schema_from_files(
     &[file_opt
-      .csv_path
-      .clone()
+      .input
+      .as_ref()
       .unwrap()
       .to_str()
       .unwrap()
@@ -153,9 +204,23 @@ fn infer_parquet_schema(col_opt: &InputColumnOpt, path: &Path) -> Result<Schema>
   Ok(schema)
 }
 
+fn get_pco_field(path: &Path) -> Result<Option<Field>> {
+  // horribly inefficient, but we're not making performance a concern here yet
+  let compressed = fs::read(&path)?;
+  let field = utils::get_standalone_dtype(&compressed)?.map(|dtype| {
+    let name = path.file_stem().unwrap().to_str().unwrap();
+    Field::new(name, dtypes::to_arrow(dtype), false)
+  });
+  Ok(field)
+}
+
+fn infer_pco_schema(path: &Path) -> Result<Schema> {
+  single_column_or_filtered_dir_schema(path, get_pco_field)
+}
+
 #[cfg(feature = "audio")]
 fn infer_wav_schema(path: &Path) -> Result<Schema> {
-  audio::infer_wav_schema(path)
+  single_column_or_filtered_dir_schema(path, audio::get_wav_field)
 }
 
 #[cfg(not(feature = "audio"))]
@@ -164,23 +229,14 @@ fn infer_wav_schema(_path: &Path) -> Result<Schema> {
 }
 
 pub fn get_schema(col_opt: &InputColumnOpt, file_opt: &InputFileOpt) -> Result<Schema> {
-  match (
-    &file_opt.binary_dir,
-    &file_opt.csv_path,
-    &file_opt.parquet_path,
-    &file_opt.wav_dir,
-  ) {
+  let path = file_opt.input.as_ref().unwrap();
+  match file_opt.format()? {
     // maybe one day I should structure this better
-    (Some(path), None, None, None) => infer_binary_schema(path),
-    (None, Some(_), None, None) => infer_csv_schema(col_opt, file_opt),
-    (None, None, Some(path), None) => infer_parquet_schema(col_opt, path),
-    (None, None, None, Some(path)) => infer_wav_schema(path),
-    (None, None, None, None) => Err(anyhow!(
-      "no input file or directory was specified"
-    )),
-    _ => Err(anyhow!(
-      "multiple input files or directories were specified"
-    )),
+    Format::Binary => infer_binary_schema(path),
+    Format::Csv => infer_csv_schema(col_opt, file_opt),
+    Format::Parquet => infer_parquet_schema(col_opt, path),
+    Format::Pco => infer_pco_schema(path),
+    Format::Wav => infer_wav_schema(path),
   }
 }
 
@@ -207,23 +263,17 @@ pub fn new_column_reader(
   col_idx: usize,
   opt: &InputFileOpt,
 ) -> Result<Box<dyn Iterator<Item = Result<ArrayRef>>>> {
-  let res: Box<dyn Iterator<Item = Result<ArrayRef>>> = match (
-    &opt.binary_dir,
-    &opt.csv_path,
-    &opt.parquet_path,
-    &opt.wav_dir,
-  ) {
-    (Some(_), None, None, None) => Box::new(BinaryColumnReader::new(schema, col_idx)?),
-    (None, Some(csv_path), None, None) => Box::new(CsvColumnReader::new(
-      schema, csv_path, col_idx, opt,
+  let path = opt.input.as_ref().unwrap();
+  let res: Box<dyn Iterator<Item = Result<ArrayRef>>> = match opt.format()? {
+    Format::Binary => Box::new(BinaryColumnReader::new(schema, col_idx)?),
+    Format::Csv => Box::new(CsvColumnReader::new(
+      schema, path, col_idx, opt,
     )?),
-    (None, None, Some(parquet_path), None) => Box::new(ParquetColumnReader::new(
-      schema,
-      parquet_path,
-      col_idx,
+    Format::Parquet => Box::new(ParquetColumnReader::new(
+      schema, path, col_idx,
     )?),
-    (None, None, None, Some(_)) if cfg!(feature = "audio") => new_wav_reader(schema, col_idx)?,
-    _ => unreachable!("should have already checked that file is uniquely specified"),
+    Format::Pco => Box::new(PcoColumnReader::new(schema, col_idx)?),
+    Format::Wav => new_wav_reader(schema, col_idx)?,
   };
   Ok(res)
 }
@@ -331,5 +381,65 @@ impl Iterator for CsvColumnReader {
       let batch = batch_result?;
       Ok(batch.column(self.col_idx).clone())
     })
+  }
+}
+
+struct PcoColumnReader {
+  col_path: PathBuf,
+  dtype: CoreDataType,
+  did_read: bool,
+}
+
+impl PcoColumnReader {
+  fn new(schema: &Schema, col_idx: usize) -> Result<Self> {
+    let col_path = PathBuf::from(schema.metadata.get(&col_idx.to_string()).unwrap());
+    let dtype = dtypes::from_arrow(&schema.field(col_idx).data_type().clone())?;
+    Ok(PcoColumnReader {
+      col_path,
+      dtype,
+      did_read: false,
+    })
+  }
+}
+
+impl PcoColumnReader {
+  fn get_array(&self) -> Result<ArrayRef> {
+    use CoreDataType::*;
+
+    let compressed = fs::read(&self.col_path)?;
+    let array: ArrayRef = match self.dtype {
+      F32 => Arc::new(Float32Array::from(simple_decompress::<f32>(
+        &compressed,
+      )?)),
+      F64 => Arc::new(Float64Array::from(simple_decompress::<f64>(
+        &compressed,
+      )?)),
+      I32 => Arc::new(Int32Array::from(simple_decompress::<i32>(
+        &compressed,
+      )?)),
+      I64 => Arc::new(Int64Array::from(simple_decompress::<i64>(
+        &compressed,
+      )?)),
+      U32 => Arc::new(UInt32Array::from(simple_decompress::<u32>(
+        &compressed,
+      )?)),
+      U64 => Arc::new(UInt64Array::from(simple_decompress::<u64>(
+        &compressed,
+      )?)),
+    };
+    Ok(array)
+  }
+}
+
+impl Iterator for PcoColumnReader {
+  type Item = Result<ArrayRef>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.did_read {
+      return None;
+    }
+
+    self.did_read = true;
+    Some(self.get_array())
   }
 }
