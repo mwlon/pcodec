@@ -29,9 +29,6 @@ fn main() -> PcoResult<()> {
 }
 ```
 
-To run something right away, try
-[the benchmarks](../docs/benchmark_results.md).
-
 For information about Pco in general, see [the main README](../README.md).
 
 For documentation, [docs.rs has the best examples and API details](https://docs.rs/pco/).

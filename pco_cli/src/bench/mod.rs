@@ -19,7 +19,7 @@ use pco::data_types::CoreDataType;
 use pco::with_core_dtypes;
 
 use crate::bench::codecs::CodecConfig;
-use crate::input::{InputColumnOpt, InputFileOpt};
+use crate::input::{Format, InputColumnOpt, InputFileOpt};
 use crate::{arrow_handlers, dtypes, input, parse};
 
 mod codecs;
@@ -61,7 +61,7 @@ pub struct BenchOpt {
   /// Number of iterations to run each codec x dataset combination for
   /// better estimation of durations.
   /// The median duration is kept.
-  #[arg(long, short, default_value = "10")]
+  #[arg(long, default_value = "10")]
   pub iters: usize,
   /// How many numbers to limit each dataset to.
   #[arg(long, short)]
@@ -248,12 +248,9 @@ fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
 
 pub fn bench(mut opt: BenchOpt) -> Result<()> {
   let input = &mut opt.input;
-  if input.binary_dir.is_none()
-    && input.csv_path.is_none()
-    && input.parquet_path.is_none()
-    && input.wav_dir.is_none()
-  {
-    input.binary_dir = Some(PathBuf::from(DEFAULT_BINARY_DIR));
+  if input.input.is_none() && input.input_format.is_none() {
+    input.input = Some(PathBuf::from(DEFAULT_BINARY_DIR));
+    input.input_format = Some(Format::Binary);
   }
 
   let schema = input::get_schema(&InputColumnOpt::default(), input)?;

@@ -1,14 +1,13 @@
 use std::path::PathBuf;
 
-use anyhow::anyhow;
 use anyhow::Result;
 use clap::Parser;
 
 use pco::{FloatMultSpec, IntMultSpec};
 
 use crate::input::{InputColumnOpt, InputFileOpt};
-use crate::parse;
 use crate::{arrow_handlers, input};
+use crate::{parse, utils};
 
 pub mod handler;
 
@@ -45,16 +44,12 @@ pub struct CompressOpt {
 
 pub fn compress(opt: CompressOpt) -> Result<()> {
   let schema = input::get_schema(&opt.input_column, &opt.input_file)?;
-  let dtype = match (
-    &opt.input_column.col_idx,
+  let col_idx = utils::find_col_idx(
+    &schema,
+    opt.input_column.col_idx,
     &opt.input_column.col_name,
-  ) {
-    (Some(col_idx), None) => Ok(schema.fields()[*col_idx].data_type()),
-    (None, Some(col_name)) => Ok(schema.field_with_name(col_name)?.data_type()),
-    _ => Err(anyhow!(
-      "incomplete or incompatible col name and col idx"
-    )),
-  }?;
+  )?;
+  let dtype = schema.field(col_idx).data_type();
   let handler = arrow_handlers::from_dtype(dtype)?;
   handler.compress(&opt, &schema)
 }

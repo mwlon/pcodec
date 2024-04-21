@@ -1,14 +1,13 @@
-use crate::input::schema_from_field_paths;
-use anyhow::anyhow;
-use arrow::array::{ArrayRef, Float32Array, Int32Array};
-use arrow::datatypes::{DataType, Field, Schema};
-use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use anyhow::{anyhow, Result};
+use arrow::array::{ArrayRef, Float32Array, Int32Array};
+use arrow::datatypes::{DataType, Field, Schema};
 use wav::BitDepth;
 
-fn get_wav_field(path: &Path) -> anyhow::Result<Field> {
+pub fn get_wav_field(path: &Path) -> Result<Option<Field>> {
   // this is excessively slow, but easy for now
   let mut file = File::open(path)?;
   let (header, _) = wav::read(&mut file)?;
@@ -19,23 +18,12 @@ fn get_wav_field(path: &Path) -> anyhow::Result<Field> {
       "invalid number of bytes per wav file sample"
     )),
   }?;
-  let no_ext = path
+  let name = path
     .file_stem()
-    .expect("weird file name")
+    .unwrap()
     .to_str()
     .expect("somehow not unicode");
-  Ok(Field::new(no_ext, dtype, false))
-}
-
-pub fn infer_wav_schema(dir: &Path) -> anyhow::Result<Schema> {
-  let mut field_paths = Vec::new();
-  for f in fs::read_dir(dir)? {
-    let path = f?.path();
-    if path.extension().unwrap().to_str().unwrap() == "wav" {
-      field_paths.push((get_wav_field(&path)?, path));
-    }
-  }
-  schema_from_field_paths(field_paths)
+  Ok(Some(Field::new(name, dtype, false)))
 }
 
 pub struct WavColumnReader {
@@ -45,7 +33,7 @@ pub struct WavColumnReader {
 }
 
 impl WavColumnReader {
-  pub fn new(schema: &Schema, col_idx: usize) -> anyhow::Result<Self> {
+  pub fn new(schema: &Schema, col_idx: usize) -> Result<Self> {
     let col_path = PathBuf::from(schema.metadata.get(&col_idx.to_string()).unwrap());
     let dtype = schema.field(col_idx).data_type().clone();
     Ok(WavColumnReader {
@@ -73,7 +61,7 @@ fn array_from_f32s(f32s: Vec<f32>) -> ArrayRef {
 }
 
 impl WavColumnReader {
-  fn get_array(&self) -> anyhow::Result<ArrayRef> {
+  fn get_array(&self) -> Result<ArrayRef> {
     let mut inp_file = File::open(&self.col_path)?;
     let (_, data) = wav::read(&mut inp_file)?;
     let array = match data {
@@ -100,7 +88,7 @@ impl WavColumnReader {
 }
 
 impl Iterator for WavColumnReader {
-  type Item = anyhow::Result<ArrayRef>;
+  type Item = Result<ArrayRef>;
 
   fn next(&mut self) -> Option<Self::Item> {
     if self.did_read {
