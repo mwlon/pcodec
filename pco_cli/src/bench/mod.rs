@@ -248,7 +248,7 @@ fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
 
 pub fn bench(mut opt: BenchOpt) -> Result<()> {
   let input = &mut opt.input;
-  if input.input.is_none() {
+  if input.input.is_none() && input.input_format.is_none() {
     input.input = Some(PathBuf::from(DEFAULT_BINARY_DIR));
     input.input_format = Some(Format::Binary);
   }
