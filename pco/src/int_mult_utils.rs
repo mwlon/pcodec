@@ -50,24 +50,26 @@ fn calc_gcd<L: Latent>(mut x: L, mut y: L) -> L {
   }
 }
 
-fn biggest_square_root(a: f64, b: f64, c: f64) -> f64 {
-  (-b + (b * b - 4.0 * a * c).sqrt()) / (2.0 * a)
-}
-
+// fn biggest_square_root(a: f64, b: f64, c: f64) -> f64 {
+//   (-b + (b * b - 4.0 * a * c).sqrt()) / (2.0 * a)
+// }
+//
 fn biggest_cubic_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
   // TODO comments
-  if a == 0.0 {
-    return Some(biggest_square_root(b, c, d));
-  }
-
-  let mut x = (-d / a).cbrt();
+  // if a == 0.0 {
+  //   return Some(biggest_square_root(b, c, d));
+  // }
+  //
+  let mut x = 1.0;
   let mut prev_x = x;
+  // println!("abcd {} {} {} {} x {}", a, b, c, d, x);
   loop {
     let x2 = x * x;
     let x3 = x * x2;
     let val = a * x3 + b * x2 + c * x + d;
     let deriv = 3.0 * a * x2 + 2.0 * b * x + c;
-    x -= val / deriv;
+    x = (x - val / deriv).clamp(0.0, 1.0);
+    // println!("  x -= {}/{}->{} ", val, deriv, x);
 
     if (x - prev_x).abs() < 1E-4 {
       return Some(x);
@@ -219,6 +221,7 @@ pub fn choose_candidate_base<L: Latent>(sample: &mut [L]) -> Option<L> {
 pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
   let candidate = choose_candidate_base(&mut sample)?;
+  // println!("candidate {}\n", candidate);
 
   if sampling::has_enough_infrequent_ints(&sample, |x| x / candidate) {
     Some(candidate)
