@@ -206,7 +206,7 @@ fn infer_parquet_schema(col_opt: &InputColumnOpt, path: &Path) -> Result<Schema>
 
 fn get_pco_field(path: &Path) -> Result<Option<Field>> {
   // horribly inefficient, but we're not making performance a concern here yet
-  let compressed = fs::read(&path)?;
+  let compressed = fs::read(path)?;
   let field = utils::get_standalone_dtype(&compressed)?.map(|dtype| {
     let name = path.file_stem().unwrap().to_str().unwrap();
     Field::new(name, dtypes::to_arrow(dtype), false)
@@ -229,7 +229,10 @@ fn infer_wav_schema(_path: &Path) -> Result<Schema> {
 }
 
 pub fn get_schema(col_opt: &InputColumnOpt, file_opt: &InputFileOpt) -> Result<Schema> {
-  let path = file_opt.input.as_ref().unwrap();
+  let path = file_opt
+    .input
+    .as_ref()
+    .ok_or_else(|| anyhow!("no input was provided"))?;
   match file_opt.format()? {
     // maybe one day I should structure this better
     Format::Binary => infer_binary_schema(path),
