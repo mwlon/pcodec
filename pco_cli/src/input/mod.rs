@@ -4,7 +4,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use arrow::array::{
   ArrayData, ArrayRef, Float32Array, Float64Array, Int32Array, Int64Array, UInt32Array, UInt64Array,
 };
@@ -82,7 +82,7 @@ impl InputFileOpt {
       Some("wav") => Format::Wav,
       _ => {
         return Err(anyhow!(
-          "unable to infer input format; consider passing --input-format"
+          "failed to infer input format; consider passing --input-format"
         ))
       }
     };
@@ -121,7 +121,7 @@ fn single_column_or_filtered_dir_schema<F: Fn(&Path) -> Result<Option<Field>>>(
         continue;
       }
 
-      if let Some(field) = get_field(&file)? {
+      if let Some(field) = get_field(&file).with_context(|| format!("while reading {:?}", file))? {
         field_paths.push((field, file));
       }
     }
@@ -238,6 +238,7 @@ pub fn get_schema(col_opt: &InputColumnOpt, file_opt: &InputFileOpt) -> Result<S
     Format::Pco => infer_pco_schema(path),
     Format::Wav => infer_wav_schema(path),
   }
+  .with_context(|| "while inferring schema")
 }
 
 #[cfg(feature = "audio")]
