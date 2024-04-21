@@ -1,11 +1,14 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::f64::consts::PI;
+use std::mem;
 
 use crate::data_types::{Latent, NumberLike};
 use crate::sampling;
 
 const ZETA_OF_2: f64 = PI * PI / 6.0; // riemann zeta function
+const REQUIRED_BITS_SAVED_PER_NUM: f64 = 0.5;
+const LCB_RATIO: f64 = 1.0;
 
 #[inline(never)]
 pub fn split_latents<T: NumberLike>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
@@ -43,30 +46,46 @@ fn calc_gcd<L: Latent>(mut x: L, mut y: L) -> L {
     }
 
     x %= y;
-    std::mem::swap(&mut x, &mut y);
+    mem::swap(&mut x, &mut y);
+  }
+}
+
+fn biggest_cube_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
+  // https://en.wikipedia.org/wiki/Cubic_equation#General_cubic_formula
+  let d0 = b * b - 3.0 * a * c;
+  let d1 = 2.0 * b * b * b - 9.0 * a * b * c + 27.0 * a * a * d;
+  let for_sqrt = d1 * d1 - 4.0 * d0 * d0 * d0;
+  if for_sqrt >= 0.0 {
+    let c = (0.5 * (d1 + for_sqrt.sqrt())).cbrt();
+    Some(-(b + c + d0 / c) / (3.0 * a))
+  } else {
+    None
   }
 }
 
 fn calc_triple_gcd<L: Latent>(triple: &[L]) -> L {
-  let a = triple[0];
-  let b = triple[1];
-  let c = triple[2];
-  let (lower, x, y) = if a < b {
-    if a < c {
-      (a, b, c)
-    } else {
-      (c, a, b)
-    }
-  } else if b < c {
-    (b, c, a)
-  } else {
-    (c, a, b)
-  };
+  let mut a = triple[0];
+  let mut b = triple[1];
+  let mut c = triple[2];
+  // sort a, b, c
+  if a > b {
+    mem::swap(&mut a, &mut b);
+  }
+  if b > c {
+    mem::swap(&mut b, &mut c);
+  }
+  if a > b {
+    mem::swap(&mut a, &mut b);
+  }
 
-  calc_gcd(x - lower, y - lower)
+  calc_gcd(b - a, c - a)
 }
 
-fn score_triple_gcd<L: Latent>(gcd: L, triples_w_gcd: usize, total_triples: usize) -> Option<f64> {
+fn filter_score_triple_gcd_float(
+  gcd: f64,
+  triples_w_gcd: usize,
+  total_triples: usize,
+) -> Option<f64> {
   if triples_w_gcd <= 1 {
     // not enough to make any claims
     return None;
@@ -74,21 +93,53 @@ fn score_triple_gcd<L: Latent>(gcd: L, triples_w_gcd: usize, total_triples: usiz
 
   let triples_w_gcd = triples_w_gcd as f64;
   let total_triples = total_triples as f64;
-  // defining rarity as 1 / probability
   let prob_per_triple = triples_w_gcd / total_triples;
-  let gcd_f64 = min(gcd, L::from_u64(u64::MAX)).to_u64() as f64;
 
   // check if the GCD has statistical evidence
-  let natural_prob_per_triple = 1.0 / (ZETA_OF_2 * gcd_f64 * gcd_f64);
+  let natural_prob_per_triple = 1.0 / (ZETA_OF_2 * gcd * gcd);
   let stdev = (natural_prob_per_triple * (1.0 - natural_prob_per_triple) / total_triples).sqrt();
   let z_score = (prob_per_triple - natural_prob_per_triple) / stdev;
-  let implied_prob_per_num = prob_per_triple.sqrt();
   if z_score < 3.0 {
     return None;
   }
 
+  let triples_lcb = triples_w_gcd - LCB_RATIO * triples_w_gcd.sqrt();
+  if triples_lcb <= 0.0 {
+    return None;
+  }
+  let prob_per_triple_lcb = triples_lcb / total_triples;
+
   // heuristic for when the GCD is useless, even if true
-  if implied_prob_per_num < 0.1 || implied_prob_per_num < 1.0 / (1.3 + 0.15 * gcd_f64) {
+  // We calculate the greatest possible entropy for the distribution, modulo
+  // GCD (call it P(k)), assuming $\sum_k P(k)^2 = congruence_prob_per_pair$.
+  // This occurs when there is one likely (concentrated) value of k, and the
+  // rest are equally improbable.
+  // You can use intuition or Lagrange multipliers to verify that.
+  let congruence_prob_per_pair = (ZETA_OF_2 * prob_per_triple_lcb).min(1.0);
+  let gcd_m1 = gcd - 1.0;
+  let gcd_m1_inv_sq = 1.0 / (gcd_m1 * gcd_m1);
+  let concentrated_p = biggest_cube_root(
+    1.0 - gcd_m1_inv_sq,
+    3.0 * gcd_m1_inv_sq,
+    -3.0 * gcd_m1_inv_sq,
+    gcd_m1_inv_sq - congruence_prob_per_pair,
+  )?;
+  // let descriminant = ((congruence_prob_per_pair * gcd - 1.0) * gcd_m1).max(0.0);
+  // let concentrated_p_k = ((1.0 + descriminant.sqrt()) / gcd).min(1.0);
+  let worst_case_entropy_mod_gcd = -concentrated_p * concentrated_p.log2()
+    - (1.0 - concentrated_p) * ((1.0 - concentrated_p) / gcd_m1).log2();
+  let worst_case_bits_saved = gcd.log2() - worst_case_entropy_mod_gcd;
+  // println!(
+  //   "! %{} ({} / {}) {} {} {} {}",
+  //   gcd,
+  //   triples_lcb,
+  //   total_triples,
+  //   congruence_prob_per_pair,
+  //   concentrated_p,
+  //   worst_case_entropy_mod_gcd,
+  //   worst_case_bits_saved
+  // );
+  if worst_case_bits_saved < REQUIRED_BITS_SAVED_PER_NUM {
     return None;
   }
 
@@ -97,12 +148,20 @@ fn score_triple_gcd<L: Latent>(gcd: L, triples_w_gcd: usize, total_triples: usiz
   // conservative lower confidence bound for how many triples we'd get if we
   // repeated the measurement, and strike a compromise between most likely and
   // most valuable.
-  let triples_lcb = triples_w_gcd - 1.0 * triples_w_gcd.sqrt();
   if triples_lcb >= 0.0 {
-    Some(triples_lcb.powf(0.6) * gcd_f64)
+    Some(triples_lcb.powf(0.6) * gcd)
   } else {
     None
   }
+}
+
+fn filter_score_triple_gcd<L: Latent>(
+  gcd: L,
+  triples_w_gcd: usize,
+  total_triples: usize,
+) -> Option<f64> {
+  let gcd_f64 = min(gcd, L::from_u64(u64::MAX)).to_u64() as f64;
+  filter_score_triple_gcd_float(gcd_f64, triples_w_gcd, total_triples)
 }
 
 fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Option<L> {
@@ -114,7 +173,7 @@ fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Opt
   let (candidate_gcd, _) = raw_counts //counts_accounting_for_small_multiples
     .iter()
     .filter_map(|(&gcd, &count)| {
-      let score = score_triple_gcd(gcd, count, total_triples)?;
+      let score = filter_score_triple_gcd(gcd, count, total_triples)?;
       Some((gcd, score))
     })
     .max_by_key(|(_, score)| score.to_latent_ordered())?;
