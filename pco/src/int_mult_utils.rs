@@ -60,7 +60,7 @@ fn biggest_cubic_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
   //   return Some(biggest_square_root(b, c, d));
   // }
   //
-  let mut x = 1.0;
+  let mut x = (-d / a).cbrt();
   let mut prev_x = x;
   // println!("abcd {} {} {} {} x {}", a, b, c, d, x);
   loop {
@@ -68,7 +68,11 @@ fn biggest_cubic_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
     let x3 = x * x2;
     let val = a * x3 + b * x2 + c * x + d;
     let deriv = 3.0 * a * x2 + 2.0 * b * x + c;
-    x = (x - val / deriv).clamp(0.0, 1.0);
+    x -= val / deriv;
+
+    if x < 0.0 || x > 1.0 {
+      return None;
+    }
     // println!("  x -= {}/{}->{} ", val, deriv, x);
 
     if (x - prev_x).abs() < 1E-4 {
