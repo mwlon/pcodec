@@ -50,13 +50,38 @@ fn calc_gcd<L: Latent>(mut x: L, mut y: L) -> L {
   }
 }
 
-fn biggest_cube_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
+fn biggest_square_root(a: f64, b: f64, c: f64) -> f64 {
+  (-b + (b * b - 4.0 * a * c).sqrt()) / (2.0 * a)
+}
+
+fn biggest_cubic_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
+  // TODO comments
+  if a == 0.0 {
+    return Some(biggest_square_root(b, c, d));
+  }
+
+  let mut x = (-d / a).cbrt();
+  let mut prev_x = x;
+  loop {
+    let x2 = x * x;
+    let x3 = x * x2;
+    let val = a * x3 + b * x2 + c * x + d;
+    let deriv = 3.0 * a * x2 + 2.0 * b * x + c;
+    x -= val / deriv;
+
+    if (x - prev_x).abs() < 1E-4 {
+      return Some(x);
+    }
+    prev_x = x;
+  }
+
   // https://en.wikipedia.org/wiki/Cubic_equation#General_cubic_formula
   let d0 = b * b - 3.0 * a * c;
   let d1 = 2.0 * b * b * b - 9.0 * a * b * c + 27.0 * a * a * d;
   let for_sqrt = d1 * d1 - 4.0 * d0 * d0 * d0;
   if for_sqrt >= 0.0 {
     let c = (0.5 * (d1 + for_sqrt.sqrt())).cbrt();
+    println!("{} {} {} {}", d0, d1, for_sqrt, c);
     Some(-(b + c + d0 / c) / (3.0 * a))
   } else {
     None
@@ -118,14 +143,12 @@ fn filter_score_triple_gcd_float(
   let congruence_prob_per_pair = (ZETA_OF_2 * prob_per_triple_lcb).min(1.0);
   let gcd_m1 = gcd - 1.0;
   let gcd_m1_inv_sq = 1.0 / (gcd_m1 * gcd_m1);
-  let concentrated_p = biggest_cube_root(
+  let concentrated_p = biggest_cubic_root(
     1.0 - gcd_m1_inv_sq,
     3.0 * gcd_m1_inv_sq,
     -3.0 * gcd_m1_inv_sq,
     gcd_m1_inv_sq - congruence_prob_per_pair,
   )?;
-  // let descriminant = ((congruence_prob_per_pair * gcd - 1.0) * gcd_m1).max(0.0);
-  // let concentrated_p_k = ((1.0 + descriminant.sqrt()) / gcd).min(1.0);
   let worst_case_entropy_mod_gcd = -concentrated_p * concentrated_p.log2()
     - (1.0 - concentrated_p) * ((1.0 - concentrated_p) / gcd_m1).log2();
   let worst_case_bits_saved = gcd.log2() - worst_case_entropy_mod_gcd;
@@ -143,16 +166,18 @@ fn filter_score_triple_gcd_float(
     return None;
   }
 
+  Some(worst_case_bits_saved)
+
   // The most likely valid GCD maximizes triples * gcd, and the most
   // valuable one (if true) maximizes triples.sqrt() * gcd. We take a
   // conservative lower confidence bound for how many triples we'd get if we
   // repeated the measurement, and strike a compromise between most likely and
   // most valuable.
-  if triples_lcb >= 0.0 {
-    Some(triples_lcb.powf(0.6) * gcd)
-  } else {
-    None
-  }
+  // if triples_lcb >= 0.0 {
+  //   Some(triples_lcb.powf(0.6) * gcd)
+  // } else {
+  //   None
+  // }
 }
 
 fn filter_score_triple_gcd<L: Latent>(
