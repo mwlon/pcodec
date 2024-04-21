@@ -7,7 +7,7 @@ use crate::data_types::{Latent, NumberLike};
 use crate::sampling;
 
 const ZETA_OF_2: f64 = PI * PI / 6.0; // riemann zeta function
-const REQUIRED_BITS_SAVED_PER_NUM: f64 = 0.5;
+const REQUIRED_BITS_SAVED_PER_NUM: f64 = 0.8;
 const LCB_RATIO: f64 = 1.0;
 
 #[inline(never)]
@@ -50,20 +50,13 @@ fn calc_gcd<L: Latent>(mut x: L, mut y: L) -> L {
   }
 }
 
-// fn biggest_square_root(a: f64, b: f64, c: f64) -> f64 {
-//   (-b + (b * b - 4.0 * a * c).sqrt()) / (2.0 * a)
-// }
-//
 fn biggest_cubic_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
+  const MAX_STEPS: usize = 8;
+  const X_TOLERANCE: f64 = 1E-4;
   // TODO comments
-  // if a == 0.0 {
-  //   return Some(biggest_square_root(b, c, d));
-  // }
-  //
-  let mut x = (-d / a).cbrt();
+  let mut x = if a == 0.0 { 1.0 } else { (-d / a).cbrt() };
   let mut prev_x = x;
-  // println!("abcd {} {} {} {} x {}", a, b, c, d, x);
-  loop {
+  for _ in 0..MAX_STEPS {
     let x2 = x * x;
     let x3 = x * x2;
     let val = a * x3 + b * x2 + c * x + d;
@@ -73,25 +66,14 @@ fn biggest_cubic_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
     if x < 0.0 || x > 1.0 {
       return None;
     }
-    // println!("  x -= {}/{}->{} ", val, deriv, x);
 
-    if (x - prev_x).abs() < 1E-4 {
+    if (x - prev_x).abs() < X_TOLERANCE {
       return Some(x);
     }
     prev_x = x;
   }
 
-  // https://en.wikipedia.org/wiki/Cubic_equation#General_cubic_formula
-  let d0 = b * b - 3.0 * a * c;
-  let d1 = 2.0 * b * b * b - 9.0 * a * b * c + 27.0 * a * a * d;
-  let for_sqrt = d1 * d1 - 4.0 * d0 * d0 * d0;
-  if for_sqrt >= 0.0 {
-    let c = (0.5 * (d1 + for_sqrt.sqrt())).cbrt();
-    println!("{} {} {} {}", d0, d1, for_sqrt, c);
-    Some(-(b + c + d0 / c) / (3.0 * a))
-  } else {
-    None
-  }
+  None
 }
 
 fn calc_triple_gcd<L: Latent>(triple: &[L]) -> L {
@@ -196,12 +178,12 @@ fn filter_score_triple_gcd<L: Latent>(
 }
 
 fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Option<L> {
-  let mut raw_counts = HashMap::new();
+  let mut counts = HashMap::new();
   for &gcd in triple_gcds {
-    *raw_counts.entry(gcd).or_insert(0) += 1;
+    *counts.entry(gcd).or_insert(0) += 1;
   }
 
-  let (candidate_gcd, _) = raw_counts //counts_accounting_for_small_multiples
+  let (candidate_gcd, _) = counts //counts_accounting_for_small_multiples
     .iter()
     .filter_map(|(&gcd, &count)| {
       let score = filter_score_triple_gcd(gcd, count, total_triples)?;
@@ -225,7 +207,6 @@ pub fn choose_candidate_base<L: Latent>(sample: &mut [L]) -> Option<L> {
 pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
   let candidate = choose_candidate_base(&mut sample)?;
-  // println!("candidate {}\n", candidate);
 
   if sampling::has_enough_infrequent_ints(&sample, |x| x / candidate) {
     Some(candidate)
@@ -300,7 +281,7 @@ mod tests {
     );
     // even just evens can be useful if the signal is strong enough
     let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
-    let mut twos = (0_u32..100)
+    let mut twos = (0_u32..200)
       .map(|_| rng.gen_range(0_u32..1000) * 2)
       .collect::<Vec<_>>();
     assert_eq!(choose_candidate_base(&mut twos), Some(2));
