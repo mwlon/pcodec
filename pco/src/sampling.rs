@@ -2,6 +2,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use crate::constants::{CLASSIC_MEMORIZABLE_BINS_LOG, MULT_REQUIRED_BITS_SAVED_PER_NUM};
 use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 
 use crate::data_types::Latent;
@@ -11,9 +12,7 @@ pub const MIN_SAMPLE: usize = 10;
 const SAMPLE_RATIO: usize = 40;
 // Int mults will be considered infrequent if they occur less than 1/this of
 // the time.
-const CLASSIC_MEMORIZATION_THRESH: f64 = 256.0;
-// what proportion of numbers must come from infrequent mults
-const INFREQUENT_MULT_WEIGHT_THRESH: f64 = 0.04;
+const CLASSIC_MEMORIZABLE_BINS: f64 = (1 << CLASSIC_MEMORIZABLE_BINS_LOG) as f64;
 // how many times over to try collecting samples without replacement before
 // giving up
 const SAMPLING_PERSISTENCE: usize = 4;
@@ -65,9 +64,10 @@ pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
 }
 
 #[inline(never)]
-pub fn has_enough_infrequent_ints<L: Latent, S: Copy, F: Fn(S) -> L>(
+pub fn has_enough_infrequent_mults<L: Latent, S: Copy, F: Fn(S) -> L>(
   sample: &[S],
   mult_fn: F,
+  bits_saved_per_adj: f64,
 ) -> bool {
   let mut mult_counts = HashMap::<L, usize>::with_capacity(sample.len());
   for &x in sample {
@@ -77,7 +77,7 @@ pub fn has_enough_infrequent_ints<L: Latent, S: Copy, F: Fn(S) -> L>(
 
   let infrequent_cutoff = max(
     1,
-    (sample.len() as f64 / CLASSIC_MEMORIZATION_THRESH) as usize,
+    (sample.len() as f64 / CLASSIC_MEMORIZABLE_BINS) as usize,
   );
 
   // Maybe this should be made fuzzy instead of a hard cutoff because it's just
@@ -86,7 +86,16 @@ pub fn has_enough_infrequent_ints<L: Latent, S: Copy, F: Fn(S) -> L>(
     .values()
     .filter(|&&count| count <= infrequent_cutoff)
     .sum::<usize>();
-  (infrequent_mult_weight_estimate as f64 / sample.len() as f64) > INFREQUENT_MULT_WEIGHT_THRESH
+
+  // println!(
+  //   "infreq {} {} {}",
+  //   infrequent_mult_weight_estimate,
+  //   sample.len(),
+  //   bits_saved_per_adj
+  // );
+  let bits_saved_per_num =
+    (infrequent_mult_weight_estimate as f64 / sample.len() as f64) * bits_saved_per_adj;
+  bits_saved_per_num > MULT_REQUIRED_BITS_SAVED_PER_NUM
 }
 
 #[cfg(test)]

@@ -1,13 +1,14 @@
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 use std::mem;
 
+use crate::constants::MULT_REQUIRED_BITS_SAVED_PER_NUM;
 use crate::data_types::{Latent, NumberLike};
 use crate::sampling;
 
-const ZETA_OF_2: f64 = PI * PI / 6.0; // riemann zeta function
-const REQUIRED_BITS_SAVED_PER_NUM: f64 = 0.8;
+// riemann zeta function
+const ZETA_OF_2: f64 = PI * PI / 6.0;
 const LCB_RATIO: f64 = 1.0;
 
 #[inline(never)]
@@ -150,7 +151,7 @@ fn filter_score_triple_gcd_float(
   //   worst_case_entropy_mod_gcd,
   //   worst_case_bits_saved
   // );
-  if worst_case_bits_saved < REQUIRED_BITS_SAVED_PER_NUM {
+  if worst_case_bits_saved < MULT_REQUIRED_BITS_SAVED_PER_NUM {
     return None;
   }
 
@@ -177,13 +178,13 @@ fn filter_score_triple_gcd<L: Latent>(
   filter_score_triple_gcd_float(gcd_f64, triples_w_gcd, total_triples)
 }
 
-fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Option<L> {
+fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Option<(L, f64)> {
   let mut counts = HashMap::new();
   for &gcd in triple_gcds {
     *counts.entry(gcd).or_insert(0) += 1;
   }
 
-  let (candidate_gcd, _) = counts //counts_accounting_for_small_multiples
+  let gcd_and_score = counts //counts_accounting_for_small_multiples
     .iter()
     .filter_map(|(&gcd, &count)| {
       let score = filter_score_triple_gcd(gcd, count, total_triples)?;
@@ -191,10 +192,10 @@ fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Opt
     })
     .max_by_key(|(_, score)| score.to_latent_ordered())?;
 
-  Some(candidate_gcd)
+  Some(gcd_and_score)
 }
 
-pub fn choose_candidate_base<L: Latent>(sample: &mut [L]) -> Option<L> {
+pub fn choose_candidate_base<L: Latent>(sample: &mut [L]) -> Option<(L, f64)> {
   let triple_gcds = sample
     .chunks_exact(3)
     .map(calc_triple_gcd)
@@ -206,9 +207,13 @@ pub fn choose_candidate_base<L: Latent>(sample: &mut [L]) -> Option<L> {
 
 pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
-  let candidate = choose_candidate_base(&mut sample)?;
+  let (candidate, bits_saved_per_adj) = choose_candidate_base(&mut sample)?;
 
-  if sampling::has_enough_infrequent_ints(&sample, |x| x / candidate) {
+  if sampling::has_enough_infrequent_mults(
+    &sample,
+    |x| x / candidate,
+    bits_saved_per_adj,
+  ) {
     Some(candidate)
   } else {
     None
