@@ -95,6 +95,14 @@ fn calc_triple_gcd<L: Latent>(triple: &[L]) -> L {
   calc_gcd(b - a, c - a)
 }
 
+fn categorical_entropy(p: f64) -> f64 {
+  if p == 0.0 || p == 1.0 {
+    0.0
+  } else {
+    -p * p.log2()
+  }
+}
+
 fn filter_score_triple_gcd_float(
   gcd: f64,
   triples_w_gcd: usize,
@@ -138,8 +146,8 @@ fn filter_score_triple_gcd_float(
     -3.0 * gcd_m1_inv_sq,
     gcd_m1_inv_sq - congruence_prob_per_pair,
   )?;
-  let worst_case_entropy_mod_gcd = -concentrated_p * concentrated_p.log2()
-    - (1.0 - concentrated_p) * ((1.0 - concentrated_p) / gcd_m1).log2();
+  let worst_case_entropy_mod_gcd = categorical_entropy(concentrated_p)
+    + gcd_m1 * categorical_entropy((1.0 - concentrated_p) / gcd_m1);
   let worst_case_bits_saved = gcd.log2() - worst_case_entropy_mod_gcd;
   // println!(
   //   "! %{} ({} / {}) {} {} {} {}",
@@ -192,6 +200,7 @@ fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Opt
     })
     .max_by_key(|(_, score)| score.to_latent_ordered())?;
 
+  // println!("candidate {:?}", gcd_and_score);
   Some(gcd_and_score)
 }
 
