@@ -51,30 +51,30 @@ fn calc_gcd<L: Latent>(mut x: L, mut y: L) -> L {
   }
 }
 
-fn biggest_cubic_root(a: f64, b: f64, c: f64, d: f64) -> Option<f64> {
-  const MAX_STEPS: usize = 8;
+fn bisect_root<F: Fn(f64) -> f64>(f: F, mut lb: f64, mut ub: f64) -> Option<f64> {
   const X_TOLERANCE: f64 = 1E-4;
-  // TODO comments
-  let mut x = if a == 0.0 { 1.0 } else { (-d / a).cbrt() };
-  let mut prev_x = x;
-  for _ in 0..MAX_STEPS {
-    let x2 = x * x;
-    let x3 = x * x2;
-    let val = a * x3 + b * x2 + c * x + d;
-    let deriv = 3.0 * a * x2 + 2.0 * b * x + c;
-    x -= val / deriv;
-
-    if x < 0.0 || x > 1.0 {
-      return None;
-    }
-
-    if (x - prev_x).abs() < X_TOLERANCE {
-      return Some(x);
-    }
-    prev_x = x;
+  let mut flb = f(lb);
+  let mut fub = f(ub);
+  if flb > 0.0 || fub < 0.0 {
+    return None;
   }
 
-  None
+  while ub - lb > X_TOLERANCE && fub - flb > 0.0 {
+    // Linear interpolation is unsafe, since we might guess the exact lb or ub.
+    // Instead we squeeze just slightly toward bisection.
+    let lb_prop = 0.001 + 0.998 * fub / (fub - flb);
+    let mid = lb_prop * lb + (1.0 - lb_prop) * ub;
+    let fmid = f(mid);
+    if fmid < 0.0 {
+      lb = mid;
+      flb = fmid;
+    } else {
+      ub = mid;
+      fub = fmid;
+    }
+  }
+
+  Some((lb + ub) / 2.0)
 }
 
 fn calc_triple_gcd<L: Latent>(triple: &[L]) -> L {
@@ -140,41 +140,36 @@ fn filter_score_triple_gcd_float(
   let congruence_prob_per_pair = (ZETA_OF_2 * prob_per_triple_lcb).min(1.0);
   let gcd_m1 = gcd - 1.0;
   let gcd_m1_inv_sq = 1.0 / (gcd_m1 * gcd_m1);
-  let concentrated_p = biggest_cubic_root(
-    1.0 - gcd_m1_inv_sq,
-    3.0 * gcd_m1_inv_sq,
-    -3.0 * gcd_m1_inv_sq,
-    gcd_m1_inv_sq - congruence_prob_per_pair,
-  )?;
-  let worst_case_entropy_mod_gcd = categorical_entropy(concentrated_p)
-    + gcd_m1 * categorical_entropy((1.0 - concentrated_p) / gcd_m1);
-  let worst_case_bits_saved = gcd.log2() - worst_case_entropy_mod_gcd;
+  // let (a, b, c, d) = (
+  //   1.0 - gcd_m1_inv_sq,
+  //   3.0 * gcd_m1_inv_sq,
+  //   -3.0 * gcd_m1_inv_sq,
+  //   gcd_m1_inv_sq - congruence_prob_per_pair,
+  // );
+  let lb = 1.0 / gcd;
+  let ub = congruence_prob_per_pair.cbrt();
+  let f = |p: f64| p.powi(3) + (1.0 - p).powi(3) * gcd_m1_inv_sq - congruence_prob_per_pair;
   // println!(
-  //   "! %{} ({} / {}) {} {} {} {}",
+  //   "{} ({} / {}) {} {} {} {}",
   //   gcd,
   //   triples_lcb,
   //   total_triples,
-  //   congruence_prob_per_pair,
-  //   concentrated_p,
-  //   worst_case_entropy_mod_gcd,
-  //   worst_case_bits_saved
+  //   lb,
+  //   ub,
+  //   f(lb),
+  //   f(ub),
   // );
+  let concentrated_p = bisect_root(f, lb, ub)?;
+  // println!("  {}", concentrated_p);
+  // let concentrated_p = biggest_cubic_root_in_0_1()?;
+  let worst_case_entropy_mod_gcd = categorical_entropy(concentrated_p)
+    + gcd_m1 * categorical_entropy((1.0 - concentrated_p) / gcd_m1);
+  let worst_case_bits_saved = gcd.log2() - worst_case_entropy_mod_gcd;
   if worst_case_bits_saved < MULT_REQUIRED_BITS_SAVED_PER_NUM {
     return None;
   }
 
   Some(worst_case_bits_saved)
-
-  // The most likely valid GCD maximizes triples * gcd, and the most
-  // valuable one (if true) maximizes triples.sqrt() * gcd. We take a
-  // conservative lower confidence bound for how many triples we'd get if we
-  // repeated the measurement, and strike a compromise between most likely and
-  // most valuable.
-  // if triples_lcb >= 0.0 {
-  //   Some(triples_lcb.powf(0.6) * gcd)
-  // } else {
-  //   None
-  // }
 }
 
 fn filter_score_triple_gcd<L: Latent>(
@@ -200,7 +195,6 @@ fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Opt
     })
     .max_by_key(|(_, score)| score.to_latent_ordered())?;
 
-  // println!("candidate {:?}", gcd_and_score);
   Some(gcd_and_score)
 }
 
@@ -235,6 +229,20 @@ mod tests {
   use rand_xoshiro::rand_core::SeedableRng;
 
   use super::*;
+
+  #[test]
+  fn test_bisect() {
+    fn assert_close(x: f64, y: f64) {
+      assert!((x - y).abs() < 1E-4);
+    }
+
+    let x0 = bisect_root(|x| x * x - 1.0, -0.9, 2.0).unwrap();
+    assert_close(x0, 1.0);
+
+    assert!(bisect_root(|x| x * x, -0.9, 2.0).is_none());
+
+    assert_eq!(bisect_root(|_| 0.0, 0.0, 1.0), Some(0.5));
+  }
 
   #[test]
   fn test_split_join_latents() {
@@ -280,13 +288,17 @@ mod tests {
       None,
     );
     assert_eq!(
-      choose_candidate_base(&mut [0_u32, 4, 8, 10, 14, 18, 20, 24, 28]),
-      Some(4),
+      choose_candidate_base(&mut [0_u32, 4, 8, 10, 14, 18, 20, 24, 28])
+        .unwrap()
+        .0,
+      4,
     );
     // 2 out of 3 triples have a rare congruency
     assert_eq!(
-      choose_candidate_base(&mut [1_u32, 11, 21, 31, 41, 51, 61, 71, 82]),
-      Some(10),
+      choose_candidate_base(&mut [1_u32, 11, 21, 31, 41, 51, 61, 71, 82])
+        .unwrap()
+        .0,
+      10,
     );
     // 1 out of 3 triples has a rare congruency
     assert_eq!(
@@ -298,6 +310,9 @@ mod tests {
     let mut twos = (0_u32..200)
       .map(|_| rng.gen_range(0_u32..1000) * 2)
       .collect::<Vec<_>>();
-    assert_eq!(choose_candidate_base(&mut twos), Some(2));
+    assert_eq!(
+      choose_candidate_base(&mut twos).unwrap().0,
+      2
+    );
   }
 }

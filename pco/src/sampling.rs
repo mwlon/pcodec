@@ -87,12 +87,6 @@ pub fn has_enough_infrequent_mults<L: Latent, S: Copy, F: Fn(S) -> L>(
     .filter(|&&count| count <= infrequent_cutoff)
     .sum::<usize>();
 
-  // println!(
-  //   "infreq {} {} {}",
-  //   infrequent_mult_weight_estimate,
-  //   sample.len(),
-  //   bits_saved_per_adj
-  // );
   let bits_saved_per_num =
     (infrequent_mult_weight_estimate as f64 / sample.len() as f64) * bits_saved_per_adj;
   bits_saved_per_num > MULT_REQUIRED_BITS_SAVED_PER_NUM

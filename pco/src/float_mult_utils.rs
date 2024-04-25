@@ -297,7 +297,7 @@ fn better_compression_than_classic<F: FloatLike>(
   sampling::has_enough_infrequent_mults(
     sample,
     |x| (x * config.inv_base).round().int_float_to_latent(),
-    (F::PRECISION_BITS - CLASSIC_MEMORIZABLE_BINS_LOG) as f64,
+    F::PRECISION_BITS.saturating_sub(CLASSIC_MEMORIZABLE_BINS_LOG) as f64,
   ) && uses_few_enough_adj_bits(config, nums)
 }
 
