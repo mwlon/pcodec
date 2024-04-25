@@ -38,6 +38,8 @@ pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
 pub const MAX_ENTRIES: usize = 1 << 24;
 pub const MAX_SUPPORTED_PRECISION: Bitlen = 128;
 pub const MAX_SUPPORTED_PRECISION_BYTES: usize = (MAX_SUPPORTED_PRECISION / 8) as usize;
+pub const MULT_REQUIRED_BITS_SAVED_PER_NUM: f64 = 0.5;
+pub const CLASSIC_MEMORIZABLE_BINS_LOG: Bitlen = 8;
 
 // defaults
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;
