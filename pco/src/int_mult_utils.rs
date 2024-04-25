@@ -137,31 +137,13 @@ fn filter_score_triple_gcd_float(
   // This occurs when there is one likely (concentrated) value of k, and the
   // rest are equally improbable.
   // You can use intuition or Lagrange multipliers to verify that.
-  let congruence_prob_per_pair = (ZETA_OF_2 * prob_per_triple_lcb).min(1.0);
+  let congruence_prob_per_triple = (ZETA_OF_2 * prob_per_triple_lcb).min(1.0);
   let gcd_m1 = gcd - 1.0;
   let gcd_m1_inv_sq = 1.0 / (gcd_m1 * gcd_m1);
-  // let (a, b, c, d) = (
-  //   1.0 - gcd_m1_inv_sq,
-  //   3.0 * gcd_m1_inv_sq,
-  //   -3.0 * gcd_m1_inv_sq,
-  //   gcd_m1_inv_sq - congruence_prob_per_pair,
-  // );
   let lb = 1.0 / gcd;
-  let ub = congruence_prob_per_pair.cbrt();
-  let f = |p: f64| p.powi(3) + (1.0 - p).powi(3) * gcd_m1_inv_sq - congruence_prob_per_pair;
-  // println!(
-  //   "{} ({} / {}) {} {} {} {}",
-  //   gcd,
-  //   triples_lcb,
-  //   total_triples,
-  //   lb,
-  //   ub,
-  //   f(lb),
-  //   f(ub),
-  // );
+  let ub = congruence_prob_per_triple.cbrt() + f64::EPSILON;
+  let f = |p: f64| p.powi(3) + (1.0 - p).powi(3) * gcd_m1_inv_sq - congruence_prob_per_triple;
   let concentrated_p = bisect_root(f, lb, ub)?;
-  // println!("  {}", concentrated_p);
-  // let concentrated_p = biggest_cubic_root_in_0_1()?;
   let worst_case_entropy_mod_gcd = categorical_entropy(concentrated_p)
     + gcd_m1 * categorical_entropy((1.0 - concentrated_p) / gcd_m1);
   let worst_case_bits_saved = gcd.log2() - worst_case_entropy_mod_gcd;
