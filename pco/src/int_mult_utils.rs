@@ -239,7 +239,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn test_bisect() {
+  fn test_false_position() {
     fn assert_close(x: f64, y: f64) {
       assert!((x - y).abs() < 1E-4);
     }

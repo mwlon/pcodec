@@ -67,7 +67,7 @@ pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
 pub fn has_enough_infrequent_mults<L: Latent, S: Copy, F: Fn(S) -> L>(
   sample: &[S],
   mult_fn: F,
-  bits_saved_per_adj: f64,
+  bits_saved_per_infrequent_mult: f64,
 ) -> bool {
   let mut mult_counts = HashMap::<L, usize>::with_capacity(sample.len());
   for &x in sample {
@@ -88,7 +88,7 @@ pub fn has_enough_infrequent_mults<L: Latent, S: Copy, F: Fn(S) -> L>(
     .sum::<usize>();
 
   let bits_saved_per_num =
-    (infrequent_mult_weight_estimate as f64 / sample.len() as f64) * bits_saved_per_adj;
+    (infrequent_mult_weight_estimate as f64 / sample.len() as f64) * bits_saved_per_infrequent_mult;
   bits_saved_per_num > MULT_REQUIRED_BITS_SAVED_PER_NUM
 }
 
