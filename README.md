@@ -24,7 +24,7 @@ numerical sequences with
 
 ## Get Started
 
-[Use the CLI](./pco_cli/README.md)
+[Use the CLI](./pco_cli/README.md) (also supports benchmarking)
 
 [Use the Rust API](./pco/README.md)
 
@@ -87,7 +87,7 @@ multiple chunks per file.
 
 ### Docs
 
-[benchmarks: see the results or run your own](docs/benchmark_results.md)
+[benchmarks: see the results](docs/benchmark_results.md)
 
 [format specification](./docs/format.md)
 

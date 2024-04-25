@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 use std::mem;
 
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, CLASSIC_MEMORIZABLE_BINS_LOG};
 use crate::data_types::{FloatLike, Latent};
 use crate::{int_mult_utils, sampling};
 
@@ -172,7 +172,9 @@ fn choose_candidate_base_by_trailing_zeros<F: FloatLike>(
   }
 
   if int_sample.len() >= required_samples {
-    let int_base = int_mult_utils::choose_candidate_base(&mut int_sample).unwrap_or(F::L::ONE);
+    let int_base = int_mult_utils::choose_candidate_base(&mut int_sample)
+      .map(|(base, _)| base)
+      .unwrap_or(F::L::ONE);
     let base = F::from_latent_numerical(int_base) * F::exp2(k);
     Some(FloatMultConfig::from_base(base))
   } else {
@@ -292,9 +294,11 @@ fn better_compression_than_classic<F: FloatLike>(
   sample: &[F],
   nums: &[F],
 ) -> bool {
-  sampling::has_enough_infrequent_ints(sample, |x| {
-    ((x * config.inv_base).round()).int_float_to_latent()
-  }) && uses_few_enough_adj_bits(config, nums)
+  sampling::has_enough_infrequent_mults(
+    sample,
+    |x| (x * config.inv_base).round().int_float_to_latent(),
+    F::PRECISION_BITS.saturating_sub(CLASSIC_MEMORIZABLE_BINS_LOG) as f64,
+  ) && uses_few_enough_adj_bits(config, nums)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
