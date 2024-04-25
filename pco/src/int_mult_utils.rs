@@ -51,7 +51,7 @@ fn calc_gcd<L: Latent>(mut x: L, mut y: L) -> L {
   }
 }
 
-fn bisect_root<F: Fn(f64) -> f64>(f: F, mut lb: f64, mut ub: f64) -> Option<f64> {
+fn solve_root_by_false_position<F: Fn(f64) -> f64>(f: F, mut lb: f64, mut ub: f64) -> Option<f64> {
   const X_TOLERANCE: f64 = 1E-4;
   let mut flb = f(lb);
   let mut fub = f(ub);
@@ -60,7 +60,8 @@ fn bisect_root<F: Fn(f64) -> f64>(f: F, mut lb: f64, mut ub: f64) -> Option<f64>
   }
 
   while ub - lb > X_TOLERANCE && fub - flb > 0.0 {
-    // Linear interpolation is unsafe, since we might guess the exact lb or ub.
+    // Pure false position is a bit unsafe, since we haven't ruled out the
+    // possibility that f(lb) == f(ub).
     // Instead we squeeze just slightly toward bisection.
     let lb_prop = 0.001 + 0.998 * fub / (fub - flb);
     let mid = lb_prop * lb + (1.0 - lb_prop) * ub;
@@ -108,42 +109,63 @@ fn filter_score_triple_gcd_float(
   triples_w_gcd: usize,
   total_triples: usize,
 ) -> Option<f64> {
-  if triples_w_gcd <= 1 {
-    // not enough to make any claims
-    return None;
-  }
-
   let triples_w_gcd = triples_w_gcd as f64;
   let total_triples = total_triples as f64;
   let prob_per_triple = triples_w_gcd / total_triples;
 
-  // check if the GCD has statistical evidence
+  // 1. Check if the GCD has statistical evidence.
+  // We make the null hypothesis that "naturally" the numbers have a uniform
+  // distribution modulo the GCD.
+  // If so, subtracting out the low element from the triple still leaves us
+  // with a uniform distribution over the other 2, so the probability of
+  // observing this GCD exactly (and not a multiple of it) would be
+  // 1/(gcd^2) / (1 + 1/2^2 + 1/3^2 + ...) = 1/(zeta(2) * gcd^2)
+  // per triple.
   let natural_prob_per_triple = 1.0 / (ZETA_OF_2 * gcd * gcd);
   let stdev = (natural_prob_per_triple * (1.0 - natural_prob_per_triple) / total_triples).sqrt();
+  // simple frequentist z test
   let z_score = (prob_per_triple - natural_prob_per_triple) / stdev;
   if z_score < 3.0 {
     return None;
   }
 
-  let triples_lcb = triples_w_gcd - LCB_RATIO * triples_w_gcd.sqrt();
-  if triples_lcb <= 0.0 {
+  // 2. Make a conservative estimate (Lower Confidence Bound) for the number of
+  // triples that have congruence modulo this GCD.
+  // Again, we correct by a factor of zeta(2) because (assuming there is a
+  // certain distribution modulo GCD), there should be a 1/4 + 1/9 + 1/16 + ...
+  // chance of having observed a multiple of this GCD instead.
+  let triples_w_gcd_lcb = triples_w_gcd - LCB_RATIO * triples_w_gcd.sqrt();
+  if triples_w_gcd_lcb <= 0.0 {
     return None;
   }
-  let prob_per_triple_lcb = triples_lcb / total_triples;
+  let congruence_prob_per_triple_lcb = (ZETA_OF_2 * triples_w_gcd_lcb / total_triples).min(1.0);
 
-  // heuristic for when the GCD is useless, even if true
-  // We calculate the greatest possible entropy for the distribution, modulo
-  // GCD (call it P(k)), assuming $\sum_k P(k)^2 = congruence_prob_per_pair$.
-  // This occurs when there is one likely (concentrated) value of k, and the
-  // rest are equally improbable.
+  // 3. Measure and score by the number of bits saved by using this modulus,
+  // as opposed to just a uniform distribution over [0, GCD)).
+  // If the distribution modulo the GCD has entropy H, this is
+  // log_2(GCD) - H.
+  // To calculate H, we consider the worst case: the probability is concentrated
+  // in one particular value in [0, GCD), and the rest of the probability is
+  // distributed uniformly.
+  // This maximizes H subject to
+  // \sum_{k\in [0, GCD)} P(k)^3 = our observed probability of triple congruence
   // You can use intuition or Lagrange multipliers to verify that.
-  let congruence_prob_per_triple = (ZETA_OF_2 * prob_per_triple_lcb).min(1.0);
   let gcd_m1 = gcd - 1.0;
   let gcd_m1_inv_sq = 1.0 / (gcd_m1 * gcd_m1);
   let lb = 1.0 / gcd;
-  let ub = congruence_prob_per_triple.cbrt() + f64::EPSILON;
-  let f = |p: f64| p.powi(3) + (1.0 - p).powi(3) * gcd_m1_inv_sq - congruence_prob_per_triple;
-  let concentrated_p = bisect_root(f, lb, ub)?;
+  let ub = congruence_prob_per_triple_lcb.cbrt() + f64::EPSILON;
+  // This is the summation described above: one concentrated p value for a
+  // single k, and (GCD - 1) dispersed probabilities of (1 - p) / (GCD - 1)
+  let f = |p: f64| p.powi(3) + (1.0 - p).powi(3) * gcd_m1_inv_sq - congruence_prob_per_triple_lcb;
+  // You might think
+  // * We should apply the cubic formula directly! But no, it's horribly
+  //   numerically unstable, hard to choose the root you want, and hard to
+  //   avoid every possible NaN or inf.
+  // * We should use Newton's method! This also has some tricky NaN,
+  //   infinite loop, and divergent cases, and even if you get past those, it
+  //   converges annoyingly slowly in some cases.
+  // So instead we use the method of false position.
+  let concentrated_p = solve_root_by_false_position(f, lb, ub)?;
   let worst_case_entropy_mod_gcd = categorical_entropy(concentrated_p)
     + gcd_m1 * categorical_entropy((1.0 - concentrated_p) / gcd_m1);
   let worst_case_bits_saved = gcd.log2() - worst_case_entropy_mod_gcd;
@@ -218,12 +240,15 @@ mod tests {
       assert!((x - y).abs() < 1E-4);
     }
 
-    let x0 = bisect_root(|x| x * x - 1.0, -0.9, 2.0).unwrap();
+    let x0 = solve_root_by_false_position(|x| x * x - 1.0, -0.9, 2.0).unwrap();
     assert_close(x0, 1.0);
 
-    assert!(bisect_root(|x| x * x, -0.9, 2.0).is_none());
+    assert!(solve_root_by_false_position(|x| x * x, -0.9, 2.0).is_none());
 
-    assert_eq!(bisect_root(|_| 0.0, 0.0, 1.0), Some(0.5));
+    assert_eq!(
+      solve_root_by_false_position(|_| 0.0, 0.0, 1.0),
+      Some(0.5)
+    );
   }
 
   #[test]
