@@ -152,11 +152,15 @@ fn filter_score_triple_gcd_float(
   // You can use intuition or Lagrange multipliers to verify that.
   let gcd_m1 = gcd - 1.0;
   let gcd_m1_inv_sq = 1.0 / (gcd_m1 * gcd_m1);
-  let lb = 1.0 / gcd;
-  let ub = congruence_prob_per_triple_lcb.cbrt() + f64::EPSILON;
   // This is the summation described above: one concentrated p value for a
   // single k, and (GCD - 1) dispersed probabilities of (1 - p) / (GCD - 1)
   let f = |p: f64| p.powi(3) + (1.0 - p).powi(3) * gcd_m1_inv_sq - congruence_prob_per_triple_lcb;
+  // It's easy to show that f minimizes at 1/GCD, and that f>0 when
+  // p>cbrt(congruence_prob_per_triple_lcb).
+  // So if a root in [0, 1] exists at all, it has these lower and upper bounds.
+  let lb = 1.0 / gcd;
+  // + EPSILON because for large GCDs truncation error can make f(cbrt()) < 0.
+  let ub = congruence_prob_per_triple_lcb.cbrt() + f64::EPSILON;
   // You might think
   // * We should apply the cubic formula directly! But no, it's horribly
   //   numerically unstable, hard to choose the root you want, and hard to
