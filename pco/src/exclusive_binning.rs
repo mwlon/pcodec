@@ -22,10 +22,25 @@ struct State<L: Latent> {
   dst: Vec<BinCompressionInfo<L>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum Bound<L: Latent> {
+  Loose(L),
+  Tight(L),
+}
+
+impl<L: Latent> Bound<L> {
+  fn value(&self) -> L {
+    match self {
+      Bound::Loose(x) => *x,
+      Bound::Tight(x) => *x,
+    }
+  }
+}
+
 #[derive(Debug)]
 struct RecurseArgs<L: Latent> {
   c_count: usize,
-  tight_lower: L,
+  lower: Bound<L>,
   loose_upper: L,
   min_bin_idx: usize,
   max_bin_idx: usize,
@@ -109,7 +124,7 @@ impl<L: Latent> State<L> {
     }
   }
 
-  fn merge_incomplete(&mut self, latents: &[L], tight_lower: L) {
+  fn merge_incomplete(&mut self, latents: &[L], lower: &mut Bound<L>) {
     if latents.is_empty() {
       return;
     }
@@ -120,9 +135,11 @@ impl<L: Latent> State<L> {
       bin.upper = upper;
       bin.count += latents.len();
     } else {
+      let latents_min = calc_min(latents);
+      *lower = Bound::Tight(latents_min);
       self.incomplete_bin = Some(IncompleteBin {
         count: latents.len(),
-        lower: tight_lower,
+        lower: latents_min,
         upper,
       });
     }
@@ -143,8 +160,9 @@ impl<L: Latent> State<L> {
   ) {
     let next_target_c_count = c_count_from_bin_idx(args.min_bin_idx + 1, precomputed);
     let next_c_count = args.c_count + latents.len();
+    let mut lower = args.lower;
     if next_c_count <= next_target_c_count {
-      self.merge_incomplete(latents, args.tight_lower);
+      self.merge_incomplete(latents, &mut lower);
       if next_c_count == next_target_c_count {
         self.finish_incomplete_bin();
       }
@@ -153,40 +171,42 @@ impl<L: Latent> State<L> {
 
     // TODO case when there are only a few latents
 
-    if args.tight_lower == args.loose_upper {
+    if lower.value() == args.loose_upper {
       // everything is constant
+      let undershoot_better_than_overshoot =
+        next_c_count - next_target_c_count > next_target_c_count - args.c_count;
       if args.max_bin_idx - args.min_bin_idx >= 2 {
         self.finish_incomplete_bin();
-        self.merge_incomplete(latents, args.tight_lower);
+        self.merge_incomplete(latents, &mut lower);
         self.finish_incomplete_bin();
+      } else if undershoot_better_than_overshoot {
+        // better to emit what we have
+        self.finish_incomplete_bin();
+        self.merge_incomplete(latents, &mut lower);
       } else {
-        if next_c_count - next_target_c_count > next_target_c_count - args.c_count {
-          // better to emit what we have
-          self.finish_incomplete_bin();
-          self.merge_incomplete(latents, args.tight_lower);
-        } else {
-          // better to add this constant run first
-          self.merge_incomplete(latents, args.tight_lower);
-          self.finish_incomplete_bin();
-        }
+        // better to add this constant run first
+        self.merge_incomplete(latents, &mut lower);
+        self.finish_incomplete_bin();
       }
       return;
     }
 
     let (mut pivot, is_likely_sorted) = sort_utils::choose_pivot(latents);
-    match args.last_pivot {
-      Some(last) if last == pivot => {
-        // TODO fix this hack
-        pivot = last + L::ONE;
-      }
-      _ => (),
-    }
-    println!(
-      "pivot {} vs {:?} ({})",
-      pivot,
-      args.last_pivot,
-      latents.len()
-    );
+    let rhs_lower = if pivot == lower.value() {
+      // TODO fix this hack
+      pivot = pivot + L::ONE;
+      Bound::Loose(pivot)
+    } else {
+      Bound::Tight(pivot)
+    };
+    // println!(
+    //   "lb {:?} < pivot {} <= {} vs {:?} ({})",
+    //   lower,
+    //   pivot,
+    //   args.loose_upper,
+    //   args.last_pivot,
+    //   latents.len(),
+    // );
     let (lhs_count, _) = sort_utils::partition(latents, pivot);
 
     let pivot_c_count = args.c_count + lhs_count;
@@ -197,8 +217,8 @@ impl<L: Latent> State<L> {
       precomputed,
       RecurseArgs {
         c_count: args.c_count,
-        tight_lower: args.tight_lower,
-        loose_upper: pivot,
+        lower,
+        loose_upper: pivot - L::ONE,
         min_bin_idx: args.min_bin_idx,
         max_bin_idx: pivot_bin_idx,
         last_pivot: None,
@@ -209,7 +229,7 @@ impl<L: Latent> State<L> {
       precomputed,
       RecurseArgs {
         c_count: args.c_count + lhs_count,
-        tight_lower: pivot,
+        lower: rhs_lower,
         loose_upper: args.loose_upper,
         min_bin_idx: pivot_bin_idx,
         max_bin_idx: args.max_bin_idx,
@@ -233,13 +253,13 @@ pub fn exclusive_bins<L: Latent>(
   };
 
   let mut state = State::new(n_bins_log);
-  let tight_lower = calc_min(latents);
+  // let tight_lower = calc_min(latents);
   state.exclusive_bins_quicksort_recurse(
     latents,
     &precomputed,
     RecurseArgs {
       c_count: 0,
-      tight_lower,
+      lower: Bound::Loose(L::ZERO),
       loose_upper: L::MAX,
       min_bin_idx: 0,
       max_bin_idx: 1 << n_bins_log,

@@ -69,6 +69,7 @@ pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
     (latents[len - 1 - b], true)
   }
 }
+
 fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
   // Number of elements in a typical block.
   const BLOCK: usize = 256;
