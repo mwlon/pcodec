@@ -348,6 +348,10 @@ pub fn exclusive_bins<L: Latent>(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use rand::seq::SliceRandom;
+  use rand::Rng;
+  use rand_xoshiro::rand_core::{RngCore, SeedableRng};
+  use rand_xoshiro::Xoroshiro128PlusPlus;
 
   fn run_exclusive_bins_sorted(
     latents: &[u32],
@@ -359,7 +363,21 @@ mod tests {
       n_bins_log,
     };
     let args = RecurseArgs::new(n_bins_log);
-    state.apply_latents_sorted(&latents, &precomputed, args);
+    state.apply_latents_sorted(latents, &precomputed, args);
+    state.dst
+  }
+
+  fn run_exclusive_bins_quicksort(
+    latents: &mut [u32],
+    n_bins_log: Bitlen,
+  ) -> Vec<BinCompressionInfo<u32>> {
+    let mut state = State::<u32>::new(n_bins_log);
+    let precomputed = Precomputed {
+      n: latents.len() as u64,
+      n_bins_log,
+    };
+    let args = RecurseArgs::new(n_bins_log);
+    state.apply_latents_quicksort_recurse(latents, &precomputed, args);
     state.dst
   }
 
@@ -410,5 +428,71 @@ mod tests {
         make_info(5, 2_u32, 2),
       ]
     );
+  }
+
+  #[test]
+  fn test_exclusive_bins_quicksort() {
+    let mut latents = vec![];
+    let bins = run_exclusive_bins_quicksort(&mut latents, 2);
+    assert_eq!(bins, vec![]);
+
+    let mut latents = vec![8];
+    let bins = run_exclusive_bins_quicksort(&mut latents, 0);
+    assert_eq!(bins, vec![make_info(1, 8_u32, 8)],);
+
+    for seed in 0..16 {
+      let mut rng = Xoroshiro128PlusPlus::seed_from_u64(seed);
+      let mut latents = (0..100).collect::<Vec<_>>();
+      latents.shuffle(&mut rng);
+
+      let bins = run_exclusive_bins_quicksort(&mut latents, 2);
+      assert_eq!(
+        bins,
+        vec![
+          make_info(25, 0_u32, 24),
+          make_info(25, 25_u32, 49),
+          make_info(25, 50_u32, 74),
+          make_info(25, 75_u32, 99),
+        ]
+      );
+
+      let mut latents = vec![0; 100];
+      latents[0] = 1;
+      latents.shuffle(&mut rng);
+      let bins = run_exclusive_bins_quicksort(&mut latents, 2);
+      assert_eq!(
+        bins,
+        vec![make_info(99, 0_u32, 0), make_info(1, 1_u32, 1),]
+      );
+
+      let mut latents = [5; 100];
+      latents[0] = 3;
+      latents[1..3].fill(7);
+      latents.shuffle(&mut rng);
+      let bins = run_exclusive_bins_quicksort(&mut latents, 2);
+      assert_eq!(
+        bins,
+        vec![
+          make_info(1, 3_u32, 3),
+          make_info(97, 5_u32, 5),
+          make_info(2, 7_u32, 7),
+        ]
+      );
+      let bins = run_exclusive_bins_quicksort(&mut latents, 1);
+      assert_eq!(
+        bins,
+        vec![make_info(98, 3_u32, 5), make_info(2, 7_u32, 7),]
+      );
+
+      let mut latents = [5; 100];
+      latents[0..2].fill(3);
+      latents[2] = 7;
+      latents.shuffle(&mut rng);
+      let bins = run_exclusive_bins_quicksort(&mut latents, 1);
+      assert_eq!(
+        bins,
+        vec![make_info(2, 3_u32, 3), make_info(98, 5_u32, 7),]
+      );
+    }
   }
 }
