@@ -32,7 +32,7 @@ pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
     let mut sort2 = |a: &mut usize, b: &mut usize| unsafe {
       if *latents.get_unchecked(*b) < *latents.get_unchecked(*a) {
         ptr::swap(a, b);
-        swaps += 1;
+        // swaps += 1;
       }
     };
 
@@ -60,14 +60,15 @@ pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
     sort3(&mut a, &mut b, &mut c);
   }
 
-  if swaps < MAX_SWAPS {
-    (latents[b], swaps == 0)
-  } else {
-    // The maximum number of swaps was performed. Chances are the slice is descending or mostly
-    // descending, so reversing will probably help sort it faster.
-    latents.reverse();
-    (latents[len - 1 - b], true)
-  }
+  // if swaps < MAX_SWAPS {
+  (latents[b], swaps == 0)
+  // } else {
+  //   println!("REV {}", latents.len());
+  //   // The maximum number of swaps was performed. Chances are the slice is descending or mostly
+  //   // descending, so reversing will probably help sort it faster.
+  //   latents.reverse();
+  //   (latents[len - 1 - b], true)
+  // }
 }
 
 fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
@@ -320,6 +321,7 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
   }
 }
 
+// returns (count on left side of pivot, was_bad_pivot)
 pub fn partition<L: Latent>(latents: &mut [L], pivot: L) -> (usize, bool) {
   // Find the first pair of out-of-order elements.
   let mut l = 0;
@@ -341,8 +343,52 @@ pub fn partition<L: Latent>(latents: &mut [L], pivot: L) -> (usize, bool) {
     }
   }
 
-  (
-    l + partition_in_blocks(&mut latents[l..r], pivot),
-    l >= r,
-  )
+  // We could also return whether the data was already partitioned as `l >= r`
+  // like rust unstable sort does, but I'm not implementing that for now.
+  let l_count = l + partition_in_blocks(&mut latents[l..r], pivot);
+  let was_bad_pivot = cmp::min(l_count, latents.len() - l_count) < latents.len() / 8;
+  (l_count, was_bad_pivot)
+}
+
+// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
+#[cold]
+pub fn heapsort<L: Latent>(latents: &mut [L]) {
+  // This binary heap respects the invariant `parent >= child`.
+  let sift_down = |x: &mut [L], mut node| {
+    loop {
+      // Children of `node`.
+      let mut child = 2 * node + 1;
+      if child >= x.len() {
+        break;
+      }
+
+      // Choose the greater child.
+      if child + 1 < x.len() {
+        // We need a branch to be sure not to out-of-bounds index,
+        // but it's highly predictable.  The comparison, however,
+        // is better done branchless, especially for primitives.
+        child += (x[child] < x[child + 1]) as usize;
+      }
+
+      // Stop if the invariant holds at `node`.
+      if x[node] >= x[child] {
+        break;
+      }
+
+      // Swap `node` with the greater child, move one step down, and continue sifting.
+      x.swap(node, child);
+      node = child;
+    }
+  };
+
+  // Build the heap in linear time.
+  for i in (0..latents.len() / 2).rev() {
+    sift_down(latents, i);
+  }
+
+  // Pop maximal elements from the heap.
+  for i in (1..latents.len()).rev() {
+    latents.swap(0, i);
+    sift_down(&mut latents[..i], 0);
+  }
 }

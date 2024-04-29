@@ -1,9 +1,10 @@
+use std::cmp::{max, min};
+
 use crate::bin::BinCompressionInfo;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
+use crate::sort_utils::heapsort;
 use crate::{bits, sort_utils};
-use std::cmp::{max, min};
-use std::mem;
 
 struct Precomputed {
   n: u64,
@@ -29,7 +30,7 @@ enum Bound<L: Latent> {
 }
 
 impl<L: Latent> Bound<L> {
-  fn value(&self) -> L {
+  fn loose(&self) -> L {
     match self {
       Bound::Loose(x) => *x,
       Bound::Tight(x) => *x,
@@ -40,11 +41,24 @@ impl<L: Latent> Bound<L> {
 #[derive(Debug)]
 struct RecurseArgs<L: Latent> {
   c_count: usize,
-  lower: Bound<L>,
-  loose_upper: L,
+  lb: Bound<L>,
+  ub: Bound<L>,
   min_bin_idx: usize,
   max_bin_idx: usize,
-  last_pivot: Option<L>,
+  bad_pivot_limit: u32,
+}
+
+impl<L: Latent> RecurseArgs<L> {
+  fn new(n_bins_log: Bitlen) -> Self {
+    Self {
+      c_count: 0,
+      lb: Bound::Loose(L::ZERO),
+      ub: Bound::Loose(L::MAX),
+      min_bin_idx: 0,
+      max_bin_idx: 1 << n_bins_log,
+      bad_pivot_limit: n_bins_log + 1,
+    }
+  }
 }
 
 fn calc_min<L: Latent>(latents: &[L]) -> L {
@@ -92,30 +106,6 @@ fn make_info<L: Latent>(count: usize, lower: L, upper: L) -> BinCompressionInfo<
   }
 }
 
-// #[inline(never)]
-// fn partition<L: Latent>(latents: &mut [L], pivot: L) -> usize {
-//   let mut i = 0;
-//   let mut j = latents.len();
-//   while i < j {
-//     // TODO make this fast
-//     if latents[i] < pivot {
-//       i += 1;
-//       std::slice:
-//     } else {
-//       latents.swap(i, j - 1);
-//       j -= 1;
-//     }
-//     // let is_lt_pivot = latents[i] < pivot;
-//     // let lhs_incr = is_lt_pivot as usize;
-//     // let rhs_decr = 1 - is_lt_pivot as usize;
-//     // let swap_idx = if is_lt_pivot { i } else { j - 1 };
-//     // latents.swap(i, swap_idx);
-//     // i += lhs_incr;
-//     // j -= rhs_decr;
-//   }
-//   i
-// }
-
 impl<L: Latent> State<L> {
   fn new(n_bins_log: Bitlen) -> Self {
     Self {
@@ -124,23 +114,28 @@ impl<L: Latent> State<L> {
     }
   }
 
-  fn merge_incomplete(&mut self, latents: &[L], lower: &mut Bound<L>) {
+  fn merge_incomplete(&mut self, latents: &[L], lower: Bound<L>, upper: Bound<L>) {
     if latents.is_empty() {
       return;
     }
 
-    // TODO
-    let upper = calc_max(latents);
+    let tight_ub = match upper {
+      Bound::Loose(_) => calc_max(latents),
+      Bound::Tight(upper) => upper,
+    };
+
     if let Some(bin) = self.incomplete_bin.as_mut() {
-      bin.upper = upper;
+      bin.upper = tight_ub;
       bin.count += latents.len();
     } else {
-      let latents_min = calc_min(latents);
-      *lower = Bound::Tight(latents_min);
+      let tight_lb = match lower {
+        Bound::Loose(_) => calc_min(latents),
+        Bound::Tight(lower) => lower,
+      };
       self.incomplete_bin = Some(IncompleteBin {
         count: latents.len(),
-        lower: latents_min,
-        upper,
+        lower: tight_lb,
+        upper: tight_ub,
       });
     }
   }
@@ -152,7 +147,84 @@ impl<L: Latent> State<L> {
     }
   }
 
-  fn exclusive_bins_quicksort_recurse(
+  fn apply_constant_run(
+    &mut self,
+    latents: &[L],
+    start: usize,
+    target: usize,
+    multiple_bins_available: bool,
+  ) {
+    let end = start + latents.len();
+    let undershoot_better_than_overshoot = end - 1 - target > target - start;
+    let const_bound = Bound::Tight(latents[0]);
+    if multiple_bins_available {
+      self.finish_incomplete_bin();
+      self.merge_incomplete(latents, const_bound, const_bound);
+      self.finish_incomplete_bin();
+    } else if undershoot_better_than_overshoot {
+      // better to emit what we have
+      self.finish_incomplete_bin();
+      self.merge_incomplete(latents, const_bound, const_bound);
+    } else {
+      // better to add this constant run first
+      self.merge_incomplete(latents, const_bound, const_bound);
+      self.finish_incomplete_bin();
+    }
+  }
+
+  fn apply_latents_sorted(
+    &mut self,
+    mut latents: &[L],
+    precomputed: &Precomputed,
+    args: RecurseArgs<L>,
+  ) {
+    let mut next_bin_idx = args.min_bin_idx + 1;
+    let mut c_count = args.c_count;
+    let mut multiple_bins_available = false;
+
+    while !latents.is_empty() {
+      let target_c_count = c_count_from_bin_idx(next_bin_idx, &precomputed);
+      let target_i = target_c_count - c_count - 1;
+      let target_x = latents[target_i];
+
+      let mut l = target_i;
+      let mut r = target_i + 1;
+      while l > 0 && latents[l - 1] == target_x {
+        l -= 1;
+      }
+      while r < latents.len() && latents[r] == target_x {
+        r += 1;
+      }
+
+      if l > 0 {
+        self.merge_incomplete(
+          &latents[..l],
+          Bound::Tight(latents[0]),
+          Bound::Tight(latents[l - 1]),
+        );
+      }
+
+      self.apply_constant_run(
+        &latents[l..r],
+        l,
+        target_i,
+        multiple_bins_available,
+      );
+
+      latents = &latents[r..];
+      c_count += r;
+      let updated_bin_idx = max(
+        next_bin_idx,
+        bin_idx_from_c_count(c_count, &precomputed),
+      ) + 1;
+      multiple_bins_available = updated_bin_idx >= next_bin_idx + 2;
+      next_bin_idx = updated_bin_idx;
+    }
+
+    self.finish_incomplete_bin();
+  }
+
+  fn apply_latents_quicksort_recurse(
     &mut self,
     latents: &mut [L],
     precomputed: &Precomputed,
@@ -160,80 +232,76 @@ impl<L: Latent> State<L> {
   ) {
     let next_target_c_count = c_count_from_bin_idx(args.min_bin_idx + 1, precomputed);
     let next_c_count = args.c_count + latents.len();
-    let mut lower = args.lower;
     if next_c_count <= next_target_c_count {
-      self.merge_incomplete(latents, &mut lower);
+      self.merge_incomplete(latents, args.lb, args.ub);
       if next_c_count == next_target_c_count {
         self.finish_incomplete_bin();
       }
       return;
     }
 
-    // TODO case when there are only a few latents
-
-    if lower.value() == args.loose_upper {
+    let loose_lb = args.lb.loose();
+    if loose_lb == args.ub.loose() {
       // everything is constant
-      let undershoot_better_than_overshoot =
-        next_c_count - next_target_c_count > next_target_c_count - args.c_count;
-      if args.max_bin_idx - args.min_bin_idx >= 2 {
-        self.finish_incomplete_bin();
-        self.merge_incomplete(latents, &mut lower);
-        self.finish_incomplete_bin();
-      } else if undershoot_better_than_overshoot {
-        // better to emit what we have
-        self.finish_incomplete_bin();
-        self.merge_incomplete(latents, &mut lower);
-      } else {
-        // better to add this constant run first
-        self.merge_incomplete(latents, &mut lower);
-        self.finish_incomplete_bin();
-      }
+      let multiple_bins_available = args.max_bin_idx - args.min_bin_idx >= 2;
+      self.apply_constant_run(
+        latents,
+        args.c_count,
+        next_target_c_count,
+        multiple_bins_available,
+      );
       return;
     }
 
-    let (mut pivot, is_likely_sorted) = sort_utils::choose_pivot(latents);
-    let rhs_lower = if pivot == lower.value() {
-      // TODO fix this hack
-      pivot = pivot + L::ONE;
-      Bound::Loose(pivot)
+    let (tentative_pivot, _is_likely_sorted) = sort_utils::choose_pivot(latents);
+    let (pivot, lhs_ub, rhs_lb) = if tentative_pivot > loose_lb {
+      (
+        tentative_pivot,
+        Bound::Loose(tentative_pivot - L::ONE),
+        Bound::Tight(tentative_pivot),
+      )
     } else {
-      Bound::Tight(pivot)
+      (
+        tentative_pivot + L::ONE,
+        Bound::Tight(tentative_pivot),
+        Bound::Loose(tentative_pivot + L::ONE),
+      )
     };
-    // println!(
-    //   "lb {:?} < pivot {} <= {} vs {:?} ({})",
-    //   lower,
-    //   pivot,
-    //   args.loose_upper,
-    //   args.last_pivot,
-    //   latents.len(),
-    // );
-    let (lhs_count, _) = sort_utils::partition(latents, pivot);
+    let (lhs_count, was_bad_pivot) = sort_utils::partition(latents, pivot);
+    let bad_pivot_limit = args.bad_pivot_limit - (was_bad_pivot as u32);
+
+    if bad_pivot_limit == 0 {
+      sort_utils::heapsort(&mut latents[..lhs_count]);
+      sort_utils::heapsort(&mut latents[lhs_count..]);
+      self.apply_latents_sorted(latents, precomputed, args);
+      return;
+    }
 
     let pivot_c_count = args.c_count + lhs_count;
     let pivot_bin_idx = bin_idx_from_c_count(pivot_c_count, precomputed);
 
-    self.exclusive_bins_quicksort_recurse(
+    self.apply_latents_quicksort_recurse(
       &mut latents[..lhs_count],
       precomputed,
       RecurseArgs {
         c_count: args.c_count,
-        lower,
-        loose_upper: pivot - L::ONE,
+        lb: args.lb,
+        ub: lhs_ub,
         min_bin_idx: args.min_bin_idx,
         max_bin_idx: pivot_bin_idx,
-        last_pivot: None,
+        bad_pivot_limit,
       },
     );
-    self.exclusive_bins_quicksort_recurse(
+    self.apply_latents_quicksort_recurse(
       &mut latents[lhs_count..],
       precomputed,
       RecurseArgs {
         c_count: args.c_count + lhs_count,
-        lower: rhs_lower,
-        loose_upper: args.loose_upper,
+        lb: rhs_lb,
+        ub: args.ub,
         min_bin_idx: pivot_bin_idx,
         max_bin_idx: args.max_bin_idx,
-        last_pivot: Some(pivot),
+        bad_pivot_limit,
       },
     );
   }
@@ -254,17 +322,93 @@ pub fn exclusive_bins<L: Latent>(
 
   let mut state = State::new(n_bins_log);
   // let tight_lower = calc_min(latents);
-  state.exclusive_bins_quicksort_recurse(
+  // let mut is_sorted = true;
+  // for (i, &x) in latents.iter().enumerate().skip(1) {
+  //   if latents[i - 1] > x {
+  //     is_sorted = false;
+  //     break;
+  //   }
+  // }
+  // if is_sorted {
+  //   state.apply_latents_sorted(
+  //     latents,
+  //     &precomputed,
+  //     RecurseArgs::new(n_bins_log),
+  //   )
+  // } else {
+  state.apply_latents_quicksort_recurse(
     latents,
     &precomputed,
-    RecurseArgs {
-      c_count: 0,
-      lower: Bound::Loose(L::ZERO),
-      loose_upper: L::MAX,
-      min_bin_idx: 0,
-      max_bin_idx: 1 << n_bins_log,
-      last_pivot: None,
-    },
+    RecurseArgs::new(n_bins_log),
   );
+  // }
   state.dst
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn run_exclusive_bins_sorted(
+    latents: &[u32],
+    n_bins_log: Bitlen,
+  ) -> Vec<BinCompressionInfo<u32>> {
+    let mut state = State::<u32>::new(n_bins_log);
+    let precomputed = Precomputed {
+      n: latents.len() as u64,
+      n_bins_log,
+    };
+    let args = RecurseArgs::new(n_bins_log);
+    state.apply_latents_sorted(&latents, &precomputed, args);
+    state.dst
+  }
+
+  #[test]
+  fn test_exclusive_bins_sorted() {
+    let latents = vec![];
+    let bins = run_exclusive_bins_sorted(&latents, 2);
+    assert_eq!(bins, vec![]);
+
+    let latents = vec![8];
+    let bins = run_exclusive_bins_sorted(&latents, 0);
+    assert_eq!(bins, vec![make_info(1, 8_u32, 8)],);
+
+    let latents = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let bins = run_exclusive_bins_sorted(&latents, 2);
+    assert_eq!(
+      bins,
+      vec![
+        make_info(2, 1_u32, 2),
+        make_info(2, 3_u32, 4),
+        make_info(2, 5_u32, 6),
+        make_info(3, 7_u32, 9),
+      ]
+    );
+
+    let latents = vec![8; 11];
+    let bins = run_exclusive_bins_sorted(&latents, 2);
+    assert_eq!(bins, vec![make_info(11, 8_u32, 8),]);
+
+    let latents = vec![0, 0, 0, 1, 2, 2, 2, 2];
+    let bins = run_exclusive_bins_sorted(&latents, 3);
+    assert_eq!(
+      bins,
+      vec![
+        make_info(3, 0_u32, 0),
+        make_info(1, 1_u32, 1),
+        make_info(4, 2_u32, 2),
+      ]
+    );
+
+    let latents = vec![0, 0, 1, 2, 2, 2, 2, 2];
+    let bins = run_exclusive_bins_sorted(&latents, 3);
+    assert_eq!(
+      bins,
+      vec![
+        make_info(2, 0_u32, 0),
+        make_info(1, 1_u32, 1),
+        make_info(5, 2_u32, 2),
+      ]
+    );
+  }
 }
