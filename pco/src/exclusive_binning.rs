@@ -155,7 +155,7 @@ impl<L: Latent> State<L> {
     multiple_bins_available: bool,
   ) {
     let end = start + latents.len();
-    let undershoot_better_than_overshoot = end - 1 - target > target - start;
+    let undershoot_better_than_overshoot = end - target >= target - start;
     let const_bound = Bound::Tight(latents[0]);
     if multiple_bins_available {
       self.finish_incomplete_bin();
@@ -184,11 +184,11 @@ impl<L: Latent> State<L> {
 
     while !latents.is_empty() {
       let target_c_count = c_count_from_bin_idx(next_bin_idx, &precomputed);
-      let target_i = target_c_count - c_count - 1;
-      let target_x = latents[target_i];
+      let target_i = target_c_count - c_count;
+      let target_x = latents[target_i - 1];
 
-      let mut l = target_i;
-      let mut r = target_i + 1;
+      let mut l = target_i - 1;
+      let mut r = target_i;
       while l > 0 && latents[l - 1] == target_x {
         l -= 1;
       }
