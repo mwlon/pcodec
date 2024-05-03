@@ -5,11 +5,6 @@ use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::{bits, sort_utils};
 
-// struct Precomputed {
-//   n: u64,
-//   n_bins_log: Bitlen,
-// }
-//
 #[derive(Debug)]
 struct IncompleteBin<L: Latent> {
   count: usize,
@@ -34,22 +29,16 @@ impl<L: Latent> Bound<L> {
 
 #[derive(Debug)]
 struct RecurseArgs<L: Latent> {
-  // c_count: usize,
   lb: Bound<L>,
   ub: Bound<L>,
-  // min_bin_idx: usize,
-  // max_bin_idx: usize,
   bad_pivot_limit: u32,
 }
 
 impl<L: Latent> RecurseArgs<L> {
   fn new(n_bins_log: Bitlen) -> Self {
     Self {
-      // c_count: 0,
       lb: Bound::Loose(L::ZERO),
       ub: Bound::Loose(L::MAX),
-      // min_bin_idx: 0,
-      // max_bin_idx: 1 << n_bins_log,
       bad_pivot_limit: n_bins_log + 1,
     }
   }
@@ -145,12 +134,16 @@ impl<L: Latent> State<L> {
     self.n_applied += latents.len();
   }
 
-  fn complete_bin(&mut self, bin_idx: usize) {
+  // true if anything was completed
+  fn complete_bin(&mut self, bin_idx: usize) -> bool {
     if let Some(bin) = self.incomplete_bin.as_ref() {
       debug_assert!(bin_idx >= self.next_avail_bin_idx);
       self.next_avail_bin_idx = bin_idx + 1;
       self.dst.push(make_info(bin.count, bin.lower, bin.upper));
       self.incomplete_bin = None;
+      true
+    } else {
+      false
     }
   }
 
@@ -168,16 +161,20 @@ impl<L: Latent> State<L> {
     let start = self.n_applied;
     let mid = start + latents.len() / 2;
     let end = start + latents.len();
-    let mid_bin_idx = self.bin_idx(mid);
+    let mut bin_idx = self.bin_idx(mid);
+    if bin_idx > self.next_avail_bin_idx {
+      // the previous bin idx is available, so we can either emit incomplete
+      // stuff early or
+      let spare_bin_idx = bin_idx - 1;
+      if !self.complete_bin(spare_bin_idx) {
+        bin_idx = spare_bin_idx;
+      }
+    }
 
     let const_bound = Bound::Tight(latents[0]);
-    if mid_bin_idx > self.next_avail_bin_idx {
-      // multiple bins are available
-      self.complete_bin(mid_bin_idx - 1);
-    }
     self.apply_incomplete(latents, const_bound, const_bound);
-    if end >= self.c_count(mid_bin_idx) {
-      self.complete_bin(mid_bin_idx);
+    if end >= self.c_count(bin_idx) {
+      self.complete_bin(bin_idx);
     }
   }
 
