@@ -3,24 +3,18 @@ use std::cmp::{max, min};
 use crate::bin::BinCompressionInfo;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
-use crate::sort_utils::heapsort;
 use crate::{bits, sort_utils};
 
-struct Precomputed {
-  n: u64,
-  n_bins_log: Bitlen,
-}
-
+// struct Precomputed {
+//   n: u64,
+//   n_bins_log: Bitlen,
+// }
+//
 #[derive(Debug)]
 struct IncompleteBin<L: Latent> {
   count: usize,
   lower: L,
   upper: L,
-}
-
-struct State<L: Latent> {
-  incomplete_bin: Option<IncompleteBin<L>>,
-  dst: Vec<BinCompressionInfo<L>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -40,22 +34,22 @@ impl<L: Latent> Bound<L> {
 
 #[derive(Debug)]
 struct RecurseArgs<L: Latent> {
-  c_count: usize,
+  // c_count: usize,
   lb: Bound<L>,
   ub: Bound<L>,
-  min_bin_idx: usize,
-  max_bin_idx: usize,
+  // min_bin_idx: usize,
+  // max_bin_idx: usize,
   bad_pivot_limit: u32,
 }
 
 impl<L: Latent> RecurseArgs<L> {
   fn new(n_bins_log: Bitlen) -> Self {
     Self {
-      c_count: 0,
+      // c_count: 0,
       lb: Bound::Loose(L::ZERO),
       ub: Bound::Loose(L::MAX),
-      min_bin_idx: 0,
-      max_bin_idx: 1 << n_bins_log,
+      // min_bin_idx: 0,
+      // max_bin_idx: 1 << n_bins_log,
       bad_pivot_limit: n_bins_log + 1,
     }
   }
@@ -87,15 +81,6 @@ fn calc_max<L: Latent>(latents: &[L]) -> L {
   max(max0, max1)
 }
 
-fn bin_idx_from_c_count(i: usize, precomputed: &Precomputed) -> usize {
-  // 64-bit arithmetic here because otherwise it would go OOB on 32-bit arches
-  (((i as u64) << precomputed.n_bins_log) / precomputed.n) as usize
-}
-
-fn c_count_from_bin_idx(bin_idx: usize, precomputed: &Precomputed) -> usize {
-  ((bin_idx as u64 * precomputed.n) >> precomputed.n_bins_log) as usize
-}
-
 fn make_info<L: Latent>(count: usize, lower: L, upper: L) -> BinCompressionInfo<L> {
   BinCompressionInfo {
     weight: count as Weight,
@@ -106,15 +91,34 @@ fn make_info<L: Latent>(count: usize, lower: L, upper: L) -> BinCompressionInfo<
   }
 }
 
+struct State<L: Latent> {
+  // immutable
+  n: u64,
+  n_bins: u64,
+  n_bins_log: Bitlen,
+
+  // mutable
+  n_applied: usize,
+  next_avail_bin_idx: usize,
+  incomplete_bin: Option<IncompleteBin<L>>,
+  dst: Vec<BinCompressionInfo<L>>,
+}
+
 impl<L: Latent> State<L> {
-  fn new(n_bins_log: Bitlen) -> Self {
+  fn new(n: usize, n_bins_log: Bitlen) -> Self {
+    let n_bins = 1 << n_bins_log;
     Self {
+      n: n as u64,
+      n_bins,
+      n_bins_log,
+      n_applied: 0,
+      next_avail_bin_idx: 0,
       incomplete_bin: None,
       dst: Vec::with_capacity(1 << n_bins_log),
     }
   }
 
-  fn merge_incomplete(&mut self, latents: &[L], lower: Bound<L>, upper: Bound<L>) {
+  fn apply_incomplete(&mut self, latents: &[L], lower: Bound<L>, upper: Bound<L>) {
     if latents.is_empty() {
       return;
     }
@@ -138,57 +142,56 @@ impl<L: Latent> State<L> {
         upper: tight_ub,
       });
     }
+    self.n_applied += latents.len();
   }
 
-  fn finish_incomplete_bin(&mut self) {
+  fn complete_bin(&mut self, bin_idx: usize) {
     if let Some(bin) = self.incomplete_bin.as_ref() {
+      debug_assert!(bin_idx >= self.next_avail_bin_idx);
+      self.next_avail_bin_idx = bin_idx + 1;
       self.dst.push(make_info(bin.count, bin.lower, bin.upper));
       self.incomplete_bin = None;
     }
   }
 
-  fn apply_constant_run(
-    &mut self,
-    latents: &[L],
-    start: usize,
-    target: usize,
-    multiple_bins_available: bool,
-  ) {
+  fn bin_idx(&self, c_count: usize) -> usize {
+    // 64-bit arithmetic here because otherwise it would go OOB on 32-bit arches
+    (((c_count as u64) << self.n_bins_log) / self.n) as usize
+  }
+
+  fn c_count(&self, bin_idx: usize) -> usize {
+    // ceiling of (bin_idx + 1) * n / n_bins
+    (((bin_idx + 1) as u64 * self.n + self.n_bins - 1) >> self.n_bins_log) as usize
+  }
+
+  fn apply_constant_run(&mut self, latents: &[L]) {
+    let start = self.n_applied;
+    let mid = start + latents.len() / 2;
     let end = start + latents.len();
-    let undershoot_better_than_overshoot = end - target >= target - start;
+    let mid_bin_idx = self.bin_idx(mid);
+
     let const_bound = Bound::Tight(latents[0]);
-    if multiple_bins_available {
-      self.finish_incomplete_bin();
-      self.merge_incomplete(latents, const_bound, const_bound);
-      self.finish_incomplete_bin();
-    } else if undershoot_better_than_overshoot {
-      // better to emit what we have
-      self.finish_incomplete_bin();
-      self.merge_incomplete(latents, const_bound, const_bound);
-    } else {
-      // better to add this constant run first
-      self.merge_incomplete(latents, const_bound, const_bound);
-      self.finish_incomplete_bin();
+    if mid_bin_idx > self.next_avail_bin_idx {
+      // multiple bins are available
+      self.complete_bin(mid_bin_idx - 1);
+    }
+    self.apply_incomplete(latents, const_bound, const_bound);
+    if end >= self.c_count(mid_bin_idx) {
+      self.complete_bin(mid_bin_idx);
     }
   }
 
-  fn apply_latents_sorted(
-    &mut self,
-    mut latents: &[L],
-    precomputed: &Precomputed,
-    args: RecurseArgs<L>,
-  ) {
-    let mut next_bin_idx = args.min_bin_idx + 1;
-    let mut c_count = args.c_count;
-    let mut multiple_bins_available = false;
+  fn apply_sorted(&mut self, mut latents: &[L]) {
+    let mut target_bin_idx = self.next_avail_bin_idx;
 
     while !latents.is_empty() {
-      let target_c_count = c_count_from_bin_idx(next_bin_idx, &precomputed);
-      let target_i = target_c_count - c_count;
-      let target_x = latents[target_i - 1];
+      let target_c_count = self.c_count(target_bin_idx);
+      let target_i = target_c_count - self.n_applied;
 
       let mut l = target_i - 1;
       let mut r = target_i;
+      let target_x = latents[l];
+
       while l > 0 && latents[l - 1] == target_x {
         l -= 1;
       }
@@ -197,59 +200,56 @@ impl<L: Latent> State<L> {
       }
 
       if l > 0 {
-        self.merge_incomplete(
+        self.apply_incomplete(
           &latents[..l],
           Bound::Tight(latents[0]),
           Bound::Tight(latents[l - 1]),
         );
       }
 
-      self.apply_constant_run(
-        &latents[l..r],
-        l,
-        target_i,
-        multiple_bins_available,
-      );
+      self.apply_constant_run(&latents[l..r]);
 
       latents = &latents[r..];
-      c_count += r;
-      let updated_bin_idx = max(
-        next_bin_idx,
-        bin_idx_from_c_count(c_count, &precomputed),
-      ) + 1;
-      multiple_bins_available = updated_bin_idx >= next_bin_idx + 2;
-      next_bin_idx = updated_bin_idx;
+      target_bin_idx = self.bin_idx(self.n_applied);
+      // println!(
+      //   ". {} {} {} {}",
+      //   self.n_applied,
+      //   latents.len(),
+      //   self.next_avail_bin_idx,
+      //   target_bin_idx
+      // );
+      debug_assert!(target_bin_idx >= self.next_avail_bin_idx);
     }
-
-    self.finish_incomplete_bin();
   }
 
-  fn apply_latents_quicksort_recurse(
-    &mut self,
-    latents: &mut [L],
-    precomputed: &Precomputed,
-    args: RecurseArgs<L>,
-  ) {
-    let next_target_c_count = c_count_from_bin_idx(args.min_bin_idx + 1, precomputed);
-    let next_c_count = args.c_count + latents.len();
-    if next_c_count <= next_target_c_count {
-      self.merge_incomplete(latents, args.lb, args.ub);
-      if next_c_count == next_target_c_count {
-        self.finish_incomplete_bin();
+  fn apply_quicksort_recurse(&mut self, latents: &mut [L], args: RecurseArgs<L>) {
+    if latents.is_empty() {
+      return;
+    }
+
+    let target_bin_idx = self.bin_idx(self.n_applied);
+    let target_c_count = self.c_count(target_bin_idx);
+    let end = self.n_applied + latents.len();
+    if end <= target_c_count {
+      // println!(
+      //   "INTRA {} {} {} {}",
+      //   self.n_applied, end, target_bin_idx, target_c_count
+      // );
+      self.apply_incomplete(latents, args.lb, args.ub);
+      if end == target_c_count {
+        self.complete_bin(target_bin_idx);
       }
       return;
     }
 
     let loose_lb = args.lb.loose();
-    if loose_lb == args.ub.loose() {
+    if loose_lb == args.ub.loose() || latents.len() == 1 {
+      // println!(
+      //   "CONST {} {} {:?}",
+      //   self.n_applied, end, loose_lb
+      // );
       // everything is constant
-      let multiple_bins_available = args.max_bin_idx - args.min_bin_idx >= 2;
-      self.apply_constant_run(
-        latents,
-        args.c_count,
-        next_target_c_count,
-        multiple_bins_available,
-      );
+      self.apply_constant_run(latents);
       return;
     }
 
@@ -273,142 +273,104 @@ impl<L: Latent> State<L> {
     if bad_pivot_limit == 0 {
       sort_utils::heapsort(&mut latents[..lhs_count]);
       sort_utils::heapsort(&mut latents[lhs_count..]);
-      self.apply_latents_sorted(latents, precomputed, args);
+      self.apply_sorted(latents);
       return;
     }
 
-    let pivot_c_count = args.c_count + lhs_count;
-    let pivot_bin_idx = bin_idx_from_c_count(pivot_c_count, precomputed);
-
-    self.apply_latents_quicksort_recurse(
+    self.apply_quicksort_recurse(
       &mut latents[..lhs_count],
-      precomputed,
       RecurseArgs {
-        c_count: args.c_count,
         lb: args.lb,
         ub: lhs_ub,
-        min_bin_idx: args.min_bin_idx,
-        max_bin_idx: pivot_bin_idx,
         bad_pivot_limit,
       },
     );
-    self.apply_latents_quicksort_recurse(
+    self.apply_quicksort_recurse(
       &mut latents[lhs_count..],
-      precomputed,
       RecurseArgs {
-        c_count: args.c_count + lhs_count,
         lb: rhs_lb,
         ub: args.ub,
-        min_bin_idx: pivot_bin_idx,
-        max_bin_idx: args.max_bin_idx,
         bad_pivot_limit,
       },
     );
   }
 }
 
-pub fn exclusive_bins<L: Latent>(
-  latents: &mut [L],
-  n_bins_log: Bitlen,
-) -> Vec<BinCompressionInfo<L>> {
+pub fn histogram<L: Latent>(latents: &mut [L], n_bins_log: Bitlen) -> Vec<BinCompressionInfo<L>> {
   if latents.is_empty() {
     return vec![];
   }
 
-  let precomputed = Precomputed {
-    n: latents.len() as u64,
-    n_bins_log,
-  };
-
-  let mut state = State::new(n_bins_log);
-  // let tight_lower = calc_min(latents);
-  // let mut is_sorted = true;
-  // for (i, &x) in latents.iter().enumerate().skip(1) {
-  //   if latents[i - 1] > x {
-  //     is_sorted = false;
-  //     break;
-  //   }
-  // }
-  // if is_sorted {
-  //   state.apply_latents_sorted(
-  //     latents,
-  //     &precomputed,
-  //     RecurseArgs::new(n_bins_log),
-  //   )
-  // } else {
-  state.apply_latents_quicksort_recurse(
-    latents,
-    &precomputed,
-    RecurseArgs::new(n_bins_log),
-  );
+  let mut state = State::new(latents.len(), n_bins_log);
+  state.apply_quicksort_recurse(latents, RecurseArgs::new(n_bins_log));
   // }
   state.dst
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
   use rand::seq::SliceRandom;
   use rand::Rng;
-  use rand_xoshiro::rand_core::{RngCore, SeedableRng};
+  use rand_xoshiro::rand_core::SeedableRng;
   use rand_xoshiro::Xoroshiro128PlusPlus;
 
-  fn run_exclusive_bins_sorted(
-    latents: &[u32],
-    n_bins_log: Bitlen,
-  ) -> Vec<BinCompressionInfo<u32>> {
-    let mut state = State::<u32>::new(n_bins_log);
-    let precomputed = Precomputed {
-      n: latents.len() as u64,
-      n_bins_log,
-    };
-    let args = RecurseArgs::new(n_bins_log);
-    state.apply_latents_sorted(latents, &precomputed, args);
+  use super::*;
+
+  fn run_sorted(latents: &[u32], n_bins_log: Bitlen) -> Vec<BinCompressionInfo<u32>> {
+    let mut state = State::<u32>::new(latents.len(), n_bins_log);
+    state.apply_sorted(latents);
     state.dst
   }
 
-  fn run_exclusive_bins_quicksort(
-    latents: &mut [u32],
-    n_bins_log: Bitlen,
-  ) -> Vec<BinCompressionInfo<u32>> {
-    let mut state = State::<u32>::new(n_bins_log);
-    let precomputed = Precomputed {
-      n: latents.len() as u64,
-      n_bins_log,
-    };
+  fn run_quicksort(latents: &mut [u32], n_bins_log: Bitlen) -> Vec<BinCompressionInfo<u32>> {
+    let mut state = State::<u32>::new(latents.len(), n_bins_log);
     let args = RecurseArgs::new(n_bins_log);
-    state.apply_latents_quicksort_recurse(latents, &precomputed, args);
+    state.apply_quicksort_recurse(latents, args);
     state.dst
   }
 
   #[test]
-  fn test_exclusive_bins_sorted() {
+  fn test_bin_idx_and_c_count() {
+    let state = State::<u32>::new(41, 2);
+    assert_eq!(state.bin_idx(0), 0);
+    assert_eq!(state.bin_idx(10), 0);
+    assert_eq!(state.bin_idx(11), 1);
+    assert_eq!(state.c_count(0), 11);
+
+    assert_eq!(state.bin_idx(30), 2);
+    assert_eq!(state.bin_idx(31), 3);
+    assert_eq!(state.bin_idx(40), 3);
+    assert_eq!(state.c_count(3), 41);
+  }
+
+  #[test]
+  fn test_histogram_sorted() {
     let latents = vec![];
-    let bins = run_exclusive_bins_sorted(&latents, 2);
+    let bins = run_sorted(&latents, 2);
     assert_eq!(bins, vec![]);
 
     let latents = vec![8];
-    let bins = run_exclusive_bins_sorted(&latents, 0);
+    let bins = run_sorted(&latents, 0);
     assert_eq!(bins, vec![make_info(1, 8_u32, 8)],);
 
     let latents = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let bins = run_exclusive_bins_sorted(&latents, 2);
+    let bins = run_sorted(&latents, 2);
     assert_eq!(
       bins,
       vec![
-        make_info(2, 1_u32, 2),
-        make_info(2, 3_u32, 4),
-        make_info(2, 5_u32, 6),
-        make_info(3, 7_u32, 9),
+        make_info(3, 1_u32, 3),
+        make_info(2, 4_u32, 5),
+        make_info(2, 6_u32, 7),
+        make_info(2, 8_u32, 9),
       ]
     );
 
     let latents = vec![8; 11];
-    let bins = run_exclusive_bins_sorted(&latents, 2);
+    let bins = run_sorted(&latents, 2);
     assert_eq!(bins, vec![make_info(11, 8_u32, 8),]);
 
     let latents = vec![0, 0, 0, 1, 2, 2, 2, 2];
-    let bins = run_exclusive_bins_sorted(&latents, 3);
+    let bins = run_sorted(&latents, 3);
     assert_eq!(
       bins,
       vec![
@@ -419,7 +381,7 @@ mod tests {
     );
 
     let latents = vec![0, 0, 1, 2, 2, 2, 2, 2];
-    let bins = run_exclusive_bins_sorted(&latents, 3);
+    let bins = run_sorted(&latents, 3);
     assert_eq!(
       bins,
       vec![
@@ -431,13 +393,13 @@ mod tests {
   }
 
   #[test]
-  fn test_exclusive_bins_quicksort() {
+  fn test_histogram_quicksort() {
     let mut latents = vec![];
-    let bins = run_exclusive_bins_quicksort(&mut latents, 2);
+    let bins = run_quicksort(&mut latents, 2);
     assert_eq!(bins, vec![]);
 
     let mut latents = vec![8];
-    let bins = run_exclusive_bins_quicksort(&mut latents, 0);
+    let bins = run_quicksort(&mut latents, 0);
     assert_eq!(bins, vec![make_info(1, 8_u32, 8)],);
 
     for seed in 0..16 {
@@ -445,7 +407,7 @@ mod tests {
       let mut latents = (0..100).collect::<Vec<_>>();
       latents.shuffle(&mut rng);
 
-      let bins = run_exclusive_bins_quicksort(&mut latents, 2);
+      let bins = run_quicksort(&mut latents, 2);
       assert_eq!(
         bins,
         vec![
@@ -459,17 +421,26 @@ mod tests {
       let mut latents = vec![0; 100];
       latents[0] = 1;
       latents.shuffle(&mut rng);
-      let bins = run_exclusive_bins_quicksort(&mut latents, 2);
+      let bins = run_quicksort(&mut latents, 2);
       assert_eq!(
         bins,
         vec![make_info(99, 0_u32, 0), make_info(1, 1_u32, 1),]
+      );
+
+      let mut latents = vec![1; 100];
+      latents[0] = 0;
+      latents.shuffle(&mut rng);
+      let bins = run_quicksort(&mut latents, 2);
+      assert_eq!(
+        bins,
+        vec![make_info(1, 0_u32, 0), make_info(99, 1_u32, 1),]
       );
 
       let mut latents = [5; 100];
       latents[0] = 3;
       latents[1..3].fill(7);
       latents.shuffle(&mut rng);
-      let bins = run_exclusive_bins_quicksort(&mut latents, 2);
+      let bins = run_quicksort(&mut latents, 2);
       assert_eq!(
         bins,
         vec![
@@ -478,7 +449,7 @@ mod tests {
           make_info(2, 7_u32, 7),
         ]
       );
-      let bins = run_exclusive_bins_quicksort(&mut latents, 1);
+      let bins = run_quicksort(&mut latents, 1);
       assert_eq!(
         bins,
         vec![make_info(98, 3_u32, 5), make_info(2, 7_u32, 7),]
@@ -488,7 +459,7 @@ mod tests {
       latents[0..2].fill(3);
       latents[2] = 7;
       latents.shuffle(&mut rng);
-      let bins = run_exclusive_bins_quicksort(&mut latents, 1);
+      let bins = run_quicksort(&mut latents, 1);
       assert_eq!(
         bins,
         vec![make_info(2, 3_u32, 3), make_info(98, 5_u32, 7),]

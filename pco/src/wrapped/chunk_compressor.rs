@@ -12,7 +12,7 @@ use crate::constants::{
 use crate::data_types::{Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
-use crate::exclusive_binning::exclusive_bins;
+use crate::histograms::histogram;
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
 use crate::read_write_uint::ReadWriteUint;
@@ -60,7 +60,7 @@ fn train_infos<L: Latent>(
 
   let n_latents = latents.len();
   let unoptimized_bins = {
-    exclusive_bins(&mut latents, unoptimized_bins_log as Bitlen)
+    histogram(&mut latents, unoptimized_bins_log as Bitlen)
     // let mut sorted = latents;
     // sorted.sort_unstable();
     // choose_unoptimized_bins(&sorted, unoptimized_bins_log)
