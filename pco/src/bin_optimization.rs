@@ -2,6 +2,7 @@ use crate::ans::Symbol;
 use crate::bin::BinCompressionInfo;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
+use crate::histograms::HistogramBin;
 use crate::{bits, chunk_meta};
 
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
@@ -25,14 +26,14 @@ fn bin_cost<L: Latent>(
 // This algorithm is exactly optimal, assuming our cost estimates (measured in
 // total bit size) are correct.
 fn choose_optimized_partitioning<L: Latent>(
-  bins: &[BinCompressionInfo<L>],
+  bins: &[HistogramBin<L>],
   ans_size_log: Bitlen,
 ) -> Vec<(usize, usize)> {
   let mut c = 0;
   let mut cum_count = Vec::with_capacity(bins.len() + 1);
   cum_count.push(0);
   for bin in bins {
-    c += bin.weight;
+    c += bin.count as u32;
     cum_count.push(c);
   }
   let total_count = c;
@@ -93,15 +94,15 @@ fn choose_optimized_partitioning<L: Latent>(
 }
 
 pub fn optimize_bins<L: Latent>(
-  bins: &[BinCompressionInfo<L>],
+  bins: &[HistogramBin<L>],
   ans_size_log: Bitlen,
 ) -> Vec<BinCompressionInfo<L>> {
   let partitioning = choose_optimized_partitioning(bins, ans_size_log);
   let mut res = Vec::with_capacity(partitioning.len());
   for (symbol, &(j, i)) in partitioning.iter().enumerate() {
-    let count = bins.iter().take(i + 1).skip(j).map(|bin| bin.weight).sum();
+    let count: usize = bins.iter().take(i + 1).skip(j).map(|bin| bin.count).sum();
     let optimized_bin = BinCompressionInfo {
-      weight: count,
+      weight: count as Weight,
       lower: bins[j].lower,
       upper: bins[i].upper,
       symbol: symbol as Symbol,
@@ -116,26 +117,24 @@ pub fn optimize_bins<L: Latent>(
 mod tests {
   use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
-  use crate::constants::Weight;
+  use crate::histograms::HistogramBin;
 
-  fn make_info(weight: Weight, lower: u32, upper: u32) -> BinCompressionInfo<u32> {
-    BinCompressionInfo {
-      weight,
+  fn make_bin(count: usize, lower: u32, upper: u32) -> HistogramBin<u32> {
+    HistogramBin {
+      count,
       lower,
       upper,
-      offset_bits: 0, // not used
-      symbol: 0,      // not used
     }
   }
 
   #[test]
   fn test_bin_optimization() {
     let infos = vec![
-      make_info(100, 1, 16),  // far enough from the others to stay independent
-      make_info(100, 33, 48), // same density as next bin, gets combined
-      make_info(100, 49, 64),
-      make_info(100, 65, 74), // same density as next bin (but different from previous ones)
-      make_info(50, 75, 79),
+      make_bin(100, 1, 16),  // far enough from the others to stay independent
+      make_bin(100, 33, 48), // same density as next bin, gets combined
+      make_bin(100, 49, 64),
+      make_bin(100, 65, 74), // same density as next bin (but different from previous ones)
+      make_bin(50, 75, 79),
     ];
     let optimized = optimize_bins(&infos, 10);
     assert_eq!(
@@ -171,7 +170,7 @@ mod tests {
     // here the 2nd bin would be covered by previous bin (which takes 8 offset
     // bits), but it's disadvantageous to combine them because the 2nd bin has
     // so much higher density
-    let infos = vec![make_info(1000, 0, 150), make_info(1000, 200, 200)];
+    let infos = vec![make_bin(1000, 0, 150), make_bin(1000, 200, 200)];
     let optimized = optimize_bins(&infos, 10);
     assert_eq!(
       optimized,

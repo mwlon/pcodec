@@ -59,12 +59,7 @@ fn train_infos<L: Latent>(
   }
 
   let n_latents = latents.len();
-  let unoptimized_bins = {
-    histogram(&mut latents, unoptimized_bins_log as Bitlen)
-    // let mut sorted = latents;
-    // sorted.sort_unstable();
-    // choose_unoptimized_bins(&sorted, unoptimized_bins_log)
-  };
+  let unoptimized_bins = histogram(&mut latents, unoptimized_bins_log as Bitlen);
 
   let n_log_ceil = if n_latents <= 1 {
     0

@@ -1,16 +1,8 @@
 use std::cmp::{max, min};
 
-use crate::bin::BinCompressionInfo;
-use crate::constants::{Bitlen, Weight};
+use crate::constants::Bitlen;
 use crate::data_types::Latent;
-use crate::{bits, sort_utils};
-
-#[derive(Debug)]
-struct IncompleteBin<L: Latent> {
-  count: usize,
-  lower: L,
-  upper: L,
-}
+use crate::sort_utils;
 
 #[derive(Clone, Copy, Debug)]
 enum Bound<L: Latent> {
@@ -44,6 +36,13 @@ impl<L: Latent> RecurseArgs<L> {
   }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct HistogramBin<L: Latent> {
+  pub count: usize,
+  pub lower: L,
+  pub upper: L,
+}
+
 fn calc_min<L: Latent>(latents: &[L]) -> L {
   let mut min0 = L::MAX;
   let mut min1 = L::MAX;
@@ -70,13 +69,11 @@ fn calc_max<L: Latent>(latents: &[L]) -> L {
   max(max0, max1)
 }
 
-fn make_info<L: Latent>(count: usize, lower: L, upper: L) -> BinCompressionInfo<L> {
-  BinCompressionInfo {
-    weight: count as Weight,
+fn make_bin<L: Latent>(count: usize, lower: L, upper: L) -> HistogramBin<L> {
+  HistogramBin {
+    count,
     lower,
     upper,
-    offset_bits: bits::bits_to_encode_offset(upper - lower),
-    ..Default::default()
   }
 }
 
@@ -89,8 +86,8 @@ struct State<L: Latent> {
   // mutable
   n_applied: usize,
   next_avail_bin_idx: usize,
-  incomplete_bin: Option<IncompleteBin<L>>,
-  dst: Vec<BinCompressionInfo<L>>,
+  incomplete_bin: Option<HistogramBin<L>>,
+  dst: Vec<HistogramBin<L>>,
 }
 
 impl<L: Latent> State<L> {
@@ -125,7 +122,7 @@ impl<L: Latent> State<L> {
         Bound::Loose(_) => calc_min(latents),
         Bound::Tight(lower) => lower,
       };
-      self.incomplete_bin = Some(IncompleteBin {
+      self.incomplete_bin = Some(HistogramBin {
         count: latents.len(),
         lower: tight_lb,
         upper: tight_ub,
@@ -139,7 +136,7 @@ impl<L: Latent> State<L> {
     if let Some(bin) = self.incomplete_bin.as_ref() {
       debug_assert!(bin_idx >= self.next_avail_bin_idx);
       self.next_avail_bin_idx = bin_idx + 1;
-      self.dst.push(make_info(bin.count, bin.lower, bin.upper));
+      self.dst.push(make_bin(bin.count, bin.lower, bin.upper));
       self.incomplete_bin = None;
       true
     } else {
@@ -293,7 +290,7 @@ impl<L: Latent> State<L> {
   }
 }
 
-pub fn histogram<L: Latent>(latents: &mut [L], n_bins_log: Bitlen) -> Vec<BinCompressionInfo<L>> {
+pub fn histogram<L: Latent>(latents: &mut [L], n_bins_log: Bitlen) -> Vec<HistogramBin<L>> {
   if latents.is_empty() {
     return vec![];
   }
@@ -313,13 +310,13 @@ mod tests {
 
   use super::*;
 
-  fn run_sorted(latents: &[u32], n_bins_log: Bitlen) -> Vec<BinCompressionInfo<u32>> {
+  fn run_sorted(latents: &[u32], n_bins_log: Bitlen) -> Vec<HistogramBin<u32>> {
     let mut state = State::<u32>::new(latents.len(), n_bins_log);
     state.apply_sorted(latents);
     state.dst
   }
 
-  fn run_quicksort(latents: &mut [u32], n_bins_log: Bitlen) -> Vec<BinCompressionInfo<u32>> {
+  fn run_quicksort(latents: &mut [u32], n_bins_log: Bitlen) -> Vec<HistogramBin<u32>> {
     let mut state = State::<u32>::new(latents.len(), n_bins_log);
     let args = RecurseArgs::new(n_bins_log);
     state.apply_quicksort_recurse(latents, args);
@@ -348,32 +345,32 @@ mod tests {
 
     let latents = vec![8];
     let bins = run_sorted(&latents, 0);
-    assert_eq!(bins, vec![make_info(1, 8_u32, 8)],);
+    assert_eq!(bins, vec![make_bin(1, 8_u32, 8)],);
 
     let latents = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
     let bins = run_sorted(&latents, 2);
     assert_eq!(
       bins,
       vec![
-        make_info(3, 1_u32, 3),
-        make_info(2, 4_u32, 5),
-        make_info(2, 6_u32, 7),
-        make_info(2, 8_u32, 9),
+        make_bin(3, 1_u32, 3),
+        make_bin(2, 4_u32, 5),
+        make_bin(2, 6_u32, 7),
+        make_bin(2, 8_u32, 9),
       ]
     );
 
     let latents = vec![8; 11];
     let bins = run_sorted(&latents, 2);
-    assert_eq!(bins, vec![make_info(11, 8_u32, 8),]);
+    assert_eq!(bins, vec![make_bin(11, 8_u32, 8),]);
 
     let latents = vec![0, 0, 0, 1, 2, 2, 2, 2];
     let bins = run_sorted(&latents, 3);
     assert_eq!(
       bins,
       vec![
-        make_info(3, 0_u32, 0),
-        make_info(1, 1_u32, 1),
-        make_info(4, 2_u32, 2),
+        make_bin(3, 0_u32, 0),
+        make_bin(1, 1_u32, 1),
+        make_bin(4, 2_u32, 2),
       ]
     );
 
@@ -382,9 +379,9 @@ mod tests {
     assert_eq!(
       bins,
       vec![
-        make_info(2, 0_u32, 0),
-        make_info(1, 1_u32, 1),
-        make_info(5, 2_u32, 2),
+        make_bin(2, 0_u32, 0),
+        make_bin(1, 1_u32, 1),
+        make_bin(5, 2_u32, 2),
       ]
     );
   }
@@ -397,7 +394,7 @@ mod tests {
 
     let mut latents = vec![8];
     let bins = run_quicksort(&mut latents, 0);
-    assert_eq!(bins, vec![make_info(1, 8_u32, 8)],);
+    assert_eq!(bins, vec![make_bin(1, 8_u32, 8)],);
 
     for seed in 0..16 {
       let mut rng = Xoroshiro128PlusPlus::seed_from_u64(seed);
@@ -408,10 +405,10 @@ mod tests {
       assert_eq!(
         bins,
         vec![
-          make_info(25, 0_u32, 24),
-          make_info(25, 25_u32, 49),
-          make_info(25, 50_u32, 74),
-          make_info(25, 75_u32, 99),
+          make_bin(25, 0_u32, 24),
+          make_bin(25, 25_u32, 49),
+          make_bin(25, 50_u32, 74),
+          make_bin(25, 75_u32, 99),
         ]
       );
 
@@ -421,7 +418,7 @@ mod tests {
       let bins = run_quicksort(&mut latents, 2);
       assert_eq!(
         bins,
-        vec![make_info(99, 0_u32, 0), make_info(1, 1_u32, 1),]
+        vec![make_bin(99, 0_u32, 0), make_bin(1, 1_u32, 1),]
       );
 
       let mut latents = vec![1; 100];
@@ -430,7 +427,7 @@ mod tests {
       let bins = run_quicksort(&mut latents, 2);
       assert_eq!(
         bins,
-        vec![make_info(1, 0_u32, 0), make_info(99, 1_u32, 1),]
+        vec![make_bin(1, 0_u32, 0), make_bin(99, 1_u32, 1),]
       );
 
       let mut latents = [5; 100];
@@ -441,15 +438,15 @@ mod tests {
       assert_eq!(
         bins,
         vec![
-          make_info(1, 3_u32, 3),
-          make_info(97, 5_u32, 5),
-          make_info(2, 7_u32, 7),
+          make_bin(1, 3_u32, 3),
+          make_bin(97, 5_u32, 5),
+          make_bin(2, 7_u32, 7),
         ]
       );
       let bins = run_quicksort(&mut latents, 1);
       assert_eq!(
         bins,
-        vec![make_info(98, 3_u32, 5), make_info(2, 7_u32, 7),]
+        vec![make_bin(98, 3_u32, 5), make_bin(2, 7_u32, 7),]
       );
 
       let mut latents = [5; 100];
@@ -459,7 +456,7 @@ mod tests {
       let bins = run_quicksort(&mut latents, 1);
       assert_eq!(
         bins,
-        vec![make_info(2, 3_u32, 3), make_info(98, 5_u32, 7),]
+        vec![make_bin(2, 3_u32, 3), make_bin(98, 5_u32, 7),]
       );
     }
   }
