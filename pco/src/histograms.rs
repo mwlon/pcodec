@@ -205,13 +205,6 @@ impl<L: Latent> State<L> {
 
       latents = &latents[r..];
       target_bin_idx = self.bin_idx(self.n_applied);
-      // println!(
-      //   ". {} {} {} {}",
-      //   self.n_applied,
-      //   latents.len(),
-      //   self.next_avail_bin_idx,
-      //   target_bin_idx
-      // );
       debug_assert!(target_bin_idx >= self.next_avail_bin_idx);
     }
   }
@@ -225,10 +218,6 @@ impl<L: Latent> State<L> {
     let target_c_count = self.c_count(target_bin_idx);
     let end = self.n_applied + latents.len();
     if end <= target_c_count {
-      // println!(
-      //   "INTRA {} {} {} {}",
-      //   self.n_applied, end, target_bin_idx, target_c_count
-      // );
       self.apply_incomplete(latents, args.lb, args.ub);
       if end == target_c_count {
         self.complete_bin(target_bin_idx);
@@ -238,16 +227,11 @@ impl<L: Latent> State<L> {
 
     let loose_lb = args.lb.loose();
     if loose_lb == args.ub.loose() || latents.len() == 1 {
-      // println!(
-      //   "CONST {} {} {:?}",
-      //   self.n_applied, end, loose_lb
-      // );
-      // everything is constant
       self.apply_constant_run(latents);
       return;
     }
 
-    let (tentative_pivot, _is_likely_sorted) = sort_utils::choose_pivot(latents);
+    let tentative_pivot = sort_utils::choose_pivot(latents);
     let (pivot, lhs_ub, rhs_lb) = if tentative_pivot > loose_lb {
       (
         tentative_pivot,
@@ -297,14 +281,12 @@ pub fn histogram<L: Latent>(latents: &mut [L], n_bins_log: Bitlen) -> Vec<Histog
 
   let mut state = State::new(latents.len(), n_bins_log);
   state.apply_quicksort_recurse(latents, RecurseArgs::new(n_bins_log));
-  // }
   state.dst
 }
 
 #[cfg(test)]
 mod tests {
   use rand::seq::SliceRandom;
-  use rand::Rng;
   use rand_xoshiro::rand_core::SeedableRng;
   use rand_xoshiro::Xoroshiro128PlusPlus;
 

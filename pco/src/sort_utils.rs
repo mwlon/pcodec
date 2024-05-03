@@ -4,12 +4,10 @@ use std::{cmp, mem, ptr};
 
 use crate::data_types::Latent;
 
-pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
+pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> L {
   // Minimum length to choose the median-of-medians method.
   // Shorter slices use the simple median-of-three method.
   const SHORTEST_MEDIAN_OF_MEDIANS: usize = 50;
-  // Maximum number of swaps that can be performed in this function.
-  const MAX_SWAPS: usize = 4 * 3;
 
   let len = latents.len();
 
@@ -17,9 +15,6 @@ pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
   let mut a = len / 4;
   let mut b = len / 2;
   let mut c = (len * 3) / 4;
-
-  // Counts the total number of swaps we are about to perform while sorting indices.
-  let mut swaps = 0;
 
   if len >= 8 {
     // Swaps indices so that `v[a] <= v[b]`.
@@ -29,15 +24,14 @@ pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
     // pointer, which in turn means the calls to `sort2` are done with valid
     // references. Thus the `v.get_unchecked` calls are safe, as is the `ptr::swap`
     // call.
-    let mut sort2 = |a: &mut usize, b: &mut usize| unsafe {
+    let sort2 = |a: &mut usize, b: &mut usize| unsafe {
       if *latents.get_unchecked(*b) < *latents.get_unchecked(*a) {
         ptr::swap(a, b);
-        // swaps += 1;
       }
     };
 
     // Swaps indices so that `v[a] <= v[b] <= v[c]`.
-    let mut sort3 = |a: &mut usize, b: &mut usize, c: &mut usize| {
+    let sort3 = |a: &mut usize, b: &mut usize, c: &mut usize| {
       sort2(a, b);
       sort2(b, c);
       sort2(a, b);
@@ -45,7 +39,7 @@ pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
 
     if len >= SHORTEST_MEDIAN_OF_MEDIANS {
       // Finds the median of `v[a - 1], v[a], v[a + 1]` and stores the index into `a`.
-      let mut sort_adjacent = |a: &mut usize| {
+      let sort_adjacent = |a: &mut usize| {
         let tmp = *a;
         sort3(&mut (tmp - 1), a, &mut (tmp + 1));
       };
@@ -60,15 +54,7 @@ pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> (L, bool) {
     sort3(&mut a, &mut b, &mut c);
   }
 
-  // if swaps < MAX_SWAPS {
-  (latents[b], swaps == 0)
-  // } else {
-  //   println!("REV {}", latents.len());
-  //   // The maximum number of swaps was performed. Chances are the slice is descending or mostly
-  //   // descending, so reversing will probably help sort it faster.
-  //   latents.reverse();
-  //   (latents[len - 1 - b], true)
-  // }
+  latents[b]
 }
 
 fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
@@ -322,6 +308,7 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
 }
 
 // returns (count on left side of pivot, was_bad_pivot)
+#[inline(never)]
 pub fn partition<L: Latent>(latents: &mut [L], pivot: L) -> (usize, bool) {
   // Find the first pair of out-of-order elements.
   let mut l = 0;
