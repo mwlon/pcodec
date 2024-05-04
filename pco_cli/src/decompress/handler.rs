@@ -15,8 +15,8 @@ use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::FULL_BATCH_N;
 
 use crate::core_handlers::CoreHandlerImpl;
+use crate::decompress::DecompressOpt;
 use crate::decompress::OutputKind::*;
-use crate::decompress::{DecompressOpt, OutputKind};
 use crate::dtypes::PcoNumberLike;
 
 pub trait DecompressHandler {
@@ -66,8 +66,8 @@ impl<T: PcoNumberLike> DecompressHandler for CoreHandlerImpl<T> {
 fn new_column_writer<T: PcoNumberLike>(opt: &DecompressOpt) -> Result<Box<dyn ColumnWriter<T>>> {
   // eventually we'll likely have a txt writer and a parquet writer, etc.
   let writer: Box<dyn ColumnWriter<T>> = match opt.output {
-    Txt => Box::new(TxtWriter::default()),
-    Binary => Box::new(BinaryWriter::default()),
+    Txt => Box::<TxtWriter<T>>::default(),
+    Binary => Box::<BinaryWriter<T>>::default(),
   };
   Ok(writer)
 }
@@ -112,7 +112,7 @@ impl<T: PcoNumberLike> ColumnWriter<T> for BinaryWriter<T> {
   fn write(&mut self, arrow_natives: Vec<<T::Arrow as ArrowPrimitiveType>::Native>) -> Result<()> {
     let mut out = std::io::stdout();
     for &x in &arrow_natives {
-      out.write(&T::arrow_native_to_bytes(x))?;
+      out.write_all(&T::arrow_native_to_bytes(x))?;
     }
     Ok(())
   }

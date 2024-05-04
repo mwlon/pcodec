@@ -10,7 +10,7 @@ use crate::{core_handlers, utils};
 pub mod handler;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-enum OutputKind {
+pub enum OutputKind {
   Txt,
   Binary,
 }
