@@ -89,16 +89,10 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
   let mut end_r = ptr::null_mut();
   let mut offsets_r = [MaybeUninit::<u8>::uninit(); BLOCK];
 
-  // FIXME: When we get VLAs, try creating one array of length `min(v.len(), 2 * BLOCK)` rather
-  // than two fixed-size arrays of length `BLOCK`. VLAs might be more cache-efficient.
-
   // Returns the number of elements between pointers `l` (inclusive) and `r` (exclusive).
   fn width<T>(l: *mut T, r: *mut T) -> usize {
     assert!(mem::size_of::<T>() > 0);
-    // FIXME: this should *likely* use `offset_from`, but more
-    // investigation is needed (including running tests in miri).
     unsafe { r.offset_from(l) as usize }
-    // (r.addr() - l.addr()) / mem::size_of::<T>()
   }
 
   loop {
@@ -133,7 +127,6 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
     if start_l == end_l {
       // Trace `block_l` elements from the left side.
       start_l = offsets_l.as_mut_ptr().cast();
-      // start_l = MaybeUninit::slice_as_mut_ptr(&mut offsets_l);
       end_l = start_l;
       let mut elem = l;
 
@@ -160,7 +153,6 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
     if start_r == end_r {
       // Trace `block_r` elements from the right side.
       start_r = offsets_r.as_mut_ptr().cast();
-      // start_r = MaybeUninit::slice_as_mut_ptr(&mut offsets_r);
       end_r = start_r;
       let mut elem = r;
 
