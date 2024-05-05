@@ -1,6 +1,17 @@
-// TODO attribution for Rust unstable sort code
+// The bulk of this file was originally copied from Rust's sort.rs,
+// Licensed under Apache 2, i.e.
+// https://github.com/rust-lang/rust/blob/02f7806ecd641d67c8f046b073323c7e176ee6d2/library/core/src/slice/sort.rs
+// Modifications have been applied.
+// Original Rust notice regarding their use of PDQ sort:
+//   This module contains a sorting algorithm based on Orson Peters' pattern-defeating quicksort,
+//   published at: <https://github.com/orlp/pdqsort>
+//
+// It was necessary to copy much of the code, since the sort_unstable API
+// (understandably) does not expose the pivot function and such, but we want to
+// drive pivoting from a faster histogram algorithm rather than completing a
+// full sort.
 use std::mem::MaybeUninit;
-use std::{cmp, mem, ptr};
+use std::{cmp, ptr};
 
 use crate::data_types::Latent;
 
@@ -57,9 +68,59 @@ pub fn choose_pivot<L: Latent>(latents: &mut [L]) -> L {
   latents[b]
 }
 
+// Scatters some elements around in an attempt to break patterns that might cause imbalanced
+// partitions in quicksort.
+#[cold]
+pub fn break_patterns<L>(v: &mut [L]) {
+  let len = v.len();
+  if len >= 8 {
+    let mut seed = len;
+    let mut gen_usize = || {
+      // Pseudorandom number generator from the "Xorshift RNGs" paper by George Marsaglia.
+      if usize::BITS <= 32 {
+        let mut r = seed as u32;
+        r ^= r << 13;
+        r ^= r >> 17;
+        r ^= r << 5;
+        seed = r as usize;
+        seed
+      } else {
+        let mut r = seed as u64;
+        r ^= r << 13;
+        r ^= r >> 7;
+        r ^= r << 17;
+        seed = r as usize;
+        seed
+      }
+    };
+
+    // Take random numbers modulo this number.
+    // The number fits into `usize` because `len` is not greater than `isize::MAX`.
+    let modulus = len.next_power_of_two();
+
+    // Some pivot candidates will be in the nearby of this index. Let's randomize them.
+    let pos = len / 4 * 2;
+
+    for i in 0..3 {
+      // Generate a random number modulo `len`. However, in order to avoid costly operations
+      // we first take it modulo a power of two, and then decrease by `len` until it fits
+      // into the range `[0, len - 1]`.
+      let mut other = gen_usize() & (modulus - 1);
+
+      // `other` is guaranteed to be less than `2 * len`.
+      if other >= len {
+        other -= len;
+      }
+
+      v.swap(pos - 1 + i, other);
+    }
+  }
+}
+
 fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
   // Number of elements in a typical block.
-  const BLOCK: usize = 256;
+  // This cannot exceed 256 due to how we store certain offsets in u8's
+  const BLOCK_N: usize = 256;
 
   // The partitioning algorithm repeats the following steps until completion:
   //
@@ -76,35 +137,34 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
 
   // The current block on the left side (from `l` to `l.add(block_l)`).
   let mut l = latents.as_mut_ptr();
-  let mut block_l = BLOCK;
+  let mut block_l = BLOCK_N;
   let mut start_l = ptr::null_mut();
   let mut end_l = ptr::null_mut();
-  let mut offsets_l = [MaybeUninit::<u8>::uninit(); BLOCK];
+  let mut offsets_l = [MaybeUninit::<u8>::uninit(); BLOCK_N];
 
   // The current block on the right side (from `r.sub(block_r)` to `r`).
   // SAFETY: The documentation for .add() specifically mention that `vec.as_ptr().add(vec.len())` is always safe
   let mut r = unsafe { l.add(latents.len()) };
-  let mut block_r = BLOCK;
+  let mut block_r = BLOCK_N;
   let mut start_r = ptr::null_mut();
   let mut end_r = ptr::null_mut();
-  let mut offsets_r = [MaybeUninit::<u8>::uninit(); BLOCK];
+  let mut offsets_r = [MaybeUninit::<u8>::uninit(); BLOCK_N];
 
   // Returns the number of elements between pointers `l` (inclusive) and `r` (exclusive).
   fn width<T>(l: *mut T, r: *mut T) -> usize {
-    assert!(mem::size_of::<T>() > 0);
     unsafe { r.offset_from(l) as usize }
   }
 
   loop {
     // We are done with partitioning block-by-block when `l` and `r` get very close. Then we do
     // some patch-up work in order to partition the remaining elements in between.
-    let is_done = width(l, r) <= 2 * BLOCK;
+    let is_done = width(l, r) <= 2 * BLOCK_N;
 
     if is_done {
       // Number of remaining elements (still not compared to the pivot).
       let mut rem = width(l, r);
       if start_l < end_l || start_r < end_r {
-        rem -= BLOCK;
+        rem -= BLOCK_N;
       }
 
       // Adjust block sizes so that the left and right block don't overlap, but get perfectly
@@ -120,7 +180,7 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
         block_l = rem / 2;
         block_r = rem - block_l;
       }
-      debug_assert!(block_l <= BLOCK && block_r <= BLOCK);
+      debug_assert!(block_l <= BLOCK_N && block_r <= BLOCK_N);
       debug_assert!(width(l, r) == block_l + block_r);
     }
 
@@ -143,7 +203,8 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
         //        However, `elem` was initially the begin pointer to the slice which is always valid.
         unsafe {
           // Branchless comparison.
-          *end_l = i as u8;
+          // This is where things break if BLOCK_SIZE > 256
+          *end_l = i as u8; // could be as much as BLOCK_SIZE - 1
           end_l = end_l.add((*elem >= pivot) as usize);
           elem = elem.add(1);
         }

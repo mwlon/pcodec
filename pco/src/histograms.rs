@@ -175,6 +175,7 @@ impl<L: Latent> State<L> {
     }
   }
 
+  #[inline(never)]
   fn apply_sorted(&mut self, mut latents: &[L]) {
     let mut target_bin_idx = self.next_avail_bin_idx;
 
@@ -246,17 +247,24 @@ impl<L: Latent> State<L> {
       )
     };
     let (lhs_count, was_bad_pivot) = sort_utils::partition(latents, pivot);
-    let bad_pivot_limit = args.bad_pivot_limit - (was_bad_pivot as u32);
+    let mut bad_pivot_limit = args.bad_pivot_limit;
+    let (lhs, rhs) = latents.split_at_mut(lhs_count);
+    if was_bad_pivot {
+      bad_pivot_limit -= 1;
 
-    if bad_pivot_limit == 0 {
-      sort_utils::heapsort(&mut latents[..lhs_count]);
-      sort_utils::heapsort(&mut latents[lhs_count..]);
-      self.apply_sorted(latents);
-      return;
+      if bad_pivot_limit == 0 {
+        sort_utils::heapsort(lhs);
+        sort_utils::heapsort(rhs);
+        self.apply_sorted(latents);
+        return;
+      }
+
+      sort_utils::break_patterns(lhs);
+      sort_utils::break_patterns(rhs);
     }
 
     self.apply_quicksort_recurse(
-      &mut latents[..lhs_count],
+      lhs,
       RecurseArgs {
         lb: args.lb,
         ub: lhs_ub,
@@ -264,7 +272,7 @@ impl<L: Latent> State<L> {
       },
     );
     self.apply_quicksort_recurse(
-      &mut latents[lhs_count..],
+      rhs,
       RecurseArgs {
         lb: rhs_lb,
         ub: args.ub,
@@ -275,10 +283,6 @@ impl<L: Latent> State<L> {
 }
 
 pub fn histogram<L: Latent>(latents: &mut [L], n_bins_log: Bitlen) -> Vec<HistogramBin<L>> {
-  if latents.is_empty() {
-    return vec![];
-  }
-
   let mut state = State::new(latents.len(), n_bins_log);
   state.apply_quicksort_recurse(latents, RecurseArgs::new(n_bins_log));
   state.dst
