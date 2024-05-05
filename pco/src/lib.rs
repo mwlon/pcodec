@@ -36,6 +36,7 @@ mod constants;
 mod delta;
 mod float_mult_utils;
 mod format_version;
+mod histograms;
 mod int_mult_utils;
 mod latent_batch_decompressor;
 mod latent_batch_dissector;
@@ -44,6 +45,7 @@ mod page_meta;
 mod progress;
 mod read_write_uint;
 mod sampling;
+mod sort_utils;
 
 #[cfg(test)]
 mod tests;
