@@ -361,7 +361,6 @@ fn partition_in_blocks<L: Latent>(latents: &mut [L], pivot: L) -> usize {
 }
 
 // returns (count on left side of pivot, was_bad_pivot)
-#[inline(never)]
 pub fn partition<L: Latent>(latents: &mut [L], pivot: L) -> (usize, bool) {
   // Find the first pair of out-of-order elements.
   let mut l = 0;

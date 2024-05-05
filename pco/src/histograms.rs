@@ -43,7 +43,7 @@ pub struct HistogramBin<L: Latent> {
   pub upper: L,
 }
 
-fn calc_min<L: Latent>(latents: &[L]) -> L {
+fn slice_min<L: Latent>(latents: &[L]) -> L {
   let mut min0 = L::MAX;
   let mut min1 = L::MAX;
   for i in (0..latents.len()).skip(1).step_by(2) {
@@ -56,7 +56,7 @@ fn calc_min<L: Latent>(latents: &[L]) -> L {
   min(min0, min1)
 }
 
-fn calc_max<L: Latent>(latents: &[L]) -> L {
+fn slice_max<L: Latent>(latents: &[L]) -> L {
   let mut max0 = L::ZERO;
   let mut max1 = L::ZERO;
   for i in (0..latents.len()).skip(1).step_by(2) {
@@ -77,7 +77,7 @@ fn make_bin<L: Latent>(count: usize, lower: L, upper: L) -> HistogramBin<L> {
   }
 }
 
-struct State<L: Latent> {
+struct HistogramBuilder<L: Latent> {
   // immutable
   n: u64,
   n_bins: u64,
@@ -90,7 +90,7 @@ struct State<L: Latent> {
   dst: Vec<HistogramBin<L>>,
 }
 
-impl<L: Latent> State<L> {
+impl<L: Latent> HistogramBuilder<L> {
   fn new(n: usize, n_bins_log: Bitlen) -> Self {
     let n_bins = 1 << n_bins_log;
     Self {
@@ -110,7 +110,7 @@ impl<L: Latent> State<L> {
     }
 
     let tight_ub = match upper {
-      Bound::Loose(_) => calc_max(latents),
+      Bound::Loose(_) => slice_max(latents),
       Bound::Tight(upper) => upper,
     };
 
@@ -119,7 +119,7 @@ impl<L: Latent> State<L> {
       bin.count += latents.len();
     } else {
       let tight_lb = match lower {
-        Bound::Loose(_) => calc_min(latents),
+        Bound::Loose(_) => slice_min(latents),
         Bound::Tight(lower) => lower,
       };
       self.incomplete_bin = Some(HistogramBin {
@@ -215,6 +215,9 @@ impl<L: Latent> State<L> {
       return;
     }
 
+    // TODO one day we should investigate whether there's a faster
+    // selection algorithm for very short (len<20?) slices
+
     let target_bin_idx = self.bin_idx(self.n_applied);
     let target_c_count = self.c_count(target_bin_idx);
     let end = self.n_applied + latents.len();
@@ -282,8 +285,19 @@ impl<L: Latent> State<L> {
   }
 }
 
+// To compute unoptimized bins, we take a histogram of the data with the
+// following properties:
+// * there are up to 2^n_bins_log bins
+// * each bin has an exclusive, tight range of data
+// * we know the exact weight for each bin
+//
+// Previously we did a full sort and then something like the `apply_sorted`
+// function above.
+// However, the full sort is unnecessarily slow, especially when
+// n_bins_log = 0, so we now only do a partial sort, avoiding sorting within
+// each bin exactly.
 pub fn histogram<L: Latent>(latents: &mut [L], n_bins_log: Bitlen) -> Vec<HistogramBin<L>> {
-  let mut state = State::new(latents.len(), n_bins_log);
+  let mut state = HistogramBuilder::new(latents.len(), n_bins_log);
   state.apply_quicksort_recurse(latents, RecurseArgs::new(n_bins_log));
   state.dst
 }
@@ -297,13 +311,13 @@ mod tests {
   use super::*;
 
   fn run_sorted(latents: &[u32], n_bins_log: Bitlen) -> Vec<HistogramBin<u32>> {
-    let mut state = State::<u32>::new(latents.len(), n_bins_log);
+    let mut state = HistogramBuilder::<u32>::new(latents.len(), n_bins_log);
     state.apply_sorted(latents);
     state.dst
   }
 
   fn run_quicksort(latents: &mut [u32], n_bins_log: Bitlen) -> Vec<HistogramBin<u32>> {
-    let mut state = State::<u32>::new(latents.len(), n_bins_log);
+    let mut state = HistogramBuilder::<u32>::new(latents.len(), n_bins_log);
     let args = RecurseArgs::new(n_bins_log);
     state.apply_quicksort_recurse(latents, args);
     state.dst
@@ -311,7 +325,7 @@ mod tests {
 
   #[test]
   fn test_bin_idx_and_c_count() {
-    let state = State::<u32>::new(41, 2);
+    let state = HistogramBuilder::<u32>::new(41, 2);
     assert_eq!(state.bin_idx(0), 0);
     assert_eq!(state.bin_idx(10), 0);
     assert_eq!(state.bin_idx(11), 1);
