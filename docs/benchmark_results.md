@@ -52,11 +52,11 @@ Compression ratio is reported with 3 significant figures.
 
 | dataset           | compression speed / (million/s) | decompression speed / (million/s) | compression ratio |
 |-------------------|---------------------------------|-----------------------------------|-------------------|
-| `f64_decimal`     | 36                              | 290                               | 4.67              |
-| `f64_slow_cosine` | 36                              | 290                               | 4.51              |
-| `i64_lomax05_reg` | 46                              | 590                               | 4.63              |
-| `i64_sparse`      | 170                             | 690                               | 780               |
-| `micros_millis`   | 35                              | 540                               | 2.14              |
+| `f64_decimal`     | 47                              | 320                               | 4.67              |
+| `f64_slow_cosine` | 48                              | 300                               | 4.51              |
+| `i64_lomax05`     | 68                              | 600                               | 4.63              |
+| `i64_sparse`      | 180                             | 770                               | 780               |
+| `micros_millis`   | 70                              | 940                               | 2.13              |
 
 `i64` and `f64` are each 8 bytes, so compression is around 300-500MB/s,
 and decompression is around 2-5GB/s.
