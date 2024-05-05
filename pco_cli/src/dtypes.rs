@@ -35,6 +35,7 @@ pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable {
 
   fn to_arrow_native(self) -> <Self::Arrow as ArrowPrimitiveType>::Native;
   fn make_num_vec(nums: Vec<Self>) -> NumVec;
+  fn arrow_native_to_bytes(x: <Self::Arrow as ArrowPrimitiveType>::Native) -> Vec<u8>;
 }
 
 #[cfg(not(feature = "full_bench"))]
@@ -45,6 +46,7 @@ pub trait PcoNumberLike: NumberLike + Parquetable {
 
   fn to_arrow_native(self) -> <Self::Arrow as ArrowPrimitiveType>::Native;
   fn make_num_vec(nums: Vec<Self>) -> NumVec;
+  fn arrow_native_to_bytes(x: <Self::Arrow as ArrowPrimitiveType>::Native) -> Vec<u8>;
 }
 
 pub trait ArrowNumberLike: ArrowPrimitiveType {
@@ -99,6 +101,10 @@ macro_rules! trivial {
 
       fn make_num_vec(nums: Vec<Self>) -> NumVec {
         NumVec::$name(nums)
+      }
+
+      fn arrow_native_to_bytes(x: <Self::Arrow as ArrowPrimitiveType>::Native) -> Vec<u8> {
+        x.to_le_bytes().to_vec()
       }
     }
 

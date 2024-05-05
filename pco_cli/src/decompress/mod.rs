@@ -3,17 +3,25 @@ use std::io::{ErrorKind, Read};
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 use crate::{core_handlers, utils};
 
 pub mod handler;
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum OutputKind {
+  Txt,
+  Binary,
+}
 
 /// Decompress from standalone .pco into stdout.
 #[derive(Clone, Debug, Parser)]
 pub struct DecompressOpt {
   #[arg(long)]
   pub limit: Option<usize>,
+  #[arg(short, long, default_value = "txt")]
+  pub output: OutputKind,
 
   pub path: PathBuf,
 }

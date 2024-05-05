@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::fs::OpenOptions;
+use std::io::Write;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -15,6 +16,7 @@ use pco::FULL_BATCH_N;
 
 use crate::core_handlers::CoreHandlerImpl;
 use crate::decompress::DecompressOpt;
+use crate::decompress::OutputKind::*;
 use crate::dtypes::PcoNumberLike;
 
 pub trait DecompressHandler {
@@ -63,29 +65,24 @@ impl<T: PcoNumberLike> DecompressHandler for CoreHandlerImpl<T> {
 
 fn new_column_writer<T: PcoNumberLike>(opt: &DecompressOpt) -> Result<Box<dyn ColumnWriter<T>>> {
   // eventually we'll likely have a txt writer and a parquet writer, etc.
-  Ok(Box::new(StdoutWriter::from_opt(opt)))
+  let writer: Box<dyn ColumnWriter<T>> = match opt.output {
+    Txt => Box::<TxtWriter<T>>::default(),
+    Binary => Box::<BinaryWriter<T>>::default(),
+  };
+  Ok(writer)
 }
 
 trait ColumnWriter<T: PcoNumberLike> {
-  fn from_opt(opt: &DecompressOpt) -> Self
-  where
-    Self: Sized;
   fn write(&mut self, nums: Vec<<T::Arrow as ArrowPrimitiveType>::Native>) -> Result<()>;
   fn close(&mut self) -> Result<()>;
 }
 
 #[derive(Default)]
-struct StdoutWriter<T: PcoNumberLike> {
+struct TxtWriter<T: PcoNumberLike> {
   phantom: PhantomData<T>,
 }
 
-impl<T: PcoNumberLike> ColumnWriter<T> for StdoutWriter<T> {
-  fn from_opt(_opt: &DecompressOpt) -> Self {
-    Self {
-      phantom: PhantomData,
-    }
-  }
-
+impl<T: PcoNumberLike> ColumnWriter<T> for TxtWriter<T> {
   fn write(&mut self, arrow_natives: Vec<<T::Arrow as ArrowPrimitiveType>::Native>) -> Result<()> {
     let schema = Schema::new(vec![Field::new("c0", T::ARROW_DTYPE, false)]);
     let c0 = PrimitiveArray::<T::Arrow>::from_iter_values(arrow_natives);
@@ -102,6 +99,26 @@ impl<T: PcoNumberLike> ColumnWriter<T> for StdoutWriter<T> {
   }
 
   fn close(&mut self) -> Result<()> {
+    Ok(())
+  }
+}
+
+#[derive(Default)]
+struct BinaryWriter<T: PcoNumberLike> {
+  phantom: PhantomData<T>,
+}
+
+impl<T: PcoNumberLike> ColumnWriter<T> for BinaryWriter<T> {
+  fn write(&mut self, arrow_natives: Vec<<T::Arrow as ArrowPrimitiveType>::Native>) -> Result<()> {
+    let mut out = std::io::stdout();
+    for &x in &arrow_natives {
+      out.write_all(&T::arrow_native_to_bytes(x))?;
+    }
+    Ok(())
+  }
+
+  fn close(&mut self) -> Result<()> {
+    std::io::stdout().flush()?;
     Ok(())
   }
 }
