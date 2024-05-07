@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use arrow::array::{
-  ArrayData, ArrayRef, Float32Array, Float64Array, Int32Array, Int64Array, UInt32Array, UInt64Array,
+  ArrayData, ArrayRef, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, UInt16Array, UInt32Array, UInt64Array,
 };
 use arrow::buffer::Buffer;
 use arrow::csv;
@@ -418,10 +418,16 @@ impl PcoColumnReader {
       F64 => Arc::new(Float64Array::from(simple_decompress::<f64>(
         &compressed,
       )?)),
+      I16 => Arc::new(Int16Array::from(simple_decompress::<i16>(
+        &compressed,
+      )?)),
       I32 => Arc::new(Int32Array::from(simple_decompress::<i32>(
         &compressed,
       )?)),
       I64 => Arc::new(Int64Array::from(simple_decompress::<i64>(
+        &compressed,
+      )?)),
+      U16 => Arc::new(UInt16Array::from(simple_decompress::<u16>(
         &compressed,
       )?)),
       U32 => Arc::new(UInt32Array::from(simple_decompress::<u32>(
