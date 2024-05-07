@@ -33,8 +33,10 @@ pub fn arrow_dtype(s: &str) -> anyhow::Result<DataType> {
   let name_pairs = [
     ("f32", DataType::Float32),
     ("f64", DataType::Float64),
+    ("i16", DataType::Int16),
     ("i32", DataType::Int32),
     ("i64", DataType::Int64),
+    ("u16", DataType::UInt16),
     ("u32", DataType::UInt32),
     ("u64", DataType::UInt64),
     (
