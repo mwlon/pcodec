@@ -101,6 +101,7 @@ macro_rules! impl_latent {
   };
 }
 
+impl_latent!(u16);
 impl_latent!(u32);
 impl_latent!(u64);
 
@@ -161,5 +162,6 @@ macro_rules! impl_unsigned_number {
   };
 }
 
+impl_unsigned_number!(u16, 0);
 impl_unsigned_number!(u32, 1);
 impl_unsigned_number!(u64, 2);

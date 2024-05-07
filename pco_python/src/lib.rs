@@ -164,8 +164,10 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
 pub enum DynTypedPyArrayDyn<'py> {
   F32(&'py PyArrayDyn<f32>),
   F64(&'py PyArrayDyn<f64>),
+  I16(&'py PyArrayDyn<i16>),
   I32(&'py PyArrayDyn<i32>),
   I64(&'py PyArrayDyn<i64>),
+  U16(&'py PyArrayDyn<u16>),
   U32(&'py PyArrayDyn<u32>),
   U64(&'py PyArrayDyn<u64>),
 }

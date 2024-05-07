@@ -48,8 +48,10 @@ macro_rules! impl_core_dtypes {
 macro_rules! with_core_dtypes {
   ($inner:ident) => {
     $inner!(
+      U16(U16) => u16,
       U32(U32) => u32,
       U64(U64) => u64,
+      I16(U16) => i16,
       I32(U32) => i32,
       I64(U64) => i64,
       F32(U32) => f32,
@@ -64,6 +66,7 @@ macro_rules! with_core_dtypes {
 macro_rules! with_core_latents {
   ($inner:ident) => {
     $inner!(
+      U16 => u16,
       U32 => u32,
       U64 => u64,
     );

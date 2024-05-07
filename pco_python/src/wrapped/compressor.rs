@@ -17,6 +17,7 @@ struct PyFc {
 }
 
 enum DynCc {
+  U16(ChunkCompressor<u16>),
   U32(ChunkCompressor<u32>),
   U64(ChunkCompressor<u64>),
 }
