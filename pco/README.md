@@ -4,6 +4,8 @@
 
 [crates-url]: https://crates.io/crates/pco
 
+<!---TODO: remove the following stuff in the next release now that it's in the doc comments-->
+
 # Quick Start
 
 ```rust
@@ -13,13 +15,13 @@ use pco::errors::PcoResult;
 
 fn main() -> PcoResult<()> {
   // your data
-  let mut my_ints = Vec::new();
+  let mut my_nums = Vec::new();
   for i in 0..100000 {
-    my_ints.push(i as i64);
+    my_nums.push(i as i64);
   }
 
   // compress
-  let compressed: Vec<u8> = simpler_compress(&my_ints, DEFAULT_COMPRESSION_LEVEL)?;
+  let compressed: Vec<u8> = simpler_compress(&my_nums, DEFAULT_COMPRESSION_LEVEL)?;
   println!("compressed down to {} bytes", compressed.len());
 
   // decompress

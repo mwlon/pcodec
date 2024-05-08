@@ -1,5 +1,40 @@
-//! For crate-level documentation, see
-//! <https://github.com/mwlon/pcodec/tree/main/pco>.
+//! For general information about pco (full name: Pcodec), including the
+//! signifance of standalone vs. wrapped, see <https://github.com/mwlon/pcodec/>.
+//!
+//! # Quick Start
+//!
+//! ```rust
+//! use pco::standalone::{simpler_compress, simple_decompress};
+//! use pco::DEFAULT_COMPRESSION_LEVEL;
+//! use pco::errors::PcoResult;
+//!
+//! fn main() -> PcoResult<()> {
+//!   // your data
+//!   let mut my_nums = Vec::new();
+//!   for i in 0..100000 {
+//!     my_nums.push(i as i64);
+//!   }
+//!
+//!   // compress
+//!   let compressed: Vec<u8> = simpler_compress(&my_nums, DEFAULT_COMPRESSION_LEVEL)?;
+//!   println!("compressed down to {} bytes", compressed.len());
+//!
+//!   // decompress
+//!   let recovered = simple_decompress::<i64>(&compressed)?;
+//!   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
+//!   Ok(())
+//! }
+//! ```
+//!
+//! # API Notes
+//!
+//! * In some places, Pco methods accept a destination (either `W: Write` or `&mut [T: NumberLike]`).
+//! If Pco returns an error, it is possible both the destination and the struct
+//! have been modified.
+//! * Pco will always try to process all numbers, and it will fail if insufficient bytes are
+//! available. For instance, during decompression Pco will try to fill the entire `&mut [T]`
+//! passed in, returning an insufficient data error if the `&[u8]` passed in is not long enough.
+
 #![allow(clippy::uninit_vec)]
 
 pub use auto::auto_delta_encoding_order;
