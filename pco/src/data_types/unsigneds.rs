@@ -162,6 +162,6 @@ macro_rules! impl_unsigned_number {
   };
 }
 
-impl_unsigned_number!(u16, 0);
 impl_unsigned_number!(u32, 1);
 impl_unsigned_number!(u64, 2);
+impl_unsigned_number!(u16, 10);
