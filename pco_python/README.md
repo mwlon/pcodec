@@ -1,8 +1,8 @@
-[![Crates.io][crates-badge]][crates-url]
+[![pypi.org][pypi-badge]][pypi-url]
 
-[crates-badge]: https://img.shields.io/pypi/v/pcodec.svg
+[pypi-badge]: https://img.shields.io/pypi/v/pcodec.svg
 
-[crates-url]: https://pypi.org/project/pcodec/
+[pypi-url]: https://pypi.org/project/pcodec/
 
 # Pcodec Python API
 

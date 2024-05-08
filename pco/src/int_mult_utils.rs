@@ -104,11 +104,7 @@ fn categorical_entropy(p: f64) -> f64 {
   }
 }
 
-fn filter_score_triple_gcd_float(
-  gcd: f64,
-  triples_w_gcd: usize,
-  total_triples: usize,
-) -> Option<f64> {
+fn filter_score_triple_gcd(gcd: f64, triples_w_gcd: usize, total_triples: usize) -> Option<f64> {
   let triples_w_gcd = triples_w_gcd as f64;
   let total_triples = total_triples as f64;
   let prob_per_triple = triples_w_gcd / total_triples;
@@ -180,15 +176,6 @@ fn filter_score_triple_gcd_float(
   Some(worst_case_bits_saved)
 }
 
-fn filter_score_triple_gcd<L: Latent>(
-  gcd: L,
-  triples_w_gcd: usize,
-  total_triples: usize,
-) -> Option<f64> {
-  let gcd_f64 = min(gcd, L::from_u64(u64::MAX)).to_u64() as f64;
-  filter_score_triple_gcd_float(gcd_f64, triples_w_gcd, total_triples)
-}
-
 fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Option<(L, f64)> {
   let mut counts = HashMap::new();
   for &gcd in triple_gcds {
@@ -198,7 +185,8 @@ fn most_prominent_gcd<L: Latent>(triple_gcds: &[L], total_triples: usize) -> Opt
   let gcd_and_score = counts //counts_accounting_for_small_multiples
     .iter()
     .filter_map(|(&gcd, &count)| {
-      let score = filter_score_triple_gcd(gcd, count, total_triples)?;
+      let gcd_f64 = min(gcd, L::from_u64(u64::MAX)).to_u64() as f64;
+      let score = filter_score_triple_gcd(gcd_f64, count, total_triples)?;
       Some((gcd, score))
     })
     .max_by_key(|(_, score)| score.to_latent_ordered())?;
