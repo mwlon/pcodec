@@ -72,13 +72,19 @@ fn assert_recovers<T: NumberLike>(
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
-  assert_recovers(&[u64::MIN, u64::MAX], 0, "int extremes 0")?;
-  assert_recovers(&[f64::MIN, f64::MAX], 0, "float extremes 0")?;
-  assert_recovers(&[1.2_f32], 0, "float 0")?;
-  assert_recovers(&[1.2_f32], 1, "float 1")?;
-  assert_recovers(&[1.2_f32], 2, "float 2")?;
-  assert_recovers(&Vec::<u32>::new(), 6, "empty 6")?;
-  assert_recovers(&Vec::<u32>::new(), 0, "empty 0")
+  assert_recovers(&[u64::MIN, u64::MAX], 0, "u64 extremes 0 - 0")?;
+  assert_recovers(&[f64::MIN, f64::MAX], 0, "f64 extremes 0 - 0")?;
+  assert_recovers(&[1.2_f32], 0, "float - 0")?;
+  assert_recovers(&[1.2_f32], 1, "float - 1")?;
+  assert_recovers(&[1.2_f32], 2, "float - 2")?;
+  assert_recovers(&Vec::<u32>::new(), 6, "empty u32 - 6")?;
+  assert_recovers(&Vec::<u32>::new(), 0, "empty u32 - 0")?;
+  assert_recovers(&Vec::<u16>::new(), 6, "empty u16 - 6")?;
+  assert_recovers(&Vec::<u16>::new(), 0, "empty u16 - 0")?;
+  assert_recovers(&[u16::MIN, u16::MAX], 0, "u16 extremes - 0")?;
+
+
+  Ok(())
 }
 
 #[test]
@@ -103,6 +109,11 @@ fn test_sparse() -> PcoResult<()> {
 }
 
 #[test]
+fn test_u16_codec() -> PcoResult<()> {
+  assert_recovers(&[0_u16, u16::MAX, 2, 3, 4, 5], 1, "u16s")
+}
+
+#[test]
 fn test_u32_codec() -> PcoResult<()> {
   assert_recovers(&[0_u32, u32::MAX, 3, 4, 5], 1, "u32s")
 }
@@ -110,6 +121,15 @@ fn test_u32_codec() -> PcoResult<()> {
 #[test]
 fn test_u64_codec() -> PcoResult<()> {
   assert_recovers(&[0_u64, u64::MAX, 3, 4, 5], 1, "u64s")
+}
+
+#[test]
+fn test_i16_codec() -> PcoResult<()> {
+  assert_recovers(
+    &[0_i16, -1, i16::MAX, i16::MIN, 7],
+    1,
+    "i16s",
+  )
 }
 
 #[test]
