@@ -1,3 +1,14 @@
+[![crates.io][crates-badge]][crates-url]
+[![pypi.org][pypi-badge]][pypi-url]
+
+[crates-badge]: https://img.shields.io/crates/v/pco.svg
+
+[crates-url]: https://crates.io/crates/pco
+
+[pypi-badge]: https://img.shields.io/pypi/v/pcodec.svg
+
+[pypi-url]: https://pypi.org/project/pcodec/
+
 # Pcodec
 
 <div style="text-align:center">
