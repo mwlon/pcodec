@@ -25,7 +25,6 @@ fn bin_cost<L: Latent>(
 // j and i are the inclusive indices of a group of bins to combine together.
 // This algorithm is exactly optimal, assuming our cost estimates (measured in
 // total bit size) are correct.
-#[inline(never)]
 fn choose_optimized_partitioning<L: Latent>(
   bins: &[HistogramBin<L>],
   ans_size_log: Bitlen,
