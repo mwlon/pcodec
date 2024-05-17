@@ -25,25 +25,27 @@ fn bin_cost<L: Latent>(
 // j and i are the inclusive indices of a group of bins to combine together.
 // This algorithm is exactly optimal, assuming our cost estimates (measured in
 // total bit size) are correct.
+#[inline(never)]
 fn choose_optimized_partitioning<L: Latent>(
   bins: &[HistogramBin<L>],
   ans_size_log: Bitlen,
 ) -> Vec<(usize, usize)> {
   let mut c = 0;
-  let mut cum_count = Vec::with_capacity(bins.len() + 1);
-  cum_count.push(0);
+  let mut c_counts_and_best_costs = Vec::with_capacity(bins.len() + 1);
+  // To keep improve performance a bit, we put cumulative count and best cost
+  // into the same Vec. This frees up registers, requiring one fewer load in
+  // the hot loop, at least on ARM.
+  c_counts_and_best_costs.push((0, 0.0));
   for bin in bins {
     c += bin.count as u32;
-    cum_count.push(c);
+    c_counts_and_best_costs.push((c, f32::NAN));
   }
   let total_count = c;
   let lowers = bins.iter().map(|bin| bin.lower).collect::<Vec<_>>();
   let uppers = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
   let total_count_log2 = (c as f32).log2();
 
-  let mut best_costs = Vec::with_capacity(bins.len() + 1);
   let mut best_partitionings = Vec::with_capacity(bins.len() + 1);
-  best_costs.push(0.0);
   best_partitionings.push(Vec::new());
 
   let bin_meta_cost = chunk_meta::bin_exact_bit_size::<L>(ans_size_log) as f32;
@@ -52,16 +54,17 @@ fn choose_optimized_partitioning<L: Latent>(
     let mut best_cost = f32::MAX;
     let mut best_j = usize::MAX;
     let upper = uppers[i];
-    let cum_count_i = cum_count[i + 1];
+    let (c_count_i, _) = c_counts_and_best_costs[i + 1];
     for j in (0..i + 1).rev() {
       let lower = lowers[j];
+      let (c_count_j, best_cost_up_to_j) = c_counts_and_best_costs[j];
 
-      let cost = best_costs[j]
+      let cost = best_cost_up_to_j
         + bin_cost::<L>(
           bin_meta_cost,
           lower,
           upper,
-          cum_count_i - cum_count[j],
+          c_count_i - c_count_j,
           total_count_log2,
         );
       if cost < best_cost {
@@ -70,7 +73,7 @@ fn choose_optimized_partitioning<L: Latent>(
       }
     }
 
-    best_costs.push(best_cost);
+    c_counts_and_best_costs[i + 1].1 = best_cost;
     let mut best_partitioning = Vec::with_capacity(best_partitionings[best_j].len() + 1);
     best_partitioning.extend(&best_partitionings[best_j]);
     best_partitioning.push((best_j, i));
@@ -85,7 +88,7 @@ fn choose_optimized_partitioning<L: Latent>(
     total_count,
     total_count_log2,
   );
-  let best_cost = best_costs.last().unwrap();
+  let &(_, best_cost) = c_counts_and_best_costs.last().unwrap();
   if single_bin_cost < best_cost + SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM * total_count as f32 {
     single_bin_partitioning
   } else {

@@ -1,9 +1,10 @@
 [![Crates.io][crates-badge]][crates-url]
 
 [crates-badge]: https://img.shields.io/crates/v/q-compress.svg
+
 [crates-url]: https://crates.io/crates/q-compress
 
-**⚠️ Quantile Compression is being succeeded by [pco](). `q_compress` will
+**⚠️ Quantile Compression is being succeeded by [pco](../README.md). `q_compress` will
 still work, probably forever, but it is highly recommended that users port to
 pco for 5x faster decompression, better compression on certain types of data,
 a better API, and ongoing updates. ⚠️**
@@ -23,6 +24,7 @@ Quantile Compression losslessly compresses and decompresses numerical sequences
 with high compression ratio and moderately fast speed.
 
 **Use cases:**
+
 * compression for columnar data
 * compression for time series data
 * low-bandwidth communication, like transmitting batches of sensor data from
@@ -37,6 +39,7 @@ with high compression ratio and moderately fast speed.
 and optionally `i128`, `u128`, `TimestampMicros96`, `TimestampNanos96`
 
 **Features:**
+
 * stable standalone file format (`.qco`)
 * wrapped format for interleaving within a columnar table
 * preserves ordering and exact bit representation (including `NaN` floats)
@@ -79,6 +82,7 @@ number is in, and the offset specifies the exact position within that
 range.
 
 Compression happens in this order for each chunk:
+
 1. If delta encoding is on, compute deltas and use those as your values
    instead.
 2. Determine unoptimized _prefixes_ by taking `2^compression_level` roughly evenly-spaced
