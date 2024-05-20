@@ -185,6 +185,13 @@ def millis():
 def integers():
   return np.random.randint(0, 2 ** 30, size=n)
 
+# `float32`s compressed as `float64`s
+# TODO: Migrate this file to use the numpy `Generator` interface
+np.random.seed(0)
+lossless_normal = np.random.normal(size=n)
+lossy_normal = lossless_normal.astype(np.float32).astype(np.float64)
+write_f64(lossy_normal, 'quantized_normal')
+
 # decimal floats
 @datagen('f64')
 def decimal():
