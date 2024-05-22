@@ -60,6 +60,8 @@ macro_rules! impl_float_like {
   ($t: ty, $latent: ty, $bits: expr, $exp_offset: expr) => {
     impl FloatLike for $t {
       const BITS: Bitlen = $bits;
+      /// Number of bits in the representation of the significand, excluding the implicit
+      /// leading bit.  (In Rust, `MANTISSA_DIGITS` does include the implicit leading bit.)
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
       const ZERO: Self = 0.0;
       const MAX_FOR_SAMPLING: Self = Self::MAX * 0.5;

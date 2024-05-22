@@ -1,3 +1,5 @@
+use std::cmp;
+
 use crate::constants::Bitlen;
 use crate::data_types::FloatLike;
 use crate::sampling;
@@ -33,15 +35,24 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
 #[inline(never)]
 pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatDecompConfig<F>> {
   let sample = sampling::choose_sample(nums, |num|{ Some(num) })?;
-  // TODO implement in Rust:
-  //
-  // z = [num_trailing_zeros(num.significand()) for num in samples]
-  // fraction_with_at_least_i = reversed(cumsum(reversed(z))) / sample.len()
-  // k = first(i for (i, frac) in enumerate(fraction_with_at_least_i)
-  //           if frac >= 0.9)
-  // if k > 2 {
-  //   Some(FloatDecompConfig(k as Bitlen))
-  // } else {
-  //   None
-  // }
+  let thresh = (0.9 * sample.len()).floor() as usize;
+  let k = sample.iter()
+    .map(|&x| cmp::min(F::PRECISION_BITS,
+                       // Using the fact that significand bits come last in
+                       // the floating-point representations we care about
+                       x.to_latent_bits().trailing_zeros()))
+    .enumerate()
+    .rev()
+    .scan(0, |csum, &(i, x)| {
+      if *csum >= thresh {
+        return None
+      }
+      *csum = *csum + x;
+      Some(i)
+    }).last()?
+  if k > 2 {
+    Some(FloatDecompConfig(k as Bitlen))
+  } else {
+    None
+  }
 }
