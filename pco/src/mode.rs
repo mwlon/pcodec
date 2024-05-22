@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent};
 
 // Internally, here's how we should model each mode:
@@ -98,6 +99,6 @@ impl<L: Latent> Mode<L> {
   }
 
   pub(crate) fn float_decomp<F: FloatLike<L = L>>(k: Bitlen) -> Self {
-    Self::FloatDecomp(L::from_u64(k))
+    Self::FloatDecomp(L::from_u64(k.into()))
   }
 }

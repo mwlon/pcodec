@@ -51,6 +51,7 @@ pub enum FloatMultSpec {
 /// Examples where this helps:
 /// * float-valued data stored in a type that is unnecessarily wide (e.g. stored
 ///   as `f64`s where only the first 32 bits are used)
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum FloatDecompSpec {
     Disabled,
     #[default]

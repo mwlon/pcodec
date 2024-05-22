@@ -39,7 +39,7 @@
 
 pub use auto::auto_delta_encoding_order;
 pub use bin::Bin;
-pub use chunk_config::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec};
+pub use chunk_config::{ChunkConfig, FloatDecompSpec, FloatMultSpec, IntMultSpec, PagingSpec};
 pub use chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_MAX_PAGE_N, FULL_BATCH_N};
 pub use mode::Mode;
@@ -69,6 +69,7 @@ mod compression_intermediates;
 mod compression_table;
 mod constants;
 mod delta;
+mod float_decomp_utils;
 mod float_mult_utils;
 mod format_version;
 mod histograms;

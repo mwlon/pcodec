@@ -4,7 +4,7 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
-use crate::{float_mult_utils, float_decomp_utils, ChunkConfig, FloatMultSpec, Mode};
+use crate::{float_mult_utils, float_decomp_utils, ChunkConfig, FloatDecompSpec, FloatMultSpec, Mode};
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
@@ -13,7 +13,7 @@ fn choose_mode_and_split_latents<F: FloatLike>(
   if chunk_config.float_decomp_spec != FloatDecompSpec::Disabled {
     match chunk_config.float_decomp_spec {
       FloatDecompSpec::Enabled => {
-        if Some(fd_config) = float_decomp_utils::choose_config(nums) {
+        if let Some(fd_config) = float_decomp_utils::choose_config(nums) {
           let mode = Mode::float_decomp(fd_config.k);
           let latents = float_decomp_utils::split_latents(nums, fd_config.k);
           (mode, latents)
@@ -21,7 +21,7 @@ fn choose_mode_and_split_latents<F: FloatLike>(
       }
       FloatDecompSpec::Provided(k) => {
         let mode = Mode::float_decomp(k);
-        let latent = float_decomp_utils::split_latents(nums, k);
+        let latents = float_decomp_utils::split_latents(nums, k);
         (mode, latents)
       }
     }
@@ -123,6 +123,11 @@ macro_rules! impl_float_like {
       #[inline]
       fn to_latent_bits(self) -> Self::L {
         self.to_bits()
+      }
+
+      #[inline]
+      fn from_latent_bits(bits: Self::L) -> Self {
+        Self::from_bits(bits)
       }
 
       #[inline]
@@ -314,7 +319,7 @@ macro_rules! impl_float_number_like {
             Self::from_latent_ordered(base_latent).is_finite_and_normal()
           }
           Mode::FloatDecomp(k_latent) => {
-            0 <= k_latent && k_latent <= Self::PRECISION_BITS
+            0 <= k_latent && k_latent <= Self::L::from_u64(Self::PRECISION_BITS as u64)
           }
           _ => false,
         }
@@ -356,7 +361,7 @@ macro_rules! impl_float_number_like {
           }
           Mode::FloatDecomp(k_latent) => {
             let k = k_latent.to_u64() as Bitlen;
-            float_decomp_utils::join_latents(k, primary, secondary)
+            float_decomp_utils::join_latents::<Self>(k, primary, secondary)
           }
           _ => unreachable!("impossible mode for floats"),
         }

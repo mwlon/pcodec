@@ -209,6 +209,7 @@ impl<L: Latent> ChunkMeta<L> {
     let extra_bits_for_mode = match self.mode {
       Mode::Classic => 0,
       Mode::IntMult(_) => L::BITS,
+      Mode::FloatDecomp(_) => L::BITS,
       Mode::FloatMult(_) => L::BITS,
     };
     let bits_for_latent_vars: usize = self
@@ -296,6 +297,7 @@ impl<L: Latent> ChunkMeta<L> {
       Mode::Classic => 0,
       Mode::IntMult(_) => 1,
       Mode::FloatMult { .. } => 2,
+      Mode::FloatDecomp { .. } => 3,
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
     match self.mode {
@@ -305,6 +307,9 @@ impl<L: Latent> ChunkMeta<L> {
       }
       Mode::FloatMult(base_latent) => {
         writer.write_uint(base_latent, L::BITS);
+      }
+      Mode::FloatDecomp(k_latent) => {
+        writer.write_uint(k_latent, L::BITS);
       }
     };
 
