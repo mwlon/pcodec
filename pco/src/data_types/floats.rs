@@ -10,41 +10,23 @@ fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
 ) -> (Mode<F::L>, Vec<Vec<F::L>>) {
-  if chunk_config.float_decomp_spec != FloatDecompSpec::Disabled {
-    match chunk_config.float_decomp_spec {
-      FloatDecompSpec::Enabled => {
-        if let Some(fd_config) = float_decomp_utils::choose_config(nums) {
-          let mode = Mode::float_decomp(fd_config.k);
-          let latents = float_decomp_utils::split_latents(nums, fd_config.k);
-          (mode, latents)
-        }
-      }
-      FloatDecompSpec::Provided(k) => {
-        let mode = Mode::float_decomp(k);
-        let latents = float_decomp_utils::split_latents(nums, k);
+  match chunk_config.float_mult_spec {
+    FloatMultSpec::Enabled => {
+      if let Some(fm_config) = float_mult_utils::choose_config(nums) {
+        let mode = Mode::float_mult(fm_config.base);
+        let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
         (mode, latents)
+      } else {
+        (Mode::Classic, split_latents_classic(nums))
       }
     }
-  } else if chunk_config.float_mult_spec != FloatMultSpec::Disabled {
-    match chunk_config.float_mult_spec {
-      FloatMultSpec::Enabled => {
-        if let Some(fm_config) = float_mult_utils::choose_config(nums) {
-          let mode = Mode::float_mult(fm_config.base);
-          let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
-          (mode, latents)
-        } else {
-          (Mode::Classic, split_latents_classic(nums))
-        }
-      }
-      FloatMultSpec::Provided(base_f64) => {
-        let base = F::from_f64(base_f64);
-        let mode = Mode::float_mult(base);
-        let latents = float_mult_utils::split_latents(nums, base, base.inv());
-        (mode, latents)
-      }
+    FloatMultSpec::Provided(base_f64) => {
+      let base = F::from_f64(base_f64);
+      let mode = Mode::float_mult(base);
+      let latents = float_mult_utils::split_latents(nums, base, base.inv());
+      (mode, latents)
     }
-  } else {
-    (Mode::Classic, split_latents_classic(nums))
+    FloatMultSpec::Disabled => (Mode::Classic, split_latents_classic(nums)),
   }
 }
 
