@@ -260,6 +260,10 @@ impl<L: Latent> ChunkMeta<L> {
           let base_latent = reader.read_uint::<L>(L::BITS);
           Ok(Mode::FloatMult(base_latent))
         }
+        3 => {
+          let k = reader.read_bitlen(BITS_TO_ENCODE_QUANTIZE_K);
+          Ok(Mode::FloatDecomp(k))
+        }
         value => Err(PcoError::corruption(format!(
           "unknown mode value {}",
           value
@@ -308,8 +312,8 @@ impl<L: Latent> ChunkMeta<L> {
       Mode::FloatMult(base_latent) => {
         writer.write_uint(base_latent, L::BITS);
       }
-      Mode::FloatDecomp(k_latent) => {
-        writer.write_uint(k_latent, L::BITS);
+      Mode::FloatDecomp(k) => {
+        writer.write_uint(k, BITS_TO_ENCODE_QUANTIZE_K);
       }
     };
 
