@@ -62,7 +62,7 @@ pub enum Mode<L: Latent> {
   /// * the offset of `m` in that bin.
   ///
   /// Formula: F::from_latent_bits(((y_bin.lower + y_bin.offset) << mode.k) + m)
-  FloatDecomp(L),
+  FloatDecomp(Bitlen),
 }
 
 impl<L: Latent> Mode<L> {
@@ -99,6 +99,6 @@ impl<L: Latent> Mode<L> {
   }
 
   pub(crate) fn float_decomp<F: FloatLike<L = L>>(k: Bitlen) -> Self {
-    Self::FloatDecomp(L::from_u64(k.into()))
+    Self::FloatDecomp(k)
   }
 }
