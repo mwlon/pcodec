@@ -4,29 +4,47 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
-use crate::{float_mult_utils, ChunkConfig, FloatMultSpec, Mode};
+use crate::{float_mult_utils, float_decomp_utils, ChunkConfig, FloatMultSpec, Mode};
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
 ) -> (Mode<F::L>, Vec<Vec<F::L>>) {
-  match chunk_config.float_mult_spec {
-    FloatMultSpec::Enabled => {
-      if let Some(fm_config) = float_mult_utils::choose_config(nums) {
-        let mode = Mode::float_mult(fm_config.base);
-        let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
+  if chunk_config.float_decomp_spec != FloatDecompSpec::Disabled {
+    match chunk_config.float_decomp_spec {
+      FloatDecompSpec::Enabled => {
+        if Some(fd_config) = float_decomp_utils::choose_config(nums) {
+          let mode = Mode::float_decomp(fd_config.k);
+          let latents = float_decomp_utils::split_latents(nums, fd_config.k);
+          (mode, latents)
+        }
+      }
+      FloatDecompSpec::Provided(k) => {
+        let mode = Mode::float_decomp(k);
+        let latent = float_decomp_utils::split_latents(nums, k);
         (mode, latents)
-      } else {
-        (Mode::Classic, split_latents_classic(nums))
       }
     }
-    FloatMultSpec::Provided(base_f64) => {
-      let base = F::from_f64(base_f64);
-      let mode = Mode::float_mult(base);
-      let latents = float_mult_utils::split_latents(nums, base, base.inv());
-      (mode, latents)
+  } else if chunk_config.float_mult_spec != FloatMultSpec::Disabled {
+    match chunk_config.float_mult_spec {
+      FloatMultSpec::Enabled => {
+        if let Some(fm_config) = float_mult_utils::choose_config(nums) {
+          let mode = Mode::float_mult(fm_config.base);
+          let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
+          (mode, latents)
+        } else {
+          (Mode::Classic, split_latents_classic(nums))
+        }
+      }
+      FloatMultSpec::Provided(base_f64) => {
+        let base = F::from_f64(base_f64);
+        let mode = Mode::float_mult(base);
+        let latents = float_mult_utils::split_latents(nums, base, base.inv());
+        (mode, latents)
+      }
     }
-    FloatMultSpec::Disabled => (Mode::Classic, split_latents_classic(nums)),
+  } else {
+    (Mode::Classic, split_latents_classic(nums))
   }
 }
 
@@ -293,6 +311,9 @@ macro_rules! impl_float_number_like {
           Mode::FloatMult(base_latent) => {
             Self::from_latent_ordered(base_latent).is_finite_and_normal()
           }
+          Mode::FloatDecomp(k_latent) => {
+            0 <= k_latent && k_latent <= Self::PRECISION_BITS
+          }
           _ => false,
         }
       }
@@ -330,6 +351,10 @@ macro_rules! impl_float_number_like {
           Mode::FloatMult(base_latent) => {
             let base = Self::from_latent_ordered(base_latent);
             float_mult_utils::join_latents(base, primary, secondary)
+          }
+          Mode::FloatDecomp(k_latent) => {
+            let k = k_latent.to_u64() as Bitlen;
+            float_decomp_utils::join_latents(k, primary, secondary)
           }
           _ => unreachable!("impossible mode for floats"),
         }

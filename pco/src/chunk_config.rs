@@ -1,4 +1,4 @@
-use crate::constants::DEFAULT_MAX_PAGE_N;
+use crate::constants::{Bitlen, DEFAULT_MAX_PAGE_N};
 use crate::errors::{PcoError, PcoResult};
 use crate::DEFAULT_COMPRESSION_LEVEL;
 
@@ -44,6 +44,20 @@ pub enum FloatMultSpec {
   /// provide `base` here to ensure it gets used and save compression time.
   Provided(f64),
   // TODO support a LossyEnabled mode that always drops the ULPs latent var
+}
+
+/// Configures whether float-decomposition detection is enabled.
+///
+/// Examples where this helps:
+/// * float-valued data stored in a type that is unnecessarily wide (e.g. stored
+///   as `f64`s where only the first 32 bits are used)
+pub enum FloatDecompSpec {
+    Disabled,
+    #[default]
+    Enabled,
+    /// If you know how many bits of precision are unused, you can supply that
+    /// number here.
+    Provided(Bitlen),
 }
 
 /// All configurations available for a compressor.
@@ -103,6 +117,14 @@ pub struct ChunkConfig {
   ///
   /// See [`FloatMultSpec`][crate::FloatMultSpec] for more detail.
   pub float_mult_spec: FloatMultSpec,
+  /// Float decomposition improves compression ratio in cases where a
+  /// float-valued dataset does not make use of the full precision available in
+  /// the data type, i.e., the several least-significant bits of the
+  /// significands are zero
+  /// (default: `Enabled`).
+  ///
+  /// See [`FloatDecompSpec`][crate::FloatDecompSpec] for more detail.
+  pub float_decomp_spec: FloatDecompSpec,
   /// `paging_spec` specifies how the chunk should be split into pages
   /// (default: equal pages up to 2^18 numbers each).
   ///
@@ -117,6 +139,7 @@ impl Default for ChunkConfig {
       delta_encoding_order: None,
       int_mult_spec: IntMultSpec::Enabled,
       float_mult_spec: FloatMultSpec::Enabled,
+      float_decomp_spec: FloatDecompSpec::Enabled,
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }
@@ -144,6 +167,12 @@ impl ChunkConfig {
   /// Sets [`float_mult_spec`][ChunkConfig::float_mult_spec].
   pub fn with_float_mult_spec(mut self, float_mult_spec: FloatMultSpec) -> Self {
     self.float_mult_spec = float_mult_spec;
+    self
+  }
+
+  /// Sets [`float_decomp_spec`][ChunkConfig::float_decomp_spec].
+  pub fn with_float_decomp_spec(mut self, float_decomp_spec: FloatDecompSpec) -> Self {
+    self.float_decomp_spec = float_decomp_spec;
     self
   }
 

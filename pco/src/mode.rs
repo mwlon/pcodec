@@ -46,6 +46,22 @@ pub enum Mode<L: Latent> {
   /// Formula: (bin.lower + offset) * mode.base +
   /// (adj_bin.lower + adj_bin.offset) * machine_epsilon
   FloatMult(L),
+  /// This mode decomposes a float `x` with precision `p` into the pair `(y, m)`, where:
+  /// * `y` is the float with precision `p - k` obtained by truncating the least-significant `k`
+  ///   bits from the significand of `x`
+  /// * `m` is a `k`-bit unsigned integer consisting of the bits removed to form `y`.
+  ///
+  /// Here `k` is a parameter of the mode, and `p` is deduced (by table lookup) from
+  /// the underlying floating point type.
+  ///
+  /// Each number is compressed as
+  /// * which bin the latent-bits representation of `y` is in,
+  /// * the offset of the latent-bits representation of `y` in that bin,
+  /// * which bin `m` is in, and
+  /// * the offset of `m` in that bin.
+  ///
+  /// Formula: F::from_latent_bits(((y_bin.lower + y_bin.offset) << mode.k) + m)
+  FloatDecomp(L),
 }
 
 impl<L: Latent> Mode<L> {
@@ -53,8 +69,9 @@ impl<L: Latent> Mode<L> {
     use Mode::*;
 
     match self {
-      Classic => 1,
-      FloatMult(_) | IntMult(_) => 2,
+      Classic => 1,  // delta_order
+      FloatMult(_) | IntMult(_) => 2,  // delta_order, mode.base
+      FloatDecomp(_) => 2,  // delta_order, mode.k
     }
   }
 
@@ -66,8 +83,9 @@ impl<L: Latent> Mode<L> {
     use Mode::*;
 
     match (self, latent_var_idx) {
-      (Classic, 0) | (FloatMult(_), 0) | (IntMult(_), 0) => delta_order,
-      (FloatMult(_), 1) | (IntMult(_), 1) => 0,
+      (Classic, 0) | (FloatMult(_), 0) | (FloatDecomp(_), 0) | (IntMult(_), 0) => delta_order,
+      (FloatMult(_), 1) | (IntMult(_), 1) => 0,  // `mode.base`
+      (FloatDecomp(_), 1) => 0,  // `mode.k`
       _ => unreachable!(
         "unknown latent {:?}/{}",
         self, latent_var_idx
@@ -77,5 +95,9 @@ impl<L: Latent> Mode<L> {
 
   pub(crate) fn float_mult<F: FloatLike<L = L>>(base: F) -> Self {
     Self::FloatMult(base.to_latent_ordered())
+  }
+
+  pub(crate) fn float_decomp<F: FloatLike<L = L>>(k: Bitlen) -> Self {
+    Self::FloatDecomp(L::from_u64(k))
   }
 }
