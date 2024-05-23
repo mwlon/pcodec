@@ -84,9 +84,13 @@ impl<L: Latent> Mode<L> {
     use Mode::*;
 
     match (self, latent_var_idx) {
+      // In all currently-available modes, the overall `delta_order` is really the delta-order of
+      // the first latent.
       (Classic, 0) | (FloatMult(_), 0) | (FloatQuant(_), 0) | (IntMult(_), 0) => delta_order,
-      (FloatMult(_), 1) | (IntMult(_), 1) => 0,  // `mode.base`
-      (FloatQuant(_), 1) => 0,  // `mode.k`
+      // In FloatMult, IntMult, and FloatQuant, the second latent is essentially a remainder or
+      // adjustment; there isn't any a priori reason that deltas should be useful for that kind of
+      // term and we do not attempt them.
+      (FloatMult(_), 1) | (IntMult(_), 1) | (FloatQuant(_), 1) => 0,
       _ => unreachable!(
         "unknown latent {:?}/{}",
         self, latent_var_idx
