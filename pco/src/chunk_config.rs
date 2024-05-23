@@ -46,13 +46,13 @@ pub enum FloatMultSpec {
   // TODO support a LossyEnabled mode that always drops the ULPs latent var
 }
 
-/// Configures whether float-decomposition detection is enabled.
+/// Configures whether quantized-float detection is enabled.
 ///
 /// Examples where this helps:
 /// * float-valued data stored in a type that is unnecessarily wide (e.g. stored
 ///   as `f64`s where only the first 32 bits are used)
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum FloatDecompSpec {
+pub enum FloatQuantSpec {
     Disabled,
     #[default]
     Enabled,
@@ -118,14 +118,14 @@ pub struct ChunkConfig {
   ///
   /// See [`FloatMultSpec`][crate::FloatMultSpec] for more detail.
   pub float_mult_spec: FloatMultSpec,
-  /// Float decomposition improves compression ratio in cases where a
+  /// Float quantization improves compression ratio in cases where a
   /// float-valued dataset does not make use of the full precision available in
   /// the data type, i.e., the several least-significant bits of the
   /// significands are zero
   /// (default: `Enabled`).
   ///
-  /// See [`FloatDecompSpec`][crate::FloatDecompSpec] for more detail.
-  pub float_decomp_spec: FloatDecompSpec,
+  /// See [`FloatQuantSpec`][crate::FloatQuantSpec] for more detail.
+  pub float_quant_spec: FloatQuantSpec,
   /// `paging_spec` specifies how the chunk should be split into pages
   /// (default: equal pages up to 2^18 numbers each).
   ///
@@ -140,7 +140,7 @@ impl Default for ChunkConfig {
       delta_encoding_order: None,
       int_mult_spec: IntMultSpec::Enabled,
       float_mult_spec: FloatMultSpec::Enabled,
-      float_decomp_spec: FloatDecompSpec::Enabled,
+      float_quant_spec: FloatQuantSpec::Enabled,
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }
@@ -171,9 +171,9 @@ impl ChunkConfig {
     self
   }
 
-  /// Sets [`float_decomp_spec`][ChunkConfig::float_decomp_spec].
-  pub fn with_float_decomp_spec(mut self, float_decomp_spec: FloatDecompSpec) -> Self {
-    self.float_decomp_spec = float_decomp_spec;
+  /// Sets [`float_quant_spec`][ChunkConfig::float_quant_spec].
+  pub fn with_float_quant_spec(mut self, float_quant_spec: FloatQuantSpec) -> Self {
+    self.float_quant_spec = float_quant_spec;
     self
   }
 

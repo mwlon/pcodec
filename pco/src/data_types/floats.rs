@@ -4,7 +4,7 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
-use crate::{float_mult_utils, float_decomp_utils, ChunkConfig, FloatMultSpec, Mode};
+use crate::{float_mult_utils, float_quant_utils, ChunkConfig, FloatMultSpec, Mode};
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
@@ -300,7 +300,7 @@ macro_rules! impl_float_number_like {
           Mode::FloatMult(base_latent) => {
             Self::from_latent_ordered(base_latent).is_finite_and_normal()
           }
-          Mode::FloatDecomp(k) => {
+          Mode::FloatQuant(k) => {
             k <= Self::PRECISION_BITS
           }
           _ => false,
@@ -341,9 +341,9 @@ macro_rules! impl_float_number_like {
             let base = Self::from_latent_ordered(base_latent);
             float_mult_utils::join_latents(base, primary, secondary)
           }
-          Mode::FloatDecomp(k_latent) => {
+          Mode::FloatQuant(k_latent) => {
             let k = k_latent.to_u64() as Bitlen;
-            float_decomp_utils::join_latents::<Self>(k, primary, secondary)
+            float_quant_utils::join_latents::<Self>(k, primary, secondary)
           }
           _ => unreachable!("impossible mode for floats"),
         }

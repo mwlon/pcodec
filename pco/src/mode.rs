@@ -62,7 +62,7 @@ pub enum Mode<L: Latent> {
   /// * the offset of `m` in that bin.
   ///
   /// Formula: F::from_latent_bits(((y_bin.lower + y_bin.offset) << mode.k) + m)
-  FloatDecomp(Bitlen),
+  FloatQuant(Bitlen),
 }
 
 impl<L: Latent> Mode<L> {
@@ -72,7 +72,7 @@ impl<L: Latent> Mode<L> {
     match self {
       Classic => 1,  // delta_order
       FloatMult(_) | IntMult(_) => 2,  // delta_order, mode.base
-      FloatDecomp(_) => 2,  // delta_order, mode.k
+      FloatQuant(_) => 2,  // delta_order, mode.k
     }
   }
 
@@ -84,9 +84,9 @@ impl<L: Latent> Mode<L> {
     use Mode::*;
 
     match (self, latent_var_idx) {
-      (Classic, 0) | (FloatMult(_), 0) | (FloatDecomp(_), 0) | (IntMult(_), 0) => delta_order,
+      (Classic, 0) | (FloatMult(_), 0) | (FloatQuant(_), 0) | (IntMult(_), 0) => delta_order,
       (FloatMult(_), 1) | (IntMult(_), 1) => 0,  // `mode.base`
-      (FloatDecomp(_), 1) => 0,  // `mode.k`
+      (FloatQuant(_), 1) => 0,  // `mode.k`
       _ => unreachable!(
         "unknown latent {:?}/{}",
         self, latent_var_idx
@@ -98,7 +98,7 @@ impl<L: Latent> Mode<L> {
     Self::FloatMult(base.to_latent_ordered())
   }
 
-  pub(crate) fn float_decomp<F: FloatLike<L = L>>(k: Bitlen) -> Self {
-    Self::FloatDecomp(k)
+  pub(crate) fn float_quant<F: FloatLike<L = L>>(k: Bitlen) -> Self {
+    Self::FloatQuant(k)
   }
 }

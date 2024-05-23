@@ -7,7 +7,7 @@ use crate::sampling;
 #[inline(never)]
 pub(crate) fn join_latents<F: FloatLike>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) -> () {
   for (y_and_dst, &m) in primary.iter_mut().zip(secondary.iter()) {
-    assert!((m >> k).is_zero(), "Invalid input to FloatDecomp: m must be a k-bit integer");
+    assert!((m >> k).is_zero(), "Invalid input to FloatQuant: m must be a k-bit integer");
     *y_and_dst = F::from_latent_bits((*y_and_dst << k) + m).to_latent_ordered();
   }
 }
@@ -33,12 +33,12 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct FloatDecompConfig {
+pub(crate) struct FloatQuantConfig {
   pub k: Bitlen,
 }
 
 #[inline(never)]
-pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatDecompConfig> {
+pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatQuantConfig> {
   let sample = sampling::choose_sample(nums, |&num|{ Some(num) })?;
   let thresh = (0.9 * sample.len() as f32).floor() as usize;
   let mut hist = vec![0; F::PRECISION_BITS.try_into().unwrap()];
@@ -59,7 +59,7 @@ pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatDecompConfi
       Some(i)
     }).last()?;
   if k > 2 {
-    Some(FloatDecompConfig { k : k as Bitlen })
+    Some(FloatQuantConfig { k : k as Bitlen })
   } else {
     None
   }
