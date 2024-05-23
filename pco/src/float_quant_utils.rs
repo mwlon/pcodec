@@ -7,7 +7,7 @@ use crate::sampling;
 #[inline(never)]
 pub(crate) fn join_latents<F: FloatLike>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) -> () {
   for (y_and_dst, &m) in primary.iter_mut().zip(secondary.iter()) {
-    assert!((m >> k).is_zero(), "Invalid input to FloatQuant: m must be a k-bit integer");
+    debug_assert!((m >> k).is_zero(), "Invalid input to FloatQuant: m must be a k-bit integer");
     *y_and_dst = F::from_latent_bits((*y_and_dst << k) + m).to_latent_ordered();
   }
 }
