@@ -53,8 +53,8 @@ pub enum FloatMultSpec {
 ///   as `f64`s where only the first 32 bits are used)
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum FloatQuantSpec {
-    Disabled,
     #[default]
+    Disabled,
     Enabled,
     /// If you know how many bits of precision are unused, you can supply that
     /// number here.
