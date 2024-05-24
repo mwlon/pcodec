@@ -1,5 +1,5 @@
 # python 3
-# pip requirement: numpy, pyarrow
+# pip requirement: numpy
 
 import argparse
 import numpy as np
