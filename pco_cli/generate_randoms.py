@@ -93,7 +93,6 @@ def datagen(*dtypes):
     return f
   return decorate
 
-np.random.seed(0)
 @datagen('i64')
 def geo():
   return np.random.geometric(p=0.001, size=n)
@@ -232,7 +231,6 @@ def interl_scrambl1():
 # a sequence whose variance gradually increases
 @datagen('i64')
 def dist_shift():
-  np.random.seed(0)
   log_std = np.linspace(-1.5, 25, n)
   return 0.5 + np.exp(log_std) * np.random.normal(size=n)
 
