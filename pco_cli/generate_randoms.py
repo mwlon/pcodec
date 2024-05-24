@@ -26,6 +26,9 @@ def writer(f):
   WRITERS[dtype] = f
   return f
 
+def write_dispatch(dtype, arr, name, base_dir):
+  WRITERS[dtype](arr, name, base_dir)
+
 @writer
 def write_i32(arr, name, base_dir):
   if arr.dtype != np.int32:
@@ -72,9 +75,6 @@ def write_timestamp_micros(arr, name, base_dir):
   strs = [x.strftime('%Y-%m-%dT%H:%M:%S:%fZ') for x in ts]
   full_name = f'micros_{name}'
   write_generic(strs, arr, full_name, base_dir)
-
-def write_dispatch(dtype, arr, name, base_dir):
-  WRITERS[dtype](arr, name, base_dir)
 
 
 DATA_GENS = {}
