@@ -51,14 +51,6 @@ def write_i64(arr, name, base_dir):
   write_generic(strs, arr, full_name, base_dir)
 
 @writer
-def write_bool(arr, name, base_dir):
-  if arr.dtype != np.int8:
-    arr = np.floor(arr).astype(np.int8)
-  strs = [str(x) for x in arr]
-  full_name = f'bool_{name}'
-  write_generic(strs, arr, full_name, base_dir)
-
-@writer
 def write_f32(arr, name, base_dir):
   arr = arr.astype(np.float32)
   strs = [str(x) for x in arr]
