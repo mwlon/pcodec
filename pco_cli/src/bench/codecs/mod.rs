@@ -17,6 +17,8 @@ use crate::bench::codecs::pco::PcoConfig;
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::qco::QcoConfig;
 use crate::bench::codecs::snappy::SnappyConfig;
+#[cfg(feature = "full_bench")]
+use crate::bench::codecs::spdp::SpdpConfig;
 use crate::bench::codecs::zstd::ZstdConfig;
 use crate::bench::IterOpt;
 use crate::bench::{BenchStat, Precomputed};
@@ -30,6 +32,8 @@ mod pco;
 #[cfg(feature = "full_bench")]
 mod qco;
 mod snappy;
+#[cfg(feature = "full_bench")]
+mod spdp;
 pub mod utils;
 mod zstd;
 
@@ -193,14 +197,16 @@ impl FromStr for CodecConfig {
     }
 
     let mut codec: Box<dyn CodecSurface> = match name {
+      #[cfg(feature = "full_bench")]
+      "blosc" => Box::<BloscConfig>::default(),
+      "parquet" => Box::<ParquetConfig>::default(),
       "pco" | "pcodec" => Box::<PcoConfig>::default(),
       #[cfg(feature = "full_bench")]
       "qco" | "q_compress" => Box::<QcoConfig>::default(),
-      "zstd" | "zstandard" => Box::<ZstdConfig>::default(),
       "snap" | "snappy" => Box::<SnappyConfig>::default(),
-      "parquet" => Box::<ParquetConfig>::default(),
       #[cfg(feature = "full_bench")]
-      "blosc" => Box::<BloscConfig>::default(),
+      "spdp" => Box::<SpdpConfig>::default(),
+      "zstd" | "zstandard" => Box::<ZstdConfig>::default(),
       _ => {
         return Err(anyhow!(
           "Unknown codec: {}. Perhaps rebuild with the full_bench feature?",

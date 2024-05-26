@@ -1,0 +1,15 @@
+[package]
+name = "spdp-sys"
+version = "0.1.0"
+edition = "2021"
+links = "spdp"
+build = "build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+cc = { version = "1.0" }
+pkg-config = "0.3"
