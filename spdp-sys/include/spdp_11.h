@@ -1,3 +1,5 @@
+#include <stddef.h>
+
 typedef unsigned char byte_t;
 size_t spdp_compress_batch(
   const byte_t level,

@@ -11,5 +11,6 @@ build = "build.rs"
 libc = "0.2"
 
 [build-dependencies]
+bindgen = "0.69.4"
 cc = { version = "1.0" }
 pkg-config = "0.3"

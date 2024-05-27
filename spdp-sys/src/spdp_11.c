@@ -39,13 +39,9 @@ Synthesized Lossless Compression Algorithm for Floating-Point Data. Proceedings
 of the 2018 Data Compression Conference, pp. 337-346. March 2018.
 */
 
-
-#include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <spdp_11.h>
 
-#define BUFFER_SIZE (1 << 23)
 #define MAX_TABLE_SIZE (1 << 18)
 
 typedef unsigned int word_t;
