@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::convert::TryInto;
 use std::pin::Pin;
 
@@ -113,24 +113,36 @@ impl CodecInternal for SpdpConfig {
       // assert!(dst_bytes.capacity() >= dst_batch_length + 4);
       // assert!(dst_bytes.capacity() >= csize + 4);
       // SPDP modifies the input buffer, so we copy the batch
-      let mut src_batch = src
-        .iter()
-        .cloned()
-        .chain([0; 64].into_iter())
-        .collect::<Vec<_>>();
+      let mut src_batch = vec![0; max(csize, dst_batch_length)];
+      src_batch[..csize].copy_from_slice(&src[..csize]);
+      // let mut src_batch = src
+      //   .iter()
+      //   .take(csize)
+      //   .cloned()
+      //   .chain([0; 64].into_iter())
+      //   .collect::<Vec<_>>();
       // assert!(src_batch.capacity() >= csize + 4);
       // let mut src_batch = src[..csize].to_vec();
       let old_src = src_batch.as_mut_ptr();
       let old_dst = dst_bytes.as_mut_ptr();
-      println!("\nD {:?} {:?}", old_src, old_dst);
-      unsafe {
+      println!(
+        "\nD {:?} {:?} {} {}, {} {}",
+        old_src,
+        old_dst,
+        csize,
+        dst_batch_length,
+        src_batch.len(),
+        dst_bytes.len()
+      );
+      let decompressed = unsafe {
         spdp_sys::spdp_decompress_batch(
           level,
           csize,
           src_batch.as_mut_ptr(),
           dst_bytes.as_mut_ptr(),
         )
-      }
+      };
+      println!("  decompressed {} bytes", decompressed);
       let new_src = src_batch.as_mut_ptr();
       let new_dst = dst_bytes.as_mut_ptr();
       if new_src != old_src {

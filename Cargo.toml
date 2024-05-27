@@ -8,8 +8,8 @@ members = [
   "pco_cli",
   "pco_python",
   "quantile-compression/ffi",
-  "quantile-compression/q_compress", "spdp-sys",
-  "spdp-sys",
+  "quantile-compression/q_compress",
+  "spdp_sys",
 ]
 
 exclude = [

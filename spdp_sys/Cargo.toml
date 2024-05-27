@@ -1,5 +1,5 @@
 [package]
-name = "spdp-sys"
+name = "spdp_sys"
 version = "0.1.0"
 edition = "2021"
 links = "spdp"

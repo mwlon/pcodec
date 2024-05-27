@@ -1288,7 +1288,7 @@ dependencies = [
  "q_compress",
  "serde",
  "snap",
- "spdp-sys",
+ "spdp_sys",
  "tabled",
  "toml",
  "wav",
@@ -1689,7 +1689,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "spdp-sys"
+name = "spdp_sys"
 version = "0.1.0"
 dependencies = [
  "bindgen",

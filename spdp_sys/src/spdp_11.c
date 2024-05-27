@@ -119,7 +119,7 @@ size_t spdp_compress_batch(const byte_t level, const size_t length, byte_t* cons
   return wpos;
 }
 
-void spdp_decompress_batch(const byte_t level, const size_t length, byte_t* const buf2, byte_t* const buf1)
+size_t spdp_decompress_batch(const byte_t level, const size_t length, byte_t* const buf2, byte_t* const buf1)
 {
   unsigned int predtabsize = 1 << (level + 9);
   if (predtabsize > MAX_TABLE_SIZE) predtabsize = MAX_TABLE_SIZE;
@@ -185,4 +185,6 @@ void spdp_decompress_batch(const byte_t level, const size_t length, byte_t* cons
   for (pos = len * sizeof(word_t); pos < usize; pos++) {
     buf1[pos] = buf2[pos];
   }
+
+  return pos;
 }
