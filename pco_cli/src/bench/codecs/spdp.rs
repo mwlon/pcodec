@@ -2,7 +2,6 @@ use std::cmp::{max, min};
 use std::convert::TryInto;
 
 use anyhow::{anyhow, Result};
-use zstd::zstd_safe::WriteBuf;
 
 use crate::bench::codecs::{utils, CodecInternal};
 use crate::dtypes::PcoNumberLike;
