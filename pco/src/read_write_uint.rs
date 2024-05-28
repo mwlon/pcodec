@@ -52,7 +52,6 @@ pub trait ReadWriteUint:
 
   fn from_u64(x: u64) -> Self;
   fn to_u64(self) -> u64;
-  fn wrapping_sub(self, other: Self) -> Self;
 }
 
 impl ReadWriteUint for usize {
@@ -69,11 +68,6 @@ impl ReadWriteUint for usize {
   fn to_u64(self) -> u64 {
     self as u64
   }
-
-  #[inline]
-  fn wrapping_sub(self, other: Self) -> Self {
-    self.wrapping_sub(other)
-  }
 }
 
 impl<L: Latent> ReadWriteUint for L {
@@ -89,10 +83,5 @@ impl<L: Latent> ReadWriteUint for L {
   #[inline]
   fn to_u64(self) -> u64 {
     <Self as Latent>::to_u64(self)
-  }
-
-  #[inline]
-  fn wrapping_sub(self, other: Self) -> Self {
-    <Self as Latent>::wrapping_sub(self, other)
   }
 }
