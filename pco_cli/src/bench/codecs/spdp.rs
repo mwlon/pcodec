@@ -1,6 +1,5 @@
 use std::cmp::{max, min};
 use std::convert::TryInto;
-use std::pin::Pin;
 
 use anyhow::{anyhow, Result};
 use zstd::zstd_safe::WriteBuf;
@@ -44,7 +43,6 @@ impl CodecInternal for SpdpConfig {
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
-    println!("C START");
     let mut dst = Vec::new();
     dst.push(self.level);
     dst.extend((nums.len() as u32).to_le_bytes());
@@ -63,10 +61,6 @@ impl CodecInternal for SpdpConfig {
       dst.reserve(dst_buffer_size);
 
       let pos = dst.len();
-      let old_src = src_batch.as_mut_ptr();
-      let old_dst = (&mut dst[pos..]).as_mut_ptr();
-      println!("\nC {:?} {:?}", old_src, old_dst);
-      assert!(dst.capacity() >= pos + 2 * src_batch_length + 9);
       unsafe {
         let csize = spdp_sys::spdp_compress_batch(
           self.level,
@@ -77,23 +71,12 @@ impl CodecInternal for SpdpConfig {
         dst[pos - 4..pos].copy_from_slice(&(csize as u32).to_le_bytes());
         dst.set_len(pos + csize);
       };
-      let new_src = src_batch.as_mut_ptr();
-      let new_dst = (&mut dst[pos..]).as_mut_ptr();
-      if new_src != old_src {
-        println!("SRC MOVED!!!!!");
-      }
-      if new_dst != old_dst {
-        println!("DST MOVED!!!!");
-      }
-      println!("{:?} {:?}", new_src, new_dst);
       src = &src[src_batch_length..];
     }
-    println!("C END");
     dst
   }
 
   fn decompress<T: PcoNumberLike>(&self, mut src: &[u8]) -> Vec<T> {
-    println!("D START");
     let level = src[0];
     let total_count = u32::from_le_bytes(src[1..5].try_into().unwrap()) as usize;
     src = &src[5..];
@@ -110,31 +93,11 @@ impl CodecInternal for SpdpConfig {
       let dst_batch_length = u32::from_le_bytes(src[..4].try_into().unwrap()) as usize;
       let csize = u32::from_le_bytes(src[4..8].try_into().unwrap()) as usize;
       src = &src[8..];
-      // assert!(dst_bytes.capacity() >= dst_batch_length + 4);
-      // assert!(dst_bytes.capacity() >= csize + 4);
-      // SPDP modifies the input buffer, so we copy the batch
+      // SPDP modifies the input buffer and requires the input data be at least
+      // as long as the uncompressed output data, so we copy the batch.
       let mut src_batch = vec![0; max(csize, dst_batch_length)];
       src_batch[..csize].copy_from_slice(&src[..csize]);
-      // let mut src_batch = src
-      //   .iter()
-      //   .take(csize)
-      //   .cloned()
-      //   .chain([0; 64].into_iter())
-      //   .collect::<Vec<_>>();
-      // assert!(src_batch.capacity() >= csize + 4);
-      // let mut src_batch = src[..csize].to_vec();
-      let old_src = src_batch.as_mut_ptr();
-      let old_dst = dst_bytes.as_mut_ptr();
-      println!(
-        "\nD {:?} {:?} {} {}, {} {}",
-        old_src,
-        old_dst,
-        csize,
-        dst_batch_length,
-        src_batch.len(),
-        dst_bytes.len()
-      );
-      let decompressed = unsafe {
+      unsafe {
         spdp_sys::spdp_decompress_batch(
           level,
           csize,
@@ -142,20 +105,9 @@ impl CodecInternal for SpdpConfig {
           dst_bytes.as_mut_ptr(),
         )
       };
-      println!("  decompressed {} bytes", decompressed);
-      let new_src = src_batch.as_mut_ptr();
-      let new_dst = dst_bytes.as_mut_ptr();
-      if new_src != old_src {
-        println!("SRC MOVED!!!!!");
-      }
-      if new_dst != old_dst {
-        println!("DST MOVED!!!!");
-      }
-      println!("  {:?} {:?}", new_src, new_dst);
       src = &src[csize..];
       dst_bytes = &mut dst_bytes[dst_batch_length..];
     }
-    println!("D END");
     dst
   }
 }

@@ -30,20 +30,14 @@ fn handle_for_codec(
     core_dtype_to_str(num_vec.dtype()),
     name,
   );
-  println!("0");
   let precomputed = codec.warmup_iter(num_vec, &dataset, &opt.iter_opt)?;
-  println!("1");
   progress_bar.inc(1);
 
   let mut benches = Vec::with_capacity(opt.iters);
-  println!("2");
   for _ in 0..opt.iters {
-    println!("3");
     benches.push(codec.stats_iter(num_vec, &precomputed, &opt.iter_opt)?);
     progress_bar.inc(1);
-    println!("4");
   }
-  println!("5");
   Ok(PrintStat::compute(
     dataset,
     codec.to_string(),

@@ -1691,6 +1691,8 @@ dependencies = [
 [[package]]
 name = "spdp_sys"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a73a4d6b35001391b29057728a0058ba5747c9e60192f2a3fafd841fca03127"
 dependencies = [
  "bindgen",
  "cc",

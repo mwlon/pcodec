@@ -9,7 +9,6 @@ members = [
   "pco_python",
   "quantile-compression/ffi",
   "quantile-compression/q_compress",
-  "spdp_sys",
 ]
 
 exclude = [
