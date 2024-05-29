@@ -1,4 +1,7 @@
 use std::mem;
+use std::num::FpCategory;
+
+use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
@@ -36,7 +39,7 @@ fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
   }
 }
 
-macro_rules! impl_float_number {
+macro_rules! impl_float_like {
   ($t: ty, $latent: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
     impl FloatLike for $t {
       const BITS: Bitlen = $bits;
@@ -147,7 +150,121 @@ macro_rules! impl_float_number {
         l as Self
       }
     }
+  };
+}
 
+impl FloatLike for f16 {
+  const BITS: Bitlen = 16;
+  const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
+  const ZERO: Self = f16::ZERO;
+  const MAX_FOR_SAMPLING: Self = f16::from_bits(30719); // Half of MAX size.
+
+  #[inline]
+  fn abs(self) -> Self {
+    Self::from_f32(self.to_f32().abs())
+  }
+
+  fn inv(self) -> Self {
+    Self::from_f32(1.0 / self.to_f32())
+  }
+
+  #[inline]
+  fn round(self) -> Self {
+    Self::from_f32(self.to_f32().round())
+  }
+
+  #[inline]
+  fn exp2(power: i32) -> Self {
+    Self::from_f32(f32::exp2(power as f32))
+  }
+
+  #[inline]
+  fn from_f64(x: f64) -> Self {
+    Self::from_f64(x)
+  }
+
+  #[inline]
+  fn to_f64(self) -> f64 {
+    self.to_f64()
+  }
+
+  #[inline]
+  fn is_finite_and_normal(&self) -> bool {
+    self.is_finite() && !(matches!(self.classify(), FpCategory::Subnormal))
+  }
+
+  #[inline]
+  fn exponent(&self) -> i32 {
+    (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 + -15
+  }
+
+  #[inline]
+  fn trailing_zeros(&self) -> u32 {
+    self.to_bits().trailing_zeros()
+  }
+
+  #[inline]
+  fn max(a: Self, b: Self) -> Self {
+    Self::max(a, b)
+  }
+
+  #[inline]
+  fn min(a: Self, b: Self) -> Self {
+    Self::min(a, b)
+  }
+
+  #[inline]
+  fn to_latent_bits(self) -> Self::L {
+    self.to_bits()
+  }
+
+  #[inline]
+  fn int_float_from_latent(l: Self::L) -> Self {
+    let mid = Self::L::MID;
+    let (negative, abs_int) = if l >= mid {
+      (false, l - mid)
+    } else {
+      (true, mid - 1 - l)
+    };
+    let gpi = 1 << Self::MANTISSA_DIGITS;
+    let abs_float = if abs_int < gpi {
+      Self::from_f32(abs_int as f32)
+    } else {
+      Self::from_bits(Self::from_f32(gpi as f32).to_bits() + (abs_int - gpi))
+    };
+    if negative {
+      -abs_float
+    } else {
+      abs_float
+    }
+  }
+
+  #[inline]
+  fn int_float_to_latent(self) -> Self::L {
+    let abs = self.abs();
+    let gpi = 1 << Self::MANTISSA_DIGITS;
+    let gpi_float = Self::from_f32(gpi as f32);
+    let abs_int = if abs < gpi_float {
+      abs.to_f32() as Self::L
+    } else {
+      gpi + (abs.to_bits() - gpi_float.to_bits())
+    };
+    if self.is_sign_positive() {
+      Self::L::MID + abs_int
+    } else {
+      // -1 because we need to distinguish -0.0 from +0.0
+      Self::L::MID - 1 - abs_int
+    }
+  }
+
+  #[inline]
+  fn from_latent_numerical(l: Self::L) -> Self {
+    Self::from_f32(l as f32)
+  }
+}
+
+macro_rules! impl_float_number_like {
+  ($t: ty, $latent: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
     impl NumberLike for $t {
       const DTYPE_BYTE: u8 = $header_byte;
       const TRANSMUTABLE_TO_LATENT: bool = true;
@@ -229,8 +346,12 @@ macro_rules! impl_float_number {
   };
 }
 
-impl_float_number!(f32, u32, 32, 1_u32 << 31, 5, -127);
-impl_float_number!(f64, u64, 64, 1_u64 << 63, 6, -1023);
+// f16 FloatLike is implemented separately because it's non-native.
+impl_float_like!(f32, u32, 32, 1_u32 << 31, 5, -127);
+impl_float_like!(f64, u64, 64, 1_u64 << 63, 6, -1023);
+impl_float_number_like!(f16, u16, 16, 1_u16 << 15, 7, -15);
+impl_float_number_like!(f32, u32, 32, 1_u32 << 31, 5, -127);
+impl_float_number_like!(f64, u64, 64, 1_u64 << 63, 6, -1023);
 
 #[cfg(test)]
 mod tests {
