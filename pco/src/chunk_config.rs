@@ -53,12 +53,12 @@ pub enum FloatMultSpec {
 ///   as `f64`s where only the first 32 bits are used)
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum FloatQuantSpec {
-    #[default]
-    Disabled,
-    Enabled,
-    /// If you know how many bits of precision are unused, you can supply that
-    /// number here.
-    Provided(Bitlen),
+  #[default]
+  Disabled,
+  Enabled,
+  /// If you know how many bits of precision are unused, you can supply that
+  /// number here.
+  Provided(Bitlen),
 }
 
 /// All configurations available for a compressor.

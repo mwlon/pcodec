@@ -300,9 +300,7 @@ macro_rules! impl_float_number_like {
           Mode::FloatMult(base_latent) => {
             Self::from_latent_ordered(base_latent).is_finite_and_normal()
           }
-          Mode::FloatQuant(k) => {
-            k <= Self::PRECISION_BITS
-          }
+          Mode::FloatQuant(k) => k <= Self::PRECISION_BITS,
           _ => false,
         }
       }
