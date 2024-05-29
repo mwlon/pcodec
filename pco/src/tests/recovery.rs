@@ -1,3 +1,4 @@
+use half::f16;
 use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 
@@ -72,8 +73,16 @@ fn assert_recovers<T: NumberLike>(
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
-  assert_recovers(&[u64::MIN, u64::MAX], 0, "u64 extremes 0 - 0")?;
-  assert_recovers(&[f64::MIN, f64::MAX], 0, "f64 extremes 0 - 0")?;
+  assert_recovers(
+    &[u64::MIN, u64::MAX],
+    0,
+    "u64 extremes 0 - 0",
+  )?;
+  assert_recovers(
+    &[f64::MIN, f64::MAX],
+    0,
+    "f64 extremes 0 - 0",
+  )?;
   assert_recovers(&[1.2_f32], 0, "float - 0")?;
   assert_recovers(&[1.2_f32], 1, "float - 1")?;
   assert_recovers(&[1.2_f32], 2, "float - 2")?;
@@ -82,7 +91,25 @@ fn test_edge_cases() -> PcoResult<()> {
   assert_recovers(&Vec::<u16>::new(), 6, "empty u16 - 6")?;
   assert_recovers(&Vec::<u16>::new(), 0, "empty u16 - 0")?;
   assert_recovers(&[u16::MIN, u16::MAX], 0, "u16 extremes - 0")?;
-
+  assert_recovers(&Vec::<f16>::new(), 6, "empty f16 - 6")?;
+  assert_recovers(
+    &[
+      f16::NEG_INFINITY,
+      f16::MIN,
+      f16::NEG_ONE,
+      f16::NEG_ZERO,
+      f16::NAN,
+      f16::ZERO,
+      f16::ONE,
+      f16::MAX,
+      f16::INFINITY,
+    ],
+    5,
+    "f16 - 5",
+  )?;
+  assert_recovers(&[f16::from_f32(1.2)], 0, "f16 - 0")?;
+  assert_recovers(&[f16::from_f32(1.2)], 1, "f16 - 1")?;
+  assert_recovers(&[f16::from_f32(1.2)], 2, "f16 - 2")?;
 
   Ok(())
 }
@@ -147,6 +174,24 @@ fn test_i64_codec() -> PcoResult<()> {
     &[0_i64, -1, i64::MAX, i64::MIN, 7],
     1,
     "i64s",
+  )
+}
+
+#[test]
+fn test_f16_codec() -> PcoResult<()> {
+  assert_recovers(
+    &[
+      f16::MAX,
+      f16::MIN,
+      f16::NAN,
+      f16::NEG_INFINITY,
+      f16::INFINITY,
+      f16::from_f32(-0.0),
+      f16::from_f32(0.0),
+      f16::from_f32(77.7),
+    ],
+    1,
+    "f16s",
   )
 }
 
