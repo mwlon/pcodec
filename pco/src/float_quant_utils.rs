@@ -15,7 +15,8 @@ pub(crate) fn join_latents<F: FloatLike>(
       (m >> k).is_zero(),
       "Invalid input to FloatQuant: m must be a k-bit integer"
     );
-    *y_and_dst = F::from_latent_bits((*y_and_dst << k) + m).to_latent_ordered();
+    let quantized = F::from_latent_ordered(*y_and_dst << k);
+    *y_and_dst = quantized.to_latent_bits() + m;
   }
 }
 
@@ -32,7 +33,7 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
     .iter()
     .zip(primary.iter_mut().zip(secondary.iter_mut()))
   {
-    let num_ = num.to_latent_bits();
+    let num_ = num.to_latent_ordered();
     let kc = F::L::BITS - k;
     *primary_dst = num_ >> k;
     *secondary_dst = (num_ << kc) >> kc;
