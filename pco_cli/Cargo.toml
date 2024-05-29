@@ -27,6 +27,7 @@ parquet = { version = "49.0.0", features = ["arrow", "base64", "snap", "zstd"], 
 pco = { version = "0.2", path = "../pco" }
 q_compress = { version = "0.11.7", path = "../quantile-compression/q_compress", optional = true }
 snap = "1.1.0"
+spdp_sys = { version = "0.1", optional = true }
 toml = "0.8.12"
 tabled = "0.15.0"
 serde = { version = "1.0.197", features = ["derive"] }
@@ -35,4 +36,4 @@ zstd = "0.13"
 
 [features]
 audio = ["wav"]
-full_bench = ["q_compress", "blosc-src"]
+full_bench = ["blosc-src", "q_compress", "spdp_sys"]
