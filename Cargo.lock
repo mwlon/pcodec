@@ -537,6 +537,7 @@ checksum = "06ea2b9bc92be3c2baa9334a323ebca2d6f074ff852cd1d7b11064035cd3868f"
 name = "cpcodec"
 version = "0.0.0"
 dependencies = [
+ "half",
  "libc",
  "pco",
 ]
@@ -1160,6 +1161,7 @@ version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef41cbb417ea83b30525259e30ccef6af39b31c240bda578889494c5392d331"
 dependencies = [
+ "half",
  "libc",
  "ndarray",
  "num-complex",
@@ -1283,6 +1285,7 @@ dependencies = [
  "blosc-src",
  "bytes",
  "clap",
+ "half",
  "indicatif",
  "parquet",
  "pco",
@@ -1300,6 +1303,7 @@ dependencies = [
 name = "pco_python"
 version = "0.1.1"
 dependencies = [
+ "half",
  "numpy",
  "pco",
  "pyo3",

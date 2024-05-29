@@ -1,3 +1,4 @@
+use half::f16;
 use numpy::PyArrayDyn;
 use pco::data_types::CoreDataType;
 use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec, Progress};
@@ -162,6 +163,7 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
 // The first dyn refers to dynamic dtype; the second to dynamic shape
 #[derive(Debug, FromPyObject)]
 pub enum DynTypedPyArrayDyn<'py> {
+  F16(&'py PyArrayDyn<f16>),
   F32(&'py PyArrayDyn<f32>),
   F64(&'py PyArrayDyn<f64>),
   I16(&'py PyArrayDyn<i16>),

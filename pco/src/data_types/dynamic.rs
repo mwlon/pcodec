@@ -54,6 +54,7 @@ macro_rules! with_core_dtypes {
       I16(U16) => i16,
       I32(U32) => i32,
       I64(U64) => i64,
+      F16(U16) => half::f16,
       F32(U32) => f32,
       F64(U64) => f64,
     );

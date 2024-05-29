@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use arrow::array::{
-  ArrayData, ArrayRef, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, UInt16Array, UInt32Array, UInt64Array,
+  ArrayData, ArrayRef, Float16Array, Float32Array, Float64Array, Int16Array, Int32Array,
+  Int64Array, UInt16Array, UInt32Array, UInt64Array,
 };
 use arrow::buffer::Buffer;
 use arrow::csv;
@@ -14,6 +15,7 @@ use arrow::csv::Reader as CsvReader;
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatchReader;
 use clap::Parser;
+use half::f16;
 use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
 
@@ -412,6 +414,9 @@ impl PcoColumnReader {
 
     let compressed = fs::read(&self.col_path)?;
     let array: ArrayRef = match self.dtype {
+      F16 => Arc::new(Float16Array::from(simple_decompress::<f16>(
+        &compressed,
+      )?)),
       F32 => Arc::new(Float32Array::from(simple_decompress::<f32>(
         &compressed,
       )?)),

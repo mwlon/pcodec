@@ -3,9 +3,10 @@ use std::mem;
 use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes as arrow_dtypes;
-use arrow::datatypes::{ArrowPrimitiveType, DataType};
 use arrow::datatypes::DataType as ArrowDataType;
+use arrow::datatypes::{ArrowPrimitiveType, DataType};
 
+use half::f16;
 use pco::data_types::{CoreDataType, NumberLike};
 
 use crate::num_vec::NumVec;
@@ -143,6 +144,20 @@ parquetable!(f64, parquet::data_type::DoubleType, "DOUBLE");
 parquetable!(i32, parquet::data_type::Int32Type, "INT32");
 parquetable!(i64, parquet::data_type::Int64Type, "INT64");
 
+impl Parquetable for f16 {
+  const PARQUET_DTYPE_STR: &'static str = "FLOAT";
+  type Parquet = parquet::data_type::FloatType;
+
+  // Parquet doesn't have unsigned integer types, so the best zero-copy thing
+  // we can do is transmute to signed ones.
+  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+    todo!()
+  }
+  fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
+    todo!()
+  }
+}
+
 impl Parquetable for i16 {
   const PARQUET_DTYPE_STR: &'static str = "INT32";
   type Parquet = parquet::data_type::Int32Type;
@@ -200,6 +215,7 @@ impl Parquetable for u64 {
   }
 }
 
+trivial!(f16, F16, arrow_dtypes::Float16Type);
 trivial!(f32, F32, arrow_dtypes::Float32Type);
 trivial!(f64, F64, arrow_dtypes::Float64Type);
 trivial!(i16, I16, arrow_dtypes::Int16Type);
@@ -216,6 +232,7 @@ extra_arrow!(i64, arrow_dtypes::TimestampNanosecondType);
 
 pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<CoreDataType> {
   let res = match arrow_dtype {
+    ArrowDataType::Float16 => CoreDataType::F16,
     ArrowDataType::Float32 => CoreDataType::F32,
     ArrowDataType::Float64 => CoreDataType::F64,
     ArrowDataType::Int16 => CoreDataType::I16,
@@ -237,6 +254,7 @@ pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<CoreDataType> {
 
 pub fn to_arrow(dtype: CoreDataType) -> ArrowDataType {
   match dtype {
+    CoreDataType::F16 => ArrowDataType::Float16,
     CoreDataType::F32 => ArrowDataType::Float32,
     CoreDataType::F64 => ArrowDataType::Float64,
     CoreDataType::I16 => ArrowDataType::Int16,
