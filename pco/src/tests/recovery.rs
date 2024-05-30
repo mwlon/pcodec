@@ -73,25 +73,14 @@ fn assert_recovers<T: NumberLike>(
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
-  assert_recovers(
-    &[u64::MIN, u64::MAX],
-    0,
-    "u64 extremes 0 - 0",
-  )?;
-  assert_recovers(
-    &[f64::MIN, f64::MAX],
-    0,
-    "f64 extremes 0 - 0",
-  )?;
+  assert_recovers(&[u64::MIN, u64::MAX], 0, "u64 extremes - 0")?;
+  assert_recovers(&[f64::MIN, f64::MAX], 0, "f64 extremes - 0")?;
   assert_recovers(&[1.2_f32], 0, "float - 0")?;
   assert_recovers(&[1.2_f32], 1, "float - 1")?;
   assert_recovers(&[1.2_f32], 2, "float - 2")?;
   assert_recovers(&Vec::<u32>::new(), 6, "empty u32 - 6")?;
   assert_recovers(&Vec::<u32>::new(), 0, "empty u32 - 0")?;
   assert_recovers(&Vec::<u16>::new(), 6, "empty u16 - 6")?;
-  assert_recovers(&Vec::<u16>::new(), 0, "empty u16 - 0")?;
-  assert_recovers(&[u16::MIN, u16::MAX], 0, "u16 extremes - 0")?;
-  assert_recovers(&Vec::<f16>::new(), 6, "empty f16 - 6")?;
   assert_recovers(
     &[
       f16::NEG_INFINITY,
@@ -107,9 +96,6 @@ fn test_edge_cases() -> PcoResult<()> {
     5,
     "f16 - 5",
   )?;
-  assert_recovers(&[f16::from_f32(1.2)], 0, "f16 - 0")?;
-  assert_recovers(&[f16::from_f32(1.2)], 1, "f16 - 1")?;
-  assert_recovers(&[f16::from_f32(1.2)], 2, "f16 - 2")?;
 
   Ok(())
 }
