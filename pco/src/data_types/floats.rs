@@ -165,7 +165,7 @@ impl FloatLike for f16 {
   }
 
   fn inv(self) -> Self {
-    Self::from_f32(1.0 / self.to_f32())
+    Self::ONE / self
   }
 
   #[inline]
