@@ -346,12 +346,12 @@ macro_rules! impl_float_number_like {
   };
 }
 
-// f16 FloatLike is implemented separately because it's non-native.
 impl_float_like!(f32, u32, 32, -127);
 impl_float_like!(f64, u64, 64, -1023);
-impl_float_number_like!(f16, u16, 1_u16 << 15, 7);
+// f16 FloatLike is implemented separately because it's non-native.
 impl_float_number_like!(f32, u32, 1_u32 << 31, 5);
 impl_float_number_like!(f64, u64, 1_u64 << 63, 6);
+impl_float_number_like!(f16, u16, 1_u16 << 15, 9);
 
 #[cfg(test)]
 mod tests {
