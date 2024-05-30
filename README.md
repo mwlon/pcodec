@@ -31,7 +31,7 @@ numerical sequences with
 * low-bandwidth communication
 
 **Data types:**
-`u32`, `u64`, `i32`, `i64`, `f32`, `f64`
+`u16`, `u32`, `u64`, `i16`, `i32`, `i64`, `f16`, `f32`, `f64`
 
 ## Get Started
 
