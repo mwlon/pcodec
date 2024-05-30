@@ -1,5 +1,4 @@
 use std::mem;
-use std::num::FpCategory;
 
 use half::f16;
 
@@ -190,7 +189,7 @@ impl FloatLike for f16 {
 
   #[inline]
   fn is_finite_and_normal(&self) -> bool {
-    self.is_finite() && !(matches!(self.classify(), FpCategory::Subnormal))
+    self.is_finite() && self.is_normal()
   }
 
   #[inline]
