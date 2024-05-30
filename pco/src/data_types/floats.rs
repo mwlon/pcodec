@@ -40,7 +40,7 @@ fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
 }
 
 macro_rules! impl_float_like {
-  ($t: ty, $latent: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
+  ($t: ty, $latent: ty, $bits: expr, $exp_offset: expr) => {
     impl FloatLike for $t {
       const BITS: Bitlen = $bits;
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
@@ -264,7 +264,7 @@ impl FloatLike for f16 {
 }
 
 macro_rules! impl_float_number_like {
-  ($t: ty, $latent: ty, $bits: expr, $sign_bit_mask: expr, $header_byte: expr, $exp_offset: expr) => {
+  ($t: ty, $latent: ty, $sign_bit_mask: expr, $header_byte: expr) => {
     impl NumberLike for $t {
       const DTYPE_BYTE: u8 = $header_byte;
       const TRANSMUTABLE_TO_LATENT: bool = true;
@@ -347,11 +347,11 @@ macro_rules! impl_float_number_like {
 }
 
 // f16 FloatLike is implemented separately because it's non-native.
-impl_float_like!(f32, u32, 32, 1_u32 << 31, 5, -127);
-impl_float_like!(f64, u64, 64, 1_u64 << 63, 6, -1023);
-impl_float_number_like!(f16, u16, 16, 1_u16 << 15, 7, -15);
-impl_float_number_like!(f32, u32, 32, 1_u32 << 31, 5, -127);
-impl_float_number_like!(f64, u64, 64, 1_u64 << 63, 6, -1023);
+impl_float_like!(f32, u32, 32, -127);
+impl_float_like!(f64, u64, 64, -1023);
+impl_float_number_like!(f16, u16, 1_u16 << 15, 7);
+impl_float_number_like!(f32, u32, 1_u32 << 31, 5);
+impl_float_number_like!(f64, u64, 1_u64 << 63, 6);
 
 #[cfg(test)]
 mod tests {
