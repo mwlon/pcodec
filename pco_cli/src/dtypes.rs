@@ -150,10 +150,10 @@ impl Parquetable for f16 {
 
   // Parquet doesn't have unsigned integer types, so the best zero-copy thing
   // we can do is transmute to signed ones.
-  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+  fn nums_to_parquet(_nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
     todo!()
   }
-  fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
+  fn parquet_to_nums(_vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
     todo!()
   }
 }
@@ -164,10 +164,10 @@ impl Parquetable for i16 {
 
   // Parquet doesn't have unsigned integer types, so the best zero-copy thing
   // we can do is transmute to signed ones.
-  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+  fn nums_to_parquet(_nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
     todo!()
   }
-  fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
+  fn parquet_to_nums(_vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
     todo!()
   }
 }
@@ -178,10 +178,10 @@ impl Parquetable for u16 {
 
   // Parquet doesn't have unsigned integer types, so the best zero-copy thing
   // we can do is transmute to signed ones.
-  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+  fn nums_to_parquet(_nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
     todo!()
   }
-  fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
+  fn parquet_to_nums(_vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
     todo!()
   }
 }
