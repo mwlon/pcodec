@@ -7,7 +7,7 @@ use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
-use crate::{ChunkMeta, Mode};
+use crate::{ChunkMeta, FloatMultSpec, Mode};
 
 fn compress_w_meta<T: NumberLike>(
   nums: &[T],
@@ -328,6 +328,19 @@ fn test_decimals() -> PcoResult<()> {
   assert_eq!(meta.mode, Mode::float_mult(1.0 / 100.0));
 
   assert_recovers(&nums, 2, "decimals")
+}
+
+#[test]
+fn test_f16_mult() -> PcoResult<()> {
+  let nums = [100.1, 299.9, 200.0].repeat(100);
+  let config = ChunkConfig {
+    float_mult_spec: FloatMultSpec::Provided(100.0),
+    ..Default::default()
+  };
+  let (_, meta) = compress_w_meta(&nums, &config)?;
+  assert_eq!(meta.mode, Mode::float_mult(100.0));
+
+  assert_recovers(&nums, 1, "f16 mult mode")
 }
 
 #[test]

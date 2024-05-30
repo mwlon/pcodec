@@ -194,7 +194,7 @@ impl FloatLike for f16 {
 
   #[inline]
   fn exponent(&self) -> i32 {
-    (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 + -15
+    (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 - 15
   }
 
   #[inline]
