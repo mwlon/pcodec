@@ -161,7 +161,7 @@ impl FloatLike for f16 {
 
   #[inline]
   fn abs(self) -> Self {
-    Self::from_f32(self.to_f32().abs())
+    Self::from_bits(self.to_bits() & 0x7FFF)
   }
 
   fn inv(self) -> Self {
