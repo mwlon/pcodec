@@ -26,6 +26,7 @@ pub fn from_dtype(dtype: &DataType) -> Result<Box<dyn ArrowHandler>> {
   }
 
   match_dtype!(
+    Float16 => Float16Type,
     Float32 => Float32Type,
     Float64 => Float64Type,
     Int16 => Int16Type,
