@@ -537,6 +537,7 @@ checksum = "06ea2b9bc92be3c2baa9334a323ebca2d6f074ff852cd1d7b11064035cd3868f"
 name = "cpcodec"
 version = "0.0.0"
 dependencies = [
+ "half",
  "libc",
  "pco",
 ]
@@ -726,9 +727,9 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "half"
-version = "2.4.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5eceaaeec696539ddaf7b333340f1af35a5aa87ae3e4f3ead0532f72affab2e"
+checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
 dependencies = [
  "cfg-if",
  "crunchy",
@@ -1130,9 +1131,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.18"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da0df0e5185db44f69b44f26786fe401b6c293d1907744beaa7fa62b2e5a517a"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
@@ -1160,6 +1161,7 @@ version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef41cbb417ea83b30525259e30ccef6af39b31c240bda578889494c5392d331"
 dependencies = [
+ "half",
  "libc",
  "ndarray",
  "num-complex",
@@ -1267,6 +1269,7 @@ version = "0.2.5"
 dependencies = [
  "better_io",
  "futures",
+ "half",
  "rand",
  "rand_xoshiro",
  "tokio",
@@ -1282,6 +1285,7 @@ dependencies = [
  "blosc-src",
  "bytes",
  "clap",
+ "half",
  "indicatif",
  "parquet",
  "pco",
@@ -1299,6 +1303,7 @@ dependencies = [
 name = "pco_python"
 version = "0.1.1"
 dependencies = [
+ "half",
  "numpy",
  "pco",
  "pyo3",

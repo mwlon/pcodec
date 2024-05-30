@@ -17,6 +17,7 @@ struct PyFc {
 }
 
 enum DynCc {
+  U16(ChunkCompressor<u16>),
   U32(ChunkCompressor<u32>),
   U64(ChunkCompressor<u64>),
 }
@@ -67,7 +68,7 @@ impl PyFc {
   ///
   /// :param nums: numpy array to compress. This may have any shape.
   /// However, it must be contiguous, and only the following data types are
-  /// supported: float32, float64, int32, int64, uint32, uint64.
+  /// supported: float16, float32, float64, int16, int32, int64, uint16, uint32, uint64.
   /// :param config: a ChunkConfig object containing compression level and
   /// other settings.
   ///

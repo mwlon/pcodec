@@ -1,3 +1,4 @@
+use half::f16;
 use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 
@@ -6,7 +7,7 @@ use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
-use crate::{ChunkMeta, Mode};
+use crate::{ChunkMeta, FloatMultSpec, Mode};
 
 fn compress_w_meta<T: NumberLike>(
   nums: &[T],
@@ -72,13 +73,31 @@ fn assert_recovers<T: NumberLike>(
 
 #[test]
 fn test_edge_cases() -> PcoResult<()> {
-  assert_recovers(&[u64::MIN, u64::MAX], 0, "int extremes 0")?;
-  assert_recovers(&[f64::MIN, f64::MAX], 0, "float extremes 0")?;
-  assert_recovers(&[1.2_f32], 0, "float 0")?;
-  assert_recovers(&[1.2_f32], 1, "float 1")?;
-  assert_recovers(&[1.2_f32], 2, "float 2")?;
-  assert_recovers(&Vec::<u32>::new(), 6, "empty 6")?;
-  assert_recovers(&Vec::<u32>::new(), 0, "empty 0")
+  assert_recovers(&[u64::MIN, u64::MAX], 0, "u64 extremes - 0")?;
+  assert_recovers(&[f64::MIN, f64::MAX], 0, "f64 extremes - 0")?;
+  assert_recovers(&[1.2_f32], 0, "f32 - 0")?;
+  assert_recovers(&[1.2_f32], 1, "f32 - 1")?;
+  assert_recovers(&[1.2_f32], 2, "f32 - 2")?;
+  assert_recovers(&Vec::<u32>::new(), 6, "empty u32 - 6")?;
+  assert_recovers(&Vec::<u32>::new(), 0, "empty u32 - 0")?;
+  assert_recovers(&Vec::<u16>::new(), 6, "empty u16 - 6")?;
+  assert_recovers(
+    &[
+      f16::NEG_INFINITY,
+      f16::MIN,
+      f16::NEG_ONE,
+      f16::NEG_ZERO,
+      f16::NAN,
+      f16::ZERO,
+      f16::ONE,
+      f16::MAX,
+      f16::INFINITY,
+    ],
+    5,
+    "f16 - 5",
+  )?;
+
+  Ok(())
 }
 
 #[test]
@@ -103,6 +122,11 @@ fn test_sparse() -> PcoResult<()> {
 }
 
 #[test]
+fn test_u16_codec() -> PcoResult<()> {
+  assert_recovers(&[0_u16, u16::MAX, 2, 3, 4, 5], 1, "u16s")
+}
+
+#[test]
 fn test_u32_codec() -> PcoResult<()> {
   assert_recovers(&[0_u32, u32::MAX, 3, 4, 5], 1, "u32s")
 }
@@ -110,6 +134,15 @@ fn test_u32_codec() -> PcoResult<()> {
 #[test]
 fn test_u64_codec() -> PcoResult<()> {
   assert_recovers(&[0_u64, u64::MAX, 3, 4, 5], 1, "u64s")
+}
+
+#[test]
+fn test_i16_codec() -> PcoResult<()> {
+  assert_recovers(
+    &[0_i16, -1, i16::MAX, i16::MIN, 7],
+    1,
+    "i16s",
+  )
 }
 
 #[test]
@@ -127,6 +160,24 @@ fn test_i64_codec() -> PcoResult<()> {
     &[0_i64, -1, i64::MAX, i64::MIN, 7],
     1,
     "i64s",
+  )
+}
+
+#[test]
+fn test_f16_codec() -> PcoResult<()> {
+  assert_recovers(
+    &[
+      f16::MAX,
+      f16::MIN,
+      f16::NAN,
+      f16::NEG_INFINITY,
+      f16::INFINITY,
+      f16::from_f32(-0.0),
+      f16::from_f32(0.0),
+      f16::from_f32(77.7),
+    ],
+    1,
+    "f16s",
   )
 }
 
@@ -277,6 +328,19 @@ fn test_decimals() -> PcoResult<()> {
   assert_eq!(meta.mode, Mode::float_mult(1.0 / 100.0));
 
   assert_recovers(&nums, 2, "decimals")
+}
+
+#[test]
+fn test_f16_mult() -> PcoResult<()> {
+  let nums = [100.1, 299.9, 200.0].repeat(100);
+  let config = ChunkConfig {
+    float_mult_spec: FloatMultSpec::Provided(100.0),
+    ..Default::default()
+  };
+  let (_, meta) = compress_w_meta(&nums, &config)?;
+  assert_eq!(meta.mode, Mode::float_mult(100.0));
+
+  assert_recovers(&nums, 1, "f16 mult mode")
 }
 
 #[test]
