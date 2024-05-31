@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 
-use pco::{FloatMultSpec, IntMultSpec};
+use pco::{FloatMultSpec, FloatQuantSpec, IntMultSpec};
 
 use crate::input::{InputColumnOpt, InputFileOpt};
 use crate::{arrow_handlers, input};
@@ -28,6 +28,10 @@ pub struct CompressOpt {
   /// float mult mode.
   #[arg(long, default_value = "Enabled", value_parser = parse::float_mult)]
   pub float_mult: FloatMultSpec,
+  /// Can be "Disabled", or a fixed integer to use as the parameter `k` in float quant mode.
+  /// TODO(https://github.com/mwlon/pcodec/issues/194): Implement "Enabled" mode
+  #[arg(long, default_value = "Disabled", value_parser = parse::float_quant)]
+  pub float_quant: FloatQuantSpec,
   #[arg(long, default_value_t=pco::DEFAULT_MAX_PAGE_N)]
   pub chunk_size: usize,
   /// Overwrite the output path (if it exists) instead of failing.
