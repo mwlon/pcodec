@@ -39,7 +39,9 @@ fn choose_mode_and_split_latents<F: FloatLike>(
       (Mode::Classic, split_latents_classic(nums))
     }
     (_, FloatQuantSpec::Enabled) => {
-      panic!("Setting FloatQuant mode to 'Enabled' is not yet implemented, try using 'Provided' instead");
+      panic!(
+        "Setting FloatQuant mode to 'Enabled' is not yet implemented, try using 'Provided' instead"
+      );
     }
   }
 }
