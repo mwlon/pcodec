@@ -140,7 +140,7 @@ impl Default for ChunkConfig {
       delta_encoding_order: None,
       int_mult_spec: IntMultSpec::Enabled,
       float_mult_spec: FloatMultSpec::Enabled,
-      float_quant_spec: FloatQuantSpec::Enabled,
+      float_quant_spec: FloatQuantSpec::Disabled,
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }

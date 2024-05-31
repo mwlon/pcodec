@@ -4,14 +4,19 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
-use crate::{float_mult_utils, float_quant_utils, ChunkConfig, FloatMultSpec, Mode};
+use crate::{
+  float_mult_utils, float_quant_utils, ChunkConfig, FloatMultSpec, FloatQuantSpec, Mode,
+};
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
 ) -> (Mode<F::L>, Vec<Vec<F::L>>) {
-  match chunk_config.float_mult_spec {
-    FloatMultSpec::Enabled => {
+  match (
+    chunk_config.float_mult_spec,
+    chunk_config.float_quant_spec,
+  ) {
+    (FloatMultSpec::Enabled, _) => {
       if let Some(fm_config) = float_mult_utils::choose_config(nums) {
         let mode = Mode::float_mult(fm_config.base);
         let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
@@ -20,13 +25,22 @@ fn choose_mode_and_split_latents<F: FloatLike>(
         (Mode::Classic, split_latents_classic(nums))
       }
     }
-    FloatMultSpec::Provided(base_f64) => {
+    (FloatMultSpec::Provided(base_f64), _) => {
       let base = F::from_f64(base_f64);
       let mode = Mode::float_mult(base);
       let latents = float_mult_utils::split_latents(nums, base, base.inv());
       (mode, latents)
     }
-    FloatMultSpec::Disabled => (Mode::Classic, split_latents_classic(nums)),
+    (FloatMultSpec::Disabled, FloatQuantSpec::Provided(k)) => (
+      Mode::FloatQuant(k),
+      float_quant_utils::split_latents(nums, k),
+    ),
+    (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
+      (Mode::Classic, split_latents_classic(nums))
+    }
+    (_, FloatQuantSpec::Enabled) => {
+      panic!("Setting FloatQuant mode to 'Enabled' is not yet implemented, try using 'Provided' instead");
+    }
   }
 }
 
