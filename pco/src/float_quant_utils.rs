@@ -96,7 +96,7 @@ mod test {
     let k: Bitlen = 5;
     let mut s = split_latents(&nums, k);
     let (l, r) = s.split_at_mut(1);
-    let mut ys = l.get_mut(0).unwrap();
+    let ys = l.get_mut(0).unwrap();
     let ms = r.get(0).unwrap();
     join_latents::<f64>(k, ys, &ms);
     assert_eq!(uints, *ys);
