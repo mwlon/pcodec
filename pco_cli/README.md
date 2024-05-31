@@ -29,7 +29,7 @@ pcodec bench --parquet my_input_data.parquet
 pcodec bench \
   --csv my_input_data.csv \
   --csv-has-header \
-  --codecs pco:level=9,parquet:compression=zstd4 \
+  --codecs pco:level=9:delta_order=0,parquet:compression=zstd4 \
   --dtypes f32 \
   --datasets foo,bar \
   --iters 7 \
@@ -37,6 +37,7 @@ pcodec bench \
   --save-dir ./tmp
 pcodec bench --binary-dir ./data
 ```
+For full documentation of the available configuration options, see [`BenchOpt`](src/bench/mod.rs).
 
 ### Setting up synthetic data
 
