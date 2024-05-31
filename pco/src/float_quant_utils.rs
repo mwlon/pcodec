@@ -94,11 +94,10 @@ mod test {
       .collect::<Vec<_>>();
 
     let k: Bitlen = 5;
-    // TODO: basic Rust question, how can we do this without redundant copies?
     let mut s = split_latents(&nums, k);
-    let s2 = s.to_owned();
-    let ys = s.get_mut(0).unwrap();
-    let ms = s2.get(1).unwrap();
+    let (l, r) = s.split_at_mut(1);
+    let mut ys = l.get_mut(0).unwrap();
+    let ms = r.get(0).unwrap();
     join_latents::<f64>(k, ys, &ms);
     assert_eq!(uints, *ys);
   }
