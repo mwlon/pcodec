@@ -47,36 +47,7 @@ pub(crate) struct FloatQuantConfig {
 
 #[inline(never)]
 pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatQuantConfig> {
-  let sample = sampling::choose_sample(nums, |&num| Some(num))?;
-  let thresh = (0.9 * sample.len() as f32).floor() as usize;
-  let mut hist = vec![0; F::PRECISION_BITS.try_into().unwrap()];
-  for num_tz in sample.iter().map(|&x| {
-    cmp::min(
-      F::PRECISION_BITS,
-      // Using the fact that significand bits come last in
-      // the floating-point representations we care about
-      x.to_latent_bits().trailing_zeros(),
-    )
-  }) {
-    hist[num_tz as usize] += 1
-  }
-  let k = hist
-    .iter()
-    .enumerate()
-    .rev()
-    .scan(0usize, |csum, (i, x)| {
-      if *csum >= thresh {
-        return None;
-      }
-      *csum = *csum + x;
-      Some(i)
-    })
-    .last()?;
-  if k > 2 {
-    Some(FloatQuantConfig { k: k as Bitlen })
-  } else {
-    None
-  }
+  panic!("Not implemented yet - see https://github.com/mwlon/pcodec/issues/194");
 }
 
 #[cfg(test)]
