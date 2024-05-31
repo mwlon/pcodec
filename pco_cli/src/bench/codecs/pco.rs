@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 
-use pco::{FloatMultSpec, IntMultSpec, PagingSpec};
+use pco::{FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec};
 
 use crate::bench::codecs::CodecInternal;
 use crate::dtypes::PcoNumberLike;
@@ -36,6 +36,10 @@ impl CodecInternal for PcoConfig {
       (
         "float_mult",
         format!("{:?}", self.chunk_config.float_mult_spec),
+      ),
+      (
+        "float_quant",
+        format!("{:?}", self.chunk_config.float_quant_spec),
       ),
       (
         "chunk_n",
@@ -80,6 +84,16 @@ impl CodecInternal for PcoConfig {
           other => match other.parse::<f64>() {
             Ok(mult) => FloatMultSpec::Provided(mult),
             _ => return Err(anyhow!("cannot parse float mult: {}", other)),
+          },
+        }
+      }
+      "float_quant" => {
+        self.chunk_config.float_quant_spec = match value.as_str() {
+          "enabled" => return Err(anyhow!("FloatQuantSpec::Enabled is not implemented yet, see https://github.com/mwlon/pcodec/issues/194")),
+          "disabled" => FloatQuantSpec::Disabled,
+          other => match other.parse::<u32>() {
+            Ok(k) => FloatQuantSpec::Provided(k),
+            _ => return Err(anyhow!("cannot parse float quant parameter: {}", other)),
           },
         }
       }
