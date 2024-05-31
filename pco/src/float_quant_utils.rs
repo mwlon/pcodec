@@ -15,8 +15,7 @@ pub(crate) fn join_latents<F: FloatLike>(
       (m >> k).is_zero(),
       "Invalid input to FloatQuant: m must be a k-bit integer"
     );
-    let quantized = F::from_latent_ordered(*y_and_dst << k);
-    *y_and_dst = quantized.to_latent_bits() + m;
+    *y_and_dst = (*y_and_dst << k) + m;
   }
 }
 
@@ -77,5 +76,30 @@ pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatQuantConfig
     Some(FloatQuantConfig { k: k as Bitlen })
   } else {
     None
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use crate::data_types::NumberLike;
+
+  use super::*;
+
+  #[test]
+  fn test_join_split_round_trip() {
+    let nums = vec![1.234, -9999.999, f64::NAN, -f64::INFINITY];
+    let uints = nums
+      .iter()
+      .map(|num| num.to_latent_ordered())
+      .collect::<Vec<_>>();
+
+    let k: Bitlen = 5;
+    // TODO: basic Rust question, how can we do this without redundant copies?
+    let mut s = split_latents(&nums, k);
+    let s2 = s.to_owned();
+    let ys = s.get_mut(0).unwrap();
+    let ms = s2.get(1).unwrap();
+    join_latents::<f64>(k, ys, &ms);
+    assert_eq!(uints, *ys);
   }
 }
