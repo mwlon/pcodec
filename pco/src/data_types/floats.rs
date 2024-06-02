@@ -40,9 +40,8 @@ fn choose_mode_and_split_latents<F: FloatLike>(
     ),
     (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
       (Mode::Classic, split_latents_classic(nums))
-    }
-    // TODO(https://github.com/mwlon/pcodec/issues/194): Add a case for FloatQuantSpec::Enabled
-    // once it exists
+    } // TODO(https://github.com/mwlon/pcodec/issues/194): Add a case for FloatQuantSpec::Enabled
+      // once it exists
   }
 }
 
@@ -350,9 +349,7 @@ macro_rules! impl_float_number_like {
             let base = Self::from_latent_ordered(base_latent);
             float_mult_utils::join_latents(base, primary, secondary)
           }
-          Mode::FloatQuant(k) => {
-            float_quant_utils::join_latents::<Self>(k, primary, secondary)
-          }
+          Mode::FloatQuant(k) => float_quant_utils::join_latents::<Self>(k, primary, secondary),
           _ => unreachable!("impossible mode for floats"),
         }
       }
