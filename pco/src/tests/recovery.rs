@@ -7,7 +7,7 @@ use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
-use crate::{ChunkMeta, FloatMultSpec, Mode};
+use crate::{ChunkMeta, FloatMultSpec, FloatQuantSpec, Mode};
 
 fn compress_w_meta<T: NumberLike>(
   nums: &[T],
@@ -52,21 +52,34 @@ fn assert_recovers<T: NumberLike>(
   name: &str,
 ) -> PcoResult<()> {
   for delta_encoding_order in [0, 1, 7] {
-    let config = ChunkConfig {
-      compression_level,
-      delta_encoding_order: Some(delta_encoding_order),
-      ..Default::default()
-    };
-    let compressed = simple_compress(nums, &config)?;
-    let decompressed = simple_decompress(&compressed)?;
-    assert_nums_eq(
-      &decompressed,
-      nums,
-      &format!(
-        "{} delta order={}",
-        name, delta_encoding_order
+    for (fm, fq) in [
+      (
+        FloatMultSpec::Enabled,
+        FloatQuantSpec::Disabled,
       ),
-    )?;
+      (
+        FloatMultSpec::Disabled,
+        FloatQuantSpec::Provided(14),
+      ),
+    ] {
+      let config = ChunkConfig {
+        compression_level,
+        delta_encoding_order: Some(delta_encoding_order),
+        float_mult_spec: fm,
+        float_quant_spec: fq,
+        ..Default::default()
+      };
+      let compressed = simple_compress(nums, &config)?;
+      let decompressed = simple_decompress(&compressed)?;
+      assert_nums_eq(
+        &decompressed,
+        nums,
+        &format!(
+          "{} delta order={}",
+          name, delta_encoding_order
+        ),
+      )?;
+    }
   }
   Ok(())
 }
