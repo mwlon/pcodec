@@ -10,7 +10,7 @@ pub(crate) fn join_latents<F: FloatLike>(
 ) -> () {
   for (y_and_dst, &m) in primary.iter_mut().zip(secondary.iter()) {
     debug_assert!(
-      (m >> k).is_zero(),
+      m >> k == F::L::ZERO,
       "Invalid input to FloatQuant: m must be a k-bit integer"
     );
     *y_and_dst = (*y_and_dst << k) + m;

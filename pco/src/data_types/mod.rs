@@ -109,10 +109,6 @@ pub trait Latent:
   /// impossible.
   fn from_u64(x: u64) -> Self;
 
-  fn is_zero(self) -> bool {
-    self == Self::ZERO
-  }
-
   fn leading_zeros(self) -> Bitlen;
   fn trailing_zeros(self) -> Bitlen;
 
