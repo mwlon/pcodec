@@ -360,8 +360,7 @@ macro_rules! impl_float_number_like {
             let base = Self::from_latent_ordered(base_latent);
             float_mult_utils::join_latents(base, primary, secondary)
           }
-          Mode::FloatQuant(k_latent) => {
-            let k = k_latent.to_u64() as Bitlen;
+          Mode::FloatQuant(k) => {
             float_quant_utils::join_latents::<Self>(k, primary, secondary)
           }
           _ => unreachable!("impossible mode for floats"),
