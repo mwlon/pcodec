@@ -106,8 +106,4 @@ impl<L: Latent> Mode<L> {
   pub(crate) fn float_mult<F: FloatLike<L = L>>(base: F) -> Self {
     Self::FloatMult(base.to_latent_ordered())
   }
-
-  pub(crate) fn float_quant<F: FloatLike<L = L>>(k: Bitlen) -> Self {
-    Self::FloatQuant(k)
-  }
 }
