@@ -75,9 +75,9 @@ impl<L: Latent> Mode<L> {
     use Mode::*;
 
     match self {
-      Classic => 1,                   // delta_order
-      FloatMult(_) | IntMult(_) => 2, // delta_order, mode.base
-      FloatQuant(_) => 2,             // delta_order, mode.k
+      Classic => 1,
+      FloatMult(_) | IntMult(_) => 2, // coefficient, adjustment
+      FloatQuant(_) => 2,             // truncation, adjustment
     }
   }
 
