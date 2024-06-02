@@ -1,5 +1,3 @@
-use std::cmp;
-
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent};
 use crate::sampling;
@@ -35,7 +33,7 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
     let num_ = num.to_latent_ordered();
     let kc = F::L::BITS - k;
     *primary_dst = num_ >> k;
-    *secondary_dst = (num_ << kc) >> kc;
+    *secondary_dst = num_ & ((F::L::ONE << k) - F::L::ONE);
   }
   vec![primary, secondary]
 }
