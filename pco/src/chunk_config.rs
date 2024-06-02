@@ -139,9 +139,9 @@ impl Default for ChunkConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: None,
-      int_mult_spec: IntMultSpec::Enabled,
-      float_mult_spec: FloatMultSpec::Enabled,
-      float_quant_spec: FloatQuantSpec::Disabled,
+      int_mult_spec: IntMultSpec::default(),
+      float_mult_spec: FloatMultSpec::default(),
+      float_quant_spec: FloatQuantSpec::default(),
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }
