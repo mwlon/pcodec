@@ -4,6 +4,7 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
+use crate::errors::{PcoError, PcoResult};
 use crate::{
   float_mult_utils, float_quant_utils, ChunkConfig, FloatMultSpec, FloatQuantSpec, Mode,
 };
@@ -11,38 +12,44 @@ use crate::{
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
-) -> (Mode<F::L>, Vec<Vec<F::L>>) {
-  match (
-    chunk_config.float_mult_spec,
-    chunk_config.float_quant_spec,
-  ) {
-    (m, q) if m != FloatMultSpec::Disabled && q != FloatQuantSpec::Disabled => {
-      panic!("FloatMult and FloatQuant cannot be used simultaneously");
-    }
-    (FloatMultSpec::Enabled, _) => {
-      if let Some(fm_config) = float_mult_utils::choose_config(nums) {
-        let mode = Mode::float_mult(fm_config.base);
-        let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
-        (mode, latents)
-      } else {
-        (Mode::Classic, split_latents_classic(nums))
-      }
-    }
-    (FloatMultSpec::Provided(base_f64), _) => {
-      let base = F::from_f64(base_f64);
-      let mode = Mode::float_mult(base);
-      let latents = float_mult_utils::split_latents(nums, base, base.inv());
-      (mode, latents)
-    }
-    (FloatMultSpec::Disabled, FloatQuantSpec::Provided(k)) => (
-      Mode::FloatQuant(k),
-      float_quant_utils::split_latents(nums, k),
-    ),
-    (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
-      (Mode::Classic, split_latents_classic(nums))
-    } // TODO(https://github.com/mwlon/pcodec/issues/194): Add a case for FloatQuantSpec::Enabled
-      // once it exists
+) -> PcoResult<(Mode<F::L>, Vec<Vec<F::L>>)> {
+  if chunk_config.float_mult_spec != FloatMultSpec::Disabled
+    && chunk_config.float_quant_spec != FloatQuantSpec::Disabled
+  {
+    return Err(PcoError::invalid_argument(
+      "FloatMult and FloatQuant cannot be used simultaneously",
+    ));
   }
+  Ok(
+    match (
+      chunk_config.float_mult_spec,
+      chunk_config.float_quant_spec,
+    ) {
+      (FloatMultSpec::Enabled, _) => {
+        if let Some(fm_config) = float_mult_utils::choose_config(nums) {
+          let mode = Mode::float_mult(fm_config.base);
+          let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
+          (mode, latents)
+        } else {
+          (Mode::Classic, split_latents_classic(nums))
+        }
+      }
+      (FloatMultSpec::Provided(base_f64), _) => {
+        let base = F::from_f64(base_f64);
+        let mode = Mode::float_mult(base);
+        let latents = float_mult_utils::split_latents(nums, base, base.inv());
+        (mode, latents)
+      }
+      (FloatMultSpec::Disabled, FloatQuantSpec::Provided(k)) => (
+        Mode::FloatQuant(k),
+        float_quant_utils::split_latents(nums, k),
+      ),
+      (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
+        (Mode::Classic, split_latents_classic(nums))
+      } // TODO(https://github.com/mwlon/pcodec/issues/194): Add a case for FloatQuantSpec::Enabled
+        // once it exists
+    },
+  )
 }
 
 fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
@@ -318,7 +325,7 @@ macro_rules! impl_float_number_like {
         nums: &[Self],
         config: &ChunkConfig,
       ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
-        choose_mode_and_split_latents(nums, config)
+        choose_mode_and_split_latents(nums, config).unwrap()
       }
 
       #[inline]
