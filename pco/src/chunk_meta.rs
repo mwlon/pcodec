@@ -209,7 +209,7 @@ impl<L: Latent> ChunkMeta<L> {
     let extra_bits_for_mode = match self.mode {
       Mode::Classic => 0,
       Mode::IntMult(_) => L::BITS,
-      Mode::FloatQuant(_) => L::BITS,
+      Mode::FloatQuant(_) => BITS_TO_ENCODE_QUANTIZE_K,
       Mode::FloatMult(_) => L::BITS,
     };
     let bits_for_latent_vars: usize = self
