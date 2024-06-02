@@ -16,6 +16,9 @@ fn choose_mode_and_split_latents<F: FloatLike>(
     chunk_config.float_mult_spec,
     chunk_config.float_quant_spec,
   ) {
+    (m, q) if m != FloatMultSpec::Disabled && q != FloatQuantSpec::Disabled => {
+      panic!("FloatMult and FloatQuant cannot be used simultaneously");
+    }
     (FloatMultSpec::Enabled, _) => {
       if let Some(fm_config) = float_mult_utils::choose_config(nums) {
         let mode = Mode::float_mult(fm_config.base);
