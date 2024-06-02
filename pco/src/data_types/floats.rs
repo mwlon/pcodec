@@ -38,11 +38,8 @@ fn choose_mode_and_split_latents<F: FloatLike>(
     (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
       (Mode::Classic, split_latents_classic(nums))
     }
-    (_, FloatQuantSpec::Enabled) => {
-      panic!(
-        "Setting FloatQuant mode to 'Enabled' is not yet implemented, try using 'Provided' instead"
-      );
-    }
+    // TODO(https://github.com/mwlon/pcodec/issues/194): Add a case for FloatQuantSpec::Enabled
+    // once it exists
   }
 }
 
