@@ -48,6 +48,30 @@ mod test {
   use super::*;
 
   #[test]
+  fn test_split_latents_specific_values() {
+    let expected = vec![
+      (-f32::INFINITY, (0u32, 0u32)),
+      (-0.0f32, (0u32, 0u32)),
+      (0.0f32, (0u32, 0u32)),
+      (-1.0f32, (0u32, 0u32)),
+      (f32::INFINITY, (0u32, 0u32)),
+    ];
+    let (nums, (expected_ys, expected_ms)): (Vec<_>, (Vec<_>, Vec<_>)) =
+      expected.iter().cloned().unzip();
+    let k: Bitlen = 5;
+    if let [ref mut ys, ms] = &mut split_latents(&nums, k)[..] {
+      let actual: Vec<_> = nums
+        .iter()
+        .cloned()
+        .zip(ys.iter().cloned().zip(ms.iter().cloned()))
+        .collect();
+      assert_eq!(expected, actual);
+    } else {
+      panic!("Bug: `split_latents` returned data in an unexpected format");
+    }
+  }
+
+  #[test]
   fn test_join_split_round_trip() {
     let nums = vec![1.234, -9999.999, f64::NAN, -f64::INFINITY];
     let uints = nums
