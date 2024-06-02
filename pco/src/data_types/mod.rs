@@ -109,7 +109,6 @@ pub trait Latent:
   fn from_u64(x: u64) -> Self;
 
   fn leading_zeros(self) -> Bitlen;
-  fn trailing_zeros(self) -> Bitlen;
 
   /// Converts the latent to a usize, truncating higher bits if necessary.
   fn to_u64(self) -> u64;

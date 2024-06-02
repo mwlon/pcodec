@@ -84,11 +84,6 @@ macro_rules! impl_latent {
       }
 
       #[inline]
-      fn trailing_zeros(self) -> Bitlen {
-        self.trailing_zeros() as Bitlen
-      }
-
-      #[inline]
       fn to_u64(self) -> u64 {
         self as u64
       }
