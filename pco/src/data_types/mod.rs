@@ -56,7 +56,6 @@ pub(crate) trait FloatLike:
 
   /// This should use something like [`f32::to_bits()`]
   fn to_latent_bits(self) -> Self::L;
-  fn from_latent_bits(l: Self::L) -> Self;
   /// This should surjectively map the latent to the set of integers in its
   /// floating point type. E.g. 3.0, Inf, and NaN are int floats, but 3.5 is
   /// not.

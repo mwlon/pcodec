@@ -124,11 +124,6 @@ macro_rules! impl_float_like {
       }
 
       #[inline]
-      fn from_latent_bits(bits: Self::L) -> Self {
-        Self::from_bits(bits)
-      }
-
-      #[inline]
       fn int_float_from_latent(l: Self::L) -> Self {
         let mid = Self::L::MID;
         let (negative, abs_int) = if l >= mid {
@@ -238,11 +233,6 @@ impl FloatLike for f16 {
   #[inline]
   fn to_latent_bits(self) -> Self::L {
     self.to_bits()
-  }
-
-  #[inline]
-  fn from_latent_bits(bits: Self::L) -> Self {
-    Self::from_bits(bits)
   }
 
   #[inline]

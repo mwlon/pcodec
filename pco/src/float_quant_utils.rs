@@ -1,6 +1,5 @@
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent};
-use crate::sampling;
 
 #[inline(never)]
 pub(crate) fn join_latents<F: FloatLike>(
@@ -31,7 +30,6 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
     .zip(primary.iter_mut().zip(secondary.iter_mut()))
   {
     let num_ = num.to_latent_ordered();
-    let kc = F::L::BITS - k;
     *primary_dst = num_ >> k;
     *secondary_dst = num_ & ((F::L::ONE << k) - F::L::ONE);
   }
@@ -41,11 +39,6 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct FloatQuantConfig {
   pub k: Bitlen,
-}
-
-#[inline(never)]
-pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatQuantConfig> {
-  panic!("Not implemented yet - see https://github.com/mwlon/pcodec/issues/194");
 }
 
 #[cfg(test)]
