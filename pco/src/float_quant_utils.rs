@@ -92,6 +92,20 @@ mod test {
   }
 
   #[test]
+  fn test_secondary_is_zero_for_exact_quantized() {
+    let k: Bitlen = f64::MANTISSA_DIGITS - f32::MANTISSA_DIGITS;
+    let nums: Vec<f64> = [-1.234f32, -0.0f32, 0.0f32, 1.234f32]
+      .iter()
+      .map(|&num| num as f64)
+      .collect();
+    if let [_, ms] = &mut split_latents(&nums, k)[..] {
+      assert!(ms.iter().all(|&m| m == 0u64));
+    } else {
+      panic!("Bug: `split_latents` returned data in an unexpected format");
+    }
+  }
+
+  #[test]
   fn test_join_split_round_trip() {
     let nums = vec![1.234, -9999.999, f64::NAN, -f64::INFINITY];
     let uints = nums
