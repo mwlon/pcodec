@@ -98,7 +98,7 @@ mod test {
       .iter()
       .map(|&num| num as f64)
       .collect();
-    if let [_, ms] = &mut split_latents(&nums, k)[..] {
+    if let [_, ms] = &split_latents(&nums, k)[..] {
       assert!(ms.iter().all(|&m| m == 0u64));
     } else {
       panic!("Bug: `split_latents` returned data in an unexpected format");
