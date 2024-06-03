@@ -105,6 +105,11 @@ macro_rules! impl_float_like {
       }
 
       #[inline]
+      fn is_sign_positive_(&self) -> bool {
+        self.is_sign_positive()
+      }
+
+      #[inline]
       fn exponent(&self) -> i32 {
         (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 + $exp_offset
       }
@@ -214,6 +219,11 @@ impl FloatLike for f16 {
   #[inline]
   fn is_finite_and_normal(&self) -> bool {
     self.is_finite() && self.is_normal()
+  }
+
+  #[inline]
+  fn is_sign_positive_(&self) -> bool {
+    self.is_sign_positive()
   }
 
   #[inline]
