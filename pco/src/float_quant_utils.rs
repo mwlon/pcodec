@@ -76,7 +76,7 @@ mod test {
       (-1.0f32, (0u32, 0u32)),
       (f32::INFINITY, (0u32, 0u32)),
     ];
-    let (nums, (expected_ys, expected_ms)): (Vec<_>, (Vec<_>, Vec<_>)) =
+    let (nums, (_expected_ys, _expected_ms)): (Vec<_>, (Vec<_>, Vec<_>)) =
       expected.iter().cloned().unzip();
     let k: Bitlen = 5;
     if let [ref mut ys, ms] = &mut split_latents(&nums, k)[..] {
