@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use arrow::datatypes::{DataType, TimeUnit};
 
-use pco::{FloatMultSpec, IntMultSpec};
+use pco::{FloatMultSpec, FloatQuantSpec, IntMultSpec};
 
 pub fn int_mult(s: &str) -> anyhow::Result<IntMultSpec> {
   let lowercase = s.to_lowercase();
@@ -24,6 +24,25 @@ pub fn float_mult(s: &str) -> anyhow::Result<FloatMultSpec> {
     other => match other.parse::<f64>() {
       Ok(mult) => FloatMultSpec::Provided(mult),
       _ => return Err(anyhow!("cannot parse float mult: {}", other)),
+    },
+  };
+  Ok(spec)
+}
+
+pub fn float_quant(s: &str) -> anyhow::Result<FloatQuantSpec> {
+  let lowercase = s.to_lowercase();
+  let spec = match lowercase.as_str() {
+    "enabled" =>
+      return Err(anyhow!("FloatQuantSpec::Enabled is not implemented yet, see https://github.com/mwlon/pcodec/issues/194")),
+    "disabled" => FloatQuantSpec::Disabled,
+    other => match other.parse::<u32>() {
+      Ok(k) => FloatQuantSpec::Provided(k),
+      _ => {
+        return Err(anyhow!(
+          "cannot parse float quant parameter: {}",
+          other
+        ))
+      }
     },
   };
   Ok(spec)

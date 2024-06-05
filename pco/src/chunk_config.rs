@@ -1,4 +1,4 @@
-use crate::constants::DEFAULT_MAX_PAGE_N;
+use crate::constants::{Bitlen, DEFAULT_MAX_PAGE_N};
 use crate::errors::{PcoError, PcoResult};
 use crate::DEFAULT_COMPRESSION_LEVEL;
 
@@ -44,6 +44,22 @@ pub enum FloatMultSpec {
   /// provide `base` here to ensure it gets used and save compression time.
   Provided(f64),
   // TODO support a LossyEnabled mode that always drops the ULPs latent var
+}
+
+/// Configures whether quantized-float detection is enabled.
+///
+/// Examples where this helps:
+/// * float-valued data stored in a type that is unnecessarily wide (e.g. stored
+///   as `f64`s where only a `f32` worth of precision is used)
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum FloatQuantSpec {
+  #[default]
+  Disabled,
+  /// If you know how many bits of precision are unused, you can supply that
+  /// number here.
+  Provided(Bitlen),
+  // TODO(https://github.com/mwlon/pcodec/issues/194): Implement `Enabled` which guesses a value
+  // for `k`
 }
 
 /// All configurations available for a compressor.
@@ -103,6 +119,14 @@ pub struct ChunkConfig {
   ///
   /// See [`FloatMultSpec`][crate::FloatMultSpec] for more detail.
   pub float_mult_spec: FloatMultSpec,
+  /// Float quantization improves compression ratio in cases where a
+  /// float-valued dataset does not make use of the full precision available in
+  /// the data type, i.e., the several least-significant bits of the
+  /// significands are zero
+  /// (default: `Enabled`).
+  ///
+  /// See [`FloatQuantSpec`][crate::FloatQuantSpec] for more detail.
+  pub float_quant_spec: FloatQuantSpec,
   /// `paging_spec` specifies how the chunk should be split into pages
   /// (default: equal pages up to 2^18 numbers each).
   ///
@@ -115,8 +139,9 @@ impl Default for ChunkConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: None,
-      int_mult_spec: IntMultSpec::Enabled,
-      float_mult_spec: FloatMultSpec::Enabled,
+      int_mult_spec: IntMultSpec::default(),
+      float_mult_spec: FloatMultSpec::default(),
+      float_quant_spec: FloatQuantSpec::default(),
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }
@@ -144,6 +169,12 @@ impl ChunkConfig {
   /// Sets [`float_mult_spec`][ChunkConfig::float_mult_spec].
   pub fn with_float_mult_spec(mut self, float_mult_spec: FloatMultSpec) -> Self {
     self.float_mult_spec = float_mult_spec;
+    self
+  }
+
+  /// Sets [`float_quant_spec`][ChunkConfig::float_quant_spec].
+  pub fn with_float_quant_spec(mut self, float_quant_spec: FloatQuantSpec) -> Self {
+    self.float_quant_spec = float_quant_spec;
     self
   }
 
