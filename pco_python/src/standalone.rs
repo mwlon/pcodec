@@ -55,8 +55,8 @@ fn simple_compress_generic<'py, T: NumberLike + Element>(
   Ok(PyBytes::new(py, &compressed).into())
 }
 
-fn simple_decompress_into_generic<'py, T: NumberLike + Element>(
-  py: Python<'py>,
+fn simple_decompress_into_generic<T: NumberLike + Element>(
+  py: Python,
   compressed: &PyBytes,
   arr: &PyArrayDyn<T>,
 ) -> PyResult<PyProgress> {
@@ -113,8 +113,8 @@ pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
   ///
   /// :raises: TypeError, RuntimeError
   #[pyfunction]
-  fn simple_decompress_into<'py>(
-    py: Python<'py>,
+  fn simple_decompress_into(
+    py: Python,
     compressed: &PyBytes,
     dst: DynTypedPyArrayDyn,
   ) -> PyResult<PyProgress> {
