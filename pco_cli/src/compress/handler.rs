@@ -32,7 +32,8 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
       .with_compression_level(opt.level)
       .with_delta_encoding_order(opt.delta_encoding_order)
       .with_int_mult_spec(opt.int_mult)
-      .with_float_mult_spec(opt.float_mult);
+      .with_float_mult_spec(opt.float_mult)
+      .with_float_quant_spec(opt.float_quant);
     let fc = FileCompressor::default();
     fc.write_header(&file)?;
 
