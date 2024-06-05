@@ -30,14 +30,13 @@ struct PyCc(DynCc);
 impl PyFc {
   fn chunk_compressor_generic<T: NumberLike + Element>(
     &self,
+    py: Python,
     arr: &PyArrayDyn<T>,
     config: &ChunkConfig,
   ) -> PyResult<ChunkCompressor<T::L>> {
     let arr_ro = arr.readonly();
     let src = arr_ro.as_slice()?;
-    self
-      .inner
-      .chunk_compressor(src, config)
+    py.allow_threads(|| self.inner.chunk_compressor(src, config))
       .map_err(pco_err_to_py)
   }
 }
@@ -75,12 +74,17 @@ impl PyFc {
   /// :returns: a ChunkCompressor
   ///
   /// :raises: TypeError, RuntimeError
-  fn chunk_compressor(&self, nums: DynTypedPyArrayDyn, config: &PyChunkConfig) -> PyResult<PyCc> {
+  fn chunk_compressor(
+    &self,
+    py: Python,
+    nums: DynTypedPyArrayDyn,
+    config: &PyChunkConfig,
+  ) -> PyResult<PyCc> {
     let config = config.try_into()?;
     macro_rules! match_nums {
       {$($name:ident($lname:ident) => $t:ty,)+} => {
         match nums {
-          $(DynTypedPyArrayDyn::$name(arr) => DynCc::$lname(self.chunk_compressor_generic::<$t>(arr, &config)?),)+
+          $(DynTypedPyArrayDyn::$name(arr) => DynCc::$lname(self.chunk_compressor_generic::<$t>(py, arr, &config)?),)+
         }
       }
     }
@@ -97,7 +101,8 @@ fn chunk_meta_py<U: Latent>(py: Python, cc: &ChunkCompressor<U>) -> PyResult<PyO
 
 fn page_py<U: Latent>(py: Python, cc: &ChunkCompressor<U>, page_idx: usize) -> PyResult<PyObject> {
   let mut res = Vec::new();
-  cc.write_page(page_idx, &mut res).map_err(pco_err_to_py)?;
+  py.allow_threads(|| cc.write_page(page_idx, &mut res))
+    .map_err(pco_err_to_py)?;
   Ok(PyBytes::new(py, &res).into())
 }
 

@@ -67,7 +67,7 @@ impl PyFd {
         match dtype {
           $(CoreDataType::$name => {
             let (generic_cd, rest) = inner
-              .chunk_decompressor::<$t, _>(src)
+                .chunk_decompressor::<$t, _>(src)
               .map_err(pco_err_to_py)?;
             (DynCd::$name(generic_cd), rest)
           })+
@@ -105,6 +105,7 @@ impl PyCd {
   /// :raises: TypeError, RuntimeError
   fn read_page_into(
     &self,
+    py: Python,
     page: &PyBytes,
     page_n: usize,
     dst: DynTypedPyArrayDyn,
@@ -117,8 +118,8 @@ impl PyCd {
           $((DynCd::$name(cd), DynTypedPyArrayDyn::$name(arr)) => {
             let mut arr_rw = arr.readwrite();
             let dst = arr_rw.as_slice_mut()?;
-            let mut pd = cd.page_decompressor(src, page_n).map_err(pco_err_to_py)?;
-            let progress = pd.decompress(dst).map_err(pco_err_to_py)?;
+            let mut pd = py.allow_threads(|| cd.page_decompressor(src, page_n)).map_err(pco_err_to_py)?;
+            let progress = py.allow_threads(|| pd.decompress(dst)).map_err(pco_err_to_py)?;
             (progress, pd.into_src())
           })+
           _ => {
