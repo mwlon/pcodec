@@ -13,10 +13,13 @@ pub mod wrapped;
 
 pub fn core_dtype_from_str(s: &str) -> PyResult<CoreDataType> {
   match s.to_uppercase().as_str() {
+    "F16" => Ok(CoreDataType::F16),
     "F32" => Ok(CoreDataType::F32),
     "F64" => Ok(CoreDataType::F64),
+    "I16" => Ok(CoreDataType::I16),
     "I32" => Ok(CoreDataType::I32),
     "I64" => Ok(CoreDataType::I64),
+    "U16" => Ok(CoreDataType::U16),
     "U32" => Ok(CoreDataType::U32),
     "U64" => Ok(CoreDataType::U64),
     _ => Err(PyRuntimeError::new_err(format!(
