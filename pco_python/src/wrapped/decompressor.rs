@@ -67,7 +67,7 @@ impl PyFd {
         match dtype {
           $(CoreDataType::$name => {
             let (generic_cd, rest) = inner
-                .chunk_decompressor::<$t, _>(src)
+              .chunk_decompressor::<$t, _>(src)
               .map_err(pco_err_to_py)?;
             (DynCd::$name(generic_cd), rest)
           })+
