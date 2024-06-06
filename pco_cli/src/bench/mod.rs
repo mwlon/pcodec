@@ -5,10 +5,12 @@ use std::collections::HashMap;
 use std::ops::AddAssign;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
-use arrow::datatypes::{DataType, Schema};
+use anyhow::{anyhow, Result};
+use arrow::csv;
+use arrow::datatypes::{DataType, Field, Schema};
 use clap::{Args, Parser};
 use indicatif::{ProgressBar, ProgressStyle};
 use tabled::settings::object::Columns;
@@ -66,6 +68,16 @@ pub struct BenchOpt {
   /// How many numbers to limit each dataset to.
   #[arg(long, short)]
   pub limit: Option<usize>,
+  /// CSV to write the aggregate results of this command to.
+  /// Overwrites any rows with the same input name and codec config.
+  /// Columns of output CSV:
+  /// input_name, codec, compression_time/s, decompress_time/s, compressed_size/bytes
+  #[arg(long)]
+  pub results_csv: Option<PathBuf>,
+  /// Name of the input data to use in the --results-csv output.
+  /// If you're not writing the results to a CSV, ignore this.
+  #[arg(long)]
+  pub input_name: Option<String>,
   #[command(flatten)]
   pub input: InputFileOpt,
   #[command(flatten)]
@@ -217,6 +229,42 @@ fn handle_column(
   handler.bench(&arrays, field.name(), opt, progress_bar)
 }
 
+fn update_results_csv(aggregate_by_codec: &HashMap<String, BenchStat>, opt: &BenchOpt) {
+  // do nothing if the user didn't provide a results CSV
+  let Some(results_csv) = opt.results_csv.as_ref() else {
+    return;
+  };
+  let input_name = opt.input_name.as_ref().unwrap();
+
+  let schema = Schema::new(vec![
+    Field::new("input_name", DataType::Binary, false),
+    Field::new("codec", DataType::Binary, false),
+    Field::new("compression_time", DataType::Float32, false),
+    Field::new(
+      "decompression_time",
+      DataType::Float32,
+      false,
+    ),
+    Field::new("compressed_size", DataType::UInt64, false),
+  ]);
+  let mut data = if results_csv.exists() {
+    let csv = csv::ReaderBuilder::new(Arc::new(schema))
+      .with_header(true)
+      .build(File::open());
+    let mut res = HashMap::new();
+    res
+  } else {
+    HashMap::new()
+  };
+
+  for (codec, stat) in aggregate_by_codec.iter() {
+    data.insert(
+      (input_name.to_string(), codec.to_string()),
+      stat.clone(),
+    );
+  }
+}
+
 fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
   if stats.is_empty() {
     println!("No datasets found that match filters!");
@@ -244,9 +292,15 @@ fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
     .with(Modify::new(Columns::new(2..)).with(Alignment::right()))
     .to_string();
   println!("{}", table);
+  update_results_csv(&aggregate_by_codec, opt);
 }
 
 pub fn bench(mut opt: BenchOpt) -> Result<()> {
+  if opt.results_csv.is_some() && opt.input_name.is_none() {
+    return Err(anyhow!(
+      "input-name must be specified when results-csv is"
+    ));
+  }
   let input = &mut opt.input;
   if input.input.is_none() && input.input_format.is_none() {
     input.input = Some(PathBuf::from(DEFAULT_BINARY_DIR));
