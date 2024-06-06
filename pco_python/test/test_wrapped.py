@@ -4,7 +4,7 @@ from pcodec.wrapped import FileCompressor, FileDecompressor
 import pytest
 
 np.random.seed(12345)
-all_dtypes = ('f4', 'f8', 'i4', 'i8', 'u4', 'u8')
+all_dtypes = ('f2', 'f4', 'f8', 'i2', 'i4', 'i8', 'u2', 'u4', 'u8')
 
 @pytest.mark.parametrize("dtype", all_dtypes)
 def test_compress(dtype):

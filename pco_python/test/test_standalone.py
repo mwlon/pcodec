@@ -10,7 +10,7 @@ all_shapes = (
   [9, 100],
 )
 
-all_dtypes = ('f4', 'f8', 'i4', 'i8', 'u4', 'u8')
+all_dtypes = ('f2', 'f4', 'f8', 'i2', 'i4', 'i8', 'u2', 'u4', 'u8')
 
 @pytest.mark.parametrize("shape", all_shapes)
 @pytest.mark.parametrize("dtype", all_dtypes)
