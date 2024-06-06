@@ -6,7 +6,6 @@ use pyo3::types::{PyBytes, PyModule, PyNone};
 use pyo3::{pyfunction, wrap_pyfunction, PyObject, PyResult, Python};
 
 use pco::data_types::NumberLike;
-use pco::errors::PcoResult;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::{standalone, with_core_dtypes, ChunkConfig};
 
@@ -18,7 +17,7 @@ fn decompress_chunks<'py, T: NumberLike + Element>(
   file_decompressor: FileDecompressor,
 ) -> PyResult<&'py PyArray1<T>> {
   let res = py
-    .allow_threads(|| -> PcoResult<Vec<T>> {
+    .allow_threads(|| {
       let n_hint = file_decompressor.n_hint();
       let mut res: Vec<T> = Vec::with_capacity(n_hint);
       while let MaybeChunkDecompressor::Some(mut chunk_decompressor) =
