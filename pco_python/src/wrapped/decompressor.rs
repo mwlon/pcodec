@@ -105,6 +105,7 @@ impl PyCd {
   /// :raises: TypeError, RuntimeError
   fn read_page_into(
     &self,
+    py: Python,
     page: &PyBytes,
     page_n: usize,
     dst: DynTypedPyArrayDyn,
@@ -117,9 +118,11 @@ impl PyCd {
           $((DynCd::$name(cd), DynTypedPyArrayDyn::$name(arr)) => {
             let mut arr_rw = arr.readwrite();
             let dst = arr_rw.as_slice_mut()?;
-            let mut pd = cd.page_decompressor(src, page_n).map_err(pco_err_to_py)?;
-            let progress = pd.decompress(dst).map_err(pco_err_to_py)?;
-            (progress, pd.into_src())
+            py.allow_threads(|| {
+              let mut pd = cd.page_decompressor(src, page_n)?;
+              let progress = pd.decompress(dst)?;
+              Ok((progress, pd.into_src()))
+            }).map_err(pco_err_to_py)?
           })+
           _ => {
             return Err(PyRuntimeError::new_err(format!(

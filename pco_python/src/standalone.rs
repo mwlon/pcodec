@@ -16,23 +16,25 @@ fn decompress_chunks<'py, T: NumberLike + Element>(
   mut src: &[u8],
   file_decompressor: FileDecompressor,
 ) -> PyResult<&'py PyArray1<T>> {
-  let n_hint = file_decompressor.n_hint();
-  let mut res: Vec<T> = Vec::with_capacity(n_hint);
-  while let MaybeChunkDecompressor::Some(mut chunk_decompressor) = file_decompressor
-    .chunk_decompressor::<T, &[u8]>(src)
-    .map_err(pco_err_to_py)?
-  {
-    let initial_len = res.len(); // probably always zero to start, since we just created res
-    let remaining = chunk_decompressor.n();
-    unsafe {
-      res.set_len(initial_len + remaining);
-    }
-    let progress = chunk_decompressor
-      .decompress(&mut res[initial_len..])
-      .map_err(pco_err_to_py)?;
-    assert!(progress.finished);
-    src = chunk_decompressor.into_src();
-  }
+  let res = py
+    .allow_threads(|| {
+      let n_hint = file_decompressor.n_hint();
+      let mut res: Vec<T> = Vec::with_capacity(n_hint);
+      while let MaybeChunkDecompressor::Some(mut chunk_decompressor) =
+        file_decompressor.chunk_decompressor::<T, &[u8]>(src)?
+      {
+        let initial_len = res.len(); // probably always zero to start, since we just created res
+        let remaining = chunk_decompressor.n();
+        unsafe {
+          res.set_len(initial_len + remaining);
+        }
+        let progress = chunk_decompressor.decompress(&mut res[initial_len..])?;
+        assert!(progress.finished);
+        src = chunk_decompressor.into_src();
+      }
+      Ok(res)
+    })
+    .map_err(pco_err_to_py)?;
   let py_array = res.into_pyarray(py);
   Ok(py_array)
 }
@@ -44,20 +46,25 @@ fn simple_compress_generic<'py, T: NumberLike + Element>(
 ) -> PyResult<PyObject> {
   let arr_ro = arr.readonly();
   let src = arr_ro.as_slice()?;
-  let compressed = standalone::simple_compress(src, config).map_err(pco_err_to_py)?;
+  let compressed = py
+    .allow_threads(|| standalone::simple_compress(src, config))
+    .map_err(pco_err_to_py)?;
   // TODO apparently all the places we use PyBytes::new() copy the data.
   // Maybe there's a zero-copy way to do this.
   Ok(PyBytes::new(py, &compressed).into())
 }
 
 fn simple_decompress_into_generic<T: NumberLike + Element>(
+  py: Python,
   compressed: &PyBytes,
   arr: &PyArrayDyn<T>,
 ) -> PyResult<PyProgress> {
   let mut out_rw = arr.readwrite();
   let dst = out_rw.as_slice_mut()?;
   let src = compressed.as_bytes();
-  let progress = standalone::simple_decompress_into(src, dst).map_err(pco_err_to_py)?;
+  let progress = py
+    .allow_threads(|| standalone::simple_decompress_into(src, dst))
+    .map_err(pco_err_to_py)?;
   Ok(PyProgress::from(progress))
 }
 
@@ -105,11 +112,15 @@ pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
   ///
   /// :raises: TypeError, RuntimeError
   #[pyfunction]
-  fn simple_decompress_into(compressed: &PyBytes, dst: DynTypedPyArrayDyn) -> PyResult<PyProgress> {
+  fn simple_decompress_into(
+    py: Python,
+    compressed: &PyBytes,
+    dst: DynTypedPyArrayDyn,
+  ) -> PyResult<PyProgress> {
     macro_rules! match_py_array {
       {$($name:ident($lname:ident) => $t:ty,)+} => {
         match dst {
-          $(DynTypedPyArrayDyn::$name(arr) => simple_decompress_into_generic(compressed, arr),)+
+          $(DynTypedPyArrayDyn::$name(arr) => simple_decompress_into_generic(py, compressed, arr),)+
         }
       }
     }
