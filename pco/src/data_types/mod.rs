@@ -47,6 +47,7 @@ pub(crate) trait FloatLike:
   fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
   fn is_finite_and_normal(&self) -> bool;
+  fn is_sign_positive_(&self) -> bool;
   /// Returns the float's exponent. For instance, for f32 this should be
   /// between -127 and +126.
   fn exponent(&self) -> i32;

@@ -37,7 +37,8 @@ So far, these format versions exist:
 | format version | deviations from next version |
 |----------------|------------------------------|
 | 0              | int mult mode unsupported    |
-| 1              | -                            |
+| 1              | float quant mode unsupported |
+| 2              | -                            |
 
 ### Chunk Metadata
 
@@ -55,7 +56,8 @@ Each chunk metadata consists of
   | 0     | classic      | 1                  |                        |
   | 1     | int mult     | 2                  | no                     |
   | 2     | float mult   | 2                  | no                     |
-  | 3-15  | \<reserved\> |                    |                        |
+  | 3     | float quant  | 2                  | no                     |
+  | 4-15  | \<reserved\> |                    |                        |
 * [0 or `dtype_size` bits] for int mult and float mult modes, a raw
   multiplier `mult` is encoded in the data type.
 * [3 bits] the delta encoding order `delta_order`.
@@ -125,11 +127,12 @@ It consists of
 
 Based on the mode, unsigneds are decomposed into latents.
 
-| mode       | decoding formula                              |
-|------------|-----------------------------------------------|
-| classic    | `from_unsigned(latent0)`                      |
-| int mult   | `from_unsigned(latent0 * mult + latent1)`     |
-| float mult | `to_int_float(latent0) * mult + latent1 ULPs` |
+| mode        | decoding formula                              |
+|-------------|-----------------------------------------------|
+| classic     | `from_unsigned(latent0)`                      |
+| int mult    | `from_unsigned(latent0 * mult + latent1)`     |
+| float mult  | `to_int_float(latent0) * mult + latent1 ULPs` |
+| float quant | `bits_to_float((latent0 << k) + latent1)`     |
 
 Here ULP refers to [unit in the last place](https://en.wikipedia.org/wiki/Unit_in_the_last_place).
 

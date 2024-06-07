@@ -4,30 +4,52 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
-use crate::{float_mult_utils, ChunkConfig, FloatMultSpec, Mode};
+use crate::errors::{PcoError, PcoResult};
+use crate::{
+  float_mult_utils, float_quant_utils, ChunkConfig, FloatMultSpec, FloatQuantSpec, Mode,
+};
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
-) -> (Mode<F::L>, Vec<Vec<F::L>>) {
-  match chunk_config.float_mult_spec {
-    FloatMultSpec::Enabled => {
-      if let Some(fm_config) = float_mult_utils::choose_config(nums) {
-        let mode = Mode::float_mult(fm_config.base);
-        let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
-        (mode, latents)
-      } else {
-        (Mode::Classic, split_latents_classic(nums))
-      }
-    }
-    FloatMultSpec::Provided(base_f64) => {
-      let base = F::from_f64(base_f64);
-      let mode = Mode::float_mult(base);
-      let latents = float_mult_utils::split_latents(nums, base, base.inv());
-      (mode, latents)
-    }
-    FloatMultSpec::Disabled => (Mode::Classic, split_latents_classic(nums)),
+) -> PcoResult<(Mode<F::L>, Vec<Vec<F::L>>)> {
+  if chunk_config.float_mult_spec != FloatMultSpec::Disabled
+    && chunk_config.float_quant_spec != FloatQuantSpec::Disabled
+  {
+    return Err(PcoError::invalid_argument(
+      "FloatMult and FloatQuant cannot be used simultaneously",
+    ));
   }
+  Ok(
+    match (
+      chunk_config.float_mult_spec,
+      chunk_config.float_quant_spec,
+    ) {
+      (FloatMultSpec::Enabled, _) => {
+        if let Some(fm_config) = float_mult_utils::choose_config(nums) {
+          let mode = Mode::float_mult(fm_config.base);
+          let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
+          (mode, latents)
+        } else {
+          (Mode::Classic, split_latents_classic(nums))
+        }
+      }
+      (FloatMultSpec::Provided(base_f64), _) => {
+        let base = F::from_f64(base_f64);
+        let mode = Mode::float_mult(base);
+        let latents = float_mult_utils::split_latents(nums, base, base.inv());
+        (mode, latents)
+      }
+      (FloatMultSpec::Disabled, FloatQuantSpec::Provided(k)) => (
+        Mode::FloatQuant(k),
+        float_quant_utils::split_latents(nums, k),
+      ),
+      (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
+        (Mode::Classic, split_latents_classic(nums))
+      } // TODO(https://github.com/mwlon/pcodec/issues/194): Add a case for FloatQuantSpec::Enabled
+        // once it exists
+    },
+  )
 }
 
 fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
@@ -42,6 +64,8 @@ macro_rules! impl_float_like {
   ($t: ty, $latent: ty, $bits: expr, $exp_offset: expr) => {
     impl FloatLike for $t {
       const BITS: Bitlen = $bits;
+      /// Number of bits in the representation of the significand, excluding the implicit
+      /// leading bit.  (In Rust, `MANTISSA_DIGITS` does include the implicit leading bit.)
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
       const ZERO: Self = 0.0;
       const MAX_FOR_SAMPLING: Self = Self::MAX * 0.5;
@@ -78,6 +102,11 @@ macro_rules! impl_float_like {
       #[inline]
       fn is_finite_and_normal(&self) -> bool {
         self.is_finite() && !self.is_subnormal()
+      }
+
+      #[inline]
+      fn is_sign_positive_(&self) -> bool {
+        self.is_sign_positive()
       }
 
       #[inline]
@@ -193,6 +222,11 @@ impl FloatLike for f16 {
   }
 
   #[inline]
+  fn is_sign_positive_(&self) -> bool {
+    self.is_sign_positive()
+  }
+
+  #[inline]
   fn exponent(&self) -> i32 {
     (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 - 15
   }
@@ -293,6 +327,7 @@ macro_rules! impl_float_number_like {
           Mode::FloatMult(base_latent) => {
             Self::from_latent_ordered(base_latent).is_finite_and_normal()
           }
+          Mode::FloatQuant(k) => k <= Self::PRECISION_BITS,
           _ => false,
         }
       }
@@ -300,7 +335,7 @@ macro_rules! impl_float_number_like {
         nums: &[Self],
         config: &ChunkConfig,
       ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
-        choose_mode_and_split_latents(nums, config)
+        choose_mode_and_split_latents(nums, config).unwrap()
       }
 
       #[inline]
@@ -331,6 +366,7 @@ macro_rules! impl_float_number_like {
             let base = Self::from_latent_ordered(base_latent);
             float_mult_utils::join_latents(base, primary, secondary)
           }
+          Mode::FloatQuant(k) => float_quant_utils::join_latents::<Self>(k, primary, secondary),
           _ => unreachable!("impossible mode for floats"),
         }
       }

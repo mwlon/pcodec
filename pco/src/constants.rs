@@ -8,13 +8,15 @@ pub(crate) type Bitlen = u32;
 pub(crate) type Weight = u32;
 
 // compatibility
-pub const CURRENT_FORMAT_VERSION: u8 = 1;
+pub const CURRENT_FORMAT_VERSION: u8 = 2;
 
 // bit lengths
 pub const BITS_TO_ENCODE_ANS_SIZE_LOG: Bitlen = 4;
 pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: Bitlen = 3;
 pub const BITS_TO_ENCODE_MODE: Bitlen = 4;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
+// conservative: wide enough to support quantizing float datasets with 255 unused bits of precision
+pub const BITS_TO_ENCODE_QUANTIZE_K: Bitlen = 8;
 
 // padding
 pub const HEADER_PADDING: usize = 1;

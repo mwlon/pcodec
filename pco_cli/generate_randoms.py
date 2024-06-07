@@ -185,6 +185,11 @@ def millis():
 def integers():
   return np.random.randint(0, 2 ** 30, size=n)
 
+# `float32`s compressed as `float64`s
+@datagen('f64')
+def quantized_normal():
+    return np.random.normal(size=n).astype(np.float32).astype(np.float64)
+
 # decimal floats
 @datagen('f64')
 def decimal():

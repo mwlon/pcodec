@@ -209,6 +209,7 @@ impl<L: Latent> ChunkMeta<L> {
     let extra_bits_for_mode = match self.mode {
       Mode::Classic => 0,
       Mode::IntMult(_) => L::BITS,
+      Mode::FloatQuant(_) => BITS_TO_ENCODE_QUANTIZE_K,
       Mode::FloatMult(_) => L::BITS,
     };
     let bits_for_latent_vars: usize = self
@@ -259,6 +260,10 @@ impl<L: Latent> ChunkMeta<L> {
           let base_latent = reader.read_uint::<L>(L::BITS);
           Ok(Mode::FloatMult(base_latent))
         }
+        3 => {
+          let k = reader.read_bitlen(BITS_TO_ENCODE_QUANTIZE_K);
+          Ok(Mode::FloatQuant(k))
+        }
         value => Err(PcoError::corruption(format!(
           "unknown mode value {}",
           value
@@ -296,6 +301,7 @@ impl<L: Latent> ChunkMeta<L> {
       Mode::Classic => 0,
       Mode::IntMult(_) => 1,
       Mode::FloatMult { .. } => 2,
+      Mode::FloatQuant { .. } => 3,
     };
     writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
     match self.mode {
@@ -305,6 +311,9 @@ impl<L: Latent> ChunkMeta<L> {
       }
       Mode::FloatMult(base_latent) => {
         writer.write_uint(base_latent, L::BITS);
+      }
+      Mode::FloatQuant(k) => {
+        writer.write_uint(k, BITS_TO_ENCODE_QUANTIZE_K);
       }
     };
 
