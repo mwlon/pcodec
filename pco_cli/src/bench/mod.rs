@@ -156,16 +156,6 @@ pub struct PrintStat {
   pub bench_stat: BenchStat,
 }
 
-// impl Default for PrintStat {
-//   fn default() -> Self {
-//     Self {
-//       dataset: "<sum>".to_string(),
-//       codec: "<sum>".to_string(),
-//       bench_stat: BenchStat::default(),
-//     }
-//   }
-// }
-//
 impl AddAssign for BenchStat {
   fn add_assign(&mut self, rhs: Self) {
     self.compressed_size += rhs.compressed_size;
@@ -234,17 +224,6 @@ fn update_results_csv(
 
   let input_name = opt.input_name.as_ref().unwrap();
 
-  // let schema = Schema::new(vec![
-  //   Field::new("input_name", DataType::Binary, false),
-  //   Field::new("codec", DataType::Binary, false),
-  //   Field::new("compression_time", DataType::Float32, false),
-  //   Field::new(
-  //     "decompression_time",
-  //     DataType::Float32,
-  //     false,
-  //   ),
-  //   Field::new("compressed_size", DataType::UInt64, false),
-  // ]);
   let mut lines = if results_csv.exists() {
     // hacky split on commas, doesn't handle case when values contain weird characters
     let mut lines = HashMap::new();
