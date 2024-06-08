@@ -2,15 +2,14 @@
 
 use std::any::type_name;
 use std::collections::HashMap;
+use std::fs;
 use std::ops::AddAssign;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use arrow::csv;
-use arrow::datatypes::{DataType, Field, Schema};
+use arrow::datatypes::{DataType, Schema};
 use clap::{Args, Parser};
 use indicatif::{ProgressBar, ProgressStyle};
 use tabled::settings::object::Columns;
@@ -117,13 +116,6 @@ impl BenchOpt {
   }
 }
 
-#[derive(Clone, Default)]
-pub struct BenchStat {
-  pub compress_dt: Duration,
-  pub decompress_dt: Duration,
-  pub compressed_size: usize,
-}
-
 pub struct Precomputed {
   compressed: Vec<u8>,
 }
@@ -147,10 +139,8 @@ fn display_duration(duration: &Duration) -> String {
   format!("{:?}", duration)
 }
 
-#[derive(Clone, Tabled)]
-pub struct PrintStat {
-  pub dataset: String,
-  pub codec: String,
+#[derive(Clone, Default, Tabled)]
+pub struct BenchStat {
   #[tabled(display_with = "display_duration")]
   pub compress_dt: Duration,
   #[tabled(display_with = "display_duration")]
@@ -158,19 +148,25 @@ pub struct PrintStat {
   pub compressed_size: usize,
 }
 
-impl Default for PrintStat {
-  fn default() -> Self {
-    Self {
-      dataset: "<sum>".to_string(),
-      codec: "<sum>".to_string(),
-      compress_dt: Duration::default(),
-      decompress_dt: Duration::default(),
-      compressed_size: 0,
-    }
-  }
+#[derive(Clone, Tabled)]
+pub struct PrintStat {
+  pub dataset: String,
+  pub codec: String,
+  #[tabled(inline)]
+  pub bench_stat: BenchStat,
 }
 
-impl AddAssign for PrintStat {
+// impl Default for PrintStat {
+//   fn default() -> Self {
+//     Self {
+//       dataset: "<sum>".to_string(),
+//       codec: "<sum>".to_string(),
+//       bench_stat: BenchStat::default(),
+//     }
+//   }
+// }
+//
+impl AddAssign for BenchStat {
   fn add_assign(&mut self, rhs: Self) {
     self.compressed_size += rhs.compressed_size;
     self.compress_dt += rhs.compress_dt;
@@ -178,8 +174,8 @@ impl AddAssign for PrintStat {
   }
 }
 
-impl PrintStat {
-  fn compute(dataset: String, codec: String, benches: &[BenchStat]) -> Self {
+impl BenchStat {
+  fn aggregate_median(benches: &[BenchStat]) -> Self {
     let compressed_size = benches[0].compressed_size;
     let compress_dts = benches
       .iter()
@@ -190,9 +186,7 @@ impl PrintStat {
       .map(|bench| bench.decompress_dt)
       .collect::<Vec<_>>();
 
-    PrintStat {
-      dataset,
-      codec,
+    BenchStat {
       compressed_size,
       compress_dt: median_duration(compress_dts),
       decompress_dt: median_duration(decompress_dts),
@@ -229,70 +223,112 @@ fn handle_column(
   handler.bench(&arrays, field.name(), opt, progress_bar)
 }
 
-fn update_results_csv(aggregate_by_codec: &HashMap<String, BenchStat>, opt: &BenchOpt) {
+fn update_results_csv(
+  aggregate_by_codec: &HashMap<String, BenchStat>,
+  opt: &BenchOpt,
+) -> Result<()> {
   // do nothing if the user didn't provide a results CSV
   let Some(results_csv) = opt.results_csv.as_ref() else {
-    return;
+    return Ok(());
   };
+
   let input_name = opt.input_name.as_ref().unwrap();
 
-  let schema = Schema::new(vec![
-    Field::new("input_name", DataType::Binary, false),
-    Field::new("codec", DataType::Binary, false),
-    Field::new("compression_time", DataType::Float32, false),
-    Field::new(
-      "decompression_time",
-      DataType::Float32,
-      false,
-    ),
-    Field::new("compressed_size", DataType::UInt64, false),
-  ]);
-  let mut data = if results_csv.exists() {
-    let csv = csv::ReaderBuilder::new(Arc::new(schema))
-      .with_header(true)
-      .build(File::open());
-    let mut res = HashMap::new();
-    res
+  // let schema = Schema::new(vec![
+  //   Field::new("input_name", DataType::Binary, false),
+  //   Field::new("codec", DataType::Binary, false),
+  //   Field::new("compression_time", DataType::Float32, false),
+  //   Field::new(
+  //     "decompression_time",
+  //     DataType::Float32,
+  //     false,
+  //   ),
+  //   Field::new("compressed_size", DataType::UInt64, false),
+  // ]);
+  let mut lines = if results_csv.exists() {
+    // hacky split on commas, doesn't handle case when values contain weird characters
+    let mut lines = HashMap::new();
+    let contents = fs::read_to_string(results_csv)?;
+    let mut is_header = true;
+    for line in contents.split('\n') {
+      if is_header {
+        is_header = false;
+        continue;
+      }
+
+      let mut fields = line.split(',');
+      let dataset = fields.next().unwrap();
+      let codec = fields.next().unwrap();
+      let rest = fields.collect::<Vec<_>>().join(",");
+      lines.insert(
+        (dataset.to_string(), codec.to_string()),
+        rest,
+      );
+    }
+    lines
   } else {
     HashMap::new()
   };
 
   for (codec, stat) in aggregate_by_codec.iter() {
-    data.insert(
+    lines.insert(
       (input_name.to_string(), codec.to_string()),
-      stat.clone(),
+      format!(
+        "{},{},{}",
+        stat.compress_dt.as_secs_f32(),
+        stat.decompress_dt.as_secs_f32(),
+        stat.compressed_size
+      ),
     );
   }
+
+  let mut output_lines = vec!["input,codec,compress_dt,decompress_dt,compressed_size".to_string()];
+  let mut lines = lines.iter().collect::<Vec<_>>();
+  lines.sort_unstable_by_key(|&(key, _)| key);
+  for ((dataset, codec), values) in lines {
+    output_lines.push(format!("{},{},{}", dataset, codec, values));
+  }
+  let output = output_lines.join("\n");
+  fs::write(results_csv, output)?;
+
+  Ok(())
 }
 
-fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) {
+fn print_stats(mut stats: Vec<PrintStat>, opt: &BenchOpt) -> Result<()> {
   if stats.is_empty() {
-    println!("No datasets found that match filters!");
-    return;
+    return Err(anyhow!(
+      "No datasets found that match filters"
+    ));
   }
 
-  let mut aggregate = PrintStat::default();
-  let mut aggregate_by_codec: HashMap<String, PrintStat> = HashMap::new();
+  let mut aggregate = BenchStat::default();
+  let mut aggregate_by_codec: HashMap<String, BenchStat> = HashMap::new();
   for stat in &stats {
-    aggregate += stat.clone();
+    aggregate += stat.bench_stat.clone();
     aggregate_by_codec
       .entry(stat.codec.clone())
       .or_default()
-      .add_assign(stat.clone());
+      .add_assign(stat.bench_stat.clone());
   }
   stats.extend(opt.codecs.iter().map(|codec| {
     let codec = codec.to_string();
-    let mut stat = aggregate_by_codec.get(&codec).cloned().unwrap();
-    stat.codec = codec;
-    stat
+    PrintStat {
+      bench_stat: aggregate_by_codec.get(&codec).cloned().unwrap(),
+      codec,
+      dataset: "<sum>".to_string(),
+    }
   }));
-  stats.push(aggregate);
+  stats.push(PrintStat {
+    bench_stat: aggregate,
+    codec: "<sum>".to_string(),
+    dataset: "<sum>".to_string(),
+  });
   let table = Table::new(stats)
     .with(Style::rounded())
     .with(Modify::new(Columns::new(2..)).with(Alignment::right()))
     .to_string();
   println!("{}", table);
-  update_results_csv(&aggregate_by_codec, opt);
+  update_results_csv(&aggregate_by_codec, opt)
 }
 
 pub fn bench(mut opt: BenchOpt) -> Result<()> {
@@ -333,7 +369,5 @@ pub fn bench(mut opt: BenchOpt) -> Result<()> {
   }
   progress_bar.finish_and_clear();
 
-  print_stats(stats, &opt);
-
-  Ok(())
+  print_stats(stats, &opt)
 }

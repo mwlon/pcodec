@@ -4,7 +4,7 @@ use indicatif::ProgressBar;
 
 use crate::arrow_handlers::ArrowHandlerImpl;
 use crate::bench::codecs::CodecConfig;
-use crate::bench::{core_dtype_to_str, BenchOpt, PrintStat};
+use crate::bench::{core_dtype_to_str, BenchOpt, BenchStat, PrintStat};
 use crate::dtypes::{ArrowNumberLike, PcoNumberLike};
 use crate::num_vec::NumVec;
 
@@ -38,11 +38,11 @@ fn handle_for_codec(
     benches.push(codec.stats_iter(num_vec, &precomputed, &opt.iter_opt)?);
     progress_bar.inc(1);
   }
-  Ok(PrintStat::compute(
+  Ok(PrintStat {
     dataset,
-    codec.to_string(),
-    &benches,
-  ))
+    codec: codec.to_string(),
+    bench_stat: BenchStat::aggregate_median(&benches),
+  })
 }
 
 impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
