@@ -54,6 +54,7 @@ macro_rules! impl_signed {
       fn transmute_to_latents(slice: &mut [Self]) -> &mut [Self::L] {
         unsafe { mem::transmute(slice) }
       }
+      #[inline]
       fn transmute_to_latent(self) -> Self::L {
         unsafe { mem::transmute(self) }
       }

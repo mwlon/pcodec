@@ -155,6 +155,7 @@ macro_rules! impl_unsigned_number {
       fn transmute_to_latents(slice: &mut [Self]) -> &mut [Self::L] {
         slice
       }
+      #[inline]
       fn transmute_to_latent(self) -> Self::L {
         self
       }

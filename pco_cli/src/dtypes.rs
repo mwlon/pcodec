@@ -3,8 +3,8 @@ use std::mem;
 use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes as arrow_dtypes;
-use arrow::datatypes::DataType as ArrowDataType;
 use arrow::datatypes::{ArrowPrimitiveType, DataType};
+use arrow::datatypes::{DataType as ArrowDataType, Float16Type};
 
 use half::f16;
 use pco::data_types::{CoreDataType, NumberLike};
@@ -215,7 +215,36 @@ impl Parquetable for u64 {
   }
 }
 
-trivial!(f16, F16, arrow_dtypes::Float16Type);
+#[cfg(feature = "full_bench")]
+impl QCompressable for f16 {
+  type Qco = u16;
+
+  fn nums_to_qco(nums: &[Self]) -> &[Self::Qco] {
+    unsafe { mem::transmute(nums) }
+  }
+  fn qco_to_nums(vec: Vec<Self::Qco>) -> Vec<Self> {
+    unsafe { mem::transmute(vec) }
+  }
+}
+
+impl PcoNumberLike for f16 {
+  const ARROW_DTYPE: DataType = Float16Type::DATA_TYPE;
+
+  type Arrow = Float16Type;
+
+  fn to_arrow_native(self) -> <Self::Arrow as ArrowPrimitiveType>::Native {
+    self as Self
+  }
+
+  fn make_num_vec(nums: Vec<Self>) -> NumVec {
+    NumVec::F16(nums)
+  }
+
+  fn arrow_native_to_bytes(x: <Self::Arrow as ArrowPrimitiveType>::Native) -> Vec<u8> {
+    x.to_le_bytes().to_vec()
+  }
+}
+
 trivial!(f32, F32, arrow_dtypes::Float32Type);
 trivial!(f64, F64, arrow_dtypes::Float64Type);
 trivial!(i16, I16, arrow_dtypes::Int16Type);
@@ -225,6 +254,7 @@ trivial!(u16, U16, arrow_dtypes::UInt16Type);
 trivial!(u32, U32, arrow_dtypes::UInt32Type);
 trivial!(u64, U64, arrow_dtypes::UInt64Type);
 
+extra_arrow!(f16, arrow_dtypes::Float16Type);
 extra_arrow!(i64, arrow_dtypes::TimestampSecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampMillisecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);

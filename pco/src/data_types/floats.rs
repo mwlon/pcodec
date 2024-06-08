@@ -374,6 +374,8 @@ macro_rules! impl_float_number_like {
       fn transmute_to_latents(slice: &mut [Self]) -> &mut [Self::L] {
         unsafe { mem::transmute(slice) }
       }
+
+      #[inline]
       fn transmute_to_latent(self) -> Self::L {
         self.to_bits()
       }

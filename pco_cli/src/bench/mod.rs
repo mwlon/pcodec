@@ -257,8 +257,11 @@ fn update_results_csv(
       }
 
       let mut fields = line.split(',');
-      let dataset = fields.next().unwrap();
-      let codec = fields.next().unwrap();
+      let dataset = fields.next();
+      let codec = fields.next();
+      let (Some(dataset), Some(codec)) = (dataset, codec) else {
+        continue;
+      };
       let rest = fields.collect::<Vec<_>>().join(",");
       lines.insert(
         (dataset.to_string(), codec.to_string()),

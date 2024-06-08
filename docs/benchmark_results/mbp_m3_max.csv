@@ -1,0 +1,5 @@
+input,codec,compress_dt,decompress_dt,compressed_size
+r_place,blosc:cname=zstd:level=3,11.372147,3.3396413,976973046
+r_place,parquet:compression=zstd1,15.389868,1.9258637,961718183
+r_place,pco,10.598625,1.5479162,661664577
+r_place,spdp,11.464923,12.225844,3306514546
