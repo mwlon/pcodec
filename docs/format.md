@@ -34,11 +34,11 @@ The header simply consists of
 
 So far, these format versions exist:
 
-| format version | deviations from next version |
-|----------------|------------------------------|
-| 0              | int mult mode unsupported    |
-| 1              | float quant mode unsupported |
-| 2              | -                            |
+| format version | first Rust version | deviations from next format version           |
+|----------------|--------------------|-----------------------------------------------|
+| 0              | 0.0.0              | int mult mode unsupported                     |
+| 1              | 0.1.0              | float quant mode and 16-bit types unsupported |
+| 2              | 0.3.0              | -                                             |
 
 ### Chunk Metadata
 
@@ -51,15 +51,16 @@ Each chunk metadata consists of
 
 * [4 bits] `mode`, using this table:
 
-  | value | mode         | n latent variables | 2nd latent uses delta? |
-  |-------|--------------|--------------------|------------------------|
-  | 0     | classic      | 1                  |                        |
-  | 1     | int mult     | 2                  | no                     |
-  | 2     | float mult   | 2                  | no                     |
-  | 3     | float quant  | 2                  | no                     |
-  | 4-15  | \<reserved\> |                    |                        |
-* [0 or `dtype_size` bits] for int mult and float mult modes, a raw
-  multiplier `mult` is encoded in the data type.
+  | value | mode         | n latent variables | 2nd latent uses delta? | `extra_mode_bits` |
+                      |-------|--------------|--------------------|------------------------|-------------------|
+  | 0     | classic      | 1                  |                        | 0                 |
+  | 1     | int mult     | 2                  | no                     | `dtype_size`      |
+  | 2     | float mult   | 2                  | no                     | `dtype_size`      |
+  | 3     | float quant  | 2                  | no                     | 8                 |
+  | 4-15  | \<reserved\> |                    |                        |                   |
+* [`extra_mode_bits` bits] for certain modes, extra data is parsed. See the
+  mode-specific formulas below for how this is used, e.g. as the `mult` or `k`
+  values.
 * [3 bits] the delta encoding order `delta_order`.
 * per latent variable,
   * [4 bits] `ans_size_log`, the log2 of the size of its tANS table.

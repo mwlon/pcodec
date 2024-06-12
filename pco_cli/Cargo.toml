@@ -25,12 +25,12 @@ clap = { version = "4.5.3", features = ["derive"] }
 half = { version = "2.4.1", features = ["std"] }
 indicatif = "0.17.8"
 parquet = { version = "49.0.0", features = [
-    "arrow",
-    "base64",
-    "snap",
-    "zstd",
+  "arrow",
+  "base64",
+  "snap",
+  "zstd",
 ], default-features = false }
-pco = { version = "0.2", path = "../pco" }
+pco = { version = "0.3", path = "../pco" }
 q_compress = { version = "0.11.7", path = "../quantile-compression/q_compress", optional = true }
 snap = "1.1.0"
 spdp_sys = { version = "0.1", optional = true }
