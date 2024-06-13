@@ -1,7 +1,7 @@
 use half::f16;
 use numpy::PyArrayDyn;
 use pco::data_types::CoreDataType;
-use pco::{ChunkConfig, FloatMultSpec, IntMultSpec, PagingSpec, Progress};
+use pco::{ChunkConfig, FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec, Progress};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyResult, Python};
 use pyo3::{py_run, pyclass, pymethods, PyErr};
@@ -50,6 +50,78 @@ pub fn pco_err_to_py(pco: PcoError) -> PyErr {
   PyRuntimeError::new_err(format!("pco error: {}", pco))
 }
 
+#[pyclass(name = "IntMultSpec")]
+#[derive(Clone, Default)]
+pub struct PyIntMultSpec(IntMultSpec);
+
+/// TODO
+#[pymethods]
+impl PyIntMultSpec {
+  /// :returns: TODO
+  #[staticmethod]
+  fn disabled() -> Self {
+    Self(IntMultSpec::Disabled)
+  }
+
+  /// :returns: TODO
+  #[staticmethod]
+  fn enabled() -> Self {
+    Self(IntMultSpec::Enabled)
+  }
+
+  /// :returns: TODO
+  #[staticmethod]
+  fn provided(base: u64) -> Self {
+    Self(IntMultSpec::Provided(base))
+  }
+}
+
+#[pyclass(name = "FloatMultSpec")]
+#[derive(Clone, Default)]
+pub struct PyFloatMultSpec(FloatMultSpec);
+
+/// TODO
+#[pymethods]
+impl PyFloatMultSpec {
+  /// :returns: TODO
+  #[staticmethod]
+  fn disabled() -> Self {
+    Self(FloatMultSpec::Disabled)
+  }
+
+  /// :returns: TODO
+  #[staticmethod]
+  fn enabled() -> Self {
+    Self(FloatMultSpec::Enabled)
+  }
+
+  /// :returns: TODO
+  #[staticmethod]
+  fn provided(base: f64) -> Self {
+    Self(FloatMultSpec::Provided(base))
+  }
+}
+
+#[pyclass(name = "FloatQuantSpec")]
+#[derive(Clone, Default)]
+pub struct PyFloatQuantSpec(FloatQuantSpec);
+
+/// TODO
+#[pymethods]
+impl PyFloatQuantSpec {
+  /// :returns: TODO
+  #[staticmethod]
+  fn disabled() -> Self {
+    Self(FloatQuantSpec::Disabled)
+  }
+
+  /// :returns: TODO
+  #[staticmethod]
+  fn provided(bits: u32) -> Self {
+    Self(FloatQuantSpec::Provided(bits))
+  }
+}
+
 #[pyclass(name = "PagingSpec")]
 #[derive(Clone, Default)]
 pub struct PyPagingSpec(PagingSpec);
@@ -78,8 +150,9 @@ impl PyPagingSpec {
 pub struct PyChunkConfig {
   compression_level: usize,
   delta_encoding_order: Option<usize>,
-  int_mult_spec: String,
-  float_mult_spec: String,
+  int_mult_spec: PyIntMultSpec,
+  float_mult_spec: PyFloatMultSpec,
+  float_quant_spec: PyFloatQuantSpec,
   paging_spec: PyPagingSpec,
 }
 
@@ -92,12 +165,9 @@ impl PyChunkConfig {
   /// :param delta_encoding_order: either a delta encoding level from 0-7 or
   /// None. If set to None, pcodec will try to infer the optimal delta encoding
   /// order.
-  /// :param int_mult_spec: either 'enabled' or 'disabled'. If enabled, pcodec
-  /// will consider using int mult mode, which can substantially improve
-  /// compression ratio but decrease speed in some cases for integer types.
-  /// :param float_mult_spec: either 'enabled' or 'disabled'. If enabled, pcodec
-  /// will consider using float mult mode, which can substantially improve
-  /// compression ratio but decrease speed in some cases for float types.
+  /// :param int_mult_spec: TODO
+  /// :param float_mult_spec: TODO
+  /// :param float_quant_spec: TODO
   /// :param paging_spec: a PagingSpec describing how many numbers should
   /// go into each page.
   ///
@@ -106,15 +176,17 @@ impl PyChunkConfig {
   #[pyo3(signature = (
     compression_level=pco::DEFAULT_COMPRESSION_LEVEL,
     delta_encoding_order=None,
-    int_mult_spec="enabled".to_string(),
-    float_mult_spec="enabled".to_string(),
+    int_mult_spec=PyIntMultSpec::default(),
+    float_mult_spec=PyFloatMultSpec::default(),
+    float_quant_spec=PyFloatQuantSpec::default(),
     paging_spec=PyPagingSpec::default(),
   ))]
   fn new(
     compression_level: usize,
     delta_encoding_order: Option<usize>,
-    int_mult_spec: String,
-    float_mult_spec: String,
+    int_mult_spec: PyIntMultSpec,
+    float_mult_spec: PyFloatMultSpec,
+    float_quant_spec: PyFloatQuantSpec,
     paging_spec: PyPagingSpec,
   ) -> Self {
     Self {
@@ -122,6 +194,7 @@ impl PyChunkConfig {
       delta_encoding_order,
       int_mult_spec,
       float_mult_spec,
+      float_quant_spec,
       paging_spec,
     }
   }
@@ -131,31 +204,12 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
   type Error = PyErr;
 
   fn try_from(py_config: &PyChunkConfig) -> Result<Self, Self::Error> {
-    let int_mult_spec = match py_config.int_mult_spec.to_lowercase().as_str() {
-      "enabled" => IntMultSpec::Enabled,
-      "disabled" => IntMultSpec::Disabled,
-      other => {
-        return Err(PyRuntimeError::new_err(format!(
-          "unknown int mult spec: {}",
-          other
-        )))
-      }
-    };
-    let float_mult_spec = match py_config.float_mult_spec.to_lowercase().as_str() {
-      "enabled" => FloatMultSpec::Enabled,
-      "disabled" => FloatMultSpec::Disabled,
-      other => {
-        return Err(PyRuntimeError::new_err(format!(
-          "unknown float mult spec: {}",
-          other
-        )))
-      }
-    };
     let res = ChunkConfig::default()
       .with_compression_level(py_config.compression_level)
       .with_delta_encoding_order(py_config.delta_encoding_order)
-      .with_int_mult_spec(int_mult_spec)
-      .with_float_mult_spec(float_mult_spec)
+      .with_int_mult_spec(py_config.int_mult_spec.0.clone())
+      .with_float_mult_spec(py_config.float_mult_spec.0.clone())
+      .with_float_quant_spec(py_config.float_quant_spec.0.clone())
       .with_paging_spec(py_config.paging_spec.0.clone());
     Ok(res)
   }
@@ -182,6 +236,9 @@ pub enum DynTypedPyArrayDyn<'py> {
 fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
   m.add_class::<PyProgress>()?;
+  m.add_class::<PyIntMultSpec>()?;
+  m.add_class::<PyFloatMultSpec>()?;
+  m.add_class::<PyFloatQuantSpec>()?;
   m.add_class::<PyPagingSpec>()?;
   m.add_class::<PyChunkConfig>()?;
   m.add(
