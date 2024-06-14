@@ -99,6 +99,7 @@ impl<C: CodecInternal> CodecSurface for C {
   }
 
   fn details(&self, explicit: bool) -> String {
+    let asdf = crate::config::ChunkConfigOpt::command_for_update()
     let default_confs: HashMap<&'static str, String> =
       Self::default().get_confs().into_iter().collect();
     let mut res = String::new();

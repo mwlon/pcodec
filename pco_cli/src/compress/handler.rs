@@ -28,12 +28,8 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
     }
     let file = open_options.open(&opt.path)?;
 
-    let config = ChunkConfig::default()
-      .with_compression_level(opt.level)
-      .with_delta_encoding_order(opt.delta_encoding_order)
-      .with_int_mult_spec(opt.int_mult)
-      .with_float_mult_spec(opt.float_mult)
-      .with_float_quant_spec(opt.float_quant);
+    let config = ChunkConfig::from(&opt.chunk_config);
+    let chunk_size = opt.chunk_config.chunk_size;
     let fc = FileCompressor::default();
     fc.write_header(&file)?;
 
@@ -48,14 +44,14 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
     let write_chunks = |num_buffer: &mut Vec<P::Pco>, finish: bool| -> Result<()> {
       let n = num_buffer.len();
       let n_chunks = if finish {
-        n.div_ceil(opt.chunk_size)
+        n.div_ceil(chunk_size)
       } else {
-        n / opt.chunk_size
+        n / chunk_size
       };
       let mut start = 0;
       let mut end = 0;
       for _ in 0..n_chunks {
-        end = min(start + opt.chunk_size, num_buffer.len());
+        end = min(start + chunk_size, num_buffer.len());
         fc.chunk_compressor(&num_buffer[start..end], &config)?
           .write_chunk(&file)?;
         start = end;
