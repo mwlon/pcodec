@@ -207,9 +207,9 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
     let res = ChunkConfig::default()
       .with_compression_level(py_config.compression_level)
       .with_delta_encoding_order(py_config.delta_encoding_order)
-      .with_int_mult_spec(py_config.int_mult_spec.0.clone())
-      .with_float_mult_spec(py_config.float_mult_spec.0.clone())
-      .with_float_quant_spec(py_config.float_quant_spec.0.clone())
+      .with_int_mult_spec(py_config.int_mult_spec.0)
+      .with_float_mult_spec(py_config.float_mult_spec.0)
+      .with_float_quant_spec(py_config.float_quant_spec.0)
       .with_paging_spec(py_config.paging_spec.0.clone());
     Ok(res)
   }
