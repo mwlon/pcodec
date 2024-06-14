@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use arrow::array::{ArrayRef, Float32Array, Int32Array};
+use arrow::array::{ArrayRef, Float32Array, Int16Array, Int32Array, UInt16Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use wav::BitDepth;
 
@@ -12,7 +12,8 @@ pub fn get_wav_field(path: &Path) -> Result<Option<Field>> {
   let mut file = File::open(path)?;
   let (header, _) = wav::read(&mut file)?;
   let dtype = match header.bytes_per_sample {
-    1 | 2 | 3 => Ok(DataType::Int32),
+    1 | 2 => Ok(DataType::Int16),
+    3 => Ok(DataType::Int32),
     4 => Ok(DataType::Float32),
     _ => Err(anyhow!(
       "invalid number of bytes per wav file sample"
@@ -44,42 +45,25 @@ impl WavColumnReader {
   }
 }
 
-fn i32s_from_u8s(u8s: Vec<u8>) -> Vec<i32> {
-  u8s.into_iter().map(|x| x as i32).collect()
-}
-
-fn i32s_from_i16s(i16s: Vec<i16>) -> Vec<i32> {
-  i16s.into_iter().map(|x| x as i32).collect()
-}
-
-fn array_from_i32s(i32s: Vec<i32>) -> ArrayRef {
-  Arc::new(Int32Array::from(i32s))
-}
-
-fn array_from_f32s(f32s: Vec<f32>) -> ArrayRef {
-  Arc::new(Float32Array::from(f32s))
-}
-
 impl WavColumnReader {
   fn get_array(&self) -> Result<ArrayRef> {
     let mut inp_file = File::open(&self.col_path)?;
     let (_, data) = wav::read(&mut inp_file)?;
-    let array = match data {
+    let array: ArrayRef = match data {
       BitDepth::Eight(u8s) => {
-        let i32s = i32s_from_u8s(u8s);
-        array_from_i32s(i32s)
+        let u16s = u8s.into_iter().map(|x| x as u16).collect::<Vec<_>>();
+        Arc::new(UInt16Array::from(u16s))
       }
-      BitDepth::Sixteen(i16s) => {
-        let i32s = i32s_from_i16s(i16s);
-        array_from_i32s(i32s)
-      }
-      BitDepth::TwentyFour(i32s) => array_from_i32s(i32s),
-      BitDepth::ThirtyTwoFloat(f32s) => array_from_f32s(f32s),
+      BitDepth::Sixteen(i16s) => Arc::new(Int16Array::from(i16s)),
+      BitDepth::TwentyFour(i32s) => Arc::new(Int32Array::from(i32s)),
+      BitDepth::ThirtyTwoFloat(f32s) => Arc::new(Float32Array::from(f32s)),
       BitDepth::Empty => {
         if self.dtype == DataType::Int32 {
-          array_from_i32s(vec![])
+          Arc::new(Int32Array::from(Vec::<i32>::new()))
+        } else if self.dtype == DataType::Float32 {
+          Arc::new(Float32Array::from(Vec::<f32>::new()))
         } else {
-          array_from_f32s(vec![])
+          Arc::new(Int16Array::from(Vec::<i16>::new()))
         }
       }
     };

@@ -1,12 +1,11 @@
 #![allow(clippy::uninit_vec)]
 
-use std::any::type_name;
 use std::collections::HashMap;
-use std::fs;
 use std::ops::AddAssign;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
+use std::{any, fs};
 
 use anyhow::{anyhow, Result};
 use arrow::datatypes::{DataType, Schema};
@@ -184,17 +183,20 @@ impl BenchStat {
   }
 }
 
+fn type_basename<T>() -> String {
+  any::type_name::<T>().split(':').last().unwrap().to_string()
+}
+
 fn core_dtype_to_str(dtype: CoreDataType) -> String {
-  macro_rules! to_str {
+  macro_rules! to_string {
     {$($name:ident($lname:ident) => $t:ty,)+} => {
       match dtype {
-        $(CoreDataType::$name => type_name::<$t>(),)+
+        $(CoreDataType::$name => type_basename::<$t>(),)+
       }
     }
   }
 
-  let name = with_core_dtypes!(to_str);
-  name.to_string()
+  with_core_dtypes!(to_string)
 }
 
 fn handle_column(
