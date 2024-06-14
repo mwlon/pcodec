@@ -54,6 +54,13 @@ def write_i64(arr, name, base_dir):
   write_generic(strs, arr, full_name, base_dir)
 
 @writer
+def write_f16(arr, name, base_dir):
+  arr = arr.astype(np.float16)
+  strs = [str(x) for x in arr]
+  full_name = f'f16_{name}'
+  write_generic(strs, arr, full_name, base_dir)
+
+@writer
 def write_f32(arr, name, base_dir):
   arr = arr.astype(np.float32)
   strs = [str(x) for x in arr]
@@ -156,8 +163,8 @@ def slow_cosine():
   period = n / periods
   return 100_000 * np.cos(np.arange(n) * 2 * np.pi / period)
 
-# Including f32 mostly just to test performance bottlenecks on f32
-@datagen('f64', 'f32')
+# Including lower precisions mostly just to test performance bottlenecks
+@datagen('f64', 'f32', 'f16')
 def normal():
   return np.random.normal(size=n)
 
