@@ -54,22 +54,22 @@ pub fn pco_err_to_py(pco: PcoError) -> PyErr {
 #[derive(Clone, Default)]
 pub struct PyIntMultSpec(IntMultSpec);
 
-/// TODO
+/// Specifies how pcodec should handle modulo compression for integer types.
 #[pymethods]
 impl PyIntMultSpec {
-  /// :returns: TODO
+  /// :returns: a IntMultSpec disabling modulo compression.
   #[staticmethod]
   fn disabled() -> Self {
     Self(IntMultSpec::Disabled)
   }
 
-  /// :returns: TODO
+  /// :returns: a IntMultSpec enabling modulo compression.
   #[staticmethod]
   fn enabled() -> Self {
     Self(IntMultSpec::Enabled)
   }
 
-  /// :returns: TODO
+  /// :returns: a IntMultSpec with a specific `base` for modulo compression.
   #[staticmethod]
   fn provided(base: u64) -> Self {
     Self(IntMultSpec::Provided(base))
@@ -80,22 +80,23 @@ impl PyIntMultSpec {
 #[derive(Clone, Default)]
 pub struct PyFloatMultSpec(FloatMultSpec);
 
-/// TODO
+/// Specifies how pcodec should handle floating point multiplication
+/// compression.
 #[pymethods]
 impl PyFloatMultSpec {
-  /// :returns: TODO
+  /// :returns: a FloatMultSpec disabling floating point multiplication.
   #[staticmethod]
   fn disabled() -> Self {
     Self(FloatMultSpec::Disabled)
   }
 
-  /// :returns: TODO
+  /// :returns: a FloatMultSpec enabling floating point multiplication.
   #[staticmethod]
   fn enabled() -> Self {
     Self(FloatMultSpec::Enabled)
   }
 
-  /// :returns: TODO
+  /// :returns: a FloatMultSpec with a specific `base` for floating point
   #[staticmethod]
   fn provided(base: f64) -> Self {
     Self(FloatMultSpec::Provided(base))
@@ -106,16 +107,16 @@ impl PyFloatMultSpec {
 #[derive(Clone, Default)]
 pub struct PyFloatQuantSpec(FloatQuantSpec);
 
-/// TODO
+/// Specifies how pcodec should handle floating point quantization compression.
 #[pymethods]
 impl PyFloatQuantSpec {
-  /// :returns: TODO
+  /// :returns: a FloatQuantSpec disabling floating point quantization.
   #[staticmethod]
   fn disabled() -> Self {
     Self(FloatQuantSpec::Disabled)
   }
 
-  /// :returns: TODO
+  /// :returns: a FloatQuantSpec with a specific `bits` for floating point
   #[staticmethod]
   fn provided(bits: u32) -> Self {
     Self(FloatQuantSpec::Provided(bits))
@@ -165,9 +166,21 @@ impl PyChunkConfig {
   /// :param delta_encoding_order: either a delta encoding level from 0-7 or
   /// None. If set to None, pcodec will try to infer the optimal delta encoding
   /// order.
-  /// :param int_mult_spec: TODO
-  /// :param float_mult_spec: TODO
-  /// :param float_quant_spec: TODO
+  /// :param int_mult_spec: a IntMultSpec disabling, enabling, or providing a
+  /// base for modulo compression. If enabled, pcodec will consider using int
+  /// mult mode, which can substantially improve compression ratio but decrease
+  /// speed in some cases for integer types. If a base is provided, pcodec will
+  /// use that base for modulo compression. Enabled by default.
+  /// :param float_mult_spec: a FloatMultSpec disabling, enabling, or providing
+  /// a base for floating point multiplication compression. If enabled,
+  /// pcodec will consider using float mult mode, which can substantially
+  /// improve compression ratio but decrease speed in some cases for floating
+  /// point types. If a base is provided, pcodec will use that base for
+  /// floating point multiplication compression. Enabled by default.
+  /// :param float_quant_spec: a FloatQuantSpec disabling or providing the
+  /// `bits` for floating point quantization compression. If provided, pcodec
+  /// will use that number of bits for floating point quantization compression.
+  /// To use quantization, float mult must be disabled. Disabled by default.
   /// :param paging_spec: a PagingSpec describing how many numbers should
   /// go into each page.
   ///
