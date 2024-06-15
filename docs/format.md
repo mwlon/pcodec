@@ -52,7 +52,7 @@ Each chunk metadata consists of
 * [4 bits] `mode`, using this table:
 
   | value | mode         | n latent variables | 2nd latent uses delta? | `extra_mode_bits` |
-                            |-------|--------------|--------------------|------------------------|-------------------|
+                                    |-------|--------------|--------------------|------------------------|-------------------|
   | 0     | classic      | 1                  |                        | 0                 |
   | 1     | int mult     | 2                  | no                     | `dtype_size`      |
   | 2     | float mult   | 2                  | no                     | `dtype_size`      |
@@ -128,13 +128,14 @@ It consists of
 
 Based on the mode, unsigneds are decomposed into latents.
 Let `l0` and `l1` be the primary and secondary latents respectively.
+Let `MID` be the middle value for the latent type (e.g. 2^31 for `u32`).
 
-| mode        | decoding formula                                                 |
-|-------------|------------------------------------------------------------------|
-| classic     | `from_latent_ordered(l0)`                                        |
-| int mult    | `from_latent_ordered(l0 * mult + l1)`                            |
-| float mult  | `int_float_from_latent(l0) * mult + l1 ULPs`                     |
-| float quant | `from_latent_ordered((l0 << k) + (POSITIVE ? l1 : 2^k - 1 - l1)` |
+| mode        | decoding formula                                                       |
+|-------------|------------------------------------------------------------------------|
+| classic     | `from_latent_ordered(l0)`                                              |
+| int mult    | `from_latent_ordered(l0 * mult + l1)`                                  |
+| float mult  | `int_float_from_latent(l0) * mult + (l1 + MID) ULPs`                   |
+| float quant | `from_latent_ordered((l0 << k) + (l0 << k >= MID ? l1 : 2^k - 1 - l1)` |
 
 Here ULP refers to [unit in the last place](https://en.wikipedia.org/wiki/Unit_in_the_last_place).
 
