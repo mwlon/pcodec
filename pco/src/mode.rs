@@ -60,7 +60,7 @@ pub enum Mode<L: Latent> {
   ///
   /// Only applies to floats.
   ///
-  /// Formula: `num = from_bits(quantums << k) + adjustment ULPs`
+  /// Formula: `num = from_bits(quantums << k + adjustment)`
   /// (warning: this formula is especially simplified)
   FloatQuant(Bitlen),
 }
