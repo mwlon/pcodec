@@ -107,7 +107,6 @@ impl<C: CodecInternal> CodecSurface for C {
     Self: Sized,
   {
     let mut matches = Self::command()
-      // let mut matches = Self::command()
       .try_get_matches_from(kv_args)
       .map_err(|_| {
         let codec = default_codec::<Self>();
