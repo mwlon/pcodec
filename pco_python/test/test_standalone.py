@@ -1,5 +1,5 @@
 import numpy as np
-from pcodec import standalone, ChunkConfig, PagingSpec
+from pcodec import ChunkConfig, FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec, standalone
 import pytest
 
 np.random.seed(12345)
@@ -10,7 +10,28 @@ all_shapes = (
   [9, 100],
 )
 
-all_dtypes = ('f2', 'f4', 'f8', 'i2', 'i4', 'i8', 'u2', 'u4', 'u8')
+all_dtypes = ("f2", "f4", "f8", "i2", "i4", "i8", "u2", "u4", "u8")
+
+all_int_mult_specs = (
+    IntMultSpec.enabled(),
+    IntMultSpec.disabled(),
+    IntMultSpec.provided(2),
+    IntMultSpec.provided(10),
+)
+
+all_float_mult_specs = (
+    FloatMultSpec.enabled(),
+    FloatMultSpec.disabled(),
+    FloatMultSpec.provided(np.pi),
+    FloatMultSpec.provided(10 * np.pi),
+)
+
+all_float_quant_specs = (
+    FloatQuantSpec.disabled(),
+    FloatQuantSpec.provided(4),
+    FloatQuantSpec.provided(16),
+)
+
 
 @pytest.mark.parametrize("shape", all_shapes)
 @pytest.mark.parametrize("dtype", all_dtypes)
@@ -92,13 +113,66 @@ def test_compression_options():
 
   # this is mostly just to check that there is no error, but these settings
   # should give worse compression than the defaults
-  assert len(standalone.simple_compress(
+  assert (len(
+      standalone.simple_compress(
+          data,
+          ChunkConfig(
+              compression_level=0,
+              delta_encoding_order=1,
+              int_mult_spec=IntMultSpec.disabled(),
+              float_mult_spec=FloatMultSpec.disabled(),
+              float_quant_spec=FloatQuantSpec.disabled(),
+              paging_spec=PagingSpec.equal_pages_up_to(77),
+          ),
+      )) > default_size)
+
+
+@pytest.mark.parametrize("int_mult_spec", all_int_mult_specs)
+def test_compression_int_mult_spec_options(int_mult_spec):
+  data = (np.random.normal(size=100) * 1000).astype(np.int32)
+
+  # check for errors
+  compressed = standalone.simple_compress(
+    data,
+    ChunkConfig(int_mult_spec=int_mult_spec),
+  )
+
+  out = standalone.simple_decompress(compressed)
+
+  # check that the decompressed data is correct
+  np.testing.assert_array_equal(data, out)
+
+
+@pytest.mark.parametrize("float_mult_spec", all_float_mult_specs)
+def test_compression_float_mult_spec_options(float_mult_spec):
+  data = (np.random.normal(size=100) * 1000).astype(np.int32) * np.pi
+
+  # check for errors
+  compressed = standalone.simple_compress(
+    data,
+    ChunkConfig(float_mult_spec=float_mult_spec),
+  )
+
+  out = standalone.simple_decompress(compressed)
+
+  # check that the decompressed data is correct
+  np.testing.assert_array_equal(data, out)
+
+
+@pytest.mark.parametrize("float_quant_spec", all_float_quant_specs)
+def test_compression_float_quant_spec_options(float_quant_spec):
+  data = np.random.normal(size=100).astype(np.float32).astype(np.float64)
+
+  # check for errors
+  compressed = standalone.simple_compress(
     data,
     ChunkConfig(
-      compression_level=0,
-      delta_encoding_order=1,
-      int_mult_spec='disabled',
-      float_mult_spec='DISABLED',
-      paging_spec=PagingSpec.equal_pages_up_to(77),
-    )
-  )) > default_size
+      float_mult_spec=FloatMultSpec.disabled(),
+      float_quant_spec=float_quant_spec,
+    ),
+  )
+
+  out = standalone.simple_decompress(compressed)
+
+  # check that the decompressed data is correct
+  np.testing.assert_array_equal(data, out)
