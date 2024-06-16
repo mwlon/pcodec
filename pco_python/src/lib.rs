@@ -167,11 +167,11 @@ impl PyChunkConfig {
   ///
   /// :param compression_level: a compression level from 0-12, where 12 takes
   /// the longest and compresses the most.
-  /// 
+  ///
   /// :param delta_encoding_order: either a delta encoding level from 0-7 or
   /// None. If set to None, pcodec will try to infer the optimal delta encoding
   /// order.
-  /// 
+  ///
   /// :param int_mult_spec: a IntMultSpec that configures whether integer
   /// multiplier detection is enabled.
   ///
@@ -184,7 +184,7 @@ impl PyChunkConfig {
   /// substantially reduced. This configuration may hurt
   /// compression speed slightly even when it isn't helpful.
   /// However, the compression ratio improvements tend to be large.
-  /// 
+  ///
   /// :param float_mult_spec: a FloatMultSpec that configures whether float
   /// multiplier detection is enabled.
   ///
@@ -197,14 +197,14 @@ impl PyChunkConfig {
   /// substantially reduced. In rare cases, this configuration
   /// may reduce compression speed somewhat even when it isn't helpful.
   /// However, the compression ratio improvements tend to be large.
-  /// 
+  ///
   /// :param float_quant_spec: a FloatQuantSpec that configures whether
   /// quantized-float detection is enabled.
   ///
   /// Examples where this helps:
   /// * float-valued data stored in a type that is unnecessarily wide (e.g.
   /// stored as `f64`s where only a `f32` worth of precision is used)
-  /// 
+  ///
   /// :param paging_spec: a PagingSpec describing how many numbers should
   /// go into each page.
   ///
