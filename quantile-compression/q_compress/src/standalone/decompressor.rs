@@ -94,7 +94,7 @@ impl<T: NumberLike> Decompressor<T> {
       if maybe_meta.is_none() {
         state.terminated = true;
       }
-      state.chunk_meta = maybe_meta.clone();
+      state.chunk_meta.clone_from(&maybe_meta);
       Ok(maybe_meta)
     })
   }
