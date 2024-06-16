@@ -3,11 +3,18 @@ use anyhow::{anyhow, Result};
 use crate::bench::codecs::CodecInternal;
 use crate::dtypes::PcoNumberLike;
 use clap::Parser;
+use q_compress::CompressorConfig;
 
 #[derive(Clone, Debug, Default, Parser)]
 pub struct QcoConfig {
-  use_fixed_delta: bool,
-  compressor_config: q_compress::CompressorConfig,
+  /// Compression level.
+  #[arg(long, default_value = "8")]
+  level: usize,
+  /// If specified, uses a fixed delta encoding order. Defaults to automatic detection.
+  #[arg(long = "delta-order")]
+  delta_encoding_order: Option<usize>,
+  #[arg(long)]
+  use_gcds: bool,
 }
 
 impl CodecInternal for QcoConfig {
@@ -17,33 +24,27 @@ impl CodecInternal for QcoConfig {
 
   fn get_confs(&self) -> Vec<(&'static str, String)> {
     vec![
+      ("level", self.level.to_string()),
       (
-        "level",
-        self.compressor_config.compression_level.to_string(),
+        "delta-order",
+        self
+          .delta_encoding_order
+          .map(|order| order.to_string())
+          .unwrap_or("auto".to_string()),
       ),
-      (
-        "delta_order",
-        if self.use_fixed_delta {
-          self.compressor_config.delta_encoding_order.to_string()
-        } else {
-          "auto".to_string()
-        },
-      ),
-      (
-        "use_gcds",
-        self.compressor_config.use_gcds.to_string(),
-      ),
+      ("use-gcds", self.use_gcds.to_string()),
     ]
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
-    let mut c_config = self.compressor_config.clone();
     let qco_nums = T::nums_to_qco(nums);
-    if !self.use_fixed_delta {
-      c_config.delta_encoding_order =
-        q_compress::auto_compressor_config(qco_nums, c_config.compression_level)
-          .delta_encoding_order;
-    }
+    let delta_order = self.delta_encoding_order.unwrap_or_else(|| {
+      q_compress::auto_compressor_config(qco_nums, self.level).delta_encoding_order
+    });
+    let mut c_config = CompressorConfig::default()
+      .with_compression_level(self.level)
+      .with_use_gcds(self.use_gcds)
+      .with_delta_encoding_order(delta_order);
     q_compress::standalone::Compressor::<T::Qco>::from_config(c_config).simple_compress(qco_nums)
   }
 
