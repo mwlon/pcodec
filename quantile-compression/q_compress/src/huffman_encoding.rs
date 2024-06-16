@@ -51,7 +51,7 @@ impl HuffmanItem {
     item_idx: &mut [HuffmanItem],
     leaf_idx: &mut [Prefix<T>],
   ) {
-    item_idx[self.id].bits = bits.clone();
+    item_idx[self.id].bits.clone_from(&bits);
     if self.leaf_id.is_some() {
       leaf_idx[self.leaf_id.unwrap()].code = bits;
     } else {

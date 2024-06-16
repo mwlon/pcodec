@@ -1,20 +1,15 @@
 use std::cmp::{max, min};
 use std::convert::TryInto;
 
-use anyhow::{anyhow, Result};
+use clap::Parser;
 
 use crate::bench::codecs::{utils, CodecInternal};
 use crate::dtypes::PcoNumberLike;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Parser)]
 pub struct SpdpConfig {
+  #[arg(long, default_value = "5")]
   level: u8,
-}
-
-impl Default for SpdpConfig {
-  fn default() -> Self {
-    Self { level: 5 }
-  }
 }
 
 impl CodecInternal for SpdpConfig {
@@ -24,21 +19,6 @@ impl CodecInternal for SpdpConfig {
 
   fn get_confs(&self) -> Vec<(&'static str, String)> {
     vec![("level", self.level.to_string())]
-  }
-
-  fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
-    match key {
-      "level" => {
-        let level = value.parse::<u8>().unwrap();
-        if level <= 9 {
-          self.level = level;
-        } else {
-          return Err(anyhow!("SPDP max compression level is 9"));
-        }
-      }
-      _ => return Err(anyhow!("unknown conf: {}", key)),
-    }
-    Ok(())
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
