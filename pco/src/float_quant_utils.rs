@@ -2,11 +2,7 @@ use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent};
 
 #[inline(never)]
-pub(crate) fn join_latents<F: FloatLike>(
-  k: Bitlen,
-  primary: &mut [F::L],
-  secondary: &[F::L],
-) -> () {
+pub(crate) fn join_latents<F: FloatLike>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) {
   // For any float `num` such that `split_latents([num], k) == [[y], [m]]`, we have
   //     num.is_sign_positive() == (y >= sign_cutoff)
   let sign_cutoff = F::L::MID >> k;
@@ -54,11 +50,6 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
     };
   }
   vec![primary, secondary]
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct FloatQuantConfig {
-  pub k: Bitlen,
 }
 
 #[cfg(test)]
