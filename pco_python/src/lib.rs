@@ -63,7 +63,9 @@ impl PyIntMultSpec {
     Self(IntMultSpec::Disabled)
   }
 
-  /// :returns: a IntMultSpec enabling modulo compression.
+  /// :returns: a IntMultSpec enabling modulo compression. This will
+  /// automatically try to detect whether to use the mode and which `base` to
+  /// use.
   #[staticmethod]
   fn enabled() -> Self {
     Self(IntMultSpec::Enabled)
@@ -90,7 +92,9 @@ impl PyFloatMultSpec {
     Self(FloatMultSpec::Disabled)
   }
 
-  /// :returns: a FloatMultSpec enabling floating point multiplication.
+  /// :returns: a FloatMultSpec enabling floating point multiplication. This
+  /// will automatically try to detect whether to use the mode and which `base`
+  /// to use.
   #[staticmethod]
   fn enabled() -> Self {
     Self(FloatMultSpec::Enabled)
