@@ -26,47 +26,42 @@ use crate::data_types::{FloatLike, Latent};
 // which have equivalent formulas.
 
 /// A variation of how pco serializes and deserializes numbers.
+///
+/// Each mode splits the vector of numbers into one or two vectors of latents,
+/// with a different formula for how the split and join is done.
+/// We have delibrately written the formulas below in a slightly wrong way to
+/// convey the correct intuition without dealing with implementation
+/// complexities.
+/// Slightly more rigorous formulas are in format.md.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Mode<L: Latent> {
-  /// Each number is compressed as
-  /// * which bin it's in and
-  /// * the offset in that bin.
+  /// Represents each number as a single latent: itself.
   ///
-  /// Formula: bin.lower + offset
+  /// Formula: `num = num`
   #[default]
   Classic,
-  /// Each number is compressed as
-  /// * which bin it's in and
-  /// * the approximate offset in that bin as a multiplier of the base,
-  /// * which bin the additional adjustment is in, and
-  /// * the offset in that adjustment bin.
+  /// Given a `base`, represents each number as two latents: a multiplier
+  /// on the base and an adjustment.
   ///
-  /// Formula: (bin.lower + offset) * mode.base + adj_bin.lower + adj_bin.offset
+  /// Only applies to integers.
+  ///
+  /// Formula: `num = mode.base * mult + adjustment`
   IntMult(L),
-  /// Each number is compressed as
-  /// * which bin it's in,
-  /// * the approximate offset in that bin as a multiplier of the base,
-  /// * which bin the additional ULPs adjustment is in, and
-  /// * the offset in that adjustment bin.
+  /// Given a float `base`, represents each number as two latents: a
+  /// multiplier on the base and an ULPs (units-in-the-last-place) adjustment.
   ///
-  /// Formula: (bin.lower + offset) * mode.base +
-  /// (adj_bin.lower + adj_bin.offset) * machine_epsilon
+  /// Only applies to floats.
+  ///
+  /// Formula: `num = mode.base * mult + adjustment ULPs`
   FloatMult(L),
-  /// This mode decomposes a float `x` with precision `p` into the pair `(y, m)`, where:
-  /// * `y` is the float with precision `p - k` obtained by truncating the least-significant `k`
-  ///   bits from the significand of `x`
-  /// * `m` is a `k`-bit unsigned integer consisting of the bits removed to form `y`.
+  /// Given a number of bits `k`, represents each number as two latents:
+  /// quantums (effectively the first `TYPE_SIZE - k` bits) and an ULPs
+  /// adjustment.
   ///
-  /// Here `k` is a parameter of the mode, and `p` is deduced (by table lookup) from
-  /// the underlying floating point type.
+  /// Only applies to floats.
   ///
-  /// Each number is compressed as
-  /// * which bin the latent-bits representation of `y` is in,
-  /// * the offset of the latent-bits representation of `y` in that bin,
-  /// * which bin `m` is in, and
-  /// * the offset of `m` in that bin.
-  ///
-  /// Formula: F::from_latent_bits(((y_bin.lower + y_bin.offset) << mode.k) + m)
+  /// Formula: `num = from_bits(quantums << k + adjustment)`
+  /// (warning: this formula is especially simplified)
   FloatQuant(Bitlen),
 }
 
@@ -76,8 +71,8 @@ impl<L: Latent> Mode<L> {
 
     match self {
       Classic => 1,
-      FloatMult(_) | IntMult(_) => 2, // coefficient, adjustment
-      FloatQuant(_) => 2,             // truncation, adjustment
+      FloatMult(_) | IntMult(_) => 2, // multiplier, adjustment
+      FloatQuant(_) => 2,             // quantums, adjustment
     }
   }
 
