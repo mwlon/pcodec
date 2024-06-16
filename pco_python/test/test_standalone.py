@@ -131,34 +131,48 @@ def test_compression_options():
 def test_compression_int_mult_spec_options(int_mult_spec):
   data = (np.random.normal(size=100) * 1000).astype(np.int32)
 
-  # check for errors and that some compressed data was produced
-  assert (0 < len(standalone.simple_compress(
-      data,
-      ChunkConfig(int_mult_spec=int_mult_spec),
-  )) < data.nbytes)
+  # check for errors
+  compressed = standalone.simple_compress(
+    data,
+    ChunkConfig(int_mult_spec=int_mult_spec),
+  )
+
+  out = standalone.simple_decompress(compressed)
+
+  # check that the decompressed data is correct
+  np.testing.assert_array_equal(data, out)
 
 
 @pytest.mark.parametrize("float_mult_spec", all_float_mult_specs)
 def test_compression_float_mult_spec_options(float_mult_spec):
   data = (np.random.normal(size=100) * 1000).astype(np.int32) * np.pi
 
-  # check for errors and that some compressed data was produced
-  assert (0 < len(standalone.simple_compress(
-      data,
-      ChunkConfig(float_mult_spec=float_mult_spec),
-  )) < data.nbytes)
+  # check for errors
+  compressed = standalone.simple_compress(
+    data,
+    ChunkConfig(float_mult_spec=float_mult_spec),
+  )
+
+  out = standalone.simple_decompress(compressed)
+
+  # check that the decompressed data is correct
+  np.testing.assert_array_equal(data, out)
 
 
 @pytest.mark.parametrize("float_quant_spec", all_float_quant_specs)
 def test_compression_float_quant_spec_options(float_quant_spec):
   data = np.random.normal(size=100).astype(np.float32).astype(np.float64)
 
-  # check for errors and that some compressed data was produced
-  assert (0 < len(
-      standalone.simple_compress(
-          data,
-          ChunkConfig(
-              float_mult_spec=FloatMultSpec.disabled(),
-              float_quant_spec=float_quant_spec,
-          ),
-      )) < data.nbytes)
+  # check for errors
+  compressed = standalone.simple_compress(
+    data,
+    ChunkConfig(
+      float_mult_spec=FloatMultSpec.disabled(),
+      float_quant_spec=float_quant_spec,
+    ),
+  )
+
+  out = standalone.simple_decompress(compressed)
+
+  # check that the decompressed data is correct
+  np.testing.assert_array_equal(data, out)
