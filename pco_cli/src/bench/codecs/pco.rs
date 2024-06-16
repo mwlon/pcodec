@@ -1,5 +1,3 @@
-use clap::{ArgMatches, CommandFactory, FromArgMatches};
-
 use pco::ChunkConfig;
 
 use crate::bench::codecs::CodecInternal;

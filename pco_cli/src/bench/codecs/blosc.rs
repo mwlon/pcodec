@@ -8,22 +8,12 @@ use crate::dtypes::PcoNumberLike;
 
 #[derive(Clone, Debug, Parser)]
 pub struct BloscConfig {
-  #[arg(long)]
+  #[arg(long, default_value = "1048576")]
   block_size: usize,
-  #[arg(long)]
+  #[arg(long, default_value = "blosclz")]
   cname: String,
-  #[arg(long)]
+  #[arg(long, default_value = "9")]
   clevel: c_int,
-}
-
-impl Default for BloscConfig {
-  fn default() -> Self {
-    Self {
-      block_size: 1 << 20,
-      cname: "blosclz".to_string(),
-      clevel: 9,
-    }
-  }
 }
 
 impl CodecInternal for BloscConfig {

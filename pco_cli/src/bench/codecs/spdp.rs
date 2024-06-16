@@ -1,7 +1,6 @@
 use std::cmp::{max, min};
 use std::convert::TryInto;
 
-use anyhow::{anyhow, Result};
 use clap::Parser;
 
 use crate::bench::codecs::{utils, CodecInternal};
@@ -9,14 +8,8 @@ use crate::dtypes::PcoNumberLike;
 
 #[derive(Clone, Debug, Parser)]
 pub struct SpdpConfig {
-  #[arg(long)]
+  #[arg(long, default_value = "5")]
   level: u8,
-}
-
-impl Default for SpdpConfig {
-  fn default() -> Self {
-    Self { level: 5 }
-  }
 }
 
 impl CodecInternal for SpdpConfig {

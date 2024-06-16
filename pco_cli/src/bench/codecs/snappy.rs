@@ -6,7 +6,7 @@ use clap::Parser;
 use crate::bench::codecs::{utils, CodecInternal};
 use crate::dtypes::PcoNumberLike;
 
-#[derive(Clone, Debug, Default, Parser)]
+#[derive(Clone, Debug, Parser)]
 pub struct SnappyConfig {}
 
 impl CodecInternal for SnappyConfig {

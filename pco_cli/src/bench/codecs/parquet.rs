@@ -17,22 +17,13 @@ const ZSTD: &str = "zstd";
 
 #[derive(Clone, Debug, Parser)]
 pub struct ParquetConfig {
-  #[arg(long, value_parser=str_to_compression)]
+  #[arg(long, value_parser=str_to_compression, default_value = "uncompressed")]
   compression: Compression,
-  #[arg(long)]
+  // Larger group sizes work better on some datasets, and smaller ones on
+  // others, sometimes with dramatic impact.
+  // Based on experiments with zstd compression, 2^20 seems like a good default.
+  #[arg(long, default_value = "1048576")]
   group_size: usize,
-}
-
-impl Default for ParquetConfig {
-  fn default() -> Self {
-    Self {
-      compression: Compression::UNCOMPRESSED,
-      // Larger group sizes work better on some datasets, and smaller ones on
-      // others, sometimes with dramatic impact.
-      // Based on experiments with zstd compression, 2^20 seems like a good default.
-      group_size: 1 << 20,
-    }
-  }
 }
 
 fn str_to_compression(s: &str) -> Result<Compression> {

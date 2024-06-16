@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Result};
+use clap::Parser;
+
+use q_compress::CompressorConfig;
 
 use crate::bench::codecs::CodecInternal;
 use crate::dtypes::PcoNumberLike;
-use clap::Parser;
-use q_compress::CompressorConfig;
 
-#[derive(Clone, Debug, Default, Parser)]
+#[derive(Clone, Debug, Parser)]
 pub struct QcoConfig {
   /// Compression level.
   #[arg(long, default_value = "8")]
@@ -41,7 +41,7 @@ impl CodecInternal for QcoConfig {
     let delta_order = self.delta_encoding_order.unwrap_or_else(|| {
       q_compress::auto_compressor_config(qco_nums, self.level).delta_encoding_order
     });
-    let mut c_config = CompressorConfig::default()
+    let c_config = CompressorConfig::default()
       .with_compression_level(self.level)
       .with_use_gcds(self.use_gcds)
       .with_delta_encoding_order(delta_order);

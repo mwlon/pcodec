@@ -3,11 +3,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 
-use pco::{FloatMultSpec, FloatQuantSpec, IntMultSpec};
-
 use crate::input::{InputColumnOpt, InputFileOpt};
+use crate::utils;
 use crate::{arrow_handlers, chunk_config_opt, input};
-use crate::{parse, utils};
 
 pub mod handler;
 

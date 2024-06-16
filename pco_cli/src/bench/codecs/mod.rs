@@ -111,7 +111,7 @@ impl<C: CodecInternal> CodecSurface for C {
   fn details(&self, explicit: bool) -> String {
     // use derived clap defaults
     let empty_args = Vec::<String>::new();
-    let mut default_arg_matches = <Self as CommandFactory>::command().get_matches_from(&empty_args);
+    let mut default_arg_matches = <Self as CommandFactory>::command().get_matches_from(empty_args);
     let default = <Self as FromArgMatches>::from_arg_matches_mut(&mut default_arg_matches).unwrap();
     let default_confs: HashMap<&'static str, String> = default.get_confs().into_iter().collect();
     let mut res = String::new();
@@ -207,11 +207,7 @@ impl FromStr for CodecConfig {
           part
         ));
       }
-      clap_kv_args.push(format!(
-        "--{}={}",
-        kv_vec[0].to_string(),
-        kv_vec[1].to_string()
-      ));
+      clap_kv_args.push(format!("--{}={}", kv_vec[0], kv_vec[1]));
     }
 
     let codec: Result<Box<dyn CodecSurface>> = match name {
