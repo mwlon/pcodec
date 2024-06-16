@@ -54,24 +54,24 @@ pub fn pco_err_to_py(pco: PcoError) -> PyErr {
 #[derive(Clone, Default)]
 pub struct PyIntMultSpec(IntMultSpec);
 
-/// Specifies how pcodec should handle modulo compression for integer types.
+/// Specifies if pcodec should use an integer multiplier to compress data.
 #[pymethods]
 impl PyIntMultSpec {
-  /// :returns: a IntMultSpec disabling modulo compression.
+  /// :returns: a IntMultSpec disabling integer multiplier detection.
   #[staticmethod]
   fn disabled() -> Self {
     Self(IntMultSpec::Disabled)
   }
 
-  /// :returns: a IntMultSpec enabling modulo compression. This will
-  /// automatically try to detect whether to use the mode and which `base` to
-  /// use.
+  /// :returns: a IntMultSpec enabling integer multiplier detection. This
+  /// will automatically try to detect whether to use the mode and which `base`
+  /// to use.
   #[staticmethod]
   fn enabled() -> Self {
     Self(IntMultSpec::Enabled)
   }
 
-  /// :returns: a IntMultSpec with a specific `base` for modulo compression.
+  /// :returns: a IntMultSpec with a specific `base` to use for compression.
   #[staticmethod]
   fn provided(base: u64) -> Self {
     Self(IntMultSpec::Provided(base))
@@ -82,25 +82,25 @@ impl PyIntMultSpec {
 #[derive(Clone, Default)]
 pub struct PyFloatMultSpec(FloatMultSpec);
 
-/// Specifies how pcodec should handle floating point multiplication
-/// compression.
+/// Specifies if pcodec should use a floating point multiplier to compress
+/// data.
 #[pymethods]
 impl PyFloatMultSpec {
-  /// :returns: a FloatMultSpec disabling floating point multiplication.
+  /// :returns: a FloatMultSpec disabling floating point multiplier detection.
   #[staticmethod]
   fn disabled() -> Self {
     Self(FloatMultSpec::Disabled)
   }
 
-  /// :returns: a FloatMultSpec enabling floating point multiplication. This
-  /// will automatically try to detect whether to use the mode and which `base`
-  /// to use.
+  /// :returns: a FloatMultSpec enabling floating point multiplier detection.
+  /// This will automatically try to detect whether to use the mode and which
+  /// `base` to use.
   #[staticmethod]
   fn enabled() -> Self {
     Self(FloatMultSpec::Enabled)
   }
 
-  /// :returns: a FloatMultSpec with a specific `base` for floating point
+  /// :returns: a FloatMultSpec with a specific `base` to use for compression.
   #[staticmethod]
   fn provided(base: f64) -> Self {
     Self(FloatMultSpec::Provided(base))
@@ -111,7 +111,8 @@ impl PyFloatMultSpec {
 #[derive(Clone, Default)]
 pub struct PyFloatQuantSpec(FloatQuantSpec);
 
-/// Specifies how pcodec should handle floating point quantization compression.
+/// Specifies if pcodec should use floating point quantization to compress
+/// data.
 #[pymethods]
 impl PyFloatQuantSpec {
   /// :returns: a FloatQuantSpec disabling floating point quantization.
@@ -120,7 +121,8 @@ impl PyFloatQuantSpec {
     Self(FloatQuantSpec::Disabled)
   }
 
-  /// :returns: a FloatQuantSpec with a specific `bits` for floating point
+  /// :returns: a FloatQuantSpec specifying that pcodec should use quantization
+  /// with a specific number of `bits``.
   #[staticmethod]
   fn provided(bits: u32) -> Self {
     Self(FloatQuantSpec::Provided(bits))
