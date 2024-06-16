@@ -29,7 +29,7 @@ impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
     let file = open_options.open(&opt.path)?;
 
     let config = ChunkConfig::from(&opt.chunk_config);
-    let chunk_size = opt.chunk_config.chunk_size;
+    let chunk_size = opt.chunk_config.chunk_n;
     let fc = FileCompressor::default();
     fc.write_header(&file)?;
 

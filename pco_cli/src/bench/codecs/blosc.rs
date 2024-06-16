@@ -1,15 +1,18 @@
 use std::ffi::{c_int, c_void, CString};
 use std::mem;
 
-use anyhow::anyhow;
+use clap::Parser;
 
 use crate::bench::codecs::CodecInternal;
 use crate::dtypes::PcoNumberLike;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Parser)]
 pub struct BloscConfig {
+  #[arg(long)]
   block_size: usize,
+  #[arg(long)]
   cname: String,
+  #[arg(long)]
   clevel: c_int,
 }
 
@@ -30,20 +33,10 @@ impl CodecInternal for BloscConfig {
 
   fn get_confs(&self) -> Vec<(&'static str, String)> {
     vec![
-      ("block_size", self.block_size.to_string()),
+      ("block-size", self.block_size.to_string()),
       ("cname", self.cname.to_string()),
       ("level", self.clevel.to_string()),
     ]
-  }
-
-  fn set_conf(&mut self, key: &str, value: String) -> anyhow::Result<()> {
-    match key {
-      "block_size" => self.block_size = value.parse()?,
-      "cname" => self.cname = value,
-      "level" => self.clevel = value.parse()?,
-      _ => return Err(anyhow!("unknown blosc key: {}", key)),
-    }
-    Ok(())
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {

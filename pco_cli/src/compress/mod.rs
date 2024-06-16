@@ -6,7 +6,7 @@ use clap::Parser;
 use pco::{FloatMultSpec, FloatQuantSpec, IntMultSpec};
 
 use crate::input::{InputColumnOpt, InputFileOpt};
-use crate::{arrow_handlers, config, input};
+use crate::{arrow_handlers, chunk_config_opt, input};
 use crate::{parse, utils};
 
 pub mod handler;
@@ -22,7 +22,7 @@ pub struct CompressOpt {
   #[command(flatten)]
   pub input_column: InputColumnOpt,
   #[command(flatten)]
-  pub chunk_config: config::ChunkConfigOpt,
+  pub chunk_config: chunk_config_opt::ChunkConfigOpt,
 
   /// Output .pco path to write to.
   pub path: PathBuf,

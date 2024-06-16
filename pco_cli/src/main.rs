@@ -5,8 +5,8 @@ use crate::opt::{Opt, OptWrapper};
 
 mod arrow_handlers;
 mod bench;
+mod chunk_config_opt;
 mod compress;
-mod config;
 mod core_handlers;
 mod decompress;
 mod dtypes;

@@ -1,12 +1,13 @@
 use std::convert::TryInto;
 
-use anyhow::{anyhow, Result};
+use clap::Parser;
 
 use crate::bench::codecs::{utils, CodecInternal};
 use crate::dtypes::PcoNumberLike;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Parser)]
 pub struct ZstdConfig {
+  #[arg(long)]
   level: i32,
 }
 
@@ -17,14 +18,6 @@ impl CodecInternal for ZstdConfig {
 
   fn get_confs(&self) -> Vec<(&'static str, String)> {
     vec![("level", self.level.to_string())]
-  }
-
-  fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
-    match key {
-      "level" => self.level = value.parse::<i32>().unwrap(),
-      _ => return Err(anyhow!("unknown conf: {}", key)),
-    }
-    Ok(())
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {

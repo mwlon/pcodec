@@ -1,12 +1,12 @@
 use std::convert::TryInto;
 use std::io::{Read, Write};
 
-use anyhow::{anyhow, Result};
+use clap::Parser;
 
 use crate::bench::codecs::{utils, CodecInternal};
 use crate::dtypes::PcoNumberLike;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Parser)]
 pub struct SnappyConfig {}
 
 impl CodecInternal for SnappyConfig {
@@ -16,10 +16,6 @@ impl CodecInternal for SnappyConfig {
 
   fn get_confs(&self) -> Vec<(&'static str, String)> {
     vec![]
-  }
-
-  fn set_conf(&mut self, key: &str, _value: String) -> Result<()> {
-    Err(anyhow!("unknown conf: {}", key))
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {

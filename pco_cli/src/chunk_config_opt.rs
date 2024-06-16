@@ -1,7 +1,8 @@
-use crate::parse;
 use clap::Parser;
-use pco::wrapped::guarantee::chunk_size;
+
 use pco::{ChunkConfig, FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec};
+
+use crate::parse;
 
 #[derive(Clone, Debug, Parser)]
 pub struct ChunkConfigOpt {
@@ -19,12 +20,12 @@ pub struct ChunkConfigOpt {
   /// float mult mode.
   #[arg(long, default_value = "Enabled", value_parser = parse::float_mult)]
   pub float_mult: FloatMultSpec,
+  // TODO(https://github.com/mwlon/pcodec/issues/194): Implement "Enabled" mode
   /// Can be "Disabled", or a fixed integer to use as the parameter `k` in float quant mode.
-  /// TODO(https://github.com/mwlon/pcodec/issues/194): Implement "Enabled" mode
   #[arg(long, default_value = "Disabled", value_parser = parse::float_quant)]
   pub float_quant: FloatQuantSpec,
   #[arg(long, default_value_t = pco::DEFAULT_MAX_PAGE_N)]
-  pub chunk_size: usize,
+  pub chunk_n: usize,
 }
 
 impl From<&ChunkConfigOpt> for ChunkConfig {
@@ -35,6 +36,6 @@ impl From<&ChunkConfigOpt> for ChunkConfig {
       .with_int_mult_spec(opt.int_mult)
       .with_float_mult_spec(opt.float_mult)
       .with_float_quant_spec(opt.float_quant)
-      .with_paging_spec(PagingSpec::EqualPagesUpTo(opt.chunk_size))
+      .with_paging_spec(PagingSpec::EqualPagesUpTo(opt.chunk_n))
   }
 }

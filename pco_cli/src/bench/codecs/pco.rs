@@ -1,112 +1,42 @@
-use anyhow::{anyhow, Result};
+use clap::{ArgMatches, CommandFactory, FromArgMatches};
 
-use pco::{FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec};
+use pco::ChunkConfig;
 
 use crate::bench::codecs::CodecInternal;
+use crate::chunk_config_opt::ChunkConfigOpt;
 use crate::dtypes::PcoNumberLike;
 
-#[derive(Clone, Debug, Default)]
-pub struct PcoConfig {
-  chunk_config: pco::ChunkConfig,
-}
-
-impl CodecInternal for PcoConfig {
+impl CodecInternal for ChunkConfigOpt {
   fn name(&self) -> &'static str {
     "pco"
   }
 
   fn get_confs(&self) -> Vec<(&'static str, String)> {
     vec![
+      ("level", self.level.to_string()),
       (
-        "level",
-        self.chunk_config.compression_level.to_string(),
-      ),
-      (
-        "delta_order",
+        "delta-order",
         self
-          .chunk_config
           .delta_encoding_order
           .map(|order| order.to_string())
           .unwrap_or("auto".to_string()),
       ),
+      ("int-mult", format!("{:?}", self.int_mult)),
       (
-        "int_mult",
-        format!("{:?}", self.chunk_config.int_mult_spec),
+        "float-mult",
+        format!("{:?}", self.float_mult),
       ),
       (
-        "float_mult",
-        format!("{:?}", self.chunk_config.float_mult_spec),
+        "float-quant",
+        format!("{:?}", self.float_quant),
       ),
-      (
-        "float_quant",
-        format!("{:?}", self.chunk_config.float_quant_spec),
-      ),
-      (
-        "chunk_n",
-        match self.chunk_config.paging_spec {
-          PagingSpec::EqualPagesUpTo(page_size) => page_size.to_string(),
-          _ => panic!("unexpected paging spec"),
-        },
-      ),
+      ("chunk-n", self.chunk_n.to_string()),
     ]
   }
 
-  fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
-    let value = value.to_lowercase();
-    match key {
-      "level" => self.chunk_config.compression_level = value.parse::<usize>().unwrap(),
-      "delta_order" => {
-        if let Ok(order) = value.parse::<usize>() {
-          self.chunk_config.delta_encoding_order = Some(order);
-        } else if value.to_lowercase() == "auto" {
-          self.chunk_config.delta_encoding_order = None;
-        } else {
-          return Err(anyhow!(
-            "cannot parse delta order: {}",
-            value
-          ));
-        }
-      }
-      "int_mult" => {
-        self.chunk_config.int_mult_spec = match value.as_str() {
-          "enabled" => IntMultSpec::Enabled,
-          "disabled" => IntMultSpec::Disabled,
-          other => match other.parse::<u64>() {
-            Ok(mult) => IntMultSpec::Provided(mult),
-            _ => return Err(anyhow!("cannot parse int mult: {}", other)),
-          },
-        }
-      }
-      "float_mult" => {
-        self.chunk_config.float_mult_spec = match value.as_str() {
-          "enabled" => FloatMultSpec::Enabled,
-          "disabled" => FloatMultSpec::Disabled,
-          other => match other.parse::<f64>() {
-            Ok(mult) => FloatMultSpec::Provided(mult),
-            _ => return Err(anyhow!("cannot parse float mult: {}", other)),
-          },
-        }
-      }
-      "float_quant" => {
-        self.chunk_config.float_quant_spec = match value.as_str() {
-          "enabled" => return Err(anyhow!("FloatQuantSpec::Enabled is not implemented yet, see https://github.com/mwlon/pcodec/issues/194")),
-          "disabled" => FloatQuantSpec::Disabled,
-          other => match other.parse::<u32>() {
-            Ok(k) => FloatQuantSpec::Provided(k),
-            _ => return Err(anyhow!("cannot parse float quant parameter: {}", other)),
-          },
-        }
-      }
-      "chunk_n" => {
-        self.chunk_config.paging_spec = PagingSpec::EqualPagesUpTo(value.parse().unwrap())
-      }
-      _ => return Err(anyhow!("unknown conf: {}", key)),
-    }
-    Ok(())
-  }
-
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
-    pco::standalone::simple_compress(nums, &self.chunk_config).expect("invalid config")
+    let chunk_config = ChunkConfig::from(self);
+    pco::standalone::simple_compress(nums, &chunk_config).expect("invalid config")
   }
 
   fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use clap::Parser;
 use parquet::basic::{Compression, ZstdLevel};
 use parquet::column::reader::get_typed_column_reader;
 use parquet::file::properties::{WriterProperties, WriterVersion};
@@ -14,9 +15,11 @@ use crate::dtypes::PcoNumberLike;
 
 const ZSTD: &str = "zstd";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Parser)]
 pub struct ParquetConfig {
+  #[arg(long, value_parser=str_to_compression)]
   compression: Compression,
+  #[arg(long)]
   group_size: usize,
 }
 
@@ -73,17 +76,8 @@ impl CodecInternal for ParquetConfig {
         "compression",
         compression_to_string(&self.compression),
       ),
-      ("group_size", self.group_size.to_string()),
+      ("group-size", self.group_size.to_string()),
     ]
-  }
-
-  fn set_conf(&mut self, key: &str, value: String) -> Result<()> {
-    match key {
-      "compression" => self.compression = str_to_compression(&value)?,
-      "group_size" => self.group_size = value.parse().unwrap(),
-      _ => return Err(anyhow!("unknown conf: {}", key)),
-    }
-    Ok(())
   }
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
