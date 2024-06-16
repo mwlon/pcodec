@@ -167,24 +167,44 @@ impl PyChunkConfig {
   ///
   /// :param compression_level: a compression level from 0-12, where 12 takes
   /// the longest and compresses the most.
+  /// 
   /// :param delta_encoding_order: either a delta encoding level from 0-7 or
   /// None. If set to None, pcodec will try to infer the optimal delta encoding
   /// order.
-  /// :param int_mult_spec: a IntMultSpec disabling, enabling, or providing a
-  /// base for modulo compression. If enabled, pcodec will consider using int
-  /// mult mode, which can substantially improve compression ratio but decrease
-  /// speed in some cases for integer types. If a base is provided, pcodec will
-  /// use that base for modulo compression. Enabled by default.
-  /// :param float_mult_spec: a FloatMultSpec disabling, enabling, or providing
-  /// a base for floating point multiplication compression. If enabled,
-  /// pcodec will consider using float mult mode, which can substantially
-  /// improve compression ratio but decrease speed in some cases for floating
-  /// point types. If a base is provided, pcodec will use that base for
-  /// floating point multiplication compression. Enabled by default.
-  /// :param float_quant_spec: a FloatQuantSpec disabling or providing the
-  /// `bits` for floating point quantization compression. If provided, pcodec
-  /// will use that number of bits for floating point quantization compression.
-  /// To use quantization, float mult must be disabled. Disabled by default.
+  /// 
+  /// :param int_mult_spec: a IntMultSpec that configures whether integer
+  /// multiplier detection is enabled.
+  ///
+  /// Examples where this helps:
+  /// * nanosecond-precision timestamps that are mostly whole numbers of
+  /// microseconds, with a few exceptions
+  /// * integers `[7, 107, 207, 307, ... 100007]` shuffled
+  ///
+  /// When this is helpful, compression and decompression speeds can be
+  /// substantially reduced. This configuration may hurt
+  /// compression speed slightly even when it isn't helpful.
+  /// However, the compression ratio improvements tend to be large.
+  /// 
+  /// :param float_mult_spec: a FloatMultSpec that configures whether float
+  /// multiplier detection is enabled.
+  ///
+  /// Examples where this helps:
+  /// * approximate multiples of 0.01
+  /// * approximate multiples of pi
+  ///
+  /// Float mults can work even when there are NaNs and infinities.
+  /// When this is helpful, compression and decompression speeds can be
+  /// substantially reduced. In rare cases, this configuration
+  /// may reduce compression speed somewhat even when it isn't helpful.
+  /// However, the compression ratio improvements tend to be large.
+  /// 
+  /// :param float_quant_spec: a FloatQuantSpec that configures whether
+  /// quantized-float detection is enabled.
+  ///
+  /// Examples where this helps:
+  /// * float-valued data stored in a type that is unnecessarily wide (e.g.
+  /// stored as `f64`s where only a `f32` worth of precision is used)
+  /// 
   /// :param paging_spec: a PagingSpec describing how many numbers should
   /// go into each page.
   ///
