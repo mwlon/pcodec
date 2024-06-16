@@ -4,14 +4,17 @@ use pco::{ChunkConfig, FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec};
 
 use crate::parse;
 
+pub const AUTO_DELTA_ORDER: usize = usize::MAX;
+
 #[derive(Clone, Debug, Parser)]
 pub struct ChunkConfigOpt {
   /// Compression level.
   #[arg(long, default_value = "8")]
   pub level: usize,
-  /// If specified, uses a fixed delta encoding order. Defaults to automatic detection.
-  #[arg(long = "delta-order")]
-  pub delta_encoding_order: Option<usize>,
+  /// Can be an integer for how many times to apply delta encoding, or "Auto",
+  /// which tries to automatically detect the best delta encoding order.
+  #[arg(long = "delta-order", default_value = "Auto", value_parser = parse::delta_encoding_order)]
+  pub delta_encoding_order: usize,
   /// Can be "Enabled", "Disabled", or a fixed integer to use as the base in
   /// int mult mode.
   #[arg(long, default_value = "Enabled", value_parser = parse::int_mult)]
@@ -28,11 +31,21 @@ pub struct ChunkConfigOpt {
   pub chunk_n: usize,
 }
 
+impl ChunkConfigOpt {
+  pub fn delta_encoding_order(&self) -> Option<usize> {
+    if self.delta_encoding_order == AUTO_DELTA_ORDER {
+      None
+    } else {
+      Some(self.delta_encoding_order)
+    }
+  }
+}
+
 impl From<&ChunkConfigOpt> for ChunkConfig {
   fn from(opt: &ChunkConfigOpt) -> Self {
     ChunkConfig::default()
       .with_compression_level(opt.level)
-      .with_delta_encoding_order(opt.delta_encoding_order)
+      .with_delta_encoding_order(opt.delta_encoding_order())
       .with_int_mult_spec(opt.int_mult)
       .with_float_mult_spec(opt.float_mult)
       .with_float_quant_spec(opt.float_quant)

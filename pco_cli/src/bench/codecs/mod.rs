@@ -5,7 +5,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use clap::{CommandFactory, FromArgMatches};
 
 use ::pco::data_types::CoreDataType;
@@ -91,6 +91,12 @@ pub trait CodecSurface: Debug + Send + Sync {
   fn clone_to_box(&self) -> Box<dyn CodecSurface>;
 }
 
+fn default_codec<C: CodecInternal>() -> C {
+  let empty_args = Vec::<String>::new();
+  let mut default_arg_matches = <C as CommandFactory>::command().get_matches_from(empty_args);
+  <C as FromArgMatches>::from_arg_matches_mut(&mut default_arg_matches).unwrap()
+}
+
 impl<C: CodecInternal> CodecSurface for C {
   fn name(&self) -> &'static str {
     self.name()
@@ -101,18 +107,28 @@ impl<C: CodecInternal> CodecSurface for C {
     Self: Sized,
   {
     let mut matches = Self::command()
+      // let mut matches = Self::command()
       .try_get_matches_from(kv_args)
-      .map_err(anyhow::Error::from)
-      .with_context(|| Self::command().render_help())?;
+      .map_err(|_| {
+        let codec = default_codec::<Self>();
+        let help_string =
+          Self::command().render_help().to_string();
+        let options_start = help_string.find("Options:").unwrap_or_default();
+        anyhow!(
+          "Configurations for {} codec not understood. As an example, the default configuration is \"{}{}\".\n\n{}",
+          codec.name(),
+          codec.name(),
+          codec.details(true),
+          &help_string[options_start..]
+        )
+      })?;
     let codec = Self::from_arg_matches_mut(&mut matches)?;
     Ok(Box::new(codec))
   }
 
   fn details(&self, explicit: bool) -> String {
     // use derived clap defaults
-    let empty_args = Vec::<String>::new();
-    let mut default_arg_matches = <Self as CommandFactory>::command().get_matches_from(empty_args);
-    let default = <Self as FromArgMatches>::from_arg_matches_mut(&mut default_arg_matches).unwrap();
+    let default = default_codec::<Self>();
     let default_confs: HashMap<&'static str, String> = default.get_confs().into_iter().collect();
     let mut res = String::new();
     for (k, v) in self.get_confs() {

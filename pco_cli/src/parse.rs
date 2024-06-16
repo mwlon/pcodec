@@ -1,7 +1,21 @@
+use std::str::FromStr;
+
 use anyhow::anyhow;
 use arrow::datatypes::{DataType, TimeUnit};
 
 use pco::{FloatMultSpec, FloatQuantSpec, IntMultSpec};
+
+use crate::chunk_config_opt::AUTO_DELTA_ORDER;
+
+pub fn delta_encoding_order(s: &str) -> anyhow::Result<usize> {
+  match s.to_lowercase().as_str() {
+    "auto" => Ok(AUTO_DELTA_ORDER),
+    other => {
+      let delta_order = usize::from_str(other)?;
+      Ok(delta_order)
+    }
+  }
+}
 
 pub fn int_mult(s: &str) -> anyhow::Result<IntMultSpec> {
   let lowercase = s.to_lowercase();
