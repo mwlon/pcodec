@@ -188,6 +188,7 @@ def total_cents():
 
 @datagen("i64", "f64")
 def slow_cosine():
+    amplitude = 100000
     periods = 103  # something prime
     period = n / periods
     return 100_000 * np.cos(np.arange(n) * 2 * np.pi / period)
@@ -289,6 +290,7 @@ def dist_shift():
 # * distribution shift on delta size
 @datagen("f64")
 def diablo():
+    subseq_idx = 0
     n_subseqs = 77
     subseq_vals = np.random.randint(1e4, 1e5, size=n_subseqs)
     the_data = []
