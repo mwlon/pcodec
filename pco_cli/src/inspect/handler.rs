@@ -84,6 +84,8 @@ fn build_latent_var_summary<T: NumberLike>(
       T::latent_to_string(base_latent, Mode::Classic, 0, 0)
     ),
     (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
+    (Mode::FloatQuant(_), 0) => "quantums".to_string(),
+    (Mode::FloatQuant(_), 1) => "ULPs adjustment".to_string(),
     (Mode::IntMult(base), 0) => format!("multiplier [x{}]", base),
     (Mode::IntMult(_), 1) => "adjustment".to_string(),
     _ => panic!(

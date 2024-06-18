@@ -317,6 +317,9 @@ macro_rules! impl_float_number_like {
           (FloatMult(_), 0, 0) => format!("{}x", Self::int_float_from_latent(l)),
           (FloatMult(_), 0, _) => format_delta(l, "x"),
           (FloatMult(_), 1, _) => format_delta(l, " ULPs"),
+          (FloatQuant(_), 0, 0) => l.to_string(),
+          (FloatQuant(_), 0, _) => format_delta(l, ""),
+          (FloatQuant(_), 1, _) => format_delta(l, " ULPs"),
           _ => panic!("invalid context for latent"),
         }
       }
