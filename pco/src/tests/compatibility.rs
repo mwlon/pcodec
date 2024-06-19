@@ -131,12 +131,16 @@ mod tests {
     Ok(())
   }
 
-  fn generate_pseudorandom_floats() -> Vec<f32> {
+  fn generate_pseudorandom_f16s() -> Vec<f16> {
     let mut num = 0.1_f32;
     let mut nums = vec![];
     for _ in 0..2000 {
-      num = ((num * 77.7) + 0.1) % 1.0;
-      nums.push(num);
+      num = ((num * 77.7) + 0.1) % 2.0;
+      if num < 1.0 {
+        nums.push(f16::from_f32(-1.0 - num));
+      } else {
+        nums.push(f16::from_f32(num));
+      }
     }
     nums
   }
@@ -148,10 +152,7 @@ mod tests {
     let version = "0.3.0";
     let name = "f16";
     let config = ChunkConfig::default();
-    let nums = generate_pseudorandom_floats()
-      .into_iter()
-      .map(f16::from_f32)
-      .collect::<Vec<_>>();
+    let nums = generate_pseudorandom_f16s();
     simple_write_if_version_matches::<f16>(version, name, &nums, &config)?;
     assert_compatible(version, name, &nums)?;
     Ok(())
@@ -162,9 +163,16 @@ mod tests {
     // v0.3.0 introduced float quantization mode
     let version = "0.3.0";
     let name = "float_quant";
-    let nums = generate_pseudorandom_floats()
+    let nums = generate_pseudorandom_f16s()
       .into_iter()
-      .map(|x| f16::from_f32(x).to_f32())
+      .map(|x| {
+        let x = x.to_f32();
+        if x.abs() < 1.1 {
+          f32::from_bits(x.to_bits() + 1)
+        } else {
+          x
+        }
+      })
       .collect::<Vec<_>>();
     let config = ChunkConfig::default()
       .with_float_quant_spec(FloatQuantSpec::Provided(
