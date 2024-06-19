@@ -1,5 +1,7 @@
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
+use crate::sampling;
+use std::cmp;
 
 #[inline(never)]
 pub(crate) fn join_latents<F: FloatLike>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) {
@@ -50,6 +52,54 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
     };
   }
   vec![primary, secondary]
+}
+
+pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatQuantConfig> {
+  let k = estimate_best_k(nums);
+  // Nothing fancy, we simply estimate that quantizing by k bits results in saving k bits per
+  // number.  This is based on the assumption that FloatQuant will usually be used on datasets that
+  // are exactly quantized.
+  let est_saved_bits_per_num = k;
+  if (est_saved_bits_per_num as f64) > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
+    Some(FloatQuantConfig { k: k })
+  } else {
+    None
+  }
+}
+
+#[inline(never)]
+pub(crate) fn estimate_best_k<F: FloatLike>(nums: &[F]) -> Bitlen {
+  let sample = sampling::choose_sample(nums, |&num| Some(num)).expect("nums must be nonempty");
+  let thresh = (0.9 * sample.len() as f32).floor() as usize;
+  let mut hist = vec![0; F::PRECISION_BITS.try_into().unwrap()];
+  for num_tz in sample.iter().map(|&x| {
+    cmp::min(
+      F::PRECISION_BITS,
+      // Using the fact that significand bits come last in
+      // the floating-point representations we care about
+      x.trailing_zeros(),
+    )
+  }) {
+    hist[num_tz as usize] += 1
+  }
+  hist
+    .iter()
+    .enumerate()
+    .rev()
+    .scan(0_usize, |csum, (i, x)| {
+      if *csum >= thresh {
+        return None;
+      }
+      *csum = *csum + x;
+      Some(i)
+    })
+    .last()
+    .expect("nums is nonempty") as Bitlen
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FloatQuantConfig {
+  pub k: Bitlen,
 }
 
 #[cfg(test)]

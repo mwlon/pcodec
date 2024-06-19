@@ -13,43 +13,75 @@ fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
 ) -> PcoResult<(Mode<F::L>, Vec<Vec<F::L>>)> {
-  if chunk_config.float_mult_spec != FloatMultSpec::Disabled
-    && chunk_config.float_quant_spec != FloatQuantSpec::Disabled
-  {
-    return Err(PcoError::invalid_argument(
-      "FloatMult and FloatQuant cannot be used simultaneously",
-    ));
-  }
-  Ok(
-    match (
-      chunk_config.float_mult_spec,
-      chunk_config.float_quant_spec,
-    ) {
-      (FloatMultSpec::Enabled, _) => {
-        if let Some(fm_config) = float_mult_utils::choose_config(nums) {
+  match (
+    chunk_config.float_mult_spec,
+    chunk_config.float_quant_spec,
+  ) {
+    (FloatMultSpec::Provided(_), FloatQuantSpec::Provided(_)) => {
+      return Err(PcoError::invalid_argument(
+        "FloatMult and FloatQuant cannot be provided (thus required) simultaneously",
+      ));
+    }
+    (FloatMultSpec::Provided(base_f64), _) => {
+      let base = F::from_f64(base_f64);
+      let mode = Mode::float_mult(base);
+      let latents = float_mult_utils::split_latents(nums, base, base.inv());
+      Ok((mode, latents))
+    }
+    (FloatMultSpec::Disabled, FloatQuantSpec::Provided(k)) => Ok((
+      Mode::FloatQuant(k),
+      float_quant_utils::split_latents(nums, k),
+    )),
+    (FloatMultSpec::Enabled, FloatQuantSpec::Enabled) => {
+      match (
+        float_mult_utils::choose_config_diagnostic(nums),
+        float_quant_utils::choose_config(nums),
+      ) {
+        (None, None) => Ok((Mode::Classic, split_latents_classic(nums))),
+        (Some((fm_config, _)), None) => {
           let mode = Mode::float_mult(fm_config.base);
           let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
-          (mode, latents)
-        } else {
-          (Mode::Classic, split_latents_classic(nums))
+          Ok((mode, latents))
+        }
+        (None, Some(fq_config)) => {
+          let latents = float_quant_utils::split_latents(nums, fq_config.k);
+          Ok((Mode::FloatQuant(fq_config.k), latents))
+        }
+        (Some((fm_config, diagnostics)), Some(fq_config)) => {
+          if diagnostics.est_saved_mult_bits_per_num > (fq_config.k as f64) {
+            let mode = Mode::float_mult(fm_config.base);
+            let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
+            Ok((mode, latents))
+          } else {
+            let latents = float_quant_utils::split_latents(nums, fq_config.k);
+            Ok((Mode::FloatQuant(fq_config.k), latents))
+          }
         }
       }
-      (FloatMultSpec::Provided(base_f64), _) => {
-        let base = F::from_f64(base_f64);
-        let mode = Mode::float_mult(base);
-        let latents = float_mult_utils::split_latents(nums, base, base.inv());
-        (mode, latents)
+    }
+    (FloatMultSpec::Enabled, _) => {
+      if let Some(fm_config) = float_mult_utils::choose_config(nums) {
+        let mode = Mode::float_mult(fm_config.base);
+        let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
+        Ok((mode, latents))
+      } else {
+        Ok((Mode::Classic, split_latents_classic(nums)))
       }
-      (FloatMultSpec::Disabled, FloatQuantSpec::Provided(k)) => (
-        Mode::FloatQuant(k),
-        float_quant_utils::split_latents(nums, k),
-      ),
-      (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
-        (Mode::Classic, split_latents_classic(nums))
-      } // TODO(https://github.com/mwlon/pcodec/issues/194): Add a case for FloatQuantSpec::Enabled
-        // once it exists
-    },
-  )
+    }
+    (_, FloatQuantSpec::Enabled) => {
+      if let Some(float_quant_utils::FloatQuantConfig { k }) =
+        float_quant_utils::choose_config(nums)
+      {
+        let latents = float_quant_utils::split_latents(nums, k);
+        Ok((Mode::FloatQuant(k), latents))
+      } else {
+        Ok((Mode::Classic, split_latents_classic(nums)))
+      }
+    }
+    (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
+      Ok((Mode::Classic, split_latents_classic(nums)))
+    }
+  }
 }
 
 fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {

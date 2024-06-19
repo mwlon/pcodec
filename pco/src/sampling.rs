@@ -2,7 +2,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use crate::constants::{CLASSIC_MEMORIZABLE_BINS_LOG, MULT_REQUIRED_BITS_SAVED_PER_NUM};
+use crate::constants::CLASSIC_MEMORIZABLE_BINS_LOG;
 use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 
 use crate::data_types::Latent;
@@ -64,11 +64,11 @@ pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
 }
 
 #[inline(never)]
-pub fn has_enough_infrequent_mults<L: Latent, S: Copy, F: Fn(S) -> L>(
+pub fn est_saved_mult_bits_per_num<L: Latent, S: Copy, F: Fn(S) -> L>(
   sample: &[S],
   mult_fn: F,
   bits_saved_per_infrequent_mult: f64,
-) -> bool {
+) -> f64 {
   let mut mult_counts = HashMap::<L, usize>::with_capacity(sample.len());
   for &x in sample {
     let mult = mult_fn(x);
@@ -87,9 +87,7 @@ pub fn has_enough_infrequent_mults<L: Latent, S: Copy, F: Fn(S) -> L>(
     .filter(|&&count| count <= infrequent_cutoff)
     .sum::<usize>();
 
-  let bits_saved_per_num =
-    (infrequent_mult_weight_estimate as f64 / sample.len() as f64) * bits_saved_per_infrequent_mult;
-  bits_saved_per_num > MULT_REQUIRED_BITS_SAVED_PER_NUM
+  (infrequent_mult_weight_estimate as f64 / sample.len() as f64) * bits_saved_per_infrequent_mult
 }
 
 #[cfg(test)]
