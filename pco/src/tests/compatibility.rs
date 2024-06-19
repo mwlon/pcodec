@@ -132,6 +132,8 @@ mod tests {
   }
 
   fn generate_pseudorandom_f16s() -> Vec<f16> {
+    // makes a variety of floats approximately uniformly distributed
+    // between (-2.0, -1.0] U [1.0, 2.0)
     let mut num = 0.1_f32;
     let mut nums = vec![];
     for _ in 0..2000 {
