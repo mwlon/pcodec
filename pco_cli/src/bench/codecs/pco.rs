@@ -26,6 +26,7 @@ fn unparse_float_quant(spec: &FloatQuantSpec) -> String {
   use FloatQuantSpec::*;
   match spec {
     Disabled => "Disabled".to_string(),
+    Enabled => "Enabled".to_string(),
     Provided(k) => k.to_string(),
   }
 }
