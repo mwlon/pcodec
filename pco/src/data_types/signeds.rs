@@ -1,8 +1,8 @@
 use std::mem;
 
 use crate::data_types::{unsigneds, NumberLike};
-use crate::latent_describer::LatentDescriber;
-use crate::{int_mult_utils, latent_describer, ChunkMeta};
+use crate::describers::LatentDescriber;
+use crate::{describers, int_mult_utils, ChunkMeta};
 use crate::{ChunkConfig, Mode};
 
 macro_rules! impl_signed {
@@ -14,8 +14,8 @@ macro_rules! impl_signed {
       type L = $latent;
 
       fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
-        latent_describer::match_classic_mode::<Self>(meta, "")
-          .or_else(|| latent_describer::match_int_modes(meta, true))
+        describers::match_classic_mode::<Self>(meta, "")
+          .or_else(|| describers::match_int_modes(meta, true))
           .expect("invalid mode for signed type")
       }
 

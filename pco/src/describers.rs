@@ -3,9 +3,19 @@ use crate::data_types::{FloatLike, Latent, NumberLike};
 use crate::{ChunkMeta, Mode};
 use std::marker::PhantomData;
 
+/// Interprets the meaning of latent variables and values from [`ChunkMeta`].
+///
+/// Obtainable via [`crate::data_types::NumberLike::get_latent_describers`].
 pub trait DescribeLatent<L: Latent> {
+  /// Returns a description for this latent variable.
   fn latent_var(&self) -> String;
+  /// Returns a description for this latent variable's units, when formatted
+  /// using [`latent()`][Self::latent].
+  ///
+  /// Returns an empty string if the latents are already interpretable as
+  /// numbers.
   fn latent_units(&self) -> String;
+  /// Returns a more easily interpretable description for the latent.
   fn latent(&self, latent: L) -> String;
 }
 
