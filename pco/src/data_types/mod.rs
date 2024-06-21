@@ -159,6 +159,8 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// bitwise logic and such.
   type L: Latent;
 
+  /// Returns a `LatentDescriber` for each latent variable in the chunk
+  /// metadata.
   fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>>;
 
   fn mode_is_valid(mode: Mode<Self::L>) -> bool;
