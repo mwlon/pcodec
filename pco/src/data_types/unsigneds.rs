@@ -1,8 +1,8 @@
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, Latent, NumberLike};
-use crate::latent_formatter::LatentFormatter;
+use crate::latent_describer::LatentDescriber;
 use crate::Mode::Classic;
-use crate::{int_mult_utils, latent_formatter, ChunkConfig, ChunkMeta, IntMultSpec, Mode};
+use crate::{int_mult_utils, latent_describer, ChunkConfig, ChunkMeta, IntMultSpec, Mode};
 
 pub fn choose_mode_and_split_latents<T: NumberLike>(
   nums: &[T],
@@ -79,9 +79,9 @@ macro_rules! impl_unsigned_number {
 
       type L = Self;
 
-      fn get_latent_formatters(meta: &ChunkMeta<Self::L>) -> Vec<LatentFormatter<Self::L>> {
-        latent_formatter::match_classic_mode::<Self>(meta, "")
-          .or_else(|| latent_formatter::match_int_modes(meta, false))
+      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+        latent_describer::match_classic_mode::<Self>(meta, "")
+          .or_else(|| latent_describer::match_int_modes(meta, false))
           .expect("invalid mode for unsigned type")
       }
 

@@ -75,17 +75,17 @@ fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
 fn build_latent_var_summaries<T: NumberLike>(
   meta: &ChunkMeta<T::L>,
 ) -> BTreeMap<String, LatentVarSummary> {
-  let formatters = T::get_latent_formatters(meta);
+  let describers = T::get_latent_describers(meta);
   let mut summaries = BTreeMap::new();
   for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
-    let formatter = &formatters[latent_var_idx];
-    let unit = formatter.var_units();
+    let describer = &describers[latent_var_idx];
+    let unit = describer.latent_units();
 
     let mut bins = Vec::new();
     for bin in &latent_var_meta.bins {
       bins.push(BinSummary {
         weight: bin.weight,
-        lower: format!("{}{}", formatter.format(bin.lower), unit),
+        lower: format!("{}{}", describer.latent(bin.lower), unit),
         offset_bits: bin.offset_bits,
       });
     }
@@ -100,7 +100,7 @@ fn build_latent_var_summaries<T: NumberLike>(
       bins: bins_table.to_string(),
     };
 
-    summaries.insert(formatter.var_description(), summary);
+    summaries.insert(describer.latent_var(), summary);
   }
 
   summaries

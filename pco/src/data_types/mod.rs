@@ -8,7 +8,7 @@ use std::ops::{
 pub use dynamic::CoreDataType;
 
 use crate::constants::Bitlen;
-use crate::latent_formatter::LatentFormatter;
+use crate::latent_describer::LatentDescriber;
 use crate::{ChunkConfig, ChunkMeta, Mode};
 
 mod dynamic;
@@ -159,7 +159,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// bitwise logic and such.
   type L: Latent;
 
-  fn get_latent_formatters(meta: &ChunkMeta<Self::L>) -> Vec<LatentFormatter<Self::L>>;
+  fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>>;
 
   fn mode_is_valid(mode: Mode<Self::L>) -> bool;
   fn choose_mode_and_split_latents(

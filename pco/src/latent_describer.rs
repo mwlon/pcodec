@@ -3,35 +3,35 @@ use crate::data_types::{FloatLike, Latent, NumberLike};
 use crate::{ChunkMeta, Mode};
 use std::marker::PhantomData;
 
-pub trait FormatsLatent<L: Latent> {
-  fn var_description(&self) -> String;
-  fn var_units(&self) -> String;
-  fn format(&self, latent: L) -> String;
+pub trait DescribeLatent<L: Latent> {
+  fn latent_var(&self) -> String;
+  fn latent_units(&self) -> String;
+  fn latent(&self, latent: L) -> String;
 }
 
-pub type LatentFormatter<L> = Box<dyn FormatsLatent<L>>;
+pub type LatentDescriber<L> = Box<dyn DescribeLatent<L>>;
 
 pub(crate) fn match_classic_mode<T: NumberLike>(
   meta: &ChunkMeta<T::L>,
   delta_units: &'static str,
-) -> Option<Vec<LatentFormatter<T::L>>> {
+) -> Option<Vec<LatentDescriber<T::L>>> {
   match (meta.mode, meta.delta_encoding_order) {
     (Mode::Classic, 0) => {
-      let formatter = Box::new(ClassicFormatter::<T>::default());
-      Some(vec![formatter])
+      let describer = Box::new(ClassicDescriber::<T>::default());
+      Some(vec![describer])
     }
     (Mode::Classic, _) => {
-      let formatter = centered_delta_formatter("delta".to_string(), delta_units.to_string());
-      Some(vec![formatter])
+      let describer = centered_delta_describer("delta".to_string(), delta_units.to_string());
+      Some(vec![describer])
     }
     _ => None,
   }
 }
 
-pub fn match_int_modes<L: Latent>(
+pub(crate) fn match_int_modes<L: Latent>(
   meta: &ChunkMeta<L>,
   is_signed: bool,
-) -> Option<Vec<LatentFormatter<L>>> {
+) -> Option<Vec<LatentDescriber<L>>> {
   match meta.mode {
     Mode::IntMult(base) => {
       let dtype_center = if is_signed { L::MID } else { L::ZERO };
@@ -39,19 +39,19 @@ pub fn match_int_modes<L: Latent>(
       let adj_center = dtype_center % base;
       let primary = if meta.delta_encoding_order == 0 {
         // TODO
-        Box::new(IntFormatter {
+        Box::new(IntDescriber {
           description: format!("multiplier [x{}]", base),
           units: "x".to_string(),
           center: mult_center,
           is_signed,
         })
       } else {
-        centered_delta_formatter(
+        centered_delta_describer(
           format!("multiplier delta [x{}]", base),
           "x".to_string(),
         )
       };
-      let secondary = Box::new(IntFormatter {
+      let secondary = Box::new(IntDescriber {
         description: "adjustment".to_string(),
         units: "".to_string(),
         center: adj_center,
@@ -63,26 +63,24 @@ pub fn match_int_modes<L: Latent>(
   }
 }
 
-pub fn match_float_modes<F: FloatLike>(
-  meta: &ChunkMeta<F::L>,
-) -> Option<Vec<LatentFormatter<F::L>>> {
+pub(crate) fn match_float_modes<F: FloatLike>(meta: &ChunkMeta<F::L>) -> Option<Vec<LatentDescriber<F::L>>> {
   match meta.mode {
     Mode::FloatMult(base) => {
       let base_string = F::from_latent_ordered(base).to_string();
-      let primary: LatentFormatter<F::L> = if meta.delta_encoding_order == 0 {
-        Box::new(FloatMultFormatter {
+      let primary: LatentDescriber<F::L> = if meta.delta_encoding_order == 0 {
+        Box::new(FloatMultDescriber {
           base_string,
           phantom: PhantomData::<F>,
         })
       } else {
-        Box::new(IntFormatter {
+        Box::new(IntDescriber {
           description: format!("multiplier delta [x{}]", base_string),
           units: "x".to_string(),
           center: F::L::MID,
           is_signed: true,
         })
       };
-      let secondary = Box::new(IntFormatter {
+      let secondary = Box::new(IntDescriber {
         description: "adjustment".to_string(),
         units: " ULPs".to_string(),
         center: F::L::MID,
@@ -92,17 +90,17 @@ pub fn match_float_modes<F: FloatLike>(
     }
     Mode::FloatQuant(k) => {
       let primary = if meta.delta_encoding_order == 0 {
-        Box::new(FloatQuantFormatter {
+        Box::new(FloatQuantDescriber {
           k,
           phantom: PhantomData::<F>,
         })
       } else {
-        centered_delta_formatter(
+        centered_delta_describer(
           format!("quantums delta [<<{}]", k),
           "q".to_string(),
         )
       };
-      let secondary = Box::new(IntFormatter {
+      let secondary = Box::new(IntDescriber {
         description: "magnitude adjustment".to_string(),
         units: " ULPs".to_string(),
         center: F::L::ZERO,
@@ -116,39 +114,39 @@ pub fn match_float_modes<F: FloatLike>(
 }
 
 #[derive(Default)]
-struct ClassicFormatter<T: NumberLike>(PhantomData<T>);
+struct ClassicDescriber<T: NumberLike>(PhantomData<T>);
 
-impl<T: NumberLike> FormatsLatent<T::L> for ClassicFormatter<T> {
-  fn var_description(&self) -> String {
+impl<T: NumberLike> DescribeLatent<T::L> for ClassicDescriber<T> {
+  fn latent_var(&self) -> String {
     "primary".to_string()
   }
 
-  fn var_units(&self) -> String {
+  fn latent_units(&self) -> String {
     "".to_string()
   }
 
-  fn format(&self, latent: T::L) -> String {
+  fn latent(&self, latent: T::L) -> String {
     T::from_latent_ordered(latent).to_string()
   }
 }
 
-struct IntFormatter<L: Latent> {
+struct IntDescriber<L: Latent> {
   description: String,
   units: String,
   center: L,
   is_signed: bool,
 }
 
-impl<L: Latent> FormatsLatent<L> for IntFormatter<L> {
-  fn var_description(&self) -> String {
+impl<L: Latent> DescribeLatent<L> for IntDescriber<L> {
+  fn latent_var(&self) -> String {
     self.description.to_string()
   }
 
-  fn var_units(&self) -> String {
+  fn latent_units(&self) -> String {
     self.units.to_string()
   }
 
-  fn format(&self, latent: L) -> String {
+  fn latent(&self, latent: L) -> String {
     let centered = latent.wrapping_sub(self.center);
     if centered < L::MID || !self.is_signed {
       centered.to_string()
@@ -158,8 +156,8 @@ impl<L: Latent> FormatsLatent<L> for IntFormatter<L> {
   }
 }
 
-fn centered_delta_formatter<L: Latent>(description: String, units: String) -> LatentFormatter<L> {
-  Box::new(IntFormatter {
+fn centered_delta_describer<L: Latent>(description: String, units: String) -> LatentDescriber<L> {
+  Box::new(IntDescriber {
     description,
     units,
     center: L::MID,
@@ -167,40 +165,40 @@ fn centered_delta_formatter<L: Latent>(description: String, units: String) -> La
   })
 }
 
-struct FloatMultFormatter<F: FloatLike> {
+struct FloatMultDescriber<F: FloatLike> {
   base_string: String,
   phantom: PhantomData<F>,
 }
 
-impl<F: FloatLike> FormatsLatent<F::L> for FloatMultFormatter<F> {
-  fn var_description(&self) -> String {
+impl<F: FloatLike> DescribeLatent<F::L> for FloatMultDescriber<F> {
+  fn latent_var(&self) -> String {
     format!("multiplier [x{}]", self.base_string)
   }
 
-  fn var_units(&self) -> String {
+  fn latent_units(&self) -> String {
     "x".to_string()
   }
 
-  fn format(&self, latent: F::L) -> String {
+  fn latent(&self, latent: F::L) -> String {
     F::int_float_from_latent(latent).to_string()
   }
 }
 
-struct FloatQuantFormatter<F: FloatLike> {
+struct FloatQuantDescriber<F: FloatLike> {
   k: Bitlen,
   phantom: PhantomData<F>,
 }
 
-impl<F: FloatLike> FormatsLatent<F::L> for FloatQuantFormatter<F> {
-  fn var_description(&self) -> String {
+impl<F: FloatLike> DescribeLatent<F::L> for FloatQuantDescriber<F> {
+  fn latent_var(&self) -> String {
     "quantized".to_string()
   }
 
-  fn var_units(&self) -> String {
+  fn latent_units(&self) -> String {
     "".to_string()
   }
 
-  fn format(&self, latent: F::L) -> String {
+  fn latent(&self, latent: F::L) -> String {
     let shifted = latent << self.k;
     if shifted >= F::L::MID {
       F::from_latent_ordered(shifted).to_string()

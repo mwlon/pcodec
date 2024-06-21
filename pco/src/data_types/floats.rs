@@ -5,9 +5,9 @@ use half::f16;
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
 use crate::errors::{PcoError, PcoResult};
-use crate::latent_formatter::LatentFormatter;
+use crate::latent_describer::LatentDescriber;
 use crate::{
-  float_mult_utils, float_quant_utils, latent_formatter, ChunkConfig, ChunkMeta, FloatMultSpec,
+  float_mult_utils, float_quant_utils, latent_describer, ChunkConfig, ChunkMeta, FloatMultSpec,
   FloatQuantSpec, Mode,
 };
 
@@ -298,9 +298,9 @@ macro_rules! impl_float_number_like {
 
       type L = $latent;
 
-      fn get_latent_formatters(meta: &ChunkMeta<Self::L>) -> Vec<LatentFormatter<Self::L>> {
-        latent_formatter::match_classic_mode::<Self>(meta, " ULPs")
-          .or_else(|| latent_formatter::match_float_modes::<Self>(meta))
+      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+        latent_describer::match_classic_mode::<Self>(meta, " ULPs")
+          .or_else(|| latent_describer::match_float_modes::<Self>(meta))
           .expect("invalid mode for float type")
       }
 

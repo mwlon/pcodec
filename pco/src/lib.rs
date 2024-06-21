@@ -78,6 +78,7 @@ mod histograms;
 mod int_mult_utils;
 mod latent_batch_decompressor;
 mod latent_batch_dissector;
+mod latent_describer;
 mod mode;
 mod page_meta;
 mod progress;
@@ -85,6 +86,5 @@ mod read_write_uint;
 mod sampling;
 mod sort_utils;
 
-mod latent_formatter;
 #[cfg(test)]
 mod tests;

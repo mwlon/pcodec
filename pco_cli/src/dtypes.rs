@@ -29,7 +29,7 @@ pub trait QCompressable: Sized {
 }
 
 #[cfg(feature = "full_bench")]
-pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable + Formattable {
+pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable {
   const ARROW_DTYPE: DataType;
 
   type Arrow: ArrowPrimitiveType;
