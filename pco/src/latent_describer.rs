@@ -63,7 +63,9 @@ pub(crate) fn match_int_modes<L: Latent>(
   }
 }
 
-pub(crate) fn match_float_modes<F: FloatLike>(meta: &ChunkMeta<F::L>) -> Option<Vec<LatentDescriber<F::L>>> {
+pub(crate) fn match_float_modes<F: FloatLike>(
+  meta: &ChunkMeta<F::L>,
+) -> Option<Vec<LatentDescriber<F::L>>> {
   match meta.mode {
     Mode::FloatMult(base) => {
       let base_string = F::from_latent_ordered(base).to_string();
