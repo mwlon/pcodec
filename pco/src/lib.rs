@@ -85,5 +85,6 @@ mod read_write_uint;
 mod sampling;
 mod sort_utils;
 
+mod latent_formatter;
 #[cfg(test)]
 mod tests;
