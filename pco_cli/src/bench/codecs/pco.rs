@@ -41,7 +41,7 @@ impl CodecInternal for ChunkConfigOpt {
       (
         "delta-order",
         self
-          .delta_encoding_order()
+          .delta_encoding_order
           .map(|order| order.to_string())
           .unwrap_or("Auto".to_string()),
       ),
