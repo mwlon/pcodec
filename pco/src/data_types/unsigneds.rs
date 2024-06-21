@@ -1,42 +1,8 @@
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, Latent, NumberLike};
+use crate::describers::LatentDescriber;
 use crate::Mode::Classic;
-use crate::{int_mult_utils, ChunkConfig, IntMultSpec, Mode};
-
-pub fn latent_to_string<T: NumberLike>(
-  l: T::L,
-  mode: Mode<T::L>,
-  latent_var_idx: usize,
-  delta_encoding_order: usize,
-) -> String {
-  let format_as_signed = || {
-    if l >= T::L::MID {
-      (l - T::L::MID).to_string()
-    } else {
-      format!("-{}", T::L::MID - l)
-    }
-  };
-
-  use Mode::*;
-  match (mode, latent_var_idx, delta_encoding_order) {
-    (Classic, 0, 0) => T::from_latent_ordered(l).to_string(),
-    (IntMult(base), 0, 0) => {
-      let latent_0 = T::default().to_latent_ordered();
-      let relative_to_0 = l.wrapping_sub(latent_0 / base);
-      T::from_latent_ordered(latent_0.wrapping_add(relative_to_0)).to_string()
-    }
-    (Classic, 0, _) | (IntMult(_), 0, _) => format_as_signed(),
-    (IntMult(base), 1, _) => {
-      let latent_0_rem = T::default().to_latent_ordered() % base;
-      if l < latent_0_rem {
-        format!("-{}", latent_0_rem - l)
-      } else {
-        (l - latent_0_rem).to_string()
-      }
-    }
-    _ => panic!("invalid context for latent"),
-  }
-}
+use crate::{describers, int_mult_utils, ChunkConfig, ChunkMeta, IntMultSpec, Mode};
 
 pub fn choose_mode_and_split_latents<T: NumberLike>(
   nums: &[T],
@@ -113,13 +79,10 @@ macro_rules! impl_unsigned_number {
 
       type L = Self;
 
-      fn latent_to_string(
-        l: Self::L,
-        mode: Mode<Self::L>,
-        latent_var_idx: usize,
-        delta_encoding_order: usize,
-      ) -> String {
-        latent_to_string::<Self>(l, mode, latent_var_idx, delta_encoding_order)
+      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+        describers::match_classic_mode::<Self>(meta, "")
+          .or_else(|| describers::match_int_modes(meta, false))
+          .expect("invalid mode for unsigned type")
       }
 
       fn mode_is_valid(mode: Mode<Self::L>) -> bool {

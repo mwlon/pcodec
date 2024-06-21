@@ -4,9 +4,11 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
+use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
 use crate::{
-  float_mult_utils, float_quant_utils, ChunkConfig, FloatMultSpec, FloatQuantSpec, Mode,
+  describers, float_mult_utils, float_quant_utils, ChunkConfig, ChunkMeta, FloatMultSpec,
+  FloatQuantSpec, Mode,
 };
 
 fn choose_mode_and_split_latents<F: FloatLike>(
@@ -50,14 +52,6 @@ fn choose_mode_and_split_latents<F: FloatLike>(
         // once it exists
     },
   )
-}
-
-fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
-  if adj >= L::MID {
-    format!("{}{}", adj - L::MID, suffix)
-  } else {
-    format!("-{}{}", L::MID - adj, suffix)
-  }
 }
 
 macro_rules! impl_float_like {
@@ -304,21 +298,10 @@ macro_rules! impl_float_number_like {
 
       type L = $latent;
 
-      fn latent_to_string(
-        l: Self::L,
-        mode: Mode<Self::L>,
-        latent_var_idx: usize,
-        delta_encoding_order: usize,
-      ) -> String {
-        use Mode::*;
-        match (mode, latent_var_idx, delta_encoding_order) {
-          (Classic, 0, 0) => Self::from_latent_ordered(l).to_string(),
-          (Classic, 0, _) => format_delta(l, " ULPs"),
-          (FloatMult(_), 0, 0) => format!("{}x", Self::int_float_from_latent(l)),
-          (FloatMult(_), 0, _) => format_delta(l, "x"),
-          (FloatMult(_), 1, _) => format_delta(l, " ULPs"),
-          _ => panic!("invalid context for latent"),
-        }
+      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+        describers::match_classic_mode::<Self>(meta, " ULPs")
+          .or_else(|| describers::match_float_modes::<Self>(meta))
+          .expect("invalid mode for float type")
       }
 
       fn mode_is_valid(mode: Mode<Self::L>) -> bool {

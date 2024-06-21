@@ -52,6 +52,8 @@ pub use progress::Progress;
 struct ReadmeDoctest;
 
 pub mod data_types;
+/// for inspecting certain types of Pco metadata
+pub mod describers;
 pub mod errors;
 /// for compressing/decompressing .pco files
 pub mod standalone;
