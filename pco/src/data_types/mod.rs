@@ -8,7 +8,7 @@ use std::ops::{
 pub use dynamic::CoreDataType;
 
 use crate::constants::Bitlen;
-use crate::latent_formatter::{FormatsLatent, LatentFormatter};
+use crate::latent_formatter::LatentFormatter;
 use crate::{ChunkConfig, ChunkMeta, Mode};
 
 mod dynamic;

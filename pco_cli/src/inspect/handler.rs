@@ -8,7 +8,7 @@ use tabled::{Table, Tabled};
 
 use pco::data_types::{Latent, NumberLike};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
+use pco::ChunkMeta;
 
 use crate::core_handlers::CoreHandlerImpl;
 use crate::dtypes::PcoNumberLike;
