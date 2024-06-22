@@ -1856,9 +1856,9 @@ dependencies = [
 
 [[package]]
 name = "turbo_pfor_sys"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d36c56b485085e9b54c9d30ae83da6a3d14894e28812f87229b66b93aa9f51f"
+checksum = "28932be17efcefa650352ca73530c77f537ff73f8adc0bc24cbf8297d8eb0a38"
 dependencies = [
  "bindgen",
  "libc",
