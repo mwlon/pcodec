@@ -1295,6 +1295,7 @@ dependencies = [
  "spdp_sys",
  "tabled",
  "toml",
+ "turbo_pfor_sys",
  "wav",
  "zstd",
 ]
@@ -1851,6 +1852,16 @@ dependencies = [
  "serde_spanned",
  "toml_datetime",
  "winnow",
+]
+
+[[package]]
+name = "turbo_pfor_sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d36c56b485085e9b54c9d30ae83da6a3d14894e28812f87229b66b93aa9f51f"
+dependencies = [
+ "bindgen",
+ "libc",
 ]
 
 [[package]]

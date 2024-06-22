@@ -29,7 +29,13 @@ pub trait QCompressable: Sized {
 }
 
 #[cfg(feature = "full_bench")]
-pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable {
+pub trait TurboPforable: Sized {
+  unsafe fn encode(src: &mut [Self], dst: &mut [u8]) -> usize;
+  unsafe fn decode(src: &mut [u8], n: usize, dst: &mut [Self]);
+}
+
+#[cfg(feature = "full_bench")]
+pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable + TurboPforable {
   const ARROW_DTYPE: DataType;
 
   type Arrow: ArrowPrimitiveType;
