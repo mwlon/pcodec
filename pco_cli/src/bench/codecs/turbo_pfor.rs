@@ -1,10 +1,10 @@
-use std::cmp::{max, min};
 use std::convert::TryInto;
+use std::mem;
 
 use clap::Parser;
 use half::f16;
 
-use crate::bench::codecs::{utils, CodecInternal};
+use crate::bench::codecs::CodecInternal;
 use crate::dtypes::{PcoNumberLike, TurboPforable};
 
 #[derive(Clone, Debug, Parser)]
@@ -21,7 +21,9 @@ impl CodecInternal for TurboPforConfig {
 
   fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
     let mut nums = nums.to_vec();
-    let mut dst = vec![0; 1 << 24];
+    // not sure this is the real contract, just a heuristic
+    let dst_size = 64 + ((nums.len() * mem::size_of::<T>()) as f32 * 1.01) as usize;
+    let mut dst = vec![0; dst_size];
     dst[..8].copy_from_slice(&(nums.len() as u64).to_le_bytes());
     let byte_len = unsafe { <T as TurboPforable>::encode(&mut nums, &mut dst[8..]) };
     dst.truncate(byte_len + 8);
