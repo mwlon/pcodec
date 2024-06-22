@@ -19,6 +19,8 @@ use crate::bench::codecs::qco::QcoConfig;
 use crate::bench::codecs::snappy::SnappyConfig;
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::spdp::SpdpConfig;
+#[cfg(feature = "full_bench")]
+use crate::bench::codecs::turbo_pfor::TurboPforConfig;
 use crate::bench::codecs::zstd::ZstdConfig;
 use crate::bench::IterOpt;
 use crate::bench::{BenchStat, Precomputed};
@@ -35,6 +37,8 @@ mod qco;
 mod snappy;
 #[cfg(feature = "full_bench")]
 mod spdp;
+#[cfg(feature = "full_bench")]
+mod turbo_pfor;
 pub mod utils;
 mod zstd;
 
@@ -235,6 +239,8 @@ impl FromStr for CodecConfig {
       "snap" | "snappy" => SnappyConfig::from_kv_args(&clap_kv_args),
       #[cfg(feature = "full_bench")]
       "spdp" => SpdpConfig::from_kv_args(&clap_kv_args),
+      #[cfg(feature = "full_bench")]
+      "tpfor" | "turbopfor" => TurboPforConfig::from_kv_args(&clap_kv_args),
       "zstd" | "zstandard" => ZstdConfig::from_kv_args(&clap_kv_args),
       _ => {
         return Err(anyhow!(
