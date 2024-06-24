@@ -102,3 +102,12 @@ impl<L: Latent> Mode<L> {
     Self::FloatMult(base.to_latent_ordered())
   }
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Bid<L: Latent> {
+  /// "Don't use this mode" (TODO: elaborate)
+  #[default]
+  Forfeit,
+  /// Bid to use this mode (TODO: elaborate)
+  Candidate { mode: Mode<L>, bits_saved_per_num: f64 },
+}

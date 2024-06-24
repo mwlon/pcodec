@@ -1,6 +1,6 @@
 use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
-use crate::sampling;
+use crate::{mode::Bid, Mode};
 use std::cmp;
 
 #[inline(never)]
@@ -54,22 +54,23 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
   vec![primary, secondary]
 }
 
-pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatQuantConfig> {
-  let k = estimate_best_k(nums);
+pub(crate) fn compute_bid_w_sample<F: FloatLike>(sample: &[F]) -> Bid<F::L> {
+  let k = estimate_best_k(sample);
   // Nothing fancy, we simply estimate that quantizing by k bits results in saving k bits per
   // number.  This is based on the assumption that FloatQuant will usually be used on datasets that
   // are exactly quantized.
-  let est_saved_bits_per_num = k;
-  if (est_saved_bits_per_num as f64) > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
-    Some(FloatQuantConfig { k: k })
+  if (k as f64) > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
+    Bid::Candidate {
+      mode: Mode::FloatQuant(k),
+      bits_saved_per_num: k as f64,
+    }
   } else {
-    None
+    Bid::Forfeit
   }
 }
 
 #[inline(never)]
-pub(crate) fn estimate_best_k<F: FloatLike>(nums: &[F]) -> Bitlen {
-  let sample = sampling::choose_sample(nums, |&num| Some(num)).expect("nums must be nonempty");
+pub(crate) fn estimate_best_k<F: FloatLike>(sample: &[F]) -> Bitlen {
   let thresh = (0.9 * sample.len() as f32).floor() as usize;
   let mut hist = vec![0; F::PRECISION_BITS.try_into().unwrap()];
   for num_tz in sample.iter().map(|&x| {
@@ -95,11 +96,6 @@ pub(crate) fn estimate_best_k<F: FloatLike>(nums: &[F]) -> Bitlen {
     })
     .last()
     .expect("nums is nonempty") as Bitlen
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct FloatQuantConfig {
-  pub k: Bitlen,
 }
 
 #[cfg(test)]

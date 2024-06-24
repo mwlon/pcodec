@@ -6,8 +6,10 @@ use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
 use crate::errors::{PcoError, PcoResult};
 use crate::{
-  float_mult_utils, float_quant_utils, ChunkConfig, FloatMultSpec, FloatQuantSpec, Mode,
+  float_mult_utils, float_quant_utils, mode::Bid, sampling, ChunkConfig, FloatMultSpec,
+  FloatQuantSpec, Mode,
 };
+use std::cmp::Ordering;
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
@@ -33,55 +35,115 @@ fn choose_mode_and_split_latents<F: FloatLike>(
       float_quant_utils::split_latents(nums, k),
     )),
     (FloatMultSpec::Enabled, FloatQuantSpec::Enabled) => {
-      match (
-        float_mult_utils::choose_config_diagnostic(nums),
-        float_quant_utils::choose_config(nums),
-      ) {
-        (None, None) => Ok((Mode::Classic, split_latents_classic(nums))),
-        (Some((fm_config, _)), None) => {
-          let mode = Mode::float_mult(fm_config.base);
-          let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
-          Ok((mode, latents))
+      let bids = compute_all_bids_float(nums);
+      let winning_bid = choose_winning_bid(&bids);
+      match winning_bid {
+        Bid::Candidate {
+          mode: mode @ Mode::FloatMult(base_l),
+          ..
+        } => {
+          let base = F::from_latent_ordered(*base_l);
+          let latents = float_mult_utils::split_latents(nums, base, base.inv());
+          Ok((*mode, latents))
         }
-        (None, Some(fq_config)) => {
-          let latents = float_quant_utils::split_latents(nums, fq_config.k);
-          Ok((Mode::FloatQuant(fq_config.k), latents))
+        Bid::Candidate {
+          mode: mode @ Mode::FloatQuant(k),
+          ..
+        } => {
+          let latents = float_quant_utils::split_latents(nums, *k);
+          Ok((*mode, latents))
         }
-        (Some((fm_config, diagnostics)), Some(fq_config)) => {
-          if diagnostics.est_saved_mult_bits_per_num > (fq_config.k as f64) {
-            let mode = Mode::float_mult(fm_config.base);
-            let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
-            Ok((mode, latents))
-          } else {
-            let latents = float_quant_utils::split_latents(nums, fq_config.k);
-            Ok((Mode::FloatQuant(fq_config.k), latents))
-          }
-        }
+        Bid::Candidate {
+          mode: mode @ Mode::Classic,
+          ..
+        } => Ok((*mode, split_latents_classic(nums))),
+        Bid::Candidate { .. } => Err(PcoError::internal(
+          "Bug: float mode selection logic returned an int mode",
+        )),
+        Bid::Forfeit => Err(PcoError::internal(
+          "Bug: no candidate mode found, not even Classic",
+        )),
       }
     }
-    (FloatMultSpec::Enabled, _) => {
-      if let Some(fm_config) = float_mult_utils::choose_config(nums) {
-        let mode = Mode::float_mult(fm_config.base);
-        let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
+    (FloatMultSpec::Enabled, _) => match float_mult_utils::compute_bid(nums) {
+      Bid::Candidate {
+        mode: mode @ Mode::FloatMult(base_l),
+        ..
+      } => {
+        let base = F::from_latent_ordered(base_l);
+        let latents = float_mult_utils::split_latents(nums, base, base.inv());
         Ok((mode, latents))
-      } else {
-        Ok((Mode::Classic, split_latents_classic(nums)))
       }
-    }
-    (_, FloatQuantSpec::Enabled) => {
-      if let Some(float_quant_utils::FloatQuantConfig { k }) =
-        float_quant_utils::choose_config(nums)
-      {
+      Bid::Candidate { .. } => Err(PcoError::internal(
+        "Bug: expected a FloatMult bid, got a different mode",
+      )),
+      Bid::Forfeit => Ok((Mode::Classic, split_latents_classic(nums))),
+    },
+    (_, FloatQuantSpec::Enabled) => match sampling::choose_sample(
+      nums,
+      // for now we use the same filtering criteria for FloatQuant as for FloatMult
+      float_mult_utils::filter_sample,
+    )
+    .and_then(|sample| {
+      Some(float_quant_utils::compute_bid_w_sample(
+        &sample,
+      ))
+    })
+    .unwrap_or(Bid::Forfeit)
+    {
+      Bid::Candidate {
+        mode: mode @ Mode::FloatQuant(k),
+        ..
+      } => {
         let latents = float_quant_utils::split_latents(nums, k);
-        Ok((Mode::FloatQuant(k), latents))
-      } else {
-        Ok((Mode::Classic, split_latents_classic(nums)))
+        Ok((mode, latents))
       }
-    }
+      Bid::Candidate { .. } => Err(PcoError::internal(
+        "Bug: expected a FloatQuant bid, got a different mode",
+      )),
+      Bid::Forfeit => Ok((Mode::Classic, split_latents_classic(nums))),
+    },
     (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
       Ok((Mode::Classic, split_latents_classic(nums)))
     }
   }
+}
+
+fn compute_all_bids_float<F: FloatLike>(nums: &[F]) -> Vec<Bid<F::L>> {
+  let classic = Bid::Candidate {
+    mode: Mode::<F::L>::Classic,
+    bits_saved_per_num: 0.0,
+  };
+  let (float_mult, sample) = float_mult_utils::compute_bid_and_sample(nums);
+  let float_quant = sample
+    .and_then(|sample| {
+      Some(float_quant_utils::compute_bid_w_sample(
+        &sample,
+      ))
+    })
+    .unwrap_or(Bid::Forfeit);
+  vec![classic, float_mult, float_quant]
+}
+
+fn choose_winning_bid<L: Latent>(bids: &Vec<Bid<L>>) -> &Bid<L> {
+  bids
+    .iter()
+    .max_by(|b1, b2| match (b1, b2) {
+      (Bid::Forfeit, Bid::Forfeit) => Ordering::Equal,
+      (Bid::Candidate { .. }, Bid::Forfeit) => Ordering::Greater,
+      (Bid::Forfeit, Bid::Candidate { .. }) => Ordering::Less,
+      (
+        Bid::Candidate {
+          bits_saved_per_num: saved1,
+          ..
+        },
+        Bid::Candidate {
+          bits_saved_per_num: saved2,
+          ..
+        },
+      ) => saved1.partial_cmp(saved2).unwrap(),
+    })
+    .expect("bids must be nonempty")
 }
 
 fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {

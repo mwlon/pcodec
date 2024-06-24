@@ -3,7 +3,7 @@ use std::mem;
 
 use crate::constants::{Bitlen, CLASSIC_MEMORIZABLE_BINS_LOG, MULT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
-use crate::{int_mult_utils, sampling};
+use crate::{int_mult_utils, mode::Bid, sampling, Mode};
 
 #[inline(never)]
 pub(crate) fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondary: &[F::L]) {
@@ -291,7 +291,7 @@ fn uses_few_enough_adj_bits<F: FloatLike>(config: FloatMultConfig<F>, nums: &[F]
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Diagnostics {
-  pub est_saved_mult_bits_per_num: f64,
+  pub est_mult_bits_saved_per_num: f64,
 }
 
 fn better_compression_than_classic_diagnostic<F: FloatLike>(
@@ -305,7 +305,7 @@ fn better_compression_than_classic_diagnostic<F: FloatLike>(
     F::PRECISION_BITS.saturating_sub(CLASSIC_MEMORIZABLE_BINS_LOG) as f64,
   );
   let diagnostics = Diagnostics {
-    est_saved_mult_bits_per_num: saved,
+    est_mult_bits_saved_per_num: saved,
   };
   (
     saved > MULT_REQUIRED_BITS_SAVED_PER_NUM && uses_few_enough_adj_bits(config, nums),
@@ -344,46 +344,46 @@ impl<F: FloatLike> FloatMultConfig<F> {
   }
 }
 
-fn choose_config_w_sample<F: FloatLike>(
-  sample: &[F],
-  nums: &[F],
-) -> Option<(FloatMultConfig<F>, Diagnostics)> {
-  let config = choose_candidate_base_by_trailing_zeros(sample)
-    .or_else(|| choose_candidate_base_by_euclidean(sample))?;
-  let (is_better, diagnostics) = better_compression_than_classic_diagnostic(config, sample, nums);
-  if is_better {
-    Some((config, diagnostics))
-  } else {
-    None
-  }
+fn compute_bid_w_sample<F: FloatLike>(sample: &[F], nums: &[F]) -> Bid<F::L> {
+  choose_candidate_base_by_trailing_zeros(sample)
+    .or_else(|| choose_candidate_base_by_euclidean(sample))
+    .and_then(|config| {
+      let (is_better, diagnostics) =
+        better_compression_than_classic_diagnostic(config, sample, nums);
+      if is_better {
+        Some(Bid::Candidate {
+          mode: Mode::FloatMult(config.base.to_latent_ordered()),
+          bits_saved_per_num: diagnostics.est_mult_bits_saved_per_num,
+        })
+      } else {
+        None
+      }
+    })
+    .unwrap_or(Bid::Forfeit)
 }
 
 #[inline(never)]
-pub(crate) fn choose_config_diagnostic<F: FloatLike>(
-  nums: &[F],
-) -> Option<(FloatMultConfig<F>, Diagnostics)> {
-  // We can compress infinities, nans, and baby floats, but we can't learn
-  // the base from them.
-  let sample = sampling::choose_sample(nums, |num| {
+pub(crate) fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
     if num.is_finite_and_normal() {
       let abs = num.abs();
       if abs <= F::MAX_FOR_SAMPLING {
         return Some(abs);
       }
     }
-
     None
-  })?;
-
-  choose_config_w_sample(&sample, nums)
 }
 
-pub(crate) fn choose_config<F: FloatLike>(nums: &[F]) -> Option<FloatMultConfig<F>> {
-  if let Some((fm_config, _)) = choose_config_diagnostic(nums) {
-    Some(fm_config)
-  } else {
-    None
-  }
+#[inline(never)]
+pub(crate) fn compute_bid_and_sample<F: FloatLike>(nums: &[F]) -> (Bid<F::L>, Option<Vec<F>>) {
+  // We can compress infinities, nans, and baby floats, but we can't learn
+  // the base from them.
+  sampling::choose_sample(nums, filter_sample)
+  .and_then(|sample| Some((compute_bid_w_sample(&sample, nums), Some(sample))))
+  .unwrap_or((Bid::Forfeit, None))
+}
+
+pub(crate) fn compute_bid<F: FloatLike>(nums: &[F]) -> Bid<F::L> {
+  compute_bid_and_sample(nums).0
 }
 
 #[cfg(test)]
