@@ -80,7 +80,7 @@ macro_rules! impl_float_like {
 
       #[inline]
       fn exp2(power: i32) -> Self {
-        Self::exp2(power as Self)
+        Self::from_bits(((-$exp_offset + power) as $latent) << Self::PRECISION_BITS)
       }
 
       #[inline]
@@ -197,7 +197,7 @@ impl FloatLike for f16 {
 
   #[inline]
   fn exp2(power: i32) -> Self {
-    Self::from_f32(f32::exp2(power as f32))
+    Self::from_bits(((15 + power) as u16) << Self::PRECISION_BITS)
   }
 
   #[inline]
@@ -385,13 +385,24 @@ mod tests {
   }
 
   #[test]
-  fn test_exp() {
+  fn test_exponent() {
     assert_eq!(1.0_f32.exponent(), 0);
     assert_eq!(1.0_f64.exponent(), 0);
     assert_eq!(2.0_f32.exponent(), 1);
     assert_eq!(3.3333_f32.exponent(), 1);
     assert_eq!(0.3333_f32.exponent(), -2);
     assert_eq!(31.0_f32.exponent(), 4);
+  }
+
+  #[test]
+  fn test_exp2() {
+    assert_eq!(<f32 as FloatLike>::exp2(0), 1.0);
+    assert_eq!(<f32 as FloatLike>::exp2(1), 2.0);
+    assert_eq!(<f32 as FloatLike>::exp2(-1), 0.5);
+    assert_eq!(<f32 as FloatLike>::exp2(2), 4.0);
+
+    assert_eq!(<f16 as FloatLike>::exp2(0), f16::ONE);
+    assert_eq!(<f64 as FloatLike>::exp2(0), 1.0);
   }
 
   #[test]
