@@ -105,9 +105,13 @@ impl<L: Latent> Mode<L> {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Bid<L: Latent> {
-  /// "Don't use this mode" (TODO: elaborate)
+  /// A bid of `Forfeit` means the auctioneer should not choose this bid as the winner unless all
+  /// the other bids under consideration are `Forfeit` too (and if they are that may be indicative
+  /// of a bug).
   #[default]
   Forfeit,
-  /// Bid to use this mode (TODO: elaborate)
+  /// A bid to use mode `mode`.  Contains the mode parameters and an estimate of how many bits will
+  /// be saved per number (which depends on the dataset under consideration and the sample that was
+  /// used to compute the estimate).
   Candidate { mode: Mode<L>, bits_saved_per_num: f64 },
 }
