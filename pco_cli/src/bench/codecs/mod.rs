@@ -13,6 +13,8 @@ use ::pco::with_core_dtypes;
 
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::blosc::BloscConfig;
+#[cfg(feature = "full_bench")]
+use crate::bench::codecs::flac::FlacConfig;
 use crate::bench::codecs::parquet::ParquetConfig;
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::qco::QcoConfig;
@@ -30,6 +32,8 @@ use crate::num_vec::NumVec;
 
 #[cfg(feature = "full_bench")]
 mod blosc;
+// #[cfg(feature = "full_bench")]
+mod flac;
 mod parquet;
 mod pco;
 #[cfg(feature = "full_bench")]
@@ -232,6 +236,8 @@ impl FromStr for CodecConfig {
     let codec: Result<Box<dyn CodecSurface>> = match name {
       #[cfg(feature = "full_bench")]
       "blosc" => BloscConfig::from_kv_args(&clap_kv_args),
+      #[cfg(feature = "full_bench")]
+      "flac" => FlacConfig::from_kv_args(&clap_kv_args),
       "parquet" => ParquetConfig::from_kv_args(&clap_kv_args),
       "pco" | "pcodec" => ChunkConfigOpt::from_kv_args(&clap_kv_args),
       #[cfg(feature = "full_bench")]

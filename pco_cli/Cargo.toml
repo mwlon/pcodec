@@ -22,6 +22,8 @@ better_io = { version = "0.1.0", path = "../better_io" }
 blosc-src = { version = "0.3", features = ["zstd"], optional = true }
 bytes = "1.1.0"
 clap = { version = "4.5.3", features = ["derive"] }
+# flac-bound = { version = "0.3.0", features = ["libflac", "libflac-noogg"], default-features = false, optional = true}
+flac-bound = { version = "0.3.0", features = ["libflac", "libflac-noogg"], default-features = false}
 half = { version = "2.4.1", features = ["std"] }
 indicatif = "0.17.8"
 parquet = { version = "49.0.0", features = [
