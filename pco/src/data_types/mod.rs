@@ -45,6 +45,8 @@ pub(crate) trait FloatLike:
   fn abs(self) -> Self;
   fn inv(self) -> Self;
   fn round(self) -> Self;
+  /// This only needs to cover a small range (from 2^-BITS to 2^BITS) and might
+  /// not be valid outside of it.
   fn exp2(power: i32) -> Self;
   fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
