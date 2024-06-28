@@ -70,7 +70,8 @@ fn simple_write_if_version_matches<T: NumberLike>(
 mod tests {
   use crate::errors::PcoResult;
   use crate::tests::compatibility::{assert_compatible, simple_write_if_version_matches};
-  use crate::ChunkConfig;
+  use crate::{ChunkConfig, FloatMultSpec, FloatQuantSpec};
+  use half::f16;
 
   #[test]
   fn v0_0_0_classic() -> PcoResult<()> {
@@ -125,6 +126,61 @@ mod tests {
     let name = "standalone_versioned";
     let nums = vec![];
     let config = ChunkConfig::default();
+    simple_write_if_version_matches::<f32>(version, name, &nums, &config)?;
+    assert_compatible(version, name, &nums)?;
+    Ok(())
+  }
+
+  fn generate_pseudorandom_f16s() -> Vec<f16> {
+    // makes a variety of floats approximately uniformly distributed
+    // between (-2.0, -1.0] U [1.0, 2.0)
+    let mut num = 0.1_f32;
+    let mut nums = vec![];
+    for _ in 0..2000 {
+      num = ((num * 77.7) + 0.1) % 2.0;
+      if num < 1.0 {
+        nums.push(f16::from_f32(-1.0 - num));
+      } else {
+        nums.push(f16::from_f32(num));
+      }
+    }
+    nums
+  }
+
+  #[test]
+  fn v0_3_0_f16() -> PcoResult<()> {
+    // v0.3.0 introduced 16-bit data types, including f16, which requires the
+    // half crate
+    let version = "0.3.0";
+    let name = "f16";
+    let config = ChunkConfig::default();
+    let nums = generate_pseudorandom_f16s();
+    simple_write_if_version_matches::<f16>(version, name, &nums, &config)?;
+    assert_compatible(version, name, &nums)?;
+    Ok(())
+  }
+
+  #[test]
+  fn v0_3_0_float_quant() -> PcoResult<()> {
+    // v0.3.0 introduced float quantization mode
+    let version = "0.3.0";
+    let name = "float_quant";
+    let nums = generate_pseudorandom_f16s()
+      .into_iter()
+      .map(|x| {
+        let x = x.to_f32();
+        if x.abs() < 1.1 {
+          f32::from_bits(x.to_bits() + 1)
+        } else {
+          x
+        }
+      })
+      .collect::<Vec<_>>();
+    let config = ChunkConfig::default()
+      .with_float_quant_spec(FloatQuantSpec::Provided(
+        f32::MANTISSA_DIGITS - f16::MANTISSA_DIGITS,
+      ))
+      .with_float_mult_spec(FloatMultSpec::Disabled);
     simple_write_if_version_matches::<f32>(version, name, &nums, &config)?;
     assert_compatible(version, name, &nums)?;
     Ok(())

@@ -4,154 +4,102 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
+use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
+use crate::float_mult_utils::FloatMultConfig;
 use crate::{
-  float_mult_utils, float_quant_utils, mode::Bid, sampling, ChunkConfig, FloatMultSpec,
-  FloatQuantSpec, Mode,
+  describers, float_mult_utils, float_quant_utils, mode::Bid, sampling, ChunkConfig, ChunkMeta,
+  FloatMultSpec, FloatQuantSpec, Mode,
 };
-use std::cmp::Ordering;
+
+use super::ModeAndLatents;
+
+#[inline(never)]
+fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
+  // We can compress infinities, nans, and baby floats, but we can't learn
+  // the mode from them.
+  if num.is_finite_and_normal() {
+    let abs = num.abs();
+    if abs <= F::MAX_FOR_SAMPLING {
+      return Some(abs);
+    }
+  }
+  None
+}
+
+fn detect_mode_and_split_latents<F: FloatLike>(
+  nums: &[F],
+  chunk_config: &ChunkConfig,
+) -> ModeAndLatents<F::L> {
+  // up to 3 bids: classic, float mult, float quant modes
+  let mut bids: Vec<Bid<F>> = vec![];
+  bids.push(Bid {
+    mode: Mode::Classic,
+    bits_saved_per_num: 0.0,
+    split_fn: Box::new(|nums| split_latents_classic(nums)),
+  });
+  // computing sample is unnecessary when both are disabled, but we'll change
+  // things before the next release
+  let maybe_sample = sampling::choose_sample(nums, filter_sample);
+
+  if let Some(sample) = maybe_sample {
+    if matches!(
+      chunk_config.float_mult_spec,
+      FloatMultSpec::Enabled
+    ) {
+      bids.extend(float_mult_utils::compute_bid(&sample, nums));
+    }
+    if matches!(
+      chunk_config.float_quant_spec,
+      FloatQuantSpec::Enabled
+    ) {
+      bids.extend(float_quant_utils::compute_bid(&sample));
+    }
+  }
+
+  let winning_bid = choose_winning_bid(bids);
+  let latents = (winning_bid.split_fn)(nums);
+  (winning_bid.mode, latents)
+}
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
-) -> PcoResult<(Mode<F::L>, Vec<Vec<F::L>>)> {
+) -> PcoResult<ModeAndLatents<F::L>> {
   match (
     chunk_config.float_mult_spec,
     chunk_config.float_quant_spec,
   ) {
-    (FloatMultSpec::Provided(_), FloatQuantSpec::Provided(_)) => {
-      return Err(PcoError::invalid_argument(
-        "FloatMult and FloatQuant cannot be provided (thus required) simultaneously",
-      ));
-    }
+    (FloatMultSpec::Provided(_), FloatQuantSpec::Provided(_)) => Err(PcoError::invalid_argument(
+      "FloatMult and FloatQuant cannot be provided (thus required) simultaneously",
+    )),
     (FloatMultSpec::Provided(base_f64), _) => {
       let base = F::from_f64(base_f64);
       let mode = Mode::float_mult(base);
-      let latents = float_mult_utils::split_latents(nums, base, base.inv());
+      let float_mult_config = FloatMultConfig {
+        base,
+        inv_base: base.inv(),
+      };
+      let latents = float_mult_utils::split_latents(nums, float_mult_config);
       Ok((mode, latents))
     }
-    (FloatMultSpec::Disabled, FloatQuantSpec::Provided(k)) => Ok((
+    (_, FloatQuantSpec::Provided(k)) => Ok((
       Mode::FloatQuant(k),
       float_quant_utils::split_latents(nums, k),
     )),
-    (FloatMultSpec::Enabled, FloatQuantSpec::Enabled) => {
-      let bids = compute_all_bids_float(nums);
-      let winning_bid = choose_winning_bid(&bids);
-      match winning_bid {
-        Bid::Candidate {
-          mode: mode @ Mode::FloatMult(base_l),
-          ..
-        } => {
-          let base = F::from_latent_ordered(*base_l);
-          let latents = float_mult_utils::split_latents(nums, base, base.inv());
-          Ok((*mode, latents))
-        }
-        Bid::Candidate {
-          mode: mode @ Mode::FloatQuant(k),
-          ..
-        } => {
-          let latents = float_quant_utils::split_latents(nums, *k);
-          Ok((*mode, latents))
-        }
-        Bid::Candidate {
-          mode: mode @ Mode::Classic,
-          ..
-        } => Ok((*mode, split_latents_classic(nums))),
-        Bid::Candidate { .. } => Err(PcoError::internal(
-          "Bug: float mode selection logic returned an int mode",
-        )),
-        Bid::Forfeit => Err(PcoError::internal(
-          "Bug: no candidate mode found, not even Classic",
-        )),
-      }
-    }
-    (FloatMultSpec::Enabled, _) => match float_mult_utils::compute_bid(nums) {
-      Bid::Candidate {
-        mode: mode @ Mode::FloatMult(base_l),
-        ..
-      } => {
-        let base = F::from_latent_ordered(base_l);
-        let latents = float_mult_utils::split_latents(nums, base, base.inv());
-        Ok((mode, latents))
-      }
-      Bid::Candidate { .. } => Err(PcoError::internal(
-        "Bug: expected a FloatMult bid, got a different mode",
-      )),
-      Bid::Forfeit => Ok((Mode::Classic, split_latents_classic(nums))),
-    },
-    (_, FloatQuantSpec::Enabled) => match sampling::choose_sample(
+    _ => Ok(detect_mode_and_split_latents(
       nums,
-      // for now we use the same filtering criteria for FloatQuant as for FloatMult
-      float_mult_utils::filter_sample,
-    )
-    .and_then(|sample| {
-      Some(float_quant_utils::compute_bid_w_sample(
-        &sample,
-      ))
-    })
-    .unwrap_or(Bid::Forfeit)
-    {
-      Bid::Candidate {
-        mode: mode @ Mode::FloatQuant(k),
-        ..
-      } => {
-        let latents = float_quant_utils::split_latents(nums, k);
-        Ok((mode, latents))
-      }
-      Bid::Candidate { .. } => Err(PcoError::internal(
-        "Bug: expected a FloatQuant bid, got a different mode",
-      )),
-      Bid::Forfeit => Ok((Mode::Classic, split_latents_classic(nums))),
-    },
-    (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
-      Ok((Mode::Classic, split_latents_classic(nums)))
-    }
+      chunk_config,
+    )),
   }
 }
 
-fn compute_all_bids_float<F: FloatLike>(nums: &[F]) -> Vec<Bid<F::L>> {
-  let classic = Bid::Candidate {
-    mode: Mode::<F::L>::Classic,
-    bits_saved_per_num: 0.0,
-  };
-  let (float_mult, sample) = float_mult_utils::compute_bid_and_sample(nums);
-  let float_quant = sample
-    .and_then(|sample| {
-      Some(float_quant_utils::compute_bid_w_sample(
-        &sample,
-      ))
-    })
-    .unwrap_or(Bid::Forfeit);
-  vec![classic, float_mult, float_quant]
-}
-
-fn choose_winning_bid<L: Latent>(bids: &Vec<Bid<L>>) -> &Bid<L> {
+// one day we might reuse this for int modes
+fn choose_winning_bid<T: NumberLike>(bids: Vec<Bid<T>>) -> Bid<T> {
   bids
-    .iter()
-    .max_by(|b1, b2| match (b1, b2) {
-      (Bid::Forfeit, Bid::Forfeit) => Ordering::Equal,
-      (Bid::Candidate { .. }, Bid::Forfeit) => Ordering::Greater,
-      (Bid::Forfeit, Bid::Candidate { .. }) => Ordering::Less,
-      (
-        Bid::Candidate {
-          bits_saved_per_num: saved1,
-          ..
-        },
-        Bid::Candidate {
-          bits_saved_per_num: saved2,
-          ..
-        },
-      ) => saved1.partial_cmp(saved2).unwrap(),
-    })
+    .into_iter()
+    .max_by(|bid0, bid1| bid0.bits_saved_per_num.total_cmp(&bid1.bits_saved_per_num))
     .expect("bids must be nonempty")
-}
-
-fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
-  if adj >= L::MID {
-    format!("{}{}", adj - L::MID, suffix)
-  } else {
-    format!("-{}{}", L::MID - adj, suffix)
-  }
 }
 
 macro_rules! impl_float_like {
@@ -180,7 +128,7 @@ macro_rules! impl_float_like {
 
       #[inline]
       fn exp2(power: i32) -> Self {
-        Self::exp2(power as Self)
+        Self::from_bits((($exp_offset + power) as $latent) << Self::PRECISION_BITS)
       }
 
       #[inline]
@@ -205,7 +153,7 @@ macro_rules! impl_float_like {
 
       #[inline]
       fn exponent(&self) -> i32 {
-        (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 + $exp_offset
+        (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 - $exp_offset
       }
 
       #[inline]
@@ -297,7 +245,7 @@ impl FloatLike for f16 {
 
   #[inline]
   fn exp2(power: i32) -> Self {
-    Self::from_f32(f32::exp2(power as f32))
+    Self::from_bits(((15 + power) as u16) << Self::PRECISION_BITS)
   }
 
   #[inline]
@@ -398,21 +346,10 @@ macro_rules! impl_float_number_like {
 
       type L = $latent;
 
-      fn latent_to_string(
-        l: Self::L,
-        mode: Mode<Self::L>,
-        latent_var_idx: usize,
-        delta_encoding_order: usize,
-      ) -> String {
-        use Mode::*;
-        match (mode, latent_var_idx, delta_encoding_order) {
-          (Classic, 0, 0) => Self::from_latent_ordered(l).to_string(),
-          (Classic, 0, _) => format_delta(l, " ULPs"),
-          (FloatMult(_), 0, 0) => format!("{}x", Self::int_float_from_latent(l)),
-          (FloatMult(_), 0, _) => format_delta(l, "x"),
-          (FloatMult(_), 1, _) => format_delta(l, " ULPs"),
-          _ => panic!("invalid context for latent"),
-        }
+      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+        describers::match_classic_mode::<Self>(meta, " ULPs")
+          .or_else(|| describers::match_float_modes::<Self>(meta))
+          .expect("invalid mode for float type")
       }
 
       fn mode_is_valid(mode: Mode<Self::L>) -> bool {
@@ -428,7 +365,7 @@ macro_rules! impl_float_number_like {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
+      ) -> ModeAndLatents<Self::L> {
         choose_mode_and_split_latents(nums, config).unwrap()
       }
 
@@ -477,8 +414,8 @@ macro_rules! impl_float_number_like {
   };
 }
 
-impl_float_like!(f32, u32, 32, -127);
-impl_float_like!(f64, u64, 64, -1023);
+impl_float_like!(f32, u32, 32, 127);
+impl_float_like!(f64, u64, 64, 1023);
 // f16 FloatLike is implemented separately because it's non-native.
 impl_float_number_like!(f32, u32, 1_u32 << 31, 5);
 impl_float_number_like!(f64, u64, 1_u64 << 63, 6);
@@ -496,13 +433,24 @@ mod tests {
   }
 
   #[test]
-  fn test_exp() {
+  fn test_exponent() {
     assert_eq!(1.0_f32.exponent(), 0);
     assert_eq!(1.0_f64.exponent(), 0);
     assert_eq!(2.0_f32.exponent(), 1);
     assert_eq!(3.3333_f32.exponent(), 1);
     assert_eq!(0.3333_f32.exponent(), -2);
     assert_eq!(31.0_f32.exponent(), 4);
+  }
+
+  #[test]
+  fn test_exp2() {
+    assert_eq!(<f32 as FloatLike>::exp2(0), 1.0);
+    assert_eq!(<f32 as FloatLike>::exp2(1), 2.0);
+    assert_eq!(<f32 as FloatLike>::exp2(-1), 0.5);
+    assert_eq!(<f32 as FloatLike>::exp2(2), 4.0);
+
+    assert_eq!(<f16 as FloatLike>::exp2(0), f16::ONE);
+    assert_eq!(<f64 as FloatLike>::exp2(0), 1.0);
   }
 
   #[test]

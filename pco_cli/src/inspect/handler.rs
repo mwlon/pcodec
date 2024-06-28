@@ -8,7 +8,7 @@ use tabled::{Table, Tabled};
 
 use pco::data_types::{Latent, NumberLike};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{ChunkLatentVarMeta, ChunkMeta, Mode};
+use pco::ChunkMeta;
 
 use crate::core_handlers::CoreHandlerImpl;
 use crate::dtypes::PcoNumberLike;
@@ -72,51 +72,38 @@ fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
   res
 }
 
-fn build_latent_var_summary<T: NumberLike>(
-  latent_var_idx: usize,
+fn build_latent_var_summaries<T: NumberLike>(
   meta: &ChunkMeta<T::L>,
-  latent_var: &ChunkLatentVarMeta<T::L>,
-) -> (String, LatentVarSummary) {
-  let name = match (meta.mode, latent_var_idx) {
-    (Mode::Classic, 0) => "primary".to_string(),
-    (Mode::FloatMult(base_latent), 0) => format!(
-      "multiplier [x{}]",
-      T::latent_to_string(base_latent, Mode::Classic, 0, 0)
-    ),
-    (Mode::FloatMult(_), 1) => "ULPs adjustment".to_string(),
-    (Mode::IntMult(base), 0) => format!("multiplier [x{}]", base),
-    (Mode::IntMult(_), 1) => "adjustment".to_string(),
-    _ => panic!(
-      "unknown latent: {:?}/{}",
-      meta.mode, latent_var_idx
-    ),
-  };
+) -> BTreeMap<String, LatentVarSummary> {
+  let describers = T::get_latent_describers(meta);
+  let mut summaries = BTreeMap::new();
+  for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
+    let describer = &describers[latent_var_idx];
+    let unit = describer.latent_units();
 
-  let mut bins = Vec::new();
-  for bin in &latent_var.bins {
-    bins.push(BinSummary {
-      weight: bin.weight,
-      lower: T::latent_to_string(
-        bin.lower,
-        meta.mode,
-        latent_var_idx,
-        meta.delta_encoding_order,
-      ),
-      offset_bits: bin.offset_bits,
-    });
+    let mut bins = Vec::new();
+    for bin in &latent_var_meta.bins {
+      bins.push(BinSummary {
+        weight: bin.weight,
+        lower: format!("{}{}", describer.latent(bin.lower), unit),
+        offset_bits: bin.offset_bits,
+      });
+    }
+    let bins_table = Table::new(bins)
+      .with(Style::rounded())
+      .with(Modify::new(Columns::new(0..3)).with(Alignment::right()))
+      .to_string();
+
+    let summary = LatentVarSummary {
+      n_bins: latent_var_meta.bins.len(),
+      ans_size_log: latent_var_meta.ans_size_log,
+      bins: bins_table.to_string(),
+    };
+
+    summaries.insert(describer.latent_var(), summary);
   }
 
-  let bins_table = Table::new(bins)
-    .with(Style::rounded())
-    .with(Modify::new(Columns::new(0..3)).with(Alignment::right()))
-    .to_string();
-
-  let summary = LatentVarSummary {
-    n_bins: latent_var.bins.len(),
-    ans_size_log: latent_var.ans_size_log,
-    bins: bins_table.to_string(),
-  };
-  (name, summary)
+  summaries
 }
 
 impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
@@ -166,11 +153,7 @@ impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
 
     let mut chunks = Vec::new();
     for (idx, meta) in metas.iter().enumerate() {
-      let mut latent_vars = BTreeMap::new();
-      for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
-        let (name, summary) = build_latent_var_summary::<T>(latent_var_idx, meta, latent_var_meta);
-        latent_vars.insert(name, summary);
-      }
+      let latent_vars = build_latent_var_summaries::<T>(meta);
       chunks.push(ChunkSummary {
         idx,
         n: chunk_ns[idx],

@@ -39,7 +39,6 @@
 #![deny(clippy::unused_unit)]
 #![deny(dead_code)]
 
-pub use auto::auto_delta_encoding_order;
 pub use bin::Bin;
 pub use chunk_config::{ChunkConfig, FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec};
 pub use chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
@@ -52,6 +51,8 @@ pub use progress::Progress;
 struct ReadmeDoctest;
 
 pub mod data_types;
+/// for inspecting certain types of Pco metadata
+pub mod describers;
 pub mod errors;
 /// for compressing/decompressing .pco files
 pub mod standalone;
@@ -59,7 +60,6 @@ pub mod standalone;
 pub mod wrapped;
 
 mod ans;
-mod auto;
 mod bin;
 mod bin_optimization;
 mod bit_reader;

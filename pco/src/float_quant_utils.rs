@@ -54,18 +54,19 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
   vec![primary, secondary]
 }
 
-pub(crate) fn compute_bid_w_sample<F: FloatLike>(sample: &[F]) -> Bid<F::L> {
+pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
   let k = estimate_best_k(sample);
   // Nothing fancy, we simply estimate that quantizing by k bits results in saving k bits per
   // number.  This is based on the assumption that FloatQuant will usually be used on datasets that
   // are exactly quantized.
   if (k as f64) > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
-    Bid::Candidate {
+    Some(Bid {
       mode: Mode::FloatQuant(k),
       bits_saved_per_num: k as f64,
-    }
+      split_fn: Box::new(move |nums| split_latents(nums, k)),
+    })
   } else {
-    Bid::Forfeit
+    None
   }
 }
 
@@ -91,7 +92,7 @@ pub(crate) fn estimate_best_k<F: FloatLike>(sample: &[F]) -> Bitlen {
       if *csum >= thresh {
         return None;
       }
-      *csum = *csum + x;
+      *csum += x;
       Some(i)
     })
     .last()

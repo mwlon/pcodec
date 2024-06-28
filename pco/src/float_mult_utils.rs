@@ -16,7 +16,11 @@ pub(crate) fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondar
   }
 }
 
-pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], base: F, inv_base: F) -> Vec<Vec<F::L>> {
+pub(crate) fn split_latents<F: FloatLike>(
+  page_nums: &[F],
+  config: FloatMultConfig<F>,
+) -> Vec<Vec<F::L>> {
+  let FloatMultConfig { base, inv_base } = config;
   let n = page_nums.len();
   let uninit_vec = || unsafe {
     let mut res = Vec::<F::L>::with_capacity(n);
@@ -129,9 +133,7 @@ fn approx_pair_gcd<F: FloatLike>(greater: F, lesser: F) -> Option<F> {
 }
 
 #[inline(never)]
-fn choose_candidate_base_by_trailing_zeros<F: FloatLike>(
-  sample: &[F],
-) -> Option<FloatMultConfig<F>> {
+fn choose_config_by_trailing_zeros<F: FloatLike>(sample: &[F]) -> Option<FloatMultConfig<F>> {
   let precision_bits = F::PRECISION_BITS;
   let calc_power_of_2_divisor =
     |exponent, trailing_zeros| exponent - (precision_bits.saturating_sub(trailing_zeros)) as i32;
@@ -217,7 +219,7 @@ fn approx_sample_gcd_euclidean<F: FloatLike>(sample: &[F]) -> Option<F> {
   None
 }
 
-fn choose_candidate_base_by_euclidean<F: FloatLike>(sample: &[F]) -> Option<FloatMultConfig<F>> {
+fn choose_config_by_euclidean<F: FloatLike>(sample: &[F]) -> Option<FloatMultConfig<F>> {
   let base = approx_sample_gcd_euclidean(sample)?;
   let base = center_sample_base(base, sample);
   let config = snap_to_int_reciprocal(base);
@@ -313,15 +315,6 @@ fn better_compression_than_classic_diagnostic<F: FloatLike>(
   )
 }
 
-#[cfg(test)]
-fn better_compression_than_classic<F: FloatLike>(
-  config: FloatMultConfig<F>,
-  sample: &[F],
-  nums: &[F],
-) -> bool {
-  better_compression_than_classic_diagnostic(config, sample, nums).0
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct FloatMultConfig<F: FloatLike> {
   pub base: F,
@@ -344,46 +337,23 @@ impl<F: FloatLike> FloatMultConfig<F> {
   }
 }
 
-fn compute_bid_w_sample<F: FloatLike>(sample: &[F], nums: &[F]) -> Bid<F::L> {
-  choose_candidate_base_by_trailing_zeros(sample)
-    .or_else(|| choose_candidate_base_by_euclidean(sample))
-    .and_then(|config| {
-      let (is_better, diagnostics) =
-        better_compression_than_classic_diagnostic(config, sample, nums);
-      if is_better {
-        Some(Bid::Candidate {
-          mode: Mode::FloatMult(config.base.to_latent_ordered()),
-          bits_saved_per_num: diagnostics.est_mult_bits_saved_per_num,
-        })
-      } else {
-        None
-      }
-    })
-    .unwrap_or(Bid::Forfeit)
+fn choose_config<F: FloatLike>(sample: &[F]) -> Option<FloatMultConfig<F>> {
+  choose_config_by_trailing_zeros(sample).or_else(|| choose_config_by_euclidean(sample))
 }
 
-#[inline(never)]
-pub(crate) fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
-    if num.is_finite_and_normal() {
-      let abs = num.abs();
-      if abs <= F::MAX_FOR_SAMPLING {
-        return Some(abs);
-      }
+pub(crate) fn compute_bid<F: FloatLike>(sample: &[F], nums: &[F]) -> Option<Bid<F>> {
+  choose_config(sample).and_then(|config| {
+    let (is_better, diagnostics) = better_compression_than_classic_diagnostic(config, sample, nums);
+    if is_better {
+      Some(Bid {
+        mode: Mode::FloatMult(config.base.to_latent_ordered()),
+        bits_saved_per_num: diagnostics.est_mult_bits_saved_per_num,
+        split_fn: Box::new(move |nums| split_latents(nums, config)),
+      })
+    } else {
+      None
     }
-    None
-}
-
-#[inline(never)]
-pub(crate) fn compute_bid_and_sample<F: FloatLike>(nums: &[F]) -> (Bid<F::L>, Option<Vec<F>>) {
-  // We can compress infinities, nans, and baby floats, but we can't learn
-  // the base from them.
-  sampling::choose_sample(nums, filter_sample)
-  .and_then(|sample| Some((compute_bid_w_sample(&sample, nums), Some(sample))))
-  .unwrap_or((Bid::Forfeit, None))
-}
-
-pub(crate) fn compute_bid<F: FloatLike>(nums: &[F]) -> Bid<F::L> {
-  compute_bid_and_sample(nums).0
+  })
 }
 
 #[cfg(test)]
@@ -423,6 +393,14 @@ mod test {
     f32::from_latent_ordered(a.to_latent_ordered().wrapping_add(epsilons as u32))
   }
 
+  fn better_compression_than_classic<F: FloatLike>(
+    config: FloatMultConfig<F>,
+    sample: &[F],
+    nums: &[F],
+  ) -> bool {
+    better_compression_than_classic_diagnostic(config, sample, nums).0
+  }
+
   #[test]
   fn test_near_zero() {
     assert_eq!(
@@ -442,8 +420,7 @@ mod test {
   #[test]
   fn test_trailing_zeros() {
     assert_eq!(
-      choose_candidate_base_by_trailing_zeros(&[0.0, 3.0, 6.0, 21.0, f32::exp2(100.0)].repeat(5))
-        .unwrap(),
+      choose_config_by_trailing_zeros(&[0.0, 3.0, 6.0, 21.0, f32::exp2(100.0)].repeat(5)).unwrap(),
       FloatMultConfig::from_base(3.0),
     )
   }
@@ -483,7 +460,7 @@ mod test {
   fn test_candidate_euclidean() {
     let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX];
     assert_almost_equal(
-      choose_candidate_base_by_euclidean(&nums).unwrap().base,
+      choose_config_by_euclidean(&nums).unwrap().base,
       1.0E-4,
       1.0E-6,
       "10^-4 adverse",
@@ -636,7 +613,7 @@ mod test {
   }
 
   #[test]
-  fn test_choose_config() {
+  fn test_choose_config_and_bid() {
     let mut sevenths = Vec::new();
     let mut ones = Vec::new();
     let mut noisy_decimals = Vec::new();
@@ -651,6 +628,8 @@ mod test {
       junk.push((i as f32).sin());
     }
 
+    let sevenths_sample = &sevenths[..50];
+
     assert_eq!(
       choose_config(&sevenths),
       Some(FloatMultConfig {
@@ -658,7 +637,13 @@ mod test {
         inv_base: 7.0,
       })
     );
-    assert_eq!(choose_config(&ones), None);
+    assert_eq!(
+      choose_config(&ones),
+      Some(FloatMultConfig {
+        base: 1.0,
+        inv_base: 1.0,
+      })
+    );
     assert_eq!(
       choose_config(&noisy_decimals),
       Some(FloatMultConfig {
@@ -666,10 +651,14 @@ mod test {
         inv_base: 10.0,
       })
     );
-    assert_eq!(choose_config(&junk), None);
     // just check this last one terminates
     let mut big_nums = vec![f32::MAX; 10];
     big_nums.resize(20, f32::MAX * 0.6);
     choose_config(&big_nums);
+
+    assert!(compute_bid(&sevenths_sample, &sevenths).is_some());
+    // not enough distinct mults
+    assert!(compute_bid(&ones, &ones).is_none());
+    assert!(compute_bid(&junk, &junk).is_none());
   }
 }
