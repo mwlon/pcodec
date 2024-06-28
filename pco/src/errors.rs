@@ -17,10 +17,6 @@ pub enum ErrorKind {
   /// `InsufficientData` errors occur during decompression, indicating
   /// the decompressor reached the end of the provided data before finishing.
   InsufficientData,
-  /// `Internal` errors indicate that the program has encountered a state that
-  /// should not be possible, even for invalid user inputs.  Thus, an `Internal`
-  /// error indicates a bug.
-  Internal,
   /// `InvalidArgument` errors usually occur during compression, indicating
   /// the parameters provided to a function were invalid.
   InvalidArgument,
@@ -50,10 +46,6 @@ impl PcoError {
 
   pub(crate) fn corruption<S: AsRef<str>>(message: S) -> Self {
     Self::new(ErrorKind::Corruption, message)
-  }
-
-  pub(crate) fn internal<S: AsRef<str>>(message: S) -> Self {
-    Self::new(ErrorKind::Internal, message)
   }
 
   pub(crate) fn insufficient_data<S: AsRef<str>>(message: S) -> Self {

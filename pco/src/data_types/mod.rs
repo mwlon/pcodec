@@ -15,6 +15,8 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
+pub(crate) type ModeAndLatents<L> = (Mode<L>, Vec<Vec<L>>);
+
 /// This is used internally for compressing and decompressing with
 /// [`FloatMultMode`][`crate::Mode::FloatMult`].
 pub(crate) trait FloatLike:
@@ -165,10 +167,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   ) -> String;
 
   fn mode_is_valid(mode: Mode<Self::L>) -> bool;
-  fn choose_mode_and_split_latents(
-    nums: &[Self],
-    config: &ChunkConfig,
-  ) -> (Mode<Self::L>, Vec<Vec<Self::L>>);
+  fn choose_mode_and_split_latents(nums: &[Self], config: &ChunkConfig) -> ModeAndLatents<Self::L>;
 
   fn from_latent_ordered(l: Self::L) -> Self;
   fn to_latent_ordered(self) -> Self::L;

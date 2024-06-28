@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent};
+use crate::data_types::{FloatLike, Latent, NumberLike};
 
 // Internally, here's how we should model each mode:
 //
@@ -103,11 +103,10 @@ impl<L: Latent> Mode<L> {
   }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum Bid<L: Latent> {
-  /// "Don't use this mode" (TODO: elaborate)
-  #[default]
-  Forfeit,
-  /// Bid to use this mode (TODO: elaborate)
-  Candidate { mode: Mode<L>, bits_saved_per_num: f64 },
+pub(crate) struct Bid<T: NumberLike> {
+  pub mode: Mode<T::L>,
+  pub bits_saved_per_num: f64,
+  // we include a split_fn since modes like FloatMult can benefit from extra
+  // information (inv_base) not captured entirely in the mode
+  pub split_fn: Box<dyn FnOnce(&[T]) -> Vec<Vec<T::L>>>,
 }
