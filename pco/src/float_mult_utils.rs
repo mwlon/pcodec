@@ -301,7 +301,7 @@ fn better_compression_than_classic_diagnostic<F: FloatLike>(
   sample: &[F],
   nums: &[F],
 ) -> (bool, Diagnostics) {
-  let saved = sampling::est_saved_mult_bits_per_num(
+  let saved = sampling::est_bits_saved_per_num(
     sample,
     |x| (x * config.inv_base).round().int_float_to_latent(),
     F::PRECISION_BITS.saturating_sub(CLASSIC_MEMORIZABLE_BINS_LOG) as f64,

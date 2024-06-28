@@ -208,7 +208,7 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
   let (candidate, bits_saved_per_adj) = choose_candidate_base(&mut sample)?;
 
-  if sampling::est_saved_mult_bits_per_num(
+  if sampling::est_bits_saved_per_num(
     &sample,
     |x| x / candidate,
     bits_saved_per_adj,
