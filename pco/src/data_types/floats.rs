@@ -14,7 +14,6 @@ use crate::{
 
 use super::ModeAndLatents;
 
-#[inline(never)]
 fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
   // We can compress infinities, nans, and baby floats, but we can't learn
   // the mode from them.

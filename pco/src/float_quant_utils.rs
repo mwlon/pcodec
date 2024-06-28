@@ -3,6 +3,8 @@ use crate::data_types::{FloatLike, Latent};
 use crate::{mode::Bid, Mode};
 use std::cmp;
 
+const REQUIRED_QUANTIZED_PROPORTION: f64 = 0.95;
+
 #[inline(never)]
 pub(crate) fn join_latents<F: FloatLike>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) {
   // For any float `num` such that `split_latents([num], k) == [[y], [m]]`, we have
@@ -55,14 +57,15 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
 }
 
 pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
-  let k = estimate_best_k(sample);
+  let (k, freq) = estimate_best_k_and_freq(sample);
   // Nothing fancy, we simply estimate that quantizing by k bits results in saving k bits per
-  // number.  This is based on the assumption that FloatQuant will usually be used on datasets that
-  // are exactly quantized.
+  // number, whenever possible. This is based on the assumption that FloatQuant
+  // will usually be used on datasets that are exactly quantized.
+  let bits_saved_per_num = (k as f64) * freq;
   if (k as f64) > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
     Some(Bid {
       mode: Mode::FloatQuant(k),
-      bits_saved_per_num: k as f64,
+      bits_saved_per_num,
       split_fn: Box::new(move |nums| split_latents(nums, k)),
     })
   } else {
@@ -71,32 +74,28 @@ pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
 }
 
 #[inline(never)]
-pub(crate) fn estimate_best_k<F: FloatLike>(sample: &[F]) -> Bitlen {
-  let thresh = (0.9 * sample.len() as f32).floor() as usize;
-  let mut hist = vec![0; F::PRECISION_BITS.try_into().unwrap()];
-  for num_tz in sample.iter().map(|&x| {
-    cmp::min(
-      F::PRECISION_BITS,
-      // Using the fact that significand bits come last in
-      // the floating-point representations we care about
-      x.trailing_zeros(),
-    )
-  }) {
-    hist[num_tz as usize] += 1
+pub(crate) fn estimate_best_k_and_freq<F: FloatLike>(sample: &[F]) -> (Bitlen, f64) {
+  let thresh = (REQUIRED_QUANTIZED_PROPORTION * sample.len() as f64) as usize;
+  let mut hist = vec![0; (F::PRECISION_BITS + 1) as usize];
+  for x in sample {
+    // Using the fact that significand bits come last in
+    // the floating-point representations we care about
+    let trailing_mantissa_zeros = cmp::min(F::PRECISION_BITS, x.trailing_zeros());
+    hist[trailing_mantissa_zeros as usize] += 1
   }
-  hist
-    .iter()
-    .enumerate()
-    .rev()
-    .scan(0_usize, |csum, (i, x)| {
-      if *csum >= thresh {
-        return None;
-      }
-      *csum += x;
-      Some(i)
-    })
-    .last()
-    .expect("nums is nonempty") as Bitlen
+
+  let mut rev_csum = 0;
+  for (k, &occurrences) in hist.iter().enumerate().rev() {
+    rev_csum += occurrences;
+    if rev_csum >= thresh {
+      return (
+        k as Bitlen,
+        rev_csum as f64 / sample.len() as f64,
+      );
+    }
+  }
+
+  unreachable!("nums should be nonempty")
 }
 
 #[cfg(test)]
@@ -104,6 +103,19 @@ mod test {
   use crate::data_types::NumberLike;
 
   use super::*;
+
+  #[test]
+  fn test_estimate_best_k() {
+    // all but the last of these have 21 out of 23 mantissa bits zeroed
+    let mut sample = vec![1.0_f32, 1.25, -1.5, 1.75, -0.875, 0.75, 0.625].repeat(3);
+    sample.push(f32::from_bits(1.0_f32.to_bits() + 1));
+    let (k, freq) = estimate_best_k_and_freq(&sample);
+    assert_eq!(k, 21);
+    assert_eq!(
+      freq,
+      (sample.len() - 1) as f64 / (sample.len() as f64)
+    );
+  }
 
   #[test]
   fn test_split_latents_specific_values() {
