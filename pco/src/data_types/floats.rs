@@ -4,11 +4,12 @@ use half::f16;
 
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
+use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::{
-  float_mult_utils, float_quant_utils, mode::Bid, sampling, ChunkConfig, FloatMultSpec,
-  FloatQuantSpec, Mode,
+  describers, float_mult_utils, float_quant_utils, mode::Bid, sampling, ChunkConfig, ChunkMeta,
+  FloatMultSpec, FloatQuantSpec, Mode,
 };
 
 use super::ModeAndLatents;
@@ -101,14 +102,6 @@ fn choose_winning_bid<T: NumberLike>(bids: Vec<Bid<T>>) -> Bid<T> {
     .expect("bids must be nonempty")
 }
 
-fn format_delta<L: Latent>(adj: L, suffix: &str) -> String {
-  if adj >= L::MID {
-    format!("{}{}", adj - L::MID, suffix)
-  } else {
-    format!("-{}{}", L::MID - adj, suffix)
-  }
-}
-
 macro_rules! impl_float_like {
   ($t: ty, $latent: ty, $bits: expr, $exp_offset: expr) => {
     impl FloatLike for $t {
@@ -135,7 +128,7 @@ macro_rules! impl_float_like {
 
       #[inline]
       fn exp2(power: i32) -> Self {
-        Self::exp2(power as Self)
+        Self::from_bits((($exp_offset + power) as $latent) << Self::PRECISION_BITS)
       }
 
       #[inline]
@@ -160,7 +153,7 @@ macro_rules! impl_float_like {
 
       #[inline]
       fn exponent(&self) -> i32 {
-        (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 + $exp_offset
+        (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 - $exp_offset
       }
 
       #[inline]
@@ -252,7 +245,7 @@ impl FloatLike for f16 {
 
   #[inline]
   fn exp2(power: i32) -> Self {
-    Self::from_f32(f32::exp2(power as f32))
+    Self::from_bits(((15 + power) as u16) << Self::PRECISION_BITS)
   }
 
   #[inline]
@@ -353,21 +346,10 @@ macro_rules! impl_float_number_like {
 
       type L = $latent;
 
-      fn latent_to_string(
-        l: Self::L,
-        mode: Mode<Self::L>,
-        latent_var_idx: usize,
-        delta_encoding_order: usize,
-      ) -> String {
-        use Mode::*;
-        match (mode, latent_var_idx, delta_encoding_order) {
-          (Classic, 0, 0) => Self::from_latent_ordered(l).to_string(),
-          (Classic, 0, _) => format_delta(l, " ULPs"),
-          (FloatMult(_), 0, 0) => format!("{}x", Self::int_float_from_latent(l)),
-          (FloatMult(_), 0, _) => format_delta(l, "x"),
-          (FloatMult(_), 1, _) => format_delta(l, " ULPs"),
-          _ => panic!("invalid context for latent"),
-        }
+      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+        describers::match_classic_mode::<Self>(meta, " ULPs")
+          .or_else(|| describers::match_float_modes::<Self>(meta))
+          .expect("invalid mode for float type")
       }
 
       fn mode_is_valid(mode: Mode<Self::L>) -> bool {
@@ -432,8 +414,8 @@ macro_rules! impl_float_number_like {
   };
 }
 
-impl_float_like!(f32, u32, 32, -127);
-impl_float_like!(f64, u64, 64, -1023);
+impl_float_like!(f32, u32, 32, 127);
+impl_float_like!(f64, u64, 64, 1023);
 // f16 FloatLike is implemented separately because it's non-native.
 impl_float_number_like!(f32, u32, 1_u32 << 31, 5);
 impl_float_number_like!(f64, u64, 1_u64 << 63, 6);
@@ -451,13 +433,24 @@ mod tests {
   }
 
   #[test]
-  fn test_exp() {
+  fn test_exponent() {
     assert_eq!(1.0_f32.exponent(), 0);
     assert_eq!(1.0_f64.exponent(), 0);
     assert_eq!(2.0_f32.exponent(), 1);
     assert_eq!(3.3333_f32.exponent(), 1);
     assert_eq!(0.3333_f32.exponent(), -2);
     assert_eq!(31.0_f32.exponent(), 4);
+  }
+
+  #[test]
+  fn test_exp2() {
+    assert_eq!(<f32 as FloatLike>::exp2(0), 1.0);
+    assert_eq!(<f32 as FloatLike>::exp2(1), 2.0);
+    assert_eq!(<f32 as FloatLike>::exp2(-1), 0.5);
+    assert_eq!(<f32 as FloatLike>::exp2(2), 4.0);
+
+    assert_eq!(<f16 as FloatLike>::exp2(0), f16::ONE);
+    assert_eq!(<f64 as FloatLike>::exp2(0), 1.0);
   }
 
   #[test]

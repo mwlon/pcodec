@@ -1,14 +1,15 @@
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::ops::{
-  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, DivAssign, Mul, MulAssign, Rem,
-  RemAssign, Shl, Shr, Sub, SubAssign,
+  Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, Div, DivAssign, Mul, MulAssign, Neg,
+  Rem, RemAssign, Shl, Shr, Sub, SubAssign,
 };
 
 pub use dynamic::CoreDataType;
 
 use crate::constants::Bitlen;
-use crate::{ChunkConfig, Mode};
+use crate::describers::LatentDescriber;
+use crate::{ChunkConfig, ChunkMeta, Mode};
 
 mod dynamic;
 mod floats;
@@ -26,6 +27,7 @@ pub(crate) trait FloatLike:
   + Debug
   + Display
   + Mul<Output = Self>
+  + Neg<Output = Self>
   + NumberLike
   + PartialOrd
   + RemAssign
@@ -45,6 +47,8 @@ pub(crate) trait FloatLike:
   fn abs(self) -> Self;
   fn inv(self) -> Self;
   fn round(self) -> Self;
+  /// This only needs to cover a small range (from 2^-BITS to 2^BITS) and might
+  /// not be valid outside of it.
   fn exp2(power: i32) -> Self;
   fn from_f64(x: f64) -> Self;
   fn to_f64(self) -> f64;
@@ -159,12 +163,9 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// bitwise logic and such.
   type L: Latent;
 
-  fn latent_to_string(
-    l: Self::L,
-    mode: Mode<Self::L>,
-    latent_var_idx: usize,
-    delta_encoding_order: usize,
-  ) -> String;
+  /// Returns a `LatentDescriber` for each latent variable in the chunk
+  /// metadata.
+  fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>>;
 
   fn mode_is_valid(mode: Mode<Self::L>) -> bool;
   fn choose_mode_and_split_latents(nums: &[Self], config: &ChunkConfig) -> ModeAndLatents<Self::L>;
