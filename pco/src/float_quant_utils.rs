@@ -119,7 +119,7 @@ mod test {
 
   #[test]
   fn test_estimate_best_k_full_precision() {
-    // all but the last of these have 21 out of 23 mantissa bits zeroed
+    // all elements have all 52 mantissa bits zeroed
     let sample = vec![1.0_f64; 20];
     let (k, freq) = estimate_best_k_and_freq(&sample);
     assert_eq!(k, 52);
