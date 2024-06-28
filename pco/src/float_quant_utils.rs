@@ -1,5 +1,6 @@
 use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
+use crate::sampling;
 use crate::{mode::Bid, Mode};
 use std::cmp;
 
@@ -61,8 +62,13 @@ pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
   // Nothing fancy, we simply estimate that quantizing by k bits results in saving k bits per
   // number, whenever possible. This is based on the assumption that FloatQuant
   // will usually be used on datasets that are exactly quantized.
-  let bits_saved_per_num = (k as f64) * freq;
-  if (k as f64) > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
+  let bits_saved_per_infrequent_primary = freq * (k as f64);
+  let bits_saved_per_num = sampling::est_bits_saved_per_num(
+    sample,
+    |x| x.to_latent_bits() >> k,
+    bits_saved_per_infrequent_primary,
+  );
+  if bits_saved_per_num > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
     Some(Bid {
       mode: Mode::FloatQuant(k),
       bits_saved_per_num,
@@ -207,5 +213,28 @@ mod test {
     } else {
       panic!("Bug: `split_latents` returned data in an unexpected format");
     }
+  }
+
+  #[test]
+  fn test_compute_bid() {
+    // the larger numbers in this sample have 23 - 6 = 17 bits of quantization
+    let sample = (0..100).map(|x| x as f32).collect::<Vec<_>>();
+    let bid = compute_bid(&sample).unwrap();
+    assert!(matches!(bid.mode, Mode::FloatQuant(17)));
+    assert_eq!(bid.bits_saved_per_num, 17.0);
+
+    // same as above, except not all perfectly quantized
+    let mut sample = (0..100).map(|x| x as f32).collect::<Vec<_>>();
+    sample[0] += 0.1;
+    sample[37] -= 0.1;
+    let bid = compute_bid(&sample).unwrap();
+    assert!(matches!(bid.mode, Mode::FloatQuant(17)));
+    assert!(bid.bits_saved_per_num < 17.0);
+    assert!(bid.bits_saved_per_num > 15.0);
+
+    // the primary latent in this dataset has too few values and would be easily memorizable
+    let sample = [0.0_f32, 1.0].repeat(50);
+    let bid = compute_bid(&sample);
+    assert!(bid.is_none());
   }
 }
