@@ -118,6 +118,15 @@ mod test {
   }
 
   #[test]
+  fn test_estimate_best_k_full_precision() {
+    // all but the last of these have 21 out of 23 mantissa bits zeroed
+    let sample = vec![1.0_f64; 20];
+    let (k, freq) = estimate_best_k_and_freq(&sample);
+    assert_eq!(k, 52);
+    assert_eq!(freq, 1.0);
+  }
+
+  #[test]
   fn test_split_latents_specific_values() {
     let expected = vec![
       (
