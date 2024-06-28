@@ -115,6 +115,7 @@ mod test {
       freq,
       (sample.len() - 1) as f64 / (sample.len() as f64)
     );
+    assert!(freq >= REQUIRED_QUANTIZED_PROPORTION);
   }
 
   #[test]
