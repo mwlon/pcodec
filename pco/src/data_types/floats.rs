@@ -425,6 +425,28 @@ mod tests {
   use super::*;
 
   #[test]
+  fn test_choose_mult_mode() {
+    let base = 1.7;
+    let nums = (0..300).map(|i| (i as f64) * base).collect::<Vec<_>>();
+    let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
+    assert_eq!(
+      mode,
+      Mode::FloatMult(base.to_latent_ordered())
+    );
+  }
+
+  #[test]
+  fn test_choose_quant_mode() {
+    let lowest_num_bits = 1.0_f64.to_bits();
+    let k = 20;
+    let nums = (0..300)
+      .map(|i| f64::from_bits(lowest_num_bits + (i << k)))
+      .collect::<Vec<_>>();
+    let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
+    assert_eq!(mode, Mode::FloatQuant(k));
+  }
+
+  #[test]
   fn test_float_ordering() {
     assert!(f32::NEG_INFINITY.to_latent_ordered() < (-0.0_f32).to_latent_ordered());
     assert!((-0.0_f32).to_latent_ordered() < (0.0_f32).to_latent_ordered());
