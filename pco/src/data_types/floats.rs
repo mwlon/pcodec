@@ -80,7 +80,7 @@ macro_rules! impl_float_like {
 
       #[inline]
       fn exp2(power: i32) -> Self {
-        Self::from_bits(((-$exp_offset + power) as $latent) << Self::PRECISION_BITS)
+        Self::from_bits((($exp_offset + power) as $latent) << Self::PRECISION_BITS)
       }
 
       #[inline]
@@ -105,7 +105,7 @@ macro_rules! impl_float_like {
 
       #[inline]
       fn exponent(&self) -> i32 {
-        (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 + $exp_offset
+        (self.abs().to_bits() >> Self::PRECISION_BITS) as i32 - $exp_offset
       }
 
       #[inline]
@@ -366,8 +366,8 @@ macro_rules! impl_float_number_like {
   };
 }
 
-impl_float_like!(f32, u32, 32, -127);
-impl_float_like!(f64, u64, 64, -1023);
+impl_float_like!(f32, u32, 32, 127);
+impl_float_like!(f64, u64, 64, 1023);
 // f16 FloatLike is implemented separately because it's non-native.
 impl_float_number_like!(f32, u32, 1_u32 << 31, 5);
 impl_float_number_like!(f64, u64, 1_u64 << 63, 6);
