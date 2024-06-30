@@ -25,7 +25,7 @@ pub struct ChunkConfigOpt {
   #[arg(long, default_value = "Enabled", value_parser = parse::float_mult)]
   pub float_mult: FloatMultSpec,
   // TODO(https://github.com/mwlon/pcodec/issues/194): Implement "Enabled" mode
-  /// Can be "Disabled", or a fixed integer to use as the parameter `k` in float quant mode.
+  /// Can be "Enabled", "Disabled", or a fixed integer to use as the parameter `k` in float quant mode.
   #[arg(long, default_value = "Disabled", value_parser = parse::float_quant)]
   pub float_quant: FloatQuantSpec,
   #[arg(long, default_value_t = pco::DEFAULT_MAX_PAGE_N)]
