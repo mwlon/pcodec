@@ -53,10 +53,10 @@ pub enum FloatMultSpec {
 ///   as `f64`s where only a `f32` worth of precision is used)
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum FloatQuantSpec {
-  #[default]
   Disabled,
   /// Automatically decide whether to use FloatQuant, based on an estimate of how much it would
   /// save compared to other available modes.
+  #[default]
   Enabled,
   /// If you know how many bits of precision are unused, you can supply that
   /// number here.

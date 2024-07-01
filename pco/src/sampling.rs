@@ -63,16 +63,27 @@ pub fn choose_sample<T, S: Copy + Debug, Filter: Fn(&T) -> Option<S>>(
   }
 }
 
+pub struct PrimaryLatentAndSavings<L: Latent> {
+  pub primary: L,
+  pub bits_saved: f64,
+}
+
 #[inline(never)]
-pub fn est_bits_saved_per_num<L: Latent, S: Copy, F: Fn(S) -> L>(
+pub fn est_bits_saved_per_num<L: Latent, S: Copy, F: Fn(S) -> PrimaryLatentAndSavings<L>>(
   sample: &[S],
   primary_fn: F,
-  bits_saved_per_infrequent_primary: f64,
 ) -> f64 {
-  let mut mult_counts = HashMap::<L, usize>::with_capacity(sample.len());
+  let mut primary_counts_and_savings = HashMap::<L, (usize, f64)>::with_capacity(sample.len());
   for &x in sample {
-    let primary_latent = primary_fn(x);
-    *mult_counts.entry(primary_latent).or_default() += 1;
+    let PrimaryLatentAndSavings {
+      primary: primary_latent,
+      bits_saved,
+    } = primary_fn(x);
+    let entry = primary_counts_and_savings
+      .entry(primary_latent)
+      .or_default();
+    entry.0 += 1;
+    entry.1 += bits_saved;
   }
 
   let infrequent_cutoff = max(
@@ -82,12 +93,12 @@ pub fn est_bits_saved_per_num<L: Latent, S: Copy, F: Fn(S) -> L>(
 
   // Maybe this should be made fuzzy instead of a hard cutoff because it's just
   // a sample.
-  let infrequent_weight_estimate = mult_counts
+  let sample_bits_saved = primary_counts_and_savings
     .values()
-    .filter(|&&count| count <= infrequent_cutoff)
-    .sum::<usize>();
-
-  (infrequent_weight_estimate as f64 / sample.len() as f64) * bits_saved_per_infrequent_primary
+    .filter(|&&(count, _)| count <= infrequent_cutoff)
+    .map(|&(_, bits_saved)| bits_saved)
+    .sum::<f64>();
+  sample_bits_saved / sample.len() as f64
 }
 
 #[cfg(test)]

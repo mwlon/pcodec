@@ -1,6 +1,6 @@
 use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
-use crate::sampling;
+use crate::sampling::{self, PrimaryLatentAndSavings};
 use crate::{mode::Bid, Mode};
 use std::cmp;
 
@@ -63,11 +63,13 @@ pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
   // number, whenever possible. This is based on the assumption that FloatQuant
   // will usually be used on datasets that are exactly quantized.
   let bits_saved_per_infrequent_primary = freq * (k as f64);
-  let bits_saved_per_num = sampling::est_bits_saved_per_num(
-    sample,
-    |x| x.to_latent_bits() >> k,
-    bits_saved_per_infrequent_primary,
-  );
+  let bits_saved_per_num = sampling::est_bits_saved_per_num(sample, |x| {
+    let primary = x.to_latent_bits() >> k;
+    PrimaryLatentAndSavings {
+      primary,
+      bits_saved: bits_saved_per_infrequent_primary,
+    }
+  });
   if bits_saved_per_num > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
     Some(Bid {
       mode: Mode::FloatQuant(k),
