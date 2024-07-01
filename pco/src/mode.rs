@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent};
+use crate::data_types::{FloatLike, Latent, NumberLike};
 
 // Internally, here's how we should model each mode:
 //
@@ -101,4 +101,14 @@ impl<L: Latent> Mode<L> {
   pub(crate) fn float_mult<F: FloatLike<L = L>>(base: F) -> Self {
     Self::FloatMult(base.to_latent_ordered())
   }
+}
+
+pub(crate) struct Bid<T: NumberLike> {
+  pub mode: Mode<T::L>,
+  pub bits_saved_per_num: f64,
+  // we include a split_fn since modes like FloatMult can benefit from extra
+  // information (inv_base) not captured entirely in the mode.  This extra
+  // information is an implementation detail of the compressor, not part of the
+  // format itself, and is not / does not need to be known to the decompressor.
+  pub split_fn: Box<dyn FnOnce(&[T]) -> Vec<Vec<T::L>>>,
 }

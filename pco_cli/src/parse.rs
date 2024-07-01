@@ -44,8 +44,7 @@ pub fn float_mult(s: &str) -> anyhow::Result<FloatMultSpec> {
 pub fn float_quant(s: &str) -> anyhow::Result<FloatQuantSpec> {
   let lowercase = s.to_lowercase();
   let spec = match lowercase.as_str() {
-    "enabled" =>
-      return Err(anyhow!("FloatQuantSpec::Enabled is not implemented yet, see https://github.com/mwlon/pcodec/issues/194")),
+    "enabled" => FloatQuantSpec::Enabled,
     "disabled" => FloatQuantSpec::Disabled,
     other => match other.parse::<u32>() {
       Ok(k) => FloatQuantSpec::Provided(k),

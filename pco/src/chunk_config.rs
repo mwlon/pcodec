@@ -55,11 +55,12 @@ pub enum FloatMultSpec {
 pub enum FloatQuantSpec {
   #[default]
   Disabled,
+  /// Automatically decide whether to use FloatQuant, based on an estimate of how much it would
+  /// save compared to other available modes.
+  Enabled,
   /// If you know how many bits of precision are unused, you can supply that
   /// number here.
   Provided(Bitlen),
-  // TODO(https://github.com/mwlon/pcodec/issues/194): Implement `Enabled` which guesses a value
-  // for `k`
 }
 
 /// All configurations available for a compressor.

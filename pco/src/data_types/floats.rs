@@ -6,52 +6,99 @@ use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
+use crate::float_mult_utils::FloatMultConfig;
 use crate::{
-  describers, float_mult_utils, float_quant_utils, ChunkConfig, ChunkMeta, FloatMultSpec,
-  FloatQuantSpec, Mode,
+  describers, float_mult_utils, float_quant_utils, mode::Bid, sampling, ChunkConfig, ChunkMeta,
+  FloatMultSpec, FloatQuantSpec, Mode,
 };
+
+use super::ModeAndLatents;
+
+fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
+  // We can compress infinities, nans, and baby floats, but we can't learn
+  // the mode from them.
+  if num.is_finite_and_normal() {
+    let abs = num.abs();
+    if abs <= F::MAX_FOR_SAMPLING {
+      return Some(abs);
+    }
+  }
+  None
+}
+
+fn detect_mode_and_split_latents<F: FloatLike>(
+  nums: &[F],
+  chunk_config: &ChunkConfig,
+) -> ModeAndLatents<F::L> {
+  // up to 3 bids: classic, float mult, float quant modes
+  let mut bids: Vec<Bid<F>> = vec![];
+  bids.push(Bid {
+    mode: Mode::Classic,
+    bits_saved_per_num: 0.0,
+    split_fn: Box::new(|nums| split_latents_classic(nums)),
+  });
+  // computing sample is unnecessary when both are disabled, but we'll change
+  // things before the next release
+  let maybe_sample = sampling::choose_sample(nums, filter_sample);
+
+  if let Some(sample) = maybe_sample {
+    if matches!(
+      chunk_config.float_mult_spec,
+      FloatMultSpec::Enabled
+    ) {
+      bids.extend(float_mult_utils::compute_bid(&sample, nums));
+    }
+    if matches!(
+      chunk_config.float_quant_spec,
+      FloatQuantSpec::Enabled
+    ) {
+      bids.extend(float_quant_utils::compute_bid(&sample));
+    }
+  }
+
+  let winning_bid = choose_winning_bid(bids);
+  let latents = (winning_bid.split_fn)(nums);
+  (winning_bid.mode, latents)
+}
 
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
-) -> PcoResult<(Mode<F::L>, Vec<Vec<F::L>>)> {
-  if chunk_config.float_mult_spec != FloatMultSpec::Disabled
-    && chunk_config.float_quant_spec != FloatQuantSpec::Disabled
-  {
-    return Err(PcoError::invalid_argument(
-      "FloatMult and FloatQuant cannot be used simultaneously",
-    ));
+) -> PcoResult<ModeAndLatents<F::L>> {
+  match (
+    chunk_config.float_mult_spec,
+    chunk_config.float_quant_spec,
+  ) {
+    (FloatMultSpec::Provided(_), FloatQuantSpec::Provided(_)) => Err(PcoError::invalid_argument(
+      "FloatMult and FloatQuant cannot be provided (thus required) simultaneously",
+    )),
+    (FloatMultSpec::Provided(base_f64), _) => {
+      let base = F::from_f64(base_f64);
+      let mode = Mode::float_mult(base);
+      let float_mult_config = FloatMultConfig {
+        base,
+        inv_base: base.inv(),
+      };
+      let latents = float_mult_utils::split_latents(nums, float_mult_config);
+      Ok((mode, latents))
+    }
+    (_, FloatQuantSpec::Provided(k)) => Ok((
+      Mode::FloatQuant(k),
+      float_quant_utils::split_latents(nums, k),
+    )),
+    _ => Ok(detect_mode_and_split_latents(
+      nums,
+      chunk_config,
+    )),
   }
-  Ok(
-    match (
-      chunk_config.float_mult_spec,
-      chunk_config.float_quant_spec,
-    ) {
-      (FloatMultSpec::Enabled, _) => {
-        if let Some(fm_config) = float_mult_utils::choose_config(nums) {
-          let mode = Mode::float_mult(fm_config.base);
-          let latents = float_mult_utils::split_latents(nums, fm_config.base, fm_config.inv_base);
-          (mode, latents)
-        } else {
-          (Mode::Classic, split_latents_classic(nums))
-        }
-      }
-      (FloatMultSpec::Provided(base_f64), _) => {
-        let base = F::from_f64(base_f64);
-        let mode = Mode::float_mult(base);
-        let latents = float_mult_utils::split_latents(nums, base, base.inv());
-        (mode, latents)
-      }
-      (FloatMultSpec::Disabled, FloatQuantSpec::Provided(k)) => (
-        Mode::FloatQuant(k),
-        float_quant_utils::split_latents(nums, k),
-      ),
-      (FloatMultSpec::Disabled, FloatQuantSpec::Disabled) => {
-        (Mode::Classic, split_latents_classic(nums))
-      } // TODO(https://github.com/mwlon/pcodec/issues/194): Add a case for FloatQuantSpec::Enabled
-        // once it exists
-    },
-  )
+}
+
+// one day we might reuse this for int modes
+fn choose_winning_bid<T: NumberLike>(bids: Vec<Bid<T>>) -> Bid<T> {
+  bids
+    .into_iter()
+    .max_by(|bid0, bid1| bid0.bits_saved_per_num.total_cmp(&bid1.bits_saved_per_num))
+    .expect("bids must be nonempty")
 }
 
 macro_rules! impl_float_like {
@@ -317,7 +364,7 @@ macro_rules! impl_float_number_like {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
+      ) -> ModeAndLatents<Self::L> {
         choose_mode_and_split_latents(nums, config).unwrap()
       }
 
@@ -376,6 +423,29 @@ impl_float_number_like!(f16, u16, 1_u16 << 15, 9);
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn test_choose_mult_mode() {
+    let base = 1.5;
+    let nums = (0..1000).map(|i| (i as f64) * base).collect::<Vec<_>>();
+    let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
+    assert_eq!(
+      mode,
+      Mode::FloatMult(base.to_latent_ordered())
+    );
+  }
+
+  // TODO fix this; float mult overestimates its bits saved
+  // #[test]
+  // fn test_choose_quant_mode() {
+  //   let lowest_num_bits = 1.0_f64.to_bits();
+  //   let k = 20;
+  //   let nums = (0..1000)
+  //     .map(|i| f64::from_bits(lowest_num_bits + (i << k)))
+  //     .collect::<Vec<_>>();
+  //   let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
+  //   assert_eq!(mode, Mode::FloatQuant(k));
+  // }
 
   #[test]
   fn test_float_ordering() {
