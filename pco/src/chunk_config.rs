@@ -61,8 +61,6 @@ pub enum FloatQuantSpec {
   /// If you know how many bits of precision are unused, you can supply that
   /// number here.
   Provided(Bitlen),
-  // TODO(https://github.com/mwlon/pcodec/issues/194): Implement `Enabled` which guesses a value
-  // for `k`
 }
 
 /// All configurations available for a compressor.

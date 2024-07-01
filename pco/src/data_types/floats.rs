@@ -426,8 +426,8 @@ mod tests {
 
   #[test]
   fn test_choose_mult_mode() {
-    let base = 1.7;
-    let nums = (0..300).map(|i| (i as f64) * base).collect::<Vec<_>>();
+    let base = 1.5;
+    let nums = (0..1000).map(|i| (i as f64) * base).collect::<Vec<_>>();
     let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
     assert_eq!(
       mode,
@@ -440,7 +440,7 @@ mod tests {
   // fn test_choose_quant_mode() {
   //   let lowest_num_bits = 1.0_f64.to_bits();
   //   let k = 20;
-  //   let nums = (0..300)
+  //   let nums = (0..1000)
   //     .map(|i| f64::from_bits(lowest_num_bits + (i << k)))
   //     .collect::<Vec<_>>();
   //   let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
