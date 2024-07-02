@@ -59,9 +59,13 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
 
 pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
   let (k, freq) = estimate_best_k_and_freq(sample);
-  // Nothing fancy, we simply estimate that quantizing by k bits results in saving k bits per
-  // number, whenever possible. This is based on the assumption that FloatQuant
-  // will usually be used on datasets that are exactly quantized.
+  // Nothing fancy, we simply estimate that quantizing by k bits results in
+  // saving k bits per number, whenever possible. This is based on the
+  // assumption that FloatQuant will usually be used on datasets that are
+  // exactly quantized.
+  // TODO one day, if float quant has false positives, we may want a more
+  // precise estimes of bits saved. This one is overly generous when the
+  // secondary latent is nontrivial.
   let bits_saved_per_infrequent_primary = freq * (k as f64);
   let bits_saved_per_num = sampling::est_bits_saved_per_num(sample, |x| {
     let primary = x.to_latent_bits() >> k;
