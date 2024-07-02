@@ -287,12 +287,24 @@ fn bits_saved_per_num_over_classic<F: FloatLike>(
     let approx_unsigned = (mult * config.base).to_latent_ordered();
     let x_as_unsigned = x.to_latent_ordered();
     let abs_adj = max(x_as_unsigned, approx_unsigned) - min(x_as_unsigned, approx_unsigned);
-    let adj_bits = F::L::BITS - (abs_adj << 1).leading_zeros();
+    // Estimating bit cost of adjustments, we conservatively assume the
+    // probability distribution is
+    //
+    // P(adj) = 1/(2 * (adj^2 + 1)),
+    //   -2^k < adj < 2^k where k = inter_base_bits - 1
+    //
+    // So adj should cost the log_2 of this, or approximately
+    //
+    // B(adj) = 1 + 2 * log_2|adj|
+    //
+    // We relax this slightly for 0 and let it slide.
+    let adj_bits = 1 + 2 * (F::L::BITS - abs_adj.leading_zeros());
     println!(
-      "{} -> {} {} {} {}",
+      "{} -> {} {} {} {} {}",
       x,
       mult,
       inter_base_bits,
+      abs_adj,
       adj_bits,
       inter_base_bits as f64 - adj_bits as f64
     );
