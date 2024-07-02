@@ -46,7 +46,7 @@ fn detect_mode_and_split_latents<F: FloatLike>(
       chunk_config.float_mult_spec,
       FloatMultSpec::Enabled
     ) {
-      bids.extend(float_mult_utils::compute_bid(&sample, nums));
+      bids.extend(float_mult_utils::compute_bid(&sample));
     }
     if matches!(
       chunk_config.float_quant_spec,

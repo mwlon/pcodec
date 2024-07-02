@@ -5,7 +5,7 @@ use std::mem;
 
 use crate::constants::MULT_REQUIRED_BITS_SAVED_PER_NUM;
 use crate::data_types::{Latent, NumberLike};
-use crate::sampling;
+use crate::sampling::{self, PrimaryLatentAndSavings};
 
 // riemann zeta function
 const ZETA_OF_2: f64 = PI * PI / 6.0;
@@ -208,11 +208,10 @@ pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
   let (candidate, bits_saved_per_adj) = choose_candidate_base(&mut sample)?;
 
-  if sampling::est_bits_saved_per_num(
-    &sample,
-    |x| x / candidate,
-    bits_saved_per_adj,
-  ) > MULT_REQUIRED_BITS_SAVED_PER_NUM
+  if sampling::est_bits_saved_per_num(&sample, |x| PrimaryLatentAndSavings {
+    primary: x / candidate,
+    bits_saved: bits_saved_per_adj,
+  }) > MULT_REQUIRED_BITS_SAVED_PER_NUM
   {
     Some(candidate)
   } else {

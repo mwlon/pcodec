@@ -1,8 +1,9 @@
 use std::cmp::{max, min};
 use std::mem;
 
-use crate::constants::{Bitlen, CLASSIC_MEMORIZABLE_BINS_LOG, MULT_REQUIRED_BITS_SAVED_PER_NUM};
+use crate::constants::{Bitlen, MULT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
+use crate::sampling::PrimaryLatentAndSavings;
 use crate::{int_mult_utils, mode::Bid, sampling, Mode};
 
 #[inline(never)]
@@ -64,11 +65,6 @@ pub(crate) fn split_latents<F: FloatLike>(
 const REQUIRED_PRECISION_BITS: Bitlen = 6;
 const SNAP_THRESHOLD_ABSOLUTE: f64 = 0.02;
 const SNAP_THRESHOLD_DECIMAL_RELATIVE: f64 = 0.01;
-// We require that using adj bits (as opposed to full offsets between
-// consecutive multiples of the base) saves at least this proportion of the
-// full offsets (relative) or full uncompressed size (absolute).
-const ADJ_BITS_RELATIVE_SAVINGS_THRESH: f64 = 0.5;
-const ADJ_BITS_ABSOLUTE_SAVINGS_THRESH: f64 = 0.05;
 const INTERESTING_TRAILING_ZEROS: u32 = 5;
 const REQUIRED_TRAILING_ZEROS_FREQUENCY: f64 = 0.5;
 const REQUIRED_GCD_PAIR_FREQUENCY: f64 = 0.001;
@@ -196,7 +192,7 @@ fn approx_sample_gcd_euclidean<F: FloatLike>(sample: &[F]) -> Option<F> {
   }
 
   let required_pairs_with_common_gcd =
-    (sample.len() as f64 * REQUIRED_GCD_PAIR_FREQUENCY).ceil() as usize;
+    1 + (sample.len() as f64 * REQUIRED_GCD_PAIR_FREQUENCY).ceil() as usize;
   if gcds.len() < required_pairs_with_common_gcd {
     return None;
   }
@@ -265,54 +261,43 @@ fn snap_to_int_reciprocal<F: FloatLike>(base: F) -> FloatMultConfig<F> {
   }
 }
 
-#[inline(never)]
-fn uses_few_enough_adj_bits<F: FloatLike>(config: FloatMultConfig<F>, nums: &[F]) -> bool {
-  let FloatMultConfig { base, inv_base } = config;
-  let total_uncompressed_size = nums.len() * F::BITS as usize;
-  let mut total_bits_saved = 0;
-  let mut total_inter_base_bits = 0;
-  for &x in nums {
-    let mult = (x * inv_base).round();
-    if mult != F::ZERO {
-      let u = x.to_latent_ordered();
-      // For the float 0.0, we shouldn't pretend like we're saving a
-      // full PRECISION_BITS. Zero is a multiple of every possible base and
-      // would get memorized by Classic if common.
-      let approx = (mult * base).to_latent_ordered();
-      let abs_adj = max(u, approx) - min(u, approx);
-      let adj_bits = F::L::BITS - (abs_adj << 1).leading_zeros();
-      let inter_base_bits = (F::PRECISION_BITS as usize).saturating_sub(mult.exponent() as usize);
-      total_bits_saved += inter_base_bits.saturating_sub(adj_bits as usize);
-      total_inter_base_bits += inter_base_bits;
-    };
-  }
-  let total_bits_saved = total_bits_saved as f64;
-  total_bits_saved > total_inter_base_bits as f64 * ADJ_BITS_RELATIVE_SAVINGS_THRESH
-    && total_bits_saved > total_uncompressed_size as f64 * ADJ_BITS_ABSOLUTE_SAVINGS_THRESH
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Diagnostics {
-  pub est_mult_bits_saved_per_num: f64,
-}
-
-fn better_compression_than_classic_diagnostic<F: FloatLike>(
+fn bits_saved_per_num_over_classic<F: FloatLike>(
   config: FloatMultConfig<F>,
   sample: &[F],
-  nums: &[F],
-) -> (bool, Diagnostics) {
-  let saved = sampling::est_bits_saved_per_num(
-    sample,
-    |x| (x * config.inv_base).round().int_float_to_latent(),
-    F::PRECISION_BITS.saturating_sub(CLASSIC_MEMORIZABLE_BINS_LOG) as f64,
-  );
-  let diagnostics = Diagnostics {
-    est_mult_bits_saved_per_num: saved,
-  };
-  (
-    saved > MULT_REQUIRED_BITS_SAVED_PER_NUM && uses_few_enough_adj_bits(config, nums),
-    diagnostics,
-  )
+) -> Option<f64> {
+  let bits_saved_per_num = sampling::est_bits_saved_per_num(sample, |x| {
+    let mult = (x * config.inv_base).round();
+    let primary = mult.int_float_to_latent();
+    // We treat a mult of 0 as if there are only PRECISION_BITS bits between it and 1,
+    // which is not true (there are actually BITS - 2), but this is more useful
+    // for estimating bit savings.
+    let inter_base_bits = F::PRECISION_BITS.saturating_sub(mult.exponent() as Bitlen);
+    let approx_unsigned = (mult * config.base).to_latent_ordered();
+    let x_as_unsigned = x.to_latent_ordered();
+    let abs_adj = max(x_as_unsigned, approx_unsigned) - min(x_as_unsigned, approx_unsigned);
+    // Estimating bit cost of adjustments, we conservatively assume the
+    // probability distribution is
+    //
+    // P(adj) = 1/(2 * (adj^2 + 1)),
+    //   -2^k < adj < 2^k where k = inter_base_bits - 1
+    //
+    // So adj should cost the log_2 of this, or approximately
+    //
+    // B(adj) = 1 + 2 * log_2|adj|
+    //
+    // We relax this slightly for 0 and let it slide.
+    let adj_bits = 1 + 2 * (F::L::BITS - abs_adj.leading_zeros());
+    PrimaryLatentAndSavings {
+      primary,
+      bits_saved: inter_base_bits as f64 - adj_bits as f64,
+    }
+  });
+
+  if bits_saved_per_num >= MULT_REQUIRED_BITS_SAVED_PER_NUM {
+    Some(bits_saved_per_num)
+  } else {
+    None
+  }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -341,26 +326,23 @@ fn choose_config<F: FloatLike>(sample: &[F]) -> Option<FloatMultConfig<F>> {
   choose_config_by_trailing_zeros(sample).or_else(|| choose_config_by_euclidean(sample))
 }
 
-pub(crate) fn compute_bid<F: FloatLike>(sample: &[F], nums: &[F]) -> Option<Bid<F>> {
+pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
   choose_config(sample).and_then(|config| {
-    let (is_better, diagnostics) = better_compression_than_classic_diagnostic(config, sample, nums);
-    if is_better {
-      Some(Bid {
-        mode: Mode::FloatMult(config.base.to_latent_ordered()),
-        bits_saved_per_num: diagnostics.est_mult_bits_saved_per_num,
-        split_fn: Box::new(move |nums| split_latents(nums, config)),
-      })
-    } else {
-      None
-    }
+    let bits_saved_per_num = bits_saved_per_num_over_classic(config, sample)?;
+    Some(Bid {
+      mode: Mode::FloatMult(config.base.to_latent_ordered()),
+      bits_saved_per_num,
+      split_fn: Box::new(move |nums| split_latents(nums, config)),
+    })
   })
 }
 
 #[cfg(test)]
 mod test {
-  use std::f32::consts::{E, TAU};
+  use std::f32::consts::TAU;
 
   use rand::{Rng, SeedableRng};
+  use rand_xoshiro::Xoroshiro128PlusPlus;
 
   use crate::data_types::NumberLike;
 
@@ -396,9 +378,9 @@ mod test {
   fn better_compression_than_classic<F: FloatLike>(
     config: FloatMultConfig<F>,
     sample: &[F],
-    nums: &[F],
   ) -> bool {
-    better_compression_than_classic_diagnostic(config, sample, nums).0
+    bits_saved_per_num_over_classic(config, sample)
+      .is_some_and(|bits_saved| bits_saved >= MULT_REQUIRED_BITS_SAVED_PER_NUM)
   }
 
   #[test]
@@ -458,7 +440,8 @@ mod test {
 
   #[test]
   fn test_candidate_euclidean() {
-    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX];
+    let mut nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001].repeat(5);
+    nums.push(f32::MAX);
     assert_almost_equal(
       choose_config_by_euclidean(&nums).unwrap().base,
       1.0E-4,
@@ -469,7 +452,7 @@ mod test {
 
   #[test]
   fn test_gcd_euclidean() {
-    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX];
+    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX].repeat(5);
     assert_almost_equal(
       approx_sample_gcd_euclidean(&nums).unwrap(),
       1.0E-4,
@@ -477,7 +460,7 @@ mod test {
       "10^-4 adverse",
     );
 
-    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 0.0049, 1.0001, f32::MAX];
+    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 0.0049, 1.0001, f32::MAX].repeat(5);
     assert_almost_equal(
       approx_sample_gcd_euclidean(&nums).unwrap(),
       1.0E-4,
@@ -485,7 +468,11 @@ mod test {
       "10^-4",
     );
 
-    let nums = vec![1.0, E, TAU];
+    let mut nums = Vec::new();
+    let mut rng = Xoroshiro128PlusPlus::seed_from_u64(0);
+    for _ in 0..25 {
+      nums.push(rng.gen_range(0.0..1.0_f32));
+    }
     assert_eq!(approx_sample_gcd_euclidean(&nums), None);
   }
 
@@ -554,7 +541,7 @@ mod test {
       f32::INFINITY,
     ];
     assert!(better_compression_than_classic(
-      config, &nums, &nums
+      config, &nums
     ));
 
     for n in [10, 1000] {
@@ -562,7 +549,7 @@ mod test {
         .map(|x| plus_epsilons((x as f32) * 0.1, x % 2))
         .collect::<Vec<_>>();
       assert!(
-        better_compression_than_classic(config, &nums, &nums),
+        better_compression_than_classic(config, &nums),
         "n={}",
         n
       );
@@ -575,14 +562,14 @@ mod test {
     for n in [10, 1000] {
       let nums = vec![0.1; n];
       assert!(
-        !better_compression_than_classic(config, &nums, &nums),
+        !better_compression_than_classic(config, &nums),
         "n={}",
         n
       );
 
-      let nums = (0..n).map(|x| (x as f32) * 0.77).collect::<Vec<_>>();
+      let nums = (0..n).map(|x| (x as f32 + 1.0) * TAU).collect::<Vec<_>>();
       assert!(
-        !better_compression_than_classic(config, &nums, &nums),
+        !better_compression_than_classic(config, &nums),
         "n={}",
         n
       );
@@ -592,7 +579,7 @@ mod test {
         .map(|x| (x + 5_000_000) as f32 * 0.1)
         .collect::<Vec<_>>();
       assert!(
-        !better_compression_than_classic(config, &nums, &nums),
+        !better_compression_than_classic(config, &nums),
         "n={}",
         n
       );
@@ -603,12 +590,12 @@ mod test {
   fn test_float_mult_worse_than_classic_zeros() {
     let mut nums = vec![0.0_f32; 1000];
     let mut rng = rand_xoshiro::Xoroshiro128PlusPlus::seed_from_u64(0);
-    let concig = FloatMultConfig::from_inv_base(1E7);
+    let config = FloatMultConfig::from_inv_base(1E7);
     for _ in 0..1000 {
       nums.push(rng.gen_range(0.0..1.0));
     }
     assert!(!better_compression_than_classic(
-      concig, &nums, &nums
+      config, &nums
     ));
   }
 
@@ -656,9 +643,9 @@ mod test {
     big_nums.resize(20, f32::MAX * 0.6);
     choose_config(&big_nums);
 
-    assert!(compute_bid(&sevenths_sample, &sevenths).is_some());
+    assert!(compute_bid(sevenths_sample).is_some());
     // not enough distinct mults
-    assert!(compute_bid(&ones, &ones).is_none());
-    assert!(compute_bid(&junk, &junk).is_none());
+    assert!(compute_bid(&ones).is_none());
+    assert!(compute_bid(&junk).is_none());
   }
 }
