@@ -1,5 +1,5 @@
 use std::cmp::{max, min};
-use std::{iter, mem};
+use std::{mem};
 
 use crate::constants::{Bitlen, MULT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
@@ -339,7 +339,7 @@ pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
 
 #[cfg(test)]
 mod test {
-  use std::f32::consts::{E, TAU};
+  use std::f32::consts::{TAU};
 
   use rand::{Rng, SeedableRng};
   use rand_xoshiro::Xoroshiro128PlusPlus;
