@@ -174,13 +174,6 @@ fn choose_config_by_trailing_zeros<F: FloatLike>(sample: &[F]) -> Option<FloatMu
       .map(|(base, _)| base)
       .unwrap_or(F::L::ONE);
     let base = F::from_latent_numerical(int_base) * F::exp2(k);
-    println!(
-      "TZ base={} k={} int_base={} from {}",
-      base,
-      k,
-      int_base,
-      sample.len()
-    );
     Some(FloatMultConfig::from_base(base))
   } else {
     None
@@ -214,10 +207,6 @@ fn approx_sample_gcd_euclidean<F: FloatLike>(sample: &[F]) -> Option<F> {
       .filter(|&&gcd| (gcd - candidate).abs() < F::from_f64(0.01) * candidate)
       .count();
 
-    println!(
-      "candidate {} with {} / {}",
-      candidate, similar_gcd_count, required_pairs_with_common_gcd
-    );
     if similar_gcd_count >= required_pairs_with_common_gcd {
       return Some(candidate);
     }
@@ -230,7 +219,6 @@ fn choose_config_by_euclidean<F: FloatLike>(sample: &[F]) -> Option<FloatMultCon
   let base = approx_sample_gcd_euclidean(sample)?;
   let base = center_sample_base(base, sample);
   let config = snap_to_int_reciprocal(base);
-  println!("EUC {:?}", config);
   Some(config)
 }
 
@@ -299,21 +287,11 @@ fn bits_saved_per_num_over_classic<F: FloatLike>(
     //
     // We relax this slightly for 0 and let it slide.
     let adj_bits = 1 + 2 * (F::L::BITS - abs_adj.leading_zeros());
-    println!(
-      "{} -> {} {} {} {} {}",
-      x,
-      mult,
-      inter_base_bits,
-      abs_adj,
-      adj_bits,
-      inter_base_bits as f64 - adj_bits as f64
-    );
     PrimaryLatentAndSavings {
       primary,
       bits_saved: inter_base_bits as f64 - adj_bits as f64,
     }
   });
-  println!("BITS SAVED {}", bits_saved_per_num);
 
   if bits_saved_per_num >= MULT_REQUIRED_BITS_SAVED_PER_NUM {
     Some(bits_saved_per_num)
@@ -364,6 +342,7 @@ mod test {
   use std::f32::consts::{E, TAU};
 
   use rand::{Rng, SeedableRng};
+  use rand_xoshiro::Xoroshiro128PlusPlus;
 
   use crate::data_types::NumberLike;
 
@@ -461,7 +440,7 @@ mod test {
 
   #[test]
   fn test_candidate_euclidean() {
-    let mut nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001].repeat(10);
+    let mut nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001].repeat(5);
     nums.push(f32::MAX);
     assert_almost_equal(
       choose_config_by_euclidean(&nums).unwrap().base,
@@ -473,7 +452,7 @@ mod test {
 
   #[test]
   fn test_gcd_euclidean() {
-    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX];
+    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 1.0001, f32::MAX].repeat(5);
     assert_almost_equal(
       approx_sample_gcd_euclidean(&nums).unwrap(),
       1.0E-4,
@@ -481,7 +460,7 @@ mod test {
       "10^-4 adverse",
     );
 
-    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 0.0049, 1.0001, f32::MAX];
+    let nums = vec![0.0, 2.0_f32.powi(-100), 0.0037, 0.0049, 1.0001, f32::MAX].repeat(5);
     assert_almost_equal(
       approx_sample_gcd_euclidean(&nums).unwrap(),
       1.0E-4,
@@ -489,7 +468,11 @@ mod test {
       "10^-4",
     );
 
-    let nums = vec![1.0, E, TAU];
+    let mut nums = Vec::new();
+    let mut rng = Xoroshiro128PlusPlus::seed_from_u64(0);
+    for _ in 0..25 {
+      nums.push(rng.gen_range(0.0..1.0_f32));
+    }
     assert_eq!(approx_sample_gcd_euclidean(&nums), None);
   }
 

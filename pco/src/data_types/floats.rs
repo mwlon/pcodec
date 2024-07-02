@@ -95,10 +95,6 @@ fn choose_mode_and_split_latents<F: FloatLike>(
 
 // one day we might reuse this for int modes
 fn choose_winning_bid<T: NumberLike>(bids: Vec<Bid<T>>) -> Bid<T> {
-  println!("bids");
-  for bid in &bids {
-    println!("  {:?} {}", bid.mode, bid.bits_saved_per_num);
-  }
   bids
     .into_iter()
     .max_by(|bid0, bid1| bid0.bits_saved_per_num.total_cmp(&bid1.bits_saved_per_num))
