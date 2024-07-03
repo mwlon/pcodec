@@ -1,33 +1,16 @@
-use pco::{ChunkConfig, FloatMultSpec, FloatQuantSpec, IntMultSpec};
+use pco::{ChunkConfig, ModeSpec};
 
 use crate::bench::codecs::CodecInternal;
 use crate::chunk_config_opt::ChunkConfigOpt;
 use crate::dtypes::PcoNumberLike;
 
-fn unparse_int_mult(spec: &IntMultSpec) -> String {
-  use IntMultSpec::*;
+fn unparse_mode_spec(spec: &ModeSpec) -> String {
   match spec {
-    Disabled => "Disabled".to_string(),
-    Enabled => "Enabled".to_string(),
-    Provided(base) => base.to_string(),
-  }
-}
-
-fn unparse_float_mult(spec: &FloatMultSpec) -> String {
-  use FloatMultSpec::*;
-  match spec {
-    Disabled => "Disabled".to_string(),
-    Enabled => "Enabled".to_string(),
-    Provided(base) => base.to_string(),
-  }
-}
-
-fn unparse_float_quant(spec: &FloatQuantSpec) -> String {
-  use FloatQuantSpec::*;
-  match spec {
-    Disabled => "Disabled".to_string(),
-    Enabled => "Enabled".to_string(),
-    Provided(k) => k.to_string(),
+    ModeSpec::Auto => "Auto".to_string(),
+    ModeSpec::Classic => "Classic".to_string(),
+    ModeSpec::TryFloatMult(base) => format!("FloatMult@{}", base),
+    ModeSpec::TryFloatQuant(k) => format!("FloatQuant@{}", k),
+    ModeSpec::TryIntMult(base) => format!("IntMult@{}", base),
   }
 }
 
@@ -46,15 +29,7 @@ impl CodecInternal for ChunkConfigOpt {
           .map(|order| order.to_string())
           .unwrap_or("Auto".to_string()),
       ),
-      ("int-mult", unparse_int_mult(&self.int_mult)),
-      (
-        "float-mult",
-        unparse_float_mult(&self.float_mult),
-      ),
-      (
-        "float-quant",
-        unparse_float_quant(&self.float_quant),
-      ),
+      ("mode", unparse_mode_spec(&self.mode)),
       ("chunk-n", self.chunk_n.to_string()),
     ]
   }

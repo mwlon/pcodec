@@ -70,7 +70,7 @@ fn simple_write_if_version_matches<T: NumberLike>(
 mod tests {
   use crate::errors::PcoResult;
   use crate::tests::compatibility::{assert_compatible, simple_write_if_version_matches};
-  use crate::{ChunkConfig, FloatMultSpec, FloatQuantSpec};
+  use crate::{ChunkConfig, ModeSpec};
   use half::f16;
 
   #[test]
@@ -176,11 +176,9 @@ mod tests {
         }
       })
       .collect::<Vec<_>>();
-    let config = ChunkConfig::default()
-      .with_float_quant_spec(FloatQuantSpec::Provided(
-        f32::MANTISSA_DIGITS - f16::MANTISSA_DIGITS,
-      ))
-      .with_float_mult_spec(FloatMultSpec::Disabled);
+    let config = ChunkConfig::default().with_mode_spec(ModeSpec::TryFloatQuant(
+      f32::MANTISSA_DIGITS - f16::MANTISSA_DIGITS,
+    ));
     simple_write_if_version_matches::<f32>(version, name, &nums, &config)?;
     assert_compatible(version, name, &nums)?;
     Ok(())

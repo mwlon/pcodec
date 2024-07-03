@@ -9,6 +9,7 @@ pub use dynamic::CoreDataType;
 
 use crate::constants::Bitlen;
 use crate::describers::LatentDescriber;
+use crate::errors::PcoResult;
 use crate::{ChunkConfig, ChunkMeta, Mode};
 
 mod dynamic;
@@ -175,7 +176,10 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// for decompression
   /// * latents: a list of latent variables, each of which contains a latent per
   /// num in `nums`
-  fn choose_mode_and_split_latents(nums: &[Self], config: &ChunkConfig) -> ModeAndLatents<Self::L>;
+  fn choose_mode_and_split_latents(
+    nums: &[Self],
+    config: &ChunkConfig,
+  ) -> PcoResult<ModeAndLatents<Self::L>>;
 
   fn from_latent_ordered(l: Self::L) -> Self;
   fn to_latent_ordered(self) -> Self::L;

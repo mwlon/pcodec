@@ -574,7 +574,7 @@ pub(crate) fn new<T: NumberLike>(
   let n = nums.len();
   validate_chunk_size(n)?;
 
-  let (mode, latents) = T::choose_mode_and_split_latents(nums, config);
+  let (mode, latents) = T::choose_mode_and_split_latents(nums, config)?;
 
   let (candidate, bin_counts) = new_candidate_w_split(mode, latents, config)?;
   if should_fallback(n, &candidate, bin_counts) {

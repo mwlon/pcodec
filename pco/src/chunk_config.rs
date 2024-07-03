@@ -2,67 +2,40 @@ use crate::constants::{Bitlen, DEFAULT_MAX_PAGE_N};
 use crate::errors::{PcoError, PcoResult};
 use crate::DEFAULT_COMPRESSION_LEVEL;
 
-/// Configures whether integer multiplier detection is enabled.
+/// Specifies how Pco should choose a [`mode`][crate::Mode] to compress this
+/// chunk of data.
 ///
-/// Examples where this helps:
-/// * nanosecond-precision timestamps that are mostly whole numbers of
-/// microseconds, with a few exceptions
-/// * integers `[7, 107, 207, 307, ... 100007]` shuffled
-///
-/// When this is helpful, compression and decompression speeds can be
-/// substantially reduced. This configuration may hurt
-/// compression speed slightly even when it isn't helpful.
-/// However, the compression ratio improvements tend to be large.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum IntMultSpec {
-  Disabled,
-  #[default]
-  Enabled,
-  /// If you know all your ints are roughly multiples of `base` (or have a
-  /// simple distribution modulo `base`), you can provide `base` here to
-  /// ensure it gets used and save compression time.
-  Provided(u64),
-}
-
-/// Configures whether float multiplier detection is enabled.
-///
-/// Examples where this helps:
-/// * approximate multiples of 0.01
-/// * approximate multiples of pi
-///
-/// Float mults can work even when there are NaNs and infinities.
-/// When this is helpful, compression and decompression speeds can be
-/// substantially reduced. In rare cases, this configuration
-/// may reduce compression speed somewhat even when it isn't helpful.
-/// However, the compression ratio improvements tend to be large.
+/// The `Try*` variants almost always use the provided mode, but fall back to an
+/// effectively uncompressed version of `Classic` if the provided mode is
+/// especially bad.
+/// It is recommended that you only use the `Try*` variants if you know for
+/// certain that your numbers benefit from that mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum FloatMultSpec {
-  Disabled,
+pub enum ModeSpec {
+  /// Automatically detect a good mode.
+  ///
+  /// This works well most of the time, but costs some compression time and can
+  /// select a bad mode in adversarial cases.
   #[default]
-  Enabled,
-  /// If you know all your floats are roughly multiples of `base`, you can
-  /// provide `base` here to ensure it gets used and save compression time.
-  Provided(f64),
-  // TODO support a LossyEnabled mode that always drops the ULPs latent var
+  Auto,
+  /// Only use `Classic` mode.
+  Classic,
+  /// Try using `FloatMult` mode with a given `base`.
+  ///
+  /// Only applies to floating-point types.
+  TryFloatMult(f64),
+  /// Try using `FloatQuant` mode with `k` bits of quantization.
+  ///
+  /// Only applies to floating-point types.
+  TryFloatQuant(Bitlen),
+  /// Try using `IntMult` mode with a given `base`.
+  ///
+  /// Only applies to integer types.
+  TryIntMult(u64),
 }
 
-/// Configures whether quantized-float detection is enabled.
-///
-/// Examples where this helps:
-/// * float-valued data stored in a type that is unnecessarily wide (e.g. stored
-///   as `f64`s where only a `f32` worth of precision is used)
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum FloatQuantSpec {
-  Disabled,
-  /// Automatically decide whether to use FloatQuant, based on an estimate of how much it would
-  /// save compared to other available modes.
-  #[default]
-  Enabled,
-  /// If you know how many bits of precision are unused, you can supply that
-  /// number here.
-  Provided(Bitlen),
-}
-
+// TODO consider adding a "lossiness" spec that allows dropping secondary latent
+// vars.
 /// All configurations available for a compressor.
 ///
 /// Some, like `delta_encoding_order`, are explicitly stored in the
@@ -72,7 +45,7 @@ pub enum FloatQuantSpec {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct ChunkConfig {
-  /// `compression_level` ranges from 0 to 12 inclusive (default: 8).
+  /// Ranges from 0 to 12 inclusive (default: 8).
   ///
   /// At present,
   /// * Level 0 achieves only a small amount of compression.
@@ -82,8 +55,8 @@ pub struct ChunkConfig {
   /// The meaning of the compression levels is subject to change with
   /// new releases.
   pub compression_level: usize,
-  /// `delta_encoding_order` ranges from 0 to 7 inclusive (default:
-  /// `None`, automatically detecting on each chunk).
+  /// Ranges from 0 to 7 inclusive (default: `None`, automatically detecting on
+  /// each chunk).
   ///
   /// It is the number of times to apply delta encoding
   /// before compressing. For instance, say we have the numbers
@@ -103,31 +76,12 @@ pub struct ChunkConfig {
   /// chunks,
   /// [`auto_delta_encoding_order`][crate::auto_delta_encoding_order] can help.
   pub delta_encoding_order: Option<usize>,
-  /// Integer multiplier mode improves compression ratio in cases where many
-  /// numbers are congruent modulo an integer `base`
-  /// (default: `Enabled`).
+  /// Specifies how the mode should be determined.
   ///
-  /// See [`IntMultSpec`][crate::IntMultSpec] for more detail.
-  pub int_mult_spec: IntMultSpec,
-  /// Float multiplier mode improves compression ratio in cases where the data
-  /// type is a float and all numbers are close to a multiple of a float
-  /// `base`
-  /// (default: `Enabled`).
-  ///
-  /// See [`FloatMultSpec`][crate::FloatMultSpec] for more detail.
-  pub float_mult_spec: FloatMultSpec,
-  /// Float quantization improves compression ratio in cases where a
-  /// float-valued dataset does not make use of the full precision available in
-  /// the data type, i.e., the several least-significant bits of the
-  /// significands are zero
-  /// (default: `Enabled`).
-  ///
-  /// See [`FloatQuantSpec`][crate::FloatQuantSpec] for more detail.
-  pub float_quant_spec: FloatQuantSpec,
-  /// `paging_spec` specifies how the chunk should be split into pages
-  /// (default: equal pages up to 2^18 numbers each).
-  ///
-  /// See [`PagingSpec`][crate::PagingSpec] for more information.
+  /// See [`Mode`](crate::Mode) to understand what modes are.
+  pub mode_spec: ModeSpec,
+  /// Specifies how the chunk should be split into pages (default: equal pages
+  /// up to 2^18 numbers each).
   pub paging_spec: PagingSpec,
 }
 
@@ -136,9 +90,7 @@ impl Default for ChunkConfig {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
       delta_encoding_order: None,
-      int_mult_spec: IntMultSpec::default(),
-      float_mult_spec: FloatMultSpec::default(),
-      float_quant_spec: FloatQuantSpec::default(),
+      mode_spec: ModeSpec::default(),
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }
@@ -157,21 +109,9 @@ impl ChunkConfig {
     self
   }
 
-  /// Sets [`int_mult_spec`][ChunkConfig::int_mult_spec].
-  pub fn with_int_mult_spec(mut self, int_mult_spec: IntMultSpec) -> Self {
-    self.int_mult_spec = int_mult_spec;
-    self
-  }
-
-  /// Sets [`float_mult_spec`][ChunkConfig::float_mult_spec].
-  pub fn with_float_mult_spec(mut self, float_mult_spec: FloatMultSpec) -> Self {
-    self.float_mult_spec = float_mult_spec;
-    self
-  }
-
-  /// Sets [`float_quant_spec`][ChunkConfig::float_quant_spec].
-  pub fn with_float_quant_spec(mut self, float_quant_spec: FloatQuantSpec) -> Self {
-    self.float_quant_spec = float_quant_spec;
+  /// Sets [`mode_spec`][ChunkConfig::mode_spec].
+  pub fn with_mode_spec(mut self, mode_spec: ModeSpec) -> Self {
+    self.mode_spec = mode_spec;
     self
   }
 

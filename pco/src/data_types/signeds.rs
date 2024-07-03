@@ -1,7 +1,8 @@
 use std::mem;
 
-use crate::data_types::{unsigneds, NumberLike};
+use crate::data_types::{unsigneds, ModeAndLatents, NumberLike};
 use crate::describers::LatentDescriber;
+use crate::errors::PcoResult;
 use crate::{describers, int_mult_utils, ChunkMeta};
 use crate::{ChunkConfig, Mode};
 
@@ -29,7 +30,7 @@ macro_rules! impl_signed {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
+      ) -> PcoResult<ModeAndLatents<Self::L>> {
         unsigneds::choose_mode_and_split_latents(&nums, config)
       }
 
