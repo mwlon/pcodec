@@ -25,9 +25,9 @@ compression time, decompression time, and compression ratio for whatever
 codecs you request.
 
 ```shell
-pcodec bench --parquet my_input_data.parquet
+pcodec bench -i my_input_data.parquet
 pcodec bench \
-  --csv my_input_data.csv \
+  -i my_input_data.csv \
   --csv-has-header \
   --codecs pco:level=9,parquet:compression=zstd4 \
   --dtypes f32 \
