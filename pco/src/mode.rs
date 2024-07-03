@@ -25,10 +25,15 @@ use crate::data_types::{FloatLike, Latent, NumberLike};
 // Note the differences between int mult and float mult,
 // which have equivalent formulas.
 
-/// A variation of how pco serializes and deserializes numbers.
+/// How Pco does the first step of processing for this chunk.
 ///
 /// Each mode splits the vector of numbers into one or two vectors of latents,
-/// with a different formula for how the split and join is done.
+/// with a different formula for how the split and (and eventual join during
+/// decompression) is done.
+/// Each of these vectors of latents is then passed through Pco's subsequent
+/// processing steps (possible delta encoding and binning) to produce the final
+/// compressed bytes.
+///
 /// We have delibrately written the formulas below in a slightly wrong way to
 /// convey the correct intuition without dealing with implementation
 /// complexities.
