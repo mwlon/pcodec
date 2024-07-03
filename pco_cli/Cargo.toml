@@ -22,7 +22,7 @@ better_io = { version = "0.1.0", path = "../better_io" }
 blosc-src = { version = "0.3", features = ["zstd"], optional = true }
 bytes = "1.1.0"
 clap = { version = "4.5.3", features = ["derive"] }
-half = { version = "2.4.1", features = ["std"] }
+half = { version = "2.1.0", features = ["std"] }
 indicatif = "0.17.8"
 parquet = { version = "49.0.0", features = [
   "arrow",
