@@ -27,39 +27,29 @@ fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
   None
 }
 
-fn auto_mode_and_split_latents<F: FloatLike>(
-  nums: &[F],
-  chunk_config: &ChunkConfig,
-) -> ModeAndLatents<F::L> {
-  // up to 3 bids: classic, float mult, float quant modes
-  let mut bids: Vec<Bid<F>> = vec![];
-  bids.push(Bid {
-    mode: Mode::Classic,
-    bits_saved_per_num: 0.0,
-    split_fn: Box::new(|nums| split_latents_classic(nums)),
-  });
-
-  if matches!(chunk_config.mode_spec, ModeSpec::Auto) {
-    if let Some(sample) = sampling::choose_sample(nums, filter_sample) {
-      bids.extend(float_mult_utils::compute_bid(&sample));
-      bids.extend(float_quant_utils::compute_bid(&sample));
-    }
-  }
-
-  let winning_bid = choose_winning_bid(bids);
-  let latents = (winning_bid.split_fn)(nums);
-  (winning_bid.mode, latents)
-}
-
 fn choose_mode_and_split_latents<F: FloatLike>(
   nums: &[F],
   chunk_config: &ChunkConfig,
 ) -> PcoResult<ModeAndLatents<F::L>> {
   match chunk_config.mode_spec {
-    ModeSpec::Auto => Ok(auto_mode_and_split_latents(
-      nums,
-      chunk_config,
-    )),
+    ModeSpec::Auto => {
+      // up to 3 bids: classic, float mult, float quant modes
+      let mut bids: Vec<Bid<F>> = vec![];
+      bids.push(Bid {
+        mode: Mode::Classic,
+        bits_saved_per_num: 0.0,
+        split_fn: Box::new(|nums| split_latents_classic(nums)),
+      });
+
+      if let Some(sample) = sampling::choose_sample(nums, filter_sample) {
+        bids.extend(float_mult_utils::compute_bid(&sample));
+        bids.extend(float_quant_utils::compute_bid(&sample));
+      }
+
+      let winning_bid = choose_winning_bid(bids);
+      let latents = (winning_bid.split_fn)(nums);
+      Ok((winning_bid.mode, latents))
+    }
     ModeSpec::Classic => Ok((Mode::Classic, split_latents_classic(nums))),
     ModeSpec::TryFloatMult(base_f64) => {
       let base = F::from_f64(base_f64);
@@ -423,17 +413,16 @@ mod tests {
     );
   }
 
-  // TODO fix this; float mult overestimates its bits saved
-  // #[test]
-  // fn test_choose_quant_mode() {
-  //   let lowest_num_bits = 1.0_f64.to_bits();
-  //   let k = 20;
-  //   let nums = (0..1000)
-  //     .map(|i| f64::from_bits(lowest_num_bits + (i << k)))
-  //     .collect::<Vec<_>>();
-  //   let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
-  //   assert_eq!(mode, Mode::FloatQuant(k));
-  // }
+  #[test]
+  fn test_choose_quant_mode() {
+    let lowest_num_bits = 1.0_f64.to_bits();
+    let k = 20;
+    let nums = (0..1000)
+      .map(|i| f64::from_bits(lowest_num_bits + (i << k)))
+      .collect::<Vec<_>>();
+    let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
+    assert_eq!(mode, Mode::FloatQuant(k));
+  }
 
   #[test]
   fn test_float_ordering() {
