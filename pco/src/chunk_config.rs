@@ -11,6 +11,7 @@ use crate::DEFAULT_COMPRESSION_LEVEL;
 /// It is recommended that you only use the `Try*` variants if you know for
 /// certain that your numbers benefit from that mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub enum ModeSpec {
   /// Automatically detect a good mode.
   ///
@@ -73,8 +74,9 @@ pub struct ChunkConfig {
   /// smooth, like temperature or light sensor readings.
   ///
   /// If you would like to automatically choose this once and reuse it for all
-  /// chunks,
-  /// [`auto_delta_encoding_order`][crate::auto_delta_encoding_order] can help.
+  /// chunks, you can create a
+  /// [`ChunkDecompressor`][crate::wrapped::ChunkDecompressor] and read the
+  /// delta encoding order it chose.
   pub delta_encoding_order: Option<usize>,
   /// Specifies how the mode should be determined.
   ///

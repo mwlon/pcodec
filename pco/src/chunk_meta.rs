@@ -26,6 +26,7 @@ pub(crate) fn bin_exact_bit_size<L: Latent>(ans_size_log: Bitlen) -> Bitlen {
 ///
 /// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ChunkLatentVarMeta<L: Latent> {
   /// The log2 of the number of the number of states in this chunk's tANS
   /// table.

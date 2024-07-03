@@ -48,7 +48,6 @@ pub(crate) fn match_int_modes<L: Latent>(
       let mult_center = dtype_center / base;
       let adj_center = dtype_center % base;
       let primary = if meta.delta_encoding_order == 0 {
-        // TODO
         Box::new(IntDescriber {
           description: format!("multiplier [x{}]", base),
           units: "x".to_string(),

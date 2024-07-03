@@ -39,6 +39,7 @@ use crate::data_types::{FloatLike, Latent, NumberLike};
 /// complexities.
 /// Slightly more rigorous formulas are in format.md.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Mode<L: Latent> {
   /// Represents each number as a single latent: itself.
   ///

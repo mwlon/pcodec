@@ -20,7 +20,7 @@ mod unsigneds;
 pub(crate) type ModeAndLatents<L> = (Mode<L>, Vec<Vec<L>>);
 
 /// This is used internally for compressing and decompressing with
-/// [`FloatMultMode`][`crate::Mode::FloatMult`].
+/// float modes.
 pub(crate) trait FloatLike:
   Add<Output = Self>
   + AddAssign
@@ -172,7 +172,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// Breaks the numbers into latent variables for better compression.
   ///
   /// Returns
-  /// * mode: the [`Mode`][crate::Mode] that will be stored alongside the data
+  /// * mode: the [`Mode`] that will be stored alongside the data
   /// for decompression
   /// * latents: a list of latent variables, each of which contains a latent per
   /// num in `nums`

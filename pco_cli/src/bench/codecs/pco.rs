@@ -11,6 +11,7 @@ fn unparse_mode_spec(spec: &ModeSpec) -> String {
     ModeSpec::TryFloatMult(base) => format!("FloatMult@{}", base),
     ModeSpec::TryFloatQuant(k) => format!("FloatQuant@{}", k),
     ModeSpec::TryIntMult(base) => format!("IntMult@{}", base),
+    _ => "Unknown".to_string(),
   }
 }
 
