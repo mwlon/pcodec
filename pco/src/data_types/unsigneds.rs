@@ -1,32 +1,37 @@
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, Latent, NumberLike};
 use crate::describers::LatentDescriber;
+use crate::errors::{PcoError, PcoResult};
 use crate::Mode::Classic;
-use crate::{describers, int_mult_utils, ChunkConfig, ChunkMeta, IntMultSpec, Mode};
+use crate::{describers, int_mult_utils, ChunkConfig, ChunkMeta, Mode, ModeSpec};
+
+use super::ModeAndLatents;
 
 pub fn choose_mode_and_split_latents<T: NumberLike>(
   nums: &[T],
   config: &ChunkConfig,
-) -> (Mode<T::L>, Vec<Vec<T::L>>) {
-  use IntMultSpec::*;
-
-  match config.int_mult_spec {
-    Enabled => {
+) -> PcoResult<ModeAndLatents<T::L>> {
+  match config.mode_spec {
+    ModeSpec::Auto => {
       if let Some(base) = int_mult_utils::choose_base(nums) {
         let mode = Mode::IntMult(base);
         let latents = int_mult_utils::split_latents(nums, base);
-        (mode, latents)
+        Ok((mode, latents))
       } else {
-        (Classic, split_latents_classic(nums))
+        Ok((Classic, split_latents_classic(nums)))
       }
     }
-    Provided(base_u64) => {
+
+    ModeSpec::Classic => Ok((Mode::Classic, split_latents_classic(nums))),
+    ModeSpec::TryFloatMult(_) | ModeSpec::TryFloatQuant(_) => Err(PcoError::invalid_argument(
+      "unable to use float mode for ints",
+    )),
+    ModeSpec::TryIntMult(base_u64) => {
       let base = T::L::from_u64(base_u64);
       let mode = Mode::IntMult(base);
       let latents = int_mult_utils::split_latents(nums, base);
-      (mode, latents)
+      Ok((mode, latents))
     }
-    Disabled => (Classic, split_latents_classic(nums)),
   }
 }
 
@@ -95,7 +100,7 @@ macro_rules! impl_unsigned_number {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> (Mode<Self::L>, Vec<Vec<Self::L>>) {
+      ) -> PcoResult<ModeAndLatents<Self::L>> {
         choose_mode_and_split_latents(nums, config)
       }
 

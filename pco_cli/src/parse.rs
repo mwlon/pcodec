@@ -3,7 +3,7 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use arrow::datatypes::{DataType, TimeUnit};
 
-use pco::{FloatMultSpec, FloatQuantSpec, IntMultSpec};
+use pco::ModeSpec;
 
 pub fn delta_encoding_order(s: &str) -> anyhow::Result<Option<usize>> {
   match s.to_lowercase().as_str() {
@@ -15,46 +15,23 @@ pub fn delta_encoding_order(s: &str) -> anyhow::Result<Option<usize>> {
   }
 }
 
-pub fn int_mult(s: &str) -> anyhow::Result<IntMultSpec> {
+pub fn mode_spec(s: &str) -> anyhow::Result<ModeSpec> {
   let lowercase = s.to_lowercase();
   let spec = match lowercase.as_str() {
-    "enabled" => IntMultSpec::Enabled,
-    "disabled" => IntMultSpec::Disabled,
-    other => match other.parse::<u64>() {
-      Ok(mult) => IntMultSpec::Provided(mult),
-      _ => return Err(anyhow!("cannot parse int mult: {}", other)),
-    },
-  };
-  Ok(spec)
-}
-
-pub fn float_mult(s: &str) -> anyhow::Result<FloatMultSpec> {
-  let lowercase = s.to_lowercase();
-  let spec = match lowercase.as_str() {
-    "enabled" => FloatMultSpec::Enabled,
-    "disabled" => FloatMultSpec::Disabled,
-    other => match other.parse::<f64>() {
-      Ok(mult) => FloatMultSpec::Provided(mult),
-      _ => return Err(anyhow!("cannot parse float mult: {}", other)),
-    },
-  };
-  Ok(spec)
-}
-
-pub fn float_quant(s: &str) -> anyhow::Result<FloatQuantSpec> {
-  let lowercase = s.to_lowercase();
-  let spec = match lowercase.as_str() {
-    "enabled" => FloatQuantSpec::Enabled,
-    "disabled" => FloatQuantSpec::Disabled,
-    other => match other.parse::<u32>() {
-      Ok(k) => FloatQuantSpec::Provided(k),
-      _ => {
-        return Err(anyhow!(
-          "cannot parse float quant parameter: {}",
-          other
-        ))
+    "auto" => ModeSpec::Auto,
+    "classic" => ModeSpec::Classic,
+    other => {
+      let mut parts = other.split('@');
+      let name = parts.next().unwrap();
+      let err = || anyhow!("invalid mode spec: {}", s);
+      let value = parts.next().ok_or_else(err)?;
+      match name {
+        "floatmult" => ModeSpec::TryFloatMult(value.parse()?),
+        "floatquant" => ModeSpec::TryFloatQuant(value.parse()?),
+        "intmult" => ModeSpec::TryIntMult(value.parse()?),
+        _ => return Err(err()),
       }
-    },
+    }
   };
   Ok(spec)
 }

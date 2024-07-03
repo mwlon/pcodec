@@ -1,7 +1,7 @@
 use half::f16;
 use numpy::PyArrayDyn;
 use pco::data_types::CoreDataType;
-use pco::{ChunkConfig, FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec, Progress};
+use pco::{ChunkConfig, ModeSpec, PagingSpec, Progress};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyResult, Python};
 use pyo3::{py_run, pyclass, pymethods, PyErr};
@@ -50,82 +50,44 @@ pub fn pco_err_to_py(pco: PcoError) -> PyErr {
   PyRuntimeError::new_err(format!("pco error: {}", pco))
 }
 
-#[pyclass(name = "IntMultSpec")]
+#[pyclass(name = "ModeSpec")]
 #[derive(Clone, Default)]
-pub struct PyIntMultSpec(IntMultSpec);
+pub struct PyModeSpec(ModeSpec);
 
-/// Specifies if pcodec should use an integer multiplier to compress data.
+/// Specifies how Pcodec should choose the mode.
 #[pymethods]
-impl PyIntMultSpec {
-  /// :returns: a IntMultSpec disabling integer multiplier detection.
+impl PyModeSpec {
+  /// :returns: a ModeSpec that automatically detects a good mode.
   #[staticmethod]
-  fn disabled() -> Self {
-    Self(IntMultSpec::Disabled)
+  fn auto() -> Self {
+    Self(ModeSpec::Auto)
   }
 
-  /// :returns: a IntMultSpec enabling integer multiplier detection. This
-  /// will automatically try to detect whether to use the mode and which `base`
-  /// to use.
+  /// :returns: a ModeSpec that always uses the simplest mode.
   #[staticmethod]
-  fn enabled() -> Self {
-    Self(IntMultSpec::Enabled)
+  fn classic() -> Self {
+    Self(ModeSpec::Classic)
   }
 
-  /// :returns: a IntMultSpec with a specific `base` to use for compression.
+  /// :returns: a ModeSpec that tries to use the IntMult mode with the given
+  /// base, if possible.
   #[staticmethod]
-  fn provided(base: u64) -> Self {
-    Self(IntMultSpec::Provided(base))
-  }
-}
-
-#[pyclass(name = "FloatMultSpec")]
-#[derive(Clone, Default)]
-pub struct PyFloatMultSpec(FloatMultSpec);
-
-/// Specifies if pcodec should use a floating point multiplier to compress
-/// data.
-#[pymethods]
-impl PyFloatMultSpec {
-  /// :returns: a FloatMultSpec disabling floating point multiplier detection.
-  #[staticmethod]
-  fn disabled() -> Self {
-    Self(FloatMultSpec::Disabled)
+  fn try_float_mult(base: f64) -> Self {
+    Self(ModeSpec::TryFloatMult(base))
   }
 
-  /// :returns: a FloatMultSpec enabling floating point multiplier detection.
-  /// This will automatically try to detect whether to use the mode and which
-  /// `base` to use.
+  /// :returns: a ModeSpec that tries to use the IntMult mode with the given
+  /// base, if possible.
   #[staticmethod]
-  fn enabled() -> Self {
-    Self(FloatMultSpec::Enabled)
+  fn try_float_quant(k: u32) -> Self {
+    Self(ModeSpec::TryFloatQuant(k))
   }
 
-  /// :returns: a FloatMultSpec with a specific `base` to use for compression.
+  /// :returns: a ModeSpec that tries to use the IntMult mode with the given
+  /// base, if possible.
   #[staticmethod]
-  fn provided(base: f64) -> Self {
-    Self(FloatMultSpec::Provided(base))
-  }
-}
-
-#[pyclass(name = "FloatQuantSpec")]
-#[derive(Clone, Default)]
-pub struct PyFloatQuantSpec(FloatQuantSpec);
-
-/// Specifies if pcodec should use floating point quantization to compress
-/// data.
-#[pymethods]
-impl PyFloatQuantSpec {
-  /// :returns: a FloatQuantSpec disabling floating point quantization.
-  #[staticmethod]
-  fn disabled() -> Self {
-    Self(FloatQuantSpec::Disabled)
-  }
-
-  /// :returns: a FloatQuantSpec specifying that pcodec should use quantization
-  /// with a specific number of `bits``.
-  #[staticmethod]
-  fn provided(bits: u32) -> Self {
-    Self(FloatQuantSpec::Provided(bits))
+  fn try_int_mult(base: u64) -> Self {
+    Self(ModeSpec::TryIntMult(base))
   }
 }
 
@@ -157,9 +119,7 @@ impl PyPagingSpec {
 pub struct PyChunkConfig {
   compression_level: usize,
   delta_encoding_order: Option<usize>,
-  int_mult_spec: PyIntMultSpec,
-  float_mult_spec: PyFloatMultSpec,
-  float_quant_spec: PyFloatQuantSpec,
+  mode_spec: PyModeSpec,
   paging_spec: PyPagingSpec,
 }
 
@@ -215,25 +175,19 @@ impl PyChunkConfig {
   #[pyo3(signature = (
     compression_level=pco::DEFAULT_COMPRESSION_LEVEL,
     delta_encoding_order=None,
-    int_mult_spec=PyIntMultSpec::default(),
-    float_mult_spec=PyFloatMultSpec::default(),
-    float_quant_spec=PyFloatQuantSpec::default(),
+    mode_spec=PyModeSpec::default(),
     paging_spec=PyPagingSpec::default(),
   ))]
   fn new(
     compression_level: usize,
     delta_encoding_order: Option<usize>,
-    int_mult_spec: PyIntMultSpec,
-    float_mult_spec: PyFloatMultSpec,
-    float_quant_spec: PyFloatQuantSpec,
+    mode_spec: PyModeSpec,
     paging_spec: PyPagingSpec,
   ) -> Self {
     Self {
       compression_level,
       delta_encoding_order,
-      int_mult_spec,
-      float_mult_spec,
-      float_quant_spec,
+      mode_spec,
       paging_spec,
     }
   }
@@ -246,9 +200,7 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
     let res = ChunkConfig::default()
       .with_compression_level(py_config.compression_level)
       .with_delta_encoding_order(py_config.delta_encoding_order)
-      .with_int_mult_spec(py_config.int_mult_spec.0)
-      .with_float_mult_spec(py_config.float_mult_spec.0)
-      .with_float_quant_spec(py_config.float_quant_spec.0)
+      .with_mode_spec(py_config.mode_spec.0)
       .with_paging_spec(py_config.paging_spec.0.clone());
     Ok(res)
   }
@@ -275,9 +227,7 @@ pub enum DynTypedPyArrayDyn<'py> {
 fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
   m.add_class::<PyProgress>()?;
-  m.add_class::<PyIntMultSpec>()?;
-  m.add_class::<PyFloatMultSpec>()?;
-  m.add_class::<PyFloatQuantSpec>()?;
+  m.add_class::<PyModeSpec>()?;
   m.add_class::<PyPagingSpec>()?;
   m.add_class::<PyChunkConfig>()?;
   m.add(

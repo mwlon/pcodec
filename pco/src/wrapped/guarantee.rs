@@ -38,7 +38,7 @@ mod tests {
   use crate::data_types::NumberLike;
   use crate::errors::PcoResult;
   use crate::wrapped::FileCompressor;
-  use crate::{ChunkConfig, FloatMultSpec, PagingSpec};
+  use crate::{ChunkConfig, ModeSpec, PagingSpec};
 
   use super::*;
 
@@ -87,7 +87,7 @@ mod tests {
       nums.push(rng.gen_range(-1.0..1.0));
     }
     let config = ChunkConfig {
-      float_mult_spec: FloatMultSpec::Provided(0.1),
+      mode_spec: ModeSpec::TryFloatMult(0.1),
       delta_encoding_order: Some(5),
       paging_spec: PagingSpec::EqualPagesUpTo(10),
       ..Default::default()

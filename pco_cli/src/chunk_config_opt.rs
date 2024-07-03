@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use pco::{ChunkConfig, FloatMultSpec, FloatQuantSpec, IntMultSpec, PagingSpec};
+use pco::{ChunkConfig, ModeSpec, PagingSpec};
 
 use crate::parse;
 
@@ -16,18 +16,13 @@ pub struct ChunkConfigOpt {
   /// which tries to automatically detect the best delta encoding order.
   #[arg(long = "delta-order", default_value = "Auto", value_parser = parse::delta_encoding_order)]
   pub delta_encoding_order: std::option::Option<usize>,
-  /// Can be "Enabled", "Disabled", or a fixed integer to use as the base in
-  /// int mult mode.
-  #[arg(long, default_value = "Enabled", value_parser = parse::int_mult)]
-  pub int_mult: IntMultSpec,
-  /// Can be "Enabled", "Disabled", or a fixed float to use as the base in
-  /// float mult mode.
-  #[arg(long, default_value = "Enabled", value_parser = parse::float_mult)]
-  pub float_mult: FloatMultSpec,
-  /// Can be "Enabled", "Disabled", or a fixed integer to use as the parameter
-  /// `k` in float quant mode.
-  #[arg(long, default_value = "Enabled", value_parser = parse::float_quant)]
-  pub float_quant: FloatQuantSpec,
+  /// Can be "Auto", "Classic", "FloatMult@<base>", "FloatQuant@<k>", or
+  /// "IntMult@<base>".
+  ///
+  /// Specs other than Auto and Classic will try the given mode and fall back to
+  /// classic if the given mode is especially bad.
+  #[arg(long, default_value = "Auto", value_parser = parse::mode_spec)]
+  pub mode: ModeSpec,
   #[arg(long, default_value_t = pco::DEFAULT_MAX_PAGE_N)]
   pub chunk_n: usize,
 }
@@ -37,9 +32,7 @@ impl From<&ChunkConfigOpt> for ChunkConfig {
     ChunkConfig::default()
       .with_compression_level(opt.level)
       .with_delta_encoding_order(opt.delta_encoding_order)
-      .with_int_mult_spec(opt.int_mult)
-      .with_float_mult_spec(opt.float_mult)
-      .with_float_quant_spec(opt.float_quant)
+      .with_mode_spec(opt.mode)
       .with_paging_spec(PagingSpec::EqualPagesUpTo(opt.chunk_n))
   }
 }

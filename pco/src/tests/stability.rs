@@ -3,12 +3,12 @@ use crate::chunk_meta::ChunkMeta;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
 use crate::standalone::{simple_decompress, FileCompressor};
-use crate::IntMultSpec;
+use crate::ModeSpec;
 
 fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::L>> {
   let fc = FileCompressor::default();
   let config = ChunkConfig {
-    int_mult_spec: IntMultSpec::Disabled,
+    mode_spec: ModeSpec::Classic,
     delta_encoding_order: Some(0),
     ..Default::default()
   };
