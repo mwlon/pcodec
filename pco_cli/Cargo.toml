@@ -5,7 +5,7 @@ edition = "2021"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding", "command-line-utilities"]
-description = "compresses, inspects, and decompres pco data"
+description = "compresses, inspects, and decompresses pco data"
 include = ["src/**/*.rs", "Cargo.toml", "README.md"]
 keywords = ["compression", "numerical", "delta"]
 license = "Apache-2.0"

@@ -6,11 +6,12 @@
 
 # Setup
 
-You can compress, decompress, and inspect standalone .pco files using the CLI.
+You can compress, decompress, inspect, and benchmark standalone .pco files using the CLI.
 Follow this setup:
 
 1. Install Rust: https://www.rust-lang.org/tools/install
-2. `cargo install pco_cli`
+2. (optional but recommended for best performance on x86) [Configure the instruction sets available](../pco/README.md#compilation-notes)
+3. `cargo install pco_cli`
 
 This provides you with the `pcodec` command.
 
