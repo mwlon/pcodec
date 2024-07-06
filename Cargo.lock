@@ -1265,7 +1265,7 @@ checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
 name = "pco"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "better_io",
  "half",
