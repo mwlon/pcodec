@@ -5,7 +5,7 @@ edition = "2021"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding", "command-line-utilities"]
-description = "compresses, inspects, and decompres pco data"
+description = "compresses, inspects, and decompresses pco data"
 include = ["src/**/*.rs", "Cargo.toml", "README.md"]
 keywords = ["compression", "numerical", "delta"]
 license = "Apache-2.0"
@@ -30,7 +30,7 @@ parquet = { version = "49.0.0", features = [
   "snap",
   "zstd",
 ], default-features = false }
-pco = { version = "0.3", path = "../pco" }
+pco = { version = "0.3", path = "../pco", features = ["recommended-instruction-sets"] }
 q_compress = { version = "0.11.7", path = "../quantile-compression/q_compress", optional = true }
 snap = "1.1.0"
 spdp_sys = { version = "0.1", optional = true }

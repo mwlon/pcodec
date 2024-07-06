@@ -1,29 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! # Quick Start
-//!
-//! ```rust
-//! use pco::standalone::{simpler_compress, simple_decompress};
-//! use pco::DEFAULT_COMPRESSION_LEVEL;
-//! use pco::errors::PcoResult;
-//!
-//! fn main() -> PcoResult<()> {
-//!   // your data
-//!   let mut my_nums = Vec::new();
-//!   for i in 0..100000 {
-//!     my_nums.push(i as i64);
-//!   }
-//!
-//!   // compress
-//!   let compressed: Vec<u8> = simpler_compress(&my_nums, DEFAULT_COMPRESSION_LEVEL)?;
-//!   println!("compressed down to {} bytes", compressed.len());
-//!
-//!   // decompress
-//!   let recovered = simple_decompress::<i64>(&compressed)?;
-//!   println!("got back {} ints from {} to {}", recovered.len(), recovered[0], recovered.last().unwrap());
-//!   Ok(())
-//! }
-//! ```
-//!
 //! # API Notes
 //!
 //! * In some places, Pco methods accept a destination (either `W: Write` or `&mut [T: NumberLike]`).
