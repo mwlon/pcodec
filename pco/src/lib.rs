@@ -1,6 +1,4 @@
-//! For general information about pco (full name: Pcodec), including the
-//! signifance of standalone vs. wrapped, see <https://github.com/mwlon/pcodec/>.
-//!
+#![doc = include_str!("../README.md")]
 //! # Quick Start
 //!
 //! ```rust
