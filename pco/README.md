@@ -33,8 +33,7 @@ Almost all hardware x86 hardware these days supports `bmi1`, `bmi2`, and `avx2`.
 This improves compression speed slightly and decompression speed substantially!
 To make sure you're using these, you can:
 
-* Use this crate's `recommended-instruction-sets` feature,
-* OR Add the following to your `~/.cargo/config.toml`:
+* Add the following to your `~/.cargo/config.toml`:
 ```toml
 [target.'cfg(target_arch = "x86_64")']
 rustflags = ["-C", "target-feature=+bmi1,+bmi2,+avx2"]

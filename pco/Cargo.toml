@@ -2,7 +2,6 @@
 name = "pco"
 version = "0.3.0"
 edition = "2021"
-build = "build.rs"
 
 authors = ["mwlon <m.w.loncaric@gmail.com>"]
 categories = ["compression", "encoding"]
@@ -20,6 +19,3 @@ rand_xoshiro = { version = "0.6.0" }
 
 [dev-dependencies]
 rand = "0.8.4"
-
-[features]
-recommended-instruction-sets = []
