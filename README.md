@@ -71,7 +71,9 @@ exact sequences of numbers.
 Such patterns constitute just a small fraction of most numerical data's
 entropy.
 
-## Two ways to use it: wrapped or standalone
+## Usage Details
+
+### Wrapped or Standalone
 
 Pco is designed to be easily wrapped into another format.
 It provides a powerful wrapped API with the building blocks to interleave it
@@ -93,6 +95,27 @@ multiple chunks per file.
 | chunk | compression                     | \>10k numbers             |
 | page  | interleaving w/ wrapping format | \>1k numbers              |
 | batch | decompression                   | 256 numbers (fixed)       |
+
+### Mistakes to Avoid
+
+You will get disappointing results from Pco if your data:
+
+* combines semantically different sequences into a single chunk, or
+* contains fewer numbers per chunk or page than recommended (see above table).
+
+Example: the NYC taxi dataset has `f64` columns for `passenger_base_fare` and
+`tolls`.
+Suppose we assign these as `fare[0...n]` and `tolls[0...n]` respectively, where
+`n=50,000`.
+
+* separate chunk for each column => good compression
+* single chunk `fare[0], ... fare[n-1], toll[0], ... toll[n-1]` => mediocre
+  compression
+* single chunk `fare[0], toll[0], ... fare[n-1], toll[n-1]` => poor compression
+
+Similarly, we could compress images by making a separate chunk for each
+flattened channel (red, green, blue).
+Though dedicated formats like webp likely compress natural images better.
 
 ## Extra
 
