@@ -44,29 +44,30 @@ pub struct HistogramBin<L: Latent> {
 }
 
 fn slice_min<L: Latent>(latents: &[L]) -> L {
-  let mut min0 = L::MAX;
-  let mut min1 = L::MAX;
-  for i in (0..latents.len()).skip(1).step_by(2) {
-    min0 = min(min0, latents[i - 1]);
-    min1 = min(min1, latents[i]);
+  let mut min_val = L::MAX;
+  for i in 0..latents.len() {
+    min_val = min(min_val, latents[i]);
   }
-  if latents.len() % 2 == 1 {
-    min0 = min(min0, latents.last().cloned().unwrap());
-  }
-  min(min0, min1)
+  min_val
 }
 
 fn slice_max<L: Latent>(latents: &[L]) -> L {
-  let mut max0 = L::ZERO;
-  let mut max1 = L::ZERO;
-  for i in (0..latents.len()).skip(1).step_by(2) {
-    max0 = max(max0, latents[i - 1]);
-    max1 = max(max1, latents[i]);
+  let mut max_val = L::ZERO;
+  for i in 0..latents.len() {
+    max_val = max(max_val, latents[i]);
   }
-  if latents.len() % 2 == 1 {
-    max0 = max(max0, latents.last().cloned().unwrap());
+  max_val
+}
+
+fn slice_min_max<L: Latent>(latents: &[L]) -> (L, L) {
+  let mut min_val = L::MAX;
+  let mut max_val = L::ZERO;
+  for i in 0..latents.len() {
+    let val = latents[i];
+    min_val = min(min_val, val);
+    max_val = max(max_val, val);
   }
-  max(max0, max1)
+  (min_val, max_val)
 }
 
 struct HistogramBuilder<L: Latent> {
@@ -101,18 +102,22 @@ impl<L: Latent> HistogramBuilder<L> {
       return;
     }
 
-    let tight_ub = match upper {
-      Bound::Loose(_) => slice_max(latents),
-      Bound::Tight(upper) => upper,
-    };
-
     if let Some(bin) = self.incomplete_bin.as_mut() {
-      bin.upper = tight_ub;
+      bin.upper = match upper {
+        Bound::Loose(_) => slice_max(latents),
+        Bound::Tight(upper) => upper,
+      };
       bin.count += latents.len();
     } else {
-      let tight_lb = match lower {
-        Bound::Loose(_) => slice_min(latents),
-        Bound::Tight(lower) => lower,
+      let (tight_lb, tight_ub) = match lower {
+        Bound::Loose(_) => match upper {
+          Bound::Loose(_) => slice_min_max(latents),
+          Bound::Tight(upper) => (slice_min(latents), upper),
+        },
+        Bound::Tight(lower) => match upper {
+          Bound::Loose(_) => (lower, slice_max(latents)),
+          Bound::Tight(upper) => (lower, upper),
+        },
       };
       self.incomplete_bin = Some(HistogramBin {
         count: latents.len(),
