@@ -47,11 +47,6 @@ fn choose_optimized_partitioning<L: Latent>(
   let total_count = c;
   let lowers = bins.iter().map(|bin| bin.lower).collect::<Vec<_>>();
   let uppers = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
-  // On Windows, log2() is very slow, so we use log(2.0) instead, which is
-  // about 10x faster. On other platforms, we stick with log2(). See #223.
-  #[cfg(target_os = "windows")]
-  let total_count_log2 = (c as f32).log(2.0);
-  #[cfg(not(target_os = "windows"))]
   let total_count_log2 = (c as f32).log2();
 
   let mut best_partitionings = Vec::with_capacity(bins.len() + 1);
