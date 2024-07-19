@@ -56,9 +56,9 @@ fn slice_max<L: Latent>(latents: &[L]) -> L {
 }
 
 fn slice_min_max<L: Latent>(latents: &[L]) -> (L, L) {
-  latents.iter().fold(
+  latents.iter().cloned().fold(
     (L::MAX, L::ZERO),
-    |(min_val, max_val), val| (min(min_val, *val), max(max_val, *val)),
+    |(min_val, max_val), val| (min(min_val, val), max(max_val, val)),
   )
 }
 
