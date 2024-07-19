@@ -101,15 +101,11 @@ impl<L: Latent> HistogramBuilder<L> {
       };
       bin.count += latents.len();
     } else {
-      let (tight_lb, tight_ub) = match lower {
-        Bound::Loose(_) => match upper {
-          Bound::Loose(_) => slice_min_max(latents),
-          Bound::Tight(upper) => (slice_min(latents), upper),
-        },
-        Bound::Tight(lower) => match upper {
-          Bound::Loose(_) => (lower, slice_max(latents)),
-          Bound::Tight(upper) => (lower, upper),
-        },
+      let (tight_lb, tight_ub) = match (lower, upper) {
+        (Bound::Tight(lower), Bound::Tight(upper)) => (lower, upper),
+        (Bound::Loose(_), Bound::Loose(_)) => slice_min_max(latents),
+        (Bound::Tight(lower), Bound::Loose(_)) => (lower, slice_max(latents)),
+        (Bound::Loose(_), Bound::Tight(upper)) => (slice_min(latents), upper),
       };
       self.incomplete_bin = Some(HistogramBin {
         count: latents.len(),
