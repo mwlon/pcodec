@@ -44,17 +44,11 @@ pub struct HistogramBin<L: Latent> {
 }
 
 fn slice_min<L: Latent>(latents: &[L]) -> L {
-  latents
-    .iter()
-    .cloned()
-    .fold(L::MAX, |min_val, val| min(min_val, val))
+  latents.iter().cloned().fold(L::MAX, min)
 }
 
 fn slice_max<L: Latent>(latents: &[L]) -> L {
-  latents
-    .iter()
-    .cloned()
-    .fold(L::ZERO, |max_val, val| max(max_val, val))
+  latents.iter().cloned().fold(L::ZERO, max)
 }
 
 fn slice_min_max<L: Latent>(latents: &[L]) -> (L, L) {
