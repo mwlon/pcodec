@@ -44,29 +44,18 @@ pub struct HistogramBin<L: Latent> {
 }
 
 fn slice_min<L: Latent>(latents: &[L]) -> L {
-  let mut min0 = L::MAX;
-  let mut min1 = L::MAX;
-  for i in (0..latents.len()).skip(1).step_by(2) {
-    min0 = min(min0, latents[i - 1]);
-    min1 = min(min1, latents[i]);
-  }
-  if latents.len() % 2 == 1 {
-    min0 = min(min0, latents.last().cloned().unwrap());
-  }
-  min(min0, min1)
+  latents.iter().cloned().fold(L::MAX, min)
 }
 
 fn slice_max<L: Latent>(latents: &[L]) -> L {
-  let mut max0 = L::ZERO;
-  let mut max1 = L::ZERO;
-  for i in (0..latents.len()).skip(1).step_by(2) {
-    max0 = max(max0, latents[i - 1]);
-    max1 = max(max1, latents[i]);
-  }
-  if latents.len() % 2 == 1 {
-    max0 = max(max0, latents.last().cloned().unwrap());
-  }
-  max(max0, max1)
+  latents.iter().cloned().fold(L::ZERO, max)
+}
+
+fn slice_min_max<L: Latent>(latents: &[L]) -> (L, L) {
+  latents.iter().cloned().fold(
+    (L::MAX, L::ZERO),
+    |(min_val, max_val), val| (min(min_val, val), max(max_val, val)),
+  )
 }
 
 struct HistogramBuilder<L: Latent> {
@@ -101,18 +90,18 @@ impl<L: Latent> HistogramBuilder<L> {
       return;
     }
 
-    let tight_ub = match upper {
-      Bound::Loose(_) => slice_max(latents),
-      Bound::Tight(upper) => upper,
-    };
-
     if let Some(bin) = self.incomplete_bin.as_mut() {
-      bin.upper = tight_ub;
+      bin.upper = match upper {
+        Bound::Loose(_) => slice_max(latents),
+        Bound::Tight(upper) => upper,
+      };
       bin.count += latents.len();
     } else {
-      let tight_lb = match lower {
-        Bound::Loose(_) => slice_min(latents),
-        Bound::Tight(lower) => lower,
+      let (tight_lb, tight_ub) = match (lower, upper) {
+        (Bound::Loose(_), Bound::Loose(_)) => slice_min_max(latents),
+        (Bound::Loose(_), Bound::Tight(upper)) => (slice_min(latents), upper),
+        (Bound::Tight(lower), Bound::Loose(_)) => (lower, slice_max(latents)),
+        (Bound::Tight(lower), Bound::Tight(upper)) => (lower, upper),
       };
       self.incomplete_bin = Some(HistogramBin {
         count: latents.len(),
