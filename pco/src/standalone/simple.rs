@@ -8,6 +8,44 @@ use crate::standalone::compressor::FileCompressor;
 use crate::standalone::decompressor::{FileDecompressor, MaybeChunkDecompressor};
 use crate::{PagingSpec, FULL_BATCH_N};
 
+// TODO in 0.4 make this generic to Write and make all compress methods
+// accepting a Write return the number of bytes written?
+/// Takes in a slice of numbers and an exact configuration and writes compressed
+/// bytes to the destination, retuning the number of bytes written.
+///
+/// Will return an error if the compressor config is invalid, there is an IO
+/// error.
+/// This will use the `PagingSpec` in `ChunkConfig` to decide where to split
+/// chunks.
+/// For standalone, the concepts of chunk and page are conflated since each
+/// chunk has exactly one page.
+pub fn simple_compress_into<T: NumberLike>(
+  nums: &[T],
+  config: &ChunkConfig,
+  mut dst: &mut [u8],
+) -> PcoResult<usize> {
+  let original_length = dst.len();
+  let file_compressor = FileCompressor::default().with_n_hint(nums.len());
+  dst = file_compressor.write_header(dst)?;
+
+  // here we use the paging spec to determine chunks; each chunk has 1 page
+  let n_per_page = config.paging_spec.n_per_page(nums.len())?;
+  let mut start = 0;
+  let mut this_chunk_config = config.clone();
+  for &page_n in &n_per_page {
+    let end = start + page_n;
+    this_chunk_config.paging_spec = PagingSpec::Exact(vec![page_n]);
+    let chunk_compressor =
+      file_compressor.chunk_compressor(&nums[start..end], &this_chunk_config)?;
+
+    dst = chunk_compressor.write_chunk(dst)?;
+    start = end;
+  }
+
+  dst = file_compressor.write_footer(dst)?;
+  Ok(original_length - dst.len())
+}
+
 /// Takes in a slice of numbers and an exact configuration and returns
 /// compressed bytes.
 ///
@@ -134,6 +172,27 @@ pub fn simple_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn test_simple_compress_into() -> PcoResult<()> {
+    let nums = (0..100).map(|x| x as i32).collect::<Vec<_>>();
+    let config = &ChunkConfig {
+      delta_encoding_order: Some(0),
+      ..Default::default()
+    };
+    let mut buffer = [77];
+    // error if buffer is too small
+    assert!(simple_compress_into(&nums, config, &mut buffer).is_err());
+
+    let mut buffer = vec![0; 1000];
+    let bytes_written = simple_compress_into(&nums, config, &mut buffer)?;
+    assert!(bytes_written >= 10);
+    for i in bytes_written..buffer.len() {
+      assert_eq!(buffer[i], 0);
+    }
+
+    Ok(())
+  }
 
   #[test]
   fn test_simple_decompress_into() -> PcoResult<()> {
