@@ -190,6 +190,8 @@ mod tests {
     for i in bytes_written..buffer.len() {
       assert_eq!(buffer[i], 0);
     }
+    let decompressed = simple_decompress::<i32>(&buffer[..bytes_written])?;
+    assert_eq!(decompressed, nums);
 
     Ok(())
   }
