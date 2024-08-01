@@ -38,7 +38,6 @@ pub(crate) trait FloatLike:
   + SubAssign
   + Div<Output = Self>
 {
-  const BITS: Bitlen;
   /// Number of bits that aren't used for exponent or sign.
   /// E.g. for f32 this should be 23.
   const PRECISION_BITS: Bitlen;

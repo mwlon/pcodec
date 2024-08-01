@@ -80,9 +80,8 @@ fn choose_winning_bid<T: NumberLike>(bids: Vec<Bid<T>>) -> Bid<T> {
 }
 
 macro_rules! impl_float_like {
-  ($t: ty, $latent: ty, $bits: expr, $exp_offset: expr) => {
+  ($t: ty, $latent: ty, $exp_offset: expr) => {
     impl FloatLike for $t {
-      const BITS: Bitlen = $bits;
       /// Number of bits in the representation of the significand, excluding the implicit
       /// leading bit.  (In Rust, `MANTISSA_DIGITS` does include the implicit leading bit.)
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
@@ -201,7 +200,6 @@ macro_rules! impl_float_like {
 }
 
 impl FloatLike for f16 {
-  const BITS: Bitlen = 16;
   const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
   const ZERO: Self = f16::ZERO;
   const MAX_FOR_SAMPLING: Self = f16::from_bits(30719); // Half of MAX size.
@@ -391,8 +389,8 @@ macro_rules! impl_float_number_like {
   };
 }
 
-impl_float_like!(f32, u32, 32, 127);
-impl_float_like!(f64, u64, 64, 1023);
+impl_float_like!(f32, u32, 127);
+impl_float_like!(f64, u64, 1023);
 // f16 FloatLike is implemented separately because it's non-native.
 impl_float_number_like!(f32, u32, 1_u32 << 31, 5);
 impl_float_number_like!(f64, u64, 1_u64 << 63, 6);
