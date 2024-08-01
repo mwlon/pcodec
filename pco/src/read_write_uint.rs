@@ -45,7 +45,6 @@ pub trait ReadWriteUint:
   + Shr<Bitlen, Output = Self>
   + Sub<Output = Self>
 {
-  const ZERO: Self;
   const ONE: Self;
   const BITS: Bitlen;
   const MAX_U64S: usize = calc_max_u64s(Self::BITS);
@@ -55,7 +54,6 @@ pub trait ReadWriteUint:
 }
 
 impl ReadWriteUint for usize {
-  const ZERO: Self = 0;
   const ONE: Self = 1;
   const BITS: Bitlen = usize::BITS;
 
@@ -71,7 +69,6 @@ impl ReadWriteUint for usize {
 }
 
 impl<L: Latent> ReadWriteUint for L {
-  const ZERO: Self = <Self as Latent>::ZERO;
   const ONE: Self = <Self as Latent>::ONE;
   const BITS: Bitlen = <Self as Latent>::BITS;
 
