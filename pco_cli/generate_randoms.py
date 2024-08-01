@@ -126,7 +126,7 @@ def lomax05():
 
 @datagen("i64")
 def uniform():
-    return np.random.randint(-(2**63), 2**63, size=max_n)[:n]
+    return np.random.randint(-(2**63), 2**63, size=max_n, dtype=np.int64)[:n]
 
 
 # disable the following by default because it's kinda a waste of disk:
