@@ -204,6 +204,15 @@ fn test_sparse_islands() {
   assert_recovers(nums, 4, "sparse islands");
 }
 
+#[test]
+fn test_issue_229() {
+  // this example once caused an underflow or downstream panic
+  let a = f64::from_bits(0x8000000000004000);
+  let b = f64::from_bits(0x8000000000000000);
+  let nums = vec![a, -a, b];
+  assert_recovers(nums, 8, "issue_229");
+}
+
 fn assert_recovers<T: NumberLike>(nums: Vec<T>, compression_level: usize, name: &str) {
   for delta_encoding_order in [0, 1, 7] {
     for use_gcds in [false, true] {
