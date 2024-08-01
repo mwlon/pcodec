@@ -14,18 +14,11 @@ pub fn get_wav_field(path: &Path) -> Result<Option<Field>> {
   let dtype = match (header.audio_format, header.bits_per_sample) {
     (wav::WAV_FORMAT_PCM, 8 | 16) => Ok(DataType::Int16),
     (wav::WAV_FORMAT_PCM, 24 | 32) => Ok(DataType::Int32),
-    (wav::WAV_FORMAT_PCM, _) => Err(anyhow!(
-      "unsupported bit depth for WAV_FORMAT_PCM: {}",
-      header.bits_per_sample
-    )),
     (wav::WAV_FORMAT_IEEE_FLOAT, 32) => Ok(DataType::Float32),
-    (wav::WAV_FORMAT_IEEE_FLOAT, _) => Err(anyhow!(
-      "unsupported bit depth for WAV_FORMAT_IEEE_FLOAT: {}",
-      header.bits_per_sample
-    )),
     _ => Err(anyhow!(
-      "unsupported audio format: {}",
-      header.audio_format
+      "audio format {} with {} bits per sample not supported",
+      header.audio_format,
+      header.bits_per_sample
     )),
   }?;
   let name = path
