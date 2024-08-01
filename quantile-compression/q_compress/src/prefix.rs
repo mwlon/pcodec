@@ -86,7 +86,11 @@ impl<T: NumberLike> Prefix<T> {
     } else {
       (T::Unsigned::ONE << k) - T::Unsigned::ONE
     };
-    let only_k_bits_lower = diff - only_k_bits_upper;
+    let only_k_bits_lower = if diff >= only_k_bits_upper {
+      diff - only_k_bits_upper
+    } else {
+      T::Unsigned::ZERO
+    };
 
     KInfo {
       k,
