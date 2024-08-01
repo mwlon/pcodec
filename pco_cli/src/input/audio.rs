@@ -11,23 +11,20 @@ pub fn get_wav_field(path: &Path) -> Result<Option<Field>> {
   // this is excessively slow, but easy for now
   let mut file = File::open(path)?;
   let (header, _) = wav::read(&mut file)?;
-  let dtype = match header.audio_format {
-    wav::WAV_FORMAT_PCM => match header.bits_per_sample {
-      8 | 16 => Ok(DataType::Int16),
-      24 | 32 => Ok(DataType::Int32),
-      _ => Err(anyhow!(
-        "unsupported bit depth for WAV_FORMAT_PCM: {}",
-        header.bits_per_sample
-      )),
-    },
-    wav::WAV_FORMAT_IEEE_FLOAT => match header.bits_per_sample {
-      16 => Ok(DataType::Float16),
-      32 => Ok(DataType::Float32),
-      _ => Err(anyhow!(
-        "unsupported bit depth for WAV_FORMAT_IEEE_FLOAT: {}",
-        header.bits_per_sample
-      )),
-    },
+  let dtype = match (header.audio_format, header.bits_per_sample) {
+    (wav::WAV_FORMAT_PCM, 8) => Ok(DataType::UInt16),
+    (wav::WAV_FORMAT_PCM, 16) => Ok(DataType::Int16),
+    (wav::WAV_FORMAT_PCM, 24) => Ok(DataType::Int32),
+    (wav::WAV_FORMAT_PCM, 32) => Ok(DataType::Int32),
+    (wav::WAV_FORMAT_PCM, _) => Err(anyhow!(
+      "unsupported bit depth for WAV_FORMAT_PCM: {}",
+      header.bits_per_sample
+    )),
+    (wav::WAV_FORMAT_IEEE_FLOAT, 32) => Ok(DataType::Float32),
+    (wav::WAV_FORMAT_IEEE_FLOAT, _) => Err(anyhow!(
+      "unsupported bit depth for WAV_FORMAT_IEEE_FLOAT: {}",
+      header.bits_per_sample
+    )),
     _ => Err(anyhow!(
       "unsupported audio format: {}",
       header.audio_format
