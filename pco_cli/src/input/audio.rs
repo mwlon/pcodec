@@ -12,10 +12,8 @@ pub fn get_wav_field(path: &Path) -> Result<Option<Field>> {
   let mut file = File::open(path)?;
   let (header, _) = wav::read(&mut file)?;
   let dtype = match (header.audio_format, header.bits_per_sample) {
-    (wav::WAV_FORMAT_PCM, 8) => Ok(DataType::UInt16),
-    (wav::WAV_FORMAT_PCM, 16) => Ok(DataType::Int16),
-    (wav::WAV_FORMAT_PCM, 24) => Ok(DataType::Int32),
-    (wav::WAV_FORMAT_PCM, 32) => Ok(DataType::Int32),
+    (wav::WAV_FORMAT_PCM, 8 | 16) => Ok(DataType::Int16),
+    (wav::WAV_FORMAT_PCM, 24 | 32) => Ok(DataType::Int32),
     (wav::WAV_FORMAT_PCM, _) => Err(anyhow!(
       "unsupported bit depth for WAV_FORMAT_PCM: {}",
       header.bits_per_sample
