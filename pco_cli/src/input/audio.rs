@@ -11,12 +11,14 @@ pub fn get_wav_field(path: &Path) -> Result<Option<Field>> {
   // this is excessively slow, but easy for now
   let mut file = File::open(path)?;
   let (header, _) = wav::read(&mut file)?;
-  let dtype = match header.bytes_per_sample {
-    1 | 2 => Ok(DataType::Int16),
-    3 => Ok(DataType::Int32),
-    4 => Ok(DataType::Float32),
+  let dtype = match (header.audio_format, header.bits_per_sample) {
+    (wav::WAV_FORMAT_PCM, 8 | 16) => Ok(DataType::Int16),
+    (wav::WAV_FORMAT_PCM, 24 | 32) => Ok(DataType::Int32),
+    (wav::WAV_FORMAT_IEEE_FLOAT, 32) => Ok(DataType::Float32),
     _ => Err(anyhow!(
-      "invalid number of bytes per wav file sample"
+      "audio format {} with {} bits per sample not supported",
+      header.audio_format,
+      header.bits_per_sample
     )),
   }?;
   let name = path
