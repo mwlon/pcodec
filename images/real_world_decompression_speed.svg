@@ -8,9 +8,9 @@
         <path id="patch_1" d="M0 216h936V0H0z" style="fill:#fff"/>
         <g id="axes_1">
             <path id="patch_2" d="M117 192.24h213.353V25.92H117z" style="fill:#fff"/>
-            <path id="patch_3" d="M117 192.24h71.118V26.969H117z" clip-path="url(#pa67532d3ee)" style="fill:#347269"/>
-            <path id="patch_4" d="M188.118 192.24h71.117V53.366h-71.117z" clip-path="url(#pa67532d3ee)" style="fill:#b70"/>
-            <path id="patch_5" d="M259.235 192.24h71.118V65.828h-71.118z" clip-path="url(#pa67532d3ee)" style="fill:#53c"/>
+            <path id="patch_3" d="M117 192.24h71.118V26.969H117z" clip-path="url(#p1af7833e91)" style="fill:#347269"/>
+            <path id="patch_4" d="M188.118 192.24h71.117V53.366h-71.117z" clip-path="url(#p1af7833e91)" style="fill:#b70"/>
+            <path id="patch_5" d="M259.235 192.24h71.118V65.828h-71.118z" clip-path="url(#p1af7833e91)" style="fill:#63b"/>
             <g id="matplotlib.axis_2">
                 <g id="text_1">
                     <g transform="matrix(.1 0 0 -.1 16.719 95.802)">
@@ -95,9 +95,9 @@
         </g>
         <g id="axes_2">
             <path id="patch_7" d="M373.024 192.24h213.352V25.92H373.024z" style="fill:#fff"/>
-            <path id="patch_8" d="M373.024 192.24h71.117V42.535h-71.117z" clip-path="url(#p08c4009710)" style="fill:#347269"/>
-            <path id="patch_9" d="M444.141 192.24h71.118V48.152H444.14z" clip-path="url(#p08c4009710)" style="fill:#b70"/>
-            <path id="patch_10" d="M515.259 192.24h71.117v-70.226H515.26z" clip-path="url(#p08c4009710)" style="fill:#53c"/>
+            <path id="patch_8" d="M373.024 192.24h71.117V42.535h-71.117z" clip-path="url(#p7674a4cb61)" style="fill:#347269"/>
+            <path id="patch_9" d="M444.141 192.24h71.118V48.152H444.14z" clip-path="url(#p7674a4cb61)" style="fill:#b70"/>
+            <path id="patch_10" d="M515.259 192.24h71.117v-70.226H515.26z" clip-path="url(#p7674a4cb61)" style="fill:#63b"/>
             <path id="patch_11" d="M373.024 192.24h213.352" style="fill:none;stroke:#000;stroke-width:.8;stroke-linejoin:miter;stroke-linecap:square"/>
             <g id="text_5" style="fill:#fff" transform="matrix(.24 0 0 -.24 378.042 124.01)">
                 <defs>
@@ -127,9 +127,9 @@
         </g>
         <g id="axes_3">
             <path id="patch_12" d="M629.047 192.24H842.4V25.92H629.047z" style="fill:#fff"/>
-            <path id="patch_13" d="M629.047 192.24h71.118V25.92h-71.118z" clip-path="url(#p9f90639711)" style="fill:#347269"/>
-            <path id="patch_14" d="M700.165 192.24h71.117V58.088h-71.117z" clip-path="url(#p9f90639711)" style="fill:#b70"/>
-            <path id="patch_15" d="M771.282 192.24H842.4v-77.361h-71.118z" clip-path="url(#p9f90639711)" style="fill:#53c"/>
+            <path id="patch_13" d="M629.047 192.24h71.118V25.92h-71.118z" clip-path="url(#p5fb7e2b8fd)" style="fill:#347269"/>
+            <path id="patch_14" d="M700.165 192.24h71.117V58.088h-71.117z" clip-path="url(#p5fb7e2b8fd)" style="fill:#b70"/>
+            <path id="patch_15" d="M771.282 192.24H842.4v-77.361h-71.118z" clip-path="url(#p5fb7e2b8fd)" style="fill:#63b"/>
             <path id="patch_16" d="M629.047 192.24H842.4" style="fill:none;stroke:#000;stroke-width:.8;stroke-linejoin:miter;stroke-linecap:square"/>
             <g id="text_8" style="fill:#fff" transform="matrix(.24 0 0 -.24 634.066 115.703)">
                 <use xlink:href="#DejaVuSans-32"/>
@@ -152,13 +152,13 @@
         </g>
     </g>
     <defs>
-        <clipPath id="pa67532d3ee">
+        <clipPath id="p1af7833e91">
             <path d="M117 25.92h213.353v166.32H117z"/>
         </clipPath>
-        <clipPath id="p08c4009710">
+        <clipPath id="p7674a4cb61">
             <path d="M373.024 25.92h213.353v166.32H373.024z"/>
         </clipPath>
-        <clipPath id="p9f90639711">
+        <clipPath id="p5fb7e2b8fd">
             <path d="M629.047 25.92H842.4v166.32H629.047z"/>
         </clipPath>
     </defs>
