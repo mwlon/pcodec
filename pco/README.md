@@ -1,3 +1,7 @@
+<div style="text-align:center">
+  <img alt="Pco logo" src="https://raw.githubusercontent.com/mwlon/pcodec/cac902e714077426d915f4fc397508b187c72380/images/logo.svg" width="160px">
+</div>
+
 Pco (Pcodec) losslessly compresses and decompresses numerical sequences with
 high compression ratio and moderately fast speed.
 
