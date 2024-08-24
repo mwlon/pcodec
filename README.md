@@ -1,3 +1,7 @@
+<div style="text-align:center">
+  <img alt="Pco logo" src="images/logo.svg" width="160px">
+</div>
+
 [![crates.io][crates-badge]][crates-url]
 [![pypi.org][pypi-badge]][pypi-url]
 
