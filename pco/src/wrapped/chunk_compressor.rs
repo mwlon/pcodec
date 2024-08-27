@@ -385,7 +385,12 @@ fn new_candidate_w_split_and_delta_order<L: Latent>(
     bin_counts.push(trained.counts);
   }
 
-  let meta = ChunkMeta::new(mode, delta_order, var_metas);
+  let meta = ChunkMeta {
+    mode,
+    delta_encoding_order: delta_order,
+    n_delta_subsequences: 1,
+    per_latent_var: var_metas,
+  };
   let chunk_compressor = ChunkCompressor {
     meta,
     latent_var_policies: var_policies,

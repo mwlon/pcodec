@@ -158,6 +158,12 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
   }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DeltaEncoding {
+  pub order: usize,
+}
+
 /// The metadata of a pco chunk.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -169,6 +175,11 @@ pub struct ChunkMeta<L: Latent> {
   ///
   /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
   pub delta_encoding_order: usize,
+  /// How many subsequences the numbers are partitioned into for delta.
+  /// This is between 1 and 256, inclusive.
+  ///
+  /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
+  pub n_delta_subsequences: usize,
   /// Metadata about the interleaved streams needed by `pco` to
   /// compress/decompress the inputs
   /// according to the formula used by `mode`.
@@ -194,18 +205,6 @@ unsafe fn write_bins<L: Latent, W: Write>(
 }
 
 impl<L: Latent> ChunkMeta<L> {
-  pub(crate) fn new(
-    mode: Mode<L>,
-    delta_encoding_order: usize,
-    per_latent_var: Vec<ChunkLatentVarMeta<L>>,
-  ) -> Self {
-    ChunkMeta {
-      mode,
-      delta_encoding_order,
-      per_latent_var,
-    }
-  }
-
   pub(crate) fn exact_size(&self) -> usize {
     let extra_bits_for_mode = match self.mode {
       Mode::Classic => 0,
@@ -221,6 +220,7 @@ impl<L: Latent> ChunkMeta<L> {
     let n_bits = BITS_TO_ENCODE_MODE as usize
       + extra_bits_for_mode as usize
       + BITS_TO_ENCODE_DELTA_ENCODING_ORDER as usize
+      + BITS_TO_ENCODE_N_DELTA_SUBSEQUENCES as usize
       + bits_for_latent_vars;
     n_bits.div_ceil(8)
   }
@@ -244,37 +244,55 @@ impl<L: Latent> ChunkMeta<L> {
     reader_builder: &mut BitReaderBuilder<R>,
     version: &FormatVersion,
   ) -> PcoResult<Self> {
-    let (mode, delta_encoding_order) = reader_builder.with_reader(|reader| {
-      let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
-        0 => Ok(Mode::Classic),
-        1 => {
-          if version.used_old_gcds() {
-            return Err(PcoError::compatibility(
-              "unable to decompress data from v0.0.0 of pco with different GCD encoding",
-            ));
+    let (mode, delta_encoding_order, n_delta_subsequences) =
+      reader_builder.with_reader(|reader| {
+        let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
+          0 => Ok(Mode::Classic),
+          1 => {
+            if version.used_old_gcds() {
+              return Err(PcoError::compatibility(
+                "unable to decompress data from v0.0.0 of pco with different GCD encoding",
+              ));
+            }
+
+            let base = reader.read_uint::<L>(L::BITS);
+            Ok(Mode::IntMult(base))
           }
+          2 => {
+            let base_latent = reader.read_uint::<L>(L::BITS);
+            Ok(Mode::FloatMult(base_latent))
+          }
+          3 => {
+            let k = reader.read_bitlen(BITS_TO_ENCODE_QUANTIZE_K);
+            Ok(Mode::FloatQuant(k))
+          }
+          value => Err(PcoError::corruption(format!(
+            "unknown mode value {}",
+            value
+          ))),
+        }?;
 
-          let base = reader.read_uint::<L>(L::BITS);
-          Ok(Mode::IntMult(base))
-        }
-        2 => {
-          let base_latent = reader.read_uint::<L>(L::BITS);
-          Ok(Mode::FloatMult(base_latent))
-        }
-        3 => {
-          let k = reader.read_bitlen(BITS_TO_ENCODE_QUANTIZE_K);
-          Ok(Mode::FloatQuant(k))
-        }
-        value => Err(PcoError::corruption(format!(
-          "unknown mode value {}",
-          value
-        ))),
-      }?;
+        let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
+        let n_delta_subsequences = if version.0 <= 2 {
+          // delta subsequences weren't introduced until version 3
+          1
+        } else {
+          1 + reader.read_usize(BITS_TO_ENCODE_N_DELTA_SUBSEQUENCES)
+        };
 
-      let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
+        Ok((
+          mode,
+          delta_encoding_order,
+          n_delta_subsequences,
+        ))
+      })?;
 
-      Ok((mode, delta_encoding_order))
-    })?;
+    if n_delta_subsequences > 1 && delta_encoding_order != 1 {
+      return Err(PcoError::corruption(format!(
+        "unsupported delta configuration of order {} with {} subsequences",
+        delta_encoding_order, n_delta_subsequences,
+      )));
+    }
 
     let n_latent_vars = mode.n_latent_vars();
 
@@ -293,6 +311,7 @@ impl<L: Latent> ChunkMeta<L> {
     Ok(Self {
       mode,
       delta_encoding_order,
+      n_delta_subsequences,
       per_latent_var,
     })
   }
@@ -321,6 +340,10 @@ impl<L: Latent> ChunkMeta<L> {
     writer.write_usize(
       self.delta_encoding_order,
       BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
+    );
+    writer.write_usize(
+      self.n_delta_subsequences - 1,
+      BITS_TO_ENCODE_N_DELTA_SUBSEQUENCES,
     );
     writer.flush()?;
 
@@ -392,6 +415,7 @@ mod tests {
     let meta = ChunkMeta::<u32> {
       mode: Mode::Classic,
       delta_encoding_order: 5,
+      n_delta_subsequences: 1,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
         bins: vec![],
@@ -406,6 +430,7 @@ mod tests {
     let meta = ChunkMeta::<u64> {
       mode: Mode::Classic,
       delta_encoding_order: 0,
+      n_delta_subsequences: 1,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
         bins: vec![Bin {
@@ -424,6 +449,7 @@ mod tests {
     let meta = ChunkMeta::<u32> {
       mode: Mode::FloatMult(777_u32),
       delta_encoding_order: 3,
+      n_delta_subsequences: 1,
       per_latent_var: vec![
         ChunkLatentVarMeta {
           ans_size_log: 7,
