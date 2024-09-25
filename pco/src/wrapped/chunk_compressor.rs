@@ -3,6 +3,7 @@ use std::io::Write;
 
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
+use crate::chunk_config::DeltaSpec;
 use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageInfo};
 use crate::compression_table::CompressionTable;
 use crate::constants::{
@@ -28,6 +29,13 @@ const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
 
+#[derive(Default)]
+struct TrainedBins<L: Latent> {
+  infos: Vec<BinCompressionInfo<L>>,
+  ans_size_log: Bitlen,
+  counts: Vec<Weight>,
+}
+
 // returns table size log
 fn quantize_weights<L: Latent>(
   infos: &mut [BinCompressionInfo<L>],
@@ -41,13 +49,6 @@ fn quantize_weights<L: Latent>(
     infos[i].weight = weight;
   }
   ans_size_log
-}
-
-#[derive(Default)]
-struct TrainedBins<L: Latent> {
-  infos: Vec<BinCompressionInfo<L>>,
-  ans_size_log: Bitlen,
-  counts: Vec<Weight>,
 }
 
 fn train_infos<L: Latent>(
@@ -249,7 +250,7 @@ fn validate_config(config: &ChunkConfig) -> PcoResult<()> {
     )));
   }
 
-  if let Some(order) = config.delta_encoding_order {
+  if let DeltaSpec::TryConsecutiveDeltaOrder(order) = config.delta_spec {
     if order > MAX_DELTA_ENCODING_ORDER {
       return Err(PcoError::invalid_argument(format!(
         "delta encoding order may not exceed {} (was {})",
@@ -292,7 +293,7 @@ fn collect_contiguous_deltas<L: Latent>(
 
 fn build_page_infos_and_delta_moments<L: Latent>(
   mode: Mode<L>,
-  delta_order: usize,
+  delta_strategy: DeltaStrategy,
   n_per_page: &[usize],
   latents: &mut [Vec<L>],
 ) -> (Vec<PageInfo>, Vec<Vec<DeltaMoments<L>>>) {
@@ -305,7 +306,11 @@ fn build_page_infos_and_delta_moments<L: Latent>(
   for (&page_n, delta_moments) in n_per_page.iter().zip(delta_moments.iter_mut()) {
     let mut end_idx_per_var = Vec::new();
     for (latent_var_idx, latents) in latents.iter_mut().enumerate() {
-      let var_delta_order = mode.delta_order_for_latent_var(latent_var_idx, delta_order);
+      let delta_strategy_for_var = if mode.uses_delta_for_latent_var(latent_var_idx) {
+        delta_strategy
+      } else {
+        DeltaStrategy::default()
+      };
       delta_moments.push(delta::encode_in_place(
         &mut latents[start_idx..start_idx + page_n],
         var_delta_order,
@@ -328,15 +333,20 @@ fn new_candidate_w_split_and_delta_order<L: Latent>(
   mut latents: Vec<Vec<L>>, // start out plain, gets delta encoded in place
   paging_spec: &PagingSpec,
   mode: Mode<L>,
-  delta_order: usize,
+  delta_strategy: DeltaStrategy,
   unoptimized_bins_log: Bitlen,
 ) -> PcoResult<(ChunkCompressor<L>, Vec<Vec<Weight>>)> {
   let chunk_n = latents[0].len();
   let n_per_page = paging_spec.n_per_page(chunk_n)?;
   let n_latent_vars = mode.n_latent_vars();
 
-  let (page_infos, delta_moments) =
-    build_page_infos_and_delta_moments(mode, delta_order, &n_per_page, &mut latents);
+  let (page_infos, delta_moments) = build_page_infos_and_delta_moments(
+    mode,
+    delta_strategy,
+    &n_per_page,
+    &mut latents,
+  );
+  // now they are actually deltas
   let deltas = latents;
 
   // training bins
@@ -441,7 +451,7 @@ fn choose_delta_encoding_order<L: Latent>(
     1 + primary_latents.len() / N_PER_EXTRA_DELTA_GROUP,
   );
 
-  let mut best_order = usize::MAX;
+  let mut best_order = u32::MAX;
   let mut best_size = usize::MAX;
   for delta_encoding_order in 0..MAX_DELTA_ENCODING_ORDER + 1 {
     let (sample_cc, _) = new_candidate_w_split_and_delta_order(

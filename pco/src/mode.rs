@@ -82,21 +82,17 @@ impl<L: Latent> Mode<L> {
     }
   }
 
-  pub(crate) fn delta_order_for_latent_var(
-    &self,
-    latent_var_idx: usize,
-    delta_order: usize,
-  ) -> usize {
+  pub(crate) fn uses_delta_for_latent_var(&self, latent_var_idx: usize) -> bool {
     use Mode::*;
 
     match (self, latent_var_idx) {
       // In all currently-available modes, the overall `delta_order` is really the delta-order of
       // the first latent.
-      (Classic, 0) | (FloatMult(_), 0) | (FloatQuant(_), 0) | (IntMult(_), 0) => delta_order,
+      (Classic, 0) | (FloatMult(_), 0) | (FloatQuant(_), 0) | (IntMult(_), 0) => true,
       // In FloatMult, IntMult, and FloatQuant, the second latent is essentially a remainder or
       // adjustment; there isn't any a priori reason that deltas should be useful for that kind of
       // term and we do not attempt them.
-      (FloatMult(_), 1) | (IntMult(_), 1) | (FloatQuant(_), 1) => 0,
+      (FloatMult(_), 1) | (IntMult(_), 1) | (FloatQuant(_), 1) => false,
       _ => unreachable!(
         "unknown latent {:?}/{}",
         self, latent_var_idx

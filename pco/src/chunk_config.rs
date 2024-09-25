@@ -35,27 +35,12 @@ pub enum ModeSpec {
   TryIntMult(u64),
 }
 
-// TODO consider adding a "lossiness" spec that allows dropping secondary latent
-// vars.
-/// All configurations available for a compressor.
-///
-/// Some, like `delta_encoding_order`, are explicitly stored in the
-/// compressed bytes.
-/// Others, like `compression_level`, affect compression but are not explicitly
-/// stored.
-#[derive(Clone, Debug)]
+/// TODO
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[non_exhaustive]
-pub struct ChunkConfig {
-  /// Ranges from 0 to 12 inclusive (default: 8).
-  ///
-  /// At present,
-  /// * Level 0 achieves only a small amount of compression.
-  /// * Level 8 achieves very good compression.
-  /// * Level 12 achieves marginally better compression than 8.
-  ///
-  /// The meaning of the compression levels is subject to change with
-  /// new releases.
-  pub compression_level: usize,
+pub enum DeltaSpec {
+  #[default]
+  Auto,
   /// Ranges from 0 to 7 inclusive (default: `None`, automatically detecting on
   /// each chunk).
   ///
@@ -77,7 +62,38 @@ pub struct ChunkConfig {
   /// chunks, you can create a
   /// [`ChunkDecompressor`][crate::wrapped::ChunkDecompressor] and read the
   /// delta encoding order it chose.
-  pub delta_encoding_order: Option<usize>,
+  TryConsecutiveDeltaOrder(u32),
+  TryLzDelta,
+}
+
+impl DeltaSpec {
+  pub fn disabled() -> Self {
+    Self::TryConsecutiveDeltaOrder(0)
+  }
+}
+
+// TODO consider adding a "lossiness" spec that allows dropping secondary latent
+// vars.
+/// All configurations available for a compressor.
+///
+/// Some, like `delta_encoding_order`, are explicitly stored in the
+/// compressed bytes.
+/// Others, like `compression_level`, affect compression but are not explicitly
+/// stored.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct ChunkConfig {
+  /// Ranges from 0 to 12 inclusive (default: 8).
+  ///
+  /// At present,
+  /// * Level 0 achieves only a small amount of compression.
+  /// * Level 8 achieves very good compression.
+  /// * Level 12 achieves marginally better compression than 8.
+  ///
+  /// The meaning of the compression levels is subject to change with
+  /// new releases.
+  pub compression_level: usize,
+  pub delta_spec: DeltaSpec,
   /// Specifies how the mode should be determined.
   ///
   /// See [`Mode`](crate::Mode) to understand what modes are.
@@ -91,7 +107,7 @@ impl Default for ChunkConfig {
   fn default() -> Self {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
-      delta_encoding_order: None,
+      delta_spec: DeltaSpec::default(),
       mode_spec: ModeSpec::default(),
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
@@ -106,8 +122,8 @@ impl ChunkConfig {
   }
 
   /// Sets [`delta_encoding_order`][ChunkConfig::delta_encoding_order].
-  pub fn with_delta_encoding_order(mut self, order: Option<usize>) -> Self {
-    self.delta_encoding_order = order;
+  pub fn with_delta_spec(mut self, delta_spec: DeltaSpec) -> Self {
+    self.delta_spec = delta_spec;
     self
   }
 

@@ -15,6 +15,7 @@ pub const BITS_TO_ENCODE_ANS_SIZE_LOG: Bitlen = 4;
 pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: Bitlen = 3;
 pub const BITS_TO_ENCODE_N_DELTA_SUBSEQUENCES: Bitlen = 8;
 pub const BITS_TO_ENCODE_MODE: Bitlen = 4;
+pub const BITS_TO_ENCODE_DELTA_VARIANT: Bitlen = 4;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
 // conservative: wide enough to support quantizing float datasets with 255 unused bits of precision
 pub const BITS_TO_ENCODE_QUANTIZE_K: Bitlen = 8;
@@ -37,7 +38,7 @@ pub const MAX_ANS_BITS: Bitlen = 14;
 pub const MAX_ANS_BYTES: usize = MAX_ANS_BITS.div_ceil(8) as usize;
 pub const LIMITED_UNOPTIMIZED_BINS_LOG: Bitlen = 6;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
-pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
+pub const MAX_DELTA_ENCODING_ORDER: u32 = 7;
 pub const MAX_ENTRIES: usize = 1 << 24;
 pub const MAX_SUPPORTED_PRECISION: Bitlen = 128;
 pub const MAX_SUPPORTED_PRECISION_BYTES: usize = (MAX_SUPPORTED_PRECISION / 8) as usize;

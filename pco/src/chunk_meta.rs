@@ -13,10 +13,6 @@ use crate::errors::{PcoError, PcoResult};
 use crate::format_version::FormatVersion;
 use crate::Mode;
 
-pub(crate) fn bin_exact_bit_size<L: Latent>(ans_size_log: Bitlen) -> Bitlen {
-  ans_size_log + L::BITS + bits_to_encode_offset_bits::<L>()
-}
-
 /// Part of [`ChunkMeta`][crate::ChunkMeta] that describes a latent
 /// variable interleaved into the compressed data.
 ///
@@ -36,6 +32,17 @@ pub struct ChunkLatentVarMeta<L: Latent> {
   /// How the numbers or deltas are encoded, depending on their numerical
   /// range.
   pub bins: Vec<Bin<L>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DeltaEncoding {
+  Consecutive { order: u32 },
+  Lz,
+}
+
+pub(crate) fn bin_exact_bit_size<L: Latent>(ans_size_log: Bitlen) -> Bitlen {
+  ans_size_log + L::BITS + bits_to_encode_offset_bits::<L>()
 }
 
 impl<L: Latent> ChunkLatentVarMeta<L> {
@@ -158,28 +165,14 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct DeltaEncoding {
-  pub order: usize,
-}
-
 /// The metadata of a pco chunk.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ChunkMeta<L: Latent> {
   /// The formula `pco` used to compress each number at a low level.
   pub mode: Mode<L>,
-  /// How many times delta encoding was applied during compression.
-  /// This is between 0 and 7, inclusive.
-  ///
-  /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
-  pub delta_encoding_order: usize,
-  /// How many subsequences the numbers are partitioned into for delta.
-  /// This is between 1 and 256, inclusive.
-  ///
-  /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
-  pub n_delta_subsequences: usize,
+  // TODO
+  pub delta_encoding: DeltaEncoding,
   /// Metadata about the interleaved streams needed by `pco` to
   /// compress/decompress the inputs
   /// according to the formula used by `mode`.
@@ -204,6 +197,23 @@ unsafe fn write_bins<L: Latent, W: Write>(
   Ok(())
 }
 
+fn delta_order_for_latent_var<L: Latent>(
+  delta_encoding: DeltaEncoding,
+  mode: Mode<L>,
+  latent_var_idx: usize,
+) -> usize {
+  match delta_encoding {
+    DeltaEncoding::Consecutive { order } => {
+      if mode.uses_delta_for_latent_var(latent_var_idx) {
+        order as usize
+      } else {
+        0
+      }
+    }
+    _ => 0,
+  }
+}
+
 impl<L: Latent> ChunkMeta<L> {
   pub(crate) fn exact_size(&self) -> usize {
     let extra_bits_for_mode = match self.mode {
@@ -226,14 +236,23 @@ impl<L: Latent> ChunkMeta<L> {
   }
 
   pub(crate) fn exact_page_meta_size(&self) -> usize {
+    let delta_order = if let DeltaEncoding::Consecutive { order } = self.delta_encoding {
+      order
+    } else {
+      // LZ deltas don't actually require any page meta
+      0
+    };
+
     let bit_size: usize = self
       .per_latent_var
       .iter()
       .enumerate()
       .map(|(latent_var_idx, latent_var)| {
-        let delta_order = self
-          .mode
-          .delta_order_for_latent_var(latent_var_idx, self.delta_encoding_order);
+        let delta_order = delta_order_for_latent_var(
+          self.delta_encoding,
+          self.mode,
+          latent_var_idx,
+        );
         latent_var.ans_size_log as usize * ANS_INTERLEAVING + L::BITS as usize * delta_order
       })
       .sum();
@@ -244,55 +263,53 @@ impl<L: Latent> ChunkMeta<L> {
     reader_builder: &mut BitReaderBuilder<R>,
     version: &FormatVersion,
   ) -> PcoResult<Self> {
-    let (mode, delta_encoding_order, n_delta_subsequences) =
-      reader_builder.with_reader(|reader| {
-        let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
-          0 => Ok(Mode::Classic),
-          1 => {
-            if version.used_old_gcds() {
-              return Err(PcoError::compatibility(
-                "unable to decompress data from v0.0.0 of pco with different GCD encoding",
-              ));
-            }
-
-            let base = reader.read_uint::<L>(L::BITS);
-            Ok(Mode::IntMult(base))
+    let (mode, delta_encoding) = reader_builder.with_reader(|reader| {
+      let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
+        0 => Ok(Mode::Classic),
+        1 => {
+          if version.used_old_gcds() {
+            return Err(PcoError::compatibility(
+              "unable to decompress data from v0.0.0 of pco with different GCD encoding",
+            ));
           }
-          2 => {
-            let base_latent = reader.read_uint::<L>(L::BITS);
-            Ok(Mode::FloatMult(base_latent))
-          }
-          3 => {
-            let k = reader.read_bitlen(BITS_TO_ENCODE_QUANTIZE_K);
-            Ok(Mode::FloatQuant(k))
-          }
-          value => Err(PcoError::corruption(format!(
-            "unknown mode value {}",
-            value
-          ))),
-        }?;
 
-        let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
-        let n_delta_subsequences = if version.0 <= 2 {
-          // delta subsequences weren't introduced until version 3
-          1
-        } else {
-          1 + reader.read_usize(BITS_TO_ENCODE_N_DELTA_SUBSEQUENCES)
-        };
+          let base = reader.read_uint::<L>(L::BITS);
+          Ok(Mode::IntMult(base))
+        }
+        2 => {
+          let base_latent = reader.read_uint::<L>(L::BITS);
+          Ok(Mode::FloatMult(base_latent))
+        }
+        3 => {
+          let k = reader.read_bitlen(BITS_TO_ENCODE_QUANTIZE_K);
+          Ok(Mode::FloatQuant(k))
+        }
+        value => Err(PcoError::corruption(format!(
+          "unknown mode variant {}",
+          value
+        ))),
+      }?;
 
-        Ok((
-          mode,
-          delta_encoding_order,
-          n_delta_subsequences,
-        ))
-      })?;
+      let delta_encoding_variant = if version.supports_delta_encoding_variants() {
+        reader.read_usize(BITS_TO_ENCODE_DELTA_VARIANT)
+      } else {
+        0
+      };
 
-    if n_delta_subsequences > 1 && delta_encoding_order != 1 {
-      return Err(PcoError::corruption(format!(
-        "unsupported delta configuration of order {} with {} subsequences",
-        delta_encoding_order, n_delta_subsequences,
-      )));
-    }
+      let delta_encoding = match delta_encoding_variant {
+        0 => {
+          let order = reader.read_uint::<u32>(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
+          Ok(DeltaEncoding::Consecutive { order })
+        }
+        1 => Ok(DeltaEncoding::Lz),
+        _ => Err(PcoError::corruption(format!(
+          "unknown delta encoding variant {}",
+          delta_encoding_variant
+        ))),
+      }?;
+
+      Ok((mode, delta_encoding))
+    })?;
 
     let n_latent_vars = mode.n_latent_vars();
 
@@ -310,20 +327,19 @@ impl<L: Latent> ChunkMeta<L> {
 
     Ok(Self {
       mode,
-      delta_encoding_order,
-      n_delta_subsequences,
+      delta_encoding,
       per_latent_var,
     })
   }
 
   pub(crate) unsafe fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) -> PcoResult<()> {
-    let mode_value = match self.mode {
+    let mode_variant = match self.mode {
       Mode::Classic => 0,
       Mode::IntMult(_) => 1,
       Mode::FloatMult { .. } => 2,
       Mode::FloatQuant { .. } => 3,
     };
-    writer.write_usize(mode_value, BITS_TO_ENCODE_MODE);
+    writer.write_usize(mode_variant, BITS_TO_ENCODE_MODE);
     match self.mode {
       Mode::Classic => (),
       Mode::IntMult(base) => {
@@ -337,14 +353,20 @@ impl<L: Latent> ChunkMeta<L> {
       }
     };
 
+    let delta_encoding_variant = match self.delta_encoding {
+      DeltaEncoding::Consecutive { order: _ } => 0,
+      DeltaEncoding::Lz => 1,
+    };
     writer.write_usize(
-      self.delta_encoding_order,
-      BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
+      delta_encoding_variant,
+      BITS_TO_ENCODE_DELTA_VARIANT,
     );
-    writer.write_usize(
-      self.n_delta_subsequences - 1,
-      BITS_TO_ENCODE_N_DELTA_SUBSEQUENCES,
-    );
+    match self.delta_encoding {
+      DeltaEncoding::Consecutive { order } => {
+        writer.write_uint(order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER)
+      }
+      DeltaEncoding::Lz => (),
+    };
     writer.flush()?;
 
     for latents in &self.per_latent_var {
@@ -354,12 +376,6 @@ impl<L: Latent> ChunkMeta<L> {
     writer.finish_byte();
     writer.flush()?;
     Ok(())
-  }
-
-  pub(crate) fn delta_order_for_latent_var(&self, latent_idx: usize) -> usize {
-    self
-      .mode
-      .delta_order_for_latent_var(latent_idx, self.delta_encoding_order)
   }
 }
 
@@ -384,9 +400,11 @@ mod tests {
     let page_meta = PageMeta {
       per_var: (0..meta.per_latent_var.len())
         .map(|latent_var_idx| {
-          let delta_order = meta
-            .mode
-            .delta_order_for_latent_var(latent_var_idx, meta.delta_encoding_order);
+          let delta_order = delta_order_for_latent_var(
+            meta.delta_encoding,
+            meta.mode,
+            latent_var_idx,
+          );
           PageLatentVarMeta {
             delta_moments: DeltaMoments {
               moments: vec![L::ZERO; delta_order],
@@ -414,8 +432,7 @@ mod tests {
   fn exact_size_binless() -> PcoResult<()> {
     let meta = ChunkMeta::<u32> {
       mode: Mode::Classic,
-      delta_encoding_order: 5,
-      n_delta_subsequences: 1,
+      delta_encoding: DeltaEncoding::Consecutive { order: 5 },
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
         bins: vec![],
@@ -429,8 +446,7 @@ mod tests {
   fn exact_size_trivial() -> PcoResult<()> {
     let meta = ChunkMeta::<u64> {
       mode: Mode::Classic,
-      delta_encoding_order: 0,
-      n_delta_subsequences: 1,
+      delta_encoding: DeltaEncoding::Consecutive { order: 0 },
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
         bins: vec![Bin {
@@ -448,8 +464,7 @@ mod tests {
   fn exact_size_float_mult() -> PcoResult<()> {
     let meta = ChunkMeta::<u32> {
       mode: Mode::FloatMult(777_u32),
-      delta_encoding_order: 3,
-      n_delta_subsequences: 1,
+      delta_encoding: DeltaEncoding::Consecutive { order: 3 },
       per_latent_var: vec![
         ChunkLatentVarMeta {
           ans_size_log: 7,

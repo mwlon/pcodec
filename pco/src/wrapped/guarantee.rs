@@ -10,7 +10,6 @@ pub(crate) fn baseline_chunk_meta<L: Latent>() -> ChunkMeta<L> {
   ChunkMeta {
     mode: Mode::Classic,
     delta_encoding_order: 0,
-    n_delta_subsequences: 1,
     per_latent_var: vec![ChunkLatentVarMeta {
       ans_size_log: 0,
       bins: vec![Bin {
