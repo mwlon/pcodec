@@ -29,10 +29,14 @@ pub const OVERSHOOT_PADDING: usize = MAX_SUPPORTED_PRECISION_BYTES + 9;
 // generously cover the data needed to read the other parts of chunk meta.
 pub const CHUNK_META_PADDING: usize =
   FULL_BIN_BATCH_SIZE * (4 + 2 * MAX_SUPPORTED_PRECISION_BYTES) + OVERSHOOT_PADDING;
-// Page padding is enough for one full batch of latents; this should also
-// generously cover the data needed to read the page meta.
-pub const PAGE_PADDING: usize =
-  FULL_BATCH_N * (MAX_SUPPORTED_PRECISION_BYTES + MAX_ANS_BYTES) + OVERSHOOT_PADDING;
+// Page padding is enough for one full batch of a single latent variable;
+// this should also generously cover the data needed to read the page meta.
+pub const PAGE_PADDING: usize = {
+  let max_bits_per_lookback = MAX_LZ_DELTA_LOOKBACK_LOG + MAX_ANS_BITS;
+  let max_bits_per_delta = MAX_SUPPORTED_PRECISION + MAX_ANS_BITS;
+  FULL_BATCH_N * (max_bits_per_lookback + max_bits_per_delta).div_ceil(8) as usize
+    + OVERSHOOT_PADDING
+};
 
 // cutoffs and legal parameter values
 pub const MAX_ANS_BITS: Bitlen = 14;
@@ -46,6 +50,8 @@ pub const MAX_SUPPORTED_PRECISION_BYTES: usize = (MAX_SUPPORTED_PRECISION / 8) a
 pub const MULT_REQUIRED_BITS_SAVED_PER_NUM: f64 = 0.5;
 pub const QUANT_REQUIRED_BITS_SAVED_PER_NUM: f64 = 2.0;
 pub const CLASSIC_MEMORIZABLE_BINS_LOG: Bitlen = 8;
+pub const MAX_LZ_DELTA_LOOKBACK_LOG: u32 = 6;
+pub const MAX_LZ_DELTA_LOOKBACK: usize = 1 << MAX_LZ_DELTA_LOOKBACK_LOG;
 
 // defaults
 pub const DEFAULT_COMPRESSION_LEVEL: usize = 8;

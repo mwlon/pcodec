@@ -5,23 +5,36 @@ use std::marker::PhantomData;
 use better_io::BetterBufRead;
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
-use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
+use crate::constants::{Lookback, FULL_BATCH_N, MAX_LZ_DELTA_LOOKBACK, PAGE_PADDING};
 use crate::data_types::{Latent, NumberLike};
 use crate::delta;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
-use crate::metadata::delta_encoding::DeltaMoments;
+use crate::metadata::delta_encoding::{DeltaEncoding, DeltaMoments};
 use crate::metadata::page_meta::PageMeta;
 use crate::progress::Progress;
 use crate::{bit_reader, ChunkMeta, Mode};
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
 
+// NOTE: in multiple places here, we use the fact that secondary latents
+// are never delta encoded.
+
+enum DeltaState<L: Latent> {
+  None,
+  Consecutive(DeltaMoments<L>),
+  Lz {
+    lookback_bd: LatentBatchDecompressor<Lookback>,
+    lookbacks: [Lookback; MAX_LZ_DELTA_LOOKBACK],
+    window: [L; MAX_LZ_DELTA_LOOKBACK],
+  },
+}
+
 #[derive(Clone, Debug)]
 pub struct State<L: Latent> {
   n_processed: usize,
   latent_batch_decompressors: Vec<LatentBatchDecompressor<L>>,
-  delta_momentss: Vec<DeltaMoments<L>>, // one per latent variable
+  primary_delta_state: DeltaState<L>,
   primary_latents: [L; FULL_BATCH_N],
   secondary_latents: [L; FULL_BATCH_N],
 }
@@ -41,23 +54,42 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
 
 unsafe fn decompress_latents_w_delta<L: Latent>(
   reader: &mut BitReader,
-  delta_moments: &mut DeltaMoments<L>,
-  lbd: &mut LatentBatchDecompressor<L>,
+  delta_state: &mut DeltaState<L>,
+  latent_bd: &mut LatentBatchDecompressor<L>,
   dst: &mut [L],
   n_remaining: usize,
 ) -> PcoResult<()> {
-  let n_remaining_pre_delta = n_remaining.saturating_sub(delta_moments.order());
-  let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
-    dst.len()
-  } else {
-    // If we're at the end, LatentBatchdDecompressor won't initialize the last
-    // few elements before delta decoding them, so we do that manually here to
-    // satisfy MIRI. This step isn't really necessary.
-    dst[n_remaining_pre_delta..].fill(L::default());
-    n_remaining_pre_delta
-  };
-  lbd.decompress_latent_batch(reader, &mut dst[..pre_delta_len])?;
-  delta::consecutive_decode_in_place(delta_moments, dst);
+  match delta_state {
+    DeltaState::None => {
+      latent_bd.decompress_latent_batch(reader, dst)?;
+    }
+    DeltaState::Consecutive(moments) => {
+      let n_remaining_pre_delta = n_remaining.saturating_sub(moments.order());
+      let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
+        dst.len()
+      } else {
+        // If we're at the end, LatentBatchdDecompressor won't initialize the last
+        // few elements before delta decoding them, so we do that manually here to
+        // satisfy MIRI. This step isn't really necessary.
+        dst[n_remaining_pre_delta..].fill(L::default());
+        n_remaining_pre_delta
+      };
+      latent_bd.decompress_latent_batch(reader, &mut dst[..pre_delta_len])?;
+      delta::consecutive_decode_in_place(moments, dst);
+    }
+    DeltaState::Lz {
+      lookback_bd,
+      lookbacks,
+      window,
+    } => {
+      lookback_bd.decompress_latent_batch(reader, lookbacks)?;
+      latent_bd.decompress_latent_batch(reader, dst)?;
+      delta::lz_decode_in_place(window, lookbacks, dst);
+      if dst.len() >= MAX_LZ_DELTA_LOOKBACK {
+        window.copy_from_slice(&dst[dst.len() - MAX_LZ_DELTA_LOOKBACK..]);
+      }
+    }
+  }
   Ok(())
 }
 
@@ -84,20 +116,26 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       .with_reader(|reader| unsafe { PageMeta::<T::L>::parse_from(reader, chunk_meta) })?;
 
     let mode = chunk_meta.mode;
-    let delta_momentss = page_meta
-      .per_var
-      .iter()
-      .map(|latent| latent.delta_moments.clone())
-      .collect::<Vec<_>>();
+    let primary_delta_state = match chunk_meta.delta_encoding {
+      DeltaEncoding::None => DeltaState::None,
+      DeltaEncoding::Consecutive { order: _ } => {
+        DeltaState::Consecutive(page_meta.per_var[0].delta_moments.clone())
+      }
+      DeltaEncoding::Lz => DeltaState::Lz {
+        window: delta::get_default_lz_window(),
+        lookbacks: [0; MAX_LZ_DELTA_LOOKBACK],
+        lookback_bd: // TODO
+      },
+    };
 
     let mut latent_batch_decompressors = Vec::new();
     for latent_var_idx in 0..mode.n_latent_vars() {
       let chunk_latent_meta = &chunk_meta.per_latent_var[latent_var_idx];
-      let delta_order = chunk_meta.consecutive_delta_order_for_latent_var(latent_var_idx);
-      if chunk_latent_meta.bins.is_empty() && n > delta_order {
+      let n_implicit_latents = chunk_meta.n_implicit_latents(latent_var_idx);
+      if chunk_latent_meta.bins.is_empty() && n > n_implicit_latents {
         return Err(PcoError::corruption(format!(
-          "unable to decompress chunk with no bins and {} deltas",
-          n - delta_order,
+          "unable to decompress chunk with no bins and {} explicit latents",
+          n - n_implicit_latents,
         )));
       }
 
@@ -107,15 +145,16 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       )?);
     }
 
-    let maybe_constant_secondary =
-      if latent_batch_decompressors.len() >= 2 && delta_momentss[1].order() == 0 {
-        latent_batch_decompressors[1].maybe_constant_value
-      } else {
-        None
-      };
+    let maybe_constant_secondary = if latent_batch_decompressors.len() >= 2 {
+      // This case relies on the fact that seconary latents are never delta encoded
+      latent_batch_decompressors[1].maybe_constant_value
+    } else {
+      None
+    };
+
+    let secondary_default = maybe_constant_secondary.unwrap_or(T::L::default());
 
     // we don't store the whole ChunkMeta because it can get large due to bins
-    let secondary_default = maybe_constant_secondary.unwrap_or(T::L::default());
     Ok(Self {
       n,
       mode,
@@ -125,7 +164,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       state: State {
         n_processed: 0,
         latent_batch_decompressors,
-        delta_momentss,
+        primary_delta_state,
         primary_latents: [T::L::default(); FULL_BATCH_N],
         secondary_latents: [secondary_default; FULL_BATCH_N],
       },
@@ -138,7 +177,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     let mode = self.mode;
     let State {
       latent_batch_decompressors,
-      delta_momentss,
+      primary_delta_state,
       primary_latents,
       secondary_latents,
       n_processed,
@@ -157,7 +196,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       unsafe {
         decompress_latents_w_delta(
           reader,
-          &mut delta_momentss[0],
+          primary_delta_state,
           &mut latent_batch_decompressors[0],
           primary_dst,
           n - *n_processed,
@@ -167,13 +206,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
     if n_latents >= 2 && self.maybe_constant_secondary.is_none() {
       self.reader_builder.with_reader(|reader| unsafe {
-        decompress_latents_w_delta(
-          reader,
-          &mut delta_momentss[1],
-          &mut latent_batch_decompressors[1],
-          secondary_latents,
-          n - *n_processed,
-        )
+        latent_batch_decompressors[1].decompress_latent_batch(reader, secondary_latents)
       })?;
     }
 

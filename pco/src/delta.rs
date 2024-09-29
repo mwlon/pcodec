@@ -1,6 +1,6 @@
-use crate::constants::Lookback;
+use crate::constants::{Lookback, MAX_LZ_DELTA_LOOKBACK, MAX_LZ_DELTA_LOOKBACK_LOG};
 use crate::data_types::Latent;
-use crate::metadata::delta_encoding::{DeltaEncoding, DeltaMoments};
+use crate::metadata::delta_encoding::DeltaMoments;
 use std::cmp::min;
 use std::io::Write;
 use std::mem::{transmute, MaybeUninit};
@@ -78,23 +78,22 @@ pub fn consecutive_decode_in_place<L: Latent>(
 // LZ
 // ==
 
-const MAX_LOOKBACK_LOG: u32 = 5;
-const MAX_LOOKBACK: usize = 1 << MAX_LOOKBACK_LOG;
-
-fn get_default_window<L: Latent>() -> [L; MAX_LOOKBACK] {
-  core::array::from_fn(|i| L::from_u64(i as u64) * (L::ONE << (L::BITS - MAX_LOOKBACK_LOG)))
+pub fn get_default_lz_window<L: Latent>() -> [L; MAX_LZ_DELTA_LOOKBACK] {
+  core::array::from_fn(|i| {
+    L::from_u64(i as u64) * (L::ONE << (L::BITS - MAX_LZ_DELTA_LOOKBACK_LOG))
+  })
 }
 
 pub fn lz_encode_in_place<L: Latent>(latents: &mut [L]) -> Vec<Lookback> {
-  let default_window = get_default_window::<L>();
+  let default_window = get_default_lz_window::<L>();
   let mut lookbacks = vec![MaybeUninit::uninit(); latents.len()];
 
   for (i, &this) in latents.iter().enumerate() {
     let mut best_lookback = 1;
     let mut best_dist = L::MAX;
-    for lookback in 1..=MAX_LOOKBACK {
+    for lookback in 1..=MAX_LZ_DELTA_LOOKBACK {
       let other = if lookback > i {
-        default_window[MAX_LOOKBACK + i - lookback]
+        default_window[MAX_LZ_DELTA_LOOKBACK + i - lookback]
       } else {
         latents[i - lookback]
       };
@@ -110,7 +109,7 @@ pub fn lz_encode_in_place<L: Latent>(latents: &mut [L]) -> Vec<Lookback> {
     }
 
     latents[i] = this.wrapping_sub(if best_lookback > i {
-      default_window[MAX_LOOKBACK + i - best_lookback]
+      default_window[MAX_LZ_DELTA_LOOKBACK + i - best_lookback]
     } else {
       latents[i - best_lookback]
     });
@@ -120,12 +119,15 @@ pub fn lz_encode_in_place<L: Latent>(latents: &mut [L]) -> Vec<Lookback> {
   unsafe { transmute(lookbacks) }
 }
 
-fn lz_decode_in_place<L: Latent>(deltas: &mut [L], lookbacks: &[Lookback]) {
-  let default_window = get_default_window::<L>();
+pub fn lz_decode_in_place<L: Latent>(
+  window: &[L; MAX_LZ_DELTA_LOOKBACK],
+  lookbacks: &[Lookback],
+  deltas: &mut [L],
+) {
   for (i, &lookback) in lookbacks.iter().enumerate() {
     let lookback = lookback as usize;
     let other = if lookback > i {
-      default_window[MAX_LOOKBACK + i - lookback]
+      window[MAX_LZ_DELTA_LOOKBACK + i - lookback]
     } else {
       deltas[i - lookback]
     };
@@ -164,10 +166,14 @@ mod tests {
     let lookbacks = lz_encode_in_place(&mut latents);
     assert_eq!(
       lookbacks,
-      vec![MAX_LOOKBACK as Lookback, 1, 1, 2, 2, 2, 1, 3]
+      vec![MAX_LZ_DELTA_LOOKBACK as Lookback, 1, 1, 2, 2, 2, 1, 3]
     );
 
-    lz_decode_in_place(&mut latents, &lookbacks);
+    lz_decode_in_place(
+      &get_default_lz_window(),
+      &lookbacks,
+      &mut latents,
+    );
     assert_eq!(latents, orig_latents);
   }
 }

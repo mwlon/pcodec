@@ -83,6 +83,9 @@ impl<L: Latent> Mode<L> {
   }
 
   pub(crate) fn uses_delta_for_latent_var(&self, latent_var_idx: usize) -> bool {
+    // IMPORTANT NOTE: so far only primary latent variables get delta encoding,
+    // and this assumption is baked into some other parts of the code outside
+    // this function, namely in PageDecompressor.
     use Mode::*;
 
     match (self, latent_var_idx) {

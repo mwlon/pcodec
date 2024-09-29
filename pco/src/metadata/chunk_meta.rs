@@ -192,7 +192,7 @@ unsafe fn write_bins<L: Latent, W: Write>(
 }
 
 impl<L: Latent> ChunkMeta<L> {
-  pub(crate) fn consecutive_delta_order_for_latent_var(&self, latent_var_idx: usize) -> usize {
+  pub(crate) fn n_implicit_latents(&self, latent_var_idx: usize) -> usize {
     match self.delta_encoding {
       DeltaEncoding::Consecutive { order } => {
         if self.mode.uses_delta_for_latent_var(latent_var_idx) {
@@ -231,7 +231,7 @@ impl<L: Latent> ChunkMeta<L> {
       .iter()
       .enumerate()
       .map(|(latent_var_idx, latent_var)| {
-        let delta_order = self.consecutive_delta_order_for_latent_var(latent_var_idx);
+        let delta_order = self.n_implicit_latents(latent_var_idx);
         latent_var.ans_size_log as usize * ANS_INTERLEAVING + L::BITS as usize * delta_order
       })
       .sum();
@@ -386,7 +386,7 @@ mod tests {
     let page_meta = PageMeta {
       per_var: (0..meta.per_latent_var.len())
         .map(|latent_var_idx| {
-          let delta_order = meta.consecutive_delta_order_for_latent_var(latent_var_idx);
+          let delta_order = meta.n_implicit_latents(latent_var_idx);
           PageLatentVarMeta {
             delta_moments: DeltaMoments {
               moments: vec![L::ZERO; delta_order],
