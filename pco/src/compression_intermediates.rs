@@ -1,12 +1,21 @@
 use crate::ans::AnsState;
-use crate::constants::{Bitlen, ANS_INTERLEAVING};
+use crate::constants::{Bitlen, Lookback, ANS_INTERLEAVING};
 use crate::data_types::Latent;
+use crate::metadata::delta_encoding::DeltaMoments;
 
 #[derive(Clone, Debug)]
-pub struct PageInfo {
+pub enum PageDeltaInfo<L: Latent> {
+  None,
+  ConsecutiveDeltaMoments(DeltaMoments<L>),
+  LzDeltaLookbacks(Vec<Lookback>),
+}
+
+#[derive(Clone, Debug)]
+pub struct PageInfo<L: Latent> {
   pub page_n: usize,
   pub start_idx: usize,
   pub end_idx_per_var: Vec<usize>,
+  pub delta_info_per_var: Vec<PageDeltaInfo<L>>,
 }
 
 #[derive(Clone, Debug)]

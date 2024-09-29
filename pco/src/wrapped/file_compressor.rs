@@ -4,7 +4,7 @@ use crate::bit_writer::BitWriter;
 use crate::constants::HEADER_PADDING;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::format_version::FormatVersion;
+use crate::metadata::format_version::FormatVersion;
 use crate::wrapped::chunk_compressor;
 use crate::wrapped::chunk_compressor::ChunkCompressor;
 use crate::ChunkConfig;

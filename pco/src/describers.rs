@@ -1,5 +1,6 @@
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent, NumberLike};
+use crate::metadata::delta_encoding::DeltaEncoding;
 use crate::{ChunkMeta, Mode};
 use std::marker::PhantomData;
 
@@ -25,8 +26,8 @@ pub(crate) fn match_classic_mode<T: NumberLike>(
   meta: &ChunkMeta<T::L>,
   delta_units: &'static str,
 ) -> Option<Vec<LatentDescriber<T::L>>> {
-  match (meta.mode, meta.delta_encoding_order) {
-    (Mode::Classic, 0) => {
+  match (meta.mode, meta.delta_encoding) {
+    (Mode::Classic, DeltaEncoding::None) => {
       let describer = Box::new(ClassicDescriber::<T>::default());
       Some(vec![describer])
     }
@@ -47,7 +48,7 @@ pub(crate) fn match_int_modes<L: Latent>(
       let dtype_center = if is_signed { L::MID } else { L::ZERO };
       let mult_center = dtype_center / base;
       let adj_center = dtype_center % base;
-      let primary = if meta.delta_encoding_order == 0 {
+      let primary = if matches!(meta.delta_encoding, DeltaEncoding::None) {
         Box::new(IntDescriber {
           description: format!("multiplier [x{}]", base),
           units: "x".to_string(),
@@ -78,7 +79,7 @@ pub(crate) fn match_float_modes<F: FloatLike>(
   match meta.mode {
     Mode::FloatMult(base) => {
       let base_string = F::from_latent_ordered(base).to_string();
-      let primary: LatentDescriber<F::L> = if meta.delta_encoding_order == 0 {
+      let primary: LatentDescriber<F::L> = if matches!(meta.delta_encoding, DeltaEncoding::None) {
         Box::new(FloatMultDescriber {
           base_string,
           phantom: PhantomData::<F>,
@@ -100,7 +101,7 @@ pub(crate) fn match_float_modes<F: FloatLike>(
       Some(vec![primary, secondary])
     }
     Mode::FloatQuant(k) => {
-      let primary = if meta.delta_encoding_order == 0 {
+      let primary = if matches!(meta.delta_encoding, DeltaEncoding::None) {
         Box::new(FloatQuantDescriber {
           k,
           phantom: PhantomData::<F>,

@@ -1,12 +1,12 @@
 use std::fmt::Debug;
 
 use crate::ans::AnsState;
-use crate::bin::BinDecompressionInfo;
+use crate::bin_info::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::page_meta::PageLatentVarMeta;
+use crate::metadata::page_meta::PageLatentVarMeta;
 use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta};
 
 #[derive(Clone, Debug)]

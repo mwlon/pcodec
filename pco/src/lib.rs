@@ -12,11 +12,11 @@
 #![deny(clippy::unused_unit)]
 #![deny(dead_code)]
 
-pub use bin::Bin;
 pub use chunk_config::{ChunkConfig, ModeSpec, PagingSpec};
-pub use chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_MAX_PAGE_N, FULL_BATCH_N};
-pub use mode::Mode;
+pub use metadata::chunk_meta::Bin;
+pub use metadata::chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
+pub use metadata::mode::Mode;
 pub use progress::Progress;
 
 #[doc = include_str!("../README.md")]
@@ -33,26 +33,23 @@ pub mod standalone;
 pub mod wrapped;
 
 mod ans;
-mod bin;
+mod bin_info;
 mod bin_optimization;
 mod bit_reader;
 mod bit_writer;
 mod bits;
 mod chunk_config;
-mod chunk_meta;
 mod compression_intermediates;
 mod compression_table;
 mod constants;
 mod delta;
 mod float_mult_utils;
 mod float_quant_utils;
-mod format_version;
 mod histograms;
 mod int_mult_utils;
 mod latent_batch_decompressor;
 mod latent_batch_dissector;
-mod mode;
-mod page_meta;
+mod metadata;
 mod progress;
 mod read_write_uint;
 mod sampling;

@@ -3,14 +3,15 @@ use std::io::Write;
 
 use better_io::BetterBufRead;
 
-use crate::bin::Bin;
+use crate::bin_info::BinCompressionInfo;
 use crate::bit_reader::BitReaderBuilder;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
-use crate::format_version::FormatVersion;
+use crate::metadata::delta_encoding::DeltaEncoding;
+use crate::metadata::format_version::FormatVersion;
 use crate::Mode;
 
 /// Part of [`ChunkMeta`][crate::ChunkMeta] that describes a latent
@@ -32,13 +33,6 @@ pub struct ChunkLatentVarMeta<L: Latent> {
   /// How the numbers or deltas are encoded, depending on their numerical
   /// range.
   pub bins: Vec<Bin<L>>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum DeltaEncoding {
-  Consecutive { order: u32 },
-  Lz,
 }
 
 pub(crate) fn bin_exact_bit_size<L: Latent>(ans_size_log: Bitlen) -> Bitlen {
@@ -197,24 +191,20 @@ unsafe fn write_bins<L: Latent, W: Write>(
   Ok(())
 }
 
-fn delta_order_for_latent_var<L: Latent>(
-  delta_encoding: DeltaEncoding,
-  mode: Mode<L>,
-  latent_var_idx: usize,
-) -> usize {
-  match delta_encoding {
-    DeltaEncoding::Consecutive { order } => {
-      if mode.uses_delta_for_latent_var(latent_var_idx) {
-        order as usize
-      } else {
-        0
-      }
-    }
-    _ => 0,
-  }
-}
-
 impl<L: Latent> ChunkMeta<L> {
+  pub(crate) fn consecutive_delta_order_for_latent_var(&self, latent_var_idx: usize) -> usize {
+    match self.delta_encoding {
+      DeltaEncoding::Consecutive { order } => {
+        if self.mode.uses_delta_for_latent_var(latent_var_idx) {
+          order
+        } else {
+          0
+        }
+      }
+      _ => 0,
+    }
+  }
+
   pub(crate) fn exact_size(&self) -> usize {
     let extra_bits_for_mode = match self.mode {
       Mode::Classic => 0,
@@ -236,23 +226,12 @@ impl<L: Latent> ChunkMeta<L> {
   }
 
   pub(crate) fn exact_page_meta_size(&self) -> usize {
-    let delta_order = if let DeltaEncoding::Consecutive { order } = self.delta_encoding {
-      order
-    } else {
-      // LZ deltas don't actually require any page meta
-      0
-    };
-
     let bit_size: usize = self
       .per_latent_var
       .iter()
       .enumerate()
       .map(|(latent_var_idx, latent_var)| {
-        let delta_order = delta_order_for_latent_var(
-          self.delta_encoding,
-          self.mode,
-          latent_var_idx,
-        );
+        let delta_order = self.consecutive_delta_order_for_latent_var(latent_var_idx);
         latent_var.ans_size_log as usize * ANS_INTERLEAVING + L::BITS as usize * delta_order
       })
       .sum();
@@ -293,15 +272,21 @@ impl<L: Latent> ChunkMeta<L> {
       let delta_encoding_variant = if version.supports_delta_encoding_variants() {
         reader.read_usize(BITS_TO_ENCODE_DELTA_VARIANT)
       } else {
-        0
+        1
       };
 
       let delta_encoding = match delta_encoding_variant {
-        0 => {
-          let order = reader.read_uint::<u32>(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
-          Ok(DeltaEncoding::Consecutive { order })
+        0 => Ok(DeltaEncoding::None),
+        1 => {
+          let order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
+          let delta_encoding = if order == 0 {
+            DeltaEncoding::None
+          } else {
+            DeltaEncoding::Consecutive { order }
+          };
+          Ok(delta_encoding)
         }
-        1 => Ok(DeltaEncoding::Lz),
+        2 => Ok(DeltaEncoding::Lz),
         _ => Err(PcoError::corruption(format!(
           "unknown delta encoding variant {}",
           delta_encoding_variant
@@ -354,8 +339,9 @@ impl<L: Latent> ChunkMeta<L> {
     };
 
     let delta_encoding_variant = match self.delta_encoding {
-      DeltaEncoding::Consecutive { order: _ } => 0,
-      DeltaEncoding::Lz => 1,
+      DeltaEncoding::None => 0,
+      DeltaEncoding::Consecutive { order: _ } => 1,
+      DeltaEncoding::Lz => 2,
     };
     writer.write_usize(
       delta_encoding_variant,
@@ -363,9 +349,9 @@ impl<L: Latent> ChunkMeta<L> {
     );
     match self.delta_encoding {
       DeltaEncoding::Consecutive { order } => {
-        writer.write_uint(order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER)
+        writer.write_usize(order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER)
       }
-      DeltaEncoding::Lz => (),
+      _ => (),
     };
     writer.flush()?;
 
@@ -381,8 +367,8 @@ impl<L: Latent> ChunkMeta<L> {
 
 #[cfg(test)]
 mod tests {
-  use crate::delta::DeltaMoments;
-  use crate::page_meta::{PageLatentVarMeta, PageMeta};
+  use crate::metadata::delta_encoding::DeltaMoments;
+  use crate::metadata::page_meta::{PageLatentVarMeta, PageMeta};
 
   use super::*;
 
@@ -400,11 +386,7 @@ mod tests {
     let page_meta = PageMeta {
       per_var: (0..meta.per_latent_var.len())
         .map(|latent_var_idx| {
-          let delta_order = delta_order_for_latent_var(
-            meta.delta_encoding,
-            meta.mode,
-            latent_var_idx,
-          );
+          let delta_order = meta.consecutive_delta_order_for_latent_var(latent_var_idx);
           PageLatentVarMeta {
             delta_moments: DeltaMoments {
               moments: vec![L::ZERO; delta_order],
@@ -500,5 +482,36 @@ mod tests {
     };
 
     check_exact_sizes(&meta)
+  }
+}
+
+/// Part of [`ChunkLatentVarMeta`][`crate::ChunkLatentVarMeta`] representing
+/// a numerical range.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Bin<L: Latent> {
+  /// The number of occurrences of this bin in the asymmetric numeral system
+  /// table.
+  pub weight: Weight,
+  /// The lower bound for this bin's numerical range.
+  pub lower: L,
+  /// The log of the size of this bin's (inclusive) numerical range.
+  pub offset_bits: Bitlen,
+}
+
+impl<L: Latent> From<BinCompressionInfo<L>> for Bin<L> {
+  fn from(info: BinCompressionInfo<L>) -> Self {
+    Bin {
+      weight: info.weight,
+      lower: info.lower,
+      offset_bits: info.offset_bits,
+    }
+  }
+}
+
+impl<L: Latent> Bin<L> {
+  #[inline]
+  pub(crate) fn worst_case_bits_per_delta(&self, ans_size_log: Bitlen) -> Bitlen {
+    self.offset_bits + ans_size_log - self.weight.ilog2()
   }
 }

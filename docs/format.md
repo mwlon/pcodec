@@ -52,7 +52,7 @@ Each chunk metadata consists of
 * [4 bits] `mode`, using this table:
 
   | value | mode         | n latent variables | 2nd latent uses delta? | `extra_mode_bits` |
-                                    |-------|--------------|--------------------|------------------------|-------------------|
+                  |-------|--------------|--------------------|------------------------|-------------------|
   | 0     | classic      | 1                  |                        | 0                 |
   | 1     | int mult     | 2                  | no                     | `dtype_size`      |
   | 2     | float mult   | 2                  | no                     | `dtype_size`      |
@@ -61,7 +61,18 @@ Each chunk metadata consists of
 * [`extra_mode_bits` bits] for certain modes, extra data is parsed. See the
   mode-specific formulas below for how this is used, e.g. as the `mult` or `k`
   values.
-* [3 bits] the delta encoding order `delta_order`.
+* [4 bits] `delta_encoding`, using this table:
+
+| value | delta encoding | `extra_delta_bits` |
+  |-------|----------------|--------------------|
+| 0     | none           | 0                  |
+| 1     | consecutive    | 3                  |
+| 2     | LZ             | 0                  |
+| 3-15  | \<reserved\>   |                    |
+
+* [`extra_delta_bits`] for consecutive delta mode, a 3-bit number
+  `delta_encoding_order` is parsed.
+  It may be 0, in which case the delta encoding is equivalent to "none".
 * per latent variable,
   * [4 bits] `ans_size_log`, the log2 of the size of its tANS table.
     This may not exceed 14.
@@ -86,7 +97,7 @@ batch will contain the rest (<= 256 numbers).
 Each data page consists of
 
 * per latent variable,
-  * if delta encoding is applicable, for `i in 0..delta_order`,
+  * if delta encoding is applicable, for `i in 0..delta_encoding_order`,
     * [`dtype_size` bits] the `i`th delta moment
   * for `i in 0..4`,
     * [`ans_size_log` bits] the `i`th interleaved tANS state index
@@ -167,7 +178,7 @@ fn from_unsigned(unsigned: u32) -> i32 {
 ### Latents <-> Deltas
 
 Latents are converted to deltas by taking consecutive differences
-`delta_order` times, and decoded by taking a cumulative sum repeatedly.
+`delta_encoding_order` times, and decoded by taking a cumulative sum repeatedly.
 Delta moments are emitted during encoding and consumed during decoding to
 initialize the cumulative sum.
 

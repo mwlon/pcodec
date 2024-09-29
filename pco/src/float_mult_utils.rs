@@ -3,8 +3,9 @@ use std::mem;
 
 use crate::constants::{Bitlen, MULT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
+use crate::metadata::mode::Bid;
 use crate::sampling::PrimaryLatentAndSavings;
-use crate::{int_mult_utils, mode::Bid, sampling, Mode};
+use crate::{int_mult_utils, sampling, Mode};
 
 #[inline(never)]
 pub(crate) fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondary: &[F::L]) {

@@ -8,10 +8,10 @@ use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::{Latent, NumberLike};
 use crate::delta;
-use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
-use crate::page_meta::PageMeta;
+use crate::metadata::delta_encoding::DeltaMoments;
+use crate::metadata::page_meta::PageMeta;
 use crate::progress::Progress;
 use crate::{bit_reader, ChunkMeta, Mode};
 
@@ -57,7 +57,7 @@ unsafe fn decompress_latents_w_delta<L: Latent>(
     n_remaining_pre_delta
   };
   lbd.decompress_latent_batch(reader, &mut dst[..pre_delta_len])?;
-  delta::decode_in_place(delta_moments, dst);
+  delta::consecutive_decode_in_place(delta_moments, dst);
   Ok(())
 }
 
@@ -91,18 +91,19 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       .collect::<Vec<_>>();
 
     let mut latent_batch_decompressors = Vec::new();
-    for latent_idx in 0..mode.n_latent_vars() {
-      let chunk_latent_meta = &chunk_meta.per_latent_var[latent_idx];
-      if chunk_latent_meta.bins.is_empty() && n > chunk_meta.delta_encoding_order {
+    for latent_var_idx in 0..mode.n_latent_vars() {
+      let chunk_latent_meta = &chunk_meta.per_latent_var[latent_var_idx];
+      let delta_order = chunk_meta.consecutive_delta_order_for_latent_var(latent_var_idx);
+      if chunk_latent_meta.bins.is_empty() && n > delta_order {
         return Err(PcoError::corruption(format!(
           "unable to decompress chunk with no bins and {} deltas",
-          n - chunk_meta.delta_encoding_order,
+          n - delta_order,
         )));
       }
 
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
         chunk_latent_meta,
-        &page_meta.per_var[latent_idx],
+        &page_meta.per_var[latent_var_idx],
       )?);
     }
 

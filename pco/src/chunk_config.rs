@@ -62,14 +62,12 @@ pub enum DeltaSpec {
   /// chunks, you can create a
   /// [`ChunkDecompressor`][crate::wrapped::ChunkDecompressor] and read the
   /// delta encoding order it chose.
-  TryConsecutiveDeltaOrder(u32),
+  // TODO better name?
+  None,
+  TryConsecutive {
+    order: usize,
+  },
   TryLzDelta,
-}
-
-impl DeltaSpec {
-  pub fn disabled() -> Self {
-    Self::TryConsecutiveDeltaOrder(0)
-  }
 }
 
 // TODO consider adding a "lossiness" spec that allows dropping secondary latent
@@ -93,11 +91,11 @@ pub struct ChunkConfig {
   /// The meaning of the compression levels is subject to change with
   /// new releases.
   pub compression_level: usize,
-  pub delta_spec: DeltaSpec,
   /// Specifies how the mode should be determined.
   ///
   /// See [`Mode`](crate::Mode) to understand what modes are.
   pub mode_spec: ModeSpec,
+  pub delta_spec: DeltaSpec,
   /// Specifies how the chunk should be split into pages (default: equal pages
   /// up to 2^18 numbers each).
   pub paging_spec: PagingSpec,

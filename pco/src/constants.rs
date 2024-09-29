@@ -6,6 +6,7 @@ pub(crate) type Bitlen = u32;
 // must be u32 or larger
 // exposed in public API
 pub(crate) type Weight = u32;
+pub(crate) type Lookback = u32;
 
 // compatibility
 pub const CURRENT_FORMAT_VERSION: u8 = 3;
@@ -38,7 +39,7 @@ pub const MAX_ANS_BITS: Bitlen = 14;
 pub const MAX_ANS_BYTES: usize = MAX_ANS_BITS.div_ceil(8) as usize;
 pub const LIMITED_UNOPTIMIZED_BINS_LOG: Bitlen = 6;
 pub const MAX_COMPRESSION_LEVEL: usize = 12;
-pub const MAX_DELTA_ENCODING_ORDER: u32 = 7;
+pub const MAX_DELTA_ENCODING_ORDER: usize = 7;
 pub const MAX_ENTRIES: usize = 1 << 24;
 pub const MAX_SUPPORTED_PRECISION: Bitlen = 128;
 pub const MAX_SUPPORTED_PRECISION_BYTES: usize = (MAX_SUPPORTED_PRECISION / 8) as usize;
@@ -75,7 +76,7 @@ mod tests {
   fn test_bits_to_encode_delta_encoding_order() {
     assert_can_encode(
       BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
-      MAX_DELTA_ENCODING_ORDER,
+      MAX_DELTA_ENCODING_ORDER as usize,
     );
   }
 

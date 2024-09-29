@@ -1,4 +1,4 @@
-use crate::bin::BinCompressionInfo;
+use crate::bin_info::BinCompressionInfo;
 use crate::data_types::Latent;
 
 #[derive(Debug, Clone)]

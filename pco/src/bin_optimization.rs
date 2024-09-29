@@ -1,9 +1,10 @@
 use crate::ans::Symbol;
-use crate::bin::BinCompressionInfo;
+use crate::bin_info::BinCompressionInfo;
+use crate::bits;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::histograms::HistogramBin;
-use crate::{bits, chunk_meta};
+use crate::metadata::chunk_meta;
 
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 
@@ -122,7 +123,7 @@ pub fn optimize_bins<L: Latent>(
 
 #[cfg(test)]
 mod tests {
-  use crate::bin::BinCompressionInfo;
+  use crate::bin_info::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
   use crate::histograms::HistogramBin;
 

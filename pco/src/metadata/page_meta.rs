@@ -5,8 +5,8 @@ use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, ANS_INTERLEAVING};
 use crate::data_types::Latent;
-use crate::delta::DeltaMoments;
 use crate::errors::PcoResult;
+use crate::metadata::delta_encoding::DeltaMoments;
 use crate::ChunkMeta;
 
 #[derive(Clone, Debug)]
@@ -69,7 +69,7 @@ impl<L: Latent> PageMeta<L> {
     for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
       per_var.push(PageLatentVarMeta::parse_from(
         reader,
-        chunk_meta.delta_order_for_latent_var(latent_idx),
+        chunk_meta.consecutive_delta_order_for_latent_var(latent_idx),
         chunk_latent_var_meta.ans_size_log,
       )?);
     }
