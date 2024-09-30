@@ -1,9 +1,26 @@
 use crate::constants::{Lookback, MAX_LZ_DELTA_LOOKBACK, MAX_LZ_DELTA_LOOKBACK_LOG};
 use crate::data_types::Latent;
-use crate::metadata::delta_encoding::DeltaMoments;
+use crate::metadata::delta_encoding::{DeltaEncoding, DeltaMoments};
 use std::cmp::min;
 use std::io::Write;
 use std::mem::{transmute, MaybeUninit};
+
+#[derive(Clone, Copy, Debug)]
+pub enum DeltaStrategy {
+  None,
+  Consecutive(usize),
+  Lz,
+}
+
+impl DeltaStrategy {
+  pub fn n_moments(&self) -> usize {
+    match self {
+      Self::None => 0,
+      Self::Consecutive(order) => *order,
+      Self::Lz => 0,
+    }
+  }
+}
 
 // Without this, deltas in, say, [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].

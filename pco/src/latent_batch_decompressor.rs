@@ -6,8 +6,8 @@ use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::metadata::page_meta::PageLatentVarMeta;
-use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta};
+use crate::metadata::page_meta::PageVarMeta;
+use crate::{ans, bit_reader, read_write_uint, ChunkVarMeta};
 
 #[derive(Clone, Debug)]
 struct State<L: Latent> {
@@ -45,17 +45,16 @@ pub struct LatentBatchDecompressor<L: Latent> {
 
 impl<L: Latent> LatentBatchDecompressor<L> {
   pub fn new(
-    chunk_latent_var_meta: &ChunkLatentVarMeta<L>,
-    page_latent_var_meta: &PageLatentVarMeta<L>,
+    chunk_var_meta: &ChunkVarMeta<L>,
+    page_latent_var_meta: &PageVarMeta<L>,
   ) -> PcoResult<Self> {
-    let u64s_per_offset =
-      read_write_uint::calc_max_u64s(chunk_latent_var_meta.max_bits_per_offset());
-    let infos = chunk_latent_var_meta
+    let u64s_per_offset = read_write_uint::calc_max_u64s(chunk_var_meta.max_bits_per_offset());
+    let infos = chunk_var_meta
       .bins
       .iter()
       .map(BinDecompressionInfo::from)
       .collect::<Vec<_>>();
-    let decoder = ans::Decoder::from_chunk_latent_var_meta(chunk_latent_var_meta)?;
+    let decoder = ans::Decoder::from_chunk_latent_var_meta(chunk_var_meta)?;
 
     let mut state = State {
       offset_bits_csum_scratch: [0; FULL_BATCH_N],
@@ -64,10 +63,10 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       state_idxs: page_latent_var_meta.ans_final_state_idxs,
     };
 
-    let needs_ans = chunk_latent_var_meta.bins.len() != 1;
+    let needs_ans = chunk_var_meta.bins.len() != 1;
     if !needs_ans {
       // we optimize performance by setting state once and never again
-      let bin = &chunk_latent_var_meta.bins[0];
+      let bin = &chunk_var_meta.bins[0];
       let mut csum = 0;
       for i in 0..FULL_BATCH_N {
         state.offset_bits_scratch[i] = bin.offset_bits;
@@ -77,8 +76,8 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       }
     }
 
-    let maybe_constant_value = if chunk_latent_var_meta.is_trivial() {
-      chunk_latent_var_meta.bins.first().map(|bin| bin.lower)
+    let maybe_constant_value = if chunk_var_meta.is_trivial() {
+      chunk_var_meta.bins.first().map(|bin| bin.lower)
     } else {
       None
     };

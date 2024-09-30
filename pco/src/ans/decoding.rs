@@ -3,7 +3,7 @@ use crate::ans::{AnsState, Symbol};
 use crate::constants::Bitlen;
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::ChunkLatentVarMeta;
+use crate::ChunkVarMeta;
 
 #[derive(Clone, Debug)]
 #[repr(align(16))]
@@ -42,9 +42,7 @@ impl Decoder {
     Self { nodes }
   }
 
-  pub fn from_chunk_latent_var_meta<L: Latent>(
-    latent_meta: &ChunkLatentVarMeta<L>,
-  ) -> PcoResult<Self> {
+  pub fn from_chunk_latent_var_meta<L: Latent>(latent_meta: &ChunkVarMeta<L>) -> PcoResult<Self> {
     let weights = latent_meta
       .bins
       .iter()

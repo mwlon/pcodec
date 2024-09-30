@@ -15,7 +15,7 @@
 pub use chunk_config::{ChunkConfig, ModeSpec, PagingSpec};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_MAX_PAGE_N, FULL_BATCH_N};
 pub use metadata::chunk_meta::Bin;
-pub use metadata::chunk_meta::{ChunkLatentVarMeta, ChunkMeta};
+pub use metadata::chunk_meta::{ChunkMeta, ChunkVarMeta};
 pub use metadata::mode::Mode;
 pub use progress::Progress;
 

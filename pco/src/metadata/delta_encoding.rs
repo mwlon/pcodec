@@ -1,10 +1,12 @@
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
+use crate::constants::{Bitlen, Lookback};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
+use crate::ChunkVarMeta;
 use std::io::Write;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DeltaEncoding {
   #[default]
@@ -12,22 +14,30 @@ pub enum DeltaEncoding {
   Consecutive {
     order: usize,
   },
-  Lz,
+  Lz(ChunkVarMeta<Lookback>),
 }
 
 impl DeltaEncoding {
-  pub fn n_in_page_meta(&self) -> usize {
+  // pub(crate) fn n_lookback_vars(&self) -> usize {
+  //   match self {
+  //     Self::None => 0,
+  //     Self::Consecutive { order: _ } => 0,
+  //     Self::Lz(_) => 1,
+  //   }
+  // }
+
+  pub(crate) fn n_delta_moments(&self) -> usize {
     match self {
       Self::None => 0,
-      Self::Consecutive { order } => *order,
-      Self::Lz => 0,
+      Self::Consecutive(order) => *order,
+      Self::Lz(_) => 0,
     }
   }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DeltaMoments<L: Latent> {
-  // length = delta encoding order
+  // length = consecutive delta encoding order
   pub moments: Vec<L>,
 }
 

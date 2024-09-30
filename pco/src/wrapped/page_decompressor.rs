@@ -116,22 +116,22 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       .with_reader(|reader| unsafe { PageMeta::<T::L>::parse_from(reader, chunk_meta) })?;
 
     let mode = chunk_meta.mode;
-    let primary_delta_state = match chunk_meta.delta_encoding {
+    let primary_delta_state = match &chunk_meta.delta_encoding {
       DeltaEncoding::None => DeltaState::None,
       DeltaEncoding::Consecutive { order: _ } => {
-        DeltaState::Consecutive(page_meta.per_var[0].delta_moments.clone())
+        DeltaState::Consecutive(page_meta.per_latent_var[0].delta_moments.clone())
       }
-      DeltaEncoding::Lz => DeltaState::Lz {
+      DeltaEncoding::Lz(var_meta) => DeltaState::Lz {
         window: delta::get_default_lz_window(),
         lookbacks: [0; MAX_LZ_DELTA_LOOKBACK],
-        lookback_bd: // TODO
+        lookback_bd: LatentBatchDecompressor::new(var_meta, &page_meta.per_latent_var)?, // TODO
       },
     };
 
     let mut latent_batch_decompressors = Vec::new();
     for latent_var_idx in 0..mode.n_latent_vars() {
       let chunk_latent_meta = &chunk_meta.per_latent_var[latent_var_idx];
-      let n_implicit_latents = chunk_meta.n_implicit_latents(latent_var_idx);
+      let n_implicit_latents = chunk_meta.n_delta_moments(latent_var_idx);
       if chunk_latent_meta.bins.is_empty() && n > n_implicit_latents {
         return Err(PcoError::corruption(format!(
           "unable to decompress chunk with no bins and {} explicit latents",
@@ -141,7 +141,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
         chunk_latent_meta,
-        &page_meta.per_var[latent_var_idx],
+        &page_meta.per_latent_var[latent_var_idx],
       )?);
     }
 

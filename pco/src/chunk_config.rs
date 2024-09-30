@@ -197,7 +197,7 @@ impl PagingSpec {
     for &page_n in &n_per_page {
       if page_n == 0 {
         return Err(PcoError::invalid_argument(
-          "cannot write data page of 0 numbers",
+          "cannot write page of 0 numbers",
         ));
       }
     }
