@@ -45,18 +45,28 @@ macro_rules! impl_latent {
       const BITS: Bitlen = Self::BITS as Bitlen;
 
       #[inline]
+      fn from_usize(x: usize) -> Self {
+        x as Self
+      }
+
+      #[inline]
       fn from_u64(x: u64) -> Self {
         x as Self
       }
 
       #[inline]
-      fn leading_zeros(self) -> Bitlen {
-        self.leading_zeros() as Bitlen
+      fn to_usize(self) -> usize {
+        self as usize
       }
 
       #[inline]
       fn to_u64(self) -> u64 {
         self as u64
+      }
+
+      #[inline]
+      fn leading_zeros(self) -> Bitlen {
+        self.leading_zeros() as Bitlen
       }
 
       #[inline]

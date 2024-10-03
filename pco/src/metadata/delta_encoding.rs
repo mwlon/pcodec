@@ -6,7 +6,7 @@ use crate::errors::PcoResult;
 use crate::ChunkVarMeta;
 use std::io::Write;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DeltaEncoding {
   #[default]
@@ -14,23 +14,23 @@ pub enum DeltaEncoding {
   Consecutive {
     order: usize,
   },
-  Lz(ChunkVarMeta<Lookback>),
+  Lz,
 }
 
 impl DeltaEncoding {
-  // pub(crate) fn n_lookback_vars(&self) -> usize {
-  //   match self {
-  //     Self::None => 0,
-  //     Self::Consecutive { order: _ } => 0,
-  //     Self::Lz(_) => 1,
-  //   }
-  // }
+  pub(crate) fn n_vars(&self) -> usize {
+    match self {
+      Self::None => 0,
+      Self::Consecutive { order: _ } => 0,
+      Self::Lz => 1,
+    }
+  }
 
-  pub(crate) fn n_delta_moments(&self) -> usize {
+  pub(crate) fn n_moments(&self) -> usize {
     match self {
       Self::None => 0,
       Self::Consecutive(order) => *order,
-      Self::Lz(_) => 0,
+      Self::Lz => 0,
     }
   }
 }

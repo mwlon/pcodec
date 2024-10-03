@@ -11,6 +11,7 @@ use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::*;
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
+use crate::latent_var::LatentVarMap;
 use crate::metadata::delta_encoding::DeltaEncoding;
 use crate::metadata::format_version::FormatVersion;
 use crate::metadata::page_meta::{PageMeta, PageVarMeta};
@@ -196,7 +197,7 @@ unsafe fn write_bins<L: Latent, W: Write>(
 impl<L: Latent> ChunkMeta<L> {
   pub(crate) fn n_delta_moments(&self, latent_var_idx: usize) -> usize {
     if self.mode.uses_delta_for_latent_var(latent_var_idx) {
-      self.delta_encoding.n_delta_moments()
+      self.delta_encoding.n_moments()
     } else {
       0
     }
@@ -239,7 +240,7 @@ impl<L: Latent> ChunkMeta<L> {
     reader_builder: &mut BitReaderBuilder<R>,
     version: &FormatVersion,
   ) -> PcoResult<Self> {
-    let (mode, delta_encoding_variant) = reader_builder.with_reader(|reader| {
+    let (mode, delta_encoding) = reader_builder.with_reader(|reader| {
       let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
         0 => Ok(Mode::Classic),
         1 => {
@@ -272,38 +273,45 @@ impl<L: Latent> ChunkMeta<L> {
         1
       };
 
-      Ok((mode, delta_encoding_variant))
+      let delta_encoding = match delta_encoding_variant {
+        0 => Ok(DeltaEncoding::None),
+        1 => {
+          let order = reader_builder
+            .with_reader(|reader| Ok(reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)))?;
+          let delta_encoding = if order == 0 {
+            DeltaEncoding::None
+          } else {
+            DeltaEncoding::Consecutive { order }
+          };
+          Ok(delta_encoding)
+        }
+        2 => Ok(DeltaEncoding::Lz),
+        _ => Err(PcoError::corruption(format!(
+          "unknown delta encoding variant {}",
+          delta_encoding_variant
+        ))),
+      }?;
+
+      Ok((mode, delta_encoding))
     })?;
 
-    let delta_encoding = match delta_encoding_variant {
-      0 => Ok(DeltaEncoding::None),
-      1 => {
-        let order = reader_builder
-          .with_reader(|reader| Ok(reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER)))?;
-        let delta_encoding = if order == 0 {
-          DeltaEncoding::None
-        } else {
-          DeltaEncoding::Consecutive { order }
-        };
-        Ok(delta_encoding)
-      }
-      2 => {
-        let lookback_var = ChunkVarMeta::parse_from(reader_builder)?;
-        Ok(DeltaEncoding::Lz(lookback_var))
-      }
-      _ => Err(PcoError::corruption(format!(
-        "unknown delta encoding variant {}",
-        delta_encoding_variant
-      ))),
-    }?;
+    let lookback_var = if matches!(delta_encoding, DeltaEncoding::Lz) {
+      let true_dtype_var_meta = ChunkVarMeta::<Lookback>::parse_from(reader_builder)?;
+    } else {
+      None
+    };
+    let primary_var = ChunkVarMeta::parse_from(reader_builder)?;
+    let secondary_var = if mode.has_secondary_latent_var() {
+      Some(ChunkVarMeta::parse_from(reader_builder)?)
+    } else {
+      None
+    };
 
-    let n_latent_vars = mode.n_latent_vars();
-
-    let mut per_latent_var = Vec::with_capacity(n_latent_vars);
-
-    for _ in 0..n_latent_vars {
-      per_latent_var.push(ChunkVarMeta::parse_from(reader_builder)?)
-    }
+    let per_latent_var = LatentVarMap {
+      delta: lookback_var,
+      primary: primary_var,
+      secondary: secondary_var,
+    };
 
     reader_builder.with_reader(|reader| {
       reader.drain_empty_byte("nonzero bits in end of final byte of chunk metadata")

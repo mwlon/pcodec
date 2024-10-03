@@ -55,5 +55,7 @@ mod read_write_uint;
 mod sampling;
 mod sort_utils;
 
+mod encoding;
+mod latent_var;
 #[cfg(test)]
 mod tests;

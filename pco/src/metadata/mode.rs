@@ -72,13 +72,12 @@ pub enum Mode<L: Latent> {
 }
 
 impl<L: Latent> Mode<L> {
-  pub(crate) fn n_latent_vars(&self) -> usize {
+  pub(crate) fn has_secondary_latent_var(&self) -> bool {
     use Mode::*;
 
     match self {
-      Classic => 1,
-      FloatMult(_) | IntMult(_) => 2, // multiplier, adjustment
-      FloatQuant(_) => 2,             // quantums, adjustment
+      Classic => false,
+      FloatMult(_) | FloatQuant(_) | IntMult(_) => true, // secondary var is adjustment
     }
   }
 

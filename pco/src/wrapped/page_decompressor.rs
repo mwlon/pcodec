@@ -129,7 +129,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     };
 
     let mut latent_batch_decompressors = Vec::new();
-    for latent_var_idx in 0..mode.n_latent_vars() {
+    for latent_var_idx in 0..mode.has_secondary_latent_var() {
       let chunk_latent_meta = &chunk_meta.per_latent_var[latent_var_idx];
       let n_implicit_latents = chunk_meta.n_delta_moments(latent_var_idx);
       if chunk_latent_meta.bins.is_empty() && n > n_implicit_latents {
