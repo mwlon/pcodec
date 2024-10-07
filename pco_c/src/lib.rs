@@ -2,7 +2,7 @@
 
 use std::ptr;
 
-use libc::{c_uchar, c_uint, c_void};
+use libc::{c_uchar, c_uint, c_void, size_t};
 
 use pco::data_types::{CoreDataType, NumberLike};
 
@@ -51,7 +51,7 @@ pco::with_core_dtypes!(impl_dtypes);
 #[repr(C)]
 pub struct PcoFfiVec {
   ptr: *const c_void,
-  len: c_uint,
+  len: size_t,
   raw_box: *const c_void,
 }
 
@@ -61,7 +61,7 @@ impl PcoFfiVec {
     Vec<T>: Into<DynTypedVec>,
   {
     self.ptr = v.as_ptr() as *const c_void;
-    self.len = v.len() as c_uint;
+    self.len = v.len();
     self.raw_box = Box::into_raw(Box::new(v.into())) as *const c_void;
   }
 
@@ -79,11 +79,11 @@ impl PcoFfiVec {
 
 fn _simpler_compress<T: NumberLike>(
   nums: *const c_void,
-  len: c_uint,
+  len: size_t,
   level: c_uint,
   ffi_vec_ptr: *mut PcoFfiVec,
 ) -> PcoError {
-  let slice = unsafe { std::slice::from_raw_parts(nums as *const T, len as usize) };
+  let slice = unsafe { std::slice::from_raw_parts(nums as *const T, len) };
   match pco::standalone::simpler_compress(slice, level as usize) {
     Err(_) => PcoError::PcoCompressionError,
     Ok(v) => {
@@ -95,13 +95,13 @@ fn _simpler_compress<T: NumberLike>(
 
 fn _simple_decompress<T: NumberLike>(
   compressed: *const c_void,
-  len: c_uint,
+  len: size_t,
   ffi_vec_ptr: *mut PcoFfiVec,
 ) -> PcoError
 where
   Vec<T>: Into<DynTypedVec>,
 {
-  let slice = unsafe { std::slice::from_raw_parts(compressed as *const u8, len as usize) };
+  let slice = unsafe { std::slice::from_raw_parts(compressed as *const u8, len) };
   match pco::standalone::simple_decompress::<T>(slice) {
     Err(_) => PcoError::PcoDecompressionError,
     Ok(v) => {
@@ -114,7 +114,7 @@ where
 #[no_mangle]
 pub extern "C" fn pco_simpler_compress(
   nums: *const c_void,
-  len: c_uint,
+  len: size_t,
   dtype: c_uchar,
   level: c_uint,
   dst: *mut PcoFfiVec,
@@ -133,7 +133,7 @@ pub extern "C" fn pco_simpler_compress(
 #[no_mangle]
 pub extern "C" fn pco_simple_decompress(
   compressed: *const c_void,
-  len: c_uint,
+  len: size_t,
   dtype: c_uchar,
   dst: *mut PcoFfiVec,
 ) -> PcoError {
