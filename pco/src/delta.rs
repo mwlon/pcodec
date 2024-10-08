@@ -3,35 +3,27 @@ use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::data_types::Latent;
-use crate::errors::PcoResult;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct DeltaMoments<L: Latent> {
-  // length = delta encoding order
-  pub moments: Vec<L>,
-}
+pub struct DeltaMoments<L: Latent>(pub Vec<L>);
 
 impl<L: Latent> DeltaMoments<L> {
-  fn new(moments: Vec<L>) -> Self {
-    Self { moments }
-  }
-
-  pub unsafe fn parse_from(reader: &mut BitReader, order: usize) -> PcoResult<Self> {
+  pub unsafe fn parse_from(reader: &mut BitReader, order: usize) -> Self {
     let mut moments = Vec::new();
     for _ in 0..order {
       moments.push(reader.read_uint::<L>(L::BITS));
     }
-    Ok(DeltaMoments { moments })
+    DeltaMoments(moments)
   }
 
   pub unsafe fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
-    for &moment in &self.moments {
+    for &moment in &self.0 {
       writer.write_uint(moment, L::BITS);
     }
   }
 
   pub fn order(&self) -> usize {
-    self.moments.len()
+    self.0.len()
   }
 }
 
@@ -77,7 +69,7 @@ pub fn encode_in_place<L: Latent>(mut latents: &mut [L], order: usize) -> DeltaM
   }
   toggle_center_in_place(latents);
 
-  DeltaMoments::new(page_moments)
+  DeltaMoments(page_moments)
 }
 
 fn first_order_decode_in_place<L: Latent>(moment: &mut L, latents: &mut [L]) {
@@ -97,7 +89,7 @@ pub fn decode_in_place<L: Latent>(delta_moments: &mut DeltaMoments<L>, latents: 
   }
 
   toggle_center_in_place(latents);
-  for moment in delta_moments.moments.iter_mut().rev() {
+  for moment in delta_moments.0.iter_mut().rev() {
     first_order_decode_in_place(moment, latents);
   }
 }

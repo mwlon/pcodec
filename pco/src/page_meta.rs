@@ -30,7 +30,7 @@ impl<L: Latent> PageLatentVarMeta<L> {
     delta_order: usize,
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
-    let delta_moments = DeltaMoments::parse_from(reader, delta_order)?;
+    let delta_moments = DeltaMoments::parse_from(reader, delta_order);
     let mut ans_final_state_idxs = [0; ANS_INTERLEAVING];
     for state in &mut ans_final_state_idxs {
       *state = reader.read_uint::<AnsState>(ans_size_log);
