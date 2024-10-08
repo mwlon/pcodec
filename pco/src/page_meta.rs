@@ -25,12 +25,12 @@ impl<L: Latent> PageLatentVarMeta<L> {
     }
   }
 
-  pub unsafe fn parse_from(
+  pub unsafe fn read_from(
     reader: &mut BitReader,
     delta_order: usize,
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
-    let delta_moments = DeltaMoments::parse_from(reader, delta_order);
+    let delta_moments = DeltaMoments::read_from(reader, delta_order);
     let mut ans_final_state_idxs = [0; ANS_INTERLEAVING];
     for state in &mut ans_final_state_idxs {
       *state = reader.read_uint::<AnsState>(ans_size_log);
@@ -64,10 +64,10 @@ impl<L: Latent> PageMeta<L> {
     writer.finish_byte();
   }
 
-  pub unsafe fn parse_from(reader: &mut BitReader, chunk_meta: &ChunkMeta<L>) -> PcoResult<Self> {
+  pub unsafe fn read_from(reader: &mut BitReader, chunk_meta: &ChunkMeta<L>) -> PcoResult<Self> {
     let mut per_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
     for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
-      per_var.push(PageLatentVarMeta::parse_from(
+      per_var.push(PageLatentVarMeta::read_from(
         reader,
         chunk_meta.delta_order_for_latent_var(latent_idx),
         chunk_latent_var_meta.ans_size_log,

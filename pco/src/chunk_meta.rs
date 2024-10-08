@@ -61,7 +61,7 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
   }
 }
 
-unsafe fn parse_bin_batch<L: Latent, R: BetterBufRead>(
+unsafe fn read_bin_batch<L: Latent, R: BetterBufRead>(
   reader_builder: &mut BitReaderBuilder<R>,
   ans_size_log: Bitlen,
   batch_size: usize,
@@ -96,7 +96,7 @@ unsafe fn parse_bin_batch<L: Latent, R: BetterBufRead>(
 }
 
 impl<L: Latent> ChunkLatentVarMeta<L> {
-  unsafe fn parse_from<R: BetterBufRead>(
+  unsafe fn read_from<R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
   ) -> PcoResult<Self> {
     let (ans_size_log, n_bins) = reader_builder.with_reader(|reader| {
@@ -127,7 +127,7 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
     let mut bins = Vec::with_capacity(n_bins);
     while bins.len() < n_bins {
       let batch_size = min(n_bins - bins.len(), FULL_BIN_BATCH_SIZE);
-      parse_bin_batch(
+      read_bin_batch(
         reader_builder,
         ans_size_log,
         batch_size,
@@ -240,7 +240,7 @@ impl<L: Latent> ChunkMeta<L> {
     bit_size.div_ceil(8)
   }
 
-  pub(crate) unsafe fn parse_from<R: BetterBufRead>(
+  pub(crate) unsafe fn read_from<R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
     version: &FormatVersion,
   ) -> PcoResult<Self> {
@@ -281,7 +281,7 @@ impl<L: Latent> ChunkMeta<L> {
     let mut per_latent_var = Vec::with_capacity(n_latent_vars);
 
     for _ in 0..n_latent_vars {
-      per_latent_var.push(ChunkLatentVarMeta::parse_from(
+      per_latent_var.push(ChunkLatentVarMeta::read_from(
         reader_builder,
       )?)
     }

@@ -81,7 +81,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
 
     let page_meta = reader_builder
-      .with_reader(|reader| unsafe { PageMeta::<T::L>::parse_from(reader, chunk_meta) })?;
+      .with_reader(|reader| unsafe { PageMeta::<T::L>::read_from(reader, chunk_meta) })?;
 
     let mode = chunk_meta.mode;
     let delta_momentss = page_meta
