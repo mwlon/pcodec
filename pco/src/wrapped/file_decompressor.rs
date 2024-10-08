@@ -27,7 +27,7 @@ impl FileDecompressor {
   pub fn new<R: BetterBufRead>(mut src: R) -> PcoResult<(Self, R)> {
     bit_reader::ensure_buf_read_capacity(&mut src, HEADER_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, HEADER_PADDING, 0);
-    let format_version = reader_builder.with_reader(FormatVersion::parse_from)?;
+    let format_version = reader_builder.with_reader(FormatVersion::read_from)?;
     Ok((
       Self { format_version },
       reader_builder.into_inner(),
@@ -50,7 +50,7 @@ impl FileDecompressor {
     bit_reader::ensure_buf_read_capacity(&mut src, CHUNK_META_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, CHUNK_META_PADDING, 0);
     let chunk_meta =
-      unsafe { ChunkMeta::<T::L>::parse_from(&mut reader_builder, &self.format_version)? };
+      unsafe { ChunkMeta::<T::L>::read_from(&mut reader_builder, &self.format_version)? };
     let cd = ChunkDecompressor::new(chunk_meta)?;
     Ok((cd, reader_builder.into_inner()))
   }

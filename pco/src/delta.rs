@@ -8,7 +8,7 @@ use crate::data_types::Latent;
 pub struct DeltaMoments<L: Latent>(pub Vec<L>);
 
 impl<L: Latent> DeltaMoments<L> {
-  pub unsafe fn parse_from(reader: &mut BitReader, order: usize) -> Self {
+  pub unsafe fn read_from(reader: &mut BitReader, order: usize) -> Self {
     let mut moments = Vec::new();
     for _ in 0..order {
       moments.push(reader.read_uint::<L>(L::BITS));
