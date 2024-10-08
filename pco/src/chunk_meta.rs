@@ -365,9 +365,7 @@ mod tests {
             .mode
             .delta_order_for_latent_var(latent_var_idx, meta.delta_encoding_order);
           PageLatentVarMeta {
-            delta_moments: DeltaMoments {
-              moments: vec![L::ZERO; delta_order],
-            },
+            delta_moments: DeltaMoments(vec![L::ZERO; delta_order]),
             ans_final_state_idxs: [0; ANS_INTERLEAVING],
           }
         })
