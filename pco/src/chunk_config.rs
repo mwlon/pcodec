@@ -2,7 +2,7 @@ use crate::constants::{Bitlen, DEFAULT_MAX_PAGE_N};
 use crate::errors::{PcoError, PcoResult};
 use crate::DEFAULT_COMPRESSION_LEVEL;
 
-/// Specifies how Pco should choose a [`mode`][crate::Mode] to compress this
+/// Specifies how Pco should choose a [`mode`][crate::metadata::Mode] to compress this
 /// chunk of data.
 ///
 /// The `Try*` variants almost always use the provided mode, but fall back to an
@@ -80,7 +80,7 @@ pub struct ChunkConfig {
   pub delta_encoding_order: Option<usize>,
   /// Specifies how the mode should be determined.
   ///
-  /// See [`Mode`](crate::Mode) to understand what modes are.
+  /// See [`Mode`](crate::metadata::Mode) to understand what modes are.
   pub mode_spec: ModeSpec,
   /// Specifies how the chunk should be split into pages (default: equal pages
   /// up to 2^18 numbers each).

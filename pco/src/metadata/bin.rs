@@ -7,7 +7,7 @@ pub(crate) fn bin_exact_bit_size<L: Latent>(ans_size_log: Bitlen) -> Bitlen {
   ans_size_log + L::BITS + bits_to_encode_offset_bits::<L>()
 }
 
-/// Part of [`ChunkLatentVarMeta`][`crate::ChunkLatentVarMeta`] representing
+/// Part of [`ChunkLatentVarMeta`][`crate::metadata::ChunkLatentVarMeta`] representing
 /// a numerical range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]

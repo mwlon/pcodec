@@ -12,7 +12,7 @@ use crate::{ans, bit_reader, read_write_uint};
 
 // Default here is meaningless and should only be used to fill in empty
 // vectors.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct BinDecompressionInfo<L: Latent> {
   pub lower: L,
   pub offset_bits: Bitlen,

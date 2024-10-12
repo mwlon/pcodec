@@ -127,11 +127,11 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
   }
 }
 
-/// Part of [`ChunkMeta`][crate::ChunkMeta] that describes a latent
+/// Part of [`ChunkMeta`][crate::metadata::ChunkMeta] that describes a latent
 /// variable interleaved into the compressed data.
 ///
 /// For instance, with
-/// [classic mode][crate::Mode::Classic], there is a single latent variable
+/// [classic mode][crate::metadata::Mode::Classic], there is a single latent variable
 /// corresponding to the actual numbers' (or deltas') bins.
 ///
 /// This is mainly useful for inspecting how compression was done.
