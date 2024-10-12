@@ -474,7 +474,7 @@ impl<L: Latent> ChunkCompressor<L> {
     } = self;
 
     let page_info = &page_infos[page_idx];
-    let mut per_var = Vec::new();
+    let mut per_latent_var = Vec::new();
 
     for ((lcc, &delta_end), var_deltas) in latent_chunk_compressors
       .iter()
@@ -482,12 +482,12 @@ impl<L: Latent> ChunkCompressor<L> {
       .zip(deltas)
     {
       let page_deltas = &var_deltas[page_info.start_idx..delta_end];
-      per_var.push(lcc.dissect_page(page_deltas));
+      per_latent_var.push(lcc.dissect_page(page_deltas));
     }
 
     Ok(DissectedPage {
       page_n: page_info.page_n,
-      per_latent_var: per_var,
+      per_latent_var,
     })
   }
 
