@@ -1,24 +1,24 @@
 use std::cmp::min;
 use std::io::Write;
 
-use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
+use crate::compression_intermediates::BinCompressionInfo;
 use crate::compression_intermediates::{DissectedPage, PageInfo};
 use crate::constants::{
   Bitlen, Weight, ANS_INTERLEAVING, LIMITED_UNOPTIMIZED_BINS_LOG, MAX_COMPRESSION_LEVEL,
   MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
 };
 use crate::data_types::{Latent, NumberLike};
-use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::histograms::histogram;
 use crate::latent_chunk_compressor::{LatentChunkCompressor, TrainedBins};
-use crate::page_meta::{PageLatentVarMeta, PageMeta};
+use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
+use crate::metadata::delta_moments::DeltaMoments;
+use crate::metadata::page::PageMeta;
+use crate::metadata::page_latent_var::PageLatentVarMeta;
+use crate::metadata::{Bin, ChunkMeta, Mode};
 use crate::wrapped::guarantee;
-use crate::{
-  ans, bin_optimization, data_types, delta, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta, Mode,
-  PagingSpec, FULL_BATCH_N,
-};
+use crate::{ans, bin_optimization, data_types, delta, ChunkConfig, PagingSpec, FULL_BATCH_N};
 
 // if it looks like the average page of size n will use k bits, hint that it
 // will be PAGE_SIZE_OVERESTIMATION * k bits.

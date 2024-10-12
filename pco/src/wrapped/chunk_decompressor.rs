@@ -2,8 +2,8 @@ use better_io::BetterBufRead;
 
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
+use crate::metadata::ChunkMeta;
 use crate::wrapped::PageDecompressor;
-use crate::ChunkMeta;
 
 /// Holds metadata about a chunk and can produce page decompressors.
 #[derive(Clone, Debug)]

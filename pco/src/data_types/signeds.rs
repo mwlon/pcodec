@@ -3,8 +3,8 @@ use std::mem;
 use crate::data_types::{unsigneds, ModeAndLatents, NumberLike};
 use crate::describers::LatentDescriber;
 use crate::errors::PcoResult;
-use crate::{describers, int_mult_utils, ChunkMeta};
-use crate::{ChunkConfig, Mode};
+use crate::metadata::{ChunkMeta, Mode};
+use crate::{describers, int_mult_utils, ChunkConfig};
 
 macro_rules! impl_signed {
   ($t: ty, $latent: ty, $header_byte: expr) => {

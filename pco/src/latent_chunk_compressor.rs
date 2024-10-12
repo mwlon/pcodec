@@ -1,13 +1,14 @@
-use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
+use crate::compression_intermediates::BinCompressionInfo;
 use crate::compression_intermediates::DissectedPageVar;
 use crate::compression_table::CompressionTable;
 use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING, PAGE_PADDING};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::latent_batch_dissector::LatentBatchDissector;
+use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
 use crate::read_write_uint::ReadWriteUint;
-use crate::{ans, bit_reader, bit_writer, read_write_uint, ChunkLatentVarMeta, FULL_BATCH_N};
+use crate::{ans, bit_reader, bit_writer, read_write_uint, FULL_BATCH_N};
 use std::io::Write;
 
 // This would be very hard to combine with write_uints because it makes use of

@@ -4,11 +4,11 @@ use better_io::BetterBufRead;
 
 use crate::bit_reader;
 use crate::bit_reader::BitReaderBuilder;
-use crate::chunk_meta::ChunkMeta;
 use crate::constants::{CHUNK_META_PADDING, HEADER_PADDING};
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
-use crate::format_version::FormatVersion;
+use crate::metadata::chunk::ChunkMeta;
+use crate::metadata::format_version::FormatVersion;
 use crate::wrapped::chunk_decompressor::ChunkDecompressor;
 
 /// Top-level entry point for decompressing wrapped pco files.

@@ -4,10 +4,11 @@ use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
+use crate::metadata::ChunkMeta;
 use crate::progress::Progress;
 use crate::standalone::constants::*;
 use crate::standalone::DataTypeOrTermination;
-use crate::{bit_reader, wrapped, ChunkMeta};
+use crate::{bit_reader, wrapped};
 
 unsafe fn read_varint(reader: &mut BitReader) -> PcoResult<u64> {
   let power = 1 + reader.read_uint::<Bitlen>(BITS_TO_ENCODE_VARINT_POWER);

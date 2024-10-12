@@ -6,8 +6,9 @@ use crate::chunk_config::ChunkConfig;
 use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
+use crate::metadata::{ChunkMeta, Mode};
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
-use crate::{ChunkMeta, Mode, ModeSpec};
+use crate::ModeSpec;
 
 fn compress_w_meta<T: NumberLike>(
   nums: &[T],

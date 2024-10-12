@@ -2,8 +2,8 @@ use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, Latent, NumberLike};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
-use crate::Mode::Classic;
-use crate::{describers, int_mult_utils, ChunkConfig, ChunkMeta, Mode, ModeSpec};
+use crate::metadata::{ChunkMeta, Mode};
+use crate::{describers, int_mult_utils, ChunkConfig, ModeSpec};
 
 use super::ModeAndLatents;
 
@@ -18,7 +18,7 @@ pub fn choose_mode_and_split_latents<T: NumberLike>(
         let latents = int_mult_utils::split_latents(nums, base);
         Ok((mode, latents))
       } else {
-        Ok((Classic, split_latents_classic(nums)))
+        Ok((Mode::Classic, split_latents_classic(nums)))
       }
     }
 

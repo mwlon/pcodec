@@ -1,6 +1,6 @@
 use crate::constants::Bitlen;
 use crate::data_types::{FloatLike, Latent, NumberLike};
-use crate::{ChunkMeta, Mode};
+use crate::metadata::{ChunkMeta, Mode};
 use std::marker::PhantomData;
 
 /// Interprets the meaning of latent variables and values from [`ChunkMeta`].

@@ -1,7 +1,7 @@
 use crate::chunk_config::ChunkConfig;
-use crate::chunk_meta::ChunkMeta;
 use crate::data_types::NumberLike;
 use crate::errors::{ErrorKind, PcoResult};
+use crate::metadata::chunk::ChunkMeta;
 use crate::standalone::{simple_decompress, FileCompressor};
 use crate::ModeSpec;
 

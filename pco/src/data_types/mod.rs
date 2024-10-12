@@ -10,7 +10,8 @@ pub use dynamic::CoreDataType;
 use crate::constants::Bitlen;
 use crate::describers::LatentDescriber;
 use crate::errors::PcoResult;
-use crate::{ChunkConfig, ChunkMeta, Mode};
+use crate::metadata::{ChunkMeta, Mode};
+use crate::ChunkConfig;
 
 mod dynamic;
 mod floats;

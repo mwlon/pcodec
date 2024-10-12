@@ -5,7 +5,7 @@ use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::Bin;
+use crate::metadata::Bin;
 
 #[derive(Clone, Debug)]
 struct SymbolInfo {
