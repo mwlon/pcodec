@@ -51,6 +51,7 @@ mod histograms;
 mod int_mult_utils;
 mod latent_batch_decompressor;
 mod latent_batch_dissector;
+mod latent_chunk_compressor;
 mod mode;
 mod page_meta;
 mod progress;

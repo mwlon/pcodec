@@ -3,8 +3,7 @@ use std::io::Write;
 
 use crate::bin::BinCompressionInfo;
 use crate::bit_writer::BitWriter;
-use crate::compression_intermediates::{DissectedPage, DissectedPageVar, PageInfo};
-use crate::compression_table::CompressionTable;
+use crate::compression_intermediates::{DissectedPage, PageInfo};
 use crate::constants::{
   Bitlen, Weight, ANS_INTERLEAVING, LIMITED_UNOPTIMIZED_BINS_LOG, MAX_COMPRESSION_LEVEL,
   MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
@@ -13,13 +12,12 @@ use crate::data_types::{Latent, NumberLike};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::histograms::histogram;
-use crate::latent_batch_dissector::LatentBatchDissector;
+use crate::latent_chunk_compressor::{LatentChunkCompressor, TrainedBins};
 use crate::page_meta::{PageLatentVarMeta, PageMeta};
-use crate::read_write_uint::ReadWriteUint;
 use crate::wrapped::guarantee;
 use crate::{
-  ans, bin_optimization, bit_reader, bit_writer, data_types, delta, read_write_uint, Bin,
-  ChunkConfig, ChunkLatentVarMeta, ChunkMeta, Mode, PagingSpec, FULL_BATCH_N,
+  ans, bin_optimization, data_types, delta, Bin, ChunkConfig, ChunkLatentVarMeta, ChunkMeta, Mode,
+  PagingSpec, FULL_BATCH_N,
 };
 
 // if it looks like the average page of size n will use k bits, hint that it
@@ -41,13 +39,6 @@ fn quantize_weights<L: Latent>(
     infos[i].weight = weight;
   }
   ans_size_log
-}
-
-#[derive(Default)]
-struct TrainedBins<L: Latent> {
-  infos: Vec<BinCompressionInfo<L>>,
-  ans_size_log: Bitlen,
-  counts: Vec<Weight>,
 }
 
 fn train_infos<L: Latent>(
@@ -99,136 +90,11 @@ fn train_infos<L: Latent>(
   })
 }
 
-fn uninit_vec<T>(n: usize) -> Vec<T> {
-  unsafe {
-    let mut res = Vec::with_capacity(n);
-    res.set_len(n);
-    res
-  }
-}
-
-// This would be very hard to combine with write_uints because it makes use of
-// an optimization that only works easily for single-u64 writes of 56 bits or
-// less: we keep the `target_u64` value we're updating in a register instead
-// of referring back to `dst` (recent values of which will be in L1 cache). If
-// a write exceeds 56 bits, we may need to shift target_u64 by 64 bits, which
-// would be an overflow panic.
-#[inline(never)]
-unsafe fn write_short_uints<U: ReadWriteUint>(
-  vals: &[U],
-  bitlens: &[Bitlen],
-  mut stale_byte_idx: usize,
-  mut bits_past_byte: Bitlen,
-  dst: &mut [u8],
-) -> (usize, Bitlen) {
-  stale_byte_idx += bits_past_byte as usize / 8;
-  bits_past_byte %= 8;
-  let mut target_u64 = bit_reader::u64_at(dst, stale_byte_idx);
-
-  for (&val, &bitlen) in vals.iter().zip(bitlens).take(FULL_BATCH_N) {
-    let bytes_added = bits_past_byte as usize / 8;
-    stale_byte_idx += bytes_added;
-    target_u64 >>= bytes_added * 8;
-    bits_past_byte %= 8;
-
-    target_u64 |= val.to_u64() << bits_past_byte;
-    bit_writer::write_u64_to(target_u64, stale_byte_idx, dst);
-
-    bits_past_byte += bitlen;
-  }
-  (stale_byte_idx, bits_past_byte)
-}
-
-#[inline(never)]
-unsafe fn write_uints<U: ReadWriteUint, const MAX_U64S: usize>(
-  vals: &[U],
-  bitlens: &[Bitlen],
-  mut stale_byte_idx: usize,
-  mut bits_past_byte: Bitlen,
-  dst: &mut [u8],
-) -> (usize, Bitlen) {
-  for (&val, &bitlen) in vals.iter().zip(bitlens).take(FULL_BATCH_N) {
-    stale_byte_idx += bits_past_byte as usize / 8;
-    bits_past_byte %= 8;
-    bit_writer::write_uint_to::<_, MAX_U64S>(val, stale_byte_idx, bits_past_byte, dst);
-    bits_past_byte += bitlen;
-  }
-  (stale_byte_idx, bits_past_byte)
-}
-
-fn write_dissected_batch_var<L: Latent, W: Write>(
-  dissected_page_var: &DissectedPageVar<L>,
-  var_policy: &LatentVarPolicy<L>,
-  batch_start: usize,
-  writer: &mut BitWriter<W>,
-) -> PcoResult<()> {
-  assert!(writer.buf.len() >= PAGE_PADDING);
-  writer.flush()?;
-
-  if batch_start >= dissected_page_var.offsets.len() {
-    return Ok(());
-  }
-
-  // write ANS
-  if var_policy.needs_ans {
-    (writer.stale_byte_idx, writer.bits_past_byte) = unsafe {
-      write_short_uints(
-        &dissected_page_var.ans_vals[batch_start..],
-        &dissected_page_var.ans_bits[batch_start..],
-        writer.stale_byte_idx,
-        writer.bits_past_byte,
-        &mut writer.buf,
-      )
-    };
-  }
-
-  // write offsets
-  (writer.stale_byte_idx, writer.bits_past_byte) = unsafe {
-    match var_policy.max_u64s_per_offset {
-      0 => (writer.stale_byte_idx, writer.bits_past_byte),
-      1 => write_short_uints::<L>(
-        &dissected_page_var.offsets[batch_start..],
-        &dissected_page_var.offset_bits[batch_start..],
-        writer.stale_byte_idx,
-        writer.bits_past_byte,
-        &mut writer.buf,
-      ),
-      2 => write_uints::<L, 2>(
-        &dissected_page_var.offsets[batch_start..],
-        &dissected_page_var.offset_bits[batch_start..],
-        writer.stale_byte_idx,
-        writer.bits_past_byte,
-        &mut writer.buf,
-      ),
-      3 => write_uints::<L, 3>(
-        &dissected_page_var.offsets[batch_start..],
-        &dissected_page_var.offset_bits[batch_start..],
-        writer.stale_byte_idx,
-        writer.bits_past_byte,
-        &mut writer.buf,
-      ),
-      _ => panic!("[ChunkCompressor] data type is too large"),
-    }
-  };
-
-  Ok(())
-}
-
-#[derive(Clone, Debug)]
-struct LatentVarPolicy<L: Latent> {
-  table: CompressionTable<L>,
-  encoder: ans::Encoder,
-  avg_bits_per_delta: f64,
-  is_trivial: bool,
-  needs_ans: bool,
-  max_u64s_per_offset: usize,
-}
-
 /// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
 pub struct ChunkCompressor<L: Latent> {
   meta: ChunkMeta<L>,
-  latent_var_policies: Vec<LatentVarPolicy<L>>,
+  latent_chunk_compressors: Vec<LatentChunkCompressor<L>>,
   page_infos: Vec<PageInfo>,
   // n_latent_vars x n_deltas
   deltas: Vec<Vec<L>>,
@@ -341,7 +207,7 @@ fn new_candidate_w_split_and_delta_order<L: Latent>(
 
   // training bins
   let mut var_metas = Vec::with_capacity(n_latent_vars);
-  let mut var_policies = Vec::with_capacity(n_latent_vars);
+  let mut latent_chunk_compressors = Vec::with_capacity(n_latent_vars);
   let mut bin_counts = Vec::with_capacity(n_latent_vars);
   for (latent_idx, deltas) in deltas.iter().enumerate() {
     // secondary latents should be compressed faster
@@ -355,40 +221,26 @@ fn new_candidate_w_split_and_delta_order<L: Latent>(
     };
 
     let contiguous_deltas = collect_contiguous_deltas(deltas, &page_infos, latent_idx);
-
     let trained = train_infos(contiguous_deltas, unoptimized_bins_log)?;
     let bins = bins_from_compression_infos(&trained.infos);
-    let needs_ans = bins.len() != 1;
-
-    let table = CompressionTable::from(trained.infos);
-    let encoder = ans::Encoder::from_bins(trained.ans_size_log, &bins)?;
 
     let latent_meta = ChunkLatentVarMeta {
       bins,
       ans_size_log: trained.ans_size_log,
     };
-    let max_bits_per_offset = latent_meta.max_bits_per_offset();
-    let avg_bits_per_delta = latent_meta.avg_bits_per_delta();
-    let is_trivial = latent_meta.is_trivial();
 
-    let max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(max_bits_per_offset);
-
+    bin_counts.push(trained.counts.to_vec());
+    latent_chunk_compressors.push(LatentChunkCompressor::new(
+      trained,
+      &latent_meta,
+    )?);
     var_metas.push(latent_meta);
-    var_policies.push(LatentVarPolicy {
-      table,
-      encoder,
-      avg_bits_per_delta,
-      is_trivial,
-      needs_ans,
-      max_u64s_per_offset,
-    });
-    bin_counts.push(trained.counts);
   }
 
   let meta = ChunkMeta::new(mode, delta_order, var_metas);
   let chunk_compressor = ChunkCompressor {
     meta,
-    latent_var_policies: var_policies,
+    latent_chunk_compressors,
     page_infos,
     deltas,
     delta_moments,
@@ -496,44 +348,12 @@ fn new_candidate_w_split<L: Latent>(
   )
 }
 
-fn should_fallback<L: Latent>(
-  n: usize,
-  candidate: &ChunkCompressor<L>,
-  bin_counts_per_latent_var: Vec<Vec<Weight>>,
-) -> bool {
-  let meta = &candidate.meta;
-  if meta.delta_encoding_order == 0 && matches!(meta.mode, Mode::Classic) {
-    // we already have a size guarantee in this case
-    return false;
-  }
-
-  let n_pages = candidate.page_infos.len();
-
-  // worst case trailing bytes after bit packing
-  let mut worst_case_body_bit_size = 7 * n_pages;
-  for (latent_var_meta, bin_counts) in meta
-    .per_latent_var
-    .iter()
-    .zip(bin_counts_per_latent_var.iter())
-  {
-    for (bin, &count) in latent_var_meta.bins.iter().zip(bin_counts) {
-      worst_case_body_bit_size +=
-        count as usize * bin.worst_case_bits_per_delta(latent_var_meta.ans_size_log) as usize;
-    }
-  }
-
-  let worst_case_size = meta.exact_size()
-    + n_pages * meta.exact_page_meta_size()
-    + worst_case_body_bit_size.div_ceil(8);
-  let baseline_size = guarantee::chunk_size::<L>(n);
-  worst_case_size > baseline_size
-}
-
 fn fallback_chunk_compressor<L: Latent>(
   mut latents: Vec<Vec<L>>,
   config: &ChunkConfig,
 ) -> PcoResult<ChunkCompressor<L>> {
-  let n_per_page = config.paging_spec.n_per_page(latents[0].len())?;
+  let n = latents[0].len();
+  let n_per_page = config.paging_spec.n_per_page(n)?;
   let (page_infos, delta_moments) =
     build_page_infos_and_delta_moments(Mode::Classic, 0, &n_per_page, &mut latents);
   let infos = vec![BinCompressionInfo::<L> {
@@ -541,24 +361,20 @@ fn fallback_chunk_compressor<L: Latent>(
     symbol: 0,
     ..Default::default()
   }];
-  let ans_size_log = 0;
-  let bins = bins_from_compression_infos(&infos);
-  let table = CompressionTable::from(infos);
-  let encoder = ans::Encoder::from_bins(ans_size_log, &bins)?;
-  let offset_bits = L::BITS;
-  let max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(offset_bits);
+  let meta = guarantee::baseline_chunk_meta::<L>();
+  let latent_var_meta = &meta.per_latent_var[0];
 
-  let policy = LatentVarPolicy {
-    table,
-    encoder,
-    avg_bits_per_delta: offset_bits as f64,
-    is_trivial: false,
-    needs_ans: false,
-    max_u64s_per_offset,
-  };
+  let lcc = LatentChunkCompressor::new(
+    TrainedBins {
+      infos,
+      ans_size_log: 0,
+      counts: vec![n as Weight],
+    },
+    latent_var_meta,
+  )?;
   Ok(ChunkCompressor {
-    meta: guarantee::baseline_chunk_meta::<L>(),
-    latent_var_policies: vec![policy],
+    meta,
+    latent_chunk_compressors: vec![lcc],
     page_infos,
     deltas: latents,
     delta_moments,
@@ -577,7 +393,7 @@ pub(crate) fn new<T: NumberLike>(
   let (mode, latents) = T::choose_mode_and_split_latents(nums, config)?;
 
   let (candidate, bin_counts) = new_candidate_w_split(mode, latents, config)?;
-  if should_fallback(n, &candidate, bin_counts) {
+  if candidate.should_fallback(n, bin_counts) {
     let latents = data_types::split_latents_classic(nums);
     return fallback_chunk_compressor(latents, config);
   }
@@ -586,6 +402,35 @@ pub(crate) fn new<T: NumberLike>(
 }
 
 impl<L: Latent> ChunkCompressor<L> {
+  fn should_fallback(&self, n: usize, bin_counts_per_latent_var: Vec<Vec<Weight>>) -> bool {
+    let meta = &self.meta;
+    if meta.delta_encoding_order == 0 && matches!(meta.mode, Mode::Classic) {
+      // we already have a size guarantee in this case
+      return false;
+    }
+
+    let n_pages = self.page_infos.len();
+
+    // worst case trailing bytes after bit packing
+    let mut worst_case_body_bit_size = 7 * n_pages;
+    for (latent_var_meta, bin_counts) in meta
+      .per_latent_var
+      .iter()
+      .zip(bin_counts_per_latent_var.iter())
+    {
+      for (bin, &count) in latent_var_meta.bins.iter().zip(bin_counts) {
+        worst_case_body_bit_size +=
+          count as usize * bin.worst_case_bits_per_delta(latent_var_meta.ans_size_log) as usize;
+      }
+    }
+
+    let worst_case_size = meta.exact_size()
+      + n_pages * meta.exact_page_meta_size()
+      + worst_case_body_bit_size.div_ceil(8);
+    let baseline_size = guarantee::chunk_size::<L>(n);
+    worst_case_size > baseline_size
+  }
+
   fn page_moments(&self, page_idx: usize, latent_var_idx: usize) -> &DeltaMoments<L> {
     &self.delta_moments[page_idx][latent_var_idx]
   }
@@ -622,56 +467,27 @@ impl<L: Latent> ChunkCompressor<L> {
 
   fn dissect_page(&self, page_idx: usize) -> PcoResult<DissectedPage<L>> {
     let Self {
-      latent_var_policies,
+      latent_chunk_compressors,
       deltas,
       page_infos,
       ..
     } = self;
 
-    let uninit_dissected_page_var = |n, ans_default_state| {
-      let ans_final_states = [ans_default_state; ANS_INTERLEAVING];
-      DissectedPageVar {
-        ans_vals: uninit_vec(n),
-        ans_bits: uninit_vec(n),
-        offsets: uninit_vec(n),
-        offset_bits: uninit_vec(n),
-        ans_final_states,
-      }
-    };
-
     let page_info = &page_infos[page_idx];
     let mut per_var = Vec::new();
 
-    for ((var_policy, &delta_end), var_deltas) in latent_var_policies
+    for ((lcc, &delta_end), var_deltas) in latent_chunk_compressors
       .iter()
       .zip(page_info.end_idx_per_var.iter())
       .zip(deltas)
     {
-      if var_policy.is_trivial {
-        per_var.push(uninit_dissected_page_var(
-          0,
-          var_policy.encoder.default_state(),
-        ));
-        continue;
-      }
-
       let page_deltas = &var_deltas[page_info.start_idx..delta_end];
-      let LatentVarPolicy { table, encoder, .. } = var_policy;
-      let mut dissected_page_var =
-        uninit_dissected_page_var(page_deltas.len(), encoder.default_state());
-
-      // we go through in reverse for ANS!
-      let mut lbd = LatentBatchDissector::new(table, encoder);
-      for (batch_idx, batch) in page_deltas.chunks(FULL_BATCH_N).enumerate().rev() {
-        let base_i = batch_idx * FULL_BATCH_N;
-        lbd.dissect_latent_batch(batch, base_i, &mut dissected_page_var)
-      }
-      per_var.push(dissected_page_var);
+      per_var.push(lcc.dissect_page(page_deltas));
     }
 
     Ok(DissectedPage {
       page_n: page_info.page_n,
-      per_var,
+      per_latent_var: per_var,
     })
   }
 
@@ -686,13 +502,13 @@ impl<L: Latent> ChunkCompressor<L> {
   fn page_size_hint_inner(&self, page_idx: usize, page_size_overestimation: f64) -> usize {
     let page_info = &self.page_infos[page_idx];
     let mut body_bit_size = 0;
-    for (var_policy, &end_idx) in self
-      .latent_var_policies
+    for (lcc, &end_idx) in self
+      .latent_chunk_compressors
       .iter()
       .zip(&page_info.end_idx_per_var)
     {
       let page_n_deltas = end_idx - page_info.start_idx;
-      let nums_bit_size = page_n_deltas as f64 * var_policy.avg_bits_per_delta;
+      let nums_bit_size = page_n_deltas as f64 * lcc.avg_bits_per_delta;
       body_bit_size += (nums_bit_size * page_size_overestimation).ceil() as usize;
     }
     self.meta.exact_page_meta_size() + body_bit_size.div_ceil(8)
@@ -710,15 +526,12 @@ impl<L: Latent> ChunkCompressor<L> {
         batch_start + FULL_BATCH_N,
         dissected_page.page_n,
       );
-      for (dissected_page_var, policy) in
-        dissected_page.per_var.iter().zip(&self.latent_var_policies)
+      for (dissected_page_var, lcc) in dissected_page
+        .per_latent_var
+        .iter()
+        .zip(&self.latent_chunk_compressors)
       {
-        write_dissected_batch_var(
-          dissected_page_var,
-          policy,
-          batch_start,
-          writer,
-        )?;
+        lcc.write_dissected_batch(dissected_page_var, batch_start, writer)?;
       }
       batch_start = batch_end;
     }
@@ -742,26 +555,26 @@ impl<L: Latent> ChunkCompressor<L> {
     let dissected_page = self.dissect_page(page_idx)?;
 
     let n_latents = self.meta.mode.n_latent_vars();
-    let mut latent_metas = Vec::with_capacity(n_latents);
+    let mut per_latent_var = Vec::with_capacity(n_latents);
     for latent_idx in 0..n_latents {
       let delta_moments = self.page_moments(page_idx, latent_idx).clone();
-      let base_state = self.latent_var_policies[latent_idx].encoder.default_state();
+      let base_state = self.latent_chunk_compressors[latent_idx]
+        .encoder
+        .default_state();
 
       let ans_final_state_idxs = dissected_page
-        .per_var
+        .per_latent_var
         .get(latent_idx)
         .map(|dissected| dissected.ans_final_states.map(|state| state - base_state))
         .unwrap_or([0; ANS_INTERLEAVING]);
-      latent_metas.push(PageLatentVarMeta {
+      per_latent_var.push(PageLatentVarMeta {
         delta_moments,
         ans_final_state_idxs,
       });
     }
-    let page_meta = PageMeta {
-      per_var: latent_metas,
-    };
+    let page_meta = PageMeta { per_latent_var };
     let ans_size_logs = self
-      .latent_var_policies
+      .latent_chunk_compressors
       .iter()
       .map(|config| config.encoder.size_log());
 
