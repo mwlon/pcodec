@@ -359,7 +359,7 @@ mod tests {
     let mut dst = Vec::new();
     let mut writer = BitWriter::new(&mut dst, buffer_size);
     let page_meta = PageMeta {
-      per_var: (0..meta.per_latent_var.len())
+      per_latent_var: (0..meta.per_latent_var.len())
         .map(|latent_var_idx| {
           let delta_order = meta
             .mode

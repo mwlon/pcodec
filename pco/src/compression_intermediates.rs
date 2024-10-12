@@ -23,5 +23,5 @@ pub struct DissectedPageVar<L: Latent> {
 #[derive(Clone, Debug)]
 pub struct DissectedPage<L: Latent> {
   pub page_n: usize,
-  pub per_var: Vec<DissectedPageVar<L>>, // one per latent variable
+  pub per_latent_var: Vec<DissectedPageVar<L>>, // one per latent variable
 }

@@ -85,7 +85,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
     let mode = chunk_meta.mode;
     let delta_momentss = page_meta
-      .per_var
+      .per_latent_var
       .iter()
       .map(|latent| latent.delta_moments.clone())
       .collect::<Vec<_>>();
@@ -102,7 +102,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
         chunk_latent_meta,
-        &page_meta.per_var[latent_idx],
+        &page_meta.per_latent_var[latent_idx],
       )?);
     }
 
