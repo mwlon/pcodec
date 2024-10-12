@@ -30,7 +30,7 @@ parquet = { version = "49.0.0", features = [
   "snap",
   "zstd",
 ], default-features = false }
-pco = { version = "0.3", path = "../pco" }
+pco = { version = "0.4", path = "../pco" }
 q_compress = { version = "0.11.7", path = "../quantile-compression/q_compress", optional = true }
 snap = "1.1.0"
 spdp_sys = { version = "0.1", optional = true }

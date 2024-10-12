@@ -2,18 +2,16 @@ use std::mem;
 
 use half::f16;
 
+use super::ModeAndLatents;
 use crate::chunk_config::ModeSpec;
+use crate::compression_intermediates::Bid;
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::{
-  describers, float_mult_utils, float_quant_utils, mode::Bid, sampling, ChunkConfig, ChunkMeta,
-  Mode,
-};
-
-use super::ModeAndLatents;
+use crate::metadata::{ChunkMeta, Mode};
+use crate::{describers, float_mult_utils, float_quant_utils, sampling, ChunkConfig};
 
 fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
   // We can compress infinities, nans, and baby floats, but we can't learn

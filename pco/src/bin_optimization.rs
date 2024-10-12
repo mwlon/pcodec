@@ -1,9 +1,10 @@
 use crate::ans::Symbol;
-use crate::bin::BinCompressionInfo;
+use crate::bits;
+use crate::compression_intermediates::BinCompressionInfo;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::histograms::HistogramBin;
-use crate::{bits, chunk_meta};
+use crate::metadata::bin;
 
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 
@@ -52,7 +53,7 @@ fn choose_optimized_partitioning<L: Latent>(
   let mut best_partitionings = Vec::with_capacity(bins.len() + 1);
   best_partitionings.push(Vec::new());
 
-  let bin_meta_cost = chunk_meta::bin_exact_bit_size::<L>(ans_size_log) as f32;
+  let bin_meta_cost = bin::bin_exact_bit_size::<L>(ans_size_log) as f32;
 
   for i in 0..bins.len() {
     let mut best_cost = f32::MAX;
@@ -122,8 +123,8 @@ pub fn optimize_bins<L: Latent>(
 
 #[cfg(test)]
 mod tests {
-  use crate::bin::BinCompressionInfo;
   use crate::bin_optimization::optimize_bins;
+  use crate::compression_intermediates::BinCompressionInfo;
   use crate::histograms::HistogramBin;
 
   fn make_bin(count: usize, lower: u32, upper: u32) -> HistogramBin<u32> {

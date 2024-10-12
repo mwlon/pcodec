@@ -1,13 +1,31 @@
 use std::fmt::Debug;
 
 use crate::ans::AnsState;
-use crate::bin::BinDecompressionInfo;
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::page_meta::PageLatentVarMeta;
-use crate::{ans, bit_reader, read_write_uint, ChunkLatentVarMeta};
+use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
+use crate::metadata::page_latent_var::PageLatentVarMeta;
+use crate::metadata::Bin;
+use crate::{ans, bit_reader, read_write_uint};
+
+// Default here is meaningless and should only be used to fill in empty
+// vectors.
+#[derive(Clone, Copy, Debug)]
+pub struct BinDecompressionInfo<L: Latent> {
+  pub lower: L,
+  pub offset_bits: Bitlen,
+}
+
+impl<L: Latent> From<&Bin<L>> for BinDecompressionInfo<L> {
+  fn from(bin: &Bin<L>) -> Self {
+    Self {
+      lower: bin.lower,
+      offset_bits: bin.offset_bits,
+    }
+  }
+}
 
 #[derive(Clone, Debug)]
 struct State<L: Latent> {

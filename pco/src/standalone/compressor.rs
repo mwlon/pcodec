@@ -4,8 +4,9 @@ use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
 use crate::data_types::{Latent, NumberLike};
 use crate::errors::PcoResult;
+use crate::metadata::ChunkMeta;
 use crate::standalone::constants::*;
-use crate::{bits, wrapped, ChunkConfig, ChunkMeta};
+use crate::{bits, wrapped, ChunkConfig};
 
 unsafe fn write_varint<W: Write>(n: u64, writer: &mut BitWriter<W>) {
   let power = if n == 0 { 1 } else { n.ilog2() + 1 };

@@ -1,7 +1,8 @@
+use crate::compression_intermediates::Bid;
 use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{FloatLike, Latent};
+use crate::metadata::Mode;
 use crate::sampling::{self, PrimaryLatentAndSavings};
-use crate::{mode::Bid, Mode};
 use std::cmp;
 
 const REQUIRED_QUANTIZED_PROPORTION: f64 = 0.95;

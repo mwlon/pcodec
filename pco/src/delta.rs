@@ -1,31 +1,5 @@
-use std::io::Write;
-
-use crate::bit_reader::BitReader;
-use crate::bit_writer::BitWriter;
 use crate::data_types::Latent;
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct DeltaMoments<L: Latent>(pub Vec<L>);
-
-impl<L: Latent> DeltaMoments<L> {
-  pub unsafe fn read_from(reader: &mut BitReader, order: usize) -> Self {
-    let mut moments = Vec::new();
-    for _ in 0..order {
-      moments.push(reader.read_uint::<L>(L::BITS));
-    }
-    DeltaMoments(moments)
-  }
-
-  pub unsafe fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
-    for &moment in &self.0 {
-      writer.write_uint(moment, L::BITS);
-    }
-  }
-
-  pub fn order(&self) -> usize {
-    self.0.len()
-  }
-}
+use crate::metadata::delta_moments::DeltaMoments;
 
 // Without this, deltas in, say, [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].

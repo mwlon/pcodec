@@ -4,16 +4,17 @@ use std::marker::PhantomData;
 
 use better_io::BetterBufRead;
 
+use crate::bit_reader;
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::{Latent, NumberLike};
 use crate::delta;
-use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
-use crate::page_meta::PageMeta;
+use crate::metadata::delta_moments::DeltaMoments;
+use crate::metadata::page::PageMeta;
+use crate::metadata::{ChunkMeta, Mode};
 use crate::progress::Progress;
-use crate::{bit_reader, ChunkMeta, Mode};
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
 

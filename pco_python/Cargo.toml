@@ -14,5 +14,5 @@ crate-type = ["cdylib"]
 [dependencies]
 half = { version = "2.0.0", features = ["std"] }
 numpy = { version = "0.20.0", features = ["half"] }
-pco = { version = "0.3.0", path = "../pco" }
+pco = { version = "0.4.0", path = "../pco" }
 pyo3 = { version = "0.20.0", features = ["extension-module"] }

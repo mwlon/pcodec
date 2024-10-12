@@ -7,8 +7,8 @@ use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
 use pco::data_types::{Latent, NumberLike};
+use pco::metadata::ChunkMeta;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::ChunkMeta;
 
 use crate::core_handlers::CoreHandlerImpl;
 use crate::dtypes::PcoNumberLike;

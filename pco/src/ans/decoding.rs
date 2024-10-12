@@ -3,7 +3,7 @@ use crate::ans::{AnsState, Symbol};
 use crate::constants::Bitlen;
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::ChunkLatentVarMeta;
+use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
 
 #[derive(Clone, Debug)]
 #[repr(align(16))]

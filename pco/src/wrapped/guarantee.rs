@@ -1,5 +1,6 @@
 use crate::data_types::Latent;
-use crate::{Bin, ChunkLatentVarMeta, ChunkMeta, Mode};
+use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
+use crate::metadata::{Bin, ChunkMeta, Mode};
 
 /// Returns the maximum possible byte size of a wrapped header.
 pub fn header_size() -> usize {
