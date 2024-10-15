@@ -64,7 +64,7 @@ pub struct LatentBatchDecompressor<L: Latent> {
 impl<L: Latent> LatentBatchDecompressor<L> {
   pub fn new(
     chunk_latent_var_meta: &ChunkLatentVarMeta<L>,
-    page_latent_var_meta: &PageLatentVarMeta<L>,
+    page_latent_var_meta: &PageLatentVarMeta,
   ) -> PcoResult<Self> {
     let u64s_per_offset =
       read_write_uint::calc_max_u64s(chunk_latent_var_meta.max_bits_per_offset());

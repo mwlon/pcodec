@@ -178,7 +178,7 @@ impl<L: Latent> ChunkMeta<L> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::metadata::delta_moments::DeltaMoments;
+  use crate::metadata::dyn_latents::DynLatents;
   use crate::metadata::page::PageMeta;
   use crate::metadata::page_latent_var::PageLatentVarMeta;
   use crate::metadata::Bin;
@@ -201,7 +201,7 @@ mod tests {
             .mode
             .delta_order_for_latent_var(latent_var_idx, meta.delta_encoding_order);
           PageLatentVarMeta {
-            delta_moments: DeltaMoments(vec![L::ZERO; delta_order]),
+            delta_moments: DynLatents::try_from(vec![L::ZERO; delta_order]).unwrap(),
             ans_final_state_idxs: [0; ANS_INTERLEAVING],
           }
         })

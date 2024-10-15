@@ -9,11 +9,12 @@ use crate::constants::{
   MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
 };
 use crate::data_types::{Latent, NumberLike};
+use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::histograms::histogram;
 use crate::latent_chunk_compressor::{LatentChunkCompressor, TrainedBins};
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
-use crate::metadata::delta_moments::DeltaMoments;
+use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::page::PageMeta;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
 use crate::metadata::{Bin, ChunkMeta, Mode};
@@ -161,6 +162,7 @@ fn build_page_infos_and_delta_moments<L: Latent>(
   delta_order: usize,
   n_per_page: &[usize],
   latents: &mut [Vec<L>],
+  // TODO put delta state into page info
 ) -> (Vec<PageInfo>, Vec<Vec<DeltaMoments<L>>>) {
   let n_pages = n_per_page.len();
   let mut page_infos = Vec::with_capacity(n_pages);
@@ -172,10 +174,11 @@ fn build_page_infos_and_delta_moments<L: Latent>(
     let mut end_idx_per_var = Vec::new();
     for (latent_var_idx, latents) in latents.iter_mut().enumerate() {
       let var_delta_order = mode.delta_order_for_latent_var(latent_var_idx, delta_order);
-      delta_moments.push(delta::encode_in_place(
+      let moments = delta::encode_in_place(
         &mut latents[start_idx..start_idx + page_n],
         var_delta_order,
-      ));
+      );
+      delta_moments.push(moments);
       end_idx_per_var.push(start_idx + page_n.saturating_sub(var_delta_order));
     }
     page_infos.push(PageInfo {
@@ -568,7 +571,7 @@ impl<L: Latent> ChunkCompressor<L> {
         .map(|dissected| dissected.ans_final_states.map(|state| state - base_state))
         .unwrap_or([0; ANS_INTERLEAVING]);
       per_latent_var.push(PageLatentVarMeta {
-        delta_moments,
+        delta_moments: DynLatents::try_from(delta_moments.0).unwrap(),
         ans_final_state_idxs,
       });
     }

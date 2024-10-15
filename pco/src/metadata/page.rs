@@ -14,11 +14,11 @@ use crate::metadata::ChunkMeta;
 // chunk metadata parsing step (standalone mode) OR from the wrapping format
 // (wrapped mode).
 #[derive(Clone, Debug)]
-pub struct PageMeta<L: Latent> {
-  pub per_latent_var: Vec<PageLatentVarMeta<L>>,
+pub struct PageMeta {
+  pub per_latent_var: Vec<PageLatentVarMeta>,
 }
 
-impl<L: Latent> PageMeta<L> {
+impl PageMeta {
   pub unsafe fn write_to<I: Iterator<Item = Bitlen>, W: Write>(
     &self,
     ans_size_logs: I,
@@ -30,10 +30,13 @@ impl<L: Latent> PageMeta<L> {
     writer.finish_byte();
   }
 
-  pub unsafe fn read_from(reader: &mut BitReader, chunk_meta: &ChunkMeta<L>) -> PcoResult<Self> {
+  pub unsafe fn read_from<L: Latent>(
+    reader: &mut BitReader,
+    chunk_meta: &ChunkMeta<L>,
+  ) -> PcoResult<Self> {
     let mut per_latent_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
     for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
-      per_latent_var.push(PageLatentVarMeta::read_from(
+      per_latent_var.push(PageLatentVarMeta::read_from::<L>(
         reader,
         chunk_meta.delta_order_for_latent_var(latent_idx),
         chunk_latent_var_meta.ans_size_log,

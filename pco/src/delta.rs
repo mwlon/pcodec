@@ -1,5 +1,13 @@
 use crate::data_types::Latent;
-use crate::metadata::delta_moments::DeltaMoments;
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct DeltaMoments<L: Latent>(pub Vec<L>);
+
+impl<L: Latent> DeltaMoments<L> {
+  pub fn order(&self) -> usize {
+    self.0.len()
+  }
+}
 
 // Without this, deltas in, say, [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].

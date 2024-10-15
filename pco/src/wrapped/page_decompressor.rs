@@ -9,9 +9,9 @@ use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::{Latent, NumberLike};
 use crate::delta;
+use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
-use crate::metadata::delta_moments::DeltaMoments;
 use crate::metadata::page::PageMeta;
 use crate::metadata::{ChunkMeta, Mode};
 use crate::progress::Progress;
@@ -82,13 +82,16 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
 
     let page_meta = reader_builder
-      .with_reader(|reader| unsafe { PageMeta::<T::L>::read_from(reader, chunk_meta) })?;
+      .with_reader(|reader| unsafe { PageMeta::read_from::<T::L>(reader, chunk_meta) })?;
 
     let mode = chunk_meta.mode;
     let delta_momentss = page_meta
       .per_latent_var
       .iter()
-      .map(|latent| latent.delta_moments.clone())
+      .map(|latent_var_meta| {
+        let moments = latent_var_meta.delta_moments.downcast_ref::<T::L>().clone();
+        DeltaMoments(moments)
+      })
       .collect::<Vec<_>>();
 
     let mut latent_batch_decompressors = Vec::new();
