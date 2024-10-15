@@ -4,7 +4,7 @@ use crate::compression_intermediates::BinCompressionInfo;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::histograms::HistogramBin;
-use crate::metadata::bin;
+use crate::metadata::{bin, Bin};
 
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 
@@ -53,7 +53,7 @@ fn choose_optimized_partitioning<L: Latent>(
   let mut best_partitionings = Vec::with_capacity(bins.len() + 1);
   best_partitionings.push(Vec::new());
 
-  let bin_meta_cost = bin::bin_exact_bit_size::<L>(ans_size_log) as f32;
+  let bin_meta_cost = Bin::<L>::exact_bit_size(ans_size_log) as f32;
 
   for i in 0..bins.len() {
     let mut best_cost = f32::MAX;

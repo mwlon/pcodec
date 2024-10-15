@@ -5,7 +5,8 @@ use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::metadata::Bin;
+use crate::metadata::dyn_bins::DynBins;
+use crate::metadata::{Bin, ChunkLatentVarMeta};
 
 #[derive(Clone, Debug)]
 struct SymbolInfo {
@@ -28,9 +29,9 @@ pub struct Encoder {
 }
 
 impl Encoder {
-  pub fn from_bins<L: Latent>(size_log: Bitlen, bins: &[Bin<L>]) -> PcoResult<Self> {
-    let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
-    let spec = Spec::from_weights(size_log, weights)?;
+  pub fn from_chunk_latent_var_meta(meta: &ChunkLatentVarMeta) -> PcoResult<Self> {
+    let weights = meta.bins.weights();
+    let spec = Spec::from_weights(meta.ans_size_log, weights)?;
     Ok(Self::new(&spec))
   }
 

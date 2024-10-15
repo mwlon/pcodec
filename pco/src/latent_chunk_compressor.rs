@@ -7,6 +7,7 @@ use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::latent_batch_dissector::LatentBatchDissector;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
+use crate::metadata::{bin, Bin};
 use crate::read_write_uint::ReadWriteUint;
 use crate::{ans, bit_reader, bit_writer, read_write_uint, FULL_BATCH_N};
 use std::io::Write;
@@ -86,16 +87,15 @@ pub struct LatentChunkCompressor<L: Latent> {
 }
 
 impl<L: Latent> LatentChunkCompressor<L> {
-  pub(crate) fn new(
-    trained: TrainedBins<L>,
-    latent_meta: &ChunkLatentVarMeta<L>,
-  ) -> PcoResult<Self> {
-    let needs_ans = latent_meta.bins.len() != 1;
+  pub(crate) fn new(trained: TrainedBins<L>, bins: &[Bin<L>]) -> PcoResult<Self> {
+    let needs_ans = bins.len() != 1;
 
     let table = CompressionTable::from(trained.infos);
-    let encoder = ans::Encoder::from_bins(trained.ans_size_log, &latent_meta.bins)?;
+    let weights = bin::weights(bins);
+    let ans_spec = ans::Spec::from_weights(trained.ans_size_log, weights)?;
+    let encoder = ans::Encoder::new(&ans_spec);
 
-    let max_bits_per_offset = latent_meta.max_bits_per_offset();
+    let max_bits_per_offset = max_bits_per_offset();
     let max_u64s_per_offset = read_write_uint::calc_max_u64s_for_writing(max_bits_per_offset);
 
     Ok(LatentChunkCompressor {

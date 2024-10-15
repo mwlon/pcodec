@@ -7,6 +7,9 @@ use crate::constants::{
 };
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
+use crate::match_latent_enum;
+use crate::metadata::bin::Bins;
+use crate::metadata::dyn_bins::DynBins;
 use crate::metadata::{bin, Bin};
 use better_io::BetterBufRead;
 use std::cmp::min;
@@ -64,8 +67,52 @@ unsafe fn write_bins<L: Latent, W: Write>(
   Ok(())
 }
 
-impl<L: Latent> ChunkLatentVarMeta<L> {
-  pub(crate) unsafe fn read_from<R: BetterBufRead>(
+/// Part of [`ChunkMeta`][crate::metadata::ChunkMeta] that describes a latent
+/// variable interleaved into the compressed data.
+///
+/// For instance, with
+/// [classic mode][crate::metadata::Mode::Classic], there is a single latent variable
+/// corresponding to the actual numbers' (or deltas') bins.
+///
+/// This is mainly useful for inspecting how compression was done.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ChunkLatentVarMeta {
+  /// The log2 of the number of the number of states in this chunk's tANS
+  /// table.
+  ///
+  /// See <https://en.wikipedia.org/wiki/Asymmetric_numeral_systems>.
+  pub ans_size_log: Bitlen,
+  /// How the numbers or deltas are encoded, depending on their numerical
+  /// range.
+  pub bins: DynBins,
+}
+
+impl ChunkLatentVarMeta {
+  pub(crate) fn max_bits_per_offset(&self) -> Bitlen {
+    match_latent_enum!(
+      &self.bins,
+      DynBins<L>(inner) => { bin::max_offset_bits(inner) }
+    )
+  }
+
+  pub(crate) fn avg_bits_per_delta(&self) -> f64 {
+    let total_weight = (1 << self.ans_size_log) as f64;
+    match_latent_enum!(
+      &self.bins,
+      DynBins<L>(inner) => {
+        inner
+          .iter()
+          .map(|bin| {
+            let ans_bits = self.ans_size_log as f64 - (bin.weight as f64).log2();
+            (ans_bits + bin.offset_bits as f64) * bin.weight as f64 / total_weight
+          })
+          .sum()
+      }
+    )
+  }
+
+  pub(crate) unsafe fn read_from<L: Latent, R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
   ) -> PcoResult<Self> {
     let (ans_size_log, n_bins) = reader_builder.with_reader(|reader| {
@@ -96,13 +143,15 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
     let mut bins = Vec::with_capacity(n_bins);
     while bins.len() < n_bins {
       let batch_size = min(n_bins - bins.len(), FULL_BIN_BATCH_SIZE);
-      read_bin_batch(
+      read_bin_batch::<L, R>(
         reader_builder,
         ans_size_log,
         batch_size,
         &mut bins,
       )?;
     }
+
+    let bins = DynBins::from(bins);
 
     Ok(Self { bins, ans_size_log })
   }
@@ -116,57 +165,13 @@ impl<L: Latent> ChunkLatentVarMeta<L> {
     write_bins(&self.bins, self.ans_size_log, writer)
   }
 
-  pub(crate) fn is_trivial(&self) -> bool {
-    self.bins.is_empty() || (self.bins.len() == 1 && self.bins[0].offset_bits == 0)
-  }
-
   pub(crate) fn exact_bit_size(&self) -> usize {
+    let bin_size = match_latent_enum!(
+      self.bins,
+      Bins<L>(_inner) => { Bin::<L>::exact_bit_size(self.ans_size_log) }
+    ) as usize;
     BITS_TO_ENCODE_ANS_SIZE_LOG as usize
       + BITS_TO_ENCODE_N_BINS as usize
-      + self.bins.len() * bin::bin_exact_bit_size::<L>(self.ans_size_log) as usize
-  }
-}
-
-/// Part of [`ChunkMeta`][crate::metadata::ChunkMeta] that describes a latent
-/// variable interleaved into the compressed data.
-///
-/// For instance, with
-/// [classic mode][crate::metadata::Mode::Classic], there is a single latent variable
-/// corresponding to the actual numbers' (or deltas') bins.
-///
-/// This is mainly useful for inspecting how compression was done.
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct ChunkLatentVarMeta<L: Latent> {
-  /// The log2 of the number of the number of states in this chunk's tANS
-  /// table.
-  ///
-  /// See <https://en.wikipedia.org/wiki/Asymmetric_numeral_systems>.
-  pub ans_size_log: Bitlen,
-  /// How the numbers or deltas are encoded, depending on their numerical
-  /// range.
-  pub bins: Vec<Bin<L>>,
-}
-
-impl<L: Latent> ChunkLatentVarMeta<L> {
-  pub(crate) fn max_bits_per_offset(&self) -> Bitlen {
-    self
-      .bins
-      .iter()
-      .map(|bin| bin.offset_bits)
-      .max()
-      .unwrap_or_default()
-  }
-
-  pub(crate) fn avg_bits_per_delta(&self) -> f64 {
-    let total_weight = (1 << self.ans_size_log) as f64;
-    self
-      .bins
-      .iter()
-      .map(|bin| {
-        let ans_bits = self.ans_size_log as f64 - (bin.weight as f64).log2();
-        (ans_bits + bin.offset_bits as f64) * bin.weight as f64 / total_weight
-      })
-      .sum()
+      + self.bins.len() * bin_size
   }
 }

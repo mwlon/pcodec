@@ -3,10 +3,6 @@ use crate::compression_intermediates::BinCompressionInfo;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 
-pub(crate) fn bin_exact_bit_size<L: Latent>(ans_size_log: Bitlen) -> Bitlen {
-  ans_size_log + L::BITS + bits_to_encode_offset_bits::<L>()
-}
-
 /// Part of [`ChunkLatentVarMeta`][`crate::metadata::ChunkLatentVarMeta`] representing
 /// a numerical range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,6 +18,10 @@ pub struct Bin<L: Latent> {
 }
 
 impl<L: Latent> Bin<L> {
+  pub(crate) fn exact_bit_size(ans_size_log: Bitlen) -> Bitlen {
+    ans_size_log + L::BITS + bits_to_encode_offset_bits::<L>()
+  }
+
   #[inline]
   pub(crate) fn worst_case_bits_per_delta(&self, ans_size_log: Bitlen) -> Bitlen {
     self.offset_bits + ans_size_log - self.weight.ilog2()
@@ -36,4 +36,22 @@ impl<L: Latent> From<BinCompressionInfo<L>> for Bin<L> {
       offset_bits: info.offset_bits,
     }
   }
+}
+
+pub type Bins<L: Latent> = Vec<Bin<L>>;
+
+pub fn bins_are_trivial<L: Latent>(bins: &[Bin<L>]) -> bool {
+  bins.is_empty() || (bins.len() == 1 && bins[0].offset_bits == 0)
+}
+
+pub fn max_offset_bits<L: Latent>(bins: &[Bin<L>]) -> Bitlen {
+  bins
+    .iter()
+    .map(|bin| bin.offset_bits)
+    .max()
+    .unwrap_or_default()
+}
+
+pub fn weights<L: Latent>(bins: &[Bin<L>]) -> Vec<Weight> {
+  bins.iter().map(|bin| bin.weight).collect()
 }

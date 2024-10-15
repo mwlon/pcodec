@@ -8,7 +8,7 @@ macro_rules! build_dtype_macros {
     (
         $definer: ident,
         $matcher: ident,
-        $constraint: ident,
+        $constraint: path,
         {$($variant: ident => $t: ty,)+}$(,)?
     ) => {
         macro_rules! $definer {
@@ -119,4 +119,46 @@ macro_rules! build_dtype_macros {
             };
         }
     };
+}
+
+#[allow(dead_code)]
+#[cfg(test)]
+mod tests {
+  trait Constraint: 'static {}
+
+  impl Constraint for u16 {}
+  impl Constraint for u32 {}
+  impl Constraint for u64 {}
+
+  build_dtype_macros!(
+      define_enum,
+      match_enum,
+      crate::tests::Constraint,
+      {
+          U16 => u16,
+          U32 => u32,
+          U64 => u64,
+      }
+  );
+
+  define_enum!(
+    #[derive(Clone, Debug)]
+    MyEnum,
+    Vec
+  );
+
+  // we use this helper just to prove that we can handle generic types, not
+  // just concrete types
+  fn generic_new<T: Constraint>(inner: Vec<T>) -> MyEnum {
+    MyEnum::from(inner)
+  }
+
+  #[test]
+  fn test_end_to_end() {
+    let x = generic_new(vec![1_u16, 1, 2, 3, 5]);
+    let bit_size = match_enum!(&x, MyEnum<L>(inner) => { inner.len() * L::BITS as usize });
+    assert_eq!(bit_size, 80);
+    let x = x.downcast::<u16>();
+    assert_eq!(x[0], 1);
+  }
 }

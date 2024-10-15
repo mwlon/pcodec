@@ -74,7 +74,7 @@ fn test_insufficient_data_long_offsets() -> PcoResult<()> {
   assert_eq!(meta.per_latent_var.len(), 1);
   assert_eq!(meta.per_latent_var[0].bins.len(), 1);
   assert_eq!(
-    meta.per_latent_var[0].bins[0].offset_bits,
+    meta.per_latent_var[0].bins.downcast_ref::<u64>()[0].offset_bits,
     64
   );
   Ok(())

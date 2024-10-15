@@ -1,9 +1,6 @@
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Symbol};
 use crate::constants::Bitlen;
-use crate::data_types::Latent;
-use crate::errors::PcoResult;
-use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
 
 #[derive(Clone, Debug)]
 #[repr(align(16))]
@@ -40,17 +37,5 @@ impl Decoder {
     }
 
     Self { nodes }
-  }
-
-  pub fn from_chunk_latent_var_meta<L: Latent>(
-    latent_meta: &ChunkLatentVarMeta<L>,
-  ) -> PcoResult<Self> {
-    let weights = latent_meta
-      .bins
-      .iter()
-      .map(|bin| bin.weight)
-      .collect::<Vec<_>>();
-    let spec = Spec::from_weights(latent_meta.ans_size_log, weights)?;
-    Ok(Self::new(&spec))
   }
 }

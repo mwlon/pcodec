@@ -25,14 +25,14 @@ pub struct ChunkMeta<L: Latent> {
   /// Metadata about the interleaved streams needed by `pco` to
   /// compress/decompress the inputs
   /// according to the formula used by `mode`.
-  pub per_latent_var: Vec<ChunkLatentVarMeta<L>>,
+  pub per_latent_var: Vec<ChunkLatentVarMeta>,
 }
 
 impl<L: Latent> ChunkMeta<L> {
   pub(crate) fn new(
     mode: Mode<L>,
     delta_encoding_order: usize,
-    per_latent_var: Vec<ChunkLatentVarMeta<L>>,
+    per_latent_var: Vec<ChunkLatentVarMeta>,
   ) -> Self {
     ChunkMeta {
       mode,
@@ -228,7 +228,7 @@ mod tests {
       delta_encoding_order: 5,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
-        bins: vec![],
+        bins: vec![].into(),
       }],
     };
 
@@ -244,9 +244,10 @@ mod tests {
         ans_size_log: 0,
         bins: vec![Bin {
           weight: 1,
-          lower: 77,
+          lower: 77_u64,
           offset_bits: 0,
-        }],
+        }]
+        .into(),
       }],
     };
 
@@ -272,7 +273,8 @@ mod tests {
               lower: 1,
               offset_bits: 0,
             },
-          ],
+          ]
+          .into(),
         },
         ChunkLatentVarMeta {
           ans_size_log: 3,
@@ -287,7 +289,8 @@ mod tests {
               lower: 1,
               offset_bits: 0,
             },
-          ],
+          ]
+          .into(),
         },
       ],
     };

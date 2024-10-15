@@ -251,7 +251,7 @@ fn recover_with_alternating_nums(offset_bits: Bitlen, name: &str) -> PcoResult<(
   assert_eq!(meta.per_latent_var.len(), 1);
   let latent_var = &meta.per_latent_var[0];
   assert_eq!(latent_var.bins.len(), 1);
-  let bin = latent_var.bins[0];
+  let bin = latent_var.bins.downcast_ref::<u64>()[0];
   assert_eq!(bin.offset_bits, offset_bits);
   let decompressed = simple_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, name)

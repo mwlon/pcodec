@@ -11,7 +11,7 @@ Consider this simple API of a hypothetical numerical library supporting the
 ```rust
 use std::{any, mem};
 
-trait Dtype: 'static {}
+pub trait Dtype: 'static {}
 impl Dtype for i32 {}
 impl Dtype for f32 {}
 
@@ -90,7 +90,7 @@ powerful macros for you to use.
 These building blocks can solve any dynamic<->generic dispatch problem:
 
 ```rust
-trait Dtype: 'static {}
+pub trait Dtype: 'static {}
 impl Dtype for i32 {}
 impl Dtype for f32 {}
 
@@ -154,3 +154,9 @@ which is annoyingly restrictive.
 For instance, traits with generic associated functions can't be put in a
 `Box<dyn>`.
 
+## Limitations
+
+At present, enum and container type names must always be a single identifier.
+For instance, `Vec` will work, but `std::vec::Vec` will not.
+You can satisfy this by `use`ing your type or making a type alias of it,
+e.g. `type MyContainer<T: MyConstraint> = Vec<Foo<T>>`.

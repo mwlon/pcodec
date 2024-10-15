@@ -1,13 +1,14 @@
 use std::fmt::Debug;
 
-use crate::ans::AnsState;
+use crate::ans::{AnsState, Spec};
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
+use crate::metadata::bin::Bins;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
-use crate::metadata::Bin;
+use crate::metadata::{bin, Bin};
 use crate::{ans, bit_reader, read_write_uint};
 
 // Default here is meaningless and should only be used to fill in empty
@@ -63,29 +64,30 @@ pub struct LatentBatchDecompressor<L: Latent> {
 
 impl<L: Latent> LatentBatchDecompressor<L> {
   pub fn new(
-    chunk_latent_var_meta: &ChunkLatentVarMeta<L>,
-    page_latent_var_meta: &PageLatentVarMeta,
+    ans_size_log: Bitlen,
+    bins: &[Bin<L>],
+    ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
   ) -> PcoResult<Self> {
-    let u64s_per_offset =
-      read_write_uint::calc_max_u64s(chunk_latent_var_meta.max_bits_per_offset());
-    let infos = chunk_latent_var_meta
-      .bins
+    let u64s_per_offset = read_write_uint::calc_max_u64s(bin::max_offset_bits(bins));
+    let infos = bins
       .iter()
       .map(BinDecompressionInfo::from)
       .collect::<Vec<_>>();
-    let decoder = ans::Decoder::from_chunk_latent_var_meta(chunk_latent_var_meta)?;
+    let weights = bin::weights(bins);
+    let ans_spec = Spec::from_weights(ans_size_log, weights)?;
+    let decoder = ans::Decoder::new(&ans_spec);
 
     let mut state = State {
       offset_bits_csum_scratch: [0; FULL_BATCH_N],
       offset_bits_scratch: [0; FULL_BATCH_N],
       lowers_scratch: [L::ZERO; FULL_BATCH_N],
-      state_idxs: page_latent_var_meta.ans_final_state_idxs,
+      state_idxs: ans_final_state_idxs,
     };
 
-    let needs_ans = chunk_latent_var_meta.bins.len() != 1;
+    let needs_ans = bins.len() != 1;
     if !needs_ans {
       // we optimize performance by setting state once and never again
-      let bin = &chunk_latent_var_meta.bins[0];
+      let bin = &bins[0];
       let mut csum = 0;
       for i in 0..FULL_BATCH_N {
         state.offset_bits_scratch[i] = bin.offset_bits;
@@ -95,8 +97,8 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       }
     }
 
-    let maybe_constant_value = if chunk_latent_var_meta.is_trivial() {
-      chunk_latent_var_meta.bins.first().map(|bin| bin.lower)
+    let maybe_constant_value = if bin::bins_are_trivial(bins) {
+      bins.first().map(|bin| bin.lower)
     } else {
       None
     };
