@@ -94,17 +94,15 @@ macro_rules! build_dtype_macros {
                     }
                 }
 
-                impl<S: $constraint> TryFrom<$container<S>> for $name {
-                    type Error = String;
-
-                    fn try_from(value: $container<S>) -> Result<Self, Self::Error> {
+                impl<S: $constraint> From<$container<S>> for $name {
+                    fn from(value: $container<S>) -> Self {
                         let type_id = std::any::TypeId::of::<S>();
                         $(
                             if type_id == std::any::TypeId::of::<$t>() {
-                                return Ok($name::$variant(value.downcast()));
+                                return $name::$variant(value.downcast());
                             }
                         )+
-                        return Err(format!("unsafe try_from for data type {}", std::any::type_name::<S>()));
+                        panic!("unsafe conversion from {}", std::any::type_name::<S>());
                     }
                 }
             };

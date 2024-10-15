@@ -571,7 +571,7 @@ impl<L: Latent> ChunkCompressor<L> {
         .map(|dissected| dissected.ans_final_states.map(|state| state - base_state))
         .unwrap_or([0; ANS_INTERLEAVING]);
       per_latent_var.push(PageLatentVarMeta {
-        delta_moments: DynLatents::try_from(delta_moments.0).unwrap(),
+        delta_moments: DynLatents::from(delta_moments.0),
         ans_final_state_idxs,
       });
     }

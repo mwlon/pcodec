@@ -122,14 +122,14 @@ impl DynArray {
     match_an_enum!(self, DynArray<T>(inner) => {
       let other_inner = other.downcast_ref::<T>();
       let added = inner.iter().zip(other_inner).map(|(a, b)| a + b).collect::<Vec<_>>();
-      DynArray::try_from(added).unwrap()
+      DynArray::from(added)
     })
   }
 }
 
 fn main() {
   // we could also use `DynArray::I32()` here, but just to show we can convert generics:
-  let x_dynamic = DynArray::try_from(vec![1_i32, 2, 3]).unwrap();
+  let x_dynamic = DynArray::from(vec![1_i32, 2, 3]);
   let x_doubled_generic = x_dynamic.add(&x_dynamic).downcast::<i32>();
   assert_eq!(x_doubled_generic, vec![2, 4, 6]);
 }

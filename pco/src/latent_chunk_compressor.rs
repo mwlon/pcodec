@@ -86,7 +86,10 @@ pub struct LatentChunkCompressor<L: Latent> {
 }
 
 impl<L: Latent> LatentChunkCompressor<L> {
-  pub fn new(trained: TrainedBins<L>, latent_meta: &ChunkLatentVarMeta<L>) -> PcoResult<Self> {
+  pub(crate) fn new(
+    trained: TrainedBins<L>,
+    latent_meta: &ChunkLatentVarMeta<L>,
+  ) -> PcoResult<Self> {
     let needs_ans = latent_meta.bins.len() != 1;
 
     let table = CompressionTable::from(trained.infos);
