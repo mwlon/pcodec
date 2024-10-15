@@ -3,4 +3,13 @@ name = "dtype_dispatch"
 version = "0.1.0"
 edition = "2021"
 
+authors = ["mwlon <m.w.loncaric@gmail.com>"]
+categories = ["development-tools"]
+description = "Macro builder for working with data types"
+include = ["src/**/*.rs", "Cargo.toml", "README.md"]
+keywords = ["dtype", "generic", "enum", "dispatch"]
+license = "Apache-2.0"
+repository = "https://github.com/mwlon/pcodec"
+rust-version = "1.73.0"
+
 [dependencies]

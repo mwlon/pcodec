@@ -1,3 +1,8 @@
+#![doc = include_str!("../README.md")]
+
+/// Produces two macros: an enum definer and an enum matcher.
+///
+/// See the crate-level documentation for more info.
 #[macro_export]
 macro_rules! build_dtype_macros {
     (
@@ -7,10 +12,11 @@ macro_rules! build_dtype_macros {
         {$($variant: ident => $t: ty,)+}$(,)?
     ) => {
         macro_rules! $definer {
-            (#[$attrs:meta] $vis:vis $name: ident, $container: ident) => {
+            (#[$attrs: meta] $vis: vis $name: ident, $container: ident) => {
                 $vis trait Downcast {
                     fn downcast<S: $constraint>(self) -> $container<S>;
                     fn downcast_ref<S: $constraint>(&self) -> &$container<S>;
+                    fn downcast_mut<S: $constraint>(&mut self) -> &mut $container<S>;
                 }
 
                 #[$attrs]
@@ -46,13 +52,43 @@ macro_rules! build_dtype_macros {
                             )
                         }
                     }
+
+                    fn downcast_mut<S: $constraint>(&mut self) -> &mut $container<S> {
+                        if std::any::TypeId::of::<S>() == std::any::TypeId::of::<T>() {
+                            unsafe {
+                                std::mem::transmute::<_, &mut $container<S>>(self)
+                            }
+                        } else {
+                            panic!(
+                                "unsafe downcast conversion from {} to {}",
+                                std::any::type_name::<T>(),
+                                std::any::type_name::<S>(),
+                            )
+                        }
+                    }
                 }
 
                 impl $name {
+                    pub fn downcast<S: $constraint>(self) -> $container<S> {
+                        match self {
+                            $(
+                                Self::$variant(inner) => inner.downcast::<S>(),
+                            )+
+                        }
+                    }
+
                     pub fn downcast_ref<S: $constraint>(&self) -> &$container<S> {
                         match self {
                             $(
                                 Self::$variant(inner) => inner.downcast_ref::<S>(),
+                            )+
+                        }
+                    }
+
+                    pub fn downcast_mut<S: $constraint>(&mut self) -> &mut $container<S> {
+                        match self {
+                            $(
+                                Self::$variant(inner) => inner.downcast_mut::<S>(),
                             )+
                         }
                     }
@@ -75,7 +111,7 @@ macro_rules! build_dtype_macros {
         }
 
         macro_rules! $matcher {
-            ($value: expr, $enum_:ident<$generic:ident>($inner:ident) => $block:block) => {
+            ($value: expr, $enum_: ident<$generic: ident>($inner: ident) => $block: block) => {
                 match $value {
                     $($enum_::$variant($inner) => {
                         type $generic = $t;
