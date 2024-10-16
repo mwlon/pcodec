@@ -5,7 +5,7 @@ use crate::macros::{define_latent_enum, match_latent_enum};
 use std::io::Write;
 
 define_latent_enum!(
-  #[derive(Clone, Debug)]
+  #[derive(Clone, Debug, PartialEq, Eq)]
   pub DynLatents,
   Vec
 );

@@ -48,7 +48,6 @@ mod int_mult_utils;
 mod latent_batch_decompressor;
 mod latent_batch_dissector;
 mod latent_chunk_compressor;
-#[macro_use]
 mod macros;
 mod progress;
 mod read_write_uint;
