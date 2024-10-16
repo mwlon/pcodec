@@ -7,7 +7,7 @@ use crate::constants::{
 };
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
-use crate::match_latent_enum;
+use crate::macros::match_latent_enum;
 use crate::metadata::dyn_bins::DynBins;
 use crate::metadata::Bin;
 use better_io::BetterBufRead;

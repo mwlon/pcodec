@@ -1,7 +1,7 @@
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::data_types::Latent;
-use crate::{define_latent_enum, match_latent_enum};
+use crate::macros::{define_latent_enum, match_latent_enum};
 use std::io::Write;
 
 define_latent_enum!(
@@ -19,7 +19,7 @@ impl DynLatents {
     for _ in 0..len {
       latents.push(reader.read_uint::<L>(L::BITS));
     }
-    DynLatents::try_from(latents).unwrap()
+    DynLatents::from(latents)
   }
 
   pub(crate) unsafe fn write_uncompressed_to<W: Write>(&self, writer: &mut BitWriter<W>) {

@@ -13,6 +13,7 @@ use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::histograms::histogram;
 use crate::latent_chunk_compressor::{LatentChunkCompressor, TrainedBins};
+use crate::macros::match_latent_enum;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
 use crate::metadata::dyn_bins::DynBins;
 use crate::metadata::dyn_latents::DynLatents;
@@ -20,10 +21,7 @@ use crate::metadata::page::PageMeta;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
 use crate::metadata::{Bin, ChunkMeta, Mode};
 use crate::wrapped::guarantee;
-use crate::{
-  ans, bin_optimization, data_types, delta, match_latent_enum, ChunkConfig, PagingSpec,
-  FULL_BATCH_N,
-};
+use crate::{ans, bin_optimization, data_types, delta, ChunkConfig, PagingSpec, FULL_BATCH_N};
 
 // if it looks like the average page of size n will use k bits, hint that it
 // will be PAGE_SIZE_OVERESTIMATION * k bits.
@@ -374,7 +372,7 @@ fn fallback_chunk_compressor<L: Latent>(
       ans_size_log: 0,
       counts: vec![n as Weight],
     },
-    &latent_var_meta.bins.downcast_ref::<L>(),
+    latent_var_meta.bins.downcast_ref::<L>(),
   )?;
   Ok(ChunkCompressor {
     meta,

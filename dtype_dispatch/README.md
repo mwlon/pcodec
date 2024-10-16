@@ -75,11 +75,9 @@ impl DynArray {
   }
 }
 
-fn main() {
-  let x_dynamic = DynArray::new(vec![1_i32, 2, 3]);
-  let x_doubled_generic = x_dynamic.add(&x_dynamic).downcast::<i32>();
-  assert_eq!(x_doubled_generic, vec![2, 4, 6]);
-}
+let x_dynamic = DynArray::new(vec![1_i32, 2, 3]);
+let x_doubled_generic = x_dynamic.add( & x_dynamic).downcast::<i32>();
+assert_eq!(x_doubled_generic, vec![2, 4, 6]);
 ```
 
 That's a lot of match/if clauses and repeated boilerplate!
@@ -127,12 +125,10 @@ impl DynArray {
   }
 }
 
-fn main() {
-  // we could also use `DynArray::I32()` here, but just to show we can convert generics:
-  let x_dynamic = DynArray::from(vec![1_i32, 2, 3]);
-  let x_doubled_generic = x_dynamic.add(&x_dynamic).downcast::<i32>();
-  assert_eq!(x_doubled_generic, vec![2, 4, 6]);
-}
+// we could also use `DynArray::I32()` here, but just to show we can convert generics:
+let x_dynamic = DynArray::from(vec![1_i32, 2, 3]);
+let x_doubled_generic = x_dynamic.add( & x_dynamic).downcast::<i32>();
+assert_eq!(x_doubled_generic, vec![2, 4, 6]);
 ```
 
 ## Comparisons
