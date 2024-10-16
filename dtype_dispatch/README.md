@@ -153,6 +153,6 @@ For instance, traits with generic associated functions can't be put in a
 ## Limitations
 
 At present, enum and container type names must always be a single identifier.
-For instance, `Vec` will work, but `std::vec::Vec` will not.
+For instance, `Vec` will work, but `std::vec::Vec` and `Vec<Foo>` will not.
 You can satisfy this by `use`ing your type or making a type alias of it,
 e.g. `type MyContainer<T: MyConstraint> = Vec<Foo<T>>`.
