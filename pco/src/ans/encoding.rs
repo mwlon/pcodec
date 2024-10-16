@@ -3,10 +3,6 @@ use std::cmp::max;
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight};
-use crate::data_types::Latent;
-use crate::errors::PcoResult;
-use crate::metadata::dyn_bins::DynBins;
-use crate::metadata::{Bin, ChunkLatentVarMeta};
 
 #[derive(Clone, Debug)]
 struct SymbolInfo {
@@ -29,12 +25,6 @@ pub struct Encoder {
 }
 
 impl Encoder {
-  pub fn from_chunk_latent_var_meta(meta: &ChunkLatentVarMeta) -> PcoResult<Self> {
-    let weights = meta.bins.weights();
-    let spec = Spec::from_weights(meta.ans_size_log, weights)?;
-    Ok(Self::new(&spec))
-  }
-
   pub fn new(spec: &Spec) -> Self {
     let table_size = spec.table_size();
 

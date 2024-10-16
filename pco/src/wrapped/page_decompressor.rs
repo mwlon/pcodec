@@ -97,7 +97,10 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     let mut latent_batch_decompressors = Vec::new();
     for latent_idx in 0..mode.n_latent_vars() {
       let chunk_latent_meta = &chunk_meta.per_latent_var[latent_idx];
-      if chunk_latent_meta.bins.is_empty() && n > chunk_meta.delta_encoding_order {
+
+      // this will change to dynamically typed soon
+      let bins = chunk_latent_meta.bins.downcast_ref::<T::L>();
+      if bins.is_empty() && n > chunk_meta.delta_encoding_order {
         return Err(PcoError::corruption(format!(
           "unable to decompress chunk with no bins and {} deltas",
           n - chunk_meta.delta_encoding_order,
@@ -105,8 +108,9 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       }
 
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
-        chunk_latent_meta,
-        &page_meta.per_latent_var[latent_idx],
+        chunk_latent_meta.ans_size_log,
+        bins,
+        page_meta.per_latent_var[latent_idx].ans_final_state_idxs,
       )?);
     }
 

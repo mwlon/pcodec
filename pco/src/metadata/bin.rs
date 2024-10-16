@@ -23,7 +23,7 @@ impl<L: Latent> Bin<L> {
   }
 
   #[inline]
-  pub(crate) fn worst_case_bits_per_delta(&self, ans_size_log: Bitlen) -> Bitlen {
+  pub(crate) fn worst_case_bits_per_latent(&self, ans_size_log: Bitlen) -> Bitlen {
     self.offset_bits + ans_size_log - self.weight.ilog2()
   }
 }
@@ -36,22 +36,4 @@ impl<L: Latent> From<BinCompressionInfo<L>> for Bin<L> {
       offset_bits: info.offset_bits,
     }
   }
-}
-
-pub type Bins<L: Latent> = Vec<Bin<L>>;
-
-pub fn bins_are_trivial<L: Latent>(bins: &[Bin<L>]) -> bool {
-  bins.is_empty() || (bins.len() == 1 && bins[0].offset_bits == 0)
-}
-
-pub fn max_offset_bits<L: Latent>(bins: &[Bin<L>]) -> Bitlen {
-  bins
-    .iter()
-    .map(|bin| bin.offset_bits)
-    .max()
-    .unwrap_or_default()
-}
-
-pub fn weights<L: Latent>(bins: &[Bin<L>]) -> Vec<Weight> {
-  bins.iter().map(|bin| bin.weight).collect()
 }

@@ -8,9 +8,8 @@ use crate::constants::{
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
 use crate::match_latent_enum;
-use crate::metadata::bin::Bins;
 use crate::metadata::dyn_bins::DynBins;
-use crate::metadata::{bin, Bin};
+use crate::metadata::Bin;
 use better_io::BetterBufRead;
 use std::cmp::min;
 use std::io::Write;
@@ -89,29 +88,6 @@ pub struct ChunkLatentVarMeta {
 }
 
 impl ChunkLatentVarMeta {
-  pub(crate) fn max_bits_per_offset(&self) -> Bitlen {
-    match_latent_enum!(
-      &self.bins,
-      DynBins<L>(inner) => { bin::max_offset_bits(inner) }
-    )
-  }
-
-  pub(crate) fn avg_bits_per_delta(&self) -> f64 {
-    let total_weight = (1 << self.ans_size_log) as f64;
-    match_latent_enum!(
-      &self.bins,
-      DynBins<L>(inner) => {
-        inner
-          .iter()
-          .map(|bin| {
-            let ans_bits = self.ans_size_log as f64 - (bin.weight as f64).log2();
-            (ans_bits + bin.offset_bits as f64) * bin.weight as f64 / total_weight
-          })
-          .sum()
-      }
-    )
-  }
-
   pub(crate) unsafe fn read_from<L: Latent, R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
   ) -> PcoResult<Self> {
@@ -162,13 +138,16 @@ impl ChunkLatentVarMeta {
       BITS_TO_ENCODE_ANS_SIZE_LOG,
     );
 
-    write_bins(&self.bins, self.ans_size_log, writer)
+    match_latent_enum!(&self.bins, DynBins<L>(bins) => {
+      write_bins(bins, self.ans_size_log, writer)?;
+    });
+    Ok(())
   }
 
   pub(crate) fn exact_bit_size(&self) -> usize {
     let bin_size = match_latent_enum!(
-      self.bins,
-      Bins<L>(_inner) => { Bin::<L>::exact_bit_size(self.ans_size_log) }
+      &self.bins,
+      DynBins<L>(_inner) => { Bin::<L>::exact_bit_size(self.ans_size_log) }
     ) as usize;
     BITS_TO_ENCODE_ANS_SIZE_LOG as usize
       + BITS_TO_ENCODE_N_BINS as usize

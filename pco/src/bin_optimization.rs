@@ -4,7 +4,7 @@ use crate::compression_intermediates::BinCompressionInfo;
 use crate::constants::{Bitlen, Weight};
 use crate::data_types::Latent;
 use crate::histograms::HistogramBin;
-use crate::metadata::{bin, Bin};
+use crate::metadata::Bin;
 
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 

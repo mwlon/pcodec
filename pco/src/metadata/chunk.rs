@@ -116,7 +116,7 @@ impl<L: Latent> ChunkMeta<L> {
     let mut per_latent_var = Vec::with_capacity(n_latent_vars);
 
     for _ in 0..n_latent_vars {
-      per_latent_var.push(ChunkLatentVarMeta::read_from(
+      per_latent_var.push(ChunkLatentVarMeta::read_from::<L, R>(
         reader_builder,
       )?)
     }
@@ -228,7 +228,7 @@ mod tests {
       delta_encoding_order: 5,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
-        bins: vec![].into(),
+        bins: Vec::<Bin<u32>>::new().into(),
       }],
     };
 
@@ -265,7 +265,7 @@ mod tests {
           bins: vec![
             Bin {
               weight: 11,
-              lower: 0,
+              lower: 0_u32,
               offset_bits: 0,
             },
             Bin {
@@ -281,7 +281,7 @@ mod tests {
           bins: vec![
             Bin {
               weight: 3,
-              lower: 0,
+              lower: 0_u32,
               offset_bits: 0,
             },
             Bin {

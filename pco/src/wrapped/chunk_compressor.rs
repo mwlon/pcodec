@@ -14,12 +14,16 @@ use crate::errors::{PcoError, PcoResult};
 use crate::histograms::histogram;
 use crate::latent_chunk_compressor::{LatentChunkCompressor, TrainedBins};
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
+use crate::metadata::dyn_bins::DynBins;
 use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::page::PageMeta;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
 use crate::metadata::{Bin, ChunkMeta, Mode};
 use crate::wrapped::guarantee;
-use crate::{ans, bin_optimization, data_types, delta, ChunkConfig, PagingSpec, FULL_BATCH_N};
+use crate::{
+  ans, bin_optimization, data_types, delta, match_latent_enum, ChunkConfig, PagingSpec,
+  FULL_BATCH_N,
+};
 
 // if it looks like the average page of size n will use k bits, hint that it
 // will be PAGE_SIZE_OVERESTIMATION * k bits.
@@ -227,16 +231,13 @@ fn new_candidate_w_split_and_delta_order<L: Latent>(
     let trained = train_infos(contiguous_deltas, unoptimized_bins_log)?;
     let bins = bins_from_compression_infos(&trained.infos);
 
-    let latent_meta = ChunkLatentVarMeta {
-      bins,
-      ans_size_log: trained.ans_size_log,
-    };
-
+    let ans_size_log = trained.ans_size_log;
     bin_counts.push(trained.counts.to_vec());
-    latent_chunk_compressors.push(LatentChunkCompressor::new(
-      trained,
-      &latent_meta,
-    )?);
+    latent_chunk_compressors.push(LatentChunkCompressor::new(trained, &bins)?);
+    let latent_meta = ChunkLatentVarMeta {
+      bins: DynBins::from(bins),
+      ans_size_log,
+    };
     var_metas.push(latent_meta);
   }
 
@@ -373,7 +374,7 @@ fn fallback_chunk_compressor<L: Latent>(
       ans_size_log: 0,
       counts: vec![n as Weight],
     },
-    latent_var_meta,
+    &latent_var_meta.bins.downcast_ref::<L>(),
   )?;
   Ok(ChunkCompressor {
     meta,
@@ -421,10 +422,12 @@ impl<L: Latent> ChunkCompressor<L> {
       .iter()
       .zip(bin_counts_per_latent_var.iter())
     {
-      for (bin, &count) in latent_var_meta.bins.iter().zip(bin_counts) {
-        worst_case_body_bit_size +=
-          count as usize * bin.worst_case_bits_per_delta(latent_var_meta.ans_size_log) as usize;
-      }
+      match_latent_enum!(&latent_var_meta.bins, DynBins<L>(bins) => {
+        for (bin, &count) in bins.iter().zip(bin_counts) {
+          worst_case_body_bit_size +=
+            count as usize * bin.worst_case_bits_per_latent(latent_var_meta.ans_size_log) as usize;
+        }
+      });
     }
 
     let worst_case_size = meta.exact_size()

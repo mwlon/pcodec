@@ -4,6 +4,7 @@ pub use chunk_latent_var::ChunkLatentVarMeta;
 pub use mode::Mode;
 
 pub(crate) mod bin;
+pub(crate) mod bins;
 pub(crate) mod chunk;
 pub(crate) mod chunk_latent_var;
 pub(crate) mod dyn_bins;

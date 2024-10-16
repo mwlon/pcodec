@@ -5,10 +5,7 @@ use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::metadata::bin::Bins;
-use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
-use crate::metadata::page_latent_var::PageLatentVarMeta;
-use crate::metadata::{bin, Bin};
+use crate::metadata::{bins, Bin};
 use crate::{ans, bit_reader, read_write_uint};
 
 // Default here is meaningless and should only be used to fill in empty
@@ -68,12 +65,12 @@ impl<L: Latent> LatentBatchDecompressor<L> {
     bins: &[Bin<L>],
     ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
   ) -> PcoResult<Self> {
-    let u64s_per_offset = read_write_uint::calc_max_u64s(bin::max_offset_bits(bins));
+    let u64s_per_offset = read_write_uint::calc_max_u64s(bins::max_offset_bits(bins));
     let infos = bins
       .iter()
       .map(BinDecompressionInfo::from)
       .collect::<Vec<_>>();
-    let weights = bin::weights(bins);
+    let weights = bins::weights(bins);
     let ans_spec = Spec::from_weights(ans_size_log, weights)?;
     let decoder = ans::Decoder::new(&ans_spec);
 
@@ -97,7 +94,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       }
     }
 
-    let maybe_constant_value = if bin::bins_are_trivial(bins) {
+    let maybe_constant_value = if bins::are_trivial(bins) {
       bins.first().map(|bin| bin.lower)
     } else {
       None
