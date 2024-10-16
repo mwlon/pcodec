@@ -5,10 +5,6 @@ dtype_dispatch::build_dtype_macros!(
     Defines enums where each variant holds a `$container<$t>` for each
     `Latent` type $t.
   "]
-  #[doc = "\
-    Equips each enum with `From<L: Latent>` and `.downcast*::<L: Latent>()`
-    functionality.
-  "]
   #[macro_export]
   define_latent_enum,
 
