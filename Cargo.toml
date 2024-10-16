@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
   "better_io",
+  "dtype_dispatch",
   "pco",
   "pco_c",
   "pco_cli",
