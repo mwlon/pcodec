@@ -145,12 +145,12 @@ impl ChunkLatentVarMeta {
   }
 
   pub(crate) fn exact_bit_size(&self) -> usize {
-    let bin_size = match_latent_enum!(
+    let total_bin_size = match_latent_enum!(
       &self.bins,
-      DynBins<L>(_inner) => { Bin::<L>::exact_bit_size(self.ans_size_log) }
-    ) as usize;
-    BITS_TO_ENCODE_ANS_SIZE_LOG as usize
-      + BITS_TO_ENCODE_N_BINS as usize
-      + self.bins.len() * bin_size
+      DynBins<L>(bins) => {
+        bins.len() * Bin::<L>::exact_bit_size(self.ans_size_log) as usize
+      }
+    );
+    BITS_TO_ENCODE_ANS_SIZE_LOG as usize + BITS_TO_ENCODE_N_BINS as usize + total_bin_size
   }
 }

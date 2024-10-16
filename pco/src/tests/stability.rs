@@ -45,7 +45,10 @@ fn test_insufficient_data_short_bins() -> PcoResult<()> {
 
   let meta = assert_panic_safe(nums)?;
   assert_eq!(meta.per_latent_var.len(), 1);
-  assert_eq!(meta.per_latent_var[0].bins.len(), 2);
+  assert_eq!(
+    meta.per_latent_var[0].bins.downcast_ref::<u32>().len(),
+    2
+  );
   Ok(())
 }
 
@@ -58,7 +61,10 @@ fn test_insufficient_data_sparse() -> PcoResult<()> {
 
   let meta = assert_panic_safe(nums)?;
   assert_eq!(meta.per_latent_var.len(), 1);
-  assert_eq!(meta.per_latent_var[0].bins.len(), 2);
+  assert_eq!(
+    meta.per_latent_var[0].bins.downcast_ref::<u32>().len(),
+    2
+  );
   Ok(())
 }
 
@@ -71,11 +77,9 @@ fn test_insufficient_data_long_offsets() -> PcoResult<()> {
   }
 
   let meta = assert_panic_safe(nums)?;
+  let bins = meta.per_latent_var[0].bins.downcast_ref::<u64>();
   assert_eq!(meta.per_latent_var.len(), 1);
-  assert_eq!(meta.per_latent_var[0].bins.len(), 1);
-  assert_eq!(
-    meta.per_latent_var[0].bins.downcast_ref::<u64>()[0].offset_bits,
-    64
-  );
+  assert_eq!(bins.len(), 1);
+  assert_eq!(bins[0].offset_bits, 64);
   Ok(())
 }

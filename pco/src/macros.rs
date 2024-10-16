@@ -1,7 +1,9 @@
 #![allow(clippy::single_component_path_imports)]
 
 dtype_dispatch::build_dtype_macros!(
+  #[macro_export]
   define_latent_enum,
+  #[macro_export]
   match_latent_enum,
   Latent,
   {

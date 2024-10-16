@@ -61,17 +61,4 @@ macro_rules! with_core_dtypes {
   }
 }
 
-/// Similar to with_core_dtypes, but only for core latent types.
-/// Accepts a macro over a repeated list of `$($name => $t,)+`.
-#[macro_export]
-macro_rules! with_core_latents {
-  ($inner:ident) => {
-    $inner!(
-      U16 => u16,
-      U32 => u32,
-      U64 => u64,
-    );
-  }
-}
-
 with_core_dtypes!(impl_core_dtypes);

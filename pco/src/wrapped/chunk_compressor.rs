@@ -176,11 +176,10 @@ fn build_page_infos_and_delta_moments<L: Latent>(
     let mut end_idx_per_var = Vec::new();
     for (latent_var_idx, latents) in latents.iter_mut().enumerate() {
       let var_delta_order = mode.delta_order_for_latent_var(latent_var_idx, delta_order);
-      let moments = delta::encode_in_place(
+      delta_moments.push(delta::encode_in_place(
         &mut latents[start_idx..start_idx + page_n],
         var_delta_order,
-      );
-      delta_moments.push(moments);
+      ));
       end_idx_per_var.push(start_idx + page_n.saturating_sub(var_delta_order));
     }
     page_infos.push(PageInfo {

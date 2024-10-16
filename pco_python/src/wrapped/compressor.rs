@@ -6,7 +6,7 @@ use pyo3::{pyclass, pymethods, PyObject, PyResult, Python};
 
 use pco::data_types::{Latent, NumberLike};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
-use pco::{with_core_dtypes, with_core_latents, ChunkConfig};
+use pco::{match_latent_enum, with_core_dtypes, ChunkConfig};
 
 use crate::{pco_err_to_py, DynTypedPyArrayDyn, PyChunkConfig};
 
@@ -112,28 +112,18 @@ impl PyCc {
   ///
   /// :raises: TypeError, RuntimeError
   fn write_chunk_meta(&self, py: Python) -> PyResult<PyObject> {
-    let dyn_cc = &self.0;
-    macro_rules! match_cc {
-      {$($name:ident => $t:ty,)+} => {
-        match dyn_cc {
-          $(DynCc::$name(cc) => chunk_meta_py(py, cc),)+
-        }
-      }
-    }
-    with_core_latents!(match_cc)
+    match_latent_enum!(
+      &self.0,
+      DynCc<T>(cc) => { chunk_meta_py(py, cc) }
+    )
   }
 
   /// :returns: a list containing the count of numbers in each page.
   fn n_per_page(&self) -> Vec<usize> {
-    let dyn_cc = &self.0;
-    macro_rules! match_cc {
-      {$($name:ident => $t:ty,)+} => {
-        match dyn_cc {
-          $(DynCc::$name(cc) => cc.n_per_page(),)+
-        }
-      }
-    }
-    with_core_latents!(match_cc)
+    match_latent_enum!(
+      &self.0,
+      DynCc<T>(cc) => { cc.n_per_page() }
+    )
   }
 
   /// :param page_idx: an int for which page you want to write.
@@ -142,15 +132,10 @@ impl PyCc {
   ///
   /// :raises: TypeError, RuntimeError
   fn write_page(&self, py: Python, page_idx: usize) -> PyResult<PyObject> {
-    let dyn_cc = &self.0;
-    macro_rules! match_cc {
-      {$($name:ident => $t:ty,)+} => {
-        match dyn_cc {
-          $(DynCc::$name(cc) => page_py(py, cc, page_idx),)+
-        }
-      }
-    }
-    with_core_latents!(match_cc)
+    match_latent_enum!(
+      &self.0,
+      DynCc<T>(cc) => { page_py(py, cc, page_idx) }
+    )
   }
 }
 

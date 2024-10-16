@@ -6,20 +6,23 @@
 #[macro_export]
 macro_rules! build_dtype_macros {
   (
+    $(#[$definer_attrs: meta])?
     $definer: ident,
+    $(#[$matcher_attrs: meta])?
     $matcher: ident,
     $constraint: path,
     {$($variant: ident => $t: ty,)+}$(,)?
   ) => {
+    $(#[$definer_attrs])?
     macro_rules! $definer {
-      (#[$attrs: meta] $vis: vis $name: ident, $container: ident) => {
+      (#[$enum_attrs: meta] $vis: vis $name: ident, $container: ident) => {
         $vis trait Downcast {
           fn downcast<S: $constraint>(self) -> $container<S>;
           fn downcast_ref<S: $constraint>(&self) -> &$container<S>;
           fn downcast_mut<S: $constraint>(&mut self) -> &mut $container<S>;
         }
 
-        #[$attrs]
+        #[$enum_attrs]
         $vis enum $name {
           $($variant($container<$t>),)+
         }
@@ -108,6 +111,7 @@ macro_rules! build_dtype_macros {
       };
     }
 
+    $(#[$matcher_attrs])?
     macro_rules! $matcher {
       ($value: expr, $enum_: ident<$generic: ident>($inner: ident) => $block: block) => {
         match $value {
