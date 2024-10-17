@@ -8,15 +8,16 @@ use crate::constants::*;
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
+use crate::metadata::dyn_latent::DynLatent;
 use crate::metadata::format_version::FormatVersion;
 use crate::metadata::Mode;
 
 /// The metadata of a pco chunk.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct ChunkMeta<L: Latent> {
+pub struct ChunkMeta {
   /// The formula `pco` used to compress each number at a low level.
-  pub mode: Mode<L>,
+  pub mode: Mode,
   /// How many times delta encoding was applied during compression.
   /// This is between 0 and 7, inclusive.
   ///
@@ -25,14 +26,14 @@ pub struct ChunkMeta<L: Latent> {
   /// Metadata about the interleaved streams needed by `pco` to
   /// compress/decompress the inputs
   /// according to the formula used by `mode`.
-  pub per_latent_var: Vec<ChunkLatentVarMeta<L>>,
+  pub per_latent_var: Vec<ChunkLatentVarMeta>,
 }
 
-impl<L: Latent> ChunkMeta<L> {
+impl ChunkMeta {
   pub(crate) fn new(
-    mode: Mode<L>,
+    mode: Mode,
     delta_encoding_order: usize,
-    per_latent_var: Vec<ChunkLatentVarMeta<L>>,
+    per_latent_var: Vec<ChunkLatentVarMeta>,
   ) -> Self {
     ChunkMeta {
       mode,
@@ -44,9 +45,9 @@ impl<L: Latent> ChunkMeta<L> {
   pub(crate) fn exact_size(&self) -> usize {
     let extra_bits_for_mode = match self.mode {
       Mode::Classic => 0,
-      Mode::IntMult(_) => L::BITS,
+      Mode::IntMult(inner) => inner.bits(),
+      Mode::FloatMult(inner) => inner.bits(),
       Mode::FloatQuant(_) => BITS_TO_ENCODE_QUANTIZE_K,
-      Mode::FloatMult(_) => L::BITS,
     };
     let bits_for_latent_vars: usize = self
       .per_latent_var
@@ -69,13 +70,13 @@ impl<L: Latent> ChunkMeta<L> {
         let delta_order = self
           .mode
           .delta_order_for_latent_var(latent_var_idx, self.delta_encoding_order);
-        latent_var.ans_size_log as usize * ANS_INTERLEAVING + L::BITS as usize * delta_order
+        latent_var.exact_page_meta_bit_size(delta_order)
       })
       .sum();
     bit_size.div_ceil(8)
   }
 
-  pub(crate) unsafe fn read_from<R: BetterBufRead>(
+  pub(crate) unsafe fn read_from<L: Latent, R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
     version: &FormatVersion,
   ) -> PcoResult<Self> {
@@ -89,11 +90,11 @@ impl<L: Latent> ChunkMeta<L> {
             ));
           }
 
-          let base = reader.read_uint::<L>(L::BITS);
+          let base = DynLatent::read_uncompressed_from::<L>(reader);
           Ok(Mode::IntMult(base))
         }
         2 => {
-          let base_latent = reader.read_uint::<L>(L::BITS);
+          let base_latent = DynLatent::read_uncompressed_from::<L>(reader);
           Ok(Mode::FloatMult(base_latent))
         }
         3 => {
@@ -116,7 +117,7 @@ impl<L: Latent> ChunkMeta<L> {
     let mut per_latent_var = Vec::with_capacity(n_latent_vars);
 
     for _ in 0..n_latent_vars {
-      per_latent_var.push(ChunkLatentVarMeta::read_from(
+      per_latent_var.push(ChunkLatentVarMeta::read_from::<L, R>(
         reader_builder,
       )?)
     }
@@ -143,10 +144,10 @@ impl<L: Latent> ChunkMeta<L> {
     match self.mode {
       Mode::Classic => (),
       Mode::IntMult(base) => {
-        writer.write_uint(base, L::BITS);
+        base.write_uncompressed_to(writer);
       }
       Mode::FloatMult(base_latent) => {
-        writer.write_uint(base_latent, L::BITS);
+        base_latent.write_uncompressed_to(writer);
       }
       Mode::FloatQuant(k) => {
         writer.write_uint(k, BITS_TO_ENCODE_QUANTIZE_K);
@@ -178,12 +179,14 @@ impl<L: Latent> ChunkMeta<L> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::metadata::delta_moments::DeltaMoments;
+  use crate::macros::match_latent_enum;
+  use crate::metadata::dyn_bins::DynBins;
+  use crate::metadata::dyn_latents::DynLatents;
   use crate::metadata::page::PageMeta;
   use crate::metadata::page_latent_var::PageLatentVarMeta;
   use crate::metadata::Bin;
 
-  fn check_exact_sizes<L: Latent>(meta: &ChunkMeta<L>) -> PcoResult<()> {
+  fn check_exact_sizes(meta: &ChunkMeta) -> PcoResult<()> {
     let buffer_size = 8192;
     let mut dst = Vec::new();
     let mut writer = BitWriter::new(&mut dst, buffer_size);
@@ -200,8 +203,14 @@ mod tests {
           let delta_order = meta
             .mode
             .delta_order_for_latent_var(latent_var_idx, meta.delta_encoding_order);
+          let delta_moments = match_latent_enum!(
+            &meta.per_latent_var[latent_var_idx].bins,
+            DynBins<L>(_bins) => {
+              DynLatents::new(vec![L::ZERO; delta_order]).unwrap()
+            }
+          );
           PageLatentVarMeta {
-            delta_moments: DeltaMoments(vec![L::ZERO; delta_order]),
+            delta_moments,
             ans_final_state_idxs: [0; ANS_INTERLEAVING],
           }
         })
@@ -223,12 +232,12 @@ mod tests {
 
   #[test]
   fn exact_size_binless() -> PcoResult<()> {
-    let meta = ChunkMeta::<u32> {
+    let meta = ChunkMeta {
       mode: Mode::Classic,
       delta_encoding_order: 5,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
-        bins: vec![],
+        bins: DynBins::U32(vec![]),
       }],
     };
 
@@ -237,16 +246,16 @@ mod tests {
 
   #[test]
   fn exact_size_trivial() -> PcoResult<()> {
-    let meta = ChunkMeta::<u64> {
+    let meta = ChunkMeta {
       mode: Mode::Classic,
       delta_encoding_order: 0,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
-        bins: vec![Bin {
+        bins: DynBins::U64(vec![Bin {
           weight: 1,
-          lower: 77,
+          lower: 77_u64,
           offset_bits: 0,
-        }],
+        }]),
       }],
     };
 
@@ -255,16 +264,16 @@ mod tests {
 
   #[test]
   fn exact_size_float_mult() -> PcoResult<()> {
-    let meta = ChunkMeta::<u32> {
-      mode: Mode::FloatMult(777_u32),
+    let meta = ChunkMeta {
+      mode: Mode::FloatMult(DynLatent::U32(777_u32)),
       delta_encoding_order: 3,
       per_latent_var: vec![
         ChunkLatentVarMeta {
           ans_size_log: 7,
-          bins: vec![
+          bins: DynBins::U32(vec![
             Bin {
               weight: 11,
-              lower: 0,
+              lower: 0_u32,
               offset_bits: 0,
             },
             Bin {
@@ -272,14 +281,14 @@ mod tests {
               lower: 1,
               offset_bits: 0,
             },
-          ],
+          ]),
         },
         ChunkLatentVarMeta {
           ans_size_log: 3,
-          bins: vec![
+          bins: DynBins::U32(vec![
             Bin {
               weight: 3,
-              lower: 0,
+              lower: 0_u32,
               offset_bits: 0,
             },
             Bin {
@@ -287,7 +296,7 @@ mod tests {
               lower: 1,
               offset_bits: 0,
             },
-          ],
+          ]),
         },
       ],
     };

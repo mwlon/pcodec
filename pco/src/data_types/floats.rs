@@ -319,16 +319,17 @@ macro_rules! impl_float_number_like {
 
       type L = $latent;
 
-      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+      fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>> {
         describers::match_classic_mode::<Self>(meta, " ULPs")
           .or_else(|| describers::match_float_modes::<Self>(meta))
           .expect("invalid mode for float type")
       }
 
-      fn mode_is_valid(mode: Mode<Self::L>) -> bool {
+      fn mode_is_valid(mode: Mode) -> bool {
         match mode {
           Mode::Classic => true,
-          Mode::FloatMult(base_latent) => {
+          Mode::FloatMult(dyn_latent) => {
+            let base_latent = *dyn_latent.downcast_ref::<Self::L>().unwrap();
             Self::from_latent_ordered(base_latent).is_finite_and_normal()
           }
           Mode::FloatQuant(k) => k <= Self::PRECISION_BITS,
@@ -363,11 +364,11 @@ macro_rules! impl_float_number_like {
           mem_layout ^ $sign_bit_mask
         }
       }
-      fn join_latents(mode: Mode<Self::L>, primary: &mut [Self::L], secondary: &[Self::L]) {
+      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]) {
         match mode {
           Mode::Classic => (),
-          Mode::FloatMult(base_latent) => {
-            let base = Self::from_latent_ordered(base_latent);
+          Mode::FloatMult(dyn_latent) => {
+            let base = Self::from_latent_ordered(*dyn_latent.downcast_ref::<Self::L>().unwrap());
             float_mult_utils::join_latents(base, primary, secondary)
           }
           Mode::FloatQuant(k) => float_quant_utils::join_latents::<Self>(k, primary, secondary),
@@ -403,10 +404,7 @@ mod tests {
     let base = 1.5;
     let nums = (0..1000).map(|i| (i as f64) * base).collect::<Vec<_>>();
     let (mode, _) = choose_mode_and_split_latents(&nums, &ChunkConfig::default()).unwrap();
-    assert_eq!(
-      mode,
-      Mode::FloatMult(base.to_latent_ordered())
-    );
+    assert_eq!(mode, Mode::float_mult(base));
   }
 
   #[test]

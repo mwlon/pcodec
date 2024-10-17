@@ -3,9 +3,6 @@ use std::cmp::max;
 use crate::ans::spec::Spec;
 use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight};
-use crate::data_types::Latent;
-use crate::errors::PcoResult;
-use crate::metadata::Bin;
 
 #[derive(Clone, Debug)]
 struct SymbolInfo {
@@ -28,12 +25,6 @@ pub struct Encoder {
 }
 
 impl Encoder {
-  pub fn from_bins<L: Latent>(size_log: Bitlen, bins: &[Bin<L>]) -> PcoResult<Self> {
-    let weights = bins.iter().map(|bin| bin.weight).collect::<Vec<_>>();
-    let spec = Spec::from_weights(size_log, weights)?;
-    Ok(Self::new(&spec))
-  }
-
   pub fn new(spec: &Spec) -> Self {
     let table_size = spec.table_size();
 

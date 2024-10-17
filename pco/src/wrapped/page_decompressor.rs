@@ -9,9 +9,9 @@ use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::{Latent, NumberLike};
 use crate::delta;
+use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
-use crate::metadata::delta_moments::DeltaMoments;
 use crate::metadata::page::PageMeta;
 use crate::metadata::{ChunkMeta, Mode};
 use crate::progress::Progress;
@@ -31,7 +31,7 @@ pub struct State<L: Latent> {
 pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   // immutable
   n: usize,
-  mode: Mode<T::L>,
+  mode: Mode,
   maybe_constant_secondary: Option<T::L>,
   phantom: PhantomData<T>,
 
@@ -77,24 +77,34 @@ fn convert_from_latents_nontransmutable<T: NumberLike>(primary: &[T::L], dst: &m
 }
 
 impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
-  pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta<T::L>, n: usize) -> PcoResult<Self> {
+  pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta, n: usize) -> PcoResult<Self> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
 
     let page_meta = reader_builder
-      .with_reader(|reader| unsafe { PageMeta::<T::L>::read_from(reader, chunk_meta) })?;
+      .with_reader(|reader| unsafe { PageMeta::read_from::<T::L>(reader, chunk_meta) })?;
 
     let mode = chunk_meta.mode;
     let delta_momentss = page_meta
       .per_latent_var
       .iter()
-      .map(|latent| latent.delta_moments.clone())
+      .map(|latent_var_meta| {
+        let moments = latent_var_meta
+          .delta_moments
+          .downcast_ref::<T::L>()
+          .unwrap()
+          .clone();
+        DeltaMoments(moments)
+      })
       .collect::<Vec<_>>();
 
     let mut latent_batch_decompressors = Vec::new();
     for latent_idx in 0..mode.n_latent_vars() {
       let chunk_latent_meta = &chunk_meta.per_latent_var[latent_idx];
-      if chunk_latent_meta.bins.is_empty() && n > chunk_meta.delta_encoding_order {
+
+      // this will change to dynamically typed soon
+      let bins = chunk_latent_meta.bins.downcast_ref::<T::L>().unwrap();
+      if bins.is_empty() && n > chunk_meta.delta_encoding_order {
         return Err(PcoError::corruption(format!(
           "unable to decompress chunk with no bins and {} deltas",
           n - chunk_meta.delta_encoding_order,
@@ -102,8 +112,9 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       }
 
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
-        chunk_latent_meta,
-        &page_meta.per_latent_var[latent_idx],
+        chunk_latent_meta.ans_size_log,
+        bins,
+        page_meta.per_latent_var[latent_idx].ans_final_state_idxs,
       )?);
     }
 

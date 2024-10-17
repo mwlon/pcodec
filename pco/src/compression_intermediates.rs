@@ -51,7 +51,7 @@ impl<L: Latent> Default for BinCompressionInfo<L> {
 }
 
 pub(crate) struct Bid<T: NumberLike> {
-  pub mode: Mode<T::L>,
+  pub mode: Mode,
   pub bits_saved_per_num: f64,
   // we include a split_fn since modes like FloatMult can benefit from extra
   // information (inv_base) not captured entirely in the mode.  This extra

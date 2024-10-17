@@ -1,5 +1,13 @@
 use crate::data_types::Latent;
-use crate::metadata::delta_moments::DeltaMoments;
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct DeltaMoments<L: Latent>(pub(crate) Vec<L>);
+
+impl<L: Latent> DeltaMoments<L> {
+  pub fn order(&self) -> usize {
+    self.0.len()
+  }
+}
 
 // Without this, deltas in, say, [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].
@@ -25,7 +33,7 @@ fn first_order_encode_in_place<L: Latent>(latents: &mut [L]) {
 
 // used for a single page, so we return the delta moments
 #[inline(never)]
-pub fn encode_in_place<L: Latent>(mut latents: &mut [L], order: usize) -> DeltaMoments<L> {
+pub(crate) fn encode_in_place<L: Latent>(mut latents: &mut [L], order: usize) -> DeltaMoments<L> {
   // TODO this function could be made faster by doing all steps on mini batches
   // of ~512 at a time
   if order == 0 {
@@ -56,7 +64,7 @@ fn first_order_decode_in_place<L: Latent>(moment: &mut L, latents: &mut [L]) {
 
 // used for a single batch, so we mutate the delta moments
 #[inline(never)]
-pub fn decode_in_place<L: Latent>(delta_moments: &mut DeltaMoments<L>, latents: &mut [L]) {
+pub(crate) fn decode_in_place<L: Latent>(delta_moments: &mut DeltaMoments<L>, latents: &mut [L]) {
   if delta_moments.order() == 0 {
     // exit early so we don't toggle to signed values
     return;

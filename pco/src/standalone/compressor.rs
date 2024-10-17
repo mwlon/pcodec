@@ -113,7 +113,7 @@ pub struct ChunkCompressor<L: Latent> {
 
 impl<L: Latent> ChunkCompressor<L> {
   /// Returns pre-computed information about the chunk.
-  pub fn meta(&self) -> &ChunkMeta<L> {
+  pub fn meta(&self) -> &ChunkMeta {
     self.inner.meta()
   }
 

@@ -332,7 +332,7 @@ pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
   choose_config(sample).and_then(|config| {
     let bits_saved_per_num = bits_saved_per_num_over_classic(config, sample)?;
     Some(Bid {
-      mode: Mode::FloatMult(config.base.to_latent_ordered()),
+      mode: Mode::float_mult(config.base),
       bits_saved_per_num,
       split_fn: Box::new(move |nums| split_latents(nums, config)),
     })

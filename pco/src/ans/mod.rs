@@ -1,6 +1,7 @@
 pub use decoding::Decoder;
 pub use encoding::quantize_weights;
 pub use encoding::Encoder;
+pub use spec::Spec;
 
 mod decoding;
 mod encoding;

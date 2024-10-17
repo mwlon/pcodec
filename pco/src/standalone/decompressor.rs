@@ -176,7 +176,7 @@ pub struct ChunkDecompressor<T: NumberLike, R: BetterBufRead> {
 
 impl<T: NumberLike, R: BetterBufRead> ChunkDecompressor<T, R> {
   /// Returns pre-computed information about the chunk.
-  pub fn meta(&self) -> &ChunkMeta<T::L> {
+  pub fn meta(&self) -> &ChunkMeta {
     &self.inner_cd.meta
   }
 
