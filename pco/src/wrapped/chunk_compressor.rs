@@ -96,7 +96,7 @@ fn train_infos<L: Latent>(
 /// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
 pub struct ChunkCompressor<L: Latent> {
-  meta: ChunkMeta<L>,
+  meta: ChunkMeta,
   latent_chunk_compressors: Vec<LatentChunkCompressor<L>>,
   page_infos: Vec<PageInfo>,
   // n_latent_vars x n_deltas
@@ -160,7 +160,7 @@ fn collect_contiguous_deltas<L: Latent>(
 }
 
 fn build_page_infos_and_delta_moments<L: Latent>(
-  mode: Mode<L>,
+  mode: Mode,
   delta_order: usize,
   n_per_page: &[usize],
   latents: &mut [Vec<L>],
@@ -197,7 +197,7 @@ fn build_page_infos_and_delta_moments<L: Latent>(
 fn new_candidate_w_split_and_delta_order<L: Latent>(
   mut latents: Vec<Vec<L>>, // start out plain, gets delta encoded in place
   paging_spec: &PagingSpec,
-  mode: Mode<L>,
+  mode: Mode,
   delta_order: usize,
   unoptimized_bins_log: Bitlen,
 ) -> PcoResult<(ChunkCompressor<L>, Vec<Vec<Weight>>)> {
@@ -328,7 +328,7 @@ fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> Bitlen {
 // Returns a chunk compressor and the counts (per latent var) of numbers in
 // each bin.
 fn new_candidate_w_split<L: Latent>(
-  mode: Mode<L>,
+  mode: Mode,
   latents: Vec<Vec<L>>,
   config: &ChunkConfig,
 ) -> PcoResult<(ChunkCompressor<L>, Vec<Vec<Weight>>)> {
@@ -444,7 +444,7 @@ impl<L: Latent> ChunkCompressor<L> {
   }
 
   /// Returns pre-computed information about the chunk.
-  pub fn meta(&self) -> &ChunkMeta<L> {
+  pub fn meta(&self) -> &ChunkMeta {
     &self.meta
   }
 

@@ -18,7 +18,7 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-pub(crate) type ModeAndLatents<L> = (Mode<L>, Vec<Vec<L>>);
+pub(crate) type ModeAndLatents<L> = (Mode, Vec<Vec<L>>);
 
 /// This is used internally for compressing and decompressing with
 /// float modes.
@@ -166,9 +166,9 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
 
   /// Returns a `LatentDescriber` for each latent variable in the chunk
   /// metadata.
-  fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>>;
+  fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>>;
 
-  fn mode_is_valid(mode: Mode<Self::L>) -> bool;
+  fn mode_is_valid(mode: Mode) -> bool;
   /// Breaks the numbers into latent variables for better compression.
   ///
   /// Returns
@@ -183,7 +183,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
 
   fn from_latent_ordered(l: Self::L) -> Self;
   fn to_latent_ordered(self) -> Self::L;
-  fn join_latents(mode: Mode<Self::L>, primary: &mut [Self::L], secondary: &[Self::L]);
+  fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]);
 
   fn transmute_to_latents(_slice: &mut [Self]) -> &mut [Self::L] {
     unimplemented!("transmutable numbers must reimplement this");

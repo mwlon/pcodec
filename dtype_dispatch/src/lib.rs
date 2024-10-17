@@ -17,7 +17,6 @@ macro_rules! build_dtype_macros {
     macro_rules! $definer {
       (#[$enum_attrs: meta] $vis: vis $name: ident, $container: ident) => {
         $vis trait Downcast {
-          fn downcast<S: $constraint>(self) -> $container<S>;
           fn downcast_ref<S: $constraint>(&self) -> &$container<S>;
           fn downcast_mut<S: $constraint>(&mut self) -> &mut $container<S>;
         }
@@ -28,20 +27,6 @@ macro_rules! build_dtype_macros {
         }
 
         impl<T: $constraint> Downcast for $container<T> {
-          fn downcast<S: $constraint>(self) -> $container<S> {
-            if std::any::TypeId::of::<S>() == std::any::TypeId::of::<T>() {
-              unsafe {
-                std::mem::transmute::<_, $container<S>>(self)
-              }
-            } else {
-              panic!(
-                "unsafe downcast conversion from {} to {}",
-                std::any::type_name::<T>(),
-                std::any::type_name::<S>(),
-              )
-            }
-          }
-
           fn downcast_ref<S: $constraint>(&self) -> &$container<S> {
             if std::any::TypeId::of::<S>() == std::any::TypeId::of::<T>() {
               unsafe {
@@ -72,14 +57,6 @@ macro_rules! build_dtype_macros {
         }
 
         impl $name {
-          pub fn downcast<S: $constraint>(self) -> $container<S> {
-            match self {
-              $(
-                Self::$variant(inner) => inner.downcast::<S>(),
-              )+
-            }
-          }
-
           pub fn downcast_ref<S: $constraint>(&self) -> &$container<S> {
             match self {
               $(
@@ -102,7 +79,13 @@ macro_rules! build_dtype_macros {
             let type_id = std::any::TypeId::of::<S>();
             $(
               if type_id == std::any::TypeId::of::<$t>() {
-                return $name::$variant(value.downcast());
+                // Transmute doesn't work for containers whose size depends on T,
+                // so we use a hack from
+                // https://users.rust-lang.org/t/transmuting-a-generic-array/45645/6
+                let ptr = &value as *const $container<S> as *const $container<$t>;
+                let res = unsafe { ptr.read() };
+                std::mem::forget(value);
+                return $name::$variant(res);
               }
             )+
             panic!("unsafe conversion from {}", std::any::type_name::<S>());

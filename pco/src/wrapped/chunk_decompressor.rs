@@ -1,4 +1,5 @@
 use better_io::BetterBufRead;
+use std::marker::PhantomData;
 
 use crate::data_types::NumberLike;
 use crate::errors::{PcoError, PcoResult};
@@ -8,13 +9,17 @@ use crate::wrapped::PageDecompressor;
 /// Holds metadata about a chunk and can produce page decompressors.
 #[derive(Clone, Debug)]
 pub struct ChunkDecompressor<T: NumberLike> {
-  pub(crate) meta: ChunkMeta<T::L>,
+  pub(crate) meta: ChunkMeta,
+  phantom: PhantomData<T>,
 }
 
 impl<T: NumberLike> ChunkDecompressor<T> {
-  pub(crate) fn new(meta: ChunkMeta<T::L>) -> PcoResult<Self> {
+  pub(crate) fn new(meta: ChunkMeta) -> PcoResult<Self> {
     if T::mode_is_valid(meta.mode) {
-      Ok(Self { meta })
+      Ok(Self {
+        meta,
+        phantom: PhantomData,
+      })
     } else {
       Err(PcoError::corruption(format!(
         "invalid mode for data type: {:?}",
@@ -24,7 +29,7 @@ impl<T: NumberLike> ChunkDecompressor<T> {
   }
 
   /// Returns pre-computed information about the chunk.
-  pub fn meta(&self) -> &ChunkMeta<T::L> {
+  pub fn meta(&self) -> &ChunkMeta {
     &self.meta
   }
 
@@ -37,6 +42,6 @@ impl<T: NumberLike> ChunkDecompressor<T> {
     src: R,
     n: usize,
   ) -> PcoResult<PageDecompressor<T, R>> {
-    PageDecompressor::new(src, &self.meta, n)
+    PageDecompressor::<T, R>::new(src, &self.meta, n)
   }
 }

@@ -2,7 +2,7 @@ use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, Latent, NumberLike};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
-use crate::metadata::{ChunkMeta, Mode};
+use crate::metadata::{ChunkMeta, DynLatent, Mode};
 use crate::{describers, int_mult_utils, ChunkConfig, ModeSpec};
 
 use super::ModeAndLatents;
@@ -14,7 +14,7 @@ pub fn choose_mode_and_split_latents<T: NumberLike>(
   match config.mode_spec {
     ModeSpec::Auto => {
       if let Some(base) = int_mult_utils::choose_base(nums) {
-        let mode = Mode::IntMult(base);
+        let mode = Mode::IntMult(DynLatent::from(base));
         let latents = int_mult_utils::split_latents(nums, base);
         Ok((mode, latents))
       } else {
@@ -28,7 +28,7 @@ pub fn choose_mode_and_split_latents<T: NumberLike>(
     )),
     ModeSpec::TryIntMult(base_u64) => {
       let base = T::L::from_u64(base_u64);
-      let mode = Mode::IntMult(base);
+      let mode = Mode::IntMult(DynLatent::from(base));
       let latents = int_mult_utils::split_latents(nums, base);
       Ok((mode, latents))
     }
@@ -84,13 +84,13 @@ macro_rules! impl_unsigned_number {
 
       type L = Self;
 
-      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+      fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>> {
         describers::match_classic_mode::<Self>(meta, "")
           .or_else(|| describers::match_int_modes(meta, false))
           .expect("invalid mode for unsigned type")
       }
 
-      fn mode_is_valid(mode: Mode<Self::L>) -> bool {
+      fn mode_is_valid(mode: Mode) -> bool {
         match mode {
           Mode::Classic => true,
           Mode::IntMult(_) => true,
@@ -112,10 +112,13 @@ macro_rules! impl_unsigned_number {
       fn to_latent_ordered(self) -> Self::L {
         self
       }
-      fn join_latents(mode: Mode<Self::L>, primary: &mut [Self::L], secondary: &[Self::L]) {
+      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]) {
         match mode {
           Mode::Classic => (),
-          Mode::IntMult(base) => int_mult_utils::join_latents(base, primary, secondary),
+          Mode::IntMult(dyn_latent) => {
+            let base = *dyn_latent.downcast_ref::<Self::L>();
+            int_mult_utils::join_latents(base, primary, secondary)
+          }
           _ => unreachable!("impossible mode for unsigned ints"),
         }
       }

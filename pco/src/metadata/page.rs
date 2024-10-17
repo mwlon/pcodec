@@ -32,7 +32,7 @@ impl PageMeta {
 
   pub unsafe fn read_from<L: Latent>(
     reader: &mut BitReader,
-    chunk_meta: &ChunkMeta<L>,
+    chunk_meta: &ChunkMeta,
   ) -> PcoResult<Self> {
     let mut per_latent_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
     for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {

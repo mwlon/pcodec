@@ -31,7 +31,7 @@ pub struct State<L: Latent> {
 pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   // immutable
   n: usize,
-  mode: Mode<T::L>,
+  mode: Mode,
   maybe_constant_secondary: Option<T::L>,
   phantom: PhantomData<T>,
 
@@ -77,7 +77,7 @@ fn convert_from_latents_nontransmutable<T: NumberLike>(primary: &[T::L], dst: &m
 }
 
 impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
-  pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta<T::L>, n: usize) -> PcoResult<Self> {
+  pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta, n: usize) -> PcoResult<Self> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
 

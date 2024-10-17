@@ -85,7 +85,7 @@ It would become impossible to manage if we had 10 data types and multiple
 containers (e.g. sparse arrays).
 `dtype_dispatch` elegantly solves this with a single macro that generates two
 powerful macros for you to use.
-These building blocks can solve any dynamic<->generic dispatch problem:
+These building blocks can solve any dynamic<->generic data type dispatch problem:
 
 ```rust
 pub trait Dtype: 'static {}

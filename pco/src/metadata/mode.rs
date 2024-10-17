@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent};
+use crate::data_types::FloatLike;
+use crate::metadata::dyn_latent::DynLatent;
 
 // Internally, here's how we should model each mode:
 //
@@ -40,7 +41,7 @@ use crate::data_types::{FloatLike, Latent};
 /// Slightly more rigorous formulas are in format.md.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum Mode<L: Latent> {
+pub enum Mode {
   /// Represents each number as a single latent: itself.
   ///
   /// Formula: `num = num`
@@ -52,14 +53,14 @@ pub enum Mode<L: Latent> {
   /// Only applies to integers.
   ///
   /// Formula: `num = mode.base * mult + adjustment`
-  IntMult(L),
+  IntMult(DynLatent),
   /// Given a float `base`, represents each number as two latents: a
   /// multiplier on the base and an ULPs (units-in-the-last-place) adjustment.
   ///
   /// Only applies to floats.
   ///
   /// Formula: `num = mode.base * mult + adjustment ULPs`
-  FloatMult(L),
+  FloatMult(DynLatent),
   /// Given a number of bits `k`, represents each number as two latents:
   /// quantums (effectively the first `TYPE_SIZE - k` bits) and an ULPs
   /// adjustment.
@@ -71,7 +72,7 @@ pub enum Mode<L: Latent> {
   FloatQuant(Bitlen),
 }
 
-impl<L: Latent> Mode<L> {
+impl Mode {
   pub(crate) fn n_latent_vars(&self) -> usize {
     use Mode::*;
 
@@ -104,7 +105,7 @@ impl<L: Latent> Mode<L> {
     }
   }
 
-  pub(crate) fn float_mult<F: FloatLike<L = L>>(base: F) -> Self {
-    Self::FloatMult(base.to_latent_ordered())
+  pub(crate) fn float_mult<F: FloatLike>(base: F) -> Self {
+    Self::FloatMult(DynLatent::from(base.to_latent_ordered()))
   }
 }

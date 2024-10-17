@@ -7,7 +7,7 @@ pub fn header_size() -> usize {
   1
 }
 
-pub(crate) fn baseline_chunk_meta<L: Latent>() -> ChunkMeta<L> {
+pub(crate) fn baseline_chunk_meta<L: Latent>() -> ChunkMeta {
   ChunkMeta {
     mode: Mode::Classic,
     delta_encoding_order: 0,

@@ -14,13 +14,13 @@ macro_rules! impl_signed {
 
       type L = $latent;
 
-      fn get_latent_describers(meta: &ChunkMeta<Self::L>) -> Vec<LatentDescriber<Self::L>> {
+      fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>> {
         describers::match_classic_mode::<Self>(meta, "")
           .or_else(|| describers::match_int_modes(meta, true))
           .expect("invalid mode for signed type")
       }
 
-      fn mode_is_valid(mode: Mode<Self::L>) -> bool {
+      fn mode_is_valid(mode: Mode) -> bool {
         match mode {
           Mode::Classic => true,
           Mode::IntMult(_) => true,
@@ -42,10 +42,13 @@ macro_rules! impl_signed {
       fn to_latent_ordered(self) -> Self::L {
         self.wrapping_sub(Self::MIN) as $latent
       }
-      fn join_latents(mode: Mode<Self::L>, primary: &mut [Self::L], secondary: &[Self::L]) {
+      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]) {
         match mode {
           Mode::Classic => (),
-          Mode::IntMult(base) => int_mult_utils::join_latents(base, primary, secondary),
+          Mode::IntMult(dyn_latent) => {
+            let base = *dyn_latent.downcast_ref::<Self::L>();
+            int_mult_utils::join_latents(base, primary, secondary)
+          }
           _ => unreachable!("impossible mode for signed ints"),
         }
       }

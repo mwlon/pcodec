@@ -22,7 +22,7 @@ pub trait DescribeLatent<L: Latent> {
 pub type LatentDescriber<L> = Box<dyn DescribeLatent<L>>;
 
 pub(crate) fn match_classic_mode<T: NumberLike>(
-  meta: &ChunkMeta<T::L>,
+  meta: &ChunkMeta,
   delta_units: &'static str,
 ) -> Option<Vec<LatentDescriber<T::L>>> {
   match (meta.mode, meta.delta_encoding_order) {
@@ -39,11 +39,12 @@ pub(crate) fn match_classic_mode<T: NumberLike>(
 }
 
 pub(crate) fn match_int_modes<L: Latent>(
-  meta: &ChunkMeta<L>,
+  meta: &ChunkMeta,
   is_signed: bool,
 ) -> Option<Vec<LatentDescriber<L>>> {
   match meta.mode {
-    Mode::IntMult(base) => {
+    Mode::IntMult(dyn_latent) => {
+      let base = *dyn_latent.downcast_ref::<L>();
       let dtype_center = if is_signed { L::MID } else { L::ZERO };
       let mult_center = dtype_center / base;
       let adj_center = dtype_center % base;
@@ -73,11 +74,12 @@ pub(crate) fn match_int_modes<L: Latent>(
 }
 
 pub(crate) fn match_float_modes<F: FloatLike>(
-  meta: &ChunkMeta<F::L>,
+  meta: &ChunkMeta,
 ) -> Option<Vec<LatentDescriber<F::L>>> {
   match meta.mode {
-    Mode::FloatMult(base) => {
-      let base_string = F::from_latent_ordered(base).to_string();
+    Mode::FloatMult(dyn_latent) => {
+      let base_latent = *dyn_latent.downcast_ref::<F::L>();
+      let base_string = F::from_latent_ordered(base_latent).to_string();
       let primary: LatentDescriber<F::L> = if meta.delta_encoding_order == 0 {
         Box::new(FloatMultDescriber {
           base_string,

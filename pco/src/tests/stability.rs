@@ -5,7 +5,7 @@ use crate::metadata::chunk::ChunkMeta;
 use crate::standalone::{simple_decompress, FileCompressor};
 use crate::ModeSpec;
 
-fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta<T::L>> {
+fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta> {
   let fc = FileCompressor::default();
   let config = ChunkConfig {
     mode_spec: ModeSpec::Classic,

@@ -2,8 +2,8 @@ use crate::bit_reader::BitReaderBuilder;
 use crate::bit_writer::BitWriter;
 use crate::bits::bits_to_encode_offset_bits;
 use crate::constants::{
-  Bitlen, Weight, BITS_TO_ENCODE_ANS_SIZE_LOG, BITS_TO_ENCODE_N_BINS, FULL_BIN_BATCH_SIZE,
-  MAX_ANS_BITS,
+  Bitlen, Weight, ANS_INTERLEAVING, BITS_TO_ENCODE_ANS_SIZE_LOG, BITS_TO_ENCODE_N_BINS,
+  FULL_BIN_BATCH_SIZE, MAX_ANS_BITS,
 };
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
@@ -152,5 +152,15 @@ impl ChunkLatentVarMeta {
       }
     );
     BITS_TO_ENCODE_ANS_SIZE_LOG as usize + BITS_TO_ENCODE_N_BINS as usize + total_bin_size
+  }
+
+  pub(crate) fn exact_page_meta_bit_size(&self, delta_order: usize) -> usize {
+    let bits_per_delta = match_latent_enum!(
+      &self.bins,
+      DynBins<L>(_bins) => {
+        L::BITS
+      }
+    );
+    self.ans_size_log as usize * ANS_INTERLEAVING + bits_per_delta as usize * delta_order
   }
 }
