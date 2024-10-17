@@ -1,16 +1,14 @@
 #![allow(clippy::single_component_path_imports)]
 
 dtype_dispatch::build_dtype_macros!(
-  #[doc = "\
-    Defines enums where each variant holds a `$container<$t>` for each
-    `Latent` type $t.
-  "]
-  #[macro_export]
   define_latent_enum,
 
   #[doc = "\
-    Matches enums from `define_latent_enum!` and puts their `Latent` type into
-    scope.
+    Matches enums holding a container of `L: Latents` and puts `L` into scope.
+  "]
+  #[doc = "\
+    You'll only want to use this if you're looking at pco metadata.
+    See the dtype_dispatch crate for more details.
   "]
   #[macro_export]
   match_latent_enum,
