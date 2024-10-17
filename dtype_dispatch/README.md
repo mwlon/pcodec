@@ -76,7 +76,7 @@ impl DynArray {
 }
 
 let x_dynamic = DynArray::new(vec![1_i32, 2, 3]);
-let x_doubled_generic = x_dynamic.add( & x_dynamic).downcast::<i32>();
+let x_doubled_generic = x_dynamic.add(&x_dynamic).downcast::<i32>();
 assert_eq!(x_doubled_generic, vec![2, 4, 6]);
 ```
 
@@ -85,7 +85,8 @@ It would become impossible to manage if we had 10 data types and multiple
 containers (e.g. sparse arrays).
 `dtype_dispatch` elegantly solves this with a single macro that generates two
 powerful macros for you to use.
-These building blocks can solve any dynamic<->generic data type dispatch problem:
+These building blocks can solve almost any dynamic<->generic data type dispatch
+problem:
 
 ```rust
 pub trait Dtype: 'static {}
@@ -127,7 +128,7 @@ impl DynArray {
 
 // we could also use `DynArray::I32()` here, but just to show we can convert generics:
 let x_dynamic = DynArray::new(vec![1_i32, 2, 3]).unwrap();
-let x_doubled_generic = x_dynamic.add( & x_dynamic).downcast::<i32>().unwrap();
+let x_doubled_generic = x_dynamic.add(&x_dynamic).downcast::<i32>().unwrap();
 assert_eq!(x_doubled_generic, vec![2, 4, 6]);
 ```
 

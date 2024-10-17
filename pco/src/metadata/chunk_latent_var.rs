@@ -74,7 +74,7 @@ unsafe fn write_bins<L: Latent, W: Write>(
 /// corresponding to the actual numbers' (or deltas') bins.
 ///
 /// This is mainly useful for inspecting how compression was done.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ChunkLatentVarMeta {
   /// The log2 of the number of the number of states in this chunk's tANS

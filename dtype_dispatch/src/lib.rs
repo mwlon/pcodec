@@ -28,6 +28,7 @@ macro_rules! build_dtype_macros {
         }
 
         impl<T: $constraint> Downcast for $container<T> {
+          // we inline these because they compile down to basically nothing
           #[inline]
           fn downcast<S: $constraint>(self) -> Option<$container<S>> {
             if std::any::TypeId::of::<S>() == std::any::TypeId::of::<T>() {
@@ -43,6 +44,7 @@ macro_rules! build_dtype_macros {
             }
           }
 
+          #[inline]
           fn downcast_ref<S: $constraint>(&self) -> Option<&$container<S>> {
             if std::any::TypeId::of::<S>() == std::any::TypeId::of::<T>() {
               unsafe {
@@ -53,6 +55,7 @@ macro_rules! build_dtype_macros {
             }
           }
 
+          #[inline]
           fn downcast_mut<S: $constraint>(&mut self) -> Option<&mut $container<S>> {
             if std::any::TypeId::of::<S>() == std::any::TypeId::of::<T>() {
               unsafe {

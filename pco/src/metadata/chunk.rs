@@ -13,7 +13,7 @@ use crate::metadata::format_version::FormatVersion;
 use crate::metadata::Mode;
 
 /// The metadata of a pco chunk.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ChunkMeta {
   /// The formula `pco` used to compress each number at a low level.
