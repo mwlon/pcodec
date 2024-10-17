@@ -106,6 +106,6 @@ impl Mode {
   }
 
   pub(crate) fn float_mult<F: FloatLike>(base: F) -> Self {
-    Self::FloatMult(DynLatent::from(base.to_latent_ordered()))
+    Self::FloatMult(DynLatent::new(base.to_latent_ordered()).unwrap())
   }
 }

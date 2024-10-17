@@ -24,7 +24,7 @@ impl DynLatent {
   }
 
   pub(crate) unsafe fn read_uncompressed_from<L: Latent>(reader: &mut BitReader) -> Self {
-    DynLatent::from(reader.read_uint::<L>(L::BITS))
+    DynLatent::new(reader.read_uint::<L>(L::BITS)).unwrap()
   }
 
   pub(crate) unsafe fn write_uncompressed_to<W: Write>(&self, writer: &mut BitWriter<W>) {

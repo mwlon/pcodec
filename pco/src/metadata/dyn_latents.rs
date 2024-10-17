@@ -19,7 +19,7 @@ impl DynLatents {
     for _ in 0..len {
       latents.push(reader.read_uint::<L>(L::BITS));
     }
-    DynLatents::from(latents)
+    DynLatents::new(latents).unwrap()
   }
 
   pub(crate) unsafe fn write_uncompressed_to<W: Write>(&self, writer: &mut BitWriter<W>) {

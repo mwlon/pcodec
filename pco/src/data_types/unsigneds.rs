@@ -14,7 +14,7 @@ pub fn choose_mode_and_split_latents<T: NumberLike>(
   match config.mode_spec {
     ModeSpec::Auto => {
       if let Some(base) = int_mult_utils::choose_base(nums) {
-        let mode = Mode::IntMult(DynLatent::from(base));
+        let mode = Mode::IntMult(DynLatent::new(base).unwrap());
         let latents = int_mult_utils::split_latents(nums, base);
         Ok((mode, latents))
       } else {
@@ -28,7 +28,7 @@ pub fn choose_mode_and_split_latents<T: NumberLike>(
     )),
     ModeSpec::TryIntMult(base_u64) => {
       let base = T::L::from_u64(base_u64);
-      let mode = Mode::IntMult(DynLatent::from(base));
+      let mode = Mode::IntMult(DynLatent::new(base).unwrap());
       let latents = int_mult_utils::split_latents(nums, base);
       Ok((mode, latents))
     }
@@ -116,7 +116,7 @@ macro_rules! impl_unsigned_number {
         match mode {
           Mode::Classic => (),
           Mode::IntMult(dyn_latent) => {
-            let base = *dyn_latent.downcast_ref::<Self::L>();
+            let base = *dyn_latent.downcast_ref::<Self::L>().unwrap();
             int_mult_utils::join_latents(base, primary, secondary)
           }
           _ => unreachable!("impossible mode for unsigned ints"),

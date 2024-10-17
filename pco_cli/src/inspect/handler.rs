@@ -81,7 +81,7 @@ fn build_latent_var_summaries<T: NumberLike>(
     let describer = &describers[latent_var_idx];
     let unit = describer.latent_units();
 
-    let bins = latent_var_meta.bins.downcast_ref::<T::L>();
+    let bins = latent_var_meta.bins.downcast_ref::<T::L>().unwrap();
     let mut bin_summaries = Vec::new();
     for bin in bins {
       bin_summaries.push(BinSummary {

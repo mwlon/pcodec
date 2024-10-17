@@ -206,7 +206,7 @@ mod tests {
           let delta_moments = match_latent_enum!(
             &meta.per_latent_var[latent_var_idx].bins,
             DynBins<L>(_bins) => {
-              DynLatents::from(vec![L::ZERO; delta_order])
+              DynLatents::new(vec![L::ZERO; delta_order]).unwrap()
             }
           );
           PageLatentVarMeta {
@@ -237,7 +237,7 @@ mod tests {
       delta_encoding_order: 5,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
-        bins: Vec::<Bin<u32>>::new().into(),
+        bins: DynBins::U32(vec![]),
       }],
     };
 
@@ -251,12 +251,11 @@ mod tests {
       delta_encoding_order: 0,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
-        bins: vec![Bin {
+        bins: DynBins::U64(vec![Bin {
           weight: 1,
           lower: 77_u64,
           offset_bits: 0,
-        }]
-        .into(),
+        }]),
       }],
     };
 
@@ -266,12 +265,12 @@ mod tests {
   #[test]
   fn exact_size_float_mult() -> PcoResult<()> {
     let meta = ChunkMeta {
-      mode: Mode::FloatMult(DynLatent::from(777_u32)),
+      mode: Mode::FloatMult(DynLatent::U32(777_u32)),
       delta_encoding_order: 3,
       per_latent_var: vec![
         ChunkLatentVarMeta {
           ans_size_log: 7,
-          bins: vec![
+          bins: DynBins::U32(vec![
             Bin {
               weight: 11,
               lower: 0_u32,
@@ -282,12 +281,11 @@ mod tests {
               lower: 1,
               offset_bits: 0,
             },
-          ]
-          .into(),
+          ]),
         },
         ChunkLatentVarMeta {
           ans_size_log: 3,
-          bins: vec![
+          bins: DynBins::U32(vec![
             Bin {
               weight: 3,
               lower: 0_u32,
@@ -298,8 +296,7 @@ mod tests {
               lower: 1,
               offset_bits: 0,
             },
-          ]
-          .into(),
+          ]),
         },
       ],
     };

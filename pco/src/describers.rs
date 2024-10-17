@@ -44,7 +44,7 @@ pub(crate) fn match_int_modes<L: Latent>(
 ) -> Option<Vec<LatentDescriber<L>>> {
   match meta.mode {
     Mode::IntMult(dyn_latent) => {
-      let base = *dyn_latent.downcast_ref::<L>();
+      let base = *dyn_latent.downcast_ref::<L>().unwrap();
       let dtype_center = if is_signed { L::MID } else { L::ZERO };
       let mult_center = dtype_center / base;
       let adj_center = dtype_center % base;
@@ -78,7 +78,7 @@ pub(crate) fn match_float_modes<F: FloatLike>(
 ) -> Option<Vec<LatentDescriber<F::L>>> {
   match meta.mode {
     Mode::FloatMult(dyn_latent) => {
-      let base_latent = *dyn_latent.downcast_ref::<F::L>();
+      let base_latent = *dyn_latent.downcast_ref::<F::L>().unwrap();
       let base_string = F::from_latent_ordered(base_latent).to_string();
       let primary: LatentDescriber<F::L> = if meta.delta_encoding_order == 0 {
         Box::new(FloatMultDescriber {

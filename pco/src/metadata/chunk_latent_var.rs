@@ -127,7 +127,7 @@ impl ChunkLatentVarMeta {
       )?;
     }
 
-    let bins = DynBins::from(bins);
+    let bins = DynBins::new(bins).unwrap();
 
     Ok(Self { bins, ans_size_log })
   }

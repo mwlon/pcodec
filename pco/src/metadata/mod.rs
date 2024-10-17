@@ -1,6 +1,7 @@
 pub use bin::Bin;
 pub use chunk::ChunkMeta;
 pub use chunk_latent_var::ChunkLatentVarMeta;
+pub use dyn_bins::DynBins;
 pub use dyn_latent::DynLatent;
 pub use mode::Mode;
 

@@ -232,7 +232,7 @@ fn new_candidate_w_split_and_delta_order<L: Latent>(
     bin_counts.push(trained.counts.to_vec());
     latent_chunk_compressors.push(LatentChunkCompressor::new(trained, &bins)?);
     let latent_meta = ChunkLatentVarMeta {
-      bins: DynBins::from(bins),
+      bins: DynBins::new(bins).unwrap(),
       ans_size_log,
     };
     var_metas.push(latent_meta);
@@ -371,7 +371,7 @@ fn fallback_chunk_compressor<L: Latent>(
       ans_size_log: 0,
       counts: vec![n as Weight],
     },
-    latent_var_meta.bins.downcast_ref::<L>(),
+    latent_var_meta.bins.downcast_ref::<L>().unwrap(),
   )?;
   Ok(ChunkCompressor {
     meta,
@@ -571,7 +571,7 @@ impl<L: Latent> ChunkCompressor<L> {
         .map(|dissected| dissected.ans_final_states.map(|state| state - base_state))
         .unwrap_or([0; ANS_INTERLEAVING]);
       per_latent_var.push(PageLatentVarMeta {
-        delta_moments: DynLatents::from(delta_moments.0),
+        delta_moments: DynLatents::new(delta_moments.0).unwrap(),
         ans_final_state_idxs,
       });
     }

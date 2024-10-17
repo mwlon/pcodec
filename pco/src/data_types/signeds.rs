@@ -46,7 +46,7 @@ macro_rules! impl_signed {
         match mode {
           Mode::Classic => (),
           Mode::IntMult(dyn_latent) => {
-            let base = *dyn_latent.downcast_ref::<Self::L>();
+            let base = *dyn_latent.downcast_ref::<Self::L>().unwrap();
             int_mult_utils::join_latents(base, primary, secondary)
           }
           _ => unreachable!("impossible mode for signed ints"),

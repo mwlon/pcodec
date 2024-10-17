@@ -329,7 +329,7 @@ macro_rules! impl_float_number_like {
         match mode {
           Mode::Classic => true,
           Mode::FloatMult(dyn_latent) => {
-            let base_latent = *dyn_latent.downcast_ref::<Self::L>();
+            let base_latent = *dyn_latent.downcast_ref::<Self::L>().unwrap();
             Self::from_latent_ordered(base_latent).is_finite_and_normal()
           }
           Mode::FloatQuant(k) => k <= Self::PRECISION_BITS,
@@ -368,7 +368,7 @@ macro_rules! impl_float_number_like {
         match mode {
           Mode::Classic => (),
           Mode::FloatMult(dyn_latent) => {
-            let base = Self::from_latent_ordered(*dyn_latent.downcast_ref::<Self::L>());
+            let base = Self::from_latent_ordered(*dyn_latent.downcast_ref::<Self::L>().unwrap());
             float_mult_utils::join_latents(base, primary, secondary)
           }
           Mode::FloatQuant(k) => float_quant_utils::join_latents::<Self>(k, primary, secondary),

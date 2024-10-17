@@ -89,7 +89,11 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       .per_latent_var
       .iter()
       .map(|latent_var_meta| {
-        let moments = latent_var_meta.delta_moments.downcast_ref::<T::L>().clone();
+        let moments = latent_var_meta
+          .delta_moments
+          .downcast_ref::<T::L>()
+          .unwrap()
+          .clone();
         DeltaMoments(moments)
       })
       .collect::<Vec<_>>();
@@ -99,7 +103,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       let chunk_latent_meta = &chunk_meta.per_latent_var[latent_idx];
 
       // this will change to dynamically typed soon
-      let bins = chunk_latent_meta.bins.downcast_ref::<T::L>();
+      let bins = chunk_latent_meta.bins.downcast_ref::<T::L>().unwrap();
       if bins.is_empty() && n > chunk_meta.delta_encoding_order {
         return Err(PcoError::corruption(format!(
           "unable to decompress chunk with no bins and {} deltas",
