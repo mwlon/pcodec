@@ -73,7 +73,7 @@ fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
 }
 
 fn build_latent_var_summaries<T: NumberLike>(
-  meta: &ChunkMeta<T::L>,
+  meta: &ChunkMeta,
 ) -> BTreeMap<String, LatentVarSummary> {
   let describers = T::get_latent_describers(meta);
   let mut summaries = BTreeMap::new();
