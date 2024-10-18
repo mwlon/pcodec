@@ -107,7 +107,7 @@ impl ChunkConfig {
   }
 
   /// Sets [`delta_spec`][ChunkConfig::delta_spec].
-  pub fn with_delta_encoding_order(mut self, delta_spec: DeltaSpec) -> Self {
+  pub fn with_spec(mut self, delta_spec: DeltaSpec) -> Self {
     self.delta_spec = delta_spec;
     self
   }

@@ -12,7 +12,7 @@
 #![deny(clippy::unused_unit)]
 #![deny(dead_code)]
 
-pub use chunk_config::{ChunkConfig, ModeSpec, PagingSpec};
+pub use chunk_config::{ChunkConfig, DeltaSpec, ModeSpec, PagingSpec};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_MAX_PAGE_N, FULL_BATCH_N};
 pub use progress::Progress;
 

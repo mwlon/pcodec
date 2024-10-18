@@ -1,8 +1,17 @@
-use pco::{ChunkConfig, ModeSpec};
+use pco::{ChunkConfig, DeltaSpec, ModeSpec};
 
 use crate::bench::codecs::CodecInternal;
 use crate::chunk_config_opt::ChunkConfigOpt;
 use crate::dtypes::PcoNumberLike;
+
+fn unparse_delta_spec(spec: &DeltaSpec) -> String {
+  match spec {
+    DeltaSpec::Auto => "Auto".to_string(),
+    DeltaSpec::None => "None".to_string(),
+    DeltaSpec::TryConsecutive(order) => format!("Consecutive@{}", order),
+    _ => "Unknown".to_string(),
+  }
+}
 
 fn unparse_mode_spec(spec: &ModeSpec) -> String {
   match spec {
@@ -23,13 +32,7 @@ impl CodecInternal for ChunkConfigOpt {
   fn get_confs(&self) -> Vec<(&'static str, String)> {
     vec![
       ("level", self.level.to_string()),
-      (
-        "delta-order",
-        self
-          .delta_encoding_order
-          .map(|order| order.to_string())
-          .unwrap_or("Auto".to_string()),
-      ),
+      ("delta", unparse_delta_spec(&self.delta)),
       ("mode", unparse_mode_spec(&self.mode)),
       ("chunk-n", self.chunk_n.to_string()),
     ]
