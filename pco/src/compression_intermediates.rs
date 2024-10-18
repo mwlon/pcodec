@@ -50,6 +50,7 @@ impl<L: Latent> Default for BinCompressionInfo<L> {
   }
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) struct Bid<T: NumberLike> {
   pub mode: Mode,
   pub bits_saved_per_num: f64,
