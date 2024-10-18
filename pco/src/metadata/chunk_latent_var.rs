@@ -9,7 +9,7 @@ use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
 use crate::macros::match_latent_enum;
 use crate::metadata::dyn_bins::DynBins;
-use crate::metadata::Bin;
+use crate::metadata::{Bin, DeltaEncoding};
 use better_io::BetterBufRead;
 use std::cmp::min;
 use std::io::Write;
@@ -154,13 +154,14 @@ impl ChunkLatentVarMeta {
     BITS_TO_ENCODE_ANS_SIZE_LOG as usize + BITS_TO_ENCODE_N_BINS as usize + total_bin_size
   }
 
-  pub(crate) fn exact_page_meta_bit_size(&self, delta_order: usize) -> usize {
+  pub(crate) fn exact_page_meta_bit_size(&self, delta_encoding: DeltaEncoding) -> usize {
     let bits_per_delta = match_latent_enum!(
       &self.bins,
       DynBins<L>(_bins) => {
         L::BITS
       }
     );
-    self.ans_size_log as usize * ANS_INTERLEAVING + bits_per_delta as usize * delta_order
+    self.ans_size_log as usize * ANS_INTERLEAVING
+      + bits_per_delta as usize * delta_encoding.n_latents_per_state()
   }
 }

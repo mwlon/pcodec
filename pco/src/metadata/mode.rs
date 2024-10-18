@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::constants::Bitlen;
 use crate::data_types::FloatLike;
 use crate::metadata::dyn_latent::DynLatent;
+use crate::metadata::DeltaEncoding;
 
 // Internally, here's how we should model each mode:
 //
@@ -83,21 +84,21 @@ impl Mode {
     }
   }
 
-  pub(crate) fn delta_order_for_latent_var(
+  pub(crate) fn delta_encoding_for_latent_var(
     &self,
     latent_var_idx: usize,
-    delta_order: usize,
-  ) -> usize {
+    delta_encoding: DeltaEncoding,
+  ) -> DeltaEncoding {
     use Mode::*;
 
     match (self, latent_var_idx) {
       // In all currently-available modes, the overall `delta_order` is really the delta-order of
       // the first latent.
-      (Classic, 0) | (FloatMult(_), 0) | (FloatQuant(_), 0) | (IntMult(_), 0) => delta_order,
+      (Classic, 0) | (FloatMult(_), 0) | (FloatQuant(_), 0) | (IntMult(_), 0) => delta_encoding,
       // In FloatMult, IntMult, and FloatQuant, the second latent is essentially a remainder or
       // adjustment; there isn't any a priori reason that deltas should be useful for that kind of
       // term and we do not attempt them.
-      (FloatMult(_), 1) | (IntMult(_), 1) | (FloatQuant(_), 1) => 0,
+      (FloatMult(_), 1) | (IntMult(_), 1) | (FloatQuant(_), 1) => DeltaEncoding::None,
       _ => unreachable!(
         "unknown latent {:?}/{}",
         self, latent_var_idx

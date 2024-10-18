@@ -42,12 +42,12 @@ mod tests {
   use rand_xoshiro::rand_core::SeedableRng;
   use rand_xoshiro::Xoroshiro128PlusPlus;
 
+  use super::*;
+  use crate::chunk_config::DeltaSpec;
   use crate::data_types::NumberLike;
   use crate::errors::PcoResult;
   use crate::standalone::{simple_compress, FileCompressor};
   use crate::{ChunkConfig, ModeSpec, PagingSpec};
-
-  use super::*;
 
   #[test]
   fn test_header_guarantee() -> PcoResult<()> {
@@ -79,7 +79,7 @@ mod tests {
     }
     let config = ChunkConfig {
       mode_spec: ModeSpec::TryFloatMult(0.1),
-      delta_encoding_order: Some(5),
+      delta_spec: DeltaSpec::TryConsecutive(5),
       paging_spec: PagingSpec::EqualPagesUpTo(10),
       ..Default::default()
     };
