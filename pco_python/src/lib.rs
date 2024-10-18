@@ -91,7 +91,7 @@ impl PyModeSpec {
   }
 }
 
-#[pyclass(name = "ModeSpec")]
+#[pyclass(name = "DeltaSpec")]
 #[derive(Clone, Default)]
 pub struct PyDeltaSpec(DeltaSpec);
 
@@ -255,6 +255,7 @@ fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
   m.add_class::<PyProgress>()?;
   m.add_class::<PyModeSpec>()?;
+  m.add_class::<PyDeltaSpec>()?;
   m.add_class::<PyPagingSpec>()?;
   m.add_class::<PyChunkConfig>()?;
   m.add(
