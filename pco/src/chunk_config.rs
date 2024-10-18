@@ -5,9 +5,8 @@ use crate::DEFAULT_COMPRESSION_LEVEL;
 /// Specifies how Pco should choose a [`mode`][crate::metadata::Mode] to compress this
 /// chunk of data.
 ///
-/// The `Try*` variants almost always use the provided mode, but fall back to an
-/// effectively uncompressed version of `Classic` if the provided mode is
-/// especially bad.
+/// The `Try*` variants almost always use the provided mode, but fall back to
+/// `Classic` if the provided mode is especially bad.
 /// It is recommended that you only use the `Try*` variants if you know for
 /// certain that your numbers benefit from that mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -35,13 +34,34 @@ pub enum ModeSpec {
   TryIntMult(u64),
 }
 
-// TODO
+/// Specifies how Pco should choose a
+/// [`delta encoding`][crate::metadata::DeltaEncoding] to compress this
+/// chunk of data.
+///
+/// The `Try*` variants almost always use the provided mode, but fall back to
+/// `None` if the provided encoding is especially bad.
+/// It is recommended that you only use the `Try*` variants if you know for
+/// certain that your numbers benefit from delta encoding.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub enum DeltaSpec {
+  /// Automatically detect a good delta encoding
+  ///
+  /// This works well most of the time, but costs some compression time and can
+  /// select a bad delta encoding in adversarial cases.
   #[default]
   Auto,
+  /// Never use delta encoding.
+  ///
+  /// This is best if your data is in a random order or adjacent numbers have
+  /// no relation to each other.
   None,
+  /// Try taking nth order consecutive deltas.
+  ///
+  /// Supports a delta encoding order up to 7.
+  /// For instance, 1st order is just regular delta encoding, 2nd is
+  /// deltas-of-deltas, etc.
+  /// It is legal to use 0th order, but it is identical to `None`.
   TryConsecutive(usize),
 }
 
@@ -70,12 +90,13 @@ pub struct ChunkConfig {
   ///
   /// See [`Mode`](crate::metadata::Mode) to understand what modes are.
   pub mode_spec: ModeSpec,
-  /// TODO
+  /// Specifies how delta encoding should be chosen.
   ///
+  /// See [`DeltaEncoding`](crate::metadata::DeltaEncoding) to understand what modes are.
   /// If you would like to automatically choose this once and reuse it for all
   /// chunks, you can create a
   /// [`ChunkDecompressor`][crate::wrapped::ChunkDecompressor] and read the
-  /// delta encoding order it chose.
+  /// delta encoding it chose.
   pub delta_spec: DeltaSpec,
   /// Specifies how the chunk should be split into pages (default: equal pages
   /// up to 2^18 numbers each).

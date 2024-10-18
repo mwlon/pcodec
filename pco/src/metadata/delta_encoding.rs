@@ -1,6 +1,19 @@
+/// How Pco does
+/// [delta encoding](https://en.wikipedia.org/wiki/Delta_encoding) on this
+/// chunk.
+///
+/// This stage of processing happens after applying the
+/// [`Mode`][crate::metadata::Mode].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeltaEncoding {
+  /// No delta encoding; the values are encoded as-is.
+  ///
+  /// This is best if your data is in random order.
   None,
+  /// Encodes the differences between values (or differences between those,
+  /// etc.).
+  ///
+  /// This order is always positive, between 1 and 7.
   Consecutive(usize),
 }
 

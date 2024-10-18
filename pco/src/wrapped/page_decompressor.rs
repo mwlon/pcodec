@@ -13,7 +13,7 @@ use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::latent_batch_decompressor::LatentBatchDecompressor;
 use crate::metadata::page::PageMeta;
-use crate::metadata::{ChunkMeta, Mode};
+use crate::metadata::{ChunkMeta, DeltaEncoding, Mode};
 use crate::progress::Progress;
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
@@ -32,6 +32,7 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   // immutable
   n: usize,
   mode: Mode,
+  delta_encodings: Vec<DeltaEncoding>,
   maybe_constant_secondary: Option<T::L>,
   phantom: PhantomData<T>,
 
@@ -42,12 +43,13 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
 
 unsafe fn decompress_latents_w_delta<L: Latent>(
   reader: &mut BitReader,
-  delta_moments: &mut DeltaMoments<L>,
+  delta_encoding: &DeltaEncoding,
+  n_remaining: usize,
+  delta_state: &mut DeltaMoments<L>,
   lbd: &mut LatentBatchDecompressor<L>,
   dst: &mut [L],
-  n_remaining: usize,
 ) -> PcoResult<()> {
-  let n_remaining_pre_delta = n_remaining.saturating_sub(delta_moments.order());
+  let n_remaining_pre_delta = n_remaining.saturating_sub(delta_state.order());
   let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
     dst.len()
   } else {
@@ -58,7 +60,10 @@ unsafe fn decompress_latents_w_delta<L: Latent>(
     n_remaining_pre_delta
   };
   lbd.decompress_latent_batch(reader, &mut dst[..pre_delta_len])?;
-  delta::decode_in_place(delta_moments, dst);
+  match delta_encoding {
+    DeltaEncoding::None => (),
+    DeltaEncoding::Consecutive(_) => delta::decode_in_place(delta_state, dst),
+  }
   Ok(())
 }
 
@@ -98,6 +103,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       })
       .collect::<Vec<_>>();
 
+    let mut delta_encodings = Vec::new();
     let mut latent_batch_decompressors = Vec::new();
     for latent_idx in 0..mode.n_latent_vars() {
       let chunk_latent_meta = &chunk_meta.per_latent_var[latent_idx];
@@ -112,6 +118,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
         )));
       }
 
+      delta_encodings.push(chunk_meta.delta_encoding_for_latent_var(latent_idx));
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
         chunk_latent_meta.ans_size_log,
         bins,
@@ -131,6 +138,7 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     Ok(Self {
       n,
       mode,
+      delta_encodings,
       maybe_constant_secondary,
       phantom: PhantomData,
       reader_builder,
@@ -169,10 +177,11 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       unsafe {
         decompress_latents_w_delta(
           reader,
+          &self.delta_encodings[0],
+          n - *n_processed,
           &mut delta_momentss[0],
           &mut latent_batch_decompressors[0],
           primary_dst,
-          n - *n_processed,
         )
       }
     })?;
@@ -181,10 +190,11 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       self.reader_builder.with_reader(|reader| unsafe {
         decompress_latents_w_delta(
           reader,
+          &self.delta_encodings[1],
+          n - *n_processed,
           &mut delta_momentss[1],
           &mut latent_batch_decompressors[1],
           secondary_latents,
-          n - *n_processed,
         )
       })?;
     }
