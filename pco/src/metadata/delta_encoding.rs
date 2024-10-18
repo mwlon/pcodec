@@ -2,6 +2,8 @@
 /// [delta encoding](https://en.wikipedia.org/wiki/Delta_encoding) on this
 /// chunk.
 ///
+/// Delta encoding optionally takes differences between nearby numbers,
+/// greatly reducing the entropy of the data distribution in some cases.
 /// This stage of processing happens after applying the
 /// [`Mode`][crate::metadata::Mode].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

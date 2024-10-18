@@ -31,7 +31,7 @@ impl From<&ChunkConfigOpt> for ChunkConfig {
   fn from(opt: &ChunkConfigOpt) -> Self {
     ChunkConfig::default()
       .with_compression_level(opt.level)
-      .with_spec(opt.delta)
+      .with_delta_spec(opt.delta)
       .with_mode_spec(opt.mode)
       .with_paging_spec(PagingSpec::EqualPagesUpTo(opt.chunk_n))
   }

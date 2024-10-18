@@ -12,23 +12,23 @@ use crate::DEFAULT_COMPRESSION_LEVEL;
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub enum ModeSpec {
-  /// Automatically detect a good mode.
+  /// Automatically detects a good mode.
   ///
   /// This works well most of the time, but costs some compression time and can
   /// select a bad mode in adversarial cases.
   #[default]
   Auto,
-  /// Only use `Classic` mode.
+  /// Only uses `Classic` mode.
   Classic,
-  /// Try using `FloatMult` mode with a given `base`.
+  /// Tries using `FloatMult` mode with a given `base`.
   ///
   /// Only applies to floating-point types.
   TryFloatMult(f64),
-  /// Try using `FloatQuant` mode with `k` bits of quantization.
+  /// Tries using `FloatQuant` mode with `k` bits of quantization.
   ///
   /// Only applies to floating-point types.
   TryFloatQuant(Bitlen),
-  /// Try using `IntMult` mode with a given `base`.
+  /// Tries using `IntMult` mode with a given `base`.
   ///
   /// Only applies to integer types.
   TryIntMult(u64),
@@ -38,25 +38,25 @@ pub enum ModeSpec {
 /// [`delta encoding`][crate::metadata::DeltaEncoding] to compress this
 /// chunk of data.
 ///
-/// The `Try*` variants almost always use the provided mode, but fall back to
-/// `None` if the provided encoding is especially bad.
+/// The `Try*` variants almost always use the provided encoding, but fall back
+/// to `None` if the provided encoding is especially bad.
 /// It is recommended that you only use the `Try*` variants if you know for
 /// certain that your numbers benefit from delta encoding.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub enum DeltaSpec {
-  /// Automatically detect a good delta encoding
+  /// Automatically detects a good delta encoding.
   ///
   /// This works well most of the time, but costs some compression time and can
   /// select a bad delta encoding in adversarial cases.
   #[default]
   Auto,
-  /// Never use delta encoding.
+  /// Never uses delta encoding.
   ///
   /// This is best if your data is in a random order or adjacent numbers have
   /// no relation to each other.
   None,
-  /// Try taking nth order consecutive deltas.
+  /// Tries taking nth order consecutive deltas.
   ///
   /// Supports a delta encoding order up to 7.
   /// For instance, 1st order is just regular delta encoding, 2nd is
@@ -92,7 +92,8 @@ pub struct ChunkConfig {
   pub mode_spec: ModeSpec,
   /// Specifies how delta encoding should be chosen.
   ///
-  /// See [`DeltaEncoding`](crate::metadata::DeltaEncoding) to understand what modes are.
+  /// See [`DeltaEncoding`](crate::metadata::DeltaEncoding) to understand what
+  /// delta encoding is.
   /// If you would like to automatically choose this once and reuse it for all
   /// chunks, you can create a
   /// [`ChunkDecompressor`][crate::wrapped::ChunkDecompressor] and read the
@@ -128,7 +129,7 @@ impl ChunkConfig {
   }
 
   /// Sets [`delta_spec`][ChunkConfig::delta_spec].
-  pub fn with_spec(mut self, delta_spec: DeltaSpec) -> Self {
+  pub fn with_delta_spec(mut self, delta_spec: DeltaSpec) -> Self {
     self.delta_spec = delta_spec;
     self
   }

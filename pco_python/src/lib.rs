@@ -226,7 +226,7 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
   fn try_from(py_config: &PyChunkConfig) -> Result<Self, Self::Error> {
     let res = ChunkConfig::default()
       .with_compression_level(py_config.compression_level)
-      .with_spec(py_config.delta_spec.0)
+      .with_delta_spec(py_config.delta_spec.0)
       .with_mode_spec(py_config.mode_spec.0)
       .with_paging_spec(py_config.paging_spec.0.clone());
     Ok(res)

@@ -315,7 +315,6 @@ macro_rules! impl_float_number_like {
   ($t: ty, $latent: ty, $sign_bit_mask: expr, $header_byte: expr) => {
     impl NumberLike for $t {
       const DTYPE_BYTE: u8 = $header_byte;
-      const TRANSMUTABLE_TO_LATENT: bool = true;
 
       type L = $latent;
 

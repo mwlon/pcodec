@@ -23,7 +23,6 @@ pub struct State<L: Latent> {
   n_processed: usize,
   latent_batch_decompressors: Vec<LatentBatchDecompressor<L>>,
   delta_momentss: Vec<DeltaMoments<L>>, // one per latent variable
-  primary_latents: [L; FULL_BATCH_N],
   secondary_latents: [L; FULL_BATCH_N],
 }
 
@@ -32,8 +31,8 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
   // immutable
   n: usize,
   mode: Mode,
-  delta_encodings: Vec<DeltaEncoding>,
-  maybe_constant_secondary: Option<T::L>,
+  delta_encoding: DeltaEncoding,
+  maybe_constant_latents: Vec<Option<T::L>>, // 1 per latent var
   phantom: PhantomData<T>,
 
   // mutable
@@ -43,7 +42,7 @@ pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
 
 unsafe fn decompress_latents_w_delta<L: Latent>(
   reader: &mut BitReader,
-  delta_encoding: &DeltaEncoding,
+  delta_encoding: DeltaEncoding,
   n_remaining: usize,
   delta_state: &mut DeltaMoments<L>,
   lbd: &mut LatentBatchDecompressor<L>,
@@ -67,17 +66,10 @@ unsafe fn decompress_latents_w_delta<L: Latent>(
   Ok(())
 }
 
-fn convert_from_latents_transmutable<T: NumberLike>(dst: &mut [T]) {
+fn convert_from_latents_to_numbers<T: NumberLike>(dst: &mut [T]) {
   // we wrote the joined latents to dst, so we can convert them in place
   for l_and_dst in dst {
     *l_and_dst = T::from_latent_ordered(l_and_dst.transmute_to_latent());
-  }
-}
-
-fn convert_from_latents_nontransmutable<T: NumberLike>(primary: &[T::L], dst: &mut [T]) {
-  // we wrote the joined latents to primary, so we need to move them over
-  for (&l, dst) in primary.iter().zip(dst.iter_mut()) {
-    *dst = T::from_latent_ordered(l);
   }
 }
 
@@ -103,7 +95,6 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       })
       .collect::<Vec<_>>();
 
-    let mut delta_encodings = Vec::new();
     let mut latent_batch_decompressors = Vec::new();
     for latent_idx in 0..mode.n_latent_vars() {
       let chunk_latent_meta = &chunk_meta.per_latent_var[latent_idx];
@@ -118,7 +109,6 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
         )));
       }
 
-      delta_encodings.push(chunk_meta.delta_encoding_for_latent_var(latent_idx));
       latent_batch_decompressors.push(LatentBatchDecompressor::new(
         chunk_latent_meta.ans_size_log,
         bins,
@@ -132,21 +122,21 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       } else {
         None
       };
+    let maybe_constant_latents = vec![None, maybe_constant_secondary];
 
     // we don't store the whole ChunkMeta because it can get large due to bins
     let secondary_default = maybe_constant_secondary.unwrap_or(T::L::default());
     Ok(Self {
       n,
       mode,
-      delta_encodings,
-      maybe_constant_secondary,
+      delta_encoding: chunk_meta.delta_encoding,
+      maybe_constant_latents,
       phantom: PhantomData,
       reader_builder,
       state: State {
         n_processed: 0,
         latent_batch_decompressors,
         delta_momentss,
-        primary_latents: [T::L::default(); FULL_BATCH_N],
         secondary_latents: [secondary_default; FULL_BATCH_N],
       },
     })
@@ -159,7 +149,6 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     let State {
       latent_batch_decompressors,
       delta_momentss,
-      primary_latents,
       secondary_latents,
       n_processed,
       ..
@@ -169,15 +158,11 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
     let n_latents = latent_batch_decompressors.len();
 
     self.reader_builder.with_reader(|reader| {
-      let primary_dst = if T::TRANSMUTABLE_TO_LATENT {
-        T::transmute_to_latents(dst)
-      } else {
-        &mut primary_latents[..batch_n]
-      };
+      let primary_dst = T::transmute_to_latents(dst);
       unsafe {
         decompress_latents_w_delta(
           reader,
-          &self.delta_encodings[0],
+          mode.delta_encoding_for_latent_var(0, self.delta_encoding),
           n - *n_processed,
           &mut delta_momentss[0],
           &mut latent_batch_decompressors[0],
@@ -186,11 +171,11 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       }
     })?;
 
-    if n_latents >= 2 && self.maybe_constant_secondary.is_none() {
+    if n_latents >= 2 && self.maybe_constant_latents[1].is_none() {
       self.reader_builder.with_reader(|reader| unsafe {
         decompress_latents_w_delta(
           reader,
-          &self.delta_encodings[1],
+          mode.delta_encoding_for_latent_var(1, self.delta_encoding),
           n - *n_processed,
           &mut delta_momentss[1],
           &mut latent_batch_decompressors[1],
@@ -199,18 +184,12 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
       })?;
     }
 
-    if T::TRANSMUTABLE_TO_LATENT {
-      T::join_latents(
-        mode,
-        T::transmute_to_latents(dst),
-        secondary_latents,
-      );
-      convert_from_latents_transmutable(dst);
-    } else {
-      let primary = &mut primary_latents[..batch_n];
-      T::join_latents(mode, primary, secondary_latents);
-      convert_from_latents_nontransmutable(primary, dst);
-    }
+    T::join_latents(
+      mode,
+      T::transmute_to_latents(dst),
+      secondary_latents,
+    );
+    convert_from_latents_to_numbers(dst);
 
     *n_processed += batch_n;
     if *n_processed == n {
