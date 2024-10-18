@@ -8,6 +8,7 @@ use crate::constants::*;
 use crate::data_types::Latent;
 use crate::errors::{PcoError, PcoResult};
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
+use crate::metadata::delta_encoding::DeltaEncoding;
 use crate::metadata::dyn_latent::DynLatent;
 use crate::metadata::format_version::FormatVersion;
 use crate::metadata::Mode;
@@ -22,7 +23,7 @@ pub struct ChunkMeta {
   /// This is between 0 and 7, inclusive.
   ///
   /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
-  pub delta_encoding_order: usize,
+  pub delta_encoding: DeltaEncoding,
   /// Metadata about the interleaved streams needed by `pco` to
   /// compress/decompress the inputs
   /// according to the formula used by `mode`.
@@ -32,12 +33,12 @@ pub struct ChunkMeta {
 impl ChunkMeta {
   pub(crate) fn new(
     mode: Mode,
-    delta_encoding_order: usize,
+    delta_encoding: DeltaEncoding,
     per_latent_var: Vec<ChunkLatentVarMeta>,
   ) -> Self {
     ChunkMeta {
       mode,
-      delta_encoding_order,
+      delta_encoding,
       per_latent_var,
     }
   }
@@ -67,10 +68,10 @@ impl ChunkMeta {
       .iter()
       .enumerate()
       .map(|(latent_var_idx, latent_var)| {
-        let delta_order = self
+        let delta_encoding = self
           .mode
-          .delta_order_for_latent_var(latent_var_idx, self.delta_encoding_order);
-        latent_var.exact_page_meta_bit_size(delta_order)
+          .delta_encoding_for_latent_var(latent_var_idx, self.delta_encoding);
+        latent_var.exact_page_meta_bit_size(delta_encoding)
       })
       .sum();
     bit_size.div_ceil(8)
@@ -80,7 +81,7 @@ impl ChunkMeta {
     reader_builder: &mut BitReaderBuilder<R>,
     version: &FormatVersion,
   ) -> PcoResult<Self> {
-    let (mode, delta_encoding_order) = reader_builder.with_reader(|reader| {
+    let (mode, delta_encoding) = reader_builder.with_reader(|reader| {
       let mode = match reader.read_usize(BITS_TO_ENCODE_MODE) {
         0 => Ok(Mode::Classic),
         1 => {
@@ -108,8 +109,13 @@ impl ChunkMeta {
       }?;
 
       let delta_encoding_order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
+      let delta_encoding = if delta_encoding_order == 0 {
+        DeltaEncoding::None
+      } else {
+        DeltaEncoding::Consecutive(delta_encoding_order)
+      };
 
-      Ok((mode, delta_encoding_order))
+      Ok((mode, delta_encoding))
     })?;
 
     let n_latent_vars = mode.n_latent_vars();
@@ -128,7 +134,7 @@ impl ChunkMeta {
 
     Ok(Self {
       mode,
-      delta_encoding_order,
+      delta_encoding,
       per_latent_var,
     })
   }
@@ -154,10 +160,13 @@ impl ChunkMeta {
       }
     };
 
-    writer.write_usize(
-      self.delta_encoding_order,
-      BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
-    );
+    match self.delta_encoding {
+      DeltaEncoding::None => writer.write_usize(0, BITS_TO_ENCODE_DELTA_ENCODING_ORDER),
+      DeltaEncoding::Consecutive(order) => {
+        writer.write_usize(order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER)
+      }
+    }
+
     writer.flush()?;
 
     for latents in &self.per_latent_var {
@@ -169,10 +178,10 @@ impl ChunkMeta {
     Ok(())
   }
 
-  pub(crate) fn delta_order_for_latent_var(&self, latent_idx: usize) -> usize {
+  pub(crate) fn delta_encoding_for_latent_var(&self, latent_idx: usize) -> DeltaEncoding {
     self
       .mode
-      .delta_order_for_latent_var(latent_idx, self.delta_encoding_order)
+      .delta_encoding_for_latent_var(latent_idx, self.delta_encoding)
   }
 }
 
@@ -200,13 +209,13 @@ mod tests {
     let page_meta = PageMeta {
       per_latent_var: (0..meta.per_latent_var.len())
         .map(|latent_var_idx| {
-          let delta_order = meta
+          let delta_encoding = meta
             .mode
-            .delta_order_for_latent_var(latent_var_idx, meta.delta_encoding_order);
+            .delta_encoding_for_latent_var(latent_var_idx, meta.delta_encoding);
           let delta_moments = match_latent_enum!(
             &meta.per_latent_var[latent_var_idx].bins,
             DynBins<L>(_bins) => {
-              DynLatents::new(vec![L::ZERO; delta_order]).unwrap()
+              DynLatents::new(vec![L::ZERO; delta_encoding.n_latents_per_state()]).unwrap()
             }
           );
           PageLatentVarMeta {
@@ -234,7 +243,7 @@ mod tests {
   fn exact_size_binless() -> PcoResult<()> {
     let meta = ChunkMeta {
       mode: Mode::Classic,
-      delta_encoding_order: 5,
+      delta_encoding: DeltaEncoding::Consecutive(5),
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
         bins: DynBins::U32(vec![]),
@@ -248,7 +257,7 @@ mod tests {
   fn exact_size_trivial() -> PcoResult<()> {
     let meta = ChunkMeta {
       mode: Mode::Classic,
-      delta_encoding_order: 0,
+      delta_encoding: DeltaEncoding::None,
       per_latent_var: vec![ChunkLatentVarMeta {
         ans_size_log: 0,
         bins: DynBins::U64(vec![Bin {
@@ -266,7 +275,7 @@ mod tests {
   fn exact_size_float_mult() -> PcoResult<()> {
     let meta = ChunkMeta {
       mode: Mode::FloatMult(DynLatent::U32(777_u32)),
-      delta_encoding_order: 3,
+      delta_encoding: DeltaEncoding::Consecutive(3),
       per_latent_var: vec![
         ChunkLatentVarMeta {
           ans_size_log: 7,

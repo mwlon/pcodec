@@ -153,12 +153,6 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// 1 through 6 are used, so 7 would be a good choice for another
   /// `pco` data type implementation.
   const DTYPE_BYTE: u8;
-  /// If true, decompressors write the primary latent stream to `dst` directly
-  /// instead of a separate buffer.
-  /// It is expected that transmutable latents implement
-  /// [`transmute_to_latents`][Self::transmute_to_latents] and that
-  /// `join_latents` uses `dst` as the primary latent.
-  const TRANSMUTABLE_TO_LATENT: bool;
 
   /// The latent this type can convert between to do
   /// bitwise logic and such.
@@ -185,12 +179,8 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   fn to_latent_ordered(self) -> Self::L;
   fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]);
 
-  fn transmute_to_latents(_slice: &mut [Self]) -> &mut [Self::L] {
-    unimplemented!("transmutable numbers must reimplement this");
-  }
-  fn transmute_to_latent(self) -> Self::L {
-    unimplemented!("transmutable numbers must reimplement this");
-  }
+  fn transmute_to_latents(slice: &mut [Self]) -> &mut [Self::L];
+  fn transmute_to_latent(self) -> Self::L;
 }
 
 pub(crate) fn split_latents_classic<T: NumberLike>(nums: &[T]) -> Vec<Vec<T::L>> {

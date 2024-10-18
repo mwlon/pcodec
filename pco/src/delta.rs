@@ -36,11 +36,6 @@ fn first_order_encode_in_place<L: Latent>(latents: &mut [L]) {
 pub(crate) fn encode_in_place<L: Latent>(mut latents: &mut [L], order: usize) -> DeltaMoments<L> {
   // TODO this function could be made faster by doing all steps on mini batches
   // of ~512 at a time
-  if order == 0 {
-    // exit early so we don't toggle to signed values
-    return DeltaMoments::default();
-  }
-
   let mut page_moments = Vec::with_capacity(order);
   for _ in 0..order {
     page_moments.push(latents.first().copied().unwrap_or(L::ZERO));
@@ -65,11 +60,6 @@ fn first_order_decode_in_place<L: Latent>(moment: &mut L, latents: &mut [L]) {
 // used for a single batch, so we mutate the delta moments
 #[inline(never)]
 pub(crate) fn decode_in_place<L: Latent>(delta_moments: &mut DeltaMoments<L>, latents: &mut [L]) {
-  if delta_moments.order() == 0 {
-    // exit early so we don't toggle to signed values
-    return;
-  }
-
   toggle_center_in_place(latents);
   for moment in delta_moments.0.iter_mut().rev() {
     first_order_decode_in_place(moment, latents);

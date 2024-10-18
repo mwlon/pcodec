@@ -5,34 +5,64 @@ use crate::DEFAULT_COMPRESSION_LEVEL;
 /// Specifies how Pco should choose a [`mode`][crate::metadata::Mode] to compress this
 /// chunk of data.
 ///
-/// The `Try*` variants almost always use the provided mode, but fall back to an
-/// effectively uncompressed version of `Classic` if the provided mode is
-/// especially bad.
+/// The `Try*` variants almost always use the provided mode, but fall back to
+/// `Classic` if the provided mode is especially bad.
 /// It is recommended that you only use the `Try*` variants if you know for
 /// certain that your numbers benefit from that mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub enum ModeSpec {
-  /// Automatically detect a good mode.
+  /// Automatically detects a good mode.
   ///
   /// This works well most of the time, but costs some compression time and can
   /// select a bad mode in adversarial cases.
   #[default]
   Auto,
-  /// Only use `Classic` mode.
+  /// Only uses `Classic` mode.
   Classic,
-  /// Try using `FloatMult` mode with a given `base`.
+  /// Tries using `FloatMult` mode with a given `base`.
   ///
   /// Only applies to floating-point types.
   TryFloatMult(f64),
-  /// Try using `FloatQuant` mode with `k` bits of quantization.
+  /// Tries using `FloatQuant` mode with `k` bits of quantization.
   ///
   /// Only applies to floating-point types.
   TryFloatQuant(Bitlen),
-  /// Try using `IntMult` mode with a given `base`.
+  /// Tries using `IntMult` mode with a given `base`.
   ///
   /// Only applies to integer types.
   TryIntMult(u64),
+}
+
+/// Specifies how Pco should choose a
+/// [`delta encoding`][crate::metadata::DeltaEncoding] to compress this
+/// chunk of data.
+///
+/// The `Try*` variants almost always use the provided encoding, but fall back
+/// to `None` if the provided encoding is especially bad.
+/// It is recommended that you only use the `Try*` variants if you know for
+/// certain that your numbers benefit from delta encoding.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub enum DeltaSpec {
+  /// Automatically detects a good delta encoding.
+  ///
+  /// This works well most of the time, but costs some compression time and can
+  /// select a bad delta encoding in adversarial cases.
+  #[default]
+  Auto,
+  /// Never uses delta encoding.
+  ///
+  /// This is best if your data is in a random order or adjacent numbers have
+  /// no relation to each other.
+  None,
+  /// Tries taking nth order consecutive deltas.
+  ///
+  /// Supports a delta encoding order up to 7.
+  /// For instance, 1st order is just regular delta encoding, 2nd is
+  /// deltas-of-deltas, etc.
+  /// It is legal to use 0th order, but it is identical to `None`.
+  TryConsecutive(usize),
 }
 
 // TODO consider adding a "lossiness" spec that allows dropping secondary latent
@@ -56,32 +86,19 @@ pub struct ChunkConfig {
   /// The meaning of the compression levels is subject to change with
   /// new releases.
   pub compression_level: usize,
-  /// Ranges from 0 to 7 inclusive (default: `None`, automatically detecting on
-  /// each chunk).
-  ///
-  /// It is the number of times to apply delta encoding
-  /// before compressing. For instance, say we have the numbers
-  /// `[0, 2, 2, 4, 4, 6, 6]` and consider different delta encoding orders.
-  /// * 0th order takes numbers as-is.
-  /// This is perfect for columnar data were the order is essentially random.
-  /// * 1st order takes consecutive differences, leaving
-  /// `[0, 2, 0, 2, 0, 2, 0]`. This is best for continuous but noisy time
-  /// series data, like stock prices or most time series data.
-  /// * 2nd order takes consecutive differences again,
-  /// leaving `[2, -2, 2, -2, 2, -2]`. This is best for piecewise-linear or
-  /// somewhat quadratic data.
-  /// * Even higher-order is best for time series that are very
-  /// smooth, like temperature or light sensor readings.
-  ///
-  /// If you would like to automatically choose this once and reuse it for all
-  /// chunks, you can create a
-  /// [`ChunkDecompressor`][crate::wrapped::ChunkDecompressor] and read the
-  /// delta encoding order it chose.
-  pub delta_encoding_order: Option<usize>,
   /// Specifies how the mode should be determined.
   ///
   /// See [`Mode`](crate::metadata::Mode) to understand what modes are.
   pub mode_spec: ModeSpec,
+  /// Specifies how delta encoding should be chosen.
+  ///
+  /// See [`DeltaEncoding`](crate::metadata::DeltaEncoding) to understand what
+  /// delta encoding is.
+  /// If you would like to automatically choose this once and reuse it for all
+  /// chunks, you can create a
+  /// [`ChunkDecompressor`][crate::wrapped::ChunkDecompressor] and read the
+  /// delta encoding it chose.
+  pub delta_spec: DeltaSpec,
   /// Specifies how the chunk should be split into pages (default: equal pages
   /// up to 2^18 numbers each).
   pub paging_spec: PagingSpec,
@@ -91,8 +108,8 @@ impl Default for ChunkConfig {
   fn default() -> Self {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
-      delta_encoding_order: None,
       mode_spec: ModeSpec::default(),
+      delta_spec: DeltaSpec::default(),
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }
@@ -105,15 +122,15 @@ impl ChunkConfig {
     self
   }
 
-  /// Sets [`delta_encoding_order`][ChunkConfig::delta_encoding_order].
-  pub fn with_delta_encoding_order(mut self, order: Option<usize>) -> Self {
-    self.delta_encoding_order = order;
-    self
-  }
-
   /// Sets [`mode_spec`][ChunkConfig::mode_spec].
   pub fn with_mode_spec(mut self, mode_spec: ModeSpec) -> Self {
     self.mode_spec = mode_spec;
+    self
+  }
+
+  /// Sets [`delta_spec`][ChunkConfig::delta_spec].
+  pub fn with_delta_spec(mut self, delta_spec: DeltaSpec) -> Self {
+    self.delta_spec = delta_spec;
     self
   }
 

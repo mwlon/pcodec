@@ -4,7 +4,7 @@ use std::io::Write;
 
 use better_io::{BetterBufRead, BetterBufReader};
 
-use crate::chunk_config::ChunkConfig;
+use crate::chunk_config::{ChunkConfig, DeltaSpec};
 use crate::errors::PcoResult;
 use crate::wrapped::{FileCompressor, FileDecompressor, PageDecompressor};
 use crate::{PagingSpec, FULL_BATCH_N};
@@ -101,7 +101,7 @@ fn test_low_level_wrapped() -> PcoResult<()> {
     Chunk {
       nums: (0..1700).collect::<Vec<_>>(),
       config: ChunkConfig {
-        delta_encoding_order: Some(0),
+        delta_spec: DeltaSpec::None,
         paging_spec: PagingSpec::EqualPagesUpTo(600),
         ..Default::default()
       },
@@ -109,7 +109,7 @@ fn test_low_level_wrapped() -> PcoResult<()> {
     Chunk {
       nums: (0..500).collect::<Vec<_>>(),
       config: ChunkConfig {
-        delta_encoding_order: Some(2),
+        delta_spec: DeltaSpec::TryConsecutive(2),
         paging_spec: PagingSpec::Exact(vec![1, 499]),
         ..Default::default()
       },

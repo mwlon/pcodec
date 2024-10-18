@@ -49,7 +49,7 @@ pub struct ChunkSummary {
   idx: usize,
   n: usize,
   mode: String,
-  delta_order: usize,
+  delta_encoding: String,
   // using BTreeMaps to preserve ordering
   latent_vars: BTreeMap<String, LatentVarSummary>,
 }
@@ -159,7 +159,7 @@ impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
         idx,
         n: chunk_ns[idx],
         mode: format!("{:?}", meta.mode),
-        delta_order: meta.delta_encoding_order,
+        delta_encoding: format!("{:?}", meta.delta_encoding),
         latent_vars,
       });
     }

@@ -80,7 +80,6 @@ macro_rules! impl_unsigned_number {
   ($t: ty, $header_byte: expr) => {
     impl NumberLike for $t {
       const DTYPE_BYTE: u8 = $header_byte;
-      const TRANSMUTABLE_TO_LATENT: bool = true;
 
       type L = Self;
 

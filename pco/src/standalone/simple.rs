@@ -172,12 +172,13 @@ pub fn simple_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::chunk_config::DeltaSpec;
 
   #[test]
   fn test_simple_compress_into() -> PcoResult<()> {
     let nums = (0..100).map(|x| x as i32).collect::<Vec<_>>();
     let config = &ChunkConfig {
-      delta_encoding_order: Some(0),
+      delta_spec: DeltaSpec::None,
       ..Default::default()
     };
     let mut buffer = [77];
@@ -204,7 +205,7 @@ mod tests {
       &nums,
       &ChunkConfig {
         compression_level: 0,
-        delta_encoding_order: Some(0),
+        delta_spec: DeltaSpec::None,
         paging_spec: PagingSpec::Exact(vec![300, 300]),
         ..Default::default()
       },

@@ -10,7 +10,6 @@ macro_rules! impl_signed {
   ($t: ty, $latent: ty, $header_byte: expr) => {
     impl NumberLike for $t {
       const DTYPE_BYTE: u8 = $header_byte;
-      const TRANSMUTABLE_TO_LATENT: bool = true;
 
       type L = $latent;
 

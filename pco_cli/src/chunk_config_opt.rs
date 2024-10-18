@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use pco::{ChunkConfig, ModeSpec, PagingSpec};
+use pco::{ChunkConfig, DeltaSpec, ModeSpec, PagingSpec};
 
 use crate::parse;
 
@@ -14,8 +14,8 @@ pub struct ChunkConfigOpt {
   // https://github.com/clap-rs/clap/issues/5536#issuecomment-2179646989
   /// Can be an integer for how many times to apply delta encoding, or "Auto",
   /// which tries to automatically detect the best delta encoding order.
-  #[arg(long = "delta-order", default_value = "Auto", value_parser = parse::delta_encoding_order)]
-  pub delta_encoding_order: std::option::Option<usize>,
+  #[arg(long, default_value = "Auto", value_parser = parse::delta_spec)]
+  pub delta: DeltaSpec,
   /// Can be "Auto", "Classic", "FloatMult@<base>", "FloatQuant@<k>", or
   /// "IntMult@<base>".
   ///
@@ -31,7 +31,7 @@ impl From<&ChunkConfigOpt> for ChunkConfig {
   fn from(opt: &ChunkConfigOpt) -> Self {
     ChunkConfig::default()
       .with_compression_level(opt.level)
-      .with_delta_encoding_order(opt.delta_encoding_order)
+      .with_delta_spec(opt.delta)
       .with_mode_spec(opt.mode)
       .with_paging_spec(PagingSpec::EqualPagesUpTo(opt.chunk_n))
   }

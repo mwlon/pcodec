@@ -2,7 +2,7 @@ use half::f16;
 use rand::Rng;
 use rand_xoshiro::rand_core::SeedableRng;
 
-use crate::chunk_config::ChunkConfig;
+use crate::chunk_config::{ChunkConfig, DeltaSpec};
 use crate::constants::Bitlen;
 use crate::data_types::NumberLike;
 use crate::errors::PcoResult;
@@ -56,7 +56,7 @@ fn assert_recovers<T: NumberLike>(
     for mode_spec in [ModeSpec::Classic, ModeSpec::Auto] {
       let config = ChunkConfig {
         compression_level,
-        delta_encoding_order: Some(delta_encoding_order),
+        delta_spec: DeltaSpec::TryConsecutive(delta_encoding_order),
         mode_spec,
         ..Default::default()
       };
@@ -243,7 +243,7 @@ fn recover_with_alternating_nums(offset_bits: Bitlen, name: &str) -> PcoResult<(
   let (compressed, meta) = compress_w_meta(
     &nums,
     &ChunkConfig {
-      delta_encoding_order: Some(0),
+      delta_spec: DeltaSpec::None,
       compression_level: 0,
       ..Default::default()
     },
@@ -282,7 +282,7 @@ fn test_with_int_mult() -> PcoResult<()> {
   let (compressed, meta) = compress_w_meta(
     &nums,
     &ChunkConfig {
-      delta_encoding_order: Some(0),
+      delta_spec: DeltaSpec::None,
       ..Default::default()
     },
   )?;

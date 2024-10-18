@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from pcodec import (
     ChunkConfig,
+    DeltaSpec,
     ModeSpec,
     PagingSpec,
     standalone,
@@ -106,7 +107,7 @@ def test_compression_options():
                 data,
                 ChunkConfig(
                     compression_level=0,
-                    delta_encoding_order=1,
+                    delta_spec=DeltaSpec.try_consecutive(1),
                     mode_spec=ModeSpec.classic(),
                     paging_spec=PagingSpec.equal_pages_up_to(77),
                 ),

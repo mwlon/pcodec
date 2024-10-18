@@ -1,7 +1,7 @@
 use half::f16;
 use numpy::PyArrayDyn;
 use pco::data_types::CoreDataType;
-use pco::{ChunkConfig, ModeSpec, PagingSpec, Progress};
+use pco::{ChunkConfig, DeltaSpec, ModeSpec, PagingSpec, Progress};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyResult, Python};
 use pyo3::{py_run, pyclass, pymethods, PyErr};
@@ -91,6 +91,33 @@ impl PyModeSpec {
   }
 }
 
+#[pyclass(name = "DeltaSpec")]
+#[derive(Clone, Default)]
+pub struct PyDeltaSpec(DeltaSpec);
+
+/// Specifies how Pcodec should choose the delta encoding.
+#[pymethods]
+impl PyDeltaSpec {
+  /// :returns: a DeltaSpec that automatically detects a good choice.
+  #[staticmethod]
+  fn auto() -> Self {
+    Self(DeltaSpec::Auto)
+  }
+
+  /// :returns: a DeltaSpec that never does delta encoding.
+  #[staticmethod]
+  fn none() -> Self {
+    Self(DeltaSpec::None)
+  }
+
+  /// :returns: a DeltaSpec that tries to use the specified delta encoding
+  /// order, if possible.
+  #[staticmethod]
+  fn try_consecutive(order: usize) -> Self {
+    Self(DeltaSpec::TryConsecutive(order))
+  }
+}
+
 #[pyclass(name = "PagingSpec")]
 #[derive(Clone, Default)]
 pub struct PyPagingSpec(PagingSpec);
@@ -118,8 +145,8 @@ impl PyPagingSpec {
 #[pyclass(get_all, set_all, name = "ChunkConfig")]
 pub struct PyChunkConfig {
   compression_level: usize,
-  delta_encoding_order: Option<usize>,
   mode_spec: PyModeSpec,
+  delta_spec: PyDeltaSpec,
   paging_spec: PyPagingSpec,
 }
 
@@ -130,7 +157,7 @@ impl PyChunkConfig {
   /// :param compression_level: a compression level from 0-12, where 12 takes
   /// the longest and compresses the most.
   ///
-  /// :param delta_encoding_order: either a delta encoding level from 0-7 or
+  /// :param delta_spec: either a delta encoding level from 0-7 or
   /// None. If set to None, pcodec will try to infer the optimal delta encoding
   /// order.
   ///
@@ -174,19 +201,19 @@ impl PyChunkConfig {
   #[new]
   #[pyo3(signature = (
     compression_level=pco::DEFAULT_COMPRESSION_LEVEL,
-    delta_encoding_order=None,
     mode_spec=PyModeSpec::default(),
+    delta_spec=PyDeltaSpec::default(),
     paging_spec=PyPagingSpec::default(),
   ))]
   fn new(
     compression_level: usize,
-    delta_encoding_order: Option<usize>,
     mode_spec: PyModeSpec,
+    delta_spec: PyDeltaSpec,
     paging_spec: PyPagingSpec,
   ) -> Self {
     Self {
       compression_level,
-      delta_encoding_order,
+      delta_spec,
       mode_spec,
       paging_spec,
     }
@@ -199,7 +226,7 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
   fn try_from(py_config: &PyChunkConfig) -> Result<Self, Self::Error> {
     let res = ChunkConfig::default()
       .with_compression_level(py_config.compression_level)
-      .with_delta_encoding_order(py_config.delta_encoding_order)
+      .with_delta_spec(py_config.delta_spec.0)
       .with_mode_spec(py_config.mode_spec.0)
       .with_paging_spec(py_config.paging_spec.0.clone());
     Ok(res)
@@ -228,6 +255,7 @@ fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
   m.add_class::<PyProgress>()?;
   m.add_class::<PyModeSpec>()?;
+  m.add_class::<PyDeltaSpec>()?;
   m.add_class::<PyPagingSpec>()?;
   m.add_class::<PyChunkConfig>()?;
   m.add(

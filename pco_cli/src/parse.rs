@@ -1,23 +1,28 @@
-use std::str::FromStr;
-
 use anyhow::anyhow;
 use arrow::datatypes::{DataType, TimeUnit};
 
-use pco::ModeSpec;
+use pco::{DeltaSpec, ModeSpec};
 
-pub fn delta_encoding_order(s: &str) -> anyhow::Result<Option<usize>> {
-  match s.to_lowercase().as_str() {
-    "auto" => Ok(None),
+pub fn delta_spec(s: &str) -> anyhow::Result<DeltaSpec> {
+  let spec = match s.to_lowercase().as_str() {
+    "auto" => DeltaSpec::Auto,
+    "none" => DeltaSpec::None,
     other => {
-      let delta_order = usize::from_str(other)?;
-      Ok(Some(delta_order))
+      let mut parts = other.split('@');
+      let name = parts.next().unwrap();
+      let err = || anyhow!("invalid delta spec: {}", s);
+      let value = parts.next().ok_or_else(err)?;
+      match name {
+        "consecutive" => DeltaSpec::TryConsecutive(value.parse()?),
+        _ => return Err(err()),
+      }
     }
-  }
+  };
+  Ok(spec)
 }
 
 pub fn mode_spec(s: &str) -> anyhow::Result<ModeSpec> {
-  let lowercase = s.to_lowercase();
-  let spec = match lowercase.as_str() {
+  let spec = match s.to_lowercase().as_str() {
     "auto" => ModeSpec::Auto,
     "classic" => ModeSpec::Classic,
     other => {
