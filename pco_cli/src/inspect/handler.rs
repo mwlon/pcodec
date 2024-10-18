@@ -159,7 +159,7 @@ impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
         idx,
         n: chunk_ns[idx],
         mode: format!("{:?}", meta.mode),
-        delta_order: meta.delta_encoding_order,
+        delta_order: meta.delta_encoding,
         latent_vars,
       });
     }

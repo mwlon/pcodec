@@ -104,10 +104,11 @@ impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
 
       // this will change to dynamically typed soon
       let bins = chunk_latent_meta.bins.downcast_ref::<T::L>().unwrap();
-      if bins.is_empty() && n > chunk_meta.delta_encoding_order {
+      let n_in_body = n.saturating_sub(chunk_meta.delta_encoding.n_latents_per_state());
+      if bins.is_empty() && n_in_body > 0 {
         return Err(PcoError::corruption(format!(
-          "unable to decompress chunk with no bins and {} deltas",
-          n - chunk_meta.delta_encoding_order,
+          "unable to decompress chunk with no bins and {} latents",
+          n_in_body
         )));
       }
 

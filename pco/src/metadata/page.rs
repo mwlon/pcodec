@@ -38,7 +38,9 @@ impl PageMeta {
     for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
       per_latent_var.push(PageLatentVarMeta::read_from::<L>(
         reader,
-        chunk_meta.delta_order_for_latent_var(latent_idx),
+        chunk_meta
+          .delta_encoding_for_latent_var(latent_idx)
+          .n_latents_per_state(),
         chunk_latent_var_meta.ans_size_log,
       )?);
     }

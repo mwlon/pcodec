@@ -68,6 +68,7 @@ fn simple_write_if_version_matches<T: NumberLike>(
 
 #[cfg(test)]
 mod tests {
+  use crate::chunk_config::DeltaSpec;
   use crate::errors::PcoResult;
   use crate::tests::compatibility::{assert_compatible, simple_write_if_version_matches};
   use crate::{ChunkConfig, ModeSpec};
@@ -79,7 +80,7 @@ mod tests {
     let name = "classic";
     let nums = (0_i32..1000).chain(2000..3000).collect::<Vec<_>>();
     let config = ChunkConfig {
-      delta_encoding_order: Some(0),
+      delta_spec: DeltaSpec::None,
       ..Default::default()
     };
     simple_write_if_version_matches(version, name, &nums, &config)?;
@@ -94,7 +95,7 @@ mod tests {
     let mut nums = (0..2000).map(|i| i as f32).collect::<Vec<_>>();
     nums[1337] += 1.001;
     let config = ChunkConfig {
-      delta_encoding_order: Some(1),
+      delta_spec: DeltaSpec::TryConsecutive(1),
       ..Default::default()
     };
     simple_write_if_version_matches(version, name, &nums, &config)?;
@@ -111,7 +112,7 @@ mod tests {
     let mut nums = (0..2000).map(|i| i * 1000).collect::<Vec<_>>();
     nums[1337] -= 1;
     let config = ChunkConfig {
-      delta_encoding_order: Some(1),
+      delta_spec: DeltaSpec::TryConsecutive(1),
       ..Default::default()
     };
     simple_write_if_version_matches(version, name, &nums, &config)?;

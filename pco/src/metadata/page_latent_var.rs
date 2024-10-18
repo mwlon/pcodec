@@ -25,10 +25,10 @@ impl PageLatentVarMeta {
 
   pub unsafe fn read_from<L: Latent>(
     reader: &mut BitReader,
-    delta_order: usize,
+    n_latents_per_delta_state: usize,
     ans_size_log: Bitlen,
   ) -> PcoResult<Self> {
-    let delta_moments = DynLatents::read_uncompressed_from::<L>(reader, delta_order);
+    let delta_moments = DynLatents::read_uncompressed_from::<L>(reader, n_latents_per_delta_state);
     let mut ans_final_state_idxs = [0; ANS_INTERLEAVING];
     for state in &mut ans_final_state_idxs {
       *state = reader.read_uint::<AnsState>(ans_size_log);

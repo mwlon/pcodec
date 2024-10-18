@@ -35,6 +35,16 @@ pub enum ModeSpec {
   TryIntMult(u64),
 }
 
+// TODO
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub enum DeltaSpec {
+  #[default]
+  Auto,
+  None,
+  TryConsecutive(usize),
+}
+
 // TODO consider adding a "lossiness" spec that allows dropping secondary latent
 // vars.
 /// All configurations available for a compressor.
@@ -56,32 +66,17 @@ pub struct ChunkConfig {
   /// The meaning of the compression levels is subject to change with
   /// new releases.
   pub compression_level: usize,
-  /// Ranges from 0 to 7 inclusive (default: `None`, automatically detecting on
-  /// each chunk).
+  /// Specifies how the mode should be determined.
   ///
-  /// It is the number of times to apply delta encoding
-  /// before compressing. For instance, say we have the numbers
-  /// `[0, 2, 2, 4, 4, 6, 6]` and consider different delta encoding orders.
-  /// * 0th order takes numbers as-is.
-  /// This is perfect for columnar data were the order is essentially random.
-  /// * 1st order takes consecutive differences, leaving
-  /// `[0, 2, 0, 2, 0, 2, 0]`. This is best for continuous but noisy time
-  /// series data, like stock prices or most time series data.
-  /// * 2nd order takes consecutive differences again,
-  /// leaving `[2, -2, 2, -2, 2, -2]`. This is best for piecewise-linear or
-  /// somewhat quadratic data.
-  /// * Even higher-order is best for time series that are very
-  /// smooth, like temperature or light sensor readings.
+  /// See [`Mode`](crate::metadata::Mode) to understand what modes are.
+  pub mode_spec: ModeSpec,
+  /// TODO
   ///
   /// If you would like to automatically choose this once and reuse it for all
   /// chunks, you can create a
   /// [`ChunkDecompressor`][crate::wrapped::ChunkDecompressor] and read the
   /// delta encoding order it chose.
-  pub delta_encoding_order: Option<usize>,
-  /// Specifies how the mode should be determined.
-  ///
-  /// See [`Mode`](crate::metadata::Mode) to understand what modes are.
-  pub mode_spec: ModeSpec,
+  pub delta_spec: DeltaSpec,
   /// Specifies how the chunk should be split into pages (default: equal pages
   /// up to 2^18 numbers each).
   pub paging_spec: PagingSpec,
@@ -91,8 +86,8 @@ impl Default for ChunkConfig {
   fn default() -> Self {
     Self {
       compression_level: DEFAULT_COMPRESSION_LEVEL,
-      delta_encoding_order: None,
       mode_spec: ModeSpec::default(),
+      delta_spec: DeltaSpec::default(),
       paging_spec: PagingSpec::EqualPagesUpTo(DEFAULT_MAX_PAGE_N),
     }
   }
@@ -105,15 +100,15 @@ impl ChunkConfig {
     self
   }
 
-  /// Sets [`delta_encoding_order`][ChunkConfig::delta_encoding_order].
-  pub fn with_delta_encoding_order(mut self, order: Option<usize>) -> Self {
-    self.delta_encoding_order = order;
-    self
-  }
-
   /// Sets [`mode_spec`][ChunkConfig::mode_spec].
   pub fn with_mode_spec(mut self, mode_spec: ModeSpec) -> Self {
     self.mode_spec = mode_spec;
+    self
+  }
+
+  /// Sets [`delta_spec`][ChunkConfig::delta_spec].
+  pub fn with_delta_encoding_order(mut self, delta_spec: DeltaSpec) -> Self {
+    self.delta_spec = delta_spec;
     self
   }
 

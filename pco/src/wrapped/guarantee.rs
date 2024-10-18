@@ -1,6 +1,6 @@
 use crate::data_types::Latent;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
-use crate::metadata::{Bin, ChunkMeta, DynBins, Mode};
+use crate::metadata::{Bin, ChunkMeta, DeltaEncoding, DynBins, Mode};
 
 /// Returns the maximum possible byte size of a wrapped header.
 pub fn header_size() -> usize {
@@ -10,7 +10,7 @@ pub fn header_size() -> usize {
 pub(crate) fn baseline_chunk_meta<L: Latent>() -> ChunkMeta {
   ChunkMeta {
     mode: Mode::Classic,
-    delta_encoding_order: 0,
+    delta_encoding: DeltaEncoding::None,
     per_latent_var: vec![ChunkLatentVarMeta {
       ans_size_log: 0,
       bins: DynBins::new(vec![Bin {
@@ -37,12 +37,12 @@ mod tests {
   use rand_xoshiro::rand_core::SeedableRng;
   use rand_xoshiro::Xoroshiro128PlusPlus;
 
+  use super::*;
+  use crate::chunk_config::DeltaSpec;
   use crate::data_types::NumberLike;
   use crate::errors::PcoResult;
   use crate::wrapped::FileCompressor;
   use crate::{ChunkConfig, ModeSpec, PagingSpec};
-
-  use super::*;
 
   #[test]
   fn test_header_guarantee() -> PcoResult<()> {
@@ -90,7 +90,7 @@ mod tests {
     }
     let config = ChunkConfig {
       mode_spec: ModeSpec::TryFloatMult(0.1),
-      delta_encoding_order: Some(5),
+      delta_spec: DeltaSpec::TryConsecutive(5),
       paging_spec: PagingSpec::EqualPagesUpTo(10),
       ..Default::default()
     };
