@@ -9,12 +9,10 @@ from pcodec import (
 )
 
 np.random.seed(12345)
-
 all_lengths = (
     0,
     900,
 )
-
 all_dtypes = ("f2", "f4", "f8", "i2", "i4", "i8", "u2", "u4", "u8")
 
 @pytest.mark.parametrize("length", all_lengths)

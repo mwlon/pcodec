@@ -101,11 +101,11 @@ impl PyCd {
   fn read_page_into(
     &self,
     py: Python,
-    page: &Bound<PyBytes>,
+    src: &Bound<PyBytes>,
     page_n: usize,
     dst: &Bound<PyUntypedArray>,
   ) -> PyResult<(PyProgress, usize)> {
-    let src = page.as_bytes();
+    let src = src.as_bytes();
 
     let (progress, rest) = match_number_like_enum!(
       &self.0,
