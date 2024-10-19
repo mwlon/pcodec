@@ -1,10 +1,10 @@
 use std::convert::TryInto;
 
 use numpy::{
-  Element, IntoPyArray, PyArray, PyArray1, PyArrayDescr, PyArrayDescrMethods, PyArrayDyn,
-  PyArrayMethods, PyReadonlyArray1, PyUntypedArray, PyUntypedArrayMethods,
+  Element, IntoPyArray, PyArray1, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray,
+  PyUntypedArrayMethods,
 };
-use pyo3::exceptions::{PyRuntimeError, PyTypeError};
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule, PyNone};
 use pyo3::{pyfunction, wrap_pyfunction, Bound, PyObject, PyResult, Python};
@@ -13,7 +13,7 @@ use pco::data_types::NumberLike;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 use pco::{standalone, with_core_dtypes, ChunkConfig};
 
-use crate::{pco_err_to_py, DynTypedPyArrayDyn, PyChunkConfig, PyProgress};
+use crate::{pco_err_to_py, PyChunkConfig, PyProgress};
 
 fn decompress_chunks<'py, T: NumberLike + Element>(
   py: Python<'py>,
@@ -55,7 +55,7 @@ fn simple_compress_generic<'py, T: NumberLike + Element>(
     .map_err(pco_err_to_py)?;
   // TODO apparently all the places we use PyBytes::new() copy the data.
   // Maybe there's a zero-copy way to do this.
-  Ok(PyBytes::new_bound(py, &compressed).into())
+  Ok(PyBytes::new_bound(py, &compressed))
 }
 
 fn simple_decompress_into_generic<T: NumberLike + Element>(

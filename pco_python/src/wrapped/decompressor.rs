@@ -1,15 +1,14 @@
-use numpy::{PyArray1, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods};
+use numpy::{PyArray1, PyArrayMethods, PyUntypedArray};
 use pco::data_types::CoreDataType;
-use pco::{match_number_like_enum, with_core_dtypes, Progress};
-use pyo3::exceptions::PyRuntimeError;
+use pco::{match_number_like_enum, with_core_dtypes};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
-use pyo3::{pyclass, pymethods, AsPyPointer, Bound, PyResult, Python};
+use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
 use pco::data_types::NumberLike;
-use pco::wrapped::{ChunkCompressor, ChunkDecompressor, FileDecompressor};
+use pco::wrapped::{ChunkDecompressor, FileDecompressor};
 
-use crate::{core_dtype_from_str, pco_err_to_py, DynTypedPyArrayDyn, PyProgress};
+use crate::{core_dtype_from_str, pco_err_to_py, PyProgress};
 
 #[pyclass(name = "FileDecompressor")]
 struct PyFd(FileDecompressor);
@@ -21,10 +20,7 @@ pco::define_number_like_enum!(
 );
 
 #[pyclass(name = "ChunkDecompressor")]
-struct PyCd {
-  inner: DynCd,
-  dtype: CoreDataType,
-}
+struct PyCd(DynCd);
 
 /// The top-level object for decompressing wrapped pcodec files.
 #[pymethods]
@@ -75,7 +71,7 @@ impl PyFd {
     }
 
     let (inner, rest) = with_core_dtypes!(match_dtype);
-    let res = PyCd { inner, dtype };
+    let res = PyCd(inner);
     let n_bytes_read = src.len() - rest.len();
     Ok((res, n_bytes_read))
   }
@@ -112,7 +108,7 @@ impl PyCd {
     let src = page.as_bytes();
 
     let (progress, rest) = match_number_like_enum!(
-      &self.inner,
+      &self.0,
       DynCd<T>(cd) => {
         let arr = dst.downcast::<PyArray1<T>>()?;
         let mut arr_rw = arr.readwrite();

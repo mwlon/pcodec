@@ -1,18 +1,17 @@
 use std::convert::TryInto;
 
 use numpy::{
-  Element, PyArray1, PyArrayDescrMethods, PyArrayDyn, PyArrayMethods, PyUntypedArray,
-  PyUntypedArrayMethods,
+  Element, PyArray1, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods,
 };
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
-use pyo3::{pyclass, pymethods, Bound, PyObject, PyResult, Python};
+use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
 use pco::data_types::{Latent, NumberLike};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
 use pco::{match_latent_enum, with_core_dtypes, ChunkConfig};
 
-use crate::{pco_err_to_py, DynTypedPyArrayDyn, PyChunkConfig};
+use crate::{pco_err_to_py, PyChunkConfig};
 
 /// The top-level object for creating wrapped pcodec files.
 #[pyclass(name = "FileCompressor")]
@@ -119,7 +118,7 @@ fn page_py<'py, U: Latent>(
   let mut res = Vec::new();
   py.allow_threads(|| cc.write_page(page_idx, &mut res))
     .map_err(pco_err_to_py)?;
-  Ok(PyBytes::new_bound(py, &res).into())
+  Ok(PyBytes::new_bound(py, &res))
 }
 
 #[pymethods]

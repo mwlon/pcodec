@@ -1,5 +1,5 @@
 use pyo3::types::PyModule;
-use pyo3::{Bound, PyResult, Python};
+use pyo3::{Bound, PyResult};
 
 pub mod compressor;
 pub mod decompressor;
