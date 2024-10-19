@@ -1,15 +1,19 @@
 use half::f16;
-use numpy::PyArrayDyn;
+use numpy::{PyArrayDescr, PyArrayDyn};
 use pco::data_types::CoreDataType;
 use pco::{ChunkConfig, DeltaSpec, ModeSpec, PagingSpec, Progress};
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::{pymodule, FromPyObject, PyModule, PyResult, Python};
-use pyo3::{py_run, pyclass, pymethods, PyErr};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError};
+use pyo3::prelude::*;
+use pyo3::{py_run, pyclass, pymethods, Bound, PyErr};
 
 use pco::errors::PcoError;
 
 pub mod standalone;
 pub mod wrapped;
+
+fn unsupported_type_err(dtype: Bound<'_, PyArrayDescr>) -> PyErr {
+  PyTypeError::new_err(format!("Unsupported data type: {:?}", dtype))
+}
 
 pub fn core_dtype_from_str(s: &str) -> PyResult<CoreDataType> {
   match s.to_uppercase().as_str() {
@@ -238,20 +242,21 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
 // The first dyn refers to dynamic dtype; the second to dynamic shape
 #[derive(Debug, FromPyObject)]
 pub enum DynTypedPyArrayDyn<'py> {
-  F16(&'py PyArrayDyn<f16>),
-  F32(&'py PyArrayDyn<f32>),
-  F64(&'py PyArrayDyn<f64>),
-  I16(&'py PyArrayDyn<i16>),
-  I32(&'py PyArrayDyn<i32>),
-  I64(&'py PyArrayDyn<i64>),
-  U16(&'py PyArrayDyn<u16>),
-  U32(&'py PyArrayDyn<u32>),
-  U64(&'py PyArrayDyn<u64>),
+  F16(Bound<'py, PyArrayDyn<f16>>),
+  F32(Bound<'py, PyArrayDyn<f32>>),
+  F64(Bound<'py, PyArrayDyn<f64>>),
+  I16(Bound<'py, PyArrayDyn<i16>>),
+  I32(Bound<'py, PyArrayDyn<i32>>),
+  I64(Bound<'py, PyArrayDyn<i64>>),
+  U16(Bound<'py, PyArrayDyn<u16>>),
+  U32(Bound<'py, PyArrayDyn<u32>>),
+  U64(Bound<'py, PyArrayDyn<u64>>),
 }
 
 /// Pcodec is a codec for numerical sequences.
 #[pymodule]
-fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
+fn pcodec(m: &Bound<PyModule>) -> PyResult<()> {
+  let py = m.py();
   m.add("__version__", env!("CARGO_PKG_VERSION"))?;
   m.add_class::<PyProgress>()?;
   m.add_class::<PyModeSpec>()?;
@@ -264,8 +269,8 @@ fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
   )?;
 
   // =========== STANDALONE ===========
-  let standalone_module = PyModule::new(py, "pcodec.standalone")?;
-  standalone::register(py, standalone_module)?;
+  let standalone_module = PyModule::new_bound(py, "pcodec.standalone")?;
+  standalone::register(&standalone_module)?;
   // hackery from https://github.com/PyO3/pyo3/issues/1517#issuecomment-808664021
   // to make modules work nicely
   py_run!(
@@ -273,17 +278,17 @@ fn pcodec(py: Python, m: &PyModule) -> PyResult<()> {
     standalone_module,
     "import sys; sys.modules['pcodec.standalone'] = standalone_module"
   );
-  m.add_submodule(standalone_module)?;
+  m.add_submodule(&standalone_module)?;
 
   // =========== WRAPPED ===========
-  let wrapped_module = PyModule::new(py, "pcodec.wrapped")?;
-  wrapped::register(py, wrapped_module)?;
+  let wrapped_module = PyModule::new_bound(py, "pcodec.wrapped")?;
+  wrapped::register(&wrapped_module)?;
   py_run!(
     py,
     wrapped_module,
     "import sys; sys.modules['pcodec.wrapped'] = wrapped_module"
   );
-  m.add_submodule(wrapped_module)?;
+  m.add_submodule(&wrapped_module)?;
 
   Ok(())
 }

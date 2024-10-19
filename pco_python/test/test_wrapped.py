@@ -28,10 +28,10 @@ def test_compress(dtype):
         cc.write_page(2)
 
     # decompress
-    fd, n_bytes_read = FileDecompressor.from_header(header)
+    fd, n_bytes_read = FileDecompressor.new(header)
     assert n_bytes_read == len(header)
     # check that undershooting is fine
-    _, n_bytes_read = FileDecompressor.from_header(header + b"foo")
+    _, n_bytes_read = FileDecompressor.new(header + b"foo")
     assert n_bytes_read == len(header)
     cd, n_bytes_read = fd.read_chunk_meta(chunk_meta, pco_dtype)
     assert n_bytes_read == len(chunk_meta)
