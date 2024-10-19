@@ -1,5 +1,4 @@
-use half::f16;
-use numpy::{PyArrayDescr, PyArrayDyn};
+use numpy::PyArrayDescr;
 use pco::data_types::CoreDataType;
 use pco::{ChunkConfig, DeltaSpec, ModeSpec, PagingSpec, Progress};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
@@ -235,22 +234,6 @@ impl TryFrom<&PyChunkConfig> for ChunkConfig {
       .with_paging_spec(py_config.paging_spec.0.clone());
     Ok(res)
   }
-}
-
-// The Numpy crate recommends using this type of enum to write functions that accept different Numpy dtypes
-// https://github.com/PyO3/rust-numpy/blob/32740b33ec55ef0b7ebec726288665837722841d/examples/simple/src/lib.rs#L113
-// The first dyn refers to dynamic dtype; the second to dynamic shape
-#[derive(Debug, FromPyObject)]
-pub enum DynTypedPyArrayDyn<'py> {
-  F16(Bound<'py, PyArrayDyn<f16>>),
-  F32(Bound<'py, PyArrayDyn<f32>>),
-  F64(Bound<'py, PyArrayDyn<f64>>),
-  I16(Bound<'py, PyArrayDyn<i16>>),
-  I32(Bound<'py, PyArrayDyn<i32>>),
-  I64(Bound<'py, PyArrayDyn<i64>>),
-  U16(Bound<'py, PyArrayDyn<u16>>),
-  U32(Bound<'py, PyArrayDyn<u32>>),
-  U64(Bound<'py, PyArrayDyn<u64>>),
 }
 
 /// Pcodec is a codec for numerical sequences.
