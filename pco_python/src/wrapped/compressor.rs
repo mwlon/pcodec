@@ -33,8 +33,8 @@ struct PyCc(DynCc);
 impl PyFc {
   fn chunk_compressor_generic<T: NumberLike + Element>(
     &self,
-    py: Python<'_>,
-    arr: &Bound<'_, PyArray1<T>>,
+    py: Python,
+    arr: &Bound<PyArray1<T>>,
     config: &ChunkConfig,
   ) -> PyResult<ChunkCompressor<T::L>> {
     let arr_ro = arr.readonly();
@@ -79,8 +79,8 @@ impl PyFc {
   /// :raises: TypeError, RuntimeError
   fn chunk_compressor(
     &self,
-    py: Python<'_>,
-    nums: Bound<'_, PyUntypedArray>,
+    py: Python,
+    nums: Bound<PyUntypedArray>,
     config: &PyChunkConfig,
   ) -> PyResult<PyCc> {
     let config = config.try_into()?;
