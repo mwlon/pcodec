@@ -101,26 +101,6 @@ impl PyFc {
   }
 }
 
-fn chunk_meta_py<'py, U: Latent>(
-  py: Python<'py>,
-  cc: &ChunkCompressor<U>,
-) -> PyResult<Bound<'py, PyBytes>> {
-  let mut res = Vec::new();
-  cc.write_chunk_meta(&mut res).map_err(pco_err_to_py)?;
-  Ok(PyBytes::new_bound(py, &res))
-}
-
-fn page_py<'py, U: Latent>(
-  py: Python<'py>,
-  cc: &ChunkCompressor<U>,
-  page_idx: usize,
-) -> PyResult<Bound<'py, PyBytes>> {
-  let mut res = Vec::new();
-  py.allow_threads(|| cc.write_page(page_idx, &mut res))
-    .map_err(pco_err_to_py)?;
-  Ok(PyBytes::new_bound(py, &res))
-}
-
 #[pymethods]
 impl PyCc {
   /// :returns: a bytes object containing the encoded chunk metadata.
@@ -129,7 +109,11 @@ impl PyCc {
   fn write_chunk_meta<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
     match_latent_enum!(
       &self.0,
-      DynCc<T>(cc) => { chunk_meta_py(py, cc) }
+      DynCc<T>(cc) => {
+        let mut res = Vec::new();
+        cc.write_chunk_meta(&mut res).map_err(pco_err_to_py)?;
+        Ok(PyBytes::new_bound(py, &res))
+      }
     )
   }
 
@@ -149,7 +133,12 @@ impl PyCc {
   fn write_page<'py>(&self, py: Python<'py>, page_idx: usize) -> PyResult<Bound<'py, PyBytes>> {
     match_latent_enum!(
       &self.0,
-      DynCc<T>(cc) => { page_py(py, cc, page_idx) }
+      DynCc<T>(cc) => {
+        let mut res = Vec::new();
+        py.allow_threads(|| cc.write_page(page_idx, &mut res))
+          .map_err(pco_err_to_py)?;
+        Ok(PyBytes::new_bound(py, &res))
+      }
     )
   }
 }
