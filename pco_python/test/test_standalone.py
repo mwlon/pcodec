@@ -9,19 +9,16 @@ from pcodec import (
 )
 
 np.random.seed(12345)
-
-all_shapes = (
-    [],
-    [900],
-    [9, 100],
+all_lengths = (
+    0,
+    900,
 )
-
 all_dtypes = ("f2", "f4", "f8", "i2", "i4", "i8", "u2", "u4", "u8")
 
-@pytest.mark.parametrize("shape", all_shapes)
+@pytest.mark.parametrize("length", all_lengths)
 @pytest.mark.parametrize("dtype", all_dtypes)
-def test_round_trip_decompress_into(shape, dtype):
-    data = np.random.uniform(0, 1000, size=shape).astype(dtype)
+def test_round_trip_decompress_into(length, dtype):
+    data = np.random.uniform(0, 1000, size=length).astype(dtype)
     compressed = standalone.simple_compress(data, ChunkConfig())
 
     # decompress exactly
@@ -32,16 +29,14 @@ def test_round_trip_decompress_into(shape, dtype):
     assert progress.finished
 
 
-@pytest.mark.parametrize("shape", all_shapes)
+@pytest.mark.parametrize("length", all_lengths)
 @pytest.mark.parametrize("dtype", all_dtypes)
-def test_round_trip_simple_decompress(shape, dtype):
-    data = np.random.uniform(0, 1000, size=shape).astype(dtype)
+def test_round_trip_simple_decompress(length, dtype):
+    data = np.random.uniform(0, 1000, size=length).astype(dtype)
     compressed = standalone.simple_compress(
         data, ChunkConfig(paging_spec=PagingSpec.equal_pages_up_to(300))
     )
     out = standalone.simple_decompress(compressed)
-    # data are decompressed into a 1D array; ensure it can be reshaped to the original shape
-    out.shape = shape
     np.testing.assert_array_equal(data, out)
 
 

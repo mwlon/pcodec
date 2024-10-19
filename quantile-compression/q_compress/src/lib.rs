@@ -1,8 +1,7 @@
 //! For crate-level documentation, see either
 //! <https://crates.io/crates/q_compress> or
 //! <https://github.com/mwlon/pcodec/tree/main/quantile-compression/q_compress>.
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::manual_range_contains)]
+#![allow(clippy::all)]
 
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)]

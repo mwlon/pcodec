@@ -48,6 +48,7 @@ pub struct FileDecompressor {
 }
 
 /// The outcome of starting a new chunk of a standalone file.
+#[allow(clippy::large_enum_variant)]
 pub enum MaybeChunkDecompressor<T: NumberLike, R: BetterBufRead> {
   /// We get a `ChunkDecompressor` when there is another chunk as evidenced
   /// by the data type byte.

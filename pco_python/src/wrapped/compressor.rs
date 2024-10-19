@@ -1,14 +1,17 @@
 use std::convert::TryInto;
 
-use numpy::{Element, PyArrayDyn};
+use numpy::{
+  Element, PyArray1, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods,
+};
+use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
-use pyo3::{pyclass, pymethods, PyObject, PyResult, Python};
+use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
 use pco::data_types::{Latent, NumberLike};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
 use pco::{match_latent_enum, with_core_dtypes, ChunkConfig};
 
-use crate::{pco_err_to_py, DynTypedPyArrayDyn, PyChunkConfig};
+use crate::{pco_err_to_py, PyChunkConfig};
 
 /// The top-level object for creating wrapped pcodec files.
 #[pyclass(name = "FileCompressor")]
@@ -16,11 +19,11 @@ struct PyFc {
   inner: FileCompressor,
 }
 
-enum DynCc {
-  U16(ChunkCompressor<u16>),
-  U32(ChunkCompressor<u32>),
-  U64(ChunkCompressor<u64>),
-}
+pco::define_latent_enum!(
+  #[derive()]
+  DynCc,
+  ChunkCompressor
+);
 
 // can't pass inner directly since pyo3 only supports unit variant enums
 /// Holds metadata about a chunk and supports compressing one page at a time.
@@ -31,7 +34,7 @@ impl PyFc {
   fn chunk_compressor_generic<T: NumberLike + Element>(
     &self,
     py: Python,
-    arr: &PyArrayDyn<T>,
+    arr: &Bound<PyArray1<T>>,
     config: &ChunkConfig,
   ) -> PyResult<ChunkCompressor<T::L>> {
     let arr_ro = arr.readonly();
@@ -54,10 +57,10 @@ impl PyFc {
   /// :returns: a bytes object containing the encoded header
   ///
   /// :raises: TypeError, RuntimeError
-  fn write_header(&self, py: Python) -> PyResult<PyObject> {
+  fn write_header<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
     let mut res = Vec::new();
     self.inner.write_header(&mut res).map_err(pco_err_to_py)?;
-    Ok(PyBytes::new(py, &res).into())
+    Ok(PyBytes::new_bound(py, &res))
   }
 
   /// Create a chunk compressor, computing the chunk metadata necessary to
@@ -77,33 +80,25 @@ impl PyFc {
   fn chunk_compressor(
     &self,
     py: Python,
-    nums: DynTypedPyArrayDyn,
+    nums: Bound<PyUntypedArray>,
     config: &PyChunkConfig,
   ) -> PyResult<PyCc> {
     let config = config.try_into()?;
+    let dtype = nums.dtype();
     macro_rules! match_nums {
       {$($name:ident($lname:ident) => $t:ty,)+} => {
-        match nums {
-          $(DynTypedPyArrayDyn::$name(arr) => DynCc::$lname(self.chunk_compressor_generic::<$t>(py, arr, &config)?),)+
+        $(
+        if dtype.is_equiv_to(&numpy::dtype_bound::<$t>(py)) {
+          let cc = self.chunk_compressor_generic::<$t>(py, nums.downcast::<PyArray1<$t>>()?, &config)?;
+          return Ok(PyCc(DynCc::$lname(cc)));
         }
+        )+
       }
     }
-    let dyn_cc = with_core_dtypes!(match_nums);
-    Ok(PyCc(dyn_cc))
+    with_core_dtypes!(match_nums);
+
+    Err(crate::unsupported_type_err(dtype))
   }
-}
-
-fn chunk_meta_py<U: Latent>(py: Python, cc: &ChunkCompressor<U>) -> PyResult<PyObject> {
-  let mut res = Vec::new();
-  cc.write_chunk_meta(&mut res).map_err(pco_err_to_py)?;
-  Ok(PyBytes::new(py, &res).into())
-}
-
-fn page_py<U: Latent>(py: Python, cc: &ChunkCompressor<U>, page_idx: usize) -> PyResult<PyObject> {
-  let mut res = Vec::new();
-  py.allow_threads(|| cc.write_page(page_idx, &mut res))
-    .map_err(pco_err_to_py)?;
-  Ok(PyBytes::new(py, &res).into())
 }
 
 #[pymethods]
@@ -111,10 +106,14 @@ impl PyCc {
   /// :returns: a bytes object containing the encoded chunk metadata.
   ///
   /// :raises: TypeError, RuntimeError
-  fn write_chunk_meta(&self, py: Python) -> PyResult<PyObject> {
+  fn write_chunk_meta<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
     match_latent_enum!(
       &self.0,
-      DynCc<T>(cc) => { chunk_meta_py(py, cc) }
+      DynCc<T>(cc) => {
+        let mut res = Vec::new();
+        cc.write_chunk_meta(&mut res).map_err(pco_err_to_py)?;
+        Ok(PyBytes::new_bound(py, &res))
+      }
     )
   }
 
@@ -131,15 +130,20 @@ impl PyCc {
   /// :returns: a bytes object containing the encoded page.
   ///
   /// :raises: TypeError, RuntimeError
-  fn write_page(&self, py: Python, page_idx: usize) -> PyResult<PyObject> {
+  fn write_page<'py>(&self, py: Python<'py>, page_idx: usize) -> PyResult<Bound<'py, PyBytes>> {
     match_latent_enum!(
       &self.0,
-      DynCc<T>(cc) => { page_py(py, cc, page_idx) }
+      DynCc<T>(cc) => {
+        let mut res = Vec::new();
+        py.allow_threads(|| cc.write_page(page_idx, &mut res))
+          .map_err(pco_err_to_py)?;
+        Ok(PyBytes::new_bound(py, &res))
+      }
     )
   }
 }
 
-pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
+pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
   m.add_class::<PyFc>()?;
   m.add_class::<PyCc>()?;
 

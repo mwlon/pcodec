@@ -135,11 +135,11 @@ pub trait Latent:
 /// implement as custom in your own, these are the questions you need to
 /// answer:
 /// * What is the corresponding latent type? This is probably the
-/// smallest unsigned integer with enough bits to represent the number.
+///   smallest unsigned integer with enough bits to represent the number.
 /// * How can I convert to this latent representation and back
-/// in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
-/// wouldn't preserve ordering and would cause pco to fail. In this example,
-/// one needs to flip the sign bit and, if negative, the rest of the bits.
+///   in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
+///   wouldn't preserve ordering and would cause pco to fail. In this example,
+///   one needs to flip the sign bit and, if negative, the rest of the bits.
 pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync + 'static {
   /// A number from 1-255 that corresponds to the number's data type.
   ///
@@ -167,9 +167,9 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   ///
   /// Returns
   /// * mode: the [`Mode`] that will be stored alongside the data
-  /// for decompression
+  ///   for decompression
   /// * latents: a list of latent variables, each of which contains a latent per
-  /// num in `nums`
+  ///   num in `nums`
   fn choose_mode_and_split_latents(
     nums: &[Self],
     config: &ChunkConfig,

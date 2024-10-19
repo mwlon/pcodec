@@ -1,46 +1,41 @@
+use numpy::{PyArray1, PyArrayMethods, PyUntypedArray};
 use pco::data_types::CoreDataType;
-use pco::with_core_dtypes;
-use pyo3::exceptions::PyRuntimeError;
+use pco::{match_number_like_enum, with_core_dtypes};
+use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
-use pyo3::{pyclass, pymethods, PyResult, Python};
+use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
+use pco::data_types::NumberLike;
 use pco::wrapped::{ChunkDecompressor, FileDecompressor};
 
-use crate::{core_dtype_from_str, pco_err_to_py, DynTypedPyArrayDyn, PyProgress};
+use crate::{core_dtype_from_str, pco_err_to_py, PyProgress};
 
 #[pyclass(name = "FileDecompressor")]
 struct PyFd(FileDecompressor);
 
-macro_rules! impl_dyn_cd {
-  {$($name:ident($lname:ident) => $t:ty,)+} => {
-    #[derive(Debug)]
-    enum DynCd {
-      $($name(ChunkDecompressor<$t>),)+
-    }
-  }
-}
-with_core_dtypes!(impl_dyn_cd);
+pco::define_number_like_enum!(
+  #[derive()]
+  DynCd,
+  ChunkDecompressor
+);
 
 #[pyclass(name = "ChunkDecompressor")]
-struct PyCd {
-  inner: DynCd,
-  dtype: CoreDataType,
-}
+struct PyCd(DynCd);
 
 /// The top-level object for decompressing wrapped pcodec files.
 #[pymethods]
 impl PyFd {
-  /// The way to create a FileDecompressor.
+  /// Creates a FileDecompressor.
   ///
-  /// :param header: a bytes object containing the encoded header
+  /// :param src: a bytes object containing the encoded header
   ///
   /// :returns: a tuple containing a FileDecompressor and the number of bytes
   /// read
   ///
   /// :raises: TypeError, RuntimeError
   #[staticmethod]
-  fn from_header(header: &PyBytes) -> PyResult<(Self, usize)> {
-    let src = header.as_bytes();
+  fn new(src: &Bound<PyBytes>) -> PyResult<(Self, usize)> {
+    let src = src.as_bytes();
     let (fd, rest) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
     let py_fd = PyFd(fd);
 
@@ -50,15 +45,15 @@ impl PyFd {
 
   /// Creates a ChunkDecompressor by reading encoded chunk metadata.
   ///
-  /// :param chunk_meta: a bytes object containing the encoded chunk metadata
+  /// :param src: a bytes object containing the encoded chunk metadata
   /// :param dtype: a data type supported by pcodec; e.g. 'f32' or 'i64'
   ///
   /// :returns: a tuple containing a ChunkDecompressor and the number of bytes
   /// read
   ///
   /// :raises: TypeError, RuntimeError
-  fn read_chunk_meta(&self, chunk_meta: &PyBytes, dtype: &str) -> PyResult<(PyCd, usize)> {
-    let src = chunk_meta.as_bytes();
+  fn read_chunk_meta(&self, src: &Bound<PyBytes>, dtype: &str) -> PyResult<(PyCd, usize)> {
+    let src = src.as_bytes();
     let inner = &self.0;
     let dtype = core_dtype_from_str(dtype)?;
 
@@ -76,7 +71,7 @@ impl PyFd {
     }
 
     let (inner, rest) = with_core_dtypes!(match_dtype);
-    let res = PyCd { inner, dtype };
+    let res = PyCd(inner);
     let n_bytes_read = src.len() - rest.len();
     Ok((res, n_bytes_read))
   }
@@ -106,41 +101,31 @@ impl PyCd {
   fn read_page_into(
     &self,
     py: Python,
-    page: &PyBytes,
+    src: &Bound<PyBytes>,
     page_n: usize,
-    dst: DynTypedPyArrayDyn,
+    dst: &Bound<PyUntypedArray>,
   ) -> PyResult<(PyProgress, usize)> {
-    let src = page.as_bytes();
-    let inner = &self.inner;
-    macro_rules! match_cd_and_dst {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        match (inner, dst) {
-          $((DynCd::$name(cd), DynTypedPyArrayDyn::$name(arr)) => {
-            let mut arr_rw = arr.readwrite();
-            let dst = arr_rw.as_slice_mut()?;
-            py.allow_threads(|| {
-              let mut pd = cd.page_decompressor(src, page_n)?;
-              let progress = pd.decompress(dst)?;
-              Ok((progress, pd.into_src()))
-            }).map_err(pco_err_to_py)?
-          })+
-          _ => {
-            return Err(PyRuntimeError::new_err(format!(
-              "incompatible data types; chunk decompressor expected {:?}",
-              self.dtype
-            )))
-          }
-        }
-      }
-    }
-    let (progress, rest) = with_core_dtypes!(match_cd_and_dst);
+    let src = src.as_bytes();
 
+    let (progress, rest) = match_number_like_enum!(
+      &self.0,
+      DynCd<T>(cd) => {
+        let arr = dst.downcast::<PyArray1<T>>()?;
+        let mut arr_rw = arr.readwrite();
+        let dst = arr_rw.as_slice_mut()?;
+        py.allow_threads(|| {
+          let mut pd = cd.page_decompressor(src, page_n)?;
+          let progress = pd.decompress(dst)?;
+          Ok((progress, pd.into_src()))
+        }).map_err(pco_err_to_py)?
+      }
+    );
     let n_bytes_read = src.len() - rest.len();
     Ok((PyProgress::from(progress), n_bytes_read))
   }
 }
 
-pub fn register(_py: Python, m: &PyModule) -> PyResult<()> {
+pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
   m.add_class::<PyFd>()?;
   m.add_class::<PyCd>()?;
 

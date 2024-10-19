@@ -1,12 +1,12 @@
 use pyo3::types::PyModule;
-use pyo3::{PyResult, Python};
+use pyo3::{Bound, PyResult};
 
 pub mod compressor;
 pub mod decompressor;
 
-pub fn register(py: Python, m: &PyModule) -> PyResult<()> {
-  compressor::register(py, m)?;
-  decompressor::register(py, m)?;
+pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
+  compressor::register(m)?;
+  decompressor::register(m)?;
 
   Ok(())
 }
