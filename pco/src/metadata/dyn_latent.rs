@@ -5,12 +5,11 @@ use crate::data_types::Latent;
 use crate::macros::{define_latent_enum, match_latent_enum};
 use std::io::Write;
 
-type TrivialContainer<L> = L;
+type Single<L> = L;
 
 define_latent_enum!(
   #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-  pub DynLatent,
-  TrivialContainer
+  pub DynLatent(Single)
 );
 
 impl DynLatent {
