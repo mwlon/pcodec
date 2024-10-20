@@ -8,9 +8,6 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, FromArgMatches};
 
-use ::pco::data_types::CoreDataType;
-use ::pco::with_core_dtypes;
-
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::blosc::BloscConfig;
 use crate::bench::codecs::parquet::ParquetConfig;
@@ -27,6 +24,8 @@ use crate::bench::{BenchStat, Precomputed};
 use crate::chunk_config_opt::ChunkConfigOpt;
 use crate::dtypes::PcoNumberLike;
 use crate::num_vec::NumVec;
+use ::pco::data_types::CoreDataType;
+use ::pco::match_number_like_enum;
 
 #[cfg(feature = "full_bench")]
 mod blosc;
@@ -55,25 +54,19 @@ trait CodecInternal: Clone + CommandFactory + Debug + FromArgMatches + Send + Sy
   // sad manual dynamic dispatch, but at least we don't need all combinations
   // of (dtype x codec)
   fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
-    macro_rules! compress {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        match num_vec {
-          $(NumVec::$name(nums) => self.compress(nums),)+
-        }
-      }
-    }
-    with_core_dtypes!(compress)
+    match_number_like_enum!(
+      num_vec,
+      NumVec<T>(nums) => { self.compress(nums) }
+    )
   }
 
   fn decompress_dynamic(&self, dtype: CoreDataType, compressed: &[u8]) -> NumVec {
-    macro_rules! decompress {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        match dtype {
-          $(CoreDataType::$name => NumVec::$name(self.decompress::<$t>(compressed)),)+
-        }
+    match_number_like_enum!(
+      dtype,
+      CoreDataType<T> => {
+        NumVec::new(self.decompress::<T>(compressed)).unwrap()
       }
-    }
-    with_core_dtypes!(decompress)
+    )
   }
 }
 

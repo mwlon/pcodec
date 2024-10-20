@@ -24,7 +24,17 @@ macro_rules! build_dtype_macros {
 
         impl $name {
           #[inline]
-          fn from_descriminant(desc: $desc_t) -> Option<Self> {
+          pub fn new<S: $constraint>() -> Option<Self> {
+            let type_id = std::any::TypeId::of::<S>();
+            $(
+              if type_id == std::any::TypeId::of::<$t>() {
+                return Some($name::$variant);
+              }
+            )+
+            None
+          }
+
+          pub fn from_descriminant(desc: $desc_t) -> Option<Self> {
             match desc {
               $(<$t>::$desc_val => Some(Self::$variant),)+
               _ => None
@@ -85,6 +95,7 @@ macro_rules! build_dtype_macros {
         }
 
         impl $name {
+          #[inline]
           pub fn new<S: $constraint>(inner: $container<S>) -> Option<Self> {
             let type_id = std::any::TypeId::of::<S>();
             $(

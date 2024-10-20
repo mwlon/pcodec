@@ -119,7 +119,7 @@ pub extern "C" fn pco_simpler_compress(
   level: c_uint,
   dst: *mut PcoFfiVec,
 ) -> PcoError {
-  let Some(dtype) = CoreDataType::from_byte(dtype) else {
+  let Some(dtype) = CoreDataType::from_descriminant(dtype) else {
     return PcoInvalidType;
   };
 
@@ -137,7 +137,7 @@ pub extern "C" fn pco_simple_decompress(
   dtype: c_uchar,
   dst: *mut PcoFfiVec,
 ) -> PcoError {
-  let Some(dtype) = CoreDataType::from_byte(dtype) else {
+  let Some(dtype) = CoreDataType::from_descriminant(dtype) else {
     return PcoInvalidType;
   };
 

@@ -16,7 +16,7 @@ use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
 use pco::data_types::CoreDataType;
-use pco::with_core_dtypes;
+use pco::match_number_like_enum;
 
 use crate::bench::codecs::CodecConfig;
 use crate::input::{Format, InputColumnOpt, InputFileOpt};
@@ -188,15 +188,12 @@ fn type_basename<T>() -> String {
 }
 
 fn core_dtype_to_str(dtype: CoreDataType) -> String {
-  macro_rules! to_string {
-    {$($name:ident($lname:ident) => $t:ty,)+} => {
-      match dtype {
-        $(CoreDataType::$name => type_basename::<$t>(),)+
-      }
+  match_number_like_enum!(
+    dtype,
+    CoreDataType<T> => {
+      type_basename::<T>()
     }
-  }
-
-  with_core_dtypes!(to_string)
+  )
 }
 
 fn handle_column(

@@ -33,7 +33,7 @@ impl From<u8> for DataTypeOrTermination {
   fn from(byte: u8) -> Self {
     if byte == MAGIC_TERMINATION_BYTE {
       Termination
-    } else if let Some(core) = CoreDataType::from_byte(byte) {
+    } else if let Some(core) = CoreDataType::from_descriminant(byte) {
       Known(core)
     } else {
       Unknown(byte)

@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use pco::data_types::CoreDataType;
-use pco::with_core_dtypes;
+use pco::match_number_like_enum;
 
 use crate::decompress::handler::DecompressHandler;
 use crate::dtypes::PcoNumberLike;
@@ -14,15 +14,12 @@ fn new_boxed_handler<T: PcoNumberLike>() -> Box<dyn CoreHandler> {
 }
 
 pub fn from_dtype(dtype: CoreDataType) -> Box<dyn CoreHandler> {
-  macro_rules! match_dtype {
-    {$($name:ident($lname:ident) => $t:ty,)+} => {
-      match dtype {
-        $(CoreDataType::$name => new_boxed_handler::<$t>(),)+
-      }
+  match_number_like_enum!(
+    dtype,
+    CoreDataType<T> => {
+      new_boxed_handler::<T>()
     }
-  }
-
-  with_core_dtypes!(match_dtype)
+  )
 }
 
 pub trait CoreHandler: DecompressHandler + InspectHandler {}
