@@ -3,13 +3,13 @@ use std::mem;
 
 use crate::compression_intermediates::Bid;
 use crate::constants::{Bitlen, MULT_REQUIRED_BITS_SAVED_PER_NUM};
-use crate::data_types::{FloatLike, Latent};
+use crate::data_types::{Float, Latent};
 use crate::metadata::Mode;
 use crate::sampling::PrimaryLatentAndSavings;
 use crate::{int_mult_utils, sampling};
 
 #[inline(never)]
-pub(crate) fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondary: &[F::L]) {
+pub(crate) fn join_latents<F: Float>(base: F, primary: &mut [F::L], secondary: &[F::L]) {
   for (mult_and_dst, &adj) in primary.iter_mut().zip(secondary.iter()) {
     let unadjusted = F::int_float_from_latent(*mult_and_dst) * base;
     *mult_and_dst = unadjusted
@@ -19,7 +19,7 @@ pub(crate) fn join_latents<F: FloatLike>(base: F, primary: &mut [F::L], secondar
   }
 }
 
-pub(crate) fn split_latents<F: FloatLike>(
+pub(crate) fn split_latents<F: Float>(
   page_nums: &[F],
   config: FloatMultConfig<F>,
 ) -> Vec<Vec<F::L>> {
@@ -71,30 +71,30 @@ const INTERESTING_TRAILING_ZEROS: u32 = 5;
 const REQUIRED_TRAILING_ZEROS_FREQUENCY: f64 = 0.5;
 const REQUIRED_GCD_PAIR_FREQUENCY: f64 = 0.001;
 
-fn insignificant_float_to<F: FloatLike>(x: F) -> F {
+fn insignificant_float_to<F: Float>(x: F) -> F {
   let spare_precision_bits = F::PRECISION_BITS.saturating_sub(REQUIRED_PRECISION_BITS) as i32;
   x * F::exp2(-spare_precision_bits)
 }
 
-fn is_approx_zero<F: FloatLike>(small: F, big: F) -> bool {
+fn is_approx_zero<F: Float>(small: F, big: F) -> bool {
   small <= insignificant_float_to(big)
 }
 
-fn is_small_remainder<F: FloatLike>(remainder: F, original: F) -> bool {
+fn is_small_remainder<F: Float>(remainder: F, original: F) -> bool {
   remainder <= original * F::exp2(-16)
 }
 
-fn is_imprecise<F: FloatLike>(value: F, err: F) -> bool {
+fn is_imprecise<F: Float>(value: F, err: F) -> bool {
   value <= err * F::exp2(REQUIRED_PRECISION_BITS as i32)
 }
 
-fn approx_pair_gcd<F: FloatLike>(greater: F, lesser: F) -> Option<F> {
+fn approx_pair_gcd<F: Float>(greater: F, lesser: F) -> Option<F> {
   if is_approx_zero(lesser, greater) || lesser == greater {
     return None;
   }
 
   #[derive(Clone, Copy, Debug)]
-  struct PairMult<F: FloatLike> {
+  struct PairMult<F: Float> {
     value: F,
     err: F,
   }
@@ -131,7 +131,7 @@ fn approx_pair_gcd<F: FloatLike>(greater: F, lesser: F) -> Option<F> {
 }
 
 #[inline(never)]
-fn choose_config_by_trailing_zeros<F: FloatLike>(sample: &[F]) -> Option<FloatMultConfig<F>> {
+fn choose_config_by_trailing_zeros<F: Float>(sample: &[F]) -> Option<FloatMultConfig<F>> {
   let precision_bits = F::PRECISION_BITS;
   let calc_power_of_2_divisor =
     |exponent, trailing_zeros| exponent - (precision_bits.saturating_sub(trailing_zeros)) as i32;
@@ -183,7 +183,7 @@ fn choose_config_by_trailing_zeros<F: FloatLike>(sample: &[F]) -> Option<FloatMu
 }
 
 #[inline(never)]
-fn approx_sample_gcd_euclidean<F: FloatLike>(sample: &[F]) -> Option<F> {
+fn approx_sample_gcd_euclidean<F: Float>(sample: &[F]) -> Option<F> {
   let mut gcds = Vec::new();
   for i in (0..sample.len() - 1).step_by(2) {
     let a = sample[i];
@@ -217,7 +217,7 @@ fn approx_sample_gcd_euclidean<F: FloatLike>(sample: &[F]) -> Option<F> {
   None
 }
 
-fn choose_config_by_euclidean<F: FloatLike>(sample: &[F]) -> Option<FloatMultConfig<F>> {
+fn choose_config_by_euclidean<F: Float>(sample: &[F]) -> Option<FloatMultConfig<F>> {
   let base = approx_sample_gcd_euclidean(sample)?;
   let base = center_sample_base(base, sample);
   let config = snap_to_int_reciprocal(base);
@@ -225,7 +225,7 @@ fn choose_config_by_euclidean<F: FloatLike>(sample: &[F]) -> Option<FloatMultCon
 }
 
 #[inline(never)]
-fn center_sample_base<F: FloatLike>(base: F, sample: &[F]) -> F {
+fn center_sample_base<F: Float>(base: F, sample: &[F]) -> F {
   // Go back through the sample, holding all mults fixed, and adjust the gcd to
   // minimize the average deviation from mult * gcd, weighting by mult.
   // Ideally we would tweak by something between the weighted median and mode
@@ -247,7 +247,7 @@ fn center_sample_base<F: FloatLike>(base: F, sample: &[F]) -> F {
   base - tweak_sum / tweak_weight
 }
 
-fn snap_to_int_reciprocal<F: FloatLike>(base: F) -> FloatMultConfig<F> {
+fn snap_to_int_reciprocal<F: Float>(base: F) -> FloatMultConfig<F> {
   let inv_base = base.inv();
   let round_inv_base = inv_base.round();
   let decimal_inv_base = F::from_f64(10.0_f64.powf(inv_base.to_f64().log10().round()));
@@ -263,7 +263,7 @@ fn snap_to_int_reciprocal<F: FloatLike>(base: F) -> FloatMultConfig<F> {
   }
 }
 
-fn bits_saved_per_num_over_classic<F: FloatLike>(
+fn bits_saved_per_num_over_classic<F: Float>(
   config: FloatMultConfig<F>,
   sample: &[F],
 ) -> Option<f64> {
@@ -303,12 +303,12 @@ fn bits_saved_per_num_over_classic<F: FloatLike>(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct FloatMultConfig<F: FloatLike> {
+pub(crate) struct FloatMultConfig<F: Float> {
   pub base: F,
   pub inv_base: F,
 }
 
-impl<F: FloatLike> FloatMultConfig<F> {
+impl<F: Float> FloatMultConfig<F> {
   fn from_base(base: F) -> Self {
     Self {
       base,
@@ -324,11 +324,11 @@ impl<F: FloatLike> FloatMultConfig<F> {
   }
 }
 
-fn choose_config<F: FloatLike>(sample: &[F]) -> Option<FloatMultConfig<F>> {
+fn choose_config<F: Float>(sample: &[F]) -> Option<FloatMultConfig<F>> {
   choose_config_by_trailing_zeros(sample).or_else(|| choose_config_by_euclidean(sample))
 }
 
-pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
+pub(crate) fn compute_bid<F: Float>(sample: &[F]) -> Option<Bid<F>> {
   choose_config(sample).and_then(|config| {
     let bits_saved_per_num = bits_saved_per_num_over_classic(config, sample)?;
     Some(Bid {
@@ -377,10 +377,7 @@ mod test {
     f32::from_latent_ordered(a.to_latent_ordered().wrapping_add(epsilons as u32))
   }
 
-  fn better_compression_than_classic<F: FloatLike>(
-    config: FloatMultConfig<F>,
-    sample: &[F],
-  ) -> bool {
+  fn better_compression_than_classic<F: Float>(config: FloatMultConfig<F>, sample: &[F]) -> bool {
     bits_saved_per_num_over_classic(config, sample)
       .is_some_and(|bits_saved| bits_saved >= MULT_REQUIRED_BITS_SAVED_PER_NUM)
   }

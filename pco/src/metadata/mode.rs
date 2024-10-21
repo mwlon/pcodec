@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::constants::Bitlen;
-use crate::data_types::FloatLike;
+use crate::data_types::Float;
 use crate::metadata::dyn_latent::DynLatent;
 use crate::metadata::DeltaEncoding;
 
@@ -106,7 +106,7 @@ impl Mode {
     }
   }
 
-  pub(crate) fn float_mult<F: FloatLike>(base: F) -> Self {
+  pub(crate) fn float_mult<F: Float>(base: F) -> Self {
     Self::FloatMult(DynLatent::new(base.to_latent_ordered()).unwrap())
   }
 }

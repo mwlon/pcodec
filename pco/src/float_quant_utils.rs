@@ -1,6 +1,6 @@
 use crate::compression_intermediates::Bid;
 use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
-use crate::data_types::{FloatLike, Latent};
+use crate::data_types::{Float, Latent};
 use crate::metadata::Mode;
 use crate::sampling::{self, PrimaryLatentAndSavings};
 use std::cmp;
@@ -8,7 +8,7 @@ use std::cmp;
 const REQUIRED_QUANTIZED_PROPORTION: f64 = 0.95;
 
 #[inline(never)]
-pub(crate) fn join_latents<F: FloatLike>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) {
+pub(crate) fn join_latents<F: Float>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) {
   // For any float `num` such that `split_latents([num], k) == [[y], [m]]`, we have
   //     num.is_sign_positive() == (y >= sign_cutoff)
   let sign_cutoff = F::L::MID >> k;
@@ -28,7 +28,7 @@ pub(crate) fn join_latents<F: FloatLike>(k: Bitlen, primary: &mut [F::L], second
   }
 }
 
-pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec<F::L>> {
+pub(crate) fn split_latents<F: Float>(page_nums: &[F], k: Bitlen) -> Vec<Vec<F::L>> {
   let n = page_nums.len();
   let uninit_vec = || unsafe {
     let mut res = Vec::<F::L>::with_capacity(n);
@@ -58,7 +58,7 @@ pub(crate) fn split_latents<F: FloatLike>(page_nums: &[F], k: Bitlen) -> Vec<Vec
   vec![primary, secondary]
 }
 
-pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
+pub(crate) fn compute_bid<F: Float>(sample: &[F]) -> Option<Bid<F>> {
   let (k, freq) = estimate_best_k_and_freq(sample);
   // Nothing fancy, we simply estimate that quantizing by k bits results in
   // saving k bits per number, whenever possible. This is based on the
@@ -87,7 +87,7 @@ pub(crate) fn compute_bid<F: FloatLike>(sample: &[F]) -> Option<Bid<F>> {
 }
 
 #[inline(never)]
-pub(crate) fn estimate_best_k_and_freq<F: FloatLike>(sample: &[F]) -> (Bitlen, f64) {
+pub(crate) fn estimate_best_k_and_freq<F: Float>(sample: &[F]) -> (Bitlen, f64) {
   let thresh = (REQUIRED_QUANTIZED_PROPORTION * sample.len() as f64) as usize;
   let mut hist = vec![0; (F::PRECISION_BITS + 1) as usize];
   for x in sample {

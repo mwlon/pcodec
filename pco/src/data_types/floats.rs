@@ -6,14 +6,14 @@ use super::ModeAndLatents;
 use crate::chunk_config::ModeSpec;
 use crate::compression_intermediates::Bid;
 use crate::constants::Bitlen;
-use crate::data_types::{split_latents_classic, FloatLike, Latent, Number};
+use crate::data_types::{split_latents_classic, Float, Latent, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
 use crate::metadata::{ChunkMeta, Mode};
 use crate::{describers, float_mult_utils, float_quant_utils, sampling, ChunkConfig};
 
-fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
+fn filter_sample<F: Float>(num: &F) -> Option<F> {
   // We can compress infinities, nans, and baby floats, but we can't learn
   // the mode from them.
   if num.is_finite_and_normal() {
@@ -25,7 +25,7 @@ fn filter_sample<F: FloatLike>(num: &F) -> Option<F> {
   None
 }
 
-fn choose_mode_and_split_latents<F: FloatLike>(
+fn choose_mode_and_split_latents<F: Float>(
   nums: &[F],
   chunk_config: &ChunkConfig,
 ) -> PcoResult<ModeAndLatents<F::L>> {
@@ -77,9 +77,9 @@ fn choose_winning_bid<T: Number>(bids: Vec<Bid<T>>) -> Bid<T> {
     .expect("bids must be nonempty")
 }
 
-macro_rules! impl_float_like {
+macro_rules! impl_float {
   ($t: ty, $latent: ty, $exp_offset: expr) => {
-    impl FloatLike for $t {
+    impl Float for $t {
       /// Number of bits in the representation of the significand, excluding the implicit
       /// leading bit.  (In Rust, `MANTISSA_DIGITS` does include the implicit leading bit.)
       const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
@@ -197,7 +197,7 @@ macro_rules! impl_float_like {
   };
 }
 
-impl FloatLike for f16 {
+impl Float for f16 {
   const PRECISION_BITS: Bitlen = Self::MANTISSA_DIGITS as Bitlen - 1;
   const ZERO: Self = f16::ZERO;
   const MAX_FOR_SAMPLING: Self = f16::from_bits(30719); // Half of MAX size.
@@ -387,9 +387,9 @@ macro_rules! impl_float_number {
   };
 }
 
-impl_float_like!(f32, u32, 127);
-impl_float_like!(f64, u64, 1023);
-// f16 FloatLike is implemented separately because it's non-native.
+impl_float!(f32, u32, 127);
+impl_float!(f64, u64, 1023);
+// f16 Float is implemented separately because it's non-native.
 impl_float_number!(f32, u32, 1_u32 << 31, 5);
 impl_float_number!(f64, u64, 1_u64 << 63, 6);
 impl_float_number!(f16, u16, 1_u16 << 15, 9);
@@ -436,13 +436,13 @@ mod tests {
 
   #[test]
   fn test_exp2() {
-    assert_eq!(<f32 as FloatLike>::exp2(0), 1.0);
-    assert_eq!(<f32 as FloatLike>::exp2(1), 2.0);
-    assert_eq!(<f32 as FloatLike>::exp2(-1), 0.5);
-    assert_eq!(<f32 as FloatLike>::exp2(2), 4.0);
+    assert_eq!(<f32 as Float>::exp2(0), 1.0);
+    assert_eq!(<f32 as Float>::exp2(1), 2.0);
+    assert_eq!(<f32 as Float>::exp2(-1), 0.5);
+    assert_eq!(<f32 as Float>::exp2(2), 4.0);
 
-    assert_eq!(<f16 as FloatLike>::exp2(0), f16::ONE);
-    assert_eq!(<f64 as FloatLike>::exp2(0), 1.0);
+    assert_eq!(<f16 as Float>::exp2(0), f16::ONE);
+    assert_eq!(<f64 as Float>::exp2(0), 1.0);
   }
 
   #[test]

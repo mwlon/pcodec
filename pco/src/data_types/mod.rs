@@ -22,7 +22,7 @@ pub(crate) type ModeAndLatents<L> = (Mode, Vec<Vec<L>>);
 
 /// This is used internally for compressing and decompressing with
 /// float modes.
-pub(crate) trait FloatLike:
+pub(crate) trait Float:
   Add<Output = Self>
   + AddAssign
   + Copy

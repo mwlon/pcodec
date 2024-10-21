@@ -1,5 +1,5 @@
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent, Number};
+use crate::data_types::{Float, Latent, Number};
 use crate::metadata::{ChunkMeta, DeltaEncoding, Mode};
 use std::marker::PhantomData;
 
@@ -73,9 +73,7 @@ pub(crate) fn match_int_modes<L: Latent>(
   }
 }
 
-pub(crate) fn match_float_modes<F: FloatLike>(
-  meta: &ChunkMeta,
-) -> Option<Vec<LatentDescriber<F::L>>> {
+pub(crate) fn match_float_modes<F: Float>(meta: &ChunkMeta) -> Option<Vec<LatentDescriber<F::L>>> {
   match meta.mode {
     Mode::FloatMult(dyn_latent) => {
       let base_latent = *dyn_latent.downcast_ref::<F::L>().unwrap();
@@ -178,12 +176,12 @@ fn centered_delta_describer<L: Latent>(description: String, units: String) -> La
   })
 }
 
-struct FloatMultDescriber<F: FloatLike> {
+struct FloatMultDescriber<F: Float> {
   base_string: String,
   phantom: PhantomData<F>,
 }
 
-impl<F: FloatLike> DescribeLatent<F::L> for FloatMultDescriber<F> {
+impl<F: Float> DescribeLatent<F::L> for FloatMultDescriber<F> {
   fn latent_var(&self) -> String {
     format!("multiplier [x{}]", self.base_string)
   }
@@ -197,12 +195,12 @@ impl<F: FloatLike> DescribeLatent<F::L> for FloatMultDescriber<F> {
   }
 }
 
-struct FloatQuantDescriber<F: FloatLike> {
+struct FloatQuantDescriber<F: Float> {
   k: Bitlen,
   phantom: PhantomData<F>,
 }
 
-impl<F: FloatLike> DescribeLatent<F::L> for FloatQuantDescriber<F> {
+impl<F: Float> DescribeLatent<F::L> for FloatQuantDescriber<F> {
   fn latent_var(&self) -> String {
     "quantized".to_string()
   }
