@@ -82,9 +82,9 @@ impl PyFc {
     config: &PyChunkConfig,
   ) -> PyResult<PyCc> {
     let config = config.try_into()?;
-    let dtype = utils::core_dtype_from_numpy(py, &nums.dtype())?;
+    let number_type = utils::number_type_from_numpy(py, &nums.dtype())?;
     match_number_enum!(
-      dtype,
+      number_type,
       NumberType<T> => {
         let cc = self.chunk_compressor_generic::<T>(py, nums.downcast::<PyArray1<T>>()?, &config)?;
         Ok(PyCc(DynCc::new(cc).unwrap()))

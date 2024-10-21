@@ -48,7 +48,7 @@ impl NumVec {
       self,
       NumVec<T>(nums) => {
         let other_nums = other.downcast_ref::<T>();
-        assert!(other_nums.is_some(), "NumVecs had mismatched dtypes");
+        assert!(other_nums.is_some(), "NumVecs had mismatched types");
         let other_nums = other_nums.unwrap();
         check_equal(nums, other_nums);
       }

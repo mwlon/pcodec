@@ -22,7 +22,7 @@ pub fn core_dtype_from_str(s: &str) -> PyResult<NumberType> {
   }
 }
 
-pub fn core_dtype_from_numpy(py: Python, dtype: &Bound<PyArrayDescr>) -> PyResult<NumberType> {
+pub fn number_type_from_numpy(py: Python, dtype: &Bound<PyArrayDescr>) -> PyResult<NumberType> {
   let res = if dtype.is_equiv_to(&numpy::dtype_bound::<u16>(py)) {
     NumberType::U16
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<u32>(py)) {

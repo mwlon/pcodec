@@ -91,9 +91,9 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
     config: &PyChunkConfig,
   ) -> PyResult<Bound<'py, PyBytes>> {
     let config: ChunkConfig = config.try_into()?;
-    let dtype = utils::core_dtype_from_numpy(py, &nums.dtype())?;
+    let number_type = utils::number_type_from_numpy(py, &nums.dtype())?;
     match_number_enum!(
-      dtype,
+      number_type,
       NumberType<T> => {
         simple_compress_generic(py, nums.downcast::<PyArray1<T>>()?, &config)
       }
@@ -120,9 +120,9 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
     compressed: &Bound<PyBytes>,
     dst: &Bound<PyUntypedArray>,
   ) -> PyResult<PyProgress> {
-    let dtype = utils::core_dtype_from_numpy(py, &dst.dtype())?;
+    let number_type = utils::number_type_from_numpy(py, &dst.dtype())?;
     match_number_enum!(
-      dtype,
+      number_type,
       NumberType<T> => {
         simple_decompress_into_generic(py, compressed, dst.downcast::<PyArray1<T>>()?)
       }
@@ -146,13 +146,13 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
 
     let src = compressed.as_bytes();
     let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
-    let maybe_dtype = file_decompressor
+    let maybe_number_type = file_decompressor
       .peek_number_type_or_termination(src)
       .map_err(pco_err_to_py)?;
-    match maybe_dtype {
-      Known(dtype) => {
+    match maybe_number_type {
+      Known(number_type) => {
         match_number_enum!(
-          dtype,
+          number_type,
           NumberType<T> => {
             Ok(decompress_chunks::<T>(py, src, file_decompressor)?.to_object(py))
           }

@@ -15,8 +15,8 @@ pub fn get_standalone_dtype(initial_bytes: &[u8]) -> Result<Option<NumberType>> 
   use pco::standalone::NumberTypeOrTermination::*;
   match fd.peek_number_type_or_termination(src)? {
     Termination => Ok(None),
-    Known(dtype) => Ok(Some(dtype)),
-    Unknown(byte) => Err(anyhow!("unknown dtype byte: {}", byte)),
+    Known(number_type) => Ok(Some(number_type)),
+    Unknown(byte) => Err(anyhow!("unknown number type byte: {}", byte)),
   }
 }
 
