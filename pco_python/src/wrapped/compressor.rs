@@ -1,17 +1,16 @@
 use std::convert::TryInto;
 
-use numpy::{
-  Element, PyArray1, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods,
-};
+use numpy::{Element, PyArray1, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
 use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
-use pco::data_types::{Latent, NumberLike};
+use pco::data_types::{Latent, Number, NumberType};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
-use pco::{match_latent_enum, with_core_dtypes, ChunkConfig};
+use pco::{match_latent_enum, match_number_enum, ChunkConfig};
 
-use crate::{pco_err_to_py, PyChunkConfig};
+use crate::utils::pco_err_to_py;
+use crate::{utils, PyChunkConfig};
 
 /// The top-level object for creating wrapped pcodec files.
 #[pyclass(name = "FileCompressor")]
@@ -21,8 +20,7 @@ struct PyFc {
 
 pco::define_latent_enum!(
   #[derive()]
-  DynCc,
-  ChunkCompressor
+  DynCc(ChunkCompressor)
 );
 
 // can't pass inner directly since pyo3 only supports unit variant enums
@@ -31,7 +29,7 @@ pco::define_latent_enum!(
 struct PyCc(DynCc);
 
 impl PyFc {
-  fn chunk_compressor_generic<T: NumberLike + Element>(
+  fn chunk_compressor_generic<T: Number + Element>(
     &self,
     py: Python,
     arr: &Bound<PyArray1<T>>,
@@ -84,20 +82,14 @@ impl PyFc {
     config: &PyChunkConfig,
   ) -> PyResult<PyCc> {
     let config = config.try_into()?;
-    let dtype = nums.dtype();
-    macro_rules! match_nums {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        $(
-        if dtype.is_equiv_to(&numpy::dtype_bound::<$t>(py)) {
-          let cc = self.chunk_compressor_generic::<$t>(py, nums.downcast::<PyArray1<$t>>()?, &config)?;
-          return Ok(PyCc(DynCc::$lname(cc)));
-        }
-        )+
+    let number_type = utils::number_type_from_numpy(py, &nums.dtype())?;
+    match_number_enum!(
+      number_type,
+      NumberType<T> => {
+        let cc = self.chunk_compressor_generic::<T>(py, nums.downcast::<PyArray1<T>>()?, &config)?;
+        Ok(PyCc(DynCc::new(cc).unwrap()))
       }
-    }
-    with_core_dtypes!(match_nums);
-
-    Err(crate::unsupported_type_err(dtype))
+    )
   }
 }
 

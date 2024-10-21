@@ -1,6 +1,6 @@
 use std::mem;
 
-use crate::data_types::{unsigneds, ModeAndLatents, NumberLike};
+use crate::data_types::{unsigneds, ModeAndLatents, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::PcoResult;
 use crate::metadata::{ChunkMeta, Mode};
@@ -8,8 +8,8 @@ use crate::{describers, int_mult_utils, ChunkConfig};
 
 macro_rules! impl_signed {
   ($t: ty, $latent: ty, $header_byte: expr) => {
-    impl NumberLike for $t {
-      const DTYPE_BYTE: u8 = $header_byte;
+    impl Number for $t {
+      const NUMBER_TYPE_BYTE: u8 = $header_byte;
 
       type L = $latent;
 
@@ -69,7 +69,7 @@ impl_signed!(i16, u16, 8);
 
 #[cfg(test)]
 mod tests {
-  use crate::data_types::{Latent, NumberLike};
+  use crate::data_types::{Latent, Number};
 
   #[test]
   fn test_ordering() {

@@ -4,6 +4,5 @@ use crate::metadata::bins::Bins;
 
 define_latent_enum!(
   #[derive(Clone, Debug, PartialEq, Eq)]
-  pub DynBins,
-  Bins
+  pub DynBins(Bins)
 );

@@ -1,11 +1,11 @@
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent, NumberLike};
+use crate::data_types::{Float, Latent, Number};
 use crate::metadata::{ChunkMeta, DeltaEncoding, Mode};
 use std::marker::PhantomData;
 
 /// Interprets the meaning of latent variables and values from [`ChunkMeta`].
 ///
-/// Obtainable via [`crate::data_types::NumberLike::get_latent_describers`].
+/// Obtainable via [`crate::data_types::Number::get_latent_describers`].
 pub trait DescribeLatent<L: Latent> {
   /// Returns a description for this latent variable.
   fn latent_var(&self) -> String;
@@ -21,7 +21,7 @@ pub trait DescribeLatent<L: Latent> {
 
 pub type LatentDescriber<L> = Box<dyn DescribeLatent<L>>;
 
-pub(crate) fn match_classic_mode<T: NumberLike>(
+pub(crate) fn match_classic_mode<T: Number>(
   meta: &ChunkMeta,
   delta_units: &'static str,
 ) -> Option<Vec<LatentDescriber<T::L>>> {
@@ -73,9 +73,7 @@ pub(crate) fn match_int_modes<L: Latent>(
   }
 }
 
-pub(crate) fn match_float_modes<F: FloatLike>(
-  meta: &ChunkMeta,
-) -> Option<Vec<LatentDescriber<F::L>>> {
+pub(crate) fn match_float_modes<F: Float>(meta: &ChunkMeta) -> Option<Vec<LatentDescriber<F::L>>> {
   match meta.mode {
     Mode::FloatMult(dyn_latent) => {
       let base_latent = *dyn_latent.downcast_ref::<F::L>().unwrap();
@@ -127,9 +125,9 @@ pub(crate) fn match_float_modes<F: FloatLike>(
 }
 
 #[derive(Default)]
-struct ClassicDescriber<T: NumberLike>(PhantomData<T>);
+struct ClassicDescriber<T: Number>(PhantomData<T>);
 
-impl<T: NumberLike> DescribeLatent<T::L> for ClassicDescriber<T> {
+impl<T: Number> DescribeLatent<T::L> for ClassicDescriber<T> {
   fn latent_var(&self) -> String {
     "primary".to_string()
   }
@@ -178,12 +176,12 @@ fn centered_delta_describer<L: Latent>(description: String, units: String) -> La
   })
 }
 
-struct FloatMultDescriber<F: FloatLike> {
+struct FloatMultDescriber<F: Float> {
   base_string: String,
   phantom: PhantomData<F>,
 }
 
-impl<F: FloatLike> DescribeLatent<F::L> for FloatMultDescriber<F> {
+impl<F: Float> DescribeLatent<F::L> for FloatMultDescriber<F> {
   fn latent_var(&self) -> String {
     format!("multiplier [x{}]", self.base_string)
   }
@@ -197,12 +195,12 @@ impl<F: FloatLike> DescribeLatent<F::L> for FloatMultDescriber<F> {
   }
 }
 
-struct FloatQuantDescriber<F: FloatLike> {
+struct FloatQuantDescriber<F: Float> {
   k: Bitlen,
   phantom: PhantomData<F>,
 }
 
-impl<F: FloatLike> DescribeLatent<F::L> for FloatQuantDescriber<F> {
+impl<F: Float> DescribeLatent<F::L> for FloatQuantDescriber<F> {
   fn latent_var(&self) -> String {
     "quantized".to_string()
   }

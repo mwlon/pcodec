@@ -3,7 +3,7 @@ use clap::Parser;
 use q_compress::CompressorConfig;
 
 use crate::bench::codecs::CodecInternal;
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 
 #[derive(Clone, Debug, Parser)]
 pub struct QcoConfig {
@@ -36,7 +36,7 @@ impl CodecInternal for QcoConfig {
     ]
   }
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
     let qco_nums = T::nums_to_qco(nums);
     let delta_order = self.delta_encoding_order.unwrap_or_else(|| {
       q_compress::auto_compressor_config(qco_nums, self.level).delta_encoding_order
@@ -48,7 +48,7 @@ impl CodecInternal for QcoConfig {
     q_compress::standalone::Compressor::<T::Qco>::from_config(c_config).simple_compress(qco_nums)
   }
 
-  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumber>(&self, bytes: &[u8]) -> Vec<T> {
     let qco_nums = q_compress::auto_decompress::<T::Qco>(bytes).expect("could not decompress");
     T::qco_to_nums(qco_nums)
   }

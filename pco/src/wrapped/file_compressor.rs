@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::bit_writer::BitWriter;
 use crate::constants::HEADER_PADDING;
-use crate::data_types::NumberLike;
+use crate::data_types::Number;
 use crate::errors::PcoResult;
 use crate::metadata::format_version::FormatVersion;
 use crate::wrapped::chunk_compressor;
@@ -66,7 +66,7 @@ impl FileCompressor {
   ///
   /// Although this doesn't write anything yet, it does the bulk of
   /// compute necessary for the compression.
-  pub fn chunk_compressor<T: NumberLike>(
+  pub fn chunk_compressor<T: Number>(
     &self,
     nums: &[T],
     config: &ChunkConfig,

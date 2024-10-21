@@ -7,7 +7,7 @@ use arrow::datatypes::{ArrowPrimitiveType, DataType};
 use arrow::datatypes::{DataType as ArrowDataType, Float16Type};
 use half::f16;
 
-use pco::data_types::{CoreDataType, NumberLike};
+use pco::data_types::{Number, NumberType};
 
 use crate::num_vec::NumVec;
 
@@ -22,7 +22,7 @@ pub trait Parquetable: Sized {
 
 #[cfg(feature = "full_bench")]
 pub trait QCompressable: Sized {
-  type Qco: q_compress::data_types::NumberLike;
+  type Qco: q_compress::data_types::Number;
 
   fn nums_to_qco(nums: &[Self]) -> &[Self::Qco];
   fn qco_to_nums(vec: Vec<Self::Qco>) -> Vec<Self>;
@@ -35,7 +35,7 @@ pub trait TurboPforable: Sized {
 }
 
 #[cfg(feature = "full_bench")]
-pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable + TurboPforable {
+pub trait PcoNumber: Number + Parquetable + QCompressable + TurboPforable {
   const ARROW_DTYPE: DataType;
 
   type Arrow: ArrowPrimitiveType;
@@ -46,7 +46,7 @@ pub trait PcoNumberLike: NumberLike + Parquetable + QCompressable + TurboPforabl
 }
 
 #[cfg(not(feature = "full_bench"))]
-pub trait PcoNumberLike: NumberLike + Parquetable {
+pub trait PcoNumber: Number + Parquetable {
   const ARROW_DTYPE: DataType;
 
   type Arrow: ArrowPrimitiveType;
@@ -56,8 +56,8 @@ pub trait PcoNumberLike: NumberLike + Parquetable {
   fn arrow_native_to_bytes(x: <Self::Arrow as ArrowPrimitiveType>::Native) -> Vec<u8>;
 }
 
-pub trait ArrowNumberLike: ArrowPrimitiveType {
-  type Pco: PcoNumberLike;
+pub trait ArrowNumber: ArrowPrimitiveType {
+  type Pco: PcoNumber;
 
   fn native_to_pco(native: Self::Native) -> Self::Pco;
 
@@ -97,7 +97,7 @@ macro_rules! trivial {
       }
     }
 
-    impl PcoNumberLike for $t {
+    impl PcoNumber for $t {
       const ARROW_DTYPE: DataType = <$p as ArrowPrimitiveType>::DATA_TYPE;
 
       type Arrow = $p;
@@ -115,7 +115,7 @@ macro_rules! trivial {
       }
     }
 
-    impl ArrowNumberLike for $p {
+    impl ArrowNumber for $p {
       type Pco = $t;
 
       fn native_to_pco(native: Self::Native) -> Self::Pco {
@@ -131,7 +131,7 @@ macro_rules! trivial {
 
 macro_rules! extra_arrow {
   ($t: ty, $p: ty) => {
-    impl ArrowNumberLike for $p {
+    impl ArrowNumber for $p {
       type Pco = $t;
 
       fn native_to_pco(native: Self::Native) -> Self::Pco {
@@ -233,7 +233,7 @@ impl QCompressable for f16 {
   }
 }
 
-impl PcoNumberLike for f16 {
+impl PcoNumber for f16 {
   const ARROW_DTYPE: DataType = Float16Type::DATA_TYPE;
 
   type Arrow = Float16Type;
@@ -266,18 +266,18 @@ extra_arrow!(i64, arrow_dtypes::TimestampMillisecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampNanosecondType);
 
-pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<CoreDataType> {
+pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<NumberType> {
   let res = match arrow_dtype {
-    ArrowDataType::Float16 => CoreDataType::F16,
-    ArrowDataType::Float32 => CoreDataType::F32,
-    ArrowDataType::Float64 => CoreDataType::F64,
-    ArrowDataType::Int16 => CoreDataType::I16,
-    ArrowDataType::Int32 => CoreDataType::I32,
-    ArrowDataType::Int64 => CoreDataType::I64,
-    ArrowDataType::UInt16 => CoreDataType::U16,
-    ArrowDataType::UInt32 => CoreDataType::U32,
-    ArrowDataType::UInt64 => CoreDataType::U64,
-    ArrowDataType::Timestamp(_, _) => CoreDataType::I64,
+    ArrowDataType::Float16 => NumberType::F16,
+    ArrowDataType::Float32 => NumberType::F32,
+    ArrowDataType::Float64 => NumberType::F64,
+    ArrowDataType::Int16 => NumberType::I16,
+    ArrowDataType::Int32 => NumberType::I32,
+    ArrowDataType::Int64 => NumberType::I64,
+    ArrowDataType::UInt16 => NumberType::U16,
+    ArrowDataType::UInt32 => NumberType::U32,
+    ArrowDataType::UInt64 => NumberType::U64,
+    ArrowDataType::Timestamp(_, _) => NumberType::I64,
     _ => {
       return Err(anyhow!(
         "unable to convert arrow dtype {:?} to pco",
@@ -288,16 +288,16 @@ pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<CoreDataType> {
   Ok(res)
 }
 
-pub fn to_arrow(dtype: CoreDataType) -> ArrowDataType {
+pub fn to_arrow(dtype: NumberType) -> ArrowDataType {
   match dtype {
-    CoreDataType::F16 => ArrowDataType::Float16,
-    CoreDataType::F32 => ArrowDataType::Float32,
-    CoreDataType::F64 => ArrowDataType::Float64,
-    CoreDataType::I16 => ArrowDataType::Int16,
-    CoreDataType::I32 => ArrowDataType::Int32,
-    CoreDataType::I64 => ArrowDataType::Int64,
-    CoreDataType::U16 => ArrowDataType::UInt16,
-    CoreDataType::U32 => ArrowDataType::UInt32,
-    CoreDataType::U64 => ArrowDataType::UInt64,
+    NumberType::F16 => ArrowDataType::Float16,
+    NumberType::F32 => ArrowDataType::Float32,
+    NumberType::F64 => ArrowDataType::Float64,
+    NumberType::I16 => ArrowDataType::Int16,
+    NumberType::I32 => ArrowDataType::Int32,
+    NumberType::I64 => ArrowDataType::Int64,
+    NumberType::U16 => ArrowDataType::UInt16,
+    NumberType::U32 => ArrowDataType::UInt32,
+    NumberType::U64 => ArrowDataType::UInt64,
   }
 }

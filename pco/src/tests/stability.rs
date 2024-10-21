@@ -1,11 +1,11 @@
 use crate::chunk_config::{ChunkConfig, DeltaSpec};
-use crate::data_types::NumberLike;
+use crate::data_types::Number;
 use crate::errors::{ErrorKind, PcoResult};
 use crate::metadata::chunk::ChunkMeta;
 use crate::standalone::{simple_decompress, FileCompressor};
 use crate::ModeSpec;
 
-fn assert_panic_safe<T: NumberLike>(nums: Vec<T>) -> PcoResult<ChunkMeta> {
+fn assert_panic_safe<T: Number>(nums: Vec<T>) -> PcoResult<ChunkMeta> {
   let fc = FileCompressor::default();
   let config = ChunkConfig {
     mode_spec: ModeSpec::Classic,

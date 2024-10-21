@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use crate::chunk_config::ChunkConfig;
-use crate::data_types::NumberLike;
+use crate::data_types::Number;
 use crate::errors::PcoResult;
 use crate::progress::Progress;
 use crate::standalone::compressor::FileCompressor;
@@ -19,7 +19,7 @@ use crate::{PagingSpec, FULL_BATCH_N};
 /// chunks.
 /// For standalone, the concepts of chunk and page are conflated since each
 /// chunk has exactly one page.
-pub fn simple_compress_into<T: NumberLike>(
+pub fn simple_compress_into<T: Number>(
   nums: &[T],
   config: &ChunkConfig,
   mut dst: &mut [u8],
@@ -54,7 +54,7 @@ pub fn simple_compress_into<T: NumberLike>(
 /// chunks.
 /// For standalone, the concepts of chunk and page are conflated since each
 /// chunk has exactly one page.
-pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
+pub fn simple_compress<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<Vec<u8>> {
   let mut dst = Vec::new();
   let file_compressor = FileCompressor::default().with_n_hint(nums.len());
   file_compressor.write_header(&mut dst)?;
@@ -92,7 +92,7 @@ pub fn simple_compress<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoRe
 /// or insufficient data issues.
 /// Does not error if dst is too short or too long, but that can be inferred
 /// from `Progress`.
-pub fn simple_decompress_into<T: NumberLike>(src: &[u8], mut dst: &mut [T]) -> PcoResult<Progress> {
+pub fn simple_decompress_into<T: Number>(src: &[u8], mut dst: &mut [T]) -> PcoResult<Progress> {
   let (file_decompressor, mut src) = FileDecompressor::new(src)?;
 
   let mut incomplete_batch_buffer = vec![T::default(); FULL_BATCH_N];
@@ -144,7 +144,7 @@ pub fn simple_decompress_into<T: NumberLike>(src: &[u8], mut dst: &mut [T]) -> P
 /// [`ChunkConfig`][crate::ChunkConfig] for an explanation of compression
 /// levels).
 /// This wraps [`simple_compress`].
-pub fn simpler_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> PcoResult<Vec<u8>> {
+pub fn simpler_compress<T: Number>(nums: &[T], compression_level: usize) -> PcoResult<Vec<u8>> {
   let config = ChunkConfig {
     compression_level,
     ..Default::default()
@@ -156,7 +156,7 @@ pub fn simpler_compress<T: NumberLike>(nums: &[T], compression_level: usize) -> 
 ///
 /// Will return an error if there are any compatibility, corruption,
 /// or insufficient data issues.
-pub fn simple_decompress<T: NumberLike>(src: &[u8]) -> PcoResult<Vec<T>> {
+pub fn simple_decompress<T: Number>(src: &[u8]) -> PcoResult<Vec<T>> {
   let (file_decompressor, mut src) = FileDecompressor::new(src)?;
 
   let mut res = Vec::with_capacity(file_decompressor.n_hint());

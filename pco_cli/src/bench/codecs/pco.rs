@@ -2,7 +2,7 @@ use pco::{ChunkConfig, DeltaSpec, ModeSpec};
 
 use crate::bench::codecs::CodecInternal;
 use crate::chunk_config_opt::ChunkConfigOpt;
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 
 fn unparse_delta_spec(spec: &DeltaSpec) -> String {
   match spec {
@@ -38,12 +38,12 @@ impl CodecInternal for ChunkConfigOpt {
     ]
   }
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
     let chunk_config = ChunkConfig::from(self);
     pco::standalone::simple_compress(nums, &chunk_config).expect("invalid config")
   }
 
-  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumber>(&self, bytes: &[u8]) -> Vec<T> {
     pco::standalone::simple_decompress::<T>(bytes).expect("could not decompress")
   }
 }

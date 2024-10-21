@@ -6,12 +6,12 @@ use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
-use pco::data_types::{Latent, NumberLike};
+use pco::data_types::{Latent, Number};
 use pco::metadata::ChunkMeta;
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 
 use crate::core_handlers::CoreHandlerImpl;
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 use crate::inspect::InspectOpt;
 use crate::utils;
 
@@ -72,9 +72,7 @@ fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
   res
 }
 
-fn build_latent_var_summaries<T: NumberLike>(
-  meta: &ChunkMeta,
-) -> BTreeMap<String, LatentVarSummary> {
+fn build_latent_var_summaries<T: Number>(meta: &ChunkMeta) -> BTreeMap<String, LatentVarSummary> {
   let describers = T::get_latent_describers(meta);
   let mut summaries = BTreeMap::new();
   for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
@@ -107,7 +105,7 @@ fn build_latent_var_summaries<T: NumberLike>(
   summaries
 }
 
-impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
+impl<T: PcoNumber> InspectHandler for CoreHandlerImpl<T> {
   fn inspect(&self, opt: &InspectOpt, src: &[u8]) -> Result<()> {
     let mut prev_src_len_val = src.len();
     let prev_src_len = &mut prev_src_len_val;
@@ -148,7 +146,7 @@ impl<T: PcoNumberLike> InspectHandler for CoreHandlerImpl<T> {
     }
 
     let n: usize = chunk_ns.iter().sum();
-    let uncompressed_size = <T as NumberLike>::L::BITS as usize / 8 * n;
+    let uncompressed_size = <T as Number>::L::BITS as usize / 8 * n;
     let compressed_size = header_size + meta_size + page_size + footer_size;
     let unknown_trailing_bytes = src.len();
 

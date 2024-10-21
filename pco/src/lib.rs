@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 //! # API Notes
 //!
-//! * In some places, Pco methods accept a destination (either `W: Write` or `&mut [T: NumberLike]`).
+//! * In some places, Pco methods accept a destination (either `W: Write` or `&mut [T: Number]`).
 //! If Pco returns an error, it is possible both the destination and the struct
 //! have been modified.
 //! * Pco will always try to process all numbers, and it will fail if insufficient bytes are

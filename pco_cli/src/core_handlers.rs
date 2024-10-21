@@ -1,28 +1,25 @@
 use std::marker::PhantomData;
 
-use pco::data_types::CoreDataType;
-use pco::with_core_dtypes;
+use pco::data_types::NumberType;
+use pco::match_number_enum;
 
 use crate::decompress::handler::DecompressHandler;
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 use crate::inspect::handler::InspectHandler;
 
-fn new_boxed_handler<T: PcoNumberLike>() -> Box<dyn CoreHandler> {
+fn new_boxed_handler<T: PcoNumber>() -> Box<dyn CoreHandler> {
   Box::new(CoreHandlerImpl {
     phantom: PhantomData::<T>,
   })
 }
 
-pub fn from_dtype(dtype: CoreDataType) -> Box<dyn CoreHandler> {
-  macro_rules! match_dtype {
-    {$($name:ident($lname:ident) => $t:ty,)+} => {
-      match dtype {
-        $(CoreDataType::$name => new_boxed_handler::<$t>(),)+
-      }
+pub fn from_dtype(dtype: NumberType) -> Box<dyn CoreHandler> {
+  match_number_enum!(
+    dtype,
+    NumberType<T> => {
+      new_boxed_handler::<T>()
     }
-  }
-
-  with_core_dtypes!(match_dtype)
+  )
 }
 
 pub trait CoreHandler: DecompressHandler + InspectHandler {}
@@ -32,4 +29,4 @@ pub struct CoreHandlerImpl<T> {
   phantom: PhantomData<T>,
 }
 
-impl<T: PcoNumberLike> CoreHandler for CoreHandlerImpl<T> {}
+impl<T: PcoNumber> CoreHandler for CoreHandlerImpl<T> {}

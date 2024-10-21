@@ -2,12 +2,12 @@ use better_io::BetterBufRead;
 
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::Bitlen;
-use crate::data_types::NumberLike;
+use crate::data_types::Number;
 use crate::errors::{PcoError, PcoResult};
 use crate::metadata::ChunkMeta;
 use crate::progress::Progress;
 use crate::standalone::constants::*;
-use crate::standalone::DataTypeOrTermination;
+use crate::standalone::NumberTypeOrTermination;
 use crate::{bit_reader, wrapped};
 
 unsafe fn read_varint(reader: &mut BitReader) -> PcoResult<u64> {
@@ -49,7 +49,7 @@ pub struct FileDecompressor {
 
 /// The outcome of starting a new chunk of a standalone file.
 #[allow(clippy::large_enum_variant)]
-pub enum MaybeChunkDecompressor<T: NumberLike, R: BetterBufRead> {
+pub enum MaybeChunkDecompressor<T: Number, R: BetterBufRead> {
   /// We get a `ChunkDecompressor` when there is another chunk as evidenced
   /// by the data type byte.
   Some(ChunkDecompressor<T, R>),
@@ -115,9 +115,9 @@ impl FileDecompressor {
   /// or chunk with some data type.
   ///
   /// Will return an error if there is insufficient data.
-  pub fn peek_dtype_or_termination(&self, src: &[u8]) -> PcoResult<DataTypeOrTermination> {
+  pub fn peek_number_type_or_termination(&self, src: &[u8]) -> PcoResult<NumberTypeOrTermination> {
     match src.first() {
-      Some(&byte) => Ok(DataTypeOrTermination::from(byte)),
+      Some(&byte) => Ok(NumberTypeOrTermination::from(byte)),
       None => Err(PcoError::insufficient_data(
         "unable to peek data type from empty bytes",
       )),
@@ -129,25 +129,25 @@ impl FileDecompressor {
   ///
   /// Will return an error if corruptions or insufficient
   /// data are found.
-  pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
+  pub fn chunk_decompressor<T: Number, R: BetterBufRead>(
     &self,
     mut src: R,
   ) -> PcoResult<MaybeChunkDecompressor<T, R>> {
     bit_reader::ensure_buf_read_capacity(&mut src, STANDALONE_CHUNK_PREAMBLE_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, STANDALONE_CHUNK_PREAMBLE_PADDING, 0);
-    let dtype_or_termination_byte =
+    let type_or_termination_byte =
       reader_builder.with_reader(|reader| Ok(reader.read_aligned_bytes(1)?[0]))?;
-    if dtype_or_termination_byte == MAGIC_TERMINATION_BYTE {
+    if type_or_termination_byte == MAGIC_TERMINATION_BYTE {
       return Ok(MaybeChunkDecompressor::EndOfData(
         reader_builder.into_inner(),
       ));
     }
 
-    if dtype_or_termination_byte != T::DTYPE_BYTE {
+    if type_or_termination_byte != T::NUMBER_TYPE_BYTE {
       return Err(PcoError::corruption(format!(
         "data type byte does not match {:?}; instead found {:?}",
-        T::DTYPE_BYTE,
-        dtype_or_termination_byte,
+        T::NUMBER_TYPE_BYTE,
+        type_or_termination_byte,
       )));
     }
 
@@ -168,14 +168,14 @@ impl FileDecompressor {
 }
 
 /// Holds metadata about a chunk and supports decompression.
-pub struct ChunkDecompressor<T: NumberLike, R: BetterBufRead> {
+pub struct ChunkDecompressor<T: Number, R: BetterBufRead> {
   inner_cd: wrapped::ChunkDecompressor<T>,
   inner_pd: wrapped::PageDecompressor<T, R>,
   n: usize,
   n_processed: usize,
 }
 
-impl<T: NumberLike, R: BetterBufRead> ChunkDecompressor<T, R> {
+impl<T: Number, R: BetterBufRead> ChunkDecompressor<T, R> {
   /// Returns pre-computed information about the chunk.
   pub fn meta(&self) -> &ChunkMeta {
     &self.inner_cd.meta

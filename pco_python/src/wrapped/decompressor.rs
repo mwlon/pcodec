@@ -1,22 +1,22 @@
 use numpy::{PyArray1, PyArrayMethods, PyUntypedArray};
-use pco::data_types::CoreDataType;
-use pco::{match_number_like_enum, with_core_dtypes};
+use pco::data_types::NumberType;
+use pco::match_number_enum;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
 use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
-use pco::data_types::NumberLike;
+use pco::data_types::Number;
 use pco::wrapped::{ChunkDecompressor, FileDecompressor};
 
-use crate::{core_dtype_from_str, pco_err_to_py, PyProgress};
+use crate::utils::{core_dtype_from_str, pco_err_to_py};
+use crate::PyProgress;
 
 #[pyclass(name = "FileDecompressor")]
 struct PyFd(FileDecompressor);
 
-pco::define_number_like_enum!(
+pco::define_number_enum!(
   #[derive()]
-  DynCd,
-  ChunkDecompressor
+  DynCd(ChunkDecompressor)
 );
 
 #[pyclass(name = "ChunkDecompressor")]
@@ -54,23 +54,19 @@ impl PyFd {
   /// :raises: TypeError, RuntimeError
   fn read_chunk_meta(&self, src: &Bound<PyBytes>, dtype: &str) -> PyResult<(PyCd, usize)> {
     let src = src.as_bytes();
-    let inner = &self.0;
+    let fd = &self.0;
     let dtype = core_dtype_from_str(dtype)?;
 
-    macro_rules! match_dtype {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        match dtype {
-          $(CoreDataType::$name => {
-            let (generic_cd, rest) = inner
-              .chunk_decompressor::<$t, _>(src)
-              .map_err(pco_err_to_py)?;
-            (DynCd::$name(generic_cd), rest)
-          })+
-        }
+    let (inner, rest) = match_number_enum!(
+      dtype,
+      NumberType<T> => {
+        let (generic_cd, rest) = fd
+          .chunk_decompressor::<T, _>(src)
+          .map_err(pco_err_to_py)?;
+        (DynCd::new(generic_cd).unwrap(), rest)
       }
-    }
+    );
 
-    let (inner, rest) = with_core_dtypes!(match_dtype);
     let res = PyCd(inner);
     let n_bytes_read = src.len() - rest.len();
     Ok((res, n_bytes_read))
@@ -107,7 +103,7 @@ impl PyCd {
   ) -> PyResult<(PyProgress, usize)> {
     let src = src.as_bytes();
 
-    let (progress, rest) = match_number_like_enum!(
+    let (progress, rest) = match_number_enum!(
       &self.0,
       DynCd<T>(cd) => {
         let arr = dst.downcast::<PyArray1<T>>()?;

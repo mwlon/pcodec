@@ -2,17 +2,17 @@
 
 dtype_dispatch::build_dtype_macros!(
   #[doc = "\
-    Defines enums holding a container generic to `NumberLike`.
+    Defines enums holding a container generic to `Number`.
   "]
   #[doc = "\
     You'll only want to use this if you're using pco's low level APIs.
     See the dtype_dispatch crate for more details.
   "]
   #[macro_export]
-  define_number_like_enum,
+  define_number_enum,
 
   #[doc = "\
-    Matches enums holding a container of `NumberLike`s and puts the concrete type
+    Matches enums holding a container of `Number`s and puts the concrete type
     into scope.
   "]
   #[doc = "\
@@ -20,9 +20,9 @@ dtype_dispatch::build_dtype_macros!(
     See the dtype_dispatch crate for more details.
   "]
   #[macro_export]
-  match_number_like_enum,
+  match_number_enum,
 
-  NumberLike,
+  Number,
   {
     F16 => half::f16,
     F32 => f32,
@@ -67,4 +67,5 @@ dtype_dispatch::build_dtype_macros!(
 );
 
 pub(crate) use define_latent_enum;
+pub(crate) use define_number_enum;
 pub(crate) use match_latent_enum;

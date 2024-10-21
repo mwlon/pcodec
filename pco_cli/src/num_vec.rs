@@ -1,9 +1,8 @@
-use pco::data_types::CoreDataType;
-use pco::with_core_dtypes;
+use crate::dtypes::PcoNumber;
+use pco::data_types::{Number, NumberType};
+use pco::{define_number_enum, match_number_enum};
 
-use crate::dtypes::PcoNumberLike;
-
-fn check_equal<T: PcoNumberLike>(recovered: &[T], original: &[T]) {
+fn check_equal<T: PcoNumber>(recovered: &[T], original: &[T]) {
   assert_eq!(recovered.len(), original.len());
   for (i, (x, y)) in recovered.iter().zip(original.iter()).enumerate() {
     assert_eq!(
@@ -17,39 +16,42 @@ fn check_equal<T: PcoNumberLike>(recovered: &[T], original: &[T]) {
   }
 }
 
-macro_rules! impl_num_vec {
-  {$($name:ident($lname:ident) => $t:ty,)+} => {
-    pub enum NumVec {
-      $($name(Vec<$t>),)+
-    }
+define_number_enum!(
+  #[derive()]
+  pub NumVec(Vec)
+);
 
-    impl NumVec {
-      pub fn n(&self) -> usize {
-        match self {
-          $(NumVec::$name(nums) => nums.len(),)+
-        }
-      }
+impl NumVec {
+  pub fn n(&self) -> usize {
+    match_number_enum!(
+      self,
+      NumVec<T>(nums) => { nums.len() }
+    )
+  }
 
-      pub fn truncated(&self, limit: usize) -> Self {
-        match self {
-          $(NumVec::$name(nums) => NumVec::$name(nums[..limit].to_vec()),)+
-        }
-      }
+  pub fn dtype(&self) -> NumberType {
+    match_number_enum!(
+      self,
+      NumVec<T>(_inner) => { NumberType::new::<T>().unwrap() }
+    )
+  }
 
-      pub fn dtype(&self) -> CoreDataType {
-        match self {
-          $(NumVec::$name(_) => CoreDataType::$name,)+
-        }
-      }
+  pub fn truncated(&self, limit: usize) -> Self {
+    match_number_enum!(
+      self,
+      NumVec<T>(nums) => { NumVec::new(nums[..limit].to_vec()).unwrap() }
+    )
+  }
 
-      pub fn check_equal(&self, other: &NumVec) {
-        match (self, other) {
-          $((NumVec::$name(x), NumVec::$name(y)) => check_equal(x, y),)+
-          _ => unreachable!(),
-        }
+  pub fn check_equal(&self, other: &NumVec) {
+    match_number_enum!(
+      self,
+      NumVec<T>(nums) => {
+        let other_nums = other.downcast_ref::<T>();
+        assert!(other_nums.is_some(), "NumVecs had mismatched types");
+        let other_nums = other_nums.unwrap();
+        check_equal(nums, other_nums);
       }
-    }
-  };
+    )
+  }
 }
-
-with_core_dtypes!(impl_num_vec);

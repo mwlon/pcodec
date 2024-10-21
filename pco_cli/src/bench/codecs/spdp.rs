@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use clap::Parser;
 
 use crate::bench::codecs::{utils, CodecInternal};
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 
 #[derive(Clone, Debug, Parser)]
 pub struct SpdpConfig {
@@ -21,7 +21,7 @@ impl CodecInternal for SpdpConfig {
     vec![("level", self.level.to_string())]
   }
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
     let mut dst = Vec::new();
     dst.push(self.level);
     dst.extend((nums.len() as u32).to_le_bytes());
@@ -55,7 +55,7 @@ impl CodecInternal for SpdpConfig {
     dst
   }
 
-  fn decompress<T: PcoNumberLike>(&self, mut src: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumber>(&self, mut src: &[u8]) -> Vec<T> {
     let level = src[0];
     let total_count = u32::from_le_bytes(src[1..5].try_into().unwrap()) as usize;
     src = &src[5..];

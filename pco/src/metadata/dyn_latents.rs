@@ -6,8 +6,7 @@ use std::io::Write;
 
 define_latent_enum!(
   #[derive(Clone, Debug, PartialEq, Eq)]
-  pub DynLatents,
-  Vec
+  pub DynLatents(Vec)
 );
 
 impl DynLatents {

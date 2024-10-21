@@ -1,21 +1,21 @@
 use std::convert::TryInto;
 
 use numpy::{
-  Element, IntoPyArray, PyArray1, PyArrayDescrMethods, PyArrayMethods, PyUntypedArray,
-  PyUntypedArrayMethods,
+  Element, IntoPyArray, PyArray1, PyArrayMethods, PyUntypedArray, PyUntypedArrayMethods,
 };
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule, PyNone};
 use pyo3::{pyfunction, wrap_pyfunction, Bound, PyObject, PyResult, Python};
 
-use pco::data_types::NumberLike;
+use pco::data_types::{Number, NumberType};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{standalone, with_core_dtypes, ChunkConfig};
+use pco::{match_number_enum, standalone, ChunkConfig};
 
-use crate::{pco_err_to_py, PyChunkConfig, PyProgress};
+use crate::utils::pco_err_to_py;
+use crate::{utils, PyChunkConfig, PyProgress};
 
-fn decompress_chunks<'py, T: NumberLike + Element>(
+fn decompress_chunks<'py, T: Number + Element>(
   py: Python<'py>,
   mut src: &[u8],
   file_decompressor: FileDecompressor,
@@ -43,7 +43,7 @@ fn decompress_chunks<'py, T: NumberLike + Element>(
   Ok(py_array)
 }
 
-fn simple_compress_generic<'py, T: NumberLike + Element>(
+fn simple_compress_generic<'py, T: Number + Element>(
   py: Python<'py>,
   arr: &Bound<'_, PyArray1<T>>,
   config: &ChunkConfig,
@@ -58,7 +58,7 @@ fn simple_compress_generic<'py, T: NumberLike + Element>(
   Ok(PyBytes::new_bound(py, &compressed))
 }
 
-fn simple_decompress_into_generic<T: NumberLike + Element>(
+fn simple_decompress_into_generic<T: Number + Element>(
   py: Python,
   compressed: &Bound<PyBytes>,
   arr: &Bound<PyArray1<T>>,
@@ -91,19 +91,13 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
     config: &PyChunkConfig,
   ) -> PyResult<Bound<'py, PyBytes>> {
     let config: ChunkConfig = config.try_into()?;
-    let dtype = nums.dtype();
-    macro_rules! match_py_array {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        $(
-        if dtype.is_equiv_to(&numpy::dtype_bound::<$t>(py)) {
-          return simple_compress_generic(py, nums.downcast::<PyArray1<$t>>()?, &config)
-        }
-        )+
+    let number_type = utils::number_type_from_numpy(py, &nums.dtype())?;
+    match_number_enum!(
+      number_type,
+      NumberType<T> => {
+        simple_compress_generic(py, nums.downcast::<PyArray1<T>>()?, &config)
       }
-    }
-    with_core_dtypes!(match_py_array);
-
-    Err(crate::unsupported_type_err(dtype))
+    )
   }
   m.add_function(wrap_pyfunction!(simple_compress, m)?)?;
 
@@ -126,19 +120,13 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
     compressed: &Bound<PyBytes>,
     dst: &Bound<PyUntypedArray>,
   ) -> PyResult<PyProgress> {
-    let dtype = dst.dtype();
-    macro_rules! match_py_array {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        $(
-        if dtype.is_equiv_to(&numpy::dtype_bound::<$t>(py)) {
-          return simple_decompress_into_generic(py, compressed, dst.downcast::<PyArray1<$t>>()?);
-        }
-        )+
+    let number_type = utils::number_type_from_numpy(py, &dst.dtype())?;
+    match_number_enum!(
+      number_type,
+      NumberType<T> => {
+        simple_decompress_into_generic(py, compressed, dst.downcast::<PyArray1<T>>()?)
       }
-    }
-    with_core_dtypes!(match_py_array);
-
-    Err(crate::unsupported_type_err(dtype))
+    )
   }
   m.add_function(wrap_pyfunction!(simple_decompress_into, m)?)?;
 
@@ -154,27 +142,28 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
   /// :raises: TypeError, RuntimeError
   #[pyfunction]
   fn simple_decompress(py: Python, compressed: &Bound<PyBytes>) -> PyResult<PyObject> {
-    use pco::data_types::CoreDataType::*;
-    use pco::standalone::DataTypeOrTermination::*;
+    use pco::standalone::NumberTypeOrTermination::*;
 
     let src = compressed.as_bytes();
     let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
-    let dtype = file_decompressor
-      .peek_dtype_or_termination(src)
+    let maybe_number_type = file_decompressor
+      .peek_number_type_or_termination(src)
       .map_err(pco_err_to_py)?;
-    macro_rules! match_dtype {
-      {$($name:ident($lname:ident) => $t:ty,)+} => {
-        match dtype {
-          $(Known($name) => Ok(decompress_chunks::<$t>(py, src, file_decompressor)?.to_object(py)),)+
-          Termination => Ok(PyNone::get_bound(py).to_object(py)),
-          Unknown(other) => Err(PyRuntimeError::new_err(format!(
-            "unrecognized dtype byte {:?}",
-            other,
-          ))),
-        }
+    match maybe_number_type {
+      Known(number_type) => {
+        match_number_enum!(
+          number_type,
+          NumberType<T> => {
+            Ok(decompress_chunks::<T>(py, src, file_decompressor)?.to_object(py))
+          }
+        )
       }
+      Termination => Ok(PyNone::get_bound(py).to_object(py)),
+      Unknown(other) => Err(PyRuntimeError::new_err(format!(
+        "unrecognized dtype byte {:?}",
+        other,
+      ))),
     }
-    with_core_dtypes!(match_dtype)
   }
   m.add_function(wrap_pyfunction!(simple_decompress, m)?)?;
 

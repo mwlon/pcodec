@@ -5,7 +5,7 @@ use better_io::BetterBufRead;
 use crate::bit_reader;
 use crate::bit_reader::BitReaderBuilder;
 use crate::constants::{CHUNK_META_PADDING, HEADER_PADDING};
-use crate::data_types::NumberLike;
+use crate::data_types::Number;
 use crate::errors::PcoResult;
 use crate::metadata::chunk::ChunkMeta;
 use crate::metadata::format_version::FormatVersion;
@@ -43,7 +43,7 @@ impl FileDecompressor {
   ///
   /// Will return an error if version incompatibilities, corruptions, or
   /// insufficient data are found.
-  pub fn chunk_decompressor<T: NumberLike, R: BetterBufRead>(
+  pub fn chunk_decompressor<T: Number, R: BetterBufRead>(
     &self,
     mut src: R,
   ) -> PcoResult<(ChunkDecompressor<T>, R)> {

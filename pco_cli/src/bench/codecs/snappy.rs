@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use clap::Parser;
 
 use crate::bench::codecs::{utils, CodecInternal};
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 
 #[derive(Clone, Debug, Parser)]
 pub struct SnappyConfig {}
@@ -18,7 +18,7 @@ impl CodecInternal for SnappyConfig {
     vec![]
   }
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
     res.extend((nums.len() as u32).to_le_bytes());
 
@@ -30,7 +30,7 @@ impl CodecInternal for SnappyConfig {
     res
   }
 
-  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumber>(&self, bytes: &[u8]) -> Vec<T> {
     let len = u32::from_le_bytes(bytes[0..4].try_into().unwrap()) as usize;
     let mut res = Vec::<T>::with_capacity(len);
     let mut rdr = snap::read::FrameDecoder::new(&bytes[4..]);

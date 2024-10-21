@@ -5,7 +5,7 @@ use std::ops::{
   Rem, RemAssign, Shl, Shr, Sub, SubAssign,
 };
 
-pub use dynamic::CoreDataType;
+pub use dynamic::NumberType;
 
 use crate::constants::Bitlen;
 use crate::describers::LatentDescriber;
@@ -22,7 +22,7 @@ pub(crate) type ModeAndLatents<L> = (Mode, Vec<Vec<L>>);
 
 /// This is used internally for compressing and decompressing with
 /// float modes.
-pub(crate) trait FloatLike:
+pub(crate) trait Float:
   Add<Output = Self>
   + AddAssign
   + Copy
@@ -30,7 +30,7 @@ pub(crate) trait FloatLike:
   + Display
   + Mul<Output = Self>
   + Neg<Output = Self>
-  + NumberLike
+  + Number
   + PartialOrd
   + RemAssign
   + Send
@@ -95,7 +95,7 @@ pub trait Latent:
   + Hash
   + Mul<Output = Self>
   + MulAssign
-  + NumberLike<L = Self>
+  + Number<L = Self>
   + Ord
   + PartialOrd
   + Rem<Output = Self>
@@ -140,10 +140,10 @@ pub trait Latent:
 ///   in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
 ///   wouldn't preserve ordering and would cause pco to fail. In this example,
 ///   one needs to flip the sign bit and, if negative, the rest of the bits.
-pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync + 'static {
+pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + 'static {
   /// A number from 1-255 that corresponds to the number's data type.
   ///
-  /// Each `NumberLike` implementation should have a different `DTYPE_BYTE`.
+  /// Each `Number` implementation should have a different `NUMBER_TYPE_BYTE`.
   /// This byte gets written into the file's header during compression, and
   /// if the wrong header byte shows up during decompression, the decompressor
   /// will return an error.
@@ -152,7 +152,7 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   /// the library and pick an unused one. For instance, as of writing, bytes
   /// 1 through 6 are used, so 7 would be a good choice for another
   /// `pco` data type implementation.
-  const DTYPE_BYTE: u8;
+  const NUMBER_TYPE_BYTE: u8;
 
   /// The latent this type can convert between to do
   /// bitwise logic and such.
@@ -183,6 +183,6 @@ pub trait NumberLike: Copy + Debug + Display + Default + PartialEq + Send + Sync
   fn transmute_to_latent(self) -> Self::L;
 }
 
-pub(crate) fn split_latents_classic<T: NumberLike>(nums: &[T]) -> Vec<Vec<T::L>> {
+pub(crate) fn split_latents_classic<T: Number>(nums: &[T]) -> Vec<Vec<T::L>> {
   vec![nums.iter().map(|&x| x.to_latent_ordered()).collect()]
 }

@@ -10,7 +10,7 @@ all_dtypes = ("f2", "f4", "f8", "i2", "i4", "i8", "u2", "u4", "u8")
 @pytest.mark.parametrize("dtype", all_dtypes)
 def test_compress(dtype):
     data = np.random.uniform(0, 1000, size=[10]).astype(dtype)
-    pco_dtype = dtype[0].upper() + str(int(dtype[1]) * 8)
+    pco_number_type = dtype[0].upper() + str(int(dtype[1]) * 8)
     page_sizes = [6, 4]  # so there are 2 pages
 
     # compress
@@ -33,7 +33,7 @@ def test_compress(dtype):
     # check that undershooting is fine
     _, n_bytes_read = FileDecompressor.new(header + b"foo")
     assert n_bytes_read == len(header)
-    cd, n_bytes_read = fd.read_chunk_meta(chunk_meta, pco_dtype)
+    cd, n_bytes_read = fd.read_chunk_meta(chunk_meta, pco_number_type)
     assert n_bytes_read == len(chunk_meta)
 
     # page 1, which has elements 6-10

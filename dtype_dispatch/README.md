@@ -108,8 +108,7 @@ dtype_dispatch::build_dtype_macros!(
 // define any enum for any `Vec` of a data type!
 define_an_enum!(
   #[derive(Clone, Debug)]
-  DynArray,
-  Vec
+  DynArray(Vec)
 );
 
 impl DynArray {

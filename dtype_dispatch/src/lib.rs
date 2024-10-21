@@ -15,7 +15,34 @@ macro_rules! build_dtype_macros {
   ) => {
     $(#[$definer_attrs])*
     macro_rules! $definer {
-      (#[$enum_attrs: meta] $vis: vis $name: ident, $container: ident) => {
+      (#[$enum_attrs: meta] #[repr($desc_t: ty)] $vis: vis $name: ident = $desc_val: ident) => {
+        #[$enum_attrs]
+        #[repr($desc_t)]
+        $vis enum $name {
+          $($variant = <$t>::$desc_val,)+
+        }
+
+        impl $name {
+          #[inline]
+          pub fn new<S: $constraint>() -> Option<Self> {
+            let type_id = std::any::TypeId::of::<S>();
+            $(
+              if type_id == std::any::TypeId::of::<$t>() {
+                return Some($name::$variant);
+              }
+            )+
+            None
+          }
+
+          pub fn from_descriminant(desc: $desc_t) -> Option<Self> {
+            match desc {
+              $(<$t>::$desc_val => Some(Self::$variant),)+
+              _ => None
+            }
+          }
+        }
+      };
+      (#[$enum_attrs: meta] $vis: vis $name: ident($container: ident)) => {
         $vis trait Downcast {
           fn downcast<S: $constraint>(self) -> Option<$container<S>>;
           fn downcast_ref<S: $constraint>(&self) -> Option<&$container<S>>;
@@ -68,6 +95,7 @@ macro_rules! build_dtype_macros {
         }
 
         impl $name {
+          #[inline]
           pub fn new<S: $constraint>(inner: $container<S>) -> Option<Self> {
             let type_id = std::any::TypeId::of::<S>();
             $(
@@ -107,6 +135,14 @@ macro_rules! build_dtype_macros {
 
     $(#[$matcher_attrs])*
     macro_rules! $matcher {
+      ($value: expr, $enum_: ident<$generic: ident> => $block: block) => {
+        match $value {
+          $($enum_::$variant => {
+            type $generic = $t;
+            $block
+          })+
+        }
+      };
       ($value: expr, $enum_: ident<$generic: ident>($inner: ident) => $block: block) => {
         match $value {
           $($enum_::$variant($inner) => {
@@ -141,8 +177,7 @@ mod tests {
 
   define_enum!(
     #[derive(Clone, Debug)]
-    MyEnum,
-    Vec
+    MyEnum(Vec)
   );
 
   // we use this helper just to prove that we can handle generic types, not
