@@ -4,7 +4,7 @@ use std::mem;
 use clap::Parser;
 
 use crate::bench::codecs::CodecInternal;
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 
 #[derive(Clone, Debug, Parser)]
 pub struct BloscConfig {
@@ -29,7 +29,7 @@ impl CodecInternal for BloscConfig {
     ]
   }
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
     let type_size = mem::size_of::<T>();
     let n_bytes = std::mem::size_of_val(nums);
     let mut dst = Vec::with_capacity(n_bytes + blosc_src::BLOSC_MAX_OVERHEAD as usize);
@@ -53,7 +53,7 @@ impl CodecInternal for BloscConfig {
     dst
   }
 
-  fn decompress<T: PcoNumberLike>(&self, compressed: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumber>(&self, compressed: &[u8]) -> Vec<T> {
     let mut uncompressed_size = 0;
     let mut compressed_size = 0_usize;
     let mut block_size = 0_usize;

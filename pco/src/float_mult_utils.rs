@@ -346,7 +346,7 @@ mod test {
   use rand::{Rng, SeedableRng};
   use rand_xoshiro::Xoroshiro128PlusPlus;
 
-  use crate::data_types::NumberLike;
+  use crate::data_types::Number;
 
   use super::*;
 

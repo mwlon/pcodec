@@ -1,11 +1,11 @@
 pub use compressor::{ChunkCompressor, FileCompressor};
 pub use decompressor::{ChunkDecompressor, FileDecompressor, MaybeChunkDecompressor};
-pub use dtype_or_termination::DataTypeOrTermination;
+pub use number_type_or_termination::NumberTypeOrTermination;
 pub use simple::*;
 
 mod compressor;
 mod constants;
 mod decompressor;
-mod dtype_or_termination;
 pub mod guarantee;
+mod number_type_or_termination;
 mod simple;

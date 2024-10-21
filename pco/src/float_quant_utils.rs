@@ -113,7 +113,7 @@ pub(crate) fn estimate_best_k_and_freq<F: FloatLike>(sample: &[F]) -> (Bitlen, f
 
 #[cfg(test)]
 mod test {
-  use crate::data_types::NumberLike;
+  use crate::data_types::Number;
 
   use super::*;
 

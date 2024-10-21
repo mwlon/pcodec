@@ -6,7 +6,7 @@ use super::ModeAndLatents;
 use crate::chunk_config::ModeSpec;
 use crate::compression_intermediates::Bid;
 use crate::constants::Bitlen;
-use crate::data_types::{split_latents_classic, FloatLike, Latent, NumberLike};
+use crate::data_types::{split_latents_classic, FloatLike, Latent, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
@@ -70,7 +70,7 @@ fn choose_mode_and_split_latents<F: FloatLike>(
 }
 
 // one day we might reuse this for int modes
-fn choose_winning_bid<T: NumberLike>(bids: Vec<Bid<T>>) -> Bid<T> {
+fn choose_winning_bid<T: Number>(bids: Vec<Bid<T>>) -> Bid<T> {
   bids
     .into_iter()
     .max_by(|bid0, bid1| bid0.bits_saved_per_num.total_cmp(&bid1.bits_saved_per_num))
@@ -311,10 +311,10 @@ impl FloatLike for f16 {
   }
 }
 
-macro_rules! impl_float_number_like {
+macro_rules! impl_float_number {
   ($t: ty, $latent: ty, $sign_bit_mask: expr, $header_byte: expr) => {
-    impl NumberLike for $t {
-      const DTYPE_BYTE: u8 = $header_byte;
+    impl Number for $t {
+      const NUMBER_TYPE_BYTE: u8 = $header_byte;
 
       type L = $latent;
 
@@ -390,9 +390,9 @@ macro_rules! impl_float_number_like {
 impl_float_like!(f32, u32, 127);
 impl_float_like!(f64, u64, 1023);
 // f16 FloatLike is implemented separately because it's non-native.
-impl_float_number_like!(f32, u32, 1_u32 << 31, 5);
-impl_float_number_like!(f64, u64, 1_u64 << 63, 6);
-impl_float_number_like!(f16, u16, 1_u16 << 15, 9);
+impl_float_number!(f32, u32, 1_u32 << 31, 5);
+impl_float_number!(f64, u64, 1_u64 << 63, 6);
+impl_float_number!(f16, u16, 1_u16 << 15, 9);
 
 #[cfg(test)]
 mod tests {

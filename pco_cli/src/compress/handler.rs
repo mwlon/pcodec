@@ -9,14 +9,14 @@ use pco::ChunkConfig;
 
 use crate::arrow_handlers::ArrowHandlerImpl;
 use crate::compress::CompressOpt;
-use crate::dtypes::ArrowNumberLike;
+use crate::dtypes::ArrowNumber;
 use crate::{input, utils};
 
 pub trait CompressHandler {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()>;
 }
 
-impl<P: ArrowNumberLike> CompressHandler for ArrowHandlerImpl<P> {
+impl<P: ArrowNumber> CompressHandler for ArrowHandlerImpl<P> {
   fn compress(&self, opt: &CompressOpt, schema: &Schema) -> Result<()> {
     let mut open_options = OpenOptions::new();
     open_options.write(true);

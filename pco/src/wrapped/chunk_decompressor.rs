@@ -1,19 +1,19 @@
 use better_io::BetterBufRead;
 use std::marker::PhantomData;
 
-use crate::data_types::NumberLike;
+use crate::data_types::Number;
 use crate::errors::{PcoError, PcoResult};
 use crate::metadata::ChunkMeta;
 use crate::wrapped::PageDecompressor;
 
 /// Holds metadata about a chunk and can produce page decompressors.
 #[derive(Clone, Debug)]
-pub struct ChunkDecompressor<T: NumberLike> {
+pub struct ChunkDecompressor<T: Number> {
   pub(crate) meta: ChunkMeta,
   phantom: PhantomData<T>,
 }
 
-impl<T: NumberLike> ChunkDecompressor<T> {
+impl<T: Number> ChunkDecompressor<T> {
   pub(crate) fn new(meta: ChunkMeta) -> PcoResult<Self> {
     if T::mode_is_valid(meta.mode) {
       Ok(Self {

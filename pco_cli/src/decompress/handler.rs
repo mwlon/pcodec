@@ -17,13 +17,13 @@ use pco::FULL_BATCH_N;
 use crate::core_handlers::CoreHandlerImpl;
 use crate::decompress::DecompressOpt;
 use crate::decompress::OutputKind::*;
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 
 pub trait DecompressHandler {
   fn decompress(&self, opt: &DecompressOpt) -> Result<()>;
 }
 
-impl<T: PcoNumberLike> DecompressHandler for CoreHandlerImpl<T> {
+impl<T: PcoNumber> DecompressHandler for CoreHandlerImpl<T> {
   fn decompress(&self, opt: &DecompressOpt) -> Result<()> {
     let file = OpenOptions::new().read(true).open(&opt.path)?;
     let src = BetterBufReader::from_read_simple(file);
@@ -63,7 +63,7 @@ impl<T: PcoNumberLike> DecompressHandler for CoreHandlerImpl<T> {
   }
 }
 
-fn new_column_writer<T: PcoNumberLike>(opt: &DecompressOpt) -> Result<Box<dyn ColumnWriter<T>>> {
+fn new_column_writer<T: PcoNumber>(opt: &DecompressOpt) -> Result<Box<dyn ColumnWriter<T>>> {
   // eventually we'll likely have a txt writer and a parquet writer, etc.
   let writer: Box<dyn ColumnWriter<T>> = match opt.output {
     Txt => Box::<TxtWriter<T>>::default(),
@@ -72,17 +72,17 @@ fn new_column_writer<T: PcoNumberLike>(opt: &DecompressOpt) -> Result<Box<dyn Co
   Ok(writer)
 }
 
-trait ColumnWriter<T: PcoNumberLike> {
+trait ColumnWriter<T: PcoNumber> {
   fn write(&mut self, nums: Vec<<T::Arrow as ArrowPrimitiveType>::Native>) -> Result<()>;
   fn close(&mut self) -> Result<()>;
 }
 
 #[derive(Default)]
-struct TxtWriter<T: PcoNumberLike> {
+struct TxtWriter<T: PcoNumber> {
   phantom: PhantomData<T>,
 }
 
-impl<T: PcoNumberLike> ColumnWriter<T> for TxtWriter<T> {
+impl<T: PcoNumber> ColumnWriter<T> for TxtWriter<T> {
   fn write(&mut self, arrow_natives: Vec<<T::Arrow as ArrowPrimitiveType>::Native>) -> Result<()> {
     let schema = Schema::new(vec![Field::new("c0", T::ARROW_DTYPE, false)]);
     let c0 = PrimitiveArray::<T::Arrow>::from_iter_values(arrow_natives);
@@ -104,11 +104,11 @@ impl<T: PcoNumberLike> ColumnWriter<T> for TxtWriter<T> {
 }
 
 #[derive(Default)]
-struct BinaryWriter<T: PcoNumberLike> {
+struct BinaryWriter<T: PcoNumber> {
   phantom: PhantomData<T>,
 }
 
-impl<T: PcoNumberLike> ColumnWriter<T> for BinaryWriter<T> {
+impl<T: PcoNumber> ColumnWriter<T> for BinaryWriter<T> {
   fn write(&mut self, arrow_natives: Vec<<T::Arrow as ArrowPrimitiveType>::Native>) -> Result<()> {
     let mut out = std::io::stdout();
     for &x in &arrow_natives {

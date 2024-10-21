@@ -5,8 +5,8 @@ use std::ptr;
 use libc::{c_uchar, c_uint, c_void, size_t};
 
 use crate::PcoError::PcoInvalidType;
-use pco::data_types::{CoreDataType, NumberLike};
-use pco::match_number_like_enum;
+use pco::data_types::{Number, NumberType};
+use pco::match_number_enum;
 
 #[repr(C)]
 pub enum PcoError {
@@ -17,7 +17,7 @@ pub enum PcoError {
   PcoDecompressionError,
 }
 
-pco::define_number_like_enum!(
+pco::define_number_enum!(
   #[derive()]
   NumVec(Vec)
 );
@@ -36,7 +36,7 @@ impl PcoFfiVec {
     self.raw_box = Box::into_raw(v.into_boxed_slice()) as *const c_void;
   }
 
-  fn init_from_nums<T: NumberLike>(&mut self, v: Vec<T>) {
+  fn init_from_nums<T: Number>(&mut self, v: Vec<T>) {
     self.ptr = v.as_ptr() as *const c_void;
     self.len = v.len();
     self.raw_box = Box::into_raw(v.into_boxed_slice()) as *const c_void;
@@ -52,7 +52,7 @@ impl PcoFfiVec {
   }
 }
 
-fn _simpler_compress<T: NumberLike>(
+fn _simpler_compress<T: Number>(
   nums: *const c_void,
   len: size_t,
   level: c_uint,
@@ -68,7 +68,7 @@ fn _simpler_compress<T: NumberLike>(
   }
 }
 
-fn _simple_decompress<T: NumberLike>(
+fn _simple_decompress<T: Number>(
   compressed: *const c_void,
   len: size_t,
   ffi_vec_ptr: *mut PcoFfiVec,
@@ -91,13 +91,13 @@ pub extern "C" fn pco_simpler_compress(
   level: c_uint,
   dst: *mut PcoFfiVec,
 ) -> PcoError {
-  let Some(dtype) = CoreDataType::from_descriminant(dtype) else {
+  let Some(dtype) = NumberType::from_descriminant(dtype) else {
     return PcoInvalidType;
   };
 
-  match_number_like_enum!(
+  match_number_enum!(
     dtype,
-    CoreDataType<T> => {
+    NumberType<T> => {
       _simpler_compress::<T>(nums, len, level, dst)
     }
   )
@@ -110,13 +110,13 @@ pub extern "C" fn pco_simple_decompress(
   dtype: c_uchar,
   dst: *mut PcoFfiVec,
 ) -> PcoError {
-  let Some(dtype) = CoreDataType::from_descriminant(dtype) else {
+  let Some(dtype) = NumberType::from_descriminant(dtype) else {
     return PcoInvalidType;
   };
 
-  match_number_like_enum!(
+  match_number_enum!(
     dtype,
-    CoreDataType<T> => {
+    NumberType<T> => {
       _simple_decompress::<T>(compressed, len, dst)
     }
   )

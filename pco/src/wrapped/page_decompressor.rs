@@ -7,7 +7,7 @@ use better_io::BetterBufRead;
 use crate::bit_reader;
 use crate::bit_reader::{BitReader, BitReaderBuilder};
 use crate::constants::{FULL_BATCH_N, PAGE_PADDING};
-use crate::data_types::{Latent, NumberLike};
+use crate::data_types::{Latent, Number};
 use crate::delta;
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
@@ -27,7 +27,7 @@ pub struct State<L: Latent> {
 }
 
 /// Holds metadata about a page and supports decompression.
-pub struct PageDecompressor<T: NumberLike, R: BetterBufRead> {
+pub struct PageDecompressor<T: Number, R: BetterBufRead> {
   // immutable
   n: usize,
   mode: Mode,
@@ -66,14 +66,14 @@ unsafe fn decompress_latents_w_delta<L: Latent>(
   Ok(())
 }
 
-fn convert_from_latents_to_numbers<T: NumberLike>(dst: &mut [T]) {
+fn convert_from_latents_to_numbers<T: Number>(dst: &mut [T]) {
   // we wrote the joined latents to dst, so we can convert them in place
   for l_and_dst in dst {
     *l_and_dst = T::from_latent_ordered(l_and_dst.transmute_to_latent());
   }
 }
 
-impl<T: NumberLike, R: BetterBufRead> PageDecompressor<T, R> {
+impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
   pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta, n: usize) -> PcoResult<Self> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);

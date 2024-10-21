@@ -9,7 +9,7 @@ use crate::constants::{
   Bitlen, Weight, ANS_INTERLEAVING, LIMITED_UNOPTIMIZED_BINS_LOG, MAX_COMPRESSION_LEVEL,
   MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
 };
-use crate::data_types::{Latent, NumberLike};
+use crate::data_types::{Latent, Number};
 use crate::delta::DeltaMoments;
 use crate::errors::{PcoError, PcoResult};
 use crate::histograms::histogram;
@@ -349,7 +349,7 @@ fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> Bitlen {
 }
 
 // We pull this stuff out of `new` because it only depends on the latent type
-// and we don't need a specialization for each full dtype.
+// and we don't need a specialization for each full number type.
 // Returns a chunk compressor and the counts (per latent var) of numbers in
 // each bin.
 fn new_candidate_w_split<L: Latent>(
@@ -412,10 +412,7 @@ fn fallback_chunk_compressor<L: Latent>(
 }
 
 // Should this take nums as a slice of slices instead of having a config.paging_spec?
-pub(crate) fn new<T: NumberLike>(
-  nums: &[T],
-  config: &ChunkConfig,
-) -> PcoResult<ChunkCompressor<T::L>> {
+pub(crate) fn new<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<ChunkCompressor<T::L>> {
   validate_config(config)?;
   let n = nums.len();
   validate_chunk_size(n)?;

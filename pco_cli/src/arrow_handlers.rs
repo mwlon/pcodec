@@ -5,9 +5,9 @@ use arrow::datatypes::*;
 
 use crate::bench::handler::BenchHandler;
 use crate::compress::handler::CompressHandler;
-use crate::dtypes::ArrowNumberLike;
+use crate::dtypes::ArrowNumber;
 
-fn new_boxed_handler<P: ArrowNumberLike>() -> Box<dyn ArrowHandler> {
+fn new_boxed_handler<P: ArrowNumber>() -> Box<dyn ArrowHandler> {
   Box::new(ArrowHandlerImpl {
     phantom: PhantomData::<P>,
   })
@@ -49,4 +49,4 @@ pub struct ArrowHandlerImpl<P> {
   phantom: PhantomData<P>,
 }
 
-impl<P: ArrowNumberLike> ArrowHandler for ArrowHandlerImpl<P> {}
+impl<P: ArrowNumber> ArrowHandler for ArrowHandlerImpl<P> {}

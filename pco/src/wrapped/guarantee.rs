@@ -26,7 +26,7 @@ pub(crate) fn baseline_chunk_meta<L: Latent>() -> ChunkMeta {
 /// Returns the maximum possible byte size of a wrapped chunk for a given
 /// latent type (e.g. u32 or u64) and count of numbers.
 pub fn chunk_size<L: Latent>(n: usize) -> usize {
-  // TODO if we ever add NumberLikes that are smaller than their Latents, we
+  // TODO if we ever add Numbers that are smaller than their Latents, we
   // may want to make this more generic
   baseline_chunk_meta::<L>().exact_size() + n * L::BITS.div_ceil(8) as usize
 }
@@ -39,7 +39,7 @@ mod tests {
 
   use super::*;
   use crate::chunk_config::DeltaSpec;
-  use crate::data_types::NumberLike;
+  use crate::data_types::Number;
   use crate::errors::PcoResult;
   use crate::wrapped::FileCompressor;
   use crate::{ChunkConfig, ModeSpec, PagingSpec};
@@ -53,7 +53,7 @@ mod tests {
     Ok(())
   }
 
-  fn check_chunk_guarantee<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<()> {
+  fn check_chunk_guarantee<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<()> {
     let n = nums.len();
     let n_pages = config.paging_spec.n_per_page(n)?.len();
     let mut dst = Vec::new();

@@ -1,11 +1,11 @@
 use crate::constants::Bitlen;
-use crate::data_types::{FloatLike, Latent, NumberLike};
+use crate::data_types::{FloatLike, Latent, Number};
 use crate::metadata::{ChunkMeta, DeltaEncoding, Mode};
 use std::marker::PhantomData;
 
 /// Interprets the meaning of latent variables and values from [`ChunkMeta`].
 ///
-/// Obtainable via [`crate::data_types::NumberLike::get_latent_describers`].
+/// Obtainable via [`crate::data_types::Number::get_latent_describers`].
 pub trait DescribeLatent<L: Latent> {
   /// Returns a description for this latent variable.
   fn latent_var(&self) -> String;
@@ -21,7 +21,7 @@ pub trait DescribeLatent<L: Latent> {
 
 pub type LatentDescriber<L> = Box<dyn DescribeLatent<L>>;
 
-pub(crate) fn match_classic_mode<T: NumberLike>(
+pub(crate) fn match_classic_mode<T: Number>(
   meta: &ChunkMeta,
   delta_units: &'static str,
 ) -> Option<Vec<LatentDescriber<T::L>>> {
@@ -127,9 +127,9 @@ pub(crate) fn match_float_modes<F: FloatLike>(
 }
 
 #[derive(Default)]
-struct ClassicDescriber<T: NumberLike>(PhantomData<T>);
+struct ClassicDescriber<T: Number>(PhantomData<T>);
 
-impl<T: NumberLike> DescribeLatent<T::L> for ClassicDescriber<T> {
+impl<T: Number> DescribeLatent<T::L> for ClassicDescriber<T> {
   fn latent_var(&self) -> String {
     "primary".to_string()
   }

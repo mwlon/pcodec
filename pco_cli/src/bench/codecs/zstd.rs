@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use clap::Parser;
 
 use crate::bench::codecs::{utils, CodecInternal};
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 
 #[derive(Clone, Debug, Parser)]
 pub struct ZstdConfig {
@@ -20,7 +20,7 @@ impl CodecInternal for ZstdConfig {
     vec![("level", self.level.to_string())]
   }
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
     res.extend((nums.len() as u32).to_le_bytes());
     unsafe {
@@ -34,7 +34,7 @@ impl CodecInternal for ZstdConfig {
     res
   }
 
-  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumber>(&self, bytes: &[u8]) -> Vec<T> {
     let len = u32::from_le_bytes(bytes[0..4].try_into().unwrap()) as usize;
     let mut res = Vec::<T>::with_capacity(len);
     unsafe {

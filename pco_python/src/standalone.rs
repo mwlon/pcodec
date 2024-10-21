@@ -8,14 +8,14 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule, PyNone};
 use pyo3::{pyfunction, wrap_pyfunction, Bound, PyObject, PyResult, Python};
 
-use pco::data_types::{CoreDataType, NumberLike};
+use pco::data_types::{Number, NumberType};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
-use pco::{match_number_like_enum, standalone, ChunkConfig};
+use pco::{match_number_enum, standalone, ChunkConfig};
 
 use crate::utils::pco_err_to_py;
 use crate::{utils, PyChunkConfig, PyProgress};
 
-fn decompress_chunks<'py, T: NumberLike + Element>(
+fn decompress_chunks<'py, T: Number + Element>(
   py: Python<'py>,
   mut src: &[u8],
   file_decompressor: FileDecompressor,
@@ -43,7 +43,7 @@ fn decompress_chunks<'py, T: NumberLike + Element>(
   Ok(py_array)
 }
 
-fn simple_compress_generic<'py, T: NumberLike + Element>(
+fn simple_compress_generic<'py, T: Number + Element>(
   py: Python<'py>,
   arr: &Bound<'_, PyArray1<T>>,
   config: &ChunkConfig,
@@ -58,7 +58,7 @@ fn simple_compress_generic<'py, T: NumberLike + Element>(
   Ok(PyBytes::new_bound(py, &compressed))
 }
 
-fn simple_decompress_into_generic<T: NumberLike + Element>(
+fn simple_decompress_into_generic<T: Number + Element>(
   py: Python,
   compressed: &Bound<PyBytes>,
   arr: &Bound<PyArray1<T>>,
@@ -92,9 +92,9 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
   ) -> PyResult<Bound<'py, PyBytes>> {
     let config: ChunkConfig = config.try_into()?;
     let dtype = utils::core_dtype_from_numpy(py, &nums.dtype())?;
-    match_number_like_enum!(
+    match_number_enum!(
       dtype,
-      CoreDataType<T> => {
+      NumberType<T> => {
         simple_compress_generic(py, nums.downcast::<PyArray1<T>>()?, &config)
       }
     )
@@ -121,9 +121,9 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
     dst: &Bound<PyUntypedArray>,
   ) -> PyResult<PyProgress> {
     let dtype = utils::core_dtype_from_numpy(py, &dst.dtype())?;
-    match_number_like_enum!(
+    match_number_enum!(
       dtype,
-      CoreDataType<T> => {
+      NumberType<T> => {
         simple_decompress_into_generic(py, compressed, dst.downcast::<PyArray1<T>>()?)
       }
     )
@@ -142,18 +142,18 @@ pub fn register(m: &Bound<PyModule>) -> PyResult<()> {
   /// :raises: TypeError, RuntimeError
   #[pyfunction]
   fn simple_decompress(py: Python, compressed: &Bound<PyBytes>) -> PyResult<PyObject> {
-    use pco::standalone::DataTypeOrTermination::*;
+    use pco::standalone::NumberTypeOrTermination::*;
 
     let src = compressed.as_bytes();
     let (file_decompressor, src) = FileDecompressor::new(src).map_err(pco_err_to_py)?;
     let maybe_dtype = file_decompressor
-      .peek_dtype_or_termination(src)
+      .peek_number_type_or_termination(src)
       .map_err(pco_err_to_py)?;
     match maybe_dtype {
       Known(dtype) => {
-        match_number_like_enum!(
+        match_number_enum!(
           dtype,
-          CoreDataType<T> => {
+          NumberType<T> => {
             Ok(decompress_chunks::<T>(py, src, file_decompressor)?.to_object(py))
           }
         )

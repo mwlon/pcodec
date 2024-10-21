@@ -22,10 +22,10 @@ use crate::bench::codecs::zstd::ZstdConfig;
 use crate::bench::IterOpt;
 use crate::bench::{BenchStat, Precomputed};
 use crate::chunk_config_opt::ChunkConfigOpt;
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 use crate::num_vec::NumVec;
-use ::pco::data_types::CoreDataType;
-use ::pco::match_number_like_enum;
+use ::pco::data_types::NumberType;
+use ::pco::match_number_enum;
 
 #[cfg(feature = "full_bench")]
 mod blosc;
@@ -48,22 +48,22 @@ trait CodecInternal: Clone + CommandFactory + Debug + FromArgMatches + Send + Sy
   fn name(&self) -> &'static str;
   fn get_confs(&self) -> Vec<(&'static str, String)>;
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8>;
-  fn decompress<T: PcoNumberLike>(&self, compressed: &[u8]) -> Vec<T>;
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8>;
+  fn decompress<T: PcoNumber>(&self, compressed: &[u8]) -> Vec<T>;
 
   // sad manual dynamic dispatch, but at least we don't need all combinations
   // of (dtype x codec)
   fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
-    match_number_like_enum!(
+    match_number_enum!(
       num_vec,
       NumVec<T>(nums) => { self.compress(nums) }
     )
   }
 
-  fn decompress_dynamic(&self, dtype: CoreDataType, compressed: &[u8]) -> NumVec {
-    match_number_like_enum!(
+  fn decompress_dynamic(&self, dtype: NumberType, compressed: &[u8]) -> NumVec {
+    match_number_enum!(
       dtype,
-      CoreDataType<T> => {
+      NumberType<T> => {
         NumVec::new(self.decompress::<T>(compressed)).unwrap()
       }
     )

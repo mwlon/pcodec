@@ -44,7 +44,7 @@ mod tests {
 
   use super::*;
   use crate::chunk_config::DeltaSpec;
-  use crate::data_types::NumberLike;
+  use crate::data_types::Number;
   use crate::errors::PcoResult;
   use crate::standalone::{simple_compress, FileCompressor};
   use crate::{ChunkConfig, ModeSpec, PagingSpec};
@@ -58,7 +58,7 @@ mod tests {
     Ok(())
   }
 
-  fn check_file_guarantee<T: NumberLike>(nums: &[T], config: &ChunkConfig) -> PcoResult<()> {
+  fn check_file_guarantee<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<()> {
     let compressed = simple_compress(nums, config)?;
     assert!(compressed.len() <= file_size::<T::L>(nums.len(), &config.paging_spec)?);
     Ok(())

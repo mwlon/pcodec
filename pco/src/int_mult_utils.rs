@@ -4,7 +4,7 @@ use std::f64::consts::PI;
 use std::mem;
 
 use crate::constants::MULT_REQUIRED_BITS_SAVED_PER_NUM;
-use crate::data_types::{Latent, NumberLike};
+use crate::data_types::{Latent, Number};
 use crate::sampling::{self, PrimaryLatentAndSavings};
 
 // riemann zeta function
@@ -12,7 +12,7 @@ const ZETA_OF_2: f64 = PI * PI / 6.0;
 const LCB_RATIO: f64 = 1.0;
 
 #[inline(never)]
-pub fn split_latents<T: NumberLike>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
+pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
   let n = nums.len();
   let mut mults = Vec::with_capacity(n);
   let mut adjs = Vec::with_capacity(n);
@@ -204,7 +204,7 @@ pub fn choose_candidate_base<L: Latent>(sample: &mut [L]) -> Option<(L, f64)> {
   most_prominent_gcd(&triple_gcds, sample.len() / 3)
 }
 
-pub fn choose_base<T: NumberLike>(nums: &[T]) -> Option<T::L> {
+pub fn choose_base<T: Number>(nums: &[T]) -> Option<T::L> {
   let mut sample = sampling::choose_sample(nums, |num| Some(num.to_latent_ordered()))?;
   let (candidate, bits_saved_per_adj) = choose_candidate_base(&mut sample)?;
 

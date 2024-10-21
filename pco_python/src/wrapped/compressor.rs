@@ -5,9 +5,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
 use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
-use pco::data_types::{CoreDataType, Latent, NumberLike};
+use pco::data_types::{Latent, Number, NumberType};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
-use pco::{match_latent_enum, match_number_like_enum, ChunkConfig};
+use pco::{match_latent_enum, match_number_enum, ChunkConfig};
 
 use crate::utils::pco_err_to_py;
 use crate::{utils, PyChunkConfig};
@@ -29,7 +29,7 @@ pco::define_latent_enum!(
 struct PyCc(DynCc);
 
 impl PyFc {
-  fn chunk_compressor_generic<T: NumberLike + Element>(
+  fn chunk_compressor_generic<T: Number + Element>(
     &self,
     py: Python,
     arr: &Bound<PyArray1<T>>,
@@ -83,9 +83,9 @@ impl PyFc {
   ) -> PyResult<PyCc> {
     let config = config.try_into()?;
     let dtype = utils::core_dtype_from_numpy(py, &nums.dtype())?;
-    match_number_like_enum!(
+    match_number_enum!(
       dtype,
-      CoreDataType<T> => {
+      NumberType<T> => {
         let cc = self.chunk_compressor_generic::<T>(py, nums.downcast::<PyArray1<T>>()?, &config)?;
         Ok(PyCc(DynCc::new(cc).unwrap()))
       }

@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use crate::data_types::NumberLike;
+use crate::data_types::Number;
 use crate::errors::PcoResult;
 use crate::{standalone, ChunkConfig};
 
@@ -20,7 +20,7 @@ fn get_pco_path(version: &str, name: &str) -> PathBuf {
   ))
 }
 
-fn assert_nums_eq<T: NumberLike>(x: &[T], y: &[T]) {
+fn assert_nums_eq<T: Number>(x: &[T], y: &[T]) {
   assert_eq!(x.len(), y.len());
   for (i, (x, y)) in x.iter().zip(y).enumerate() {
     assert_eq!(
@@ -34,7 +34,7 @@ fn assert_nums_eq<T: NumberLike>(x: &[T], y: &[T]) {
   }
 }
 
-fn assert_compatible<T: NumberLike>(version: &str, name: &str, expected: &[T]) -> PcoResult<()> {
+fn assert_compatible<T: Number>(version: &str, name: &str, expected: &[T]) -> PcoResult<()> {
   let pco_path = get_pco_path(version, name);
 
   let compressed = fs::read(pco_path)?;
@@ -44,7 +44,7 @@ fn assert_compatible<T: NumberLike>(version: &str, name: &str, expected: &[T]) -
   Ok(())
 }
 
-fn simple_write_if_version_matches<T: NumberLike>(
+fn simple_write_if_version_matches<T: Number>(
   version: &str,
   name: &str,
   nums: &[T],

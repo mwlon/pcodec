@@ -11,7 +11,7 @@ use parquet::file::writer::SerializedFileWriter;
 use parquet::schema::parser::parse_message_type;
 
 use crate::bench::codecs::CodecInternal;
-use crate::dtypes::PcoNumberLike;
+use crate::dtypes::PcoNumber;
 
 const ZSTD: &str = "zstd";
 
@@ -71,7 +71,7 @@ impl CodecInternal for ParquetConfig {
     ]
   }
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
     let mut res = Vec::new();
     let message_type = format!(
       "message schema {{ REQUIRED {} nums; }}",
@@ -103,7 +103,7 @@ impl CodecInternal for ParquetConfig {
     res
   }
 
-  fn decompress<T: PcoNumberLike>(&self, bytes: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumber>(&self, bytes: &[u8]) -> Vec<T> {
     // couldn't find a way to make a parquet reader without a fully copy of the compressed bytes;
     // maybe this can be improved
     let reader = SerializedFileReader::new(bytes::Bytes::from(bytes.to_vec())).unwrap();

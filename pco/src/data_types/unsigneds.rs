@@ -1,5 +1,5 @@
 use crate::constants::Bitlen;
-use crate::data_types::{split_latents_classic, Latent, NumberLike};
+use crate::data_types::{split_latents_classic, Latent, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
 use crate::metadata::{ChunkMeta, DynLatent, Mode};
@@ -7,7 +7,7 @@ use crate::{describers, int_mult_utils, ChunkConfig, ModeSpec};
 
 use super::ModeAndLatents;
 
-pub fn choose_mode_and_split_latents<T: NumberLike>(
+pub fn choose_mode_and_split_latents<T: Number>(
   nums: &[T],
   config: &ChunkConfig,
 ) -> PcoResult<ModeAndLatents<T::L>> {
@@ -78,8 +78,8 @@ impl_latent!(u64);
 
 macro_rules! impl_unsigned_number {
   ($t: ty, $header_byte: expr) => {
-    impl NumberLike for $t {
-      const DTYPE_BYTE: u8 = $header_byte;
+    impl Number for $t {
+      const NUMBER_TYPE_BYTE: u8 = $header_byte;
 
       type L = Self;
 

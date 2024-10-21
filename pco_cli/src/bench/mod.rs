@@ -15,8 +15,8 @@ use tabled::settings::object::Columns;
 use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
-use pco::data_types::CoreDataType;
-use pco::match_number_like_enum;
+use pco::data_types::NumberType;
+use pco::match_number_enum;
 
 use crate::bench::codecs::CodecConfig;
 use crate::input::{Format, InputColumnOpt, InputFileOpt};
@@ -187,10 +187,10 @@ fn type_basename<T>() -> String {
   any::type_name::<T>().split(':').last().unwrap().to_string()
 }
 
-fn core_dtype_to_str(dtype: CoreDataType) -> String {
-  match_number_like_enum!(
+fn core_dtype_to_str(dtype: NumberType) -> String {
+  match_number_enum!(
     dtype,
-    CoreDataType<T> => {
+    NumberType<T> => {
       type_basename::<T>()
     }
   )

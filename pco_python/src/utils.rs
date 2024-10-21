@@ -1,20 +1,20 @@
 use numpy::{PyArrayDescr, PyArrayDescrMethods};
-use pco::data_types::CoreDataType;
+use pco::data_types::NumberType;
 use pco::errors::PcoError;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::{Bound, PyErr, PyResult, Python};
 
-pub fn core_dtype_from_str(s: &str) -> PyResult<CoreDataType> {
+pub fn core_dtype_from_str(s: &str) -> PyResult<NumberType> {
   match s.to_uppercase().as_str() {
-    "F16" => Ok(CoreDataType::F16),
-    "F32" => Ok(CoreDataType::F32),
-    "F64" => Ok(CoreDataType::F64),
-    "I16" => Ok(CoreDataType::I16),
-    "I32" => Ok(CoreDataType::I32),
-    "I64" => Ok(CoreDataType::I64),
-    "U16" => Ok(CoreDataType::U16),
-    "U32" => Ok(CoreDataType::U32),
-    "U64" => Ok(CoreDataType::U64),
+    "F16" => Ok(NumberType::F16),
+    "F32" => Ok(NumberType::F32),
+    "F64" => Ok(NumberType::F64),
+    "I16" => Ok(NumberType::I16),
+    "I32" => Ok(NumberType::I32),
+    "I64" => Ok(NumberType::I64),
+    "U16" => Ok(NumberType::U16),
+    "U32" => Ok(NumberType::U32),
+    "U64" => Ok(NumberType::U64),
     _ => Err(PyRuntimeError::new_err(format!(
       "unknown data type: {}",
       s,
@@ -22,25 +22,25 @@ pub fn core_dtype_from_str(s: &str) -> PyResult<CoreDataType> {
   }
 }
 
-pub fn core_dtype_from_numpy(py: Python, dtype: &Bound<PyArrayDescr>) -> PyResult<CoreDataType> {
+pub fn core_dtype_from_numpy(py: Python, dtype: &Bound<PyArrayDescr>) -> PyResult<NumberType> {
   let res = if dtype.is_equiv_to(&numpy::dtype_bound::<u16>(py)) {
-    CoreDataType::U16
+    NumberType::U16
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<u32>(py)) {
-    CoreDataType::U32
+    NumberType::U32
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<u64>(py)) {
-    CoreDataType::U64
+    NumberType::U64
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<i16>(py)) {
-    CoreDataType::I16
+    NumberType::I16
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<i32>(py)) {
-    CoreDataType::I32
+    NumberType::I32
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<i64>(py)) {
-    CoreDataType::I64
+    NumberType::I64
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<half::f16>(py)) {
-    CoreDataType::F16
+    NumberType::F16
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<f32>(py)) {
-    CoreDataType::F32
+    NumberType::F32
   } else if dtype.is_equiv_to(&numpy::dtype_bound::<f64>(py)) {
-    CoreDataType::F64
+    NumberType::F64
   } else {
     return Err(PyTypeError::new_err(format!(
       "Unsupported data type: {:?}",

@@ -4,16 +4,13 @@ use rand_xoshiro::rand_core::SeedableRng;
 
 use crate::chunk_config::{ChunkConfig, DeltaSpec};
 use crate::constants::Bitlen;
-use crate::data_types::NumberLike;
+use crate::data_types::Number;
 use crate::errors::PcoResult;
 use crate::metadata::{ChunkMeta, DynLatent, Mode};
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
 use crate::ModeSpec;
 
-fn compress_w_meta<T: NumberLike>(
-  nums: &[T],
-  config: &ChunkConfig,
-) -> PcoResult<(Vec<u8>, ChunkMeta)> {
+fn compress_w_meta<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<(Vec<u8>, ChunkMeta)> {
   let mut compressed = Vec::new();
   let fc = FileCompressor::default();
   fc.write_header(&mut compressed)?;
@@ -25,7 +22,7 @@ fn compress_w_meta<T: NumberLike>(
   Ok((compressed, meta))
 }
 
-fn assert_nums_eq<T: NumberLike>(decompressed: &[T], expected: &[T], name: &str) -> PcoResult<()> {
+fn assert_nums_eq<T: Number>(decompressed: &[T], expected: &[T], name: &str) -> PcoResult<()> {
   let debug_info = format!("name={}", name,);
   // We can't do assert_eq on the whole vector because even bitwise identical
   // floats sometimes aren't equal by ==.
@@ -47,11 +44,7 @@ fn assert_nums_eq<T: NumberLike>(decompressed: &[T], expected: &[T], name: &str)
   Ok(())
 }
 
-fn assert_recovers<T: NumberLike>(
-  nums: &[T],
-  compression_level: usize,
-  name: &str,
-) -> PcoResult<()> {
+fn assert_recovers<T: Number>(nums: &[T], compression_level: usize, name: &str) -> PcoResult<()> {
   for delta_encoding_order in [0, 1, 7] {
     for mode_spec in [ModeSpec::Classic, ModeSpec::Auto] {
       let config = ChunkConfig {

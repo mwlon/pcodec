@@ -1,6 +1,6 @@
 use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING};
-use crate::data_types::{Latent, NumberLike};
+use crate::data_types::{Latent, Number};
 use crate::metadata::Mode;
 
 #[derive(Clone, Debug)]
@@ -51,7 +51,7 @@ impl<L: Latent> Default for BinCompressionInfo<L> {
 }
 
 #[allow(clippy::type_complexity)]
-pub(crate) struct Bid<T: NumberLike> {
+pub(crate) struct Bid<T: Number> {
   pub mode: Mode,
   pub bits_saved_per_num: f64,
   // we include a split_fn since modes like FloatMult can benefit from extra

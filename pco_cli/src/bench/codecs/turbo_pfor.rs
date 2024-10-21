@@ -5,7 +5,7 @@ use clap::Parser;
 use half::f16;
 
 use crate::bench::codecs::CodecInternal;
-use crate::dtypes::{PcoNumberLike, TurboPforable};
+use crate::dtypes::{PcoNumber, TurboPforable};
 
 #[derive(Clone, Debug, Parser)]
 pub struct TurboPforConfig {}
@@ -19,7 +19,7 @@ impl CodecInternal for TurboPforConfig {
     vec![]
   }
 
-  fn compress<T: PcoNumberLike>(&self, nums: &[T]) -> Vec<u8> {
+  fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
     let mut nums = nums.to_vec();
     // not sure this is the real contract, just a heuristic
     let dst_size = 64 + ((nums.len() * mem::size_of::<T>()) as f32 * 1.01) as usize;
@@ -30,7 +30,7 @@ impl CodecInternal for TurboPforConfig {
     dst
   }
 
-  fn decompress<T: PcoNumberLike>(&self, src: &[u8]) -> Vec<T> {
+  fn decompress<T: PcoNumber>(&self, src: &[u8]) -> Vec<T> {
     let n = u64::from_le_bytes(src[..8].try_into().unwrap()) as usize;
     let mut src = src[8..].to_vec();
     let mut dst = Vec::with_capacity(n);

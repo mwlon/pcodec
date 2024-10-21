@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
-use crate::data_types::{Latent, NumberLike};
+use crate::data_types::{Latent, Number};
 use crate::errors::PcoResult;
 use crate::metadata::ChunkMeta;
 use crate::standalone::constants::*;
@@ -79,7 +79,7 @@ impl FileCompressor {
   ///
   /// Although this doesn't write anything yet, it does the bulk of
   /// compute necessary for the compression.
-  pub fn chunk_compressor<T: NumberLike>(
+  pub fn chunk_compressor<T: Number>(
     &self,
     nums: &[T],
     config: &ChunkConfig,
@@ -89,7 +89,7 @@ impl FileCompressor {
 
     Ok(ChunkCompressor {
       inner: self.inner.chunk_compressor(nums, &config)?,
-      dtype_byte: T::DTYPE_BYTE,
+      number_type_byte: T::NUMBER_TYPE_BYTE,
     })
   }
 
@@ -108,7 +108,7 @@ impl FileCompressor {
 #[derive(Clone, Debug)]
 pub struct ChunkCompressor<L: Latent> {
   inner: wrapped::ChunkCompressor<L>,
-  dtype_byte: u8,
+  number_type_byte: u8,
 }
 
 impl<L: Latent> ChunkCompressor<L> {
@@ -132,7 +132,7 @@ impl<L: Latent> ChunkCompressor<L> {
   /// Will return an error if the provided `Write` errors.
   pub fn write_chunk<W: Write>(&self, dst: W) -> PcoResult<W> {
     let mut writer = BitWriter::new(dst, STANDALONE_CHUNK_PREAMBLE_PADDING);
-    writer.write_aligned_bytes(&[self.dtype_byte])?;
+    writer.write_aligned_bytes(&[self.number_type_byte])?;
     let n = self.inner.n_per_page()[0];
     unsafe {
       writer.write_usize(n - 1, BITS_TO_ENCODE_N_ENTRIES);

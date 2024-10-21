@@ -5,7 +5,7 @@ use indicatif::ProgressBar;
 use crate::arrow_handlers::ArrowHandlerImpl;
 use crate::bench::codecs::CodecConfig;
 use crate::bench::{core_dtype_to_str, BenchOpt, BenchStat, PrintStat};
-use crate::dtypes::{ArrowNumberLike, PcoNumberLike};
+use crate::dtypes::{ArrowNumber, PcoNumber};
 use crate::num_vec::NumVec;
 
 pub trait BenchHandler {
@@ -45,7 +45,7 @@ fn handle_for_codec(
   })
 }
 
-impl<P: ArrowNumberLike> BenchHandler for ArrowHandlerImpl<P> {
+impl<P: ArrowNumber> BenchHandler for ArrowHandlerImpl<P> {
   fn bench(
     &self,
     arrays: &[ArrayRef],

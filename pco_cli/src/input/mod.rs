@@ -19,7 +19,7 @@ use half::f16;
 use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
 use parquet::arrow::ProjectionMask;
 
-use pco::data_types::CoreDataType;
+use pco::data_types::NumberType;
 use pco::standalone::simple_decompress;
 
 use crate::{dtypes, parse, utils};
@@ -392,7 +392,7 @@ impl Iterator for CsvColumnReader {
 
 struct PcoColumnReader {
   col_path: PathBuf,
-  dtype: CoreDataType,
+  dtype: NumberType,
   did_read: bool,
 }
 
@@ -410,7 +410,7 @@ impl PcoColumnReader {
 
 impl PcoColumnReader {
   fn get_array(&self) -> Result<ArrayRef> {
-    use CoreDataType::*;
+    use NumberType::*;
 
     let compressed = fs::read(&self.col_path)?;
     let array: ArrayRef = match self.dtype {

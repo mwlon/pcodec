@@ -1,11 +1,11 @@
 use numpy::{PyArray1, PyArrayMethods, PyUntypedArray};
-use pco::data_types::CoreDataType;
-use pco::match_number_like_enum;
+use pco::data_types::NumberType;
+use pco::match_number_enum;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
 use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
-use pco::data_types::NumberLike;
+use pco::data_types::Number;
 use pco::wrapped::{ChunkDecompressor, FileDecompressor};
 
 use crate::utils::{core_dtype_from_str, pco_err_to_py};
@@ -14,7 +14,7 @@ use crate::PyProgress;
 #[pyclass(name = "FileDecompressor")]
 struct PyFd(FileDecompressor);
 
-pco::define_number_like_enum!(
+pco::define_number_enum!(
   #[derive()]
   DynCd(ChunkDecompressor)
 );
@@ -57,9 +57,9 @@ impl PyFd {
     let fd = &self.0;
     let dtype = core_dtype_from_str(dtype)?;
 
-    let (inner, rest) = match_number_like_enum!(
+    let (inner, rest) = match_number_enum!(
       dtype,
-      CoreDataType<T> => {
+      NumberType<T> => {
         let (generic_cd, rest) = fd
           .chunk_decompressor::<T, _>(src)
           .map_err(pco_err_to_py)?;
@@ -103,7 +103,7 @@ impl PyCd {
   ) -> PyResult<(PyProgress, usize)> {
     let src = src.as_bytes();
 
-    let (progress, rest) = match_number_like_enum!(
+    let (progress, rest) = match_number_enum!(
       &self.0,
       DynCd<T>(cd) => {
         let arr = dst.downcast::<PyArray1<T>>()?;
