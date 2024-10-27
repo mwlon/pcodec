@@ -4,7 +4,8 @@ use crate::constants::Bitlen;
 use crate::data_types::Float;
 use crate::metadata::dyn_latent::DynLatent;
 use crate::metadata::DeltaEncoding;
-
+use crate::metadata::Mode::Classic;
+use crate::per_latent_var::LatentVarKey;
 // Internally, here's how we should model each mode:
 //
 // Classic: The data is drawn from a smooth distribution.
@@ -84,6 +85,28 @@ impl Mode {
     }
   }
 
+  pub(crate) fn latent_var_uses_delta_encoding(&self, latent_var_key: LatentVarKey) -> bool {
+    use LatentVarKey::*;
+    use Mode::*;
+
+    match (self, latent_var_key) {
+      // No recursive deltas.
+      (_, Delta) => false,
+      // In all currently-available modes, the overall delta encoding is really
+      // the delta-order of the primary latent variable.
+      (_, Primary) => true,
+      // In FloatMult, IntMult, and FloatQuant, the second latent is essentially a remainder or
+      // adjustment; there isn't any a priori reason that deltas should be useful for that kind of
+      // term and we do not attempt them.
+      (FloatMult(_) | IntMult(_) | FloatQuant(_), Secondary) => false,
+      _ => unreachable!(
+        "unknown latent {:?}/{:?}",
+        self, latent_var_key
+      ),
+    }
+  }
+
+  // TODO delete this fn
   pub(crate) fn delta_encoding_for_latent_var(
     &self,
     latent_var_idx: usize,

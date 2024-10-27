@@ -29,7 +29,7 @@ macro_rules! impl_signed {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> PcoResult<ModeAndLatents<Self::L>> {
+      ) -> PcoResult<ModeAndLatents> {
         unsigneds::choose_mode_and_split_latents(&nums, config)
       }
 

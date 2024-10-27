@@ -49,10 +49,12 @@ mod latent_batch_decompressor;
 mod latent_batch_dissector;
 mod latent_chunk_compressor;
 mod macros;
+mod per_latent_var;
 mod progress;
 mod read_write_uint;
 mod sampling;
 mod sort_utils;
 
+mod split_latents;
 #[cfg(test)]
 mod tests;

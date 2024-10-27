@@ -15,6 +15,25 @@ macro_rules! build_dtype_macros {
   ) => {
     $(#[$definer_attrs])*
     macro_rules! $definer {
+      (#[$enum_attrs: meta] $vis: vis $name: ident) => {
+        #[$enum_attrs]
+        $vis enum $name {
+          $($variant,)+
+        }
+
+        impl $name {
+          #[inline]
+          pub fn new<S: $constraint>() -> Option<Self> {
+            let type_id = std::any::TypeId::of::<S>();
+            $(
+              if type_id == std::any::TypeId::of::<$t>() {
+                return Some($name::$variant);
+              }
+            )+
+            None
+          }
+        }
+      };
       (#[$enum_attrs: meta] #[repr($desc_t: ty)] $vis: vis $name: ident = $desc_val: ident) => {
         #[$enum_attrs]
         #[repr($desc_t)]

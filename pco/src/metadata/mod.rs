@@ -4,6 +4,7 @@ pub use chunk_latent_var::ChunkLatentVarMeta;
 pub use delta_encoding::DeltaEncoding;
 pub use dyn_bins::DynBins;
 pub use dyn_latent::DynLatent;
+pub use dyn_latents::DynLatents;
 pub use mode::Mode;
 
 pub(crate) mod bin;

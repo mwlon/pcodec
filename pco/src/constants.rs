@@ -6,6 +6,7 @@ pub(crate) type Bitlen = u32;
 // must be u32 or larger
 // exposed in public API
 pub(crate) type Weight = u32;
+pub(crate) type DeltaLookback = u16;
 
 // compatibility
 pub const CURRENT_FORMAT_VERSION: u8 = 2;

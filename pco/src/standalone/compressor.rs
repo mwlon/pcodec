@@ -83,7 +83,7 @@ impl FileCompressor {
     &self,
     nums: &[T],
     config: &ChunkConfig,
-  ) -> PcoResult<ChunkCompressor<T::L>> {
+  ) -> PcoResult<ChunkCompressor> {
     let mut config = config.clone();
     config.paging_spec = PagingSpec::Exact(vec![nums.len()]);
 
@@ -106,12 +106,12 @@ impl FileCompressor {
 
 /// Holds metadata about a chunk and supports compression.
 #[derive(Clone, Debug)]
-pub struct ChunkCompressor<L: Latent> {
-  inner: wrapped::ChunkCompressor<L>,
+pub struct ChunkCompressor {
+  inner: wrapped::ChunkCompressor,
   number_type_byte: u8,
 }
 
-impl<L: Latent> ChunkCompressor<L> {
+impl ChunkCompressor {
   /// Returns pre-computed information about the chunk.
   pub fn meta(&self) -> &ChunkMeta {
     self.inner.meta()

@@ -5,14 +5,16 @@ use std::mem;
 
 use crate::constants::MULT_REQUIRED_BITS_SAVED_PER_NUM;
 use crate::data_types::{Latent, Number};
+use crate::metadata::DynLatents;
 use crate::sampling::{self, PrimaryLatentAndSavings};
+use crate::split_latents::SplitLatents;
 
 // riemann zeta function
 const ZETA_OF_2: f64 = PI * PI / 6.0;
 const LCB_RATIO: f64 = 1.0;
 
 #[inline(never)]
-pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
+pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> SplitLatents {
   let n = nums.len();
   let mut mults = Vec::with_capacity(n);
   let mut adjs = Vec::with_capacity(n);
@@ -26,7 +28,11 @@ pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
     *mult_dst = u / base;
     *adj_dst = u % base;
   }
-  vec![mults, adjs]
+
+  SplitLatents {
+    primary: DynLatents::new(mults).unwrap(),
+    secondary: Some(DynLatents::new(adjs).unwrap()),
+  }
 }
 
 #[inline(never)]

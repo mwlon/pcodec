@@ -63,6 +63,8 @@ pub enum DeltaSpec {
   /// deltas-of-deltas, etc.
   /// It is legal to use 0th order, but it is identical to `None`.
   TryConsecutive(usize),
+  // TODO
+  TryLz77,
 }
 
 // TODO consider adding a "lossiness" spec that allows dropping secondary latent

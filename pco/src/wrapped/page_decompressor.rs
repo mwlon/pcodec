@@ -61,7 +61,7 @@ unsafe fn decompress_latents_w_delta<L: Latent>(
   lbd.decompress_latent_batch(reader, &mut dst[..pre_delta_len])?;
   match delta_encoding {
     DeltaEncoding::None => (),
-    DeltaEncoding::Consecutive(_) => delta::decode_in_place(delta_state, dst),
+    DeltaEncoding::Consecutive(_) => delta::decode_consecutive_in_place(delta_state, dst),
   }
   Ok(())
 }

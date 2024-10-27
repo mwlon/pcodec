@@ -1,30 +1,52 @@
 use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING};
 use crate::data_types::{Latent, Number};
-use crate::metadata::Mode;
+use crate::delta::DeltaState;
+use crate::metadata::{DynLatents, Mode};
+use crate::per_latent_var::{LatentVarKey, PerLatentVar};
+use crate::split_latents::SplitLatents;
+use std::cmp;
+use std::ops::Range;
 
 #[derive(Clone, Debug)]
 pub struct PageInfo {
   pub page_n: usize,
   pub start_idx: usize,
-  pub end_idx_per_var: Vec<usize>,
+  pub end_idx: usize,
+  pub delta_states: PerLatentVar<DeltaState>,
+}
+
+impl PageInfo {
+  pub fn range_for_latent_var(&self, key: LatentVarKey) -> Range<usize> {
+    let start_idx = cmp::min(
+      self.start_idx + self.delta_states.get(key).unwrap_or_default().len(),
+      self.end_idx,
+    );
+    start_idx..self.end_idx
+  }
 }
 
 #[derive(Clone, Debug)]
-pub struct DissectedPageVar<L: Latent> {
+struct DeltaEncodingOutputs {
+  page_infos: Vec<PageInfo>,
+  additional_latents: Vec<DynLatents>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DissectedPageVar {
   // These vecs should have the same length.
   pub ans_vals: Vec<AnsState>,
   pub ans_bits: Vec<Bitlen>,
-  pub offsets: Vec<L>,
+  pub offsets: DynLatents,
   pub offset_bits: Vec<Bitlen>,
 
   pub ans_final_states: [AnsState; ANS_INTERLEAVING],
 }
 
 #[derive(Clone, Debug)]
-pub struct DissectedPage<L: Latent> {
+pub struct DissectedPage {
   pub page_n: usize,
-  pub per_latent_var: Vec<DissectedPageVar<L>>, // one per latent variable
+  pub per_latent_var: PerLatentVar<DissectedPageVar>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,5 +80,5 @@ pub(crate) struct Bid<T: Number> {
   // information (inv_base) not captured entirely in the mode.  This extra
   // information is an implementation detail of the compressor, not part of the
   // format itself, and is not / does not need to be known to the decompressor.
-  pub split_fn: Box<dyn FnOnce(&[T]) -> Vec<Vec<T::L>>>,
+  pub split_fn: Box<dyn FnOnce(&[T]) -> SplitLatents>,
 }

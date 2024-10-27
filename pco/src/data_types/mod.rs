@@ -5,12 +5,14 @@ use std::ops::{
   Rem, RemAssign, Shl, Shr, Sub, SubAssign,
 };
 
-pub use dynamic::NumberType;
+pub use dynamic::{LatentType, NumberType};
 
 use crate::constants::Bitlen;
 use crate::describers::LatentDescriber;
 use crate::errors::PcoResult;
+use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::{ChunkMeta, Mode};
+use crate::split_latents::SplitLatents;
 use crate::ChunkConfig;
 
 mod dynamic;
@@ -18,7 +20,7 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-pub(crate) type ModeAndLatents<L> = (Mode, Vec<Vec<L>>);
+pub(crate) type ModeAndLatents = (Mode, SplitLatents);
 
 /// This is used internally for compressing and decompressing with
 /// float modes.
@@ -173,7 +175,7 @@ pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + '
   fn choose_mode_and_split_latents(
     nums: &[Self],
     config: &ChunkConfig,
-  ) -> PcoResult<ModeAndLatents<Self::L>>;
+  ) -> PcoResult<ModeAndLatents>;
 
   fn from_latent_ordered(l: Self::L) -> Self;
   fn to_latent_ordered(self) -> Self::L;
@@ -183,6 +185,10 @@ pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + '
   fn transmute_to_latent(self) -> Self::L;
 }
 
-pub(crate) fn split_latents_classic<T: Number>(nums: &[T]) -> Vec<Vec<T::L>> {
-  vec![nums.iter().map(|&x| x.to_latent_ordered()).collect()]
+pub(crate) fn split_latents_classic<T: Number>(nums: &[T]) -> SplitLatents {
+  let primary = DynLatents::new(nums.iter().map(|&x| x.to_latent_ordered()).collect()).unwrap();
+  SplitLatents {
+    primary,
+    secondary: None,
+  }
 }

@@ -10,7 +10,7 @@ use super::ModeAndLatents;
 pub fn choose_mode_and_split_latents<T: Number>(
   nums: &[T],
   config: &ChunkConfig,
-) -> PcoResult<ModeAndLatents<T::L>> {
+) -> PcoResult<ModeAndLatents> {
   match config.mode_spec {
     ModeSpec::Auto => {
       if let Some(base) = int_mult_utils::choose_base(nums) {
@@ -99,7 +99,7 @@ macro_rules! impl_unsigned_number {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> PcoResult<ModeAndLatents<Self::L>> {
+      ) -> PcoResult<ModeAndLatents> {
         choose_mode_and_split_latents(nums, config)
       }
 

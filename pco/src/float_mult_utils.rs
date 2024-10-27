@@ -4,8 +4,9 @@ use std::mem;
 use crate::compression_intermediates::Bid;
 use crate::constants::{Bitlen, MULT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{Float, Latent};
-use crate::metadata::Mode;
+use crate::metadata::{DynLatents, Mode};
 use crate::sampling::PrimaryLatentAndSavings;
+use crate::split_latents::SplitLatents;
 use crate::{int_mult_utils, sampling};
 
 #[inline(never)]
@@ -19,10 +20,7 @@ pub(crate) fn join_latents<F: Float>(base: F, primary: &mut [F::L], secondary: &
   }
 }
 
-pub(crate) fn split_latents<F: Float>(
-  page_nums: &[F],
-  config: FloatMultConfig<F>,
-) -> Vec<Vec<F::L>> {
+pub(crate) fn split_latents<F: Float>(page_nums: &[F], config: FloatMultConfig<F>) -> SplitLatents {
   let FloatMultConfig { base, inv_base } = config;
   let n = page_nums.len();
   let uninit_vec = || unsafe {
@@ -45,7 +43,11 @@ pub(crate) fn split_latents<F: Float>(
       // that 0 is in the middle of the range
       .toggle_center();
   }
-  vec![primary, adjustments]
+
+  SplitLatents {
+    primary: DynLatents::new(primary).unwrap(),
+    secondary: Some(DynLatents::new(adjustments).unwrap()),
+  }
 }
 
 // The rest of this file concerns automatically detecting the float `base`

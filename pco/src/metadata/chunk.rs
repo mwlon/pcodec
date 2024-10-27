@@ -12,6 +12,7 @@ use crate::metadata::delta_encoding::DeltaEncoding;
 use crate::metadata::dyn_latent::DynLatent;
 use crate::metadata::format_version::FormatVersion;
 use crate::metadata::Mode;
+use crate::per_latent_var::PerLatentVar;
 
 /// The metadata of a pco chunk.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,22 +28,10 @@ pub struct ChunkMeta {
   /// Metadata about the interleaved streams needed by `pco` to
   /// compress/decompress the inputs
   /// according to the formula used by `mode`.
-  pub per_latent_var: Vec<ChunkLatentVarMeta>,
+  pub per_latent_var: PerLatentVar<ChunkLatentVarMeta>,
 }
 
 impl ChunkMeta {
-  pub(crate) fn new(
-    mode: Mode,
-    delta_encoding: DeltaEncoding,
-    per_latent_var: Vec<ChunkLatentVarMeta>,
-  ) -> Self {
-    ChunkMeta {
-      mode,
-      delta_encoding,
-      per_latent_var,
-    }
-  }
-
   pub(crate) fn exact_size(&self) -> usize {
     let extra_bits_for_mode = match self.mode {
       Mode::Classic => 0,

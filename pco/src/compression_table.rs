@@ -1,7 +1,7 @@
 use crate::compression_intermediates::BinCompressionInfo;
 use crate::data_types::Latent;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct CompressionTable<L: Latent> {
   pub search_size_log: usize,
   pub search_lowers: Vec<L>,

@@ -7,6 +7,7 @@ use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
 use crate::metadata::ChunkMeta;
+use crate::per_latent_var::PerLatentVar;
 
 // Data page metadata is slightly semantically different from chunk metadata,
 // so it gets its own type.
@@ -15,13 +16,13 @@ use crate::metadata::ChunkMeta;
 // (wrapped mode).
 #[derive(Clone, Debug)]
 pub struct PageMeta {
-  pub per_latent_var: Vec<PageLatentVarMeta>,
+  pub per_latent_var: PerLatentVar<PageLatentVarMeta>,
 }
 
 impl PageMeta {
-  pub unsafe fn write_to<I: Iterator<Item = Bitlen>, W: Write>(
+  pub unsafe fn write_to<W: Write>(
     &self,
-    ans_size_logs: I,
+    ans_size_logs: PerLatentVar<Bitlen>,
     writer: &mut BitWriter<W>,
   ) {
     for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {

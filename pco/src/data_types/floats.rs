@@ -28,7 +28,7 @@ fn filter_sample<F: Float>(num: &F) -> Option<F> {
 fn choose_mode_and_split_latents<F: Float>(
   nums: &[F],
   chunk_config: &ChunkConfig,
-) -> PcoResult<ModeAndLatents<F::L>> {
+) -> PcoResult<ModeAndLatents> {
   match chunk_config.mode_spec {
     ModeSpec::Auto => {
       // up to 3 bids: classic, float mult, float quant modes
@@ -338,7 +338,7 @@ macro_rules! impl_float_number {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> PcoResult<ModeAndLatents<Self::L>> {
+      ) -> PcoResult<ModeAndLatents> {
         choose_mode_and_split_latents(nums, config)
       }
 

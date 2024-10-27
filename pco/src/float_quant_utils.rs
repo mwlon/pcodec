@@ -1,8 +1,9 @@
 use crate::compression_intermediates::Bid;
 use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{Float, Latent};
-use crate::metadata::Mode;
+use crate::metadata::{DynLatents, Mode};
 use crate::sampling::{self, PrimaryLatentAndSavings};
+use crate::split_latents::SplitLatents;
 use std::cmp;
 
 const REQUIRED_QUANTIZED_PROPORTION: f64 = 0.95;
@@ -28,7 +29,7 @@ pub(crate) fn join_latents<F: Float>(k: Bitlen, primary: &mut [F::L], secondary:
   }
 }
 
-pub(crate) fn split_latents<F: Float>(page_nums: &[F], k: Bitlen) -> Vec<Vec<F::L>> {
+pub(crate) fn split_latents<F: Float>(page_nums: &[F], k: Bitlen) -> SplitLatents {
   let n = page_nums.len();
   let uninit_vec = || unsafe {
     let mut res = Vec::<F::L>::with_capacity(n);
@@ -55,7 +56,11 @@ pub(crate) fn split_latents<F: Float>(page_nums: &[F], k: Bitlen) -> Vec<Vec<F::
       lowest_k_bits_max - lowest_k_bits
     };
   }
-  vec![primary, secondary]
+
+  SplitLatents {
+    primary: DynLatents::new(primary).unwrap(),
+    secondary: Some(DynLatents::new(secondary).unwrap()),
+  }
 }
 
 pub(crate) fn compute_bid<F: Float>(sample: &[F]) -> Option<Bid<F>> {

@@ -5,7 +5,7 @@ use crate::compression_intermediates::DissectedPageVar;
 use crate::compression_table::CompressionTable;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
-use crate::{ans, bits};
+use crate::{ans, bits, macros};
 
 pub struct LatentBatchDissector<'a, L: Latent> {
   // immutable
@@ -104,12 +104,7 @@ impl<'a, L: Latent> LatentBatchDissector<'a, L> {
     }
   }
 
-  pub fn dissect_latent_batch(
-    &mut self,
-    latents: &[L],
-    base_i: usize,
-    dst: &mut DissectedPageVar<L>,
-  ) {
+  pub fn dissect_latent_batch(&mut self, latents: &[L], base_i: usize, dst: &mut DissectedPageVar) {
     let DissectedPageVar {
       ans_vals,
       ans_bits,
@@ -127,6 +122,7 @@ impl<'a, L: Latent> LatentBatchDissector<'a, L> {
       &mut offset_bits[base_i..end_i],
     );
 
+    let offsets = offsets.downcast_mut::<L>().unwrap();
     self.set_offsets(latents, &mut offsets[base_i..end_i]);
 
     self.encode_ans_in_reverse(
