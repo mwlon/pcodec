@@ -29,6 +29,7 @@ use std::cmp::min;
 use std::io::Write;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::num::NonZeroI16;
 
 // if it looks like the average page of size n will use k bits, hint that it
 // will be PAGE_SIZE_OVERESTIMATION * k bits.
@@ -190,7 +191,7 @@ fn build_page_infos_and_delta_states(
       start_idx..end_idx,
     );
 
-    let mut delta_states = latents.map_mut(|key, var_latents| {
+    let mut delta_states = latents.as_mut().map(|key, var_latents| {
       let encoding_for_var = delta_encoding.for_latent_var(key);
       delta::encode_in_place(
         encoding_for_var,
@@ -587,7 +588,7 @@ impl ChunkCompressor {
 
     let page_info = &page_infos[page_idx];
 
-    let per_latent_var = latent_chunk_compressors.map_ref(|key, lcc| {
+    let per_latent_var = latent_chunk_compressors.as_ref().map(|key, lcc| {
       match_latent_enum!(
         lcc,
         DynLatentChunkCompressor<L>(inner) => {
@@ -642,7 +643,8 @@ impl ChunkCompressor {
       );
       for (key, (dissected_page_var, lcc)) in dissected_page
         .per_latent_var
-        .zip_exact(&self.latent_chunk_compressors)
+        .as_ref()
+        .zip_exact(self.latent_chunk_compressors.as_ref())
         .enumerated()
       {
         match_latent_enum!(
@@ -674,8 +676,7 @@ impl ChunkCompressor {
     let dissected_page = self.dissect_page(page_idx)?;
     let page_info = &self.page_infos[page_idx];
 
-    let lccs = &self.latent_chunk_compressors;
-    let ans_default_state_and_size_log = lccs.map_ref(|_, lcc| {
+    let ans_default_state_and_size_log = self.latent_chunk_compressors.as_ref().map(|_, lcc| {
       match_latent_enum!(
         lcc,
         DynLatentChunkCompressor<L>(inner) => { (inner.encoder.default_state(), inner.encoder.size_log()) }
@@ -684,10 +685,11 @@ impl ChunkCompressor {
 
     let per_latent_var = page_info
       .delta_states
-      .zip_exact(&ans_default_state_and_size_log)
-      .zip_exact(&dissected_page.per_latent_var)
-      .map_ref(
-        |key, ((&delta_state, (ans_default_state, _)), dissected)| {
+      .as_ref()
+      .zip_exact(ans_default_state_and_size_log.as_ref())
+      .zip_exact(dissected_page.per_latent_var.as_ref())
+      .map(
+        |key, ((delta_state, (ans_default_state, _)), dissected)| {
           let ans_final_state_idxs = dissected
             .ans_final_states
             .map(|state| state - ans_default_state);

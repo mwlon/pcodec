@@ -184,16 +184,15 @@ mod test {
     let (nums, (_expected_ys, _expected_ms)): (Vec<_>, (Vec<_>, Vec<_>)) =
       expected.iter().cloned().unzip();
     let k: Bitlen = 5;
-    if let [ref mut ys, ms] = &mut split_latents(&nums, k)[..] {
-      let actual: Vec<_> = nums
-        .iter()
-        .cloned()
-        .zip(ys.iter().cloned().zip(ms.iter().cloned()))
-        .collect();
-      assert_eq!(expected, actual);
-    } else {
-      panic!("Bug: `split_latents` returned data in an unexpected format");
-    }
+    let SplitLatents { primary, secondary } = split_latents(&nums, k);
+    let primary = primary.downcast::<u32>().unwrap();
+    let secondary = secondary.unwrap().downcast::<u32>().unwrap();
+    let actual: Vec<_> = nums
+      .iter()
+      .cloned()
+      .zip(primary.iter().cloned().zip(secondary.iter().cloned()))
+      .collect();
+    assert_eq!(expected, actual);
   }
 
   #[test]
@@ -203,11 +202,12 @@ mod test {
       .iter()
       .map(|&num| num as f64)
       .collect();
-    if let [_, ms] = &split_latents(&nums, k)[..] {
-      assert!(ms.iter().all(|&m| m == 0u64));
-    } else {
-      panic!("Bug: `split_latents` returned data in an unexpected format");
-    }
+    let SplitLatents {
+      primary: _primary,
+      secondary,
+    } = split_latents(&nums, k);
+    let secondary = secondary.unwrap().downcast::<u64>().unwrap();
+    assert!(secondary.iter().all(|&m| m == 0u64));
   }
 
   #[test]
@@ -219,12 +219,11 @@ mod test {
       .collect::<Vec<_>>();
 
     let k: Bitlen = 5;
-    if let [ref mut ys, ms] = &mut split_latents(&nums, k)[..] {
-      join_latents::<f64>(k, ys, &ms);
-      assert_eq!(uints, *ys);
-    } else {
-      panic!("Bug: `split_latents` returned data in an unexpected format");
-    }
+    let SplitLatents { primary, secondary } = split_latents(&nums, k);
+    let mut primary = primary.downcast::<u64>().unwrap();
+    let secondary = secondary.unwrap().downcast::<u64>().unwrap();
+    join_latents::<f64>(k, &mut primary, &secondary);
+    assert_eq!(uints, primary);
   }
 
   #[test]

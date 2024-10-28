@@ -255,15 +255,16 @@ mod tests {
     let nums = vec![8_u32, 1, 5];
     let base = 4_u32;
     let latents = split_latents(&nums, base);
-    assert_eq!(latents.len(), 2);
-    assert_eq!(latents[0], vec![2_u32, 0, 1]);
-    assert_eq!(latents[1], vec![0_u32, 1, 1]);
+    assert_eq!(latents.primary.len(), 2);
+    let mut primary = latents.primary.downcast::<u32>().unwrap();
+    let secondary = latents.secondary.unwrap().downcast::<u32>().unwrap();
+    assert_eq!(&primary, &vec![2_u32, 0, 1]);
+    assert_eq!(&secondary, &vec![0_u32, 1, 1]);
 
     // JOIN
-    let mut primary_and_dst = latents[0].to_vec();
-    join_latents(base, &mut primary_and_dst, &latents[1]);
+    join_latents(base, &mut primary, &secondary);
 
-    assert_eq!(primary_and_dst, nums);
+    assert_eq!(primary, nums);
   }
 
   #[test]

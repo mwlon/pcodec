@@ -19,7 +19,7 @@ pub struct PageInfo {
 impl PageInfo {
   pub fn range_for_latent_var(&self, key: LatentVarKey) -> Range<usize> {
     let start_idx = cmp::min(
-      self.start_idx + self.delta_states.get(key).unwrap_or_default().len(),
+      self.start_idx + self.delta_states.get(key).unwrap().len(),
       self.end_idx,
     );
     start_idx..self.end_idx

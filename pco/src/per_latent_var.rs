@@ -70,31 +70,19 @@ impl<T> PerLatentVar<T> {
     }
   }
 
-  pub(crate) fn map_ref<S, F: Fn(LatentVarKey, &T) -> S>(&self, f: F) -> PerLatentVar<S> {
+  pub(crate) fn as_ref(&self) -> PerLatentVar<&T> {
     PerLatentVar {
-      delta: self
-        .delta
-        .as_ref()
-        .map(|delta| f(LatentVarKey::Delta, delta)),
-      primary: f(LatentVarKey::Primary, &self.primary),
-      secondary: self
-        .secondary
-        .as_ref()
-        .map(|secondary| f(LatentVarKey::Secondary, secondary)),
+      delta: self.delta.as_ref(),
+      primary: &self.primary,
+      secondary: self.secondary.as_ref(),
     }
   }
 
-  pub(crate) fn map_mut<S, F: Fn(LatentVarKey, &mut T) -> S>(&mut self, f: F) -> PerLatentVar<S> {
+  pub(crate) fn as_mut(&mut self) -> PerLatentVar<&mut T> {
     PerLatentVar {
-      delta: self
-        .delta
-        .as_mut()
-        .map(|delta| f(LatentVarKey::Delta, delta)),
-      primary: f(LatentVarKey::Primary, &mut self.primary),
-      secondary: self
-        .secondary
-        .as_mut()
-        .map(|secondary| f(LatentVarKey::Secondary, secondary)),
+      delta: self.delta.as_mut(),
+      primary: &mut self.primary,
+      secondary: self.secondary.as_mut(),
     }
   }
 
@@ -106,20 +94,17 @@ impl<T> PerLatentVar<T> {
     }
   }
 
-  pub(crate) fn zip_exact<'a, S>(&'a self, other: &'a PerLatentVar<S>) -> PerLatentVar<(&T, &S)> {
-    let zip_option = |a: Option<&'a T>, b: Option<&'a S>| match (a, b) {
+  pub(crate) fn zip_exact<S>(self, other: PerLatentVar<S>) -> PerLatentVar<(T, S)> {
+    let zip_option = |a: Option<T>, b: Option<S>| match (a, b) {
       (Some(a), Some(b)) => Some((a, b)),
       (None, None) => None,
       _ => panic!("expected values of left and right sides to match"),
     };
 
     PerLatentVar {
-      delta: zip_option(self.delta.as_ref(), other.delta.as_ref()),
-      primary: (&self.primary, &other.primary),
-      secondary: zip_option(
-        self.secondary.as_ref(),
-        other.secondary.as_ref(),
-      ),
+      delta: zip_option(self.delta, other.delta),
+      primary: (self.primary, other.primary),
+      secondary: zip_option(self.secondary, other.secondary),
     }
   }
 
