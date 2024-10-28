@@ -237,7 +237,7 @@ fn new_candidate_w_split_and_delta_encoding(
   let mut latent_chunk_compressors = PerLatentVarBuilder::default();
   let mut bin_countss = PerLatentVarBuilder::default();
   // TODO not mut
-  for (key, latents) in latents.enumerated_owned() {
+  for (key, latents) in latents.enumerated() {
     let unoptimized_bins_log = match key {
       // primary latents are generally the most important to compress, and
       // delta latents typically have a small number of discrete values, so
@@ -528,7 +528,7 @@ impl ChunkCompressor {
 
     // worst case trailing bytes after bit packing
     let mut worst_case_body_bit_size = 7 * n_pages;
-    for (key, latent_var_meta) in meta.per_latent_var.enumerated() {
+    for (key, latent_var_meta) in meta.per_latent_var.as_ref().enumerated() {
       let bin_counts = bin_counts_per_latent_var.get(key).unwrap();
       match_latent_enum!(&latent_var_meta.bins, DynBins<L>(bins) => {
         for (bin, &count) in bins.iter().zip(bin_counts) {
@@ -641,7 +641,7 @@ impl ChunkCompressor {
         batch_start + FULL_BATCH_N,
         dissected_page.page_n,
       );
-      for (key, (dissected_page_var, lcc)) in dissected_page
+      for (_, (dissected_page_var, lcc)) in dissected_page
         .per_latent_var
         .as_ref()
         .zip_exact(self.latent_chunk_compressors.as_ref())

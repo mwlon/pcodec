@@ -108,19 +108,7 @@ impl<T> PerLatentVar<T> {
     }
   }
 
-  pub(crate) fn enumerated(&self) -> Vec<(LatentVarKey, &T)> {
-    let mut res = Vec::with_capacity(3);
-    if let Some(value) = &self.delta {
-      res.push((LatentVarKey::Delta, value));
-    }
-    res.push((LatentVarKey::Primary, &self.primary));
-    if let Some(value) = &self.secondary {
-      res.push((LatentVarKey::Secondary, value));
-    }
-    res
-  }
-
-  pub(crate) fn enumerated_owned(self) -> Vec<(LatentVarKey, T)> {
+  pub(crate) fn enumerated(self) -> Vec<(LatentVarKey, T)> {
     let mut res = Vec::with_capacity(3);
     if let Some(value) = self.delta {
       res.push((LatentVarKey::Delta, value));

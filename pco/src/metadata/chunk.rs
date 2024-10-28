@@ -12,7 +12,7 @@ use crate::metadata::delta_encoding::DeltaEncoding;
 use crate::metadata::dyn_latent::DynLatent;
 use crate::metadata::format_version::FormatVersion;
 use crate::metadata::Mode;
-use crate::per_latent_var::PerLatentVar;
+use crate::per_latent_var::{LatentVarKey, PerLatentVar};
 
 /// The metadata of a pco chunk.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -165,12 +165,6 @@ impl ChunkMeta {
     writer.finish_byte();
     writer.flush()?;
     Ok(())
-  }
-
-  pub(crate) fn delta_encoding_for_latent_var(&self, latent_idx: usize) -> DeltaEncoding {
-    self
-      .mode
-      .delta_encoding_for_latent_var(latent_idx, self.delta_encoding)
   }
 }
 

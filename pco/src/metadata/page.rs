@@ -7,7 +7,8 @@ use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
 use crate::metadata::ChunkMeta;
-use crate::per_latent_var::PerLatentVar;
+use crate::per_latent_var;
+use crate::per_latent_var::{PerLatentVar, PerLatentVarBuilder};
 
 // Data page metadata is slightly semantically different from chunk metadata,
 // so it gets its own type.
@@ -25,8 +26,11 @@ impl PageMeta {
     ans_size_logs: PerLatentVar<Bitlen>,
     writer: &mut BitWriter<W>,
   ) {
-    for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
-      self.per_latent_var[latent_idx].write_to(ans_size_log, writer);
+    for (_, (ans_size_log, latent_var_meta)) in ans_size_logs
+      .zip_exact(self.per_latent_var.as_ref())
+      .enumerated()
+    {
+      latent_var_meta.write_to(ans_size_log, writer);
     }
     writer.finish_byte();
   }
@@ -35,18 +39,24 @@ impl PageMeta {
     reader: &mut BitReader,
     chunk_meta: &ChunkMeta,
   ) -> PcoResult<Self> {
-    let mut per_latent_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
-    for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
-      per_latent_var.push(PageLatentVarMeta::read_from::<L>(
-        reader,
-        chunk_meta
-          .delta_encoding_for_latent_var(latent_idx)
-          .n_latents_per_state(),
-        chunk_latent_var_meta.ans_size_log,
-      )?);
+    let mut per_latent_var_builder = PerLatentVarBuilder::default();
+    for (key, chunk_latent_var_meta) in chunk_meta.per_latent_var.as_ref().enumerated() {
+      per_latent_var_builder.set(
+        key,
+        PageLatentVarMeta::read_from::<L>(
+          reader,
+          chunk_meta
+            .delta_encoding
+            .for_latent_var(key)
+            .n_latents_per_state(),
+          chunk_latent_var_meta.ans_size_log,
+        ),
+      )
     }
     reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
 
-    Ok(Self { per_latent_var })
+    Ok(Self {
+      per_latent_var: per_latent_var_builder.into(),
+    })
   }
 }
