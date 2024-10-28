@@ -113,7 +113,6 @@ impl<L: Latent> LatentChunkCompressor<L> {
   }
 
   pub fn dissect_page(&self, page_range: Range<usize>) -> DissectedPageVar {
-    let table = self.table.downcast_ref::<L>().unwrap();
     let uninit_dissected_page_var = |n, ans_default_state| {
       let ans_final_states = [ans_default_state; ANS_INTERLEAVING];
       DissectedPageVar {
@@ -135,8 +134,8 @@ impl<L: Latent> LatentChunkCompressor<L> {
     );
 
     // we go through in reverse for ANS!
-    let mut lbd = LatentBatchDissector::new(table, &self.encoder);
-    for (batch_idx, batch) in &self.latents[page_range]
+    let mut lbd = LatentBatchDissector::new(&self.table, &self.encoder);
+    for (batch_idx, batch) in self.latents[page_range]
       .chunks(FULL_BATCH_N)
       .enumerate()
       .rev()

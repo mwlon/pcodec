@@ -165,7 +165,8 @@ mod tests {
     let mut deltas = orig_latents.to_vec();
     let order = 2;
     let zero_delta = u32::MID;
-    let mut moments = encode_consecutive_in_place(&mut deltas, order);
+    let moments = encode_consecutive_in_place(order, &mut deltas);
+    let mut moments = DeltaMoments(moments);
 
     // add back some padding we lose during compression
     for _ in 0..order {

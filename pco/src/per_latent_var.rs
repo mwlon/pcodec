@@ -22,9 +22,56 @@ pub struct PerLatentVar<T> {
   pub secondary: Option<T>,
 }
 
-impl<T> PerLatentVar<T> {
-  pub(crate) fn map<S, F: Fn(LatentVarKey, &T) -> S>(&self, f: F) -> PerLatentVar<S> {
+#[derive(Clone, Debug)]
+pub(crate) struct PerLatentVarBuilder<T> {
+  pub delta: Option<T>,
+  pub primary: Option<T>,
+  pub secondary: Option<T>,
+}
+
+impl<T> Default for PerLatentVarBuilder<T> {
+  fn default() -> Self {
     Self {
+      delta: None,
+      primary: None,
+      secondary: None,
+    }
+  }
+}
+
+impl<T> PerLatentVarBuilder<T> {
+  pub fn set(&mut self, key: LatentVarKey, value: T) {
+    match key {
+      LatentVarKey::Delta => self.delta = Some(value),
+      LatentVarKey::Primary => self.primary = Some(value),
+      LatentVarKey::Secondary => self.secondary = Some(value),
+    }
+  }
+}
+
+impl<T> From<PerLatentVarBuilder<T>> for PerLatentVar<T> {
+  fn from(value: PerLatentVarBuilder<T>) -> Self {
+    PerLatentVar {
+      delta: value.delta,
+      primary: value.primary.unwrap(),
+      secondary: value.secondary,
+    }
+  }
+}
+
+impl<T> PerLatentVar<T> {
+  pub(crate) fn map<S, F: Fn(LatentVarKey, T) -> S>(self, f: F) -> PerLatentVar<S> {
+    PerLatentVar {
+      delta: self.delta.map(|delta| f(LatentVarKey::Delta, delta)),
+      primary: f(LatentVarKey::Primary, self.primary),
+      secondary: self
+        .secondary
+        .map(|secondary| f(LatentVarKey::Secondary, secondary)),
+    }
+  }
+
+  pub(crate) fn map_ref<S, F: Fn(LatentVarKey, &T) -> S>(&self, f: F) -> PerLatentVar<S> {
+    PerLatentVar {
       delta: self
         .delta
         .as_ref()
@@ -38,7 +85,7 @@ impl<T> PerLatentVar<T> {
   }
 
   pub(crate) fn map_mut<S, F: Fn(LatentVarKey, &mut T) -> S>(&mut self, f: F) -> PerLatentVar<S> {
-    Self {
+    PerLatentVar {
       delta: self
         .delta
         .as_mut()
@@ -110,22 +157,14 @@ impl<T> PerLatentVar<T> {
   //   }
   //   res
   // }
-
-  pub(crate) fn set(&mut self, key: LatentVarKey, value: T) {
-    match key {
-      LatentVarKey::Delta => self.delta = Some(value),
-      LatentVarKey::Primary => self.primary = Some(value),
-      LatentVarKey::Secondary => self.secondary = Some(value),
-    }
-  }
 }
 
 impl<T> From<PerLatentVar<T>> for Vec<T> {
   fn from(value: PerLatentVar<T>) -> Self {
     let mut res = Vec::with_capacity(3);
-    res.extend(&value.delta);
+    res.extend(value.delta);
     res.push(value.primary);
-    res.extend(&value.secondary);
+    res.extend(value.secondary);
     res
   }
 }

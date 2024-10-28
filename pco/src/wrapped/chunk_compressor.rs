@@ -21,7 +21,8 @@ use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::page::PageMeta;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
 use crate::metadata::{Bin, ChunkMeta, DeltaEncoding, Mode};
-use crate::per_latent_var::{LatentVarKey, PerLatentVar};
+use crate::per_latent_var::{LatentVarKey, PerLatentVar, PerLatentVarBuilder};
+use crate::split_latents::SplitLatents;
 use crate::wrapped::guarantee;
 use crate::{ans, bin_optimization, data_types, delta, ChunkConfig, PagingSpec, FULL_BATCH_N};
 use std::cmp::min;
@@ -170,18 +171,17 @@ fn collect_contiguous_latents<L: Latent>(
   res
 }
 
-fn build_page_infos_and_delta_states<L: Latent>(
+fn build_page_infos_and_delta_states(
   delta_encoding: DeltaEncoding,
   n_per_page: &[usize],
   latents: &mut PerLatentVar<DynLatents>,
 ) -> Vec<PageInfo> {
   let n_pages = n_per_page.len();
   let mut page_infos = Vec::with_capacity(n_pages);
-  let mut delta_moments = vec![Vec::new(); n_pages];
 
   // delta encoding
   let mut start_idx = 0;
-  for &page_n in &n_per_page {
+  for &page_n in n_per_page {
     let end_idx = start_idx + page_n;
 
     let delta_latents = delta::compute_delta_latent_var(
@@ -190,12 +190,18 @@ fn build_page_infos_and_delta_states<L: Latent>(
       start_idx..end_idx,
     );
 
-    let delta_states = latents.map_mut(|key, var_latents| {
+    let mut delta_states = latents.map_mut(|key, var_latents| {
       let encoding_for_var = delta_encoding.for_latent_var(key);
       delta::encode_in_place(
         encoding_for_var,
         delta_latents.as_ref(),
         var_latents,
+      )
+    });
+    delta_states.delta = delta_latents.as_ref().map(|delta_latents| {
+      match_latent_enum!(
+        delta_latents,
+        DynLatents<L>(_inner) => { DeltaState::new(Vec::<L>::new()).unwrap() }
       )
     });
     latents.delta = delta_latents;
@@ -226,9 +232,9 @@ fn new_candidate_w_split_and_delta_encoding(
   let page_infos = build_page_infos_and_delta_states(delta_encoding, &n_per_page, &mut latents);
 
   // training bins
-  let mut var_metas = latents.map(|_, _| MaybeUninit::uninit());
-  let mut latent_chunk_compressors = latents.map(|_, _| MaybeUninit::uninit());
-  let mut bin_countss = latents.map(|_, _| MaybeUninit::uninit());
+  let mut var_metas = PerLatentVarBuilder::default();
+  let mut latent_chunk_compressors = PerLatentVarBuilder::default();
+  let mut bin_countss = PerLatentVarBuilder::default();
   // TODO not mut
   for (key, latents) in latents.enumerated_owned() {
     let unoptimized_bins_log = match key {
@@ -260,24 +266,23 @@ fn new_candidate_w_split_and_delta_encoding(
           bins: DynBins::new(bins).unwrap(),
           ans_size_log,
         };
-        var_metas.set(key, MaybeUninit::new(var_meta));
-        latent_chunk_compressors.set(key, MaybeUninit::new(lcc));
-        bin_countss.set(key, MaybeUninit::new(bin_counts));
+        var_metas.set(key, var_meta);
+        latent_chunk_compressors.set(key, lcc);
+        bin_countss.set(key, bin_counts);
       }
     )
   }
 
-  (
-    var_metas,
-    latent_chunk_compressors,
-    bin_countss,
-  ) = unsafe {
-    mem::transmute((
-      var_metas,
-      latent_chunk_compressors,
-      bin_countss,
-    ))
-  };
+  let var_metas = var_metas.into();
+  let latent_chunk_compressors = latent_chunk_compressors.into();
+  let bin_countss = bin_countss.into();
+  // let (var_metas, latent_chunk_compressors, bin_countss) = unsafe {
+  //   mem::transmute((
+  //     var_metas,
+  //     latent_chunk_compressors,
+  //     bin_countss,
+  //   ))
+  // };
 
   let meta = ChunkMeta {
     mode,
@@ -399,7 +404,7 @@ fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> Bitlen {
 // and we don't need a specialization for each full number type.
 // Returns a chunk compressor and the counts (per latent var) of numbers in
 // each bin.
-fn new_candidate_w_split<L: Latent>(
+fn new_candidate_w_split(
   mode: Mode,
   latents: PerLatentVar<DynLatents>,
   config: &ChunkConfig,
@@ -407,7 +412,12 @@ fn new_candidate_w_split<L: Latent>(
   let n = latents.primary.len();
   let unoptimized_bins_log = choose_unoptimized_bins_log(config.compression_level, n);
   let delta_encoding = match config.delta_spec {
-    DeltaSpec::Auto => choose_delta_encoding(&latents.primary, unoptimized_bins_log)?,
+    DeltaSpec::Auto => match_latent_enum!(
+      &latents.primary,
+      DynLatents<L>(primary) => {
+        choose_delta_encoding(primary, unoptimized_bins_log)?
+      }
+    ),
     DeltaSpec::None | DeltaSpec::TryConsecutive(0) => DeltaEncoding::None,
     DeltaSpec::TryConsecutive(order) => DeltaEncoding::Consecutive(order),
     DeltaSpec::TryLz77 => lz_delta_encoding(n),
@@ -475,7 +485,7 @@ pub(crate) fn new<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<Chun
   let n = nums.len();
   validate_chunk_size(n)?;
 
-  let (mode, primary, secondary) = T::choose_mode_and_split_latents(nums, config)?;
+  let (mode, SplitLatents { primary, secondary }) = T::choose_mode_and_split_latents(nums, config)?;
   let latents = PerLatentVar {
     delta: None,
     primary,
@@ -488,7 +498,7 @@ pub(crate) fn new<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<Chun
     n,
     bin_counts,
   ) {
-    let (primary, secondary) = data_types::split_latents_classic(nums);
+    let SplitLatents { primary, secondary } = data_types::split_latents_classic(nums);
     let latents = PerLatentVar {
       delta: None,
       primary,
@@ -577,7 +587,7 @@ impl ChunkCompressor {
 
     let page_info = &page_infos[page_idx];
 
-    let per_latent_var = latent_chunk_compressors.map(|key, lcc| {
+    let per_latent_var = latent_chunk_compressors.map_ref(|key, lcc| {
       match_latent_enum!(
         lcc,
         DynLatentChunkCompressor<L>(inner) => {
@@ -606,8 +616,8 @@ impl ChunkCompressor {
     let mut body_bit_size = 0;
     let n_pre_delta_latents = page_info.end_idx - page_info.start_idx;
     for (key, lcc) in self.latent_chunk_compressors.enumerated() {
-      let page_n_latents = n_pre_delta_latents
-        .saturating_sub(page_info.delta_states.get(key).unwrap_or_default().len());
+      let page_n_latents =
+        n_pre_delta_latents.saturating_sub(page_info.delta_states.get(key).unwrap().len());
       let nums_bit_size = page_n_latents as f64
         * match_latent_enum!(
           lcc,
@@ -664,28 +674,32 @@ impl ChunkCompressor {
     let dissected_page = self.dissect_page(page_idx)?;
     let page_info = &self.page_infos[page_idx];
 
-    let ans_encoders = self.latent_chunk_compressors.map(|_, lcc| {
+    let lccs = &self.latent_chunk_compressors;
+    let ans_default_state_and_size_log = lccs.map_ref(|_, lcc| {
       match_latent_enum!(
         lcc,
-        DynLatentChunkCompressor<L>(inner) => { &inner.encoder }
+        DynLatentChunkCompressor<L>(inner) => { (inner.encoder.default_state(), inner.encoder.size_log()) }
       )
     });
 
     let per_latent_var = page_info
       .delta_states
-      .zip_exact(&ans_encoders)
+      .zip_exact(&ans_default_state_and_size_log)
       .zip_exact(&dissected_page.per_latent_var)
-      .map(|key, ((delta_state, encoder), dissected)| {
-        let base_state = encoder.default_state();
-        let ans_final_state_idxs = dissected.ans_final_states.map(|state| state - base_state);
-        PageLatentVarMeta {
-          delta_moments: delta_state.clone(),
-          ans_final_state_idxs,
-        }
-      });
+      .map_ref(
+        |key, ((&delta_state, (ans_default_state, _)), dissected)| {
+          let ans_final_state_idxs = dissected
+            .ans_final_states
+            .map(|state| state - ans_default_state);
+          PageLatentVarMeta {
+            delta_moments: delta_state.clone(),
+            ans_final_state_idxs,
+          }
+        },
+      );
 
     let page_meta = PageMeta { per_latent_var };
-    let ans_size_logs = ans_encoders.map(|_, encoder| encoder.size_log());
+    let ans_size_logs = ans_default_state_and_size_log.map(|_, (_, size_log)| size_log);
     unsafe { page_meta.write_to(ans_size_logs, &mut writer) };
 
     self.write_dissected_page(dissected_page, &mut writer)?;
