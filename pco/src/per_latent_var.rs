@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::iter::Sum;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LatentVarKey {
@@ -118,6 +119,21 @@ impl<T> PerLatentVar<T> {
       res.push((LatentVarKey::Secondary, value));
     }
     res
+  }
+
+  pub(crate) fn sum(self) -> T
+  where
+    T: Sum,
+  {
+    let mut values = Vec::with_capacity(3);
+    if let Some(value) = self.delta {
+      values.push(value);
+    }
+    values.push(self.primary);
+    if let Some(value) = self.secondary {
+      values.push(value);
+    }
+    T::sum(values.into_iter())
   }
   // pub(crate) fn enumerated_mut(&mut self) -> Vec<(LatentVarKey, &mut T)> {
   //   let mut res = Vec::with_capacity(3);

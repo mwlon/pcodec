@@ -46,4 +46,8 @@ impl FormatVersion {
   pub(crate) fn used_old_gcds(&self) -> bool {
     self.0 == 0
   }
+
+  pub(crate) fn supports_delta_variants(&self) -> bool {
+    self.0 >= 3
+  }
 }

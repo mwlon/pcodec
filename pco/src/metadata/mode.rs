@@ -1,11 +1,17 @@
-use std::fmt::Debug;
-
-use crate::constants::Bitlen;
-use crate::data_types::Float;
+use crate::bit_reader::BitReader;
+use crate::bit_writer::BitWriter;
+use crate::constants::{Bitlen, BITS_TO_ENCODE_MODE_VARIANT, BITS_TO_ENCODE_QUANTIZE_K};
+use crate::data_types::{Float, LatentType};
+use crate::errors::{PcoError, PcoResult};
+use crate::match_latent_enum;
 use crate::metadata::dyn_latent::DynLatent;
+use crate::metadata::format_version::FormatVersion;
 use crate::metadata::DeltaEncoding;
-use crate::metadata::Mode::Classic;
+use crate::metadata::Mode::*;
 use crate::per_latent_var::LatentVarKey;
+use std::fmt::Debug;
+use std::io::Write;
+
 // Internally, here's how we should model each mode:
 //
 // Classic: The data is drawn from a smooth distribution.
@@ -75,20 +81,93 @@ pub enum Mode {
 }
 
 impl Mode {
-  pub(crate) fn n_latent_vars(&self) -> usize {
-    use Mode::*;
+  pub(crate) unsafe fn read_from(
+    reader: &mut BitReader,
+    version: &FormatVersion,
+    latent_type: LatentType,
+  ) -> PcoResult<Self> {
+    let read_latent = |reader| {
+      match_latent_enum!(
+        latent_type,
+        LatentType<L> => {
+          DynLatent::read_uncompressed_from::<L>(reader)
+        }
+      )
+    };
 
+    let mode = match reader.read_bitlen(BITS_TO_ENCODE_MODE_VARIANT) {
+      0 => Classic,
+      1 => {
+        if version.used_old_gcds() {
+          return Err(PcoError::compatibility(
+            "unable to decompress data from v0.0.0 of pco with different GCD encoding",
+          ));
+        }
+
+        let base = read_latent(reader);
+        IntMult(base)
+      }
+      2 => {
+        let base_latent = read_latent(reader);
+        FloatMult(base_latent)
+      }
+      3 => {
+        let k = reader.read_bitlen(BITS_TO_ENCODE_QUANTIZE_K);
+        FloatQuant(k)
+      }
+      value => {
+        return Err(PcoError::corruption(format!(
+          "unknown mode value {}",
+          value
+        )))
+      }
+    };
+    Ok(mode)
+  }
+
+  pub(crate) unsafe fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
+    let mode_value = match self {
+      Classic => 0,
+      IntMult(_) => 1,
+      FloatMult { .. } => 2,
+      FloatQuant { .. } => 3,
+    };
+    writer.write_bitlen(mode_value, BITS_TO_ENCODE_MODE_VARIANT);
     match self {
-      Classic => 1,
-      FloatMult(_) | IntMult(_) => 2, // multiplier, adjustment
-      FloatQuant(_) => 2,             // quantums, adjustment
+      Classic => (),
+      IntMult(base) => {
+        base.write_uncompressed_to(writer);
+      }
+      FloatMult(base_latent) => {
+        base_latent.write_uncompressed_to(writer);
+      }
+      &FloatQuant(k) => {
+        writer.write_uint(k, BITS_TO_ENCODE_QUANTIZE_K);
+      }
+    };
+  }
+
+  pub(crate) fn primary_latent_type(&self, number_latent_type: LatentType) -> LatentType {
+    match self {
+      Classic | FloatMult(_) | FloatQuant(_) | IntMult(_) => number_latent_type,
     }
   }
 
+  pub(crate) fn secondary_latent_type(&self, number_latent_type: LatentType) -> Option<LatentType> {
+    match self {
+      Classic => None,
+      FloatMult(_) | FloatQuant(_) | IntMult(_) => Some(number_latent_type),
+    }
+  }
+  // pub(crate) fn has_secondary_latent_var(&self) -> bool {
+  //   match self {
+  //     Classic => false,
+  //     FloatMult(_) | IntMult(_) | FloatQuant(_) => true,
+  //   }
+  // }
+
   pub(crate) fn latent_var_uses_delta_encoding(&self, latent_var_key: LatentVarKey) -> bool {
     use LatentVarKey::*;
-    use Mode::*;
-
     match (self, latent_var_key) {
       // No recursive deltas.
       (_, Delta) => false,
@@ -112,8 +191,6 @@ impl Mode {
     latent_var_idx: usize,
     delta_encoding: DeltaEncoding,
   ) -> DeltaEncoding {
-    use Mode::*;
-
     match (self, latent_var_idx) {
       // In all currently-available modes, the overall `delta_order` is really the delta-order of
       // the first latent.

@@ -616,9 +616,13 @@ impl ChunkCompressor {
     let page_info = &self.page_infos[page_idx];
     let mut body_bit_size = 0;
     let n_pre_delta_latents = page_info.end_idx - page_info.start_idx;
-    for (key, lcc) in self.latent_chunk_compressors.enumerated() {
-      let page_n_latents =
-        n_pre_delta_latents.saturating_sub(page_info.delta_states.get(key).unwrap().len());
+    for (_, (lcc, delta_state)) in self
+      .latent_chunk_compressors
+      .as_ref()
+      .zip_exact(page_info.delta_states.as_ref())
+      .enumerated()
+    {
+      let page_n_latents = n_pre_delta_latents.saturating_sub(delta_state.len());
       let nums_bit_size = page_n_latents as f64
         * match_latent_enum!(
           lcc,
