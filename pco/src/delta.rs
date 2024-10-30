@@ -88,7 +88,7 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
     let l = latents[i];
     let mut best_j = i;
     let mut best_delta = L::MAX;
-    for j in (i.saturating_sub(window_n)..i) {
+    for j in i.saturating_sub(window_n)..i {
       let other = latents[j];
       let delta = L::min(l.wrapping_sub(other), other.wrapping_sub(l));
       if delta < best_delta {
@@ -105,9 +105,19 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
 
 fn encode_lz77_in_place<L: Latent>(
   config: DeltaLz77Config,
-  lookbacks: &[L],
+  lookbacks: &[DeltaLookback],
   latents: &mut [L],
 ) -> Vec<L> {
+  toggle_center_in_place(latents);
+  unimplemented!();
+}
+
+pub fn decode_lz77_in_place<L: Latent>(
+  config: DeltaLz77Config,
+  lookbacks: &[DeltaLookback],
+  state: &mut [L],
+  latents: &mut [L],
+) {
   toggle_center_in_place(latents);
   unimplemented!();
 }

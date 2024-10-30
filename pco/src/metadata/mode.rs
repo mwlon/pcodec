@@ -166,46 +166,6 @@ impl Mode {
   //   }
   // }
 
-  pub(crate) fn latent_var_uses_delta_encoding(&self, latent_var_key: LatentVarKey) -> bool {
-    use LatentVarKey::*;
-    match (self, latent_var_key) {
-      // No recursive deltas.
-      (_, Delta) => false,
-      // In all currently-available modes, the overall delta encoding is really
-      // the delta-order of the primary latent variable.
-      (_, Primary) => true,
-      // In FloatMult, IntMult, and FloatQuant, the second latent is essentially a remainder or
-      // adjustment; there isn't any a priori reason that deltas should be useful for that kind of
-      // term and we do not attempt them.
-      (FloatMult(_) | IntMult(_) | FloatQuant(_), Secondary) => false,
-      _ => unreachable!(
-        "unknown latent {:?}/{:?}",
-        self, latent_var_key
-      ),
-    }
-  }
-
-  // TODO delete this fn
-  pub(crate) fn delta_encoding_for_latent_var(
-    &self,
-    latent_var_idx: usize,
-    delta_encoding: DeltaEncoding,
-  ) -> DeltaEncoding {
-    match (self, latent_var_idx) {
-      // In all currently-available modes, the overall `delta_order` is really the delta-order of
-      // the first latent.
-      (Classic, 0) | (FloatMult(_), 0) | (FloatQuant(_), 0) | (IntMult(_), 0) => delta_encoding,
-      // In FloatMult, IntMult, and FloatQuant, the second latent is essentially a remainder or
-      // adjustment; there isn't any a priori reason that deltas should be useful for that kind of
-      // term and we do not attempt them.
-      (FloatMult(_), 1) | (IntMult(_), 1) | (FloatQuant(_), 1) => DeltaEncoding::None,
-      _ => unreachable!(
-        "unknown latent {:?}/{}",
-        self, latent_var_idx
-      ),
-    }
-  }
-
   pub(crate) fn float_mult<F: Float>(base: F) -> Self {
     Self::FloatMult(DynLatent::new(base.to_latent_ordered()).unwrap())
   }
