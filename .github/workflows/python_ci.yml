@@ -41,7 +41,7 @@ jobs:
     if: contains(github.event.release.name, 'Python')
     strategy:
       matrix:
-        target: [ x86 ]
+        target: [ x64 ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
