@@ -7,7 +7,7 @@ use crate::constants::{
   MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
 };
 use crate::data_types::{Latent, LatentType, Number};
-use crate::delta::{DeltaMoments, DeltaState};
+use crate::delta::DeltaState;
 use crate::errors::{PcoError, PcoResult};
 use crate::histograms::histogram;
 use crate::latent_chunk_compressor::{

@@ -4,19 +4,11 @@ use crate::macros::match_latent_enum;
 use crate::metadata::delta_encoding::DeltaLz77Config;
 use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::DeltaEncoding;
-use std::cmp;
+use std::mem::MaybeUninit;
 use std::ops::Range;
+use std::{cmp, mem};
 
 pub type DeltaState = DynLatents;
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct DeltaMoments<L: Latent>(pub(crate) Vec<L>);
-
-impl<L: Latent> DeltaMoments<L> {
-  pub fn order(&self) -> usize {
-    self.0.len()
-  }
-}
 
 // Without this, deltas in, say, [-5, 5] would be split out of order into
 // [U::MAX - 4, U::MAX] and [0, 5].
@@ -40,7 +32,11 @@ fn first_order_encode_consecutive_in_place<L: Latent>(latents: &mut [L]) {
   }
 }
 
-// used for a single page, so we return the delta moments
+// Used for a single page, so we return the delta moments.
+// All encode in place functions leave junk data (`order`
+// latents in this case) at the front of the latents.
+// Using the front instead of the back is preferable because it makes the lz77
+// encode function simpler and faster.
 #[inline(never)]
 fn encode_consecutive_in_place<L: Latent>(order: usize, mut latents: &mut [L]) -> Vec<L> {
   // TODO this function could be made faster by doing all steps on mini batches
@@ -69,19 +65,24 @@ fn first_order_decode_consecutive_in_place<L: Latent>(moment: &mut L, latents: &
 // used for a single batch, so we mutate the delta moments
 #[inline(never)]
 pub(crate) fn decode_consecutive_in_place<L: Latent>(
-  delta_moments: &mut DeltaMoments<L>,
+  delta_moments: &mut Vec<L>,
   latents: &mut [L],
 ) {
   toggle_center_in_place(latents);
-  for moment in delta_moments.0.iter_mut().rev() {
+  for moment in delta_moments.iter_mut().rev() {
     first_order_decode_consecutive_in_place(moment, latents);
   }
 }
 
 fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> Vec<DeltaLookback> {
   let state_n = config.state_n();
+
+  if latents.len() < state_n {
+    return vec![];
+  }
+
   let window_n = config.window_n();
-  let mut res = Vec::with_capacity(latents.len() - state_n);
+  let mut res = vec![MaybeUninit::uninit(); latents.len() - state_n];
   // TODO make this fast
   for i in state_n..latents.len() {
     // TODO default window
@@ -98,22 +99,27 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
     }
 
     best_j = cmp::min(best_j, i - 1);
-    res[i - state_n] = (i - best_j) as DeltaLookback;
+    res[i - state_n] = MaybeUninit::new((i - best_j) as DeltaLookback);
   }
-  res
+
+  unsafe { mem::transmute(res) }
 }
 
+// All encode in place functions leave junk data (`state_n` latents in this
+// case) at the front of the latents.
+// Using the front instead of the back is preferable because it means we don't
+// need an extra copy of the latents in this case.
 fn encode_lz77_in_place<L: Latent>(
   config: DeltaLz77Config,
   lookbacks: &[DeltaLookback],
   latents: &mut [L],
 ) -> Vec<L> {
   toggle_center_in_place(latents);
+
   unimplemented!();
 }
 
 pub fn decode_lz77_in_place<L: Latent>(
-  config: DeltaLz77Config,
   lookbacks: &[DeltaLookback],
   state: &mut [L],
   latents: &mut [L],
@@ -156,7 +162,7 @@ pub fn encode_in_place(
           encode_consecutive_in_place(order, inner)
         }
         DeltaEncoding::Lz77(config) => {
-          let lookbacks = delta_latents.unwrap().downcast_ref::<L>().unwrap();
+          let lookbacks = delta_latents.unwrap().downcast_ref::<DeltaLookback>().unwrap();
           encode_lz77_in_place(config, lookbacks, inner)
         }
       };
@@ -174,15 +180,18 @@ mod tests {
     let orig_latents: Vec<u32> = vec![2, 2, 1, u32::MAX, 0];
     let mut deltas = orig_latents.to_vec();
     let order = 2;
-    let zero_delta = u32::MID;
-    let moments = encode_consecutive_in_place(order, &mut deltas);
-    let mut moments = DeltaMoments(moments);
+    let mut moments = encode_consecutive_in_place(order, &mut deltas);
 
-    // add back some padding we lose during compression
+    // Encoding left just deltas at the front,
+    // but for decoding we need junk deltas at the end.
+    let mut deltas_to_decode = Vec::new();
+    deltas_to_decode.extend(&deltas[order..]);
     for _ in 0..order {
-      deltas.push(zero_delta);
+      deltas_to_decode.push(1337);
     }
+    let mut deltas = deltas_to_decode;
 
+    // decode in two parts to show we keep state properly
     decode_consecutive_in_place::<u32>(&mut moments, &mut deltas[..3]);
     assert_eq!(&deltas[..3], &orig_latents[..3]);
 

@@ -2,7 +2,7 @@ use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, Latent, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
-use crate::metadata::{ChunkMeta, DynLatent, Mode};
+use crate::metadata::{ChunkMeta, DynLatent, DynLatents, Mode};
 use crate::{describers, int_mult_utils, ChunkConfig, ModeSpec};
 
 use super::ModeAndLatents;
@@ -111,7 +111,7 @@ macro_rules! impl_unsigned_number {
       fn to_latent_ordered(self) -> Self::L {
         self
       }
-      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]) {
+      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: Option<&DynLatents>) {
         match mode {
           Mode::Classic => (),
           Mode::IntMult(dyn_latent) => {

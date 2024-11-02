@@ -10,7 +10,7 @@ use crate::data_types::{split_latents_classic, Float, Latent, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::metadata::{ChunkMeta, Mode};
+use crate::metadata::{ChunkMeta, DynLatents, Mode};
 use crate::{describers, float_mult_utils, float_quant_utils, sampling, ChunkConfig};
 
 fn filter_sample<F: Float>(num: &F) -> Option<F> {
@@ -363,7 +363,7 @@ macro_rules! impl_float_number {
           mem_layout ^ $sign_bit_mask
         }
       }
-      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]) {
+      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: Option<&DynLatents>) {
         match mode {
           Mode::Classic => (),
           Mode::FloatMult(dyn_latent) => {

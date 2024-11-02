@@ -7,14 +7,14 @@ pub enum LatentVarKey {
   Primary,
   Secondary,
 }
-
-impl LatentVarKey {
-  pub const ALL: [LatentVarKey; 3] = [
-    LatentVarKey::Delta,
-    LatentVarKey::Primary,
-    LatentVarKey::Secondary,
-  ];
-}
+//
+// impl LatentVarKey {
+//   pub const ALL: [LatentVarKey; 3] = [
+//     LatentVarKey::Delta,
+//     LatentVarKey::Primary,
+//     LatentVarKey::Secondary,
+//   ];
+// }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PerLatentVar<T> {

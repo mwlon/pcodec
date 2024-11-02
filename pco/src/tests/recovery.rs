@@ -241,8 +241,9 @@ fn recover_with_alternating_nums(offset_bits: Bitlen, name: &str) -> PcoResult<(
       ..Default::default()
     },
   )?;
-  assert_eq!(meta.per_latent_var.len(), 1);
-  let latent_var = &meta.per_latent_var[0];
+  assert!(meta.per_latent_var.delta.is_none());
+  assert!(meta.per_latent_var.secondary.is_none());
+  let latent_var = &meta.per_latent_var.primary;
   let bins = latent_var.bins.downcast_ref::<u64>().unwrap();
   assert_eq!(bins.len(), 1);
   assert_eq!(bins[0].offset_bits, offset_bits);

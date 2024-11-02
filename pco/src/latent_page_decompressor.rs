@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::ans::{AnsState, Spec};
 use crate::bit_reader::BitReader;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
+use crate::constants::{Bitlen, DeltaLookback, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
 use crate::delta::DeltaState;
 use crate::errors::PcoResult;
@@ -33,7 +33,7 @@ struct State<L: Latent> {
   offset_bits_scratch: [Bitlen; FULL_BATCH_N],
   lowers_scratch: [L; FULL_BATCH_N],
 
-  state_idxs: [AnsState; ANS_INTERLEAVING],
+  ans_state_idxs: [AnsState; ANS_INTERLEAVING],
   delta_state: Vec<L>,
 }
 
@@ -84,7 +84,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
       offset_bits_csum_scratch: [0; FULL_BATCH_N],
       offset_bits_scratch: [0; FULL_BATCH_N],
       lowers_scratch: [L::ZERO; FULL_BATCH_N],
-      state_idxs: ans_final_state_idxs,
+      ans_state_idxs: ans_final_state_idxs,
       delta_state,
     };
 
@@ -132,7 +132,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
     let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
     let [mut state_idx_0, mut state_idx_1, mut state_idx_2, mut state_idx_3] =
-      self.state.state_idxs;
+      self.state.ans_state_idxs;
     let infos = self.infos.as_slice();
     let ans_nodes = self.decoder.nodes.as_slice();
     for base_i in (0..FULL_BATCH_N).step_by(ANS_INTERLEAVING) {
@@ -163,7 +163,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
 
     reader.stale_byte_idx = stale_byte_idx;
     reader.bits_past_byte = bits_past_byte;
-    self.state.state_idxs = [state_idx_0, state_idx_1, state_idx_2, state_idx_3];
+    self.state.ans_state_idxs = [state_idx_0, state_idx_1, state_idx_2, state_idx_3];
   }
 
   // This implementation handles arbitrary batch size and looks simpler, but is
@@ -174,7 +174,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
-    let mut state_idxs = self.state.state_idxs;
+    let mut state_idxs = self.state.ans_state_idxs;
     for i in 0..batch_n {
       let j = i % 4;
       stale_byte_idx += bits_past_byte as usize / 8;
@@ -191,7 +191,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
 
     reader.stale_byte_idx = stale_byte_idx;
     reader.bits_past_byte = bits_past_byte;
-    self.state.state_idxs = state_idxs;
+    self.state.ans_state_idxs = state_idxs;
   }
 
   #[inline(never)]
@@ -272,24 +272,34 @@ impl<L: Latent> LatentPageDecompressor<L> {
     reader: &mut BitReader,
     dst: &mut [L],
   ) {
+    let n_remaining_pre_delta =
+      n_remaining_in_page.saturating_sub(self.delta_encoding.n_latents_per_state());
+    let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
+      dst.len()
+    } else {
+      // If we're at the end, this won't initialize the last
+      // few elements before delta decoding them, so we do that manually here to
+      // satisfy MIRI. This step isn't really necessary.
+      dst[n_remaining_pre_delta..].fill(L::default());
+      n_remaining_pre_delta
+    };
+    self.decompress_batch_pre_delta(reader, &mut dst[..pre_delta_len]);
+
     match self.delta_encoding {
-      DeltaEncoding::None => self.decompress_batch_pre_delta(reader, dst),
-      DeltaEncoding::Consecutive(order) => {
-        let n_remaining_pre_delta =
-          n_remaining_in_page.saturating_sub(self.delta_encoding.n_latents_per_state());
-        let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
-          dst.len()
-        } else {
-          // If we're at the end, LatentBatchdDecompressor won't initialize the last
-          // few elements before delta decoding them, so we do that manually here to
-          // satisfy MIRI. This step isn't really necessary.
-          dst[n_remaining_pre_delta..].fill(L::default());
-          n_remaining_pre_delta
-        };
-        self.decompress_batch_pre_delta(reader, &mut dst[..pre_delta_len]);
+      DeltaEncoding::None => (),
+      DeltaEncoding::Consecutive(_) => {
         delta::decode_consecutive_in_place(&mut self.state.delta_state, dst)
       }
-      DeltaEncoding::Lz77(config) => {}
+      DeltaEncoding::Lz77(_) => {
+        delta::decode_lz77_in_place(
+          delta_latents
+            .unwrap()
+            .downcast_ref::<DeltaLookback>()
+            .unwrap(),
+          &mut self.state.delta_state,
+          dst,
+        );
+      }
     }
   }
 }

@@ -26,12 +26,12 @@ impl PageInfo {
   }
 }
 
-#[derive(Clone, Debug)]
-struct DeltaEncodingOutputs {
-  page_infos: Vec<PageInfo>,
-  additional_latents: Vec<DynLatents>,
-}
-
+// #[derive(Clone, Debug)]
+// struct DeltaEncodingOutputs {
+//   page_infos: Vec<PageInfo>,
+//   additional_latents: Vec<DynLatents>,
+// }
+//
 #[derive(Clone, Debug)]
 pub struct DissectedPageVar {
   // These vecs should have the same length.

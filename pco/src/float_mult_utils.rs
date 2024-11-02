@@ -10,7 +10,12 @@ use crate::split_latents::SplitLatents;
 use crate::{int_mult_utils, sampling};
 
 #[inline(never)]
-pub(crate) fn join_latents<F: Float>(base: F, primary: &mut [F::L], secondary: &[F::L]) {
+pub(crate) fn join_latents<F: Float>(
+  base: F,
+  primary: &mut [F::L],
+  secondary: Option<&DynLatents>,
+) {
+  let secondary = secondary.unwrap().downcast_ref::<F::L>().unwrap();
   for (mult_and_dst, &adj) in primary.iter_mut().zip(secondary.iter()) {
     let unadjusted = F::int_float_from_latent(*mult_and_dst) * base;
     *mult_and_dst = unadjusted

@@ -9,7 +9,12 @@ use std::cmp;
 const REQUIRED_QUANTIZED_PROPORTION: f64 = 0.95;
 
 #[inline(never)]
-pub(crate) fn join_latents<F: Float>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) {
+pub(crate) fn join_latents<F: Float>(
+  k: Bitlen,
+  primary: &mut [F::L],
+  secondary: Option<&DynLatents>,
+) {
+  let secondary = secondary.unwrap().downcast_ref::<F::L>().unwrap();
   // For any float `num` such that `split_latents([num], k) == [[y], [m]]`, we have
   //     num.is_sign_positive() == (y >= sign_cutoff)
   let sign_cutoff = F::L::MID >> k;
@@ -221,8 +226,7 @@ mod test {
     let k: Bitlen = 5;
     let SplitLatents { primary, secondary } = split_latents(&nums, k);
     let mut primary = primary.downcast::<u64>().unwrap();
-    let secondary = secondary.unwrap().downcast::<u64>().unwrap();
-    join_latents::<f64>(k, &mut primary, &secondary);
+    join_latents::<f64>(k, &mut primary, secondary.as_ref());
     assert_eq!(uints, primary);
   }
 

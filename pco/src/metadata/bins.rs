@@ -17,8 +17,6 @@ pub fn max_offset_bits<L: Latent>(bins: &[Bin<L>]) -> Bitlen {
 }
 
 pub fn weights<L: Latent>(bins: &[Bin<L>]) -> Vec<Weight> {
-  Vec::new()
-    Option::is_some()
   bins.iter().map(|bin| bin.weight).collect()
 }
 

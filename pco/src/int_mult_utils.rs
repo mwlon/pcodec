@@ -36,7 +36,8 @@ pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> SplitLatents {
 }
 
 #[inline(never)]
-pub(crate) fn join_latents<L: Latent>(base: L, primary: &mut [L], secondary: &[L]) {
+pub(crate) fn join_latents<L: Latent>(base: L, primary: &mut [L], secondary: Option<&DynLatents>) {
+  let secondary = secondary.unwrap().downcast_ref::<L>().unwrap();
   for (mult_and_dst, &adj) in primary.iter_mut().zip(secondary.iter()) {
     *mult_and_dst = (*mult_and_dst * base).wrapping_add(adj);
   }
@@ -255,14 +256,17 @@ mod tests {
     let nums = vec![8_u32, 1, 5];
     let base = 4_u32;
     let latents = split_latents(&nums, base);
-    assert_eq!(latents.primary.len(), 2);
     let mut primary = latents.primary.downcast::<u32>().unwrap();
     let secondary = latents.secondary.unwrap().downcast::<u32>().unwrap();
     assert_eq!(&primary, &vec![2_u32, 0, 1]);
     assert_eq!(&secondary, &vec![0_u32, 1, 1]);
 
     // JOIN
-    join_latents(base, &mut primary, &secondary);
+    join_latents(
+      base,
+      &mut primary,
+      DynLatents::new(secondary).as_ref(),
+    );
 
     assert_eq!(primary, nums);
   }

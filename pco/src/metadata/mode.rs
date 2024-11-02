@@ -3,12 +3,10 @@ use crate::bit_writer::BitWriter;
 use crate::constants::{Bitlen, BITS_TO_ENCODE_MODE_VARIANT, BITS_TO_ENCODE_QUANTIZE_K};
 use crate::data_types::{Float, LatentType};
 use crate::errors::{PcoError, PcoResult};
-use crate::match_latent_enum;
+use crate::macros::match_latent_enum;
 use crate::metadata::dyn_latent::DynLatent;
 use crate::metadata::format_version::FormatVersion;
-use crate::metadata::DeltaEncoding;
 use crate::metadata::Mode::*;
-use crate::per_latent_var::LatentVarKey;
 use std::fmt::Debug;
 use std::io::Write;
 
