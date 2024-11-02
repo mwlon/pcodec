@@ -4,9 +4,10 @@ use crate::ans::{AnsState, Spec};
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
+use crate::delta::DeltaState;
 use crate::errors::PcoResult;
-use crate::metadata::{bins, Bin};
-use crate::{ans, bit_reader, read_write_uint};
+use crate::metadata::{bins, Bin, DeltaEncoding, DynLatents};
+use crate::{ans, bit_reader, delta, read_write_uint};
 
 // Default here is meaningless and should only be used to fill in empty
 // vectors.
@@ -31,7 +32,9 @@ struct State<L: Latent> {
   offset_bits_csum_scratch: [Bitlen; FULL_BATCH_N],
   offset_bits_scratch: [Bitlen; FULL_BATCH_N],
   lowers_scratch: [L; FULL_BATCH_N],
+
   state_idxs: [AnsState; ANS_INTERLEAVING],
+  delta_state: Vec<L>,
 }
 
 impl<L: Latent> State<L> {
@@ -47,23 +50,26 @@ impl<L: Latent> State<L> {
 
 // LatentBatchDecompressor does the main work of decoding bytes into Latents
 #[derive(Clone, Debug)]
-pub struct LatentBatchDecompressor<L: Latent> {
+pub struct LatentPageDecompressor<L: Latent> {
   // known information about this latent variable
   u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<L>>,
   needs_ans: bool,
   decoder: ans::Decoder,
+  delta_encoding: DeltaEncoding,
   pub maybe_constant_value: Option<L>,
 
   // mutable state
   state: State<L>,
 }
 
-impl<L: Latent> LatentBatchDecompressor<L> {
+impl<L: Latent> LatentPageDecompressor<L> {
   pub fn new(
     ans_size_log: Bitlen,
     bins: &[Bin<L>],
+    delta_encoding: DeltaEncoding,
     ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
+    delta_state: Vec<L>,
   ) -> PcoResult<Self> {
     let u64s_per_offset = read_write_uint::calc_max_u64s(bins::max_offset_bits(bins));
     let infos = bins
@@ -79,6 +85,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       offset_bits_scratch: [0; FULL_BATCH_N],
       lowers_scratch: [L::ZERO; FULL_BATCH_N],
       state_idxs: ans_final_state_idxs,
+      delta_state,
     };
 
     let needs_ans = bins.len() != 1;
@@ -94,17 +101,19 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       }
     }
 
-    let maybe_constant_value = if bins::are_trivial(bins) {
-      bins.first().map(|bin| bin.lower)
-    } else {
-      None
-    };
+    let maybe_constant_value =
+      if bins::are_trivial(bins) && matches!(delta_encoding, DeltaEncoding::None) {
+        bins.first().map(|bin| bin.lower)
+      } else {
+        None
+      };
 
     Ok(Self {
       u64s_per_offset,
       infos,
       needs_ans,
       decoder,
+      delta_encoding,
       maybe_constant_value,
       state,
     })
@@ -224,13 +233,9 @@ impl<L: Latent> LatentBatchDecompressor<L> {
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
   // May contaminate dst.
-  pub unsafe fn decompress_latent_batch(
-    &mut self,
-    reader: &mut BitReader,
-    dst: &mut [L],
-  ) -> PcoResult<()> {
+  pub unsafe fn decompress_batch_pre_delta(&mut self, reader: &mut BitReader, dst: &mut [L]) {
     if dst.is_empty() {
-      return Ok(());
+      return;
     }
 
     if self.needs_ans {
@@ -258,7 +263,33 @@ impl<L: Latent> LatentBatchDecompressor<L> {
     }
 
     self.add_lowers(dst);
+  }
 
-    Ok(())
+  pub unsafe fn decompress_batch(
+    &mut self,
+    delta_latents: Option<&DynLatents>,
+    n_remaining_in_page: usize,
+    reader: &mut BitReader,
+    dst: &mut [L],
+  ) {
+    match self.delta_encoding {
+      DeltaEncoding::None => self.decompress_batch_pre_delta(reader, dst),
+      DeltaEncoding::Consecutive(order) => {
+        let n_remaining_pre_delta =
+          n_remaining_in_page.saturating_sub(self.delta_encoding.n_latents_per_state());
+        let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
+          dst.len()
+        } else {
+          // If we're at the end, LatentBatchdDecompressor won't initialize the last
+          // few elements before delta decoding them, so we do that manually here to
+          // satisfy MIRI. This step isn't really necessary.
+          dst[n_remaining_pre_delta..].fill(L::default());
+          n_remaining_pre_delta
+        };
+        self.decompress_batch_pre_delta(reader, &mut dst[..pre_delta_len]);
+        delta::decode_consecutive_in_place(&mut self.state.delta_state, dst)
+      }
+      DeltaEncoding::Lz77(config) => {}
+    }
   }
 }

@@ -9,7 +9,7 @@ use crate::constants::{DeltaLookback, FULL_BATCH_N, PAGE_PADDING};
 use crate::data_types::{Latent, Number};
 use crate::delta::DeltaState;
 use crate::errors::{PcoError, PcoResult};
-use crate::latent_batch_decompressor::LatentBatchDecompressor;
+use crate::latent_page_decompressor::LatentPageDecompressor;
 use crate::metadata::page::PageMeta;
 use crate::metadata::{ChunkLatentVarMeta, ChunkMeta, DeltaEncoding, DynBins, DynLatent, DynLatents, Mode};
 use crate::per_latent_var::{LatentVarKey, PerLatentVar, PerLatentVarBuilder};
@@ -26,7 +26,7 @@ struct LatentScratch {
 
 struct LatentPageDecompressor<L: Latent> {
   delta_encoding: DeltaEncoding,
-  latent_batch_decompressor: LatentBatchDecompressor<L>,
+  latent_batch_decompressor: LatentPageDecompressor<L>,
   delta_state: Vec<L>,
 }
 
@@ -127,7 +127,7 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
             )));
           }
 
-          let latent_batch_decompressor = LatentBatchDecompressor::new(
+          let latent_batch_decompressor = LatentPageDecompressor::new(
             chunk_latent_var_meta.ans_size_log,
             bins,
             page_latent_var_meta.ans_final_state_idxs,
