@@ -205,6 +205,7 @@ fn delta_encode_and_build_page_infos(
       let delta_state = delta::encode_in_place(
         encoding_for_var,
         page_delta_latents.as_ref(),
+        start_idx..end_idx,
         var_latents,
       );
       // delta encoding in place leaves junk in the first n_latents_per_state

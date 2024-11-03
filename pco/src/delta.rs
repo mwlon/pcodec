@@ -196,6 +196,7 @@ pub fn compute_delta_latent_var(
 pub fn encode_in_place(
   delta_encoding: DeltaEncoding,
   delta_latents: Option<&DynLatents>,
+  range: Range<usize>,
   latents: &mut DynLatents,
 ) -> DeltaState {
   match_latent_enum!(
@@ -204,11 +205,11 @@ pub fn encode_in_place(
       let delta_state = match delta_encoding {
         DeltaEncoding::None => Vec::<L>::new(),
         DeltaEncoding::Consecutive(order) => {
-          encode_consecutive_in_place(order, inner)
+          encode_consecutive_in_place(order, &mut inner[range])
         }
         DeltaEncoding::Lz77(config) => {
           let lookbacks = delta_latents.unwrap().downcast_ref::<DeltaLookback>().unwrap();
-          encode_lz77_in_place(config, lookbacks, inner)
+          encode_lz77_in_place(config, lookbacks, &mut inner[range])
         }
       };
       DynLatents::new(delta_state).unwrap()
