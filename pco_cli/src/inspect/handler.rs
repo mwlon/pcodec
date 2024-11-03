@@ -43,6 +43,7 @@ pub struct LatentVarSummary {
   name: String,
   n_bins: usize,
   ans_size_log: u32,
+  approx_avg_bits: f64,
   bins: String,
 }
 
@@ -85,6 +86,7 @@ fn build_latent_var_summaries<T: Number>(meta: &ChunkMeta) -> BTreeMap<String, L
   {
     let unit = describer.latent_units();
 
+    let mut approx_total_bits = 0.0;
     let bin_summaries = match_latent_enum!(
       &latent_var_meta.bins,
       DynBins<L>(bins) => {
@@ -95,6 +97,8 @@ fn build_latent_var_summaries<T: Number>(meta: &ChunkMeta) -> BTreeMap<String, L
             lower: format!("{}{}", describer.latent(DynLatent::new(bin.lower).unwrap()), unit),
             offset_bits: bin.offset_bits,
           });
+          let weight = bin.weight as f64;
+          approx_total_bits += weight * (bin.offset_bits as f64 + latent_var_meta.ans_size_log as f64 - weight.log2());
         }
         bin_summaries
       }
@@ -104,11 +108,13 @@ fn build_latent_var_summaries<T: Number>(meta: &ChunkMeta) -> BTreeMap<String, L
       .with(Style::rounded())
       .with(Modify::new(Columns::new(0..3)).with(Alignment::right()))
       .to_string();
+    let total_weight = (1 << latent_var_meta.ans_size_log) as f64;
 
     let summary = LatentVarSummary {
       name: describer.latent_var(),
       n_bins,
       ans_size_log: latent_var_meta.ans_size_log,
+      approx_avg_bits: approx_total_bits / total_weight,
       bins: bins_table.to_string(),
     };
 

@@ -15,7 +15,7 @@ use crate::latent_chunk_compressor::{
 };
 use crate::macros::match_latent_enum;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
-use crate::metadata::delta_encoding::DeltaLz77Config;
+use crate::metadata::delta_encoding::{DeltaConsecutiveConfig, DeltaLz77Config};
 use crate::metadata::dyn_bins::DynBins;
 use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::page::PageMeta;
@@ -26,6 +26,7 @@ use crate::split_latents::SplitLatents;
 use crate::wrapped::guarantee;
 use crate::{ans, bin_optimization, data_types, delta, ChunkConfig, PagingSpec, FULL_BATCH_N};
 use std::cmp::min;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 
 // if it looks like the average page of size n will use k bits, hint that it
@@ -33,16 +34,17 @@ use std::io::Write;
 const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
-const LZ77_WINDOW_N_LOG: Bitlen = 5;
+const LZ77_WINDOW_N_LOG: Bitlen = 18;
 const LZ77_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
 
 fn lz_delta_encoding(n: usize) -> DeltaEncoding {
   DeltaEncoding::Lz77(DeltaLz77Config {
     window_n_log: LZ77_WINDOW_N_LOG,
     state_n_log: min(
-      n.ilog2().saturating_sub(7).max(8),
+      n.ilog2().saturating_sub(8).max(8),
       LZ77_WINDOW_N_LOG,
     ),
+    secondary_uses_delta: false,
   })
 }
 
@@ -401,7 +403,10 @@ fn choose_delta_encoding<L: Latent>(
   }
 
   for delta_encoding_order in 1..MAX_DELTA_ENCODING_ORDER + 1 {
-    let encoding = DeltaEncoding::Consecutive(delta_encoding_order);
+    let encoding = DeltaEncoding::Consecutive(DeltaConsecutiveConfig {
+      order: delta_encoding_order,
+      secondary_uses_delta: false,
+    });
     let size_estimate = calculate_compressed_sample_size(&sample, unoptimized_bins_log, encoding)?;
     if size_estimate < best_size {
       best_encoding = encoding;
@@ -445,7 +450,10 @@ fn new_candidate_w_split(
       }
     ),
     DeltaSpec::None | DeltaSpec::TryConsecutive(0) => DeltaEncoding::None,
-    DeltaSpec::TryConsecutive(order) => DeltaEncoding::Consecutive(order),
+    DeltaSpec::TryConsecutive(order) => DeltaEncoding::Consecutive(DeltaConsecutiveConfig {
+      order,
+      secondary_uses_delta: false,
+    }),
     DeltaSpec::TryLz77 => lz_delta_encoding(n),
   };
 

@@ -33,27 +33,13 @@ pub struct ChunkMeta {
 
 impl ChunkMeta {
   pub(crate) fn exact_size(&self) -> usize {
-    let extra_bits_for_mode = match self.mode {
-      Mode::Classic => 0,
-      Mode::IntMult(base) | Mode::FloatMult(base) => base.bits(),
-      Mode::FloatQuant(_) => BITS_TO_ENCODE_QUANTIZE_K,
-    };
-    let extra_bits_for_delta_encoding = match self.delta_encoding {
-      DeltaEncoding::None | DeltaEncoding::Consecutive(_) => BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
-      DeltaEncoding::Lz77(_) => {
-        // We encode both (window n log) and (state n log)
-        BITS_TO_ENCODE_LZ_DELTA_N_LOG * 2
-      }
-    };
     let bits_for_latent_vars = self
       .per_latent_var
       .as_ref()
       .map(|_, var_meta| var_meta.exact_bit_size())
       .sum();
-    let n_bits = BITS_TO_ENCODE_MODE_VARIANT as usize
-      + extra_bits_for_mode as usize
-      + BITS_TO_ENCODE_DELTA_ENCODING_ORDER as usize
-      + extra_bits_for_delta_encoding as usize
+    let n_bits = self.mode.exact_bit_size() as usize
+      + self.delta_encoding.exact_bit_size() as usize
       + bits_for_latent_vars;
     n_bits.div_ceil(8)
   }

@@ -6,7 +6,7 @@ pub(crate) type Bitlen = u32;
 // must be u32 or larger
 // exposed in public API
 pub(crate) type Weight = u32;
-pub(crate) type DeltaLookback = u16;
+pub(crate) type DeltaLookback = u32;
 
 // compatibility
 pub const CURRENT_FORMAT_VERSION: u8 = 3;
@@ -16,7 +16,8 @@ pub const BITS_TO_ENCODE_ANS_SIZE_LOG: Bitlen = 4;
 pub const BITS_TO_ENCODE_MODE_VARIANT: Bitlen = 4;
 pub const BITS_TO_ENCODE_DELTA_ENCODING_VARIANT: Bitlen = 4;
 pub const BITS_TO_ENCODE_DELTA_ENCODING_ORDER: Bitlen = 3;
-pub const BITS_TO_ENCODE_LZ_DELTA_N_LOG: Bitlen = 4;
+pub const BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG: Bitlen = 5;
+pub const BITS_TO_ENCODE_LZ_DELTA_STATE_N_LOG: Bitlen = 4;
 pub const BITS_TO_ENCODE_N_BINS: Bitlen = 15;
 // conservative: wide enough to support quantizing float datasets with 255 unused bits of precision
 pub const BITS_TO_ENCODE_QUANTIZE_K: Bitlen = 8;

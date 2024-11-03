@@ -167,4 +167,13 @@ impl Mode {
   pub(crate) fn float_mult<F: Float>(base: F) -> Self {
     Self::FloatMult(DynLatent::new(base.to_latent_ordered()).unwrap())
   }
+
+  pub(crate) fn exact_bit_size(&self) -> Bitlen {
+    let payload_bits = match self {
+      Classic => 0,
+      IntMult(base) | FloatMult(base) => base.bits(),
+      FloatQuant(_) => BITS_TO_ENCODE_QUANTIZE_K,
+    };
+    BITS_TO_ENCODE_MODE_VARIANT + payload_bits
+  }
 }

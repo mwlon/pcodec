@@ -1,4 +1,4 @@
-use crate::constants::DeltaLookback;
+use crate::constants::{Bitlen, DeltaLookback};
 use crate::data_types::Latent;
 use crate::macros::match_latent_enum;
 use crate::metadata::delta_encoding::DeltaLz77Config;
@@ -83,27 +83,31 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
   }
 
   let window_n = config.window_n();
-  let mut res = vec![MaybeUninit::uninit(); latents.len() - state_n];
+  let mut lookbacks = vec![MaybeUninit::uninit(); latents.len() - state_n];
   // TODO make this fast
   for i in state_n..latents.len() {
     // TODO default window
     let l = latents[i];
-    let mut best_j = i;
-    let mut best_delta = L::MAX;
-    for j in i.saturating_sub(window_n)..i {
-      let other = latents[j];
+    let mut best_lookback = 1;
+    let mut best_goodness = 0;
+    for lookback in 1..cmp::min(i, window_n + 1) {
+      let lookback_goodness = (lookback - 1).leading_zeros();
+      let other = latents[i - lookback];
       let delta = L::min(l.wrapping_sub(other), other.wrapping_sub(l));
-      if delta < best_delta {
-        best_j = j;
-        best_delta = delta;
+      let delta_goodness = delta.leading_zeros();
+      let goodness = lookback_goodness + 2 * delta_goodness;
+      if goodness > best_goodness {
+        best_lookback = lookback;
+        best_goodness = goodness;
       }
     }
 
-    best_j = cmp::min(best_j, i - 1);
-    res[i - state_n] = MaybeUninit::new((i - best_j) as DeltaLookback);
+    lookbacks[i - state_n] = MaybeUninit::new(best_lookback as DeltaLookback);
   }
 
-  unsafe { mem::transmute(res) }
+  let lookbacks = unsafe { mem::transmute::<_, Vec<DeltaLookback>>(lookbacks) };
+
+  lookbacks
 }
 
 // All encode in place functions leave junk data (`state_n` latents in this
@@ -204,8 +208,8 @@ pub fn encode_in_place(
     DynLatents<L>(inner) => {
       let delta_state = match delta_encoding {
         DeltaEncoding::None => Vec::<L>::new(),
-        DeltaEncoding::Consecutive(order) => {
-          encode_consecutive_in_place(order, &mut inner[range])
+        DeltaEncoding::Consecutive(config) => {
+          encode_consecutive_in_place(config.order, &mut inner[range])
         }
         DeltaEncoding::Lz77(config) => {
           let lookbacks = delta_latents.unwrap().downcast_ref::<DeltaLookback>().unwrap();

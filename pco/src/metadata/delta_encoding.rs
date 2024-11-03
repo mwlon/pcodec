@@ -2,7 +2,7 @@ use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::{
   Bitlen, BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_DELTA_ENCODING_VARIANT,
-  BITS_TO_ENCODE_LZ_DELTA_N_LOG,
+  BITS_TO_ENCODE_LZ_DELTA_STATE_N_LOG, BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG,
 };
 use crate::data_types::{Latent, LatentType};
 use crate::delta;
@@ -14,9 +14,16 @@ use crate::metadata::per_latent_var::LatentVarKey;
 use std::io::Write;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DeltaConsecutiveConfig {
+  pub order: usize,
+  pub secondary_uses_delta: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DeltaLz77Config {
   pub state_n_log: Bitlen,
   pub window_n_log: Bitlen,
+  pub secondary_uses_delta: bool,
 }
 
 impl DeltaLz77Config {
@@ -47,33 +54,50 @@ pub enum DeltaEncoding {
   /// etc.).
   ///
   /// This order is always positive, between 1 and 7.
-  Consecutive(usize),
+  Consecutive(DeltaConsecutiveConfig),
   Lz77(DeltaLz77Config),
 }
 
 impl DeltaEncoding {
+  unsafe fn read_from_pre_v3(reader: &mut BitReader) -> Self {
+    let order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
+    match order {
+      0 => None,
+      _ => Consecutive(DeltaConsecutiveConfig {
+        order,
+        secondary_uses_delta: false,
+      }),
+    }
+  }
+
   pub(crate) unsafe fn read_from(
     version: &FormatVersion,
     reader: &mut BitReader,
   ) -> PcoResult<Self> {
-    let delta_encoding_variant = if version.supports_delta_variants() {
-      reader.read_bitlen(BITS_TO_ENCODE_DELTA_ENCODING_VARIANT)
-    } else {
-      0
-    };
+    if !version.supports_delta_variants() {
+      return Ok(Self::read_from_pre_v3(reader));
+    }
+
+    let delta_encoding_variant = reader.read_bitlen(BITS_TO_ENCODE_DELTA_ENCODING_VARIANT);
 
     let res = match delta_encoding_variant {
-      0 => {
+      0 => None,
+      1 => {
         let order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
         if order == 0 {
-          None
+          return Err(PcoError::corruption(
+            "Consecutive delta encoding must not be 0",
+          ));
         } else {
-          Consecutive(order)
+          Consecutive(DeltaConsecutiveConfig {
+            order,
+            secondary_uses_delta: reader.read_bool(),
+          })
         }
       }
-      1 => {
-        let window_n_log = 1 + reader.read_bitlen(BITS_TO_ENCODE_LZ_DELTA_N_LOG);
-        let state_n_log = reader.read_bitlen(BITS_TO_ENCODE_LZ_DELTA_N_LOG);
+      2 => {
+        let window_n_log = 1 + reader.read_bitlen(BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG);
+        let state_n_log = reader.read_bitlen(BITS_TO_ENCODE_LZ_DELTA_STATE_N_LOG);
         if state_n_log > window_n_log {
           return Err(PcoError::corruption(format!(
             "LZ delta encoding state size log exceeded window size log: {} vs {}",
@@ -83,6 +107,7 @@ impl DeltaEncoding {
         Lz77(DeltaLz77Config {
           window_n_log,
           state_n_log,
+          secondary_uses_delta: reader.read_bool(),
         })
       }
       value => {
@@ -96,12 +121,10 @@ impl DeltaEncoding {
   }
 
   pub(crate) unsafe fn write_to<W: Write>(&self, writer: &mut BitWriter<W>) {
-    // Due to historical reasons, None and Consecutive delta encodings are
-    // stored as the 0 variant and differentiated by their delta encoding order
-    // bits (order in the case of None).
     let variant = match self {
-      None | Consecutive(_) => 0,
-      Lz77(_) => 1,
+      None => 0,
+      Consecutive(_) => 1,
+      Lz77(_) => 2,
     };
     writer.write_bitlen(
       variant,
@@ -109,17 +132,24 @@ impl DeltaEncoding {
     );
 
     match self {
-      None => writer.write_bitlen(0, BITS_TO_ENCODE_DELTA_ENCODING_ORDER),
-      &Consecutive(order) => writer.write_usize(order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER),
+      None => (),
+      Consecutive(config) => {
+        writer.write_usize(
+          config.order,
+          BITS_TO_ENCODE_DELTA_ENCODING_ORDER,
+        );
+        writer.write_bool(config.secondary_uses_delta);
+      }
       Lz77(config) => {
         writer.write_bitlen(
           config.window_n_log - 1,
-          BITS_TO_ENCODE_LZ_DELTA_N_LOG,
+          BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG,
         );
         writer.write_bitlen(
           config.state_n_log,
-          BITS_TO_ENCODE_LZ_DELTA_N_LOG,
+          BITS_TO_ENCODE_LZ_DELTA_STATE_N_LOG,
         );
+        writer.write_bool(config.secondary_uses_delta);
       }
     }
   }
@@ -127,19 +157,19 @@ impl DeltaEncoding {
   pub(crate) fn latent_type(&self) -> Option<LatentType> {
     match self {
       None | Consecutive(_) => Option::None,
-      Lz77(_) => Some(LatentType::U16),
+      Lz77(_) => Some(LatentType::U32),
     }
   }
 
   pub(crate) fn applies_to_latent_var(&self, key: LatentVarKey) -> bool {
-    match key {
+    match (self, key) {
       // We never recursively delta encode.
-      LatentVarKey::Delta => false,
+      (_, LatentVarKey::Delta) => false,
       // We always apply the DeltaEncoding to the primary latents.
-      LatentVarKey::Primary => true,
-      // At present we never apply DeltaEncoding to the secondary latents, but
-      // this could be changed in the future.
-      LatentVarKey::Secondary => false,
+      (_, LatentVarKey::Primary) => true,
+      (None, LatentVarKey::Secondary) => false,
+      (Consecutive(config), LatentVarKey::Secondary) => config.secondary_uses_delta,
+      (Lz77(config), LatentVarKey::Secondary) => config.secondary_uses_delta,
     }
   }
 
@@ -154,8 +184,22 @@ impl DeltaEncoding {
   pub(crate) fn n_latents_per_state(&self) -> usize {
     match self {
       None => 0,
-      Consecutive(order) => *order,
+      Consecutive(config) => config.order,
       Lz77(config) => 1 << config.state_n_log,
     }
+  }
+
+  pub(crate) fn exact_bit_size(&self) -> Bitlen {
+    let payload_bits = match self {
+      None => 0,
+      // For consecutive and LZ77, we have a +1 bit for whether the
+      // secondary latent is delta-encoded or not.
+      Consecutive(_) => BITS_TO_ENCODE_DELTA_ENCODING_ORDER + 1,
+      Lz77(_) => {
+        // We encode both (window n log) and (state n log)
+        BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG * 2 + 1
+      }
+    };
+    BITS_TO_ENCODE_DELTA_ENCODING_VARIANT + payload_bits
   }
 }
