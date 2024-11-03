@@ -4,9 +4,7 @@ use crate::constants::{
   Bitlen, BITS_TO_ENCODE_DELTA_ENCODING_ORDER, BITS_TO_ENCODE_DELTA_ENCODING_VARIANT,
   BITS_TO_ENCODE_LZ_DELTA_STATE_N_LOG, BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG,
 };
-use crate::data_types::{Latent, LatentType};
-use crate::delta;
-use crate::delta::DeltaState;
+use crate::data_types::LatentType;
 use crate::errors::{PcoError, PcoResult};
 use crate::metadata::delta_encoding::DeltaEncoding::*;
 use crate::metadata::format_version::FormatVersion;

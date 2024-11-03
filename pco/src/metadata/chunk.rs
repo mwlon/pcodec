@@ -4,14 +4,12 @@ use better_io::BetterBufRead;
 
 use crate::bit_reader::BitReaderBuilder;
 use crate::bit_writer::BitWriter;
-use crate::constants::*;
-use crate::data_types::{Latent, LatentType};
-use crate::errors::{PcoError, PcoResult};
+use crate::data_types::LatentType;
+use crate::errors::PcoResult;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
-use crate::metadata::delta_encoding::{DeltaEncoding, DeltaLz77Config};
-use crate::metadata::dyn_latent::DynLatent;
+use crate::metadata::delta_encoding::DeltaEncoding;
 use crate::metadata::format_version::FormatVersion;
-use crate::metadata::per_latent_var::{LatentVarKey, PerLatentVar};
+use crate::metadata::per_latent_var::PerLatentVar;
 use crate::metadata::Mode;
 
 /// The metadata of a pco chunk.
@@ -127,12 +125,15 @@ impl ChunkMeta {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::constants::ANS_INTERLEAVING;
+  use crate::data_types::Latent;
   use crate::macros::match_latent_enum;
+  use crate::metadata::delta_encoding::DeltaConsecutiveConfig;
   use crate::metadata::dyn_bins::DynBins;
   use crate::metadata::dyn_latents::DynLatents;
   use crate::metadata::page::PageMeta;
   use crate::metadata::page_latent_var::PageLatentVarMeta;
-  use crate::metadata::Bin;
+  use crate::metadata::{Bin, DynLatent};
 
   fn check_exact_sizes(meta: &ChunkMeta) -> PcoResult<()> {
     let buffer_size = 8192;
@@ -178,7 +179,10 @@ mod tests {
   fn exact_size_binless() -> PcoResult<()> {
     let meta = ChunkMeta {
       mode: Mode::Classic,
-      delta_encoding: DeltaEncoding::Consecutive(5),
+      delta_encoding: DeltaEncoding::Consecutive(DeltaConsecutiveConfig {
+        order: 5,
+        secondary_uses_delta: false,
+      }),
       per_latent_var: PerLatentVar {
         delta: None,
         primary: ChunkLatentVarMeta {
@@ -218,7 +222,10 @@ mod tests {
   fn exact_size_float_mult() -> PcoResult<()> {
     let meta = ChunkMeta {
       mode: Mode::FloatMult(DynLatent::U32(777_u32)),
-      delta_encoding: DeltaEncoding::Consecutive(3),
+      delta_encoding: DeltaEncoding::Consecutive(DeltaConsecutiveConfig {
+        order: 3,
+        secondary_uses_delta: false,
+      }),
       per_latent_var: PerLatentVar {
         delta: None,
         primary: ChunkLatentVarMeta {

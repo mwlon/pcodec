@@ -5,7 +5,7 @@ use crate::compression_intermediates::DissectedPageVar;
 use crate::compression_table::CompressionTable;
 use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
-use crate::{ans, bits, macros};
+use crate::{ans, bits};
 
 pub struct LatentBatchDissector<'a, L: Latent> {
   // immutable

@@ -5,9 +5,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
 use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
-use pco::data_types::{Latent, Number, NumberType};
+use pco::data_types::{Number, NumberType};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
-use pco::{match_latent_enum, match_number_enum, ChunkConfig};
+use pco::{match_number_enum, ChunkConfig};
 
 use crate::utils::pco_err_to_py;
 use crate::{utils, PyChunkConfig};

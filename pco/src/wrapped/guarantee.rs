@@ -1,4 +1,4 @@
-use crate::data_types::{Latent, LatentType};
+use crate::data_types::Latent;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
 use crate::metadata::per_latent_var::PerLatentVar;
 use crate::metadata::{Bin, ChunkMeta, DeltaEncoding, DynBins, Mode};

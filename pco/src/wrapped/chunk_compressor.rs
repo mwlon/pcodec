@@ -26,7 +26,6 @@ use crate::split_latents::SplitLatents;
 use crate::wrapped::guarantee;
 use crate::{ans, bin_optimization, data_types, delta, ChunkConfig, PagingSpec, FULL_BATCH_N};
 use std::cmp::min;
-use std::collections::{HashMap, HashSet};
 use std::io::Write;
 
 // if it looks like the average page of size n will use k bits, hint that it
@@ -712,7 +711,7 @@ impl ChunkCompressor {
       .as_ref()
       .zip_exact(ans_default_state_and_size_log.as_ref())
       .zip_exact(dissected_page.per_latent_var.as_ref())
-      .map(|key, tuple| {
+      .map(|_key, tuple| {
         let ((page_info_var, (ans_default_state, _)), dissected) = tuple;
         let ans_final_state_idxs = dissected
           .ans_final_states

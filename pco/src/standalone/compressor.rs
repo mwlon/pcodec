@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::bit_writer::BitWriter;
 use crate::chunk_config::PagingSpec;
-use crate::data_types::{Latent, Number};
+use crate::data_types::Number;
 use crate::errors::PcoResult;
 use crate::metadata::ChunkMeta;
 use crate::standalone::constants::*;

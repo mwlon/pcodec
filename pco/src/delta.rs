@@ -1,4 +1,4 @@
-use crate::constants::{Bitlen, DeltaLookback};
+use crate::constants::DeltaLookback;
 use crate::data_types::Latent;
 use crate::macros::match_latent_enum;
 use crate::metadata::delta_encoding::DeltaLz77Config;
@@ -65,10 +65,7 @@ fn first_order_decode_consecutive_in_place<L: Latent>(moment: &mut L, latents: &
 
 // used for a single batch, so we mutate the delta moments
 #[inline(never)]
-pub(crate) fn decode_consecutive_in_place<L: Latent>(
-  delta_moments: &mut Vec<L>,
-  latents: &mut [L],
-) {
+pub(crate) fn decode_consecutive_in_place<L: Latent>(delta_moments: &mut [L], latents: &mut [L]) {
   toggle_center_in_place(latents);
   for moment in delta_moments.iter_mut().rev() {
     first_order_decode_consecutive_in_place(moment, latents);
@@ -105,9 +102,7 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
     lookbacks[i - state_n] = MaybeUninit::new(best_lookback as DeltaLookback);
   }
 
-  let lookbacks = unsafe { mem::transmute::<_, Vec<DeltaLookback>>(lookbacks) };
-
-  lookbacks
+  unsafe { mem::transmute::<Vec<MaybeUninit<DeltaLookback>>, Vec<DeltaLookback>>(lookbacks) }
 }
 
 // All encode in place functions leave junk data (`state_n` latents in this
@@ -143,7 +138,7 @@ pub fn new_lz77_window_buffer_and_pos<L: Latent>(
   let buffer_n = cmp::max(window_n, FULL_BATCH_N) * 2;
   // TODO better default window
   let mut res = vec![L::ZERO; buffer_n];
-  res[window_n - state.len()..window_n].copy_from_slice(&state);
+  res[window_n - state.len()..window_n].copy_from_slice(state);
   (res, window_n)
 }
 
@@ -169,7 +164,7 @@ pub fn decode_lz77_in_place<L: Latent>(
   }
 
   for (i, (&latent, &lookback)) in latents.iter().zip(lookbacks).enumerate() {
-    window_buffer[pos + i] = latents[i].wrapping_add(window_buffer[pos + i - lookback as usize]);
+    window_buffer[pos + i] = latent.wrapping_add(window_buffer[pos + i - lookback as usize]);
   }
 
   let new_pos = pos + batch_n;
@@ -255,6 +250,7 @@ mod tests {
     let config = DeltaLz77Config {
       window_n_log: 2,
       state_n_log: 1,
+      secondary_uses_delta: false,
     };
 
     let mut deltas = original_latents.clone();

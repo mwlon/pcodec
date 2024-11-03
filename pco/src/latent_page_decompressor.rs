@@ -4,7 +4,6 @@ use crate::ans::{AnsState, Spec};
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, DeltaLookback, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
-use crate::delta::DeltaState;
 use crate::errors::PcoResult;
 use crate::metadata::{bins, Bin, DeltaEncoding, DynLatents};
 use crate::{ans, bit_reader, delta, read_write_uint};

@@ -9,7 +9,7 @@ use crate::data_types::{Latent, LatentType};
 use crate::errors::{PcoError, PcoResult};
 use crate::macros::match_latent_enum;
 use crate::metadata::dyn_bins::DynBins;
-use crate::metadata::{Bin, DeltaEncoding, LatentVarKey};
+use crate::metadata::{Bin, DeltaEncoding};
 use better_io::BetterBufRead;
 use std::cmp::min;
 use std::io::Write;

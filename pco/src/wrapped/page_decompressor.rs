@@ -144,9 +144,7 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
     let latent_decompressors: PerLatentVar<DynLatentPageDecompressor> = states.into();
 
     fn make_latent_scratch(lpd: Option<&DynLatentPageDecompressor>) -> Option<LatentScratch> {
-      let Some(lpd) = lpd else {
-        return None;
-      };
+      let lpd = lpd?;
 
       match_latent_enum!(
         lpd,

@@ -1,6 +1,5 @@
-use crate::constants::Bitlen;
 use crate::data_types::{Latent, Number};
-use crate::macros::{define_latent_enum, define_number_enum, match_latent_enum};
+use crate::macros::{define_latent_enum, define_number_enum};
 
 define_number_enum!(
   #[derive(Clone, Copy, Debug, PartialEq, Eq)]

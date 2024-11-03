@@ -5,7 +5,6 @@ use crate::delta::DeltaState;
 use crate::metadata::per_latent_var::{LatentVarKey, PerLatentVar};
 use crate::metadata::{DynLatents, Mode};
 use crate::split_latents::SplitLatents;
-use std::cmp;
 use std::ops::Range;
 
 #[derive(Clone, Debug)]
