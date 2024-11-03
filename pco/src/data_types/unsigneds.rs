@@ -1,11 +1,11 @@
+use super::ModeAndLatents;
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, Latent, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
+use crate::metadata::per_latent_var::PerLatentVar;
 use crate::metadata::{ChunkMeta, DynLatent, DynLatents, Mode};
 use crate::{describers, int_mult_utils, ChunkConfig, ModeSpec};
-
-use super::ModeAndLatents;
 
 pub fn choose_mode_and_split_latents<T: Number>(
   nums: &[T],
@@ -83,9 +83,9 @@ macro_rules! impl_unsigned_number {
 
       type L = Self;
 
-      fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>> {
+      fn get_latent_describers(meta: &ChunkMeta) -> PerLatentVar<LatentDescriber> {
         describers::match_classic_mode::<Self>(meta, "")
-          .or_else(|| describers::match_int_modes(meta, false))
+          .or_else(|| describers::match_int_modes::<Self>(meta, false))
           .expect("invalid mode for unsigned type")
       }
 

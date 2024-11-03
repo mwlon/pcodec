@@ -6,9 +6,9 @@ use crate::constants::Bitlen;
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
+use crate::metadata::per_latent_var;
+use crate::metadata::per_latent_var::{PerLatentVar, PerLatentVarBuilder};
 use crate::metadata::ChunkMeta;
-use crate::per_latent_var;
-use crate::per_latent_var::{PerLatentVar, PerLatentVarBuilder};
 
 // Data page metadata is slightly semantically different from chunk metadata,
 // so it gets its own type.

@@ -1,12 +1,13 @@
-use crate::constants::Bitlen;
+use crate::constants::{Bitlen, DeltaLookback};
 use crate::data_types::{Float, Latent, Number};
-use crate::metadata::{ChunkMeta, DeltaEncoding, Mode};
+use crate::metadata::per_latent_var::PerLatentVar;
+use crate::metadata::{ChunkMeta, DeltaEncoding, DynLatent, Mode};
 use std::marker::PhantomData;
 
 /// Interprets the meaning of latent variables and values from [`ChunkMeta`].
 ///
 /// Obtainable via [`crate::data_types::Number::get_latent_describers`].
-pub trait DescribeLatent<L: Latent> {
+pub trait DescribeLatent {
   /// Returns a description for this latent variable.
   fn latent_var(&self) -> String;
   /// Returns a description for this latent variable's units, when formatted
@@ -16,32 +17,50 @@ pub trait DescribeLatent<L: Latent> {
   /// numbers.
   fn latent_units(&self) -> String;
   /// Returns a more easily interpretable description for the latent.
-  fn latent(&self, latent: L) -> String;
+  fn latent(&self, latent: DynLatent) -> String;
 }
 
-pub type LatentDescriber<L> = Box<dyn DescribeLatent<L>>;
+pub type LatentDescriber = Box<dyn DescribeLatent>;
+
+fn delta_latent_describer(delta_encoding: DeltaEncoding) -> Option<LatentDescriber> {
+  match delta_encoding {
+    DeltaEncoding::None | DeltaEncoding::Consecutive(_) => None,
+    DeltaEncoding::Lz77(_) => {
+      let describer = IntDescriber {
+        description: "lookback".to_string(),
+        units: "".to_string(),
+        center: 0 as DeltaLookback,
+        is_signed: false,
+      };
+      Some(Box::new(describer))
+    }
+  }
+}
 
 pub(crate) fn match_classic_mode<T: Number>(
   meta: &ChunkMeta,
   delta_units: &'static str,
-) -> Option<Vec<LatentDescriber<T::L>>> {
-  match (meta.mode, meta.delta_encoding) {
-    (Mode::Classic, DeltaEncoding::None) => {
-      let describer = Box::new(ClassicDescriber::<T>::default());
-      Some(vec![describer])
-    }
-    (Mode::Classic, _) => {
-      let describer = centered_delta_describer("delta".to_string(), delta_units.to_string());
-      Some(vec![describer])
-    }
+) -> Option<PerLatentVar<LatentDescriber>> {
+  let primary_describer: Option<LatentDescriber> = match (meta.mode, meta.delta_encoding) {
+    (Mode::Classic, DeltaEncoding::None) => Some(Box::new(ClassicDescriber::<T>::default())),
+    (Mode::Classic, _) => Some(centered_delta_describer::<T::L>(
+      "delta".to_string(),
+      delta_units.to_string(),
+    )),
     _ => None,
-  }
+  };
+
+  primary_describer.map(|primary| PerLatentVar {
+    delta: delta_latent_describer(meta.delta_encoding),
+    primary,
+    secondary: None,
+  })
 }
 
 pub(crate) fn match_int_modes<L: Latent>(
   meta: &ChunkMeta,
   is_signed: bool,
-) -> Option<Vec<LatentDescriber<L>>> {
+) -> Option<PerLatentVar<LatentDescriber>> {
   match meta.mode {
     Mode::IntMult(dyn_latent) => {
       let base = *dyn_latent.downcast_ref::<L>().unwrap();
@@ -56,29 +75,35 @@ pub(crate) fn match_int_modes<L: Latent>(
           is_signed,
         })
       } else {
-        centered_delta_describer(
+        centered_delta_describer::<L>(
           format!("multiplier delta [x{}]", base),
           "x".to_string(),
         )
       };
-      let secondary = Box::new(IntDescriber {
+      let secondary: Option<LatentDescriber> = Some(Box::new(IntDescriber {
         description: "adjustment".to_string(),
         units: "".to_string(),
         center: adj_center,
         is_signed: false,
-      });
-      Some(vec![primary, secondary])
+      }));
+      Some(PerLatentVar {
+        delta: delta_latent_describer(meta.delta_encoding),
+        primary,
+        secondary,
+      })
     }
     _ => None,
   }
 }
 
-pub(crate) fn match_float_modes<F: Float>(meta: &ChunkMeta) -> Option<Vec<LatentDescriber<F::L>>> {
+pub(crate) fn match_float_modes<F: Float>(
+  meta: &ChunkMeta,
+) -> Option<PerLatentVar<LatentDescriber>> {
   match meta.mode {
     Mode::FloatMult(dyn_latent) => {
       let base_latent = *dyn_latent.downcast_ref::<F::L>().unwrap();
       let base_string = F::from_latent_ordered(base_latent).to_string();
-      let primary: LatentDescriber<F::L> = if matches!(meta.delta_encoding, DeltaEncoding::None) {
+      let primary: LatentDescriber = if matches!(meta.delta_encoding, DeltaEncoding::None) {
         Box::new(FloatMultDescriber {
           base_string,
           phantom: PhantomData::<F>,
@@ -91,13 +116,17 @@ pub(crate) fn match_float_modes<F: Float>(meta: &ChunkMeta) -> Option<Vec<Latent
           is_signed: true,
         })
       };
-      let secondary = Box::new(IntDescriber {
+      let secondary: Option<LatentDescriber> = Some(Box::new(IntDescriber {
         description: "adjustment".to_string(),
         units: " ULPs".to_string(),
         center: F::L::MID,
         is_signed: true,
-      });
-      Some(vec![primary, secondary])
+      }));
+      Some(PerLatentVar {
+        delta: delta_latent_describer(meta.delta_encoding),
+        primary,
+        secondary,
+      })
     }
     Mode::FloatQuant(k) => {
       let primary = if matches!(meta.delta_encoding, DeltaEncoding::None) {
@@ -106,19 +135,23 @@ pub(crate) fn match_float_modes<F: Float>(meta: &ChunkMeta) -> Option<Vec<Latent
           phantom: PhantomData::<F>,
         })
       } else {
-        centered_delta_describer(
+        centered_delta_describer::<F::L>(
           format!("quantums delta [<<{}]", k),
           "q".to_string(),
         )
       };
-      let secondary = Box::new(IntDescriber {
+      let secondary: Option<LatentDescriber> = Some(Box::new(IntDescriber {
         description: "magnitude adjustment".to_string(),
         units: " ULPs".to_string(),
         center: F::L::ZERO,
         is_signed: false,
-      });
+      }));
 
-      Some(vec![primary, secondary])
+      Some(PerLatentVar {
+        delta: delta_latent_describer(meta.delta_encoding),
+        primary,
+        secondary,
+      })
     }
     _ => None,
   }
@@ -127,7 +160,7 @@ pub(crate) fn match_float_modes<F: Float>(meta: &ChunkMeta) -> Option<Vec<Latent
 #[derive(Default)]
 struct ClassicDescriber<T: Number>(PhantomData<T>);
 
-impl<T: Number> DescribeLatent<T::L> for ClassicDescriber<T> {
+impl<T: Number> DescribeLatent for ClassicDescriber<T> {
   fn latent_var(&self) -> String {
     "primary".to_string()
   }
@@ -136,8 +169,8 @@ impl<T: Number> DescribeLatent<T::L> for ClassicDescriber<T> {
     "".to_string()
   }
 
-  fn latent(&self, latent: T::L) -> String {
-    T::from_latent_ordered(latent).to_string()
+  fn latent(&self, latent: DynLatent) -> String {
+    T::from_latent_ordered(latent.downcast::<T::L>().unwrap()).to_string()
   }
 }
 
@@ -148,7 +181,7 @@ struct IntDescriber<L: Latent> {
   is_signed: bool,
 }
 
-impl<L: Latent> DescribeLatent<L> for IntDescriber<L> {
+impl<L: Latent> DescribeLatent for IntDescriber<L> {
   fn latent_var(&self) -> String {
     self.description.to_string()
   }
@@ -157,8 +190,8 @@ impl<L: Latent> DescribeLatent<L> for IntDescriber<L> {
     self.units.to_string()
   }
 
-  fn latent(&self, latent: L) -> String {
-    let centered = latent.wrapping_sub(self.center);
+  fn latent(&self, latent: DynLatent) -> String {
+    let centered = latent.downcast::<L>().unwrap().wrapping_sub(self.center);
     if centered < L::MID || !self.is_signed {
       centered.to_string()
     } else {
@@ -167,7 +200,7 @@ impl<L: Latent> DescribeLatent<L> for IntDescriber<L> {
   }
 }
 
-fn centered_delta_describer<L: Latent>(description: String, units: String) -> LatentDescriber<L> {
+fn centered_delta_describer<L: Latent>(description: String, units: String) -> LatentDescriber {
   Box::new(IntDescriber {
     description,
     units,
@@ -181,7 +214,7 @@ struct FloatMultDescriber<F: Float> {
   phantom: PhantomData<F>,
 }
 
-impl<F: Float> DescribeLatent<F::L> for FloatMultDescriber<F> {
+impl<F: Float> DescribeLatent for FloatMultDescriber<F> {
   fn latent_var(&self) -> String {
     format!("multiplier [x{}]", self.base_string)
   }
@@ -190,8 +223,8 @@ impl<F: Float> DescribeLatent<F::L> for FloatMultDescriber<F> {
     "x".to_string()
   }
 
-  fn latent(&self, latent: F::L) -> String {
-    F::int_float_from_latent(latent).to_string()
+  fn latent(&self, latent: DynLatent) -> String {
+    F::int_float_from_latent(latent.downcast::<F::L>().unwrap()).to_string()
   }
 }
 
@@ -200,7 +233,7 @@ struct FloatQuantDescriber<F: Float> {
   phantom: PhantomData<F>,
 }
 
-impl<F: Float> DescribeLatent<F::L> for FloatQuantDescriber<F> {
+impl<F: Float> DescribeLatent for FloatQuantDescriber<F> {
   fn latent_var(&self) -> String {
     "quantized".to_string()
   }
@@ -209,8 +242,8 @@ impl<F: Float> DescribeLatent<F::L> for FloatQuantDescriber<F> {
     "".to_string()
   }
 
-  fn latent(&self, latent: F::L) -> String {
-    let shifted = latent << self.k;
+  fn latent(&self, latent: DynLatent) -> String {
+    let shifted = latent.downcast::<F::L>().unwrap() << self.k;
     if shifted >= F::L::MID {
       F::from_latent_ordered(shifted).to_string()
     } else {

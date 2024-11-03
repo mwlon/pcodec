@@ -11,8 +11,8 @@ use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
 use crate::metadata::delta_encoding::{DeltaEncoding, DeltaLz77Config};
 use crate::metadata::dyn_latent::DynLatent;
 use crate::metadata::format_version::FormatVersion;
+use crate::metadata::per_latent_var::{LatentVarKey, PerLatentVar};
 use crate::metadata::Mode;
-use crate::per_latent_var::{LatentVarKey, PerLatentVar};
 
 /// The metadata of a pco chunk.
 #[derive(Clone, Debug, PartialEq, Eq)]

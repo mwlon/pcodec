@@ -12,8 +12,8 @@ use crate::errors::{PcoError, PcoResult};
 use crate::latent_page_decompressor::LatentPageDecompressor;
 use crate::macros::{define_latent_enum, match_latent_enum};
 use crate::metadata::page::PageMeta;
+use crate::metadata::per_latent_var::{PerLatentVar, PerLatentVarBuilder};
 use crate::metadata::{ChunkMeta, DeltaEncoding, DynBins, DynLatents, Mode};
-use crate::per_latent_var::{PerLatentVar, PerLatentVarBuilder};
 use crate::progress::Progress;
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;

@@ -10,7 +10,7 @@ use crate::delta::DeltaState;
 use crate::errors::{PcoError, PcoResult};
 use crate::metadata::delta_encoding::DeltaEncoding::*;
 use crate::metadata::format_version::FormatVersion;
-use crate::per_latent_var::LatentVarKey;
+use crate::metadata::per_latent_var::LatentVarKey;
 use std::io::Write;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

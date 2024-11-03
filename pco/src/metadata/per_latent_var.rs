@@ -71,7 +71,7 @@ impl<T> PerLatentVar<T> {
     }
   }
 
-  pub(crate) fn as_ref(&self) -> PerLatentVar<&T> {
+  pub fn as_ref(&self) -> PerLatentVar<&T> {
     PerLatentVar {
       delta: self.delta.as_ref(),
       primary: &self.primary,
@@ -95,7 +95,7 @@ impl<T> PerLatentVar<T> {
     }
   }
 
-  pub(crate) fn zip_exact<S>(self, other: PerLatentVar<S>) -> PerLatentVar<(T, S)> {
+  pub fn zip_exact<S>(self, other: PerLatentVar<S>) -> PerLatentVar<(T, S)> {
     let zip_option = |a: Option<T>, b: Option<S>| match (a, b) {
       (Some(a), Some(b)) => Some((a, b)),
       (None, None) => None,
@@ -109,7 +109,7 @@ impl<T> PerLatentVar<T> {
     }
   }
 
-  pub(crate) fn enumerated(self) -> Vec<(LatentVarKey, T)> {
+  pub fn enumerated(self) -> Vec<(LatentVarKey, T)> {
     let mut res = Vec::with_capacity(3);
     if let Some(value) = self.delta {
       res.push((LatentVarKey::Delta, value));

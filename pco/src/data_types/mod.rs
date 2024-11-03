@@ -11,6 +11,7 @@ use crate::constants::Bitlen;
 use crate::describers::LatentDescriber;
 use crate::errors::PcoResult;
 use crate::metadata::dyn_latents::DynLatents;
+use crate::metadata::per_latent_var::PerLatentVar;
 use crate::metadata::{ChunkMeta, Mode};
 use crate::split_latents::SplitLatents;
 use crate::ChunkConfig;
@@ -162,7 +163,7 @@ pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + '
 
   /// Returns a `LatentDescriber` for each latent variable in the chunk
   /// metadata.
-  fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>>;
+  fn get_latent_describers(meta: &ChunkMeta) -> PerLatentVar<LatentDescriber>;
 
   fn mode_is_valid(mode: Mode) -> bool;
   /// Breaks the numbers into latent variables for better compression.
