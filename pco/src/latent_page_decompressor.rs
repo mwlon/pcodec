@@ -35,6 +35,7 @@ struct State<L: Latent> {
 
   ans_state_idxs: [AnsState; ANS_INTERLEAVING],
   delta_state: Vec<L>,
+  delta_state_pos: usize,
 }
 
 impl<L: Latent> State<L> {
@@ -69,7 +70,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
     bins: &[Bin<L>],
     delta_encoding: DeltaEncoding,
     ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
-    delta_state: Vec<L>,
+    stored_delta_state: Vec<L>,
   ) -> PcoResult<Self> {
     let u64s_per_offset = read_write_uint::calc_max_u64s(bins::max_offset_bits(bins));
     let infos = bins
@@ -80,12 +81,20 @@ impl<L: Latent> LatentPageDecompressor<L> {
     let ans_spec = Spec::from_weights(ans_size_log, weights)?;
     let decoder = ans::Decoder::new(&ans_spec);
 
+    let (working_delta_state, delta_state_pos) = match delta_encoding {
+      DeltaEncoding::None | DeltaEncoding::Consecutive(_) => (stored_delta_state, 0),
+      DeltaEncoding::Lz77(config) => {
+        delta::new_lz77_window_buffer_and_pos(config, &stored_delta_state)
+      }
+    };
+
     let mut state = State {
       offset_bits_csum_scratch: [0; FULL_BATCH_N],
       offset_bits_scratch: [0; FULL_BATCH_N],
       lowers_scratch: [L::ZERO; FULL_BATCH_N],
       ans_state_idxs: ans_final_state_idxs,
-      delta_state,
+      delta_state: working_delta_state,
+      delta_state_pos,
     };
 
     let needs_ans = bins.len() != 1;
@@ -290,12 +299,14 @@ impl<L: Latent> LatentPageDecompressor<L> {
       DeltaEncoding::Consecutive(_) => {
         delta::decode_consecutive_in_place(&mut self.state.delta_state, dst)
       }
-      DeltaEncoding::Lz77(_) => {
+      DeltaEncoding::Lz77(config) => {
         delta::decode_lz77_in_place(
+          config,
           delta_latents
             .unwrap()
             .downcast_ref::<DeltaLookback>()
             .unwrap(),
+          &mut self.state.delta_state_pos,
           &mut self.state.delta_state,
           dst,
         );

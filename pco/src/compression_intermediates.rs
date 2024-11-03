@@ -9,20 +9,20 @@ use std::cmp;
 use std::ops::Range;
 
 #[derive(Clone, Debug)]
+pub struct PageInfoVar {
+  pub delta_state: DeltaState,
+  pub range: Range<usize>,
+}
+
+#[derive(Clone, Debug)]
 pub struct PageInfo {
   pub page_n: usize,
-  pub start_idx: usize,
-  pub end_idx: usize,
-  pub delta_states: PerLatentVar<DeltaState>,
+  pub per_latent_var: PerLatentVar<PageInfoVar>,
 }
 
 impl PageInfo {
   pub fn range_for_latent_var(&self, key: LatentVarKey) -> Range<usize> {
-    let start_idx = cmp::min(
-      self.start_idx + self.delta_states.get(key).unwrap().len(),
-      self.end_idx,
-    );
-    start_idx..self.end_idx
+    self.per_latent_var.get(key).unwrap().range.clone()
   }
 }
 

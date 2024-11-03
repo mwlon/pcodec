@@ -1,10 +1,10 @@
 use crate::bit_writer::BitWriter;
 use crate::chunk_config::DeltaSpec;
-use crate::compression_intermediates::BinCompressionInfo;
+use crate::compression_intermediates::{BinCompressionInfo, PageInfoVar};
 use crate::compression_intermediates::{DissectedPage, PageInfo};
 use crate::constants::{
-  Bitlen, Weight, ANS_INTERLEAVING, LIMITED_UNOPTIMIZED_BINS_LOG, MAX_COMPRESSION_LEVEL,
-  MAX_DELTA_ENCODING_ORDER, MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
+  Bitlen, Weight, LIMITED_UNOPTIMIZED_BINS_LOG, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER,
+  MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
 };
 use crate::data_types::{Latent, LatentType, Number};
 use crate::delta::DeltaState;
@@ -27,9 +27,6 @@ use crate::wrapped::guarantee;
 use crate::{ans, bin_optimization, data_types, delta, ChunkConfig, PagingSpec, FULL_BATCH_N};
 use std::cmp::min;
 use std::io::Write;
-use std::mem;
-use std::mem::MaybeUninit;
-use std::num::NonZeroI16;
 
 // if it looks like the average page of size n will use k bits, hint that it
 // will be PAGE_SIZE_OVERESTIMATION * k bits.
@@ -172,56 +169,80 @@ fn collect_contiguous_latents<L: Latent>(
   res
 }
 
-fn build_page_infos_and_delta_states(
+fn delta_encode_and_build_page_infos(
   delta_encoding: DeltaEncoding,
   n_per_page: &[usize],
-  latents: &mut PerLatentVar<DynLatents>,
-) -> Vec<PageInfo> {
+  latents: SplitLatents,
+) -> (PerLatentVar<DynLatents>, Vec<PageInfo>) {
+  let n = latents.primary.len();
+  let mut latents = PerLatentVar {
+    delta: None,
+    primary: latents.primary,
+    secondary: latents.secondary,
+  };
   let n_pages = n_per_page.len();
   let mut page_infos = Vec::with_capacity(n_pages);
 
   // delta encoding
   let mut start_idx = 0;
+  let mut delta_latents = delta_encoding.latent_type().map(|ltype| {
+    match_latent_enum!(
+      ltype,
+      LatentType<L> => { DynLatents::new(Vec::<L>::with_capacity(n)).unwrap() }
+    )
+  });
   for &page_n in n_per_page {
     let end_idx = start_idx + page_n;
 
-    let delta_latents = delta::compute_delta_latent_var(
+    let page_delta_latents = delta::compute_delta_latent_var(
       delta_encoding,
       &mut latents.primary,
       start_idx..end_idx,
     );
 
-    let mut delta_states = latents.as_mut().map(|key, var_latents| {
+    let mut per_latent_var = latents.as_mut().map(|key, var_latents| {
       let encoding_for_var = delta_encoding.for_latent_var(key);
-      delta::encode_in_place(
+      let delta_state = delta::encode_in_place(
         encoding_for_var,
-        delta_latents.as_ref(),
+        page_delta_latents.as_ref(),
         var_latents,
-      )
+      );
+      // delta encoding in place leaves junk in the first n_latents_per_state
+      let stored_start_idx = min(
+        start_idx + encoding_for_var.n_latents_per_state(),
+        end_idx,
+      );
+      let range = stored_start_idx..end_idx;
+      PageInfoVar { delta_state, range }
     });
-    delta_states.delta = delta_latents.as_ref().map(|delta_latents| {
+
+    if let Some(delta_latents) = delta_latents.as_mut() {
       match_latent_enum!(
         delta_latents,
-        DynLatents<L>(_inner) => { DeltaState::new(Vec::<L>::new()).unwrap() }
+        DynLatents<L>(delta_latents) => {
+          let page_delta_latents = page_delta_latents.unwrap().downcast::<L>().unwrap();
+          let delta_state = DeltaState::new(Vec::<L>::new()).unwrap();
+          let range = delta_latents.len()..delta_latents.len() + page_delta_latents.len();
+          per_latent_var.delta = Some(PageInfoVar { delta_state, range });
+          delta_latents.extend(&page_delta_latents);
+        }
       )
-    });
-    latents.delta = delta_latents;
+    }
 
     page_infos.push(PageInfo {
       page_n,
-      start_idx,
-      end_idx,
-      delta_states,
+      per_latent_var,
     });
 
     start_idx = end_idx;
   }
+  latents.delta = delta_latents;
 
-  page_infos
+  (latents, page_infos)
 }
 
 fn new_candidate_w_split_and_delta_encoding(
-  mut latents: PerLatentVar<DynLatents>, // start out plain, gets delta encoded in place
+  latents: SplitLatents, // start out plain, gets delta encoded in place
   paging_spec: &PagingSpec,
   mode: Mode,
   delta_encoding: DeltaEncoding,
@@ -230,7 +251,8 @@ fn new_candidate_w_split_and_delta_encoding(
   let chunk_n = latents.primary.len();
   let n_per_page = paging_spec.n_per_page(chunk_n)?;
 
-  let page_infos = build_page_infos_and_delta_states(delta_encoding, &n_per_page, &mut latents);
+  let (latents, page_infos) =
+    delta_encode_and_build_page_infos(delta_encoding, &n_per_page, latents);
 
   // training bins
   let mut var_metas = PerLatentVarBuilder::default();
@@ -330,8 +352,7 @@ fn calculate_compressed_sample_size<L: Latent>(
   delta_encoding: DeltaEncoding,
 ) -> PcoResult<usize> {
   let (sample_cc, _) = new_candidate_w_split_and_delta_encoding(
-    PerLatentVar {
-      delta: None,
+    SplitLatents {
       primary: DynLatents::new(sample.to_vec()).unwrap(),
       secondary: None,
     },
@@ -407,7 +428,7 @@ fn choose_unoptimized_bins_log(compression_level: usize, n: usize) -> Bitlen {
 // each bin.
 fn new_candidate_w_split(
   mode: Mode,
-  latents: PerLatentVar<DynLatents>,
+  latents: SplitLatents,
   config: &ChunkConfig,
 ) -> PcoResult<(ChunkCompressor, PerLatentVar<Vec<Weight>>)> {
   let n = latents.primary.len();
@@ -434,19 +455,16 @@ fn new_candidate_w_split(
 }
 
 fn fallback_chunk_compressor(
-  mut classic_latents: PerLatentVar<DynLatents>,
+  latents: SplitLatents,
   config: &ChunkConfig,
 ) -> PcoResult<ChunkCompressor> {
-  let n = classic_latents.primary.len();
+  let n = latents.primary.len();
   let n_per_page = config.paging_spec.n_per_page(n)?;
-  let page_infos = build_page_infos_and_delta_states(
-    DeltaEncoding::None,
-    &n_per_page,
-    &mut classic_latents,
-  );
+  let (latents, page_infos) =
+    delta_encode_and_build_page_infos(DeltaEncoding::None, &n_per_page, latents);
 
   let (meta, lcc) = match_latent_enum!(
-    classic_latents.primary,
+    latents.primary,
     DynLatents<L>(latents) => {
       let infos = vec![BinCompressionInfo::<L> {
         weight: 1,
@@ -486,12 +504,7 @@ pub(crate) fn new<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<Chun
   let n = nums.len();
   validate_chunk_size(n)?;
 
-  let (mode, SplitLatents { primary, secondary }) = T::choose_mode_and_split_latents(nums, config)?;
-  let latents = PerLatentVar {
-    delta: None,
-    primary,
-    secondary,
-  };
+  let (mode, latents) = T::choose_mode_and_split_latents(nums, config)?;
 
   let (candidate, bin_counts) = new_candidate_w_split(mode, latents, config)?;
   if candidate.should_fallback(
@@ -500,11 +513,7 @@ pub(crate) fn new<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<Chun
     bin_counts,
   ) {
     let SplitLatents { primary, secondary } = data_types::split_latents_classic(nums);
-    let latents = PerLatentVar {
-      delta: None,
-      primary,
-      secondary,
-    };
+    let latents = SplitLatents { primary, secondary };
     return fallback_chunk_compressor(latents, config);
   }
 
@@ -615,19 +624,18 @@ impl ChunkCompressor {
   fn page_size_hint_inner(&self, page_idx: usize, page_size_overestimation: f64) -> usize {
     let page_info = &self.page_infos[page_idx];
     let mut body_bit_size = 0;
-    let n_pre_delta_latents = page_info.end_idx - page_info.start_idx;
-    for (_, (lcc, delta_state)) in self
+    for (_, (lcc, page_info_var)) in self
       .latent_chunk_compressors
       .as_ref()
-      .zip_exact(page_info.delta_states.as_ref())
+      .zip_exact(page_info.per_latent_var.as_ref())
       .enumerated()
     {
-      let page_n_latents = n_pre_delta_latents.saturating_sub(delta_state.len());
-      let nums_bit_size = page_n_latents as f64
-        * match_latent_enum!(
-          lcc,
-          DynLatentChunkCompressor<L>(inner) => { inner.avg_bits_per_delta }
-        );
+      let n_stored_latents = page_info_var.range.len();
+      let avg_bits_per_latent = match_latent_enum!(
+        lcc,
+        DynLatentChunkCompressor<L>(inner) => { inner.avg_bits_per_latent }
+      );
+      let nums_bit_size = n_stored_latents as f64 * avg_bits_per_latent;
       body_bit_size += (nums_bit_size * page_size_overestimation).ceil() as usize;
     }
     self.meta.exact_page_meta_size() + body_bit_size.div_ceil(8)
@@ -688,21 +696,20 @@ impl ChunkCompressor {
     });
 
     let per_latent_var = page_info
-      .delta_states
+      .per_latent_var
       .as_ref()
       .zip_exact(ans_default_state_and_size_log.as_ref())
       .zip_exact(dissected_page.per_latent_var.as_ref())
-      .map(
-        |key, ((delta_state, (ans_default_state, _)), dissected)| {
-          let ans_final_state_idxs = dissected
-            .ans_final_states
-            .map(|state| state - ans_default_state);
-          PageLatentVarMeta {
-            delta_moments: delta_state.clone(),
-            ans_final_state_idxs,
-          }
-        },
-      );
+      .map(|key, tuple| {
+        let ((page_info_var, (ans_default_state, _)), dissected) = tuple;
+        let ans_final_state_idxs = dissected
+          .ans_final_states
+          .map(|state| state - ans_default_state);
+        PageLatentVarMeta {
+          delta_moments: page_info_var.delta_state.clone(),
+          ans_final_state_idxs,
+        }
+      });
 
     let page_meta = PageMeta { per_latent_var };
     let ans_size_logs = ans_default_state_and_size_log.map(|_, (_, size_log)| size_log);

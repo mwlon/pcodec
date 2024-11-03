@@ -82,7 +82,7 @@ pub(crate) struct TrainedBins<L: Latent> {
 pub struct LatentChunkCompressor<L: Latent> {
   table: CompressionTable<L>,
   pub encoder: ans::Encoder,
-  pub avg_bits_per_delta: f64,
+  pub avg_bits_per_latent: f64,
   is_trivial: bool,
   needs_ans: bool,
   max_u64s_per_offset: usize,
@@ -104,7 +104,7 @@ impl<L: Latent> LatentChunkCompressor<L> {
     Ok(LatentChunkCompressor {
       table,
       encoder,
-      avg_bits_per_delta: bins::avg_bits_per_latent(bins, trained.ans_size_log),
+      avg_bits_per_latent: bins::avg_bits_per_latent(bins, trained.ans_size_log),
       is_trivial: bins::are_trivial(bins),
       needs_ans,
       max_u64s_per_offset,
