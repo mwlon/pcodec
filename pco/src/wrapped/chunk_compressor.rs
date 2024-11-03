@@ -33,7 +33,7 @@ use std::io::Write;
 const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
-const LZ77_WINDOW_N_LOG: Bitlen = 18;
+const LZ77_WINDOW_N_LOG: Bitlen = 15;
 const LZ77_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
 
 fn lz_delta_encoding(n: usize) -> DeltaEncoding {
