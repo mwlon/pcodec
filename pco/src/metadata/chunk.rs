@@ -169,7 +169,7 @@ mod tests {
           }
         );
         PageLatentVarMeta {
-          delta_moments,
+          delta_state: delta_moments,
           ans_final_state_idxs: [0; ANS_INTERLEAVING],
         }
       }),

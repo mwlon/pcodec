@@ -18,6 +18,7 @@ use crate::progress::Progress;
 
 const PERFORMANT_BUF_READ_CAPACITY: usize = 8192;
 
+#[derive(Debug)]
 struct LatentScratch {
   is_constant: bool,
   dst: DynLatents,
@@ -72,6 +73,7 @@ pub struct PageDecompressor<T: Number, R: BetterBufRead> {
   // immutable
   n: usize,
   mode: Mode,
+  delta_encoding: DeltaEncoding,
   phantom: PhantomData<T>,
 
   // mutable
@@ -95,8 +97,8 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
 
-    let page_meta = reader_builder
-      .with_reader(|reader| unsafe { PageMeta::read_from::<T::L>(reader, chunk_meta) })?;
+    let page_meta =
+      reader_builder.with_reader(|reader| unsafe { PageMeta::read_from(reader, chunk_meta) })?;
 
     let mode = chunk_meta.mode;
 
@@ -111,7 +113,7 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
         &chunk_latent_var_meta.bins,
         DynBins<L>(bins) => {
           let delta_state = page_latent_var_meta
-            .delta_moments
+            .delta_state
             .downcast_ref::<L>()
             .unwrap()
             .clone();
@@ -164,6 +166,7 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
     Ok(Self {
       n,
       mode,
+      delta_encoding: chunk_meta.delta_encoding,
       phantom: PhantomData,
       reader_builder,
       n_processed: 0,
@@ -190,11 +193,14 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
         match_latent_enum!(
           dyn_lpd,
           DynLatentPageDecompressor<L>(lpd) => {
+            // Delta latents only line up with pre-delta length of the other
+            // latents.
+            let limit = min(n_remaining.saturating_sub(self.delta_encoding.n_latents_per_state()), batch_n);
             // We never apply delta encoding to delta latents, so we just
             // skip straight to the inner LatentBatchDecompressor
             lpd.decompress_batch_pre_delta(
               reader,
-              &mut dst.downcast_mut::<L>().unwrap()[..batch_n]
+              &mut dst.downcast_mut::<L>().unwrap()[..limit]
             )
           }
         );

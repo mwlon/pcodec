@@ -35,20 +35,19 @@ impl PageMeta {
     writer.finish_byte();
   }
 
-  pub unsafe fn read_from<L: Latent>(
-    reader: &mut BitReader,
-    chunk_meta: &ChunkMeta,
-  ) -> PcoResult<Self> {
+  pub unsafe fn read_from(reader: &mut BitReader, chunk_meta: &ChunkMeta) -> PcoResult<Self> {
     let mut per_latent_var_builder = PerLatentVarBuilder::default();
     for (key, chunk_latent_var_meta) in chunk_meta.per_latent_var.as_ref().enumerated() {
+      let n_latents_per_state = chunk_meta
+        .delta_encoding
+        .for_latent_var(key)
+        .n_latents_per_state();
       per_latent_var_builder.set(
         key,
-        PageLatentVarMeta::read_from::<L>(
+        PageLatentVarMeta::read_from(
           reader,
-          chunk_meta
-            .delta_encoding
-            .for_latent_var(key)
-            .n_latents_per_state(),
+          chunk_latent_var_meta.latent_type(),
+          n_latents_per_state,
           chunk_latent_var_meta.ans_size_log,
         ),
       )

@@ -73,7 +73,7 @@ impl DeltaEncoding {
       }
       1 => {
         let window_n_log = 1 + reader.read_bitlen(BITS_TO_ENCODE_LZ_DELTA_N_LOG);
-        let state_n_log = 1 + reader.read_bitlen(BITS_TO_ENCODE_LZ_DELTA_N_LOG);
+        let state_n_log = reader.read_bitlen(BITS_TO_ENCODE_LZ_DELTA_N_LOG);
         if state_n_log > window_n_log {
           return Err(PcoError::corruption(format!(
             "LZ delta encoding state size log exceeded window size log: {} vs {}",
@@ -113,7 +113,7 @@ impl DeltaEncoding {
       &Consecutive(order) => writer.write_usize(order, BITS_TO_ENCODE_DELTA_ENCODING_ORDER),
       Lz77(config) => {
         writer.write_bitlen(
-          config.window_n_log,
+          config.window_n_log - 1,
           BITS_TO_ENCODE_LZ_DELTA_N_LOG,
         );
         writer.write_bitlen(

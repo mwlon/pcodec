@@ -9,7 +9,7 @@ use crate::data_types::{Latent, LatentType};
 use crate::errors::{PcoError, PcoResult};
 use crate::macros::match_latent_enum;
 use crate::metadata::dyn_bins::DynBins;
-use crate::metadata::{Bin, DeltaEncoding};
+use crate::metadata::{Bin, DeltaEncoding, LatentVarKey};
 use better_io::BetterBufRead;
 use std::cmp::min;
 use std::io::Write;
@@ -88,6 +88,13 @@ pub struct ChunkLatentVarMeta {
 }
 
 impl ChunkLatentVarMeta {
+  pub(crate) fn latent_type(&self) -> LatentType {
+    match_latent_enum!(
+      &self.bins,
+      DynBins<L>(_inner) => { LatentType::new::<L>().unwrap() }
+    )
+  }
+
   pub(crate) unsafe fn read_from<R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
     latent_type: LatentType,

@@ -34,12 +34,15 @@ const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
 const LZ77_WINDOW_N_LOG: Bitlen = 5;
-const LZ77_REQUIRED_BIT_SAVINGS_PER_N: f64 = 2.0;
+const LZ77_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
 
 fn lz_delta_encoding(n: usize) -> DeltaEncoding {
   DeltaEncoding::Lz77(DeltaLz77Config {
     window_n_log: LZ77_WINDOW_N_LOG,
-    state_n_log: n.ilog2().saturating_sub(7).max(8),
+    state_n_log: min(
+      n.ilog2().saturating_sub(7).max(8),
+      LZ77_WINDOW_N_LOG,
+    ),
   })
 }
 
@@ -387,11 +390,11 @@ fn choose_delta_encoding<L: Latent>(
     DeltaEncoding::None,
   )?;
 
-  let lz_encoding = lz_delta_encoding(n);
+  let lz_encoding = lz_delta_encoding(sample.len());
   let lz_size_estimate =
     calculate_compressed_sample_size(&sample, unoptimized_bins_log, lz_encoding)?;
   let lz_adjusted_size_estimate =
-    lz_size_estimate + (LZ77_REQUIRED_BIT_SAVINGS_PER_N * n as f64) as usize;
+    lz_size_estimate + (LZ77_REQUIRED_BYTE_SAVINGS_PER_N * sample.len() as f64) as usize;
   if lz_adjusted_size_estimate < best_size {
     best_encoding = lz_encoding;
     best_size = lz_adjusted_size_estimate;
@@ -707,7 +710,7 @@ impl ChunkCompressor {
           .ans_final_states
           .map(|state| state - ans_default_state);
         PageLatentVarMeta {
-          delta_moments: page_info_var.delta_state.clone(),
+          delta_state: page_info_var.delta_state.clone(),
           ans_final_state_idxs,
         }
       });
