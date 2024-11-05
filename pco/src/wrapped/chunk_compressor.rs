@@ -36,6 +36,9 @@ const DELTA_GROUP_SIZE: usize = 200;
 const LZ77_WINDOW_N_LOG: Bitlen = 15;
 const LZ77_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
 
+// TODO taking deltas of secondary latents has been proven to help slightly
+// in some cases, so we should consider it in the future
+
 fn lz_delta_encoding(n: usize) -> DeltaEncoding {
   DeltaEncoding::Lz77(DeltaLz77Config {
     window_n_log: LZ77_WINDOW_N_LOG,

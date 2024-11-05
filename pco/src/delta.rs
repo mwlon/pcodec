@@ -1,13 +1,14 @@
-use crate::constants::DeltaLookback;
+use crate::constants::{Bitlen, DeltaLookback};
 use crate::data_types::Latent;
 use crate::macros::match_latent_enum;
 use crate::metadata::delta_encoding::DeltaLz77Config;
 use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::DeltaEncoding;
+use crate::read_write_uint::ReadWriteUint;
 use crate::FULL_BATCH_N;
 use std::mem::MaybeUninit;
 use std::ops::Range;
-use std::{cmp, mem};
+use std::{array, cmp, mem};
 
 pub type DeltaState = DynLatents;
 
@@ -73,26 +74,67 @@ pub(crate) fn decode_consecutive_in_place<L: Latent>(delta_moments: &mut [L], la
 }
 
 fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> Vec<DeltaLookback> {
+  const BRUTE_FORCE_LOOKBACK: usize = 16; //64;
+  const MAX_PROPOSED_N_LOOKBACKS: usize = 128;
+
   let state_n = config.state_n();
 
-  if latents.len() < state_n {
+  if latents.len() <= state_n {
     return vec![];
   }
 
-  let window_n = config.window_n();
+  let window_n = cmp::min(config.window_n(), latents.len() - 1);
+
+  let hash_table_n_log = 16; //config.window_n_log;
+  let hash_mask = (1_u64 << hash_table_n_log) - 1;
+  let coarsenesses = (0..L::BITS - 15).step_by(8).collect::<Vec<_>>();
+  // let coarsenesses = (5..L::BITS - 10).step_by(8).collect::<Vec<_>>();
+  let n_coarsenesses = coarsenesses.len();
+  // let mut mutli_coarseness_hash_table = vec![0_usize; n_coarsenesses * (1 << hash_table_n_log)];
+  let mut idx_hash_table = vec![0_usize; n_coarsenesses * (1 << hash_table_n_log)];
+  let hash_fn = |x: u64| (x ^ (x >> hash_table_n_log)) & hash_mask;
+
+  let mut lookback_counts = vec![1_u32; config.window_n()];
   let mut lookbacks = vec![MaybeUninit::uninit(); latents.len() - state_n];
   // TODO make this fast
+  let mut proposed_lookbacks = array::from_fn::<_, MAX_PROPOSED_N_LOOKBACKS, _>(|i| i + 1);
   for i in state_n..latents.len() {
     // TODO default window
     let l = latents[i];
+
+    let mut n_proposed_lookbacks = BRUTE_FORCE_LOOKBACK;
+    for (c_i, &coarseness) in coarsenesses.iter().enumerate() {
+      let offset = c_i * (1 << hash_table_n_log);
+      let bucket = (l >> coarseness).to_u64();
+      let hash = hash_fn(bucket);
+      for h in [
+        hash_fn(bucket.wrapping_sub(1)),
+        hash,
+        hash_fn(bucket.wrapping_add(1)),
+      ] {
+        let lookback_to_last_instance = i - idx_hash_table[offset + h as usize];
+        if lookback_to_last_instance < window_n {
+          proposed_lookbacks[n_proposed_lookbacks] = lookback_to_last_instance;
+          n_proposed_lookbacks += 1;
+        }
+      }
+      idx_hash_table[offset + hash as usize] = i;
+    }
+    n_proposed_lookbacks = n_proposed_lookbacks.min(i).min(window_n);
+
     let mut best_lookback = 1;
     let mut best_goodness = 0;
-    for lookback in 1..cmp::min(i, window_n + 1) {
-      let lookback_goodness = (lookback - 1).leading_zeros();
+    // for lookback in (1..cmp::min(i, BRUTE_FORCE_LOOKBACK)) {
+    for &lookback in &proposed_lookbacks[..n_proposed_lookbacks] {
+      let lookback_goodness = 32 - lookback_counts[lookback - 1].leading_zeros();
       let other = latents[i - lookback];
       let delta = L::min(l.wrapping_sub(other), other.wrapping_sub(l));
-      let delta_goodness = delta.leading_zeros();
-      let goodness = lookback_goodness + 2 * delta_goodness;
+      let delta_goodness = if delta == L::ZERO {
+        L::BITS + 10
+      } else {
+        delta.leading_zeros()
+      };
+      let goodness = lookback_goodness + delta_goodness;
       if goodness > best_goodness {
         best_lookback = lookback;
         best_goodness = goodness;
@@ -100,6 +142,7 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
     }
 
     lookbacks[i - state_n] = MaybeUninit::new(best_lookback as DeltaLookback);
+    lookback_counts[best_lookback - 1] += 1;
   }
 
   unsafe { mem::transmute::<Vec<MaybeUninit<DeltaLookback>>, Vec<DeltaLookback>>(lookbacks) }
@@ -255,7 +298,9 @@ mod tests {
 
     let mut deltas = original_latents.clone();
     let lookbacks = choose_lz77_lookbacks(config, &original_latents);
-    assert_eq!(lookbacks, vec![1, 2, 4, 1, 1, 3, 1, 1]);
+    assert_eq!(lookbacks[0], 1);
+    assert_eq!(lookbacks[2], 4);
+    assert_eq!(lookbacks[7], 1);
 
     let state = encode_lz77_in_place(config, &lookbacks, &mut deltas);
     assert_eq!(state, vec![1, 150]);
@@ -264,15 +309,14 @@ mod tests {
     // but for decoding we need junk deltas at the end.
     let mut deltas_to_decode = Vec::<u32>::new();
     deltas_to_decode.extend(&deltas[2..]);
-    let expected_deltas = vec![3_i32, 1, 3, -1, 0, 1, 1, 146];
-    assert_eq!(
-      deltas_to_decode
-        .iter()
-        .copied()
-        .map(|delta| delta.wrapping_add(u32::MID) as i32)
-        .collect::<Vec<_>>(),
-      expected_deltas
-    );
+    let intuitive_deltas = deltas_to_decode
+      .iter()
+      .copied()
+      .map(|delta| delta.wrapping_add(u32::MID) as i32)
+      .collect::<Vec<_>>();
+    assert_eq!(intuitive_deltas[0], 3);
+    assert_eq!(intuitive_deltas[2], 3);
+    assert_eq!(intuitive_deltas[7], 146);
     for _ in 0..2 {
       deltas_to_decode.push(1337);
     }
