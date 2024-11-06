@@ -138,19 +138,14 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
       idx_hash_table[offset + hash as usize] = i;
     }
 
-    for (lookback_idx, &lookback) in proposed_lookbacks.iter().enumerate() {
+    for lookback_idx in 0..N_LZ_PROPOSED_LOOKBACKS {
+      let lookback = proposed_lookbacks[lookback_idx];
       let lookback_count = unsafe { *lookback_counts.get_unchecked(lookback - 1) };
       let other = unsafe { *latents.get_unchecked(i - lookback) };
       let lookback_goodness = 32 - lookback_count.leading_zeros();
       let delta = L::min(l.wrapping_sub(other), other.wrapping_sub(l));
-      let delta_goodness = if delta == L::ZERO {
-        L::BITS + 10
-      } else {
-        delta.leading_zeros()
-      };
-      unsafe {
-        *goodnesses.get_unchecked_mut(lookback_idx) = lookback_goodness + delta_goodness;
-      }
+      let delta_goodness = delta.leading_zeros();
+      goodnesses[lookback_idx] = lookback_goodness + delta_goodness;
     }
 
     let best_lookback_idx = argmax(&goodnesses);
