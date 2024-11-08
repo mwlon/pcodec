@@ -24,45 +24,6 @@ struct LatentScratch {
   dst: DynLatents,
 }
 
-// struct LatentPageDecompressor<L: Latent> {
-//   delta_encoding: DeltaEncoding,
-//   latent_batch_decompressor: LatentPageDecompressor<L>,
-//   delta_state: Vec<L>,
-// }
-//
-// impl<L: Latent> LatentPageDecompressor<L> {
-//   unsafe fn decompress_latents_w_delta<L: Latent>(
-//     &mut self,
-//     reader: &mut BitReader,
-//     delta_latents: Option<&DynLatents>,
-//     n_remaining: usize,
-//     dst: &mut [L],
-//   ) -> PcoResult<()> {
-//     let n_remaining_pre_delta = n_remaining.saturating_sub(self.delta_encoding.n_latents_per_state());
-//     let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
-//       dst.len()
-//     } else {
-//       // If we're at the end, LatentBatchdDecompressor won't initialize the last
-//       // few elements before delta decoding them, so we do that manually here to
-//       // satisfy MIRI. This step isn't really necessary.
-//       dst[n_remaining_pre_delta..].fill(L::default());
-//       n_remaining_pre_delta
-//     };
-//     self.latent_batch_decompressor.decompress_latent_batch(reader, &mut dst[..pre_delta_len])?;
-//     match self.delta_encoding {
-//       DeltaEncoding::None => (),
-//       DeltaEncoding::Consecutive(_) => delta::decode_consecutive_in_place(&mut self.delta_state, dst),
-//       DeltaEncoding::Lz77(config) => delta::decode_lz77_in_place(
-//         config,
-//         delta_latents.unwrap().downcast_ref::<DeltaLookback>().unwrap(),
-//         &mut self.delta_state,
-//         dst,
-//       ),
-//     }
-//     Ok(())
-//   }
-// }
-
 define_latent_enum!(
   #[derive()]
   DynLatentPageDecompressor(LatentPageDecompressor)

@@ -107,7 +107,7 @@ fn lz77_hash_lookup(
       proposed_lookbacks[proposal_idx] = if lookback_to_last_instance <= window_n {
         lookback_to_last_instance
       } else {
-        proposal_idx
+        cmp::min(proposal_idx, i)
       };
       proposal_idx += 1;
     }
@@ -128,7 +128,7 @@ fn lz77_compute_goodness<L: Latent>(
   goodnesses: &mut [Bitlen; N_LZ_PROPOSED_LOOKBACKS],
 ) {
   for lookback_idx in 0..N_LZ_PROPOSED_LOOKBACKS {
-    let lookback = cmp::min(i, proposed_lookbacks[lookback_idx]);
+    let lookback = proposed_lookbacks[lookback_idx];
     // let lookback_count = unsafe { *lookback_counts.get_unchecked(lookback - 1) };
     let lookback_count = lookback_counts[lookback - 1];
     let other = unsafe { *latents.get_unchecked(i - lookback) };
@@ -172,12 +172,16 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
   let mut lookback_counts = vec![1_u32; cmp::min(window_n, latents.len())];
   let mut lookbacks = vec![MaybeUninit::uninit(); latents.len() - state_n];
   let mut idx_hash_table = vec![0_usize; COARSENESSES.len() * hash_table_n];
-  let mut proposed_lookbacks = array::from_fn::<_, N_LZ_PROPOSED_LOOKBACKS, _>(|i| i + 1);
+  let mut proposed_lookbacks =
+    array::from_fn::<_, N_LZ_PROPOSED_LOOKBACKS, _>(|i| (i + 1).min(state_n));
   let mut goodnesses = [0; N_LZ_PROPOSED_LOOKBACKS];
   let mut best_lookback = 1;
   let mut repeating_lookback_idx: usize = 0;
   for i in state_n..latents.len() {
     let l = latents[i];
+
+    let new_brute_lookback = i.min(N_LZ_PROPOSED_LOOKBACKS);
+    proposed_lookbacks[new_brute_lookback - 1] = new_brute_lookback;
 
     lz77_hash_lookup(
       l.to_u64(),

@@ -67,6 +67,12 @@ impl PyDeltaSpec {
   fn try_consecutive(order: usize) -> Self {
     Self(DeltaSpec::TryConsecutive(order))
   }
+
+  /// :returns: a DeltaSpec that tries to LZ77 delta lookbacks, if possible
+  #[staticmethod]
+  fn try_lz77() -> Self {
+    Self(DeltaSpec::TryLz77)
+  }
 }
 
 #[pyclass(name = "PagingSpec")]

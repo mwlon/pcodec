@@ -98,14 +98,14 @@ fn test_wrapped(chunks: &[Chunk]) -> PcoResult<()> {
 #[test]
 fn test_low_level_wrapped() -> PcoResult<()> {
   test_wrapped(&[
-    // Chunk {
-    //   nums: (0..1700).collect::<Vec<_>>(),
-    //   config: ChunkConfig {
-    //     delta_spec: DeltaSpec::None,
-    //     paging_spec: PagingSpec::EqualPagesUpTo(600),
-    //     ..Default::default()
-    //   },
-    // },
+    Chunk {
+      nums: (0..1700).collect::<Vec<_>>(),
+      config: ChunkConfig {
+        delta_spec: DeltaSpec::None,
+        paging_spec: PagingSpec::EqualPagesUpTo(600),
+        ..Default::default()
+      },
+    },
     Chunk {
       nums: (0..500).collect::<Vec<_>>(),
       config: ChunkConfig {
@@ -114,16 +114,16 @@ fn test_low_level_wrapped() -> PcoResult<()> {
         ..Default::default()
       },
     },
-    // Chunk {
-    //   nums: vec![1, 2, 3],
-    //   config: ChunkConfig::default(),
-    // },
-    // Chunk {
-    //   nums: vec![1, 2, 3],
-    //   config: ChunkConfig {
-    //     paging_spec: PagingSpec::EqualPagesUpTo(1),
-    //     ..Default::default()
-    //   },
-    // },
+    Chunk {
+      nums: vec![1, 2, 3],
+      config: ChunkConfig::default(),
+    },
+    Chunk {
+      nums: vec![1, 2, 3],
+      config: ChunkConfig {
+        paging_spec: PagingSpec::EqualPagesUpTo(1),
+        ..Default::default()
+      },
+    },
   ])
 }
