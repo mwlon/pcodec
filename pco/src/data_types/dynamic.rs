@@ -11,12 +11,3 @@ define_latent_enum!(
   #[derive(Clone, Copy, Debug, PartialEq, Eq)]
   pub LatentType
 );
-
-// impl LatentType {
-//   pub(crate) fn bits(&self) -> Bitlen {
-//     match_latent_enum!(
-//       self,
-//       LatentType<L> => { L::BITS }
-//     )
-//   }
-// }

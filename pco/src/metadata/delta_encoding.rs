@@ -48,11 +48,16 @@ pub enum DeltaEncoding {
   ///
   /// This is best if your data is in random order.
   None,
-  /// Encodes the differences between values (or differences between those,
-  /// etc.).
+  /// Encodes the differences between consecutive values (or differences
+  /// between those, etc.).
   ///
   /// This order is always positive, between 1 and 7.
   Consecutive(DeltaConsecutiveConfig),
+  /// Encodes an extra "lookback" latent variable and the differences
+  /// `x[i] - x[i - lookback[i]]` between values.
+  ///
+  /// The `window_n_log` parameter specifies how large the maximum lookback
+  /// can be.
   Lz77(DeltaLz77Config),
 }
 

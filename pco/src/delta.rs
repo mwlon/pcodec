@@ -142,8 +142,7 @@ fn lz_goodness_argmax(goodnesses: &[Bitlen; N_LZ_PROPOSED_LOOKBACKS]) -> usize {
   let mut best_goodness = goodnesses[0];
   let mut best_idx = 0;
 
-  for i in 1..N_LZ_PROPOSED_LOOKBACKS {
-    let goodness = goodnesses[i];
+  for (i, &goodness) in goodnesses.iter().enumerate().skip(1) {
     if goodness > best_goodness {
       best_goodness = goodness;
       best_idx = i;
