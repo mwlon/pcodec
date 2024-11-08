@@ -36,16 +36,18 @@ const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
 const LZ77_MAX_WINDOW_N_LOG: Bitlen = 15;
+const LZ77_MIN_WINDOW_N_LOG: Bitlen = 4;
 const LZ77_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
 
 // TODO taking deltas of secondary latents has been proven to help slightly
 // in some cases, so we should consider it in the future
 
 fn new_lz_delta_encoding(n: usize) -> DeltaEncoding {
-  let state_n_log = 0;
   DeltaEncoding::Lz77(DeltaLz77Config {
-    window_n_log: bits::bits_to_encode_offset(n as u32 - 1).min(LZ77_MAX_WINDOW_N_LOG),
-    state_n_log,
+    window_n_log: bits::bits_to_encode_offset(n as u32 - 1)
+      .min(LZ77_MAX_WINDOW_N_LOG)
+      .max(LZ77_MIN_WINDOW_N_LOG),
+    state_n_log: 0,
     secondary_uses_delta: false,
   })
 }

@@ -91,7 +91,7 @@ fn lz77_hash_lookup(
   // might be possible to improve this hash fn
   let hash_fn = |mut x: u64| {
     // constant is roughly 2**64 / phi
-    x = (x ^ (x >> 32)) * 11400714819323197441;
+    x = (x ^ (x >> 32)).wrapping_mul(11400714819323197441);
     x = x ^ (x >> 32);
     x as usize & hash_mask
   };
@@ -129,7 +129,8 @@ fn lz77_compute_goodness<L: Latent>(
 ) {
   for lookback_idx in 0..N_LZ_PROPOSED_LOOKBACKS {
     let lookback = cmp::min(i, proposed_lookbacks[lookback_idx]);
-    let lookback_count = unsafe { *lookback_counts.get_unchecked(lookback - 1) };
+    // let lookback_count = unsafe { *lookback_counts.get_unchecked(lookback - 1) };
+    let lookback_count = lookback_counts[lookback - 1];
     let other = unsafe { *latents.get_unchecked(i - lookback) };
     let lookback_goodness = Bitlen::BITS - lookback_count.leading_zeros();
     let delta = L::min(l.wrapping_sub(other), other.wrapping_sub(l));
@@ -162,9 +163,13 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
 
   let hash_table_n_log = config.window_n_log + 1;
   let hash_table_n = 1 << hash_table_n_log;
-  let window_n = cmp::min(config.window_n(), latents.len() - 1);
+  let window_n = config.window_n();
+  assert!(
+    window_n >= N_LZ_PROPOSED_LOOKBACKS,
+    "we do not support tiny windows during compression"
+  );
 
-  let mut lookback_counts = vec![1_u32; config.window_n()];
+  let mut lookback_counts = vec![1_u32; cmp::min(window_n, latents.len())];
   let mut lookbacks = vec![MaybeUninit::uninit(); latents.len() - state_n];
   let mut idx_hash_table = vec![0_usize; COARSENESSES.len() * hash_table_n];
   let mut proposed_lookbacks = array::from_fn::<_, N_LZ_PROPOSED_LOOKBACKS, _>(|i| i + 1);
@@ -347,40 +352,42 @@ mod tests {
 
   #[test]
   fn test_lz77_encode_decode() {
-    let original_latents = vec![1_u32, 150, 153, 151, 4, 3, 3, 5, 6, 152];
+    let original_latents = {
+      let mut res = vec![100_u32; 100];
+      res[1] = 200;
+      res[2] = 201;
+      res[3] = 202;
+      res[5] = 203;
+      res[15] = 204;
+      res[50] = 205;
+      res
+    };
     let config = DeltaLz77Config {
-      window_n_log: 2,
+      window_n_log: 4,
       state_n_log: 1,
       secondary_uses_delta: false,
     };
 
     let mut deltas = original_latents.clone();
     let lookbacks = choose_lz77_lookbacks(config, &original_latents);
-    assert_eq!(lookbacks[0], 1);
-    assert_eq!(lookbacks[2], 4);
-    assert_eq!(lookbacks[7], 1);
+    assert_eq!(lookbacks[0], 1); // 201 -> 200
+    assert_eq!(lookbacks[2], 4); // 0 -> 0
+    assert_eq!(lookbacks[13], 10); // 204 -> 203
+    assert_eq!(lookbacks[48], 1); // 205 -> 0; 204 was outside window
 
     let state = encode_lz77_in_place(config, &lookbacks, &mut deltas);
-    assert_eq!(state, vec![1, 150]);
+    assert_eq!(state, vec![100, 200]);
 
     // Encoding left junk deltas at the front,
     // but for decoding we need junk deltas at the end.
     let mut deltas_to_decode = Vec::<u32>::new();
     deltas_to_decode.extend(&deltas[2..]);
-    let intuitive_deltas = deltas_to_decode
-      .iter()
-      .copied()
-      .map(|delta| delta.wrapping_add(u32::MID) as i32)
-      .collect::<Vec<_>>();
-    assert_eq!(intuitive_deltas[0], 3);
-    assert_eq!(intuitive_deltas[2], 3);
-    assert_eq!(intuitive_deltas[7], 146);
     for _ in 0..2 {
       deltas_to_decode.push(1337);
     }
 
     let (mut window_buffer, mut pos) = new_lz77_window_buffer_and_pos(config, &state);
-    assert_eq!(pos, 4);
+    assert_eq!(pos, 16);
     decode_lz77_in_place(
       config,
       &lookbacks,
@@ -389,6 +396,6 @@ mod tests {
       &mut deltas_to_decode,
     );
     assert_eq!(deltas_to_decode, original_latents);
-    assert_eq!(pos, 4 + original_latents.len());
+    assert_eq!(pos, 16 + original_latents.len());
   }
 }
