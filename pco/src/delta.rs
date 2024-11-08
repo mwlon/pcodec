@@ -4,10 +4,7 @@ use crate::macros::match_latent_enum;
 use crate::metadata::delta_encoding::DeltaLz77Config;
 use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::DeltaEncoding;
-use crate::read_write_uint::ReadWriteUint;
 use crate::FULL_BATCH_N;
-use std::collections::HashMap;
-use std::hash::Hasher;
 use std::mem::MaybeUninit;
 use std::ops::Range;
 use std::{array, cmp, mem};
@@ -76,14 +73,79 @@ pub(crate) fn decode_consecutive_in_place<L: Latent>(delta_moments: &mut [L], la
 }
 
 const N_LZ_PROPOSED_LOOKBACKS: usize = 16;
+const BRUTE_LOOKBACKS: usize = 6;
+const REPEATING_LOOKBACKS: usize = 4;
+const N_COARSENESSES: usize = 2;
+const COARSENESSES: [Bitlen; N_COARSENESSES] = [0, 8];
+
+fn lz77_hash_lookup(
+  l: u64,
+  i: usize,
+  hash_table_n: usize,
+  window_n: usize,
+  idx_hash_table: &mut [usize],
+  proposed_lookbacks: &mut [usize; N_LZ_PROPOSED_LOOKBACKS],
+) {
+  let hash_mask = hash_table_n - 1;
+  // TODO comment
+  // might be possible to improve this hash fn
+  let hash_fn = |mut x: u64| {
+    // constant is roughly 2**64 / phi
+    x = (x ^ (x >> 32)) * 11400714819323197441;
+    x = x ^ (x >> 32);
+    x as usize & hash_mask
+  };
+
+  let mut proposal_idx = BRUTE_LOOKBACKS + REPEATING_LOOKBACKS;
+  let mut offset = 0;
+  for coarseness in COARSENESSES {
+    let bucket = l >> coarseness;
+    let buckets = [bucket.wrapping_sub(1), bucket, bucket.wrapping_add(1)];
+    let hashes = buckets.map(hash_fn);
+    for h in hashes {
+      let lookback_to_last_instance = unsafe { i - *idx_hash_table.get_unchecked(offset + h) };
+      proposed_lookbacks[proposal_idx] = if lookback_to_last_instance <= window_n {
+        lookback_to_last_instance
+      } else {
+        proposal_idx
+      };
+      proposal_idx += 1;
+    }
+    let h = hashes[1];
+    unsafe {
+      *idx_hash_table.get_unchecked_mut(offset + h) = i;
+    }
+    offset += hash_table_n;
+  }
+}
+
+fn lz77_compute_goodness<L: Latent>(
+  l: L,
+  i: usize,
+  latents: &[L],
+  proposed_lookbacks: &[usize; N_LZ_PROPOSED_LOOKBACKS],
+  lookback_counts: &mut [u32],
+  goodnesses: &mut [Bitlen; N_LZ_PROPOSED_LOOKBACKS],
+) {
+  for lookback_idx in 0..N_LZ_PROPOSED_LOOKBACKS {
+    let lookback = cmp::min(i, proposed_lookbacks[lookback_idx]);
+    let lookback_count = unsafe { *lookback_counts.get_unchecked(lookback - 1) };
+    let other = unsafe { *latents.get_unchecked(i - lookback) };
+    let lookback_goodness = Bitlen::BITS - lookback_count.leading_zeros();
+    let delta = L::min(l.wrapping_sub(other), other.wrapping_sub(l));
+    let delta_goodness = delta.leading_zeros();
+    goodnesses[lookback_idx] = lookback_goodness + delta_goodness;
+  }
+}
 
 fn lz_goodness_argmax(goodnesses: &[Bitlen; N_LZ_PROPOSED_LOOKBACKS]) -> usize {
   let mut best_goodness = goodnesses[0];
   let mut best_idx = 0;
 
-  for i in 0..N_LZ_PROPOSED_LOOKBACKS {
-    if goodnesses[i] > best_goodness {
-      best_goodness = goodnesses[i];
+  for i in 1..N_LZ_PROPOSED_LOOKBACKS {
+    let goodness = goodnesses[i];
+    if goodness > best_goodness {
+      best_goodness = goodness;
       best_idx = i;
     }
   }
@@ -93,41 +155,19 @@ fn lz_goodness_argmax(goodnesses: &[Bitlen; N_LZ_PROPOSED_LOOKBACKS]) -> usize {
 
 #[inline(never)]
 fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> Vec<DeltaLookback> {
-  const BRUTE_LOOKBACKS: usize = 6;
-  const REPEATING_LOOKBACKS: usize = 4;
-  const N_COARSENESSES: usize = 2;
   let state_n = config.state_n();
 
   if latents.len() <= state_n {
     return vec![];
   }
 
-  let window_n = cmp::min(config.window_n(), latents.len() - 1);
-
   let hash_table_n_log = config.window_n_log + 1;
-  let hash_mask = (1_u64 << hash_table_n_log) - 1;
-  // TODO comment
-  let coarsenesses = [0, 8];
-  // TODO this hash fn could be faster
-  let hash_fn = |x: u64| {
-    let y = x ^ (x >> 32);
-    y & hash_mask
-    // (y ^ (y >> 16)) & hash_mask
-    // x = (x ^ (x >> 32)) * 11400714819323197441;
-    // x = x ^ (x >> 32);
-    // x & hash_mask
-    // https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
-    // x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9;
-    // x = (x ^ (x >> 27)) * 0x94d049bb133111eb;
-    // x = x ^ (x >> 31);
-    // x & hash_mask
-    // x = (x.wrapping_mul(0x9e3779b97f4a7c15)) ^ (x >> 32);
-    // x & hash_mask
-  };
+  let hash_table_n = 1 << hash_table_n_log;
+  let window_n = cmp::min(config.window_n(), latents.len() - 1);
 
   let mut lookback_counts = vec![1_u32; config.window_n()];
   let mut lookbacks = vec![MaybeUninit::uninit(); latents.len() - state_n];
-  let mut idx_hash_table = vec![0_usize; coarsenesses.len() * (1 << hash_table_n_log)];
+  let mut idx_hash_table = vec![0_usize; COARSENESSES.len() * hash_table_n];
   let mut proposed_lookbacks = array::from_fn::<_, N_LZ_PROPOSED_LOOKBACKS, _>(|i| i + 1);
   let mut goodnesses = [0; N_LZ_PROPOSED_LOOKBACKS];
   let mut best_lookback = 1;
@@ -135,36 +175,22 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
   for i in state_n..latents.len() {
     let l = latents[i];
 
-    let mut proposal_idx = BRUTE_LOOKBACKS + REPEATING_LOOKBACKS;
-    for c_i in 0..N_COARSENESSES {
-      let coarseness = coarsenesses[c_i];
-      let offset = c_i * (1 << hash_table_n_log);
-      let bucket = (l >> coarseness).to_u64();
-      let hash = hash_fn(bucket);
-      for h in [
-        hash_fn(bucket.wrapping_sub(1)),
-        hash,
-        hash_fn(bucket.wrapping_add(1)),
-      ] {
-        let lookback_to_last_instance = i - idx_hash_table[offset + h as usize];
-        if lookback_to_last_instance < window_n {
-          proposed_lookbacks[proposal_idx] = lookback_to_last_instance;
-        }
-        proposal_idx += 1;
-      }
-      idx_hash_table[offset + hash as usize] = i;
-    }
-
-    for lookback_idx in 0..N_LZ_PROPOSED_LOOKBACKS {
-      let lookback = cmp::min(i, proposed_lookbacks[lookback_idx]);
-      let lookback_count = unsafe { *lookback_counts.get_unchecked(lookback - 1) };
-      let other = unsafe { *latents.get_unchecked(i - lookback) };
-      let lookback_goodness = Bitlen::BITS - lookback_count.leading_zeros();
-      let delta = L::min(l.wrapping_sub(other), other.wrapping_sub(l));
-      let delta_goodness = delta.leading_zeros();
-      goodnesses[lookback_idx] = lookback_goodness + delta_goodness;
-    }
-
+    lz77_hash_lookup(
+      l.to_u64(),
+      i,
+      hash_table_n,
+      window_n,
+      &mut idx_hash_table,
+      &mut proposed_lookbacks,
+    );
+    lz77_compute_goodness(
+      l,
+      i,
+      latents,
+      &proposed_lookbacks,
+      &mut lookback_counts,
+      &mut goodnesses,
+    );
     let best_lookback_idx = lz_goodness_argmax(&goodnesses);
     let new_best_lookback = proposed_lookbacks[best_lookback_idx];
     if new_best_lookback != best_lookback {
@@ -184,6 +210,7 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
 // case) at the front of the latents.
 // Using the front instead of the back is preferable because it means we don't
 // need an extra copy of the latents in this case.
+#[inline(never)]
 fn encode_lz77_in_place<L: Latent>(
   config: DeltaLz77Config,
   lookbacks: &[DeltaLookback],
