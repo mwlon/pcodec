@@ -2,7 +2,7 @@
 
 dtype_dispatch::build_dtype_macros!(
   #[doc = "\
-    Defines enums holding a container generic to `Number`.
+    **unstable API** Defines enums holding a container generic to `Number`.
   "]
   #[doc = "\
     You'll only want to use this if you're using pco's low level APIs.
@@ -37,14 +37,6 @@ dtype_dispatch::build_dtype_macros!(
 );
 
 dtype_dispatch::build_dtype_macros!(
-  #[doc = "\
-    Defines enums holding a container generic to `Latent`.
-  "]
-  #[doc = "\
-    You'll only want to use this if you're using pco's low level APIs.
-    See the dtype_dispatch crate for more details.
-  "]
-  #[macro_export]
   define_latent_enum,
 
   #[doc = "\

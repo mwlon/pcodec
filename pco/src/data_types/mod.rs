@@ -77,7 +77,7 @@ pub(crate) trait Float:
   fn from_latent_numerical(l: Self::L) -> Self;
 }
 
-/// *unstable API* Trait for data types that behave like unsigned integers.
+/// **unstable API** Trait for data types that behave like unsigned integers.
 ///
 /// This is used extensively in `pco` to guarantee that bitwise
 /// operations like `>>` and `|=` are available and that certain properties
@@ -132,7 +132,7 @@ pub trait Latent:
   }
 }
 
-/// *unstable API* Trait for data types supported for compression/decompression.
+/// **unstable API** Trait for data types supported for compression/decompression.
 ///
 /// If you have a new data type you would like to add to the library or,
 /// these are the questions you need to answer:
