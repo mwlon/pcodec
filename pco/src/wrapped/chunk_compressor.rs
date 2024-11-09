@@ -261,6 +261,7 @@ fn new_candidate_w_split_and_delta_encoding(
   let chunk_n = latents.primary.len();
   let n_per_page = paging_spec.n_per_page(chunk_n)?;
 
+  // delta encoding
   let (latents, page_infos) =
     delta_encode_and_build_page_infos(delta_encoding, &n_per_page, latents);
 
@@ -268,7 +269,6 @@ fn new_candidate_w_split_and_delta_encoding(
   let mut var_metas = PerLatentVarBuilder::default();
   let mut latent_chunk_compressors = PerLatentVarBuilder::default();
   let mut bin_countss = PerLatentVarBuilder::default();
-  // TODO not mut
   for (key, latents) in latents.enumerated() {
     let unoptimized_bins_log = match key {
       // primary latents are generally the most important to compress, and
@@ -309,13 +309,6 @@ fn new_candidate_w_split_and_delta_encoding(
   let var_metas = var_metas.into();
   let latent_chunk_compressors = latent_chunk_compressors.into();
   let bin_countss = bin_countss.into();
-  // let (var_metas, latent_chunk_compressors, bin_countss) = unsafe {
-  //   mem::transmute((
-  //     var_metas,
-  //     latent_chunk_compressors,
-  //     bin_countss,
-  //   ))
-  // };
 
   let meta = ChunkMeta {
     mode,
@@ -528,9 +521,8 @@ pub(crate) fn new<T: Number>(nums: &[T], config: &ChunkConfig) -> PcoResult<Chun
     n,
     bin_counts,
   ) {
-    let SplitLatents { primary, secondary } = data_types::split_latents_classic(nums);
-    let latents = SplitLatents { primary, secondary };
-    return fallback_chunk_compressor(latents, config);
+    let split_latents = data_types::split_latents_classic(nums);
+    return fallback_chunk_compressor(split_latents, config);
   }
 
   Ok(candidate)
