@@ -45,8 +45,7 @@ const LZ77_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
 fn new_lz_delta_encoding(n: usize) -> DeltaEncoding {
   DeltaEncoding::Lz77(DeltaLz77Config {
     window_n_log: bits::bits_to_encode_offset(n as u32 - 1)
-      .min(LZ77_MAX_WINDOW_N_LOG)
-      .max(LZ77_MIN_WINDOW_N_LOG),
+      .clamp(LZ77_MIN_WINDOW_N_LOG, LZ77_MAX_WINDOW_N_LOG),
     state_n_log: 0,
     secondary_uses_delta: false,
   })
@@ -756,7 +755,9 @@ mod tests {
     );
 
     let latents = DynLatents::new((0..300).collect::<Vec<u32>>()).unwrap();
-    let sample = choose_delta_sample(&latents, 100, 1);
+    let sample = choose_delta_sample(&latents, 100, 1)
+      .downcast::<u32>()
+      .unwrap();
     assert_eq!(sample.len(), 200);
     assert_eq!(&sample[..3], &[0, 1, 2]);
     assert_eq!(&sample[197..], &[297, 298, 299]);

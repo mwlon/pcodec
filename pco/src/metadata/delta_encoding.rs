@@ -207,7 +207,6 @@ impl DeltaEncoding {
 #[cfg(test)]
 mod tests {
   use crate::bit_writer::BitWriter;
-  use crate::constants::Bitlen;
   use crate::metadata::delta_encoding::{DeltaConsecutiveConfig, DeltaLz77Config};
   use crate::metadata::DeltaEncoding;
 
