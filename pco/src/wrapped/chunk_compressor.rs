@@ -324,42 +324,48 @@ fn new_candidate_w_split_and_delta_encoding(
   Ok((chunk_compressor, bin_countss))
 }
 
-fn choose_delta_sample<L: Latent>(
-  primary_latents: &[L],
+fn choose_delta_sample(
+  primary_latents: &DynLatents,
   group_size: usize,
   n_extra_groups: usize,
-) -> Vec<L> {
+) -> DynLatents {
   let n = primary_latents.len();
   let nominal_sample_size = (n_extra_groups + 1) * group_size;
-  let mut sample = Vec::with_capacity(nominal_sample_size);
   let group_padding = if n_extra_groups == 0 {
     0
   } else {
     n.saturating_sub(nominal_sample_size) / n_extra_groups
   };
 
-  sample.extend(primary_latents.iter().take(group_size));
   let mut i = group_size;
-  for _ in 0..n_extra_groups {
-    i += group_padding;
-    sample.extend(primary_latents.iter().skip(i).take(group_size));
-    i += group_size;
-  }
 
-  sample
+  match_latent_enum!(
+    primary_latents,
+    DynLatents<L>(primary_latents) => {
+      let mut sample = Vec::<L>::with_capacity(nominal_sample_size);
+      sample.extend(primary_latents.iter().take(group_size));
+      for _ in 0..n_extra_groups {
+        i += group_padding;
+        sample.extend(primary_latents.iter().skip(i).take(group_size));
+        i += group_size;
+      }
+      DynLatents::new(sample).unwrap()
+    }
+  )
 }
 
-fn calculate_compressed_sample_size<L: Latent>(
-  sample: &[L],
+fn calculate_compressed_sample_size(
+  sample: &DynLatents,
   unoptimized_bins_log: Bitlen,
   delta_encoding: DeltaEncoding,
 ) -> PcoResult<usize> {
+  let sample_n = sample.len();
   let (sample_cc, _) = new_candidate_w_split_and_delta_encoding(
     SplitLatents {
-      primary: DynLatents::new(sample.to_vec()).unwrap(),
+      primary: sample.clone(),
       secondary: None,
     },
-    &PagingSpec::Exact(vec![sample.len()]),
+    &PagingSpec::Exact(vec![sample_n]),
     Mode::Classic,
     delta_encoding,
     unoptimized_bins_log,
@@ -367,12 +373,9 @@ fn calculate_compressed_sample_size<L: Latent>(
   Ok(sample_cc.chunk_meta_size_hint() + sample_cc.page_size_hint_inner(0, 1.0))
 }
 
-// Right now this is entirely based on the primary latents since no existing
-// modes apply deltas to secondary latents. Might want to change this
-// eventually?
 #[inline(never)]
-fn choose_delta_encoding<L: Latent>(
-  primary_latents: &[L],
+fn choose_delta_encoding(
+  primary_latents: &DynLatents,
   unoptimized_bins_log: Bitlen,
 ) -> PcoResult<DeltaEncoding> {
   let n = primary_latents.len();
@@ -381,6 +384,7 @@ fn choose_delta_encoding<L: Latent>(
     DELTA_GROUP_SIZE,
     1 + n / N_PER_EXTRA_DELTA_GROUP,
   );
+  let sample_n = sample.len();
 
   let mut best_encoding = DeltaEncoding::None;
   let mut best_size = calculate_compressed_sample_size(
@@ -389,14 +393,15 @@ fn choose_delta_encoding<L: Latent>(
     DeltaEncoding::None,
   )?;
 
-  let lz_encoding = new_lz_delta_encoding(sample.len());
-  let lz_size_estimate =
-    calculate_compressed_sample_size(&sample, unoptimized_bins_log, lz_encoding)?;
-  let lz_adjusted_size_estimate =
-    lz_size_estimate + (LZ77_REQUIRED_BYTE_SAVINGS_PER_N * sample.len() as f64) as usize;
-  if lz_adjusted_size_estimate < best_size {
-    best_encoding = new_lz_delta_encoding(primary_latents.len());
-    best_size = lz_adjusted_size_estimate;
+  let lz_penalty = (LZ77_REQUIRED_BYTE_SAVINGS_PER_N * sample_n as f64) as usize;
+  if best_size > lz_penalty {
+    let lz_encoding = new_lz_delta_encoding(sample_n);
+    let lz_penalized_size_estimate =
+      calculate_compressed_sample_size(&sample, unoptimized_bins_log, lz_encoding)? + lz_penalty;
+    if lz_penalized_size_estimate < best_size {
+      best_encoding = new_lz_delta_encoding(primary_latents.len());
+      best_size = lz_penalized_size_estimate;
+    }
   }
 
   for delta_encoding_order in 1..MAX_DELTA_ENCODING_ORDER + 1 {
@@ -440,12 +445,7 @@ fn new_candidate_w_split(
   let n = latents.primary.len();
   let unoptimized_bins_log = choose_unoptimized_bins_log(config.compression_level, n);
   let delta_encoding = match config.delta_spec {
-    DeltaSpec::Auto => match_latent_enum!(
-      &latents.primary,
-      DynLatents<L>(primary) => {
-        choose_delta_encoding(primary, unoptimized_bins_log)?
-      }
-    ),
+    DeltaSpec::Auto => choose_delta_encoding(&latents.primary, unoptimized_bins_log)?,
     DeltaSpec::None | DeltaSpec::TryConsecutive(0) => DeltaEncoding::None,
     DeltaSpec::TryConsecutive(order) => DeltaEncoding::Consecutive(DeltaConsecutiveConfig {
       order,
@@ -741,25 +741,31 @@ mod tests {
 
   #[test]
   fn test_choose_delta_sample() {
-    let latents = vec![0_u32, 1];
+    let latents = DynLatents::new(vec![0_u32, 1]).unwrap();
     assert_eq!(
-      choose_delta_sample(&latents, 100, 0),
+      choose_delta_sample(&latents, 100, 0)
+        .downcast::<u32>()
+        .unwrap(),
       vec![0, 1]
     );
     assert_eq!(
-      choose_delta_sample(&latents, 100, 1),
+      choose_delta_sample(&latents, 100, 1)
+        .downcast::<u32>()
+        .unwrap(),
       vec![0, 1]
     );
 
-    let latents = (0..300).collect::<Vec<u32>>();
+    let latents = DynLatents::new((0..300).collect::<Vec<u32>>()).unwrap();
     let sample = choose_delta_sample(&latents, 100, 1);
     assert_eq!(sample.len(), 200);
     assert_eq!(&sample[..3], &[0, 1, 2]);
     assert_eq!(&sample[197..], &[297, 298, 299]);
 
-    let latents = (0..8).collect::<Vec<u32>>();
+    let latents = DynLatents::new((0..8).collect::<Vec<u32>>()).unwrap();
     assert_eq!(
-      choose_delta_sample(&latents, 2, 2),
+      choose_delta_sample(&latents, 2, 2)
+        .downcast::<u32>()
+        .unwrap(),
       vec![0, 1, 3, 4, 6, 7]
     );
   }
