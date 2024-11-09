@@ -29,13 +29,11 @@ define_latent_enum!(
   DynLatentPageDecompressor(LatentPageDecompressor)
 );
 
-/// Holds metadata about a page and supports decompression.
-pub struct PageDecompressor<T: Number, R: BetterBufRead> {
+struct PageDecompressorInner<R: BetterBufRead> {
   // immutable
   n: usize,
   mode: Mode,
   delta_encoding: DeltaEncoding,
-  phantom: PhantomData<T>,
 
   // mutable
   reader_builder: BitReaderBuilder<R>,
@@ -46,6 +44,12 @@ pub struct PageDecompressor<T: Number, R: BetterBufRead> {
   secondary_scratch: Option<LatentScratch>,
 }
 
+/// Holds metadata about a page and supports decompression.
+pub struct PageDecompressor<T: Number, R: BetterBufRead> {
+  inner: PageDecompressorInner<R>,
+  phantom: PhantomData<T>,
+}
+
 fn convert_from_latents_to_numbers<T: Number>(dst: &mut [T]) {
   // we wrote the joined latents to dst, so we can convert them in place
   for l_and_dst in dst {
@@ -53,8 +57,7 @@ fn convert_from_latents_to_numbers<T: Number>(dst: &mut [T]) {
   }
 }
 
-impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
-  #[inline(never)]
+impl<R: BetterBufRead> PageDecompressorInner<R> {
   pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta, n: usize) -> PcoResult<Self> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
@@ -127,7 +130,6 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
       n,
       mode,
       delta_encoding: chunk_meta.delta_encoding,
-      phantom: PhantomData,
       reader_builder,
       n_processed: 0,
       latent_decompressors,
@@ -136,24 +138,39 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
     })
   }
 
+  fn n_remaining(&self) -> usize {
+    self.n - self.n_processed
+  }
+}
+
+impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
+  #[inline(never)]
+  pub(crate) fn new(src: R, chunk_meta: &ChunkMeta, n: usize) -> PcoResult<Self> {
+    Ok(Self {
+      inner: PageDecompressorInner::new(src, chunk_meta, n)?,
+      phantom: PhantomData::<T>,
+    })
+  }
+
   fn decompress_batch(&mut self, dst: &mut [T]) -> PcoResult<()> {
     let batch_n = dst.len();
-    let n = self.n;
-    let n_remaining = self.n_remaining();
-    let mode = self.mode;
+    let inner = &mut self.inner;
+    let n = inner.n;
+    let n_remaining = inner.n_remaining();
+    let mode = inner.mode;
 
     // DELTA LATENTS
     if let Some(LatentScratch {
       is_constant: false,
       dst,
-    }) = &mut self.delta_scratch
+    }) = &mut inner.delta_scratch
     {
-      let dyn_lpd = self.latent_decompressors.delta.as_mut().unwrap();
+      let dyn_lpd = inner.latent_decompressors.delta.as_mut().unwrap();
       let limit = min(
-        n_remaining.saturating_sub(self.delta_encoding.n_latents_per_state()),
+        n_remaining.saturating_sub(inner.delta_encoding.n_latents_per_state()),
         batch_n,
       );
-      self.reader_builder.with_reader(|reader| unsafe {
+      inner.reader_builder.with_reader(|reader| unsafe {
         match_latent_enum!(
           dyn_lpd,
           DynLatentPageDecompressor<L>(lpd) => {
@@ -170,12 +187,12 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
         Ok(())
       })?;
     }
-    let delta_latents = self.delta_scratch.as_ref().map(|scratch| &scratch.dst);
+    let delta_latents = inner.delta_scratch.as_ref().map(|scratch| &scratch.dst);
 
     // PRIMARY LATENTS
-    self.reader_builder.with_reader(|reader| unsafe {
+    inner.reader_builder.with_reader(|reader| unsafe {
       let primary_dst = T::transmute_to_latents(dst);
-      let dyn_lpd = self
+      let dyn_lpd = inner
         .latent_decompressors
         .primary
         .downcast_mut::<T::L>()
@@ -193,10 +210,10 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
     if let Some(LatentScratch {
       is_constant: false,
       dst,
-    }) = &mut self.secondary_scratch
+    }) = &mut inner.secondary_scratch
     {
-      let dyn_lpd = self.latent_decompressors.secondary.as_mut().unwrap();
-      self.reader_builder.with_reader(|reader| unsafe {
+      let dyn_lpd = inner.latent_decompressors.secondary.as_mut().unwrap();
+      inner.reader_builder.with_reader(|reader| unsafe {
         match_latent_enum!(
           dyn_lpd,
           DynLatentPageDecompressor<L>(lpd) => {
@@ -217,13 +234,13 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
     T::join_latents(
       mode,
       T::transmute_to_latents(dst),
-      self.secondary_scratch.as_ref().map(|scratch| &scratch.dst),
+      inner.secondary_scratch.as_ref().map(|scratch| &scratch.dst),
     );
     convert_from_latents_to_numbers(dst);
 
-    self.n_processed += batch_n;
-    if self.n_processed == n {
-      self.reader_builder.with_reader(|reader| {
+    inner.n_processed += batch_n;
+    if inner.n_processed == n {
+      inner.reader_builder.with_reader(|reader| {
         reader.drain_empty_byte("expected trailing bits at end of page to be empty")
       })?;
     }
@@ -239,17 +256,18 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
   /// `dst` must have length either a multiple of 256 or be at least the count
   /// of numbers remaining in the page.
   pub fn decompress(&mut self, num_dst: &mut [T]) -> PcoResult<Progress> {
-    if num_dst.len() % FULL_BATCH_N != 0 && num_dst.len() < self.n_remaining() {
+    let n_remaining = self.inner.n_remaining();
+    if num_dst.len() % FULL_BATCH_N != 0 && num_dst.len() < n_remaining {
       return Err(PcoError::invalid_argument(format!(
         "num_dst's length must either be a multiple of {} or be \
          at least the count of numbers remaining ({} < {})",
         FULL_BATCH_N,
         num_dst.len(),
-        self.n_remaining(),
+        n_remaining,
       )));
     }
 
-    let n_to_process = min(num_dst.len(), self.n_remaining());
+    let n_to_process = min(num_dst.len(), n_remaining);
 
     let mut n_processed = 0;
     while n_processed < n_to_process {
@@ -260,16 +278,12 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
 
     Ok(Progress {
       n_processed,
-      finished: self.n_remaining() == 0,
+      finished: self.inner.n_remaining() == 0,
     })
-  }
-
-  fn n_remaining(&self) -> usize {
-    self.n - self.n_processed
   }
 
   /// Returns the rest of the compressed data source.
   pub fn into_src(self) -> R {
-    self.reader_builder.into_inner()
+    self.inner.reader_builder.into_inner()
   }
 }
