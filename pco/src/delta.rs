@@ -72,7 +72,11 @@ pub(crate) fn decode_consecutive_in_place<L: Latent>(delta_moments: &mut [L], la
   }
 }
 
-const N_LZ_PROPOSED_LOOKBACKS: usize = 16;
+// there are 3 types of proposed lookbacks:
+// * brute force: just try the most recent few latents
+// * repeating: try the most recent lookbacks we actually used
+// * hash: look up similar values by hash
+const PROPOSED_LOOKBACKS: usize = 16;
 const BRUTE_LOOKBACKS: usize = 6;
 const REPEATING_LOOKBACKS: usize = 4;
 // To help locate similar latents for lz77 encoding, we hash each latent at
@@ -87,7 +91,7 @@ fn lz77_hash_lookup(
   hash_table_n: usize,
   window_n: usize,
   idx_hash_table: &mut [usize],
-  proposed_lookbacks: &mut [usize; N_LZ_PROPOSED_LOOKBACKS],
+  proposed_lookbacks: &mut [usize; PROPOSED_LOOKBACKS],
 ) {
   let hash_mask = hash_table_n - 1;
   // might be possible to improve this hash fn
@@ -125,13 +129,12 @@ fn lz77_compute_goodness<L: Latent>(
   l: L,
   i: usize,
   latents: &[L],
-  proposed_lookbacks: &[usize; N_LZ_PROPOSED_LOOKBACKS],
+  proposed_lookbacks: &[usize; PROPOSED_LOOKBACKS],
   lookback_counts: &mut [u32],
-  goodnesses: &mut [Bitlen; N_LZ_PROPOSED_LOOKBACKS],
+  goodnesses: &mut [Bitlen; PROPOSED_LOOKBACKS],
 ) {
-  for lookback_idx in 0..N_LZ_PROPOSED_LOOKBACKS {
+  for lookback_idx in 0..PROPOSED_LOOKBACKS {
     let lookback = proposed_lookbacks[lookback_idx];
-    // let lookback_count = unsafe { *lookback_counts.get_unchecked(lookback - 1) };
     let lookback_count = lookback_counts[lookback - 1];
     let other = unsafe { *latents.get_unchecked(i - lookback) };
     let lookback_goodness = Bitlen::BITS - lookback_count.leading_zeros();
@@ -141,7 +144,7 @@ fn lz77_compute_goodness<L: Latent>(
   }
 }
 
-fn lz_goodness_argmax(goodnesses: &[Bitlen; N_LZ_PROPOSED_LOOKBACKS]) -> usize {
+fn lz_goodness_argmax(goodnesses: &[Bitlen; PROPOSED_LOOKBACKS]) -> usize {
   let mut best_goodness = goodnesses[0];
   let mut best_idx = 0;
 
@@ -167,22 +170,21 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
   let hash_table_n = 1 << hash_table_n_log;
   let window_n = config.window_n();
   assert!(
-    window_n >= N_LZ_PROPOSED_LOOKBACKS,
+    window_n >= PROPOSED_LOOKBACKS,
     "we do not support tiny windows during compression"
   );
 
   let mut lookback_counts = vec![1_u32; cmp::min(window_n, latents.len())];
   let mut lookbacks = vec![MaybeUninit::uninit(); latents.len() - state_n];
   let mut idx_hash_table = vec![0_usize; COARSENESSES.len() * hash_table_n];
-  let mut proposed_lookbacks =
-    array::from_fn::<_, N_LZ_PROPOSED_LOOKBACKS, _>(|i| (i + 1).min(state_n));
-  let mut goodnesses = [0; N_LZ_PROPOSED_LOOKBACKS];
+  let mut proposed_lookbacks = array::from_fn::<_, PROPOSED_LOOKBACKS, _>(|i| (i + 1).min(state_n));
+  let mut goodnesses = [0; PROPOSED_LOOKBACKS];
   let mut best_lookback = 1;
   let mut repeating_lookback_idx: usize = 0;
   for i in state_n..latents.len() {
     let l = latents[i];
 
-    let new_brute_lookback = i.min(N_LZ_PROPOSED_LOOKBACKS);
+    let new_brute_lookback = i.min(PROPOSED_LOOKBACKS);
     proposed_lookbacks[new_brute_lookback - 1] = new_brute_lookback;
 
     lz77_hash_lookup(
