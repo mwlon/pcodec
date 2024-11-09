@@ -25,7 +25,7 @@ pub type LatentDescriber = Box<dyn DescribeLatent>;
 fn delta_latent_describer(delta_encoding: DeltaEncoding) -> Option<LatentDescriber> {
   match delta_encoding {
     DeltaEncoding::None | DeltaEncoding::Consecutive(_) => None,
-    DeltaEncoding::Lz77(_) => {
+    DeltaEncoding::Lookback(_) => {
       let describer = IntDescriber {
         description: "lookback".to_string(),
         units: "".to_string(),

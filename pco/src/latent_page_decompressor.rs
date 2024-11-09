@@ -82,8 +82,8 @@ impl<L: Latent> LatentPageDecompressor<L> {
 
     let (working_delta_state, delta_state_pos) = match delta_encoding {
       DeltaEncoding::None | DeltaEncoding::Consecutive(_) => (stored_delta_state, 0),
-      DeltaEncoding::Lz77(config) => {
-        delta::new_lz77_window_buffer_and_pos(config, &stored_delta_state)
+      DeltaEncoding::Lookback(config) => {
+        delta::new_lookback_window_buffer_and_pos(config, &stored_delta_state)
       }
     };
 
@@ -298,8 +298,8 @@ impl<L: Latent> LatentPageDecompressor<L> {
       DeltaEncoding::Consecutive(_) => {
         delta::decode_consecutive_in_place(&mut self.state.delta_state, dst)
       }
-      DeltaEncoding::Lz77(config) => {
-        delta::decode_lz77_in_place(
+      DeltaEncoding::Lookback(config) => {
+        delta::decode_with_lookbacks_in_place(
           config,
           delta_latents
             .unwrap()

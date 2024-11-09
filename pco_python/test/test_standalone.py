@@ -97,7 +97,7 @@ def test_compression_options():
 
     # this is mostly just to check that there is no error, but these settings
     # should give worse compression than the defaults
-    for delta_spec in [DeltaSpec.try_consecutive(1), DeltaSpec.try_lz77()]:
+    for delta_spec in [DeltaSpec.try_consecutive(1), DeltaSpec.try_lookback()]:
         compressed = standalone.simple_compress(
             data,
             ChunkConfig(

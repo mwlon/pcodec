@@ -15,7 +15,7 @@ use crate::latent_chunk_compressor::{
 };
 use crate::macros::match_latent_enum;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
-use crate::metadata::delta_encoding::{DeltaConsecutiveConfig, DeltaLz77Config};
+use crate::metadata::delta_encoding::{DeltaConsecutiveConfig, DeltaLookbackConfig};
 use crate::metadata::dyn_bins::DynBins;
 use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::page::PageMeta;
@@ -35,17 +35,19 @@ use std::io::Write;
 const PAGE_SIZE_OVERESTIMATION: f64 = 1.2;
 const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
-const LZ77_MAX_WINDOW_N_LOG: Bitlen = 15;
-const LZ77_MIN_WINDOW_N_LOG: Bitlen = 4;
-const LZ77_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
+const LOOKBACK_MAX_WINDOW_N_LOG: Bitlen = 15;
+const LOOKBACK_MIN_WINDOW_N_LOG: Bitlen = 4;
+const LOOKBACK_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
 
 // TODO taking deltas of secondary latents has been proven to help slightly
 // in some cases, so we should consider it in the future
 
 fn new_lz_delta_encoding(n: usize) -> DeltaEncoding {
-  DeltaEncoding::Lz77(DeltaLz77Config {
-    window_n_log: bits::bits_to_encode_offset(n as u32 - 1)
-      .clamp(LZ77_MIN_WINDOW_N_LOG, LZ77_MAX_WINDOW_N_LOG),
+  DeltaEncoding::Lookback(DeltaLookbackConfig {
+    window_n_log: bits::bits_to_encode_offset(n as u32 - 1).clamp(
+      LOOKBACK_MIN_WINDOW_N_LOG,
+      LOOKBACK_MAX_WINDOW_N_LOG,
+    ),
     state_n_log: 0,
     secondary_uses_delta: false,
   })
@@ -392,7 +394,7 @@ fn choose_delta_encoding(
     DeltaEncoding::None,
   )?;
 
-  let lz_penalty = (LZ77_REQUIRED_BYTE_SAVINGS_PER_N * sample_n as f64) as usize;
+  let lz_penalty = (LOOKBACK_REQUIRED_BYTE_SAVINGS_PER_N * sample_n as f64) as usize;
   if best_size > lz_penalty {
     let lz_encoding = new_lz_delta_encoding(sample_n);
     let lz_penalized_size_estimate =
@@ -450,7 +452,7 @@ fn new_candidate_w_split(
       order,
       secondary_uses_delta: false,
     }),
-    DeltaSpec::TryLz77 => new_lz_delta_encoding(n),
+    DeltaSpec::TryLookback => new_lz_delta_encoding(n),
   };
 
   new_candidate_w_split_and_delta_encoding(

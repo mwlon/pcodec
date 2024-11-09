@@ -67,7 +67,7 @@ pub enum DeltaSpec {
   ///
   /// This can improve compression ratio when there are nontrivial patterns in
   /// your numbers, but reduces compression speed substantially.
-  TryLz77,
+  TryLookback,
 }
 
 // TODO consider adding a "lossiness" spec that allows dropping secondary latent

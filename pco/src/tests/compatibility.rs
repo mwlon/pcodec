@@ -178,10 +178,10 @@ fn v0_3_0_float_quant() -> PcoResult<()> {
 }
 
 #[test]
-fn v0_4_0_lz77_delta() -> PcoResult<()> {
-  // v0.4.0 introduced lz77 delta encoding
+fn v0_4_0_lookback_delta() -> PcoResult<()> {
+  // v0.4.0 introduced lookback delta encoding
   let version = "0.4.0";
-  let name = "lz77_delta";
+  let name = "lookback_delta";
 
   // randomly generated ahead of time
   let nums: Vec<u32> = vec![
@@ -189,7 +189,7 @@ fn v0_4_0_lz77_delta() -> PcoResult<()> {
     14752788, 1180462487,
   ]
   .repeat(100);
-  let config = ChunkConfig::default().with_delta_spec(DeltaSpec::TryLz77);
+  let config = ChunkConfig::default().with_delta_spec(DeltaSpec::TryLookback);
   simple_write_if_version_matches(version, name, &nums, &config)?;
   assert_compatible(version, name, &nums)?;
   Ok(())

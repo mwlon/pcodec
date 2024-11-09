@@ -359,18 +359,18 @@ fn test_trivial_first_latent_var() -> PcoResult<()> {
 }
 
 #[test]
-fn test_lz77_delta_encoding() -> PcoResult<()> {
+fn test_lookback_delta_encoding() -> PcoResult<()> {
   let mut nums = Vec::new();
   for i in 0..100 {
     nums.push(i % 9);
   }
   let (compressed, meta) = compress_w_meta(
     &nums,
-    &ChunkConfig::default().with_delta_spec(DeltaSpec::TryLz77),
+    &ChunkConfig::default().with_delta_spec(DeltaSpec::TryLookback),
   )?;
   assert!(matches!(
     meta.delta_encoding,
-    DeltaEncoding::Lz77(_)
+    DeltaEncoding::Lookback(_)
   ));
   let decompressed = simple_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, "trivial_first_latent")?;

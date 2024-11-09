@@ -1,7 +1,7 @@
 use crate::constants::{Bitlen, DeltaLookback};
 use crate::data_types::Latent;
 use crate::macros::match_latent_enum;
-use crate::metadata::delta_encoding::DeltaLz77Config;
+use crate::metadata::delta_encoding::DeltaLookbackConfig;
 use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::DeltaEncoding;
 use crate::FULL_BATCH_N;
@@ -36,7 +36,7 @@ fn first_order_encode_consecutive_in_place<L: Latent>(latents: &mut [L]) {
 // Used for a single page, so we return the delta moments.
 // All encode in place functions leave junk data (`order`
 // latents in this case) at the front of the latents.
-// Using the front instead of the back is preferable because it makes the lz77
+// Using the front instead of the back is preferable because it makes the lookback
 // encode function simpler and faster.
 #[inline(never)]
 fn encode_consecutive_in_place<L: Latent>(order: usize, mut latents: &mut [L]) -> Vec<L> {
@@ -79,13 +79,13 @@ pub(crate) fn decode_consecutive_in_place<L: Latent>(delta_moments: &mut [L], la
 const PROPOSED_LOOKBACKS: usize = 16;
 const BRUTE_LOOKBACKS: usize = 6;
 const REPEATING_LOOKBACKS: usize = 4;
-// To help locate similar latents for lz77 encoding, we hash each latent at
+// To help locate similar latents for lookback encoding, we hash each latent at
 // different "coarsenesses" and write them into a vector. e.g. a coarseness
 // of 8 means that (l >> 8) gets hashed, so we can lookup recent values by
 // quotient by 256.
 const COARSENESSES: [Bitlen; 2] = [0, 8];
 
-fn lz77_hash_lookup(
+fn lookback_hash_lookup(
   l: u64,
   i: usize,
   hash_table_n: usize,
@@ -125,7 +125,7 @@ fn lz77_hash_lookup(
   }
 }
 
-fn lz77_compute_goodness<L: Latent>(
+fn lookback_compute_goodness<L: Latent>(
   l: L,
   i: usize,
   latents: &[L],
@@ -144,7 +144,7 @@ fn lz77_compute_goodness<L: Latent>(
   }
 }
 
-fn lz_goodness_argmax(goodnesses: &[Bitlen; PROPOSED_LOOKBACKS]) -> usize {
+fn lookback_goodness_argmax(goodnesses: &[Bitlen; PROPOSED_LOOKBACKS]) -> usize {
   let mut best_goodness = goodnesses[0];
   let mut best_idx = 0;
 
@@ -159,7 +159,7 @@ fn lz_goodness_argmax(goodnesses: &[Bitlen; PROPOSED_LOOKBACKS]) -> usize {
 }
 
 #[inline(never)]
-fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> Vec<DeltaLookback> {
+fn choose_lookbacks<L: Latent>(config: DeltaLookbackConfig, latents: &[L]) -> Vec<DeltaLookback> {
   let state_n = config.state_n();
 
   if latents.len() <= state_n {
@@ -187,7 +187,7 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
     let new_brute_lookback = i.min(PROPOSED_LOOKBACKS);
     proposed_lookbacks[new_brute_lookback - 1] = new_brute_lookback;
 
-    lz77_hash_lookup(
+    lookback_hash_lookup(
       l.to_u64(),
       i,
       hash_table_n,
@@ -195,7 +195,7 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
       &mut idx_hash_table,
       &mut proposed_lookbacks,
     );
-    lz77_compute_goodness(
+    lookback_compute_goodness(
       l,
       i,
       latents,
@@ -203,7 +203,7 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
       &mut lookback_counts,
       &mut goodnesses,
     );
-    let best_lookback_idx = lz_goodness_argmax(&goodnesses);
+    let best_lookback_idx = lookback_goodness_argmax(&goodnesses);
     let new_best_lookback = proposed_lookbacks[best_lookback_idx];
     if new_best_lookback != best_lookback {
       repeating_lookback_idx += 1;
@@ -223,8 +223,8 @@ fn choose_lz77_lookbacks<L: Latent>(config: DeltaLz77Config, latents: &[L]) -> V
 // Using the front instead of the back is preferable because it means we don't
 // need an extra copy of the latents in this case.
 #[inline(never)]
-fn encode_lz77_in_place<L: Latent>(
-  config: DeltaLz77Config,
+fn encode_with_lookbacks_in_place<L: Latent>(
+  config: DeltaLookbackConfig,
   lookbacks: &[DeltaLookback],
   latents: &mut [L],
 ) -> Vec<L> {
@@ -244,8 +244,8 @@ fn encode_lz77_in_place<L: Latent>(
   state
 }
 
-pub fn new_lz77_window_buffer_and_pos<L: Latent>(
-  config: DeltaLz77Config,
+pub fn new_lookback_window_buffer_and_pos<L: Latent>(
+  config: DeltaLookbackConfig,
   state: &[L],
 ) -> (Vec<L>, usize) {
   let window_n = config.window_n();
@@ -257,8 +257,8 @@ pub fn new_lz77_window_buffer_and_pos<L: Latent>(
 }
 
 // returns the new position
-pub fn decode_lz77_in_place<L: Latent>(
-  config: DeltaLz77Config,
+pub fn decode_with_lookbacks_in_place<L: Latent>(
+  config: DeltaLookbackConfig,
   lookbacks: &[DeltaLookback],
   window_buffer_pos: &mut usize,
   window_buffer: &mut [L],
@@ -293,12 +293,12 @@ pub fn compute_delta_latent_var(
 ) -> Option<DynLatents> {
   match delta_encoding {
     DeltaEncoding::None | DeltaEncoding::Consecutive(_) => None,
-    DeltaEncoding::Lz77(config) => {
+    DeltaEncoding::Lookback(config) => {
       let res = match_latent_enum!(
         primary_latents,
         DynLatents<L>(inner) => {
           let latents = &mut inner[range];
-          DynLatents::new(choose_lz77_lookbacks(config, latents)).unwrap()
+          DynLatents::new(choose_lookbacks(config, latents)).unwrap()
         }
       );
       Some(res)
@@ -320,9 +320,9 @@ pub fn encode_in_place(
         DeltaEncoding::Consecutive(config) => {
           encode_consecutive_in_place(config.order, &mut inner[range])
         }
-        DeltaEncoding::Lz77(config) => {
+        DeltaEncoding::Lookback(config) => {
           let lookbacks = delta_latents.unwrap().downcast_ref::<DeltaLookback>().unwrap();
-          encode_lz77_in_place(config, lookbacks, &mut inner[range])
+          encode_with_lookbacks_in_place(config, lookbacks, &mut inner[range])
         }
       };
       DynLatents::new(delta_state).unwrap()
@@ -359,7 +359,7 @@ mod tests {
   }
 
   #[test]
-  fn test_lz77_encode_decode() {
+  fn test_lookback_encode_decode() {
     let original_latents = {
       let mut res = vec![100_u32; 100];
       res[1] = 200;
@@ -370,20 +370,20 @@ mod tests {
       res[50] = 205;
       res
     };
-    let config = DeltaLz77Config {
+    let config = DeltaLookbackConfig {
       window_n_log: 4,
       state_n_log: 1,
       secondary_uses_delta: false,
     };
 
     let mut deltas = original_latents.clone();
-    let lookbacks = choose_lz77_lookbacks(config, &original_latents);
+    let lookbacks = choose_lookbacks(config, &original_latents);
     assert_eq!(lookbacks[0], 1); // 201 -> 200
     assert_eq!(lookbacks[2], 4); // 0 -> 0
     assert_eq!(lookbacks[13], 10); // 204 -> 203
     assert_eq!(lookbacks[48], 1); // 205 -> 0; 204 was outside window
 
-    let state = encode_lz77_in_place(config, &lookbacks, &mut deltas);
+    let state = encode_with_lookbacks_in_place(config, &lookbacks, &mut deltas);
     assert_eq!(state, vec![100, 200]);
 
     // Encoding left junk deltas at the front,
@@ -394,9 +394,9 @@ mod tests {
       deltas_to_decode.push(1337);
     }
 
-    let (mut window_buffer, mut pos) = new_lz77_window_buffer_and_pos(config, &state);
+    let (mut window_buffer, mut pos) = new_lookback_window_buffer_and_pos(config, &state);
     assert_eq!(pos, 16);
-    decode_lz77_in_place(
+    decode_with_lookbacks_in_place(
       config,
       &lookbacks,
       &mut pos,

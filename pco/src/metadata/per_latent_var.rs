@@ -6,8 +6,8 @@ use std::iter::Sum;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LatentVarKey {
   /// Used by certain types of
-  /// [delta encodings][crate::metadata::DeltaEncoding]. E.g. Lz77 delta uses
-  /// this to store lookbacks.
+  /// [delta encodings][crate::metadata::DeltaEncoding]. E.g. lookback delta
+  /// encoding uses this to store lookbacks.
   Delta,
   /// The only required latent variable, used by
   /// [modes][crate::metadata::Mode] to represent number values.

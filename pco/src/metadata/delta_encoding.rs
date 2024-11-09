@@ -13,18 +13,25 @@ use std::io::Write;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DeltaConsecutiveConfig {
+  /// The number of times consecutive deltas were taken.
+  /// For instance, 2nd order delta encoding is delta-of-deltas.
+  ///
+  /// This is always positive, between 1 and 7.
   pub order: usize,
   pub secondary_uses_delta: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct DeltaLz77Config {
+pub struct DeltaLookbackConfig {
+  /// The log2 of the number of latents explicitly stored in page metadata
+  /// to prepopulate the lookback window.
   pub state_n_log: Bitlen,
+  /// The log2 of the maximum possible lookback.
   pub window_n_log: Bitlen,
   pub secondary_uses_delta: bool,
 }
 
-impl DeltaLz77Config {
+impl DeltaLookbackConfig {
   pub(crate) fn state_n(&self) -> usize {
     1 << self.state_n_log
   }
@@ -43,6 +50,7 @@ impl DeltaLz77Config {
 /// This stage of processing happens after applying the
 /// [`Mode`][crate::metadata::Mode] during compression.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DeltaEncoding {
   /// No delta encoding; the values are encoded as-is.
   ///
@@ -53,19 +61,15 @@ pub enum DeltaEncoding {
   ///
   /// This is best if your numbers have high variance overall, but adjacent
   /// numbers are close in value, e.g. an arithmetic sequence.
-  ///
-  /// This order is always positive, between 1 and 7.
-  /// For instance, 2nd order delta encoding is delta-of-deltas.
   Consecutive(DeltaConsecutiveConfig),
   /// Encodes an extra "lookback" latent variable and the differences
   /// `x[i] - x[i - lookback[i]]` between values.
   ///
   /// This is best if your numbers have complex repeating patterns
   /// beyond just adjacent elements.
-  ///
-  /// The `window_n_log` parameter specifies how large the maximum lookback
-  /// can be.
-  Lz77(DeltaLz77Config),
+  /// It is in spirit similar to LZ77 compression, but only stores lookbacks
+  /// (AKA match offsets) and no match lengths.
+  Lookback(DeltaLookbackConfig),
 }
 
 impl DeltaEncoding {
@@ -114,7 +118,7 @@ impl DeltaEncoding {
             state_n_log, window_n_log
           )));
         }
-        Lz77(DeltaLz77Config {
+        Lookback(DeltaLookbackConfig {
           window_n_log,
           state_n_log,
           secondary_uses_delta: reader.read_bool(),
@@ -134,7 +138,7 @@ impl DeltaEncoding {
     let variant = match self {
       None => 0,
       Consecutive(_) => 1,
-      Lz77(_) => 2,
+      Lookback(_) => 2,
     };
     writer.write_bitlen(
       variant,
@@ -150,7 +154,7 @@ impl DeltaEncoding {
         );
         writer.write_bool(config.secondary_uses_delta);
       }
-      Lz77(config) => {
+      Lookback(config) => {
         writer.write_bitlen(
           config.window_n_log - 1,
           BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG,
@@ -167,7 +171,7 @@ impl DeltaEncoding {
   pub(crate) fn latent_type(&self) -> Option<LatentType> {
     match self {
       None | Consecutive(_) => Option::None,
-      Lz77(_) => Some(LatentType::U32),
+      Lookback(_) => Some(LatentType::U32),
     }
   }
 
@@ -179,7 +183,7 @@ impl DeltaEncoding {
       (_, LatentVarKey::Primary) => true,
       (None, LatentVarKey::Secondary) => false,
       (Consecutive(config), LatentVarKey::Secondary) => config.secondary_uses_delta,
-      (Lz77(config), LatentVarKey::Secondary) => config.secondary_uses_delta,
+      (Lookback(config), LatentVarKey::Secondary) => config.secondary_uses_delta,
     }
   }
 
@@ -195,17 +199,17 @@ impl DeltaEncoding {
     match self {
       None => 0,
       Consecutive(config) => config.order,
-      Lz77(config) => 1 << config.state_n_log,
+      Lookback(config) => 1 << config.state_n_log,
     }
   }
 
   pub(crate) fn exact_bit_size(&self) -> Bitlen {
     let payload_bits = match self {
       None => 0,
-      // For consecutive and LZ77, we have a +1 bit for whether the
+      // For nontrivial encodings, we have a +1 bit for whether the
       // secondary latent is delta-encoded or not.
       Consecutive(_) => BITS_TO_ENCODE_DELTA_ENCODING_ORDER + 1,
-      Lz77(_) => BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG + BITS_TO_ENCODE_LZ_DELTA_STATE_N_LOG + 1,
+      Lookback(_) => BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG + BITS_TO_ENCODE_LZ_DELTA_STATE_N_LOG + 1,
     };
     BITS_TO_ENCODE_DELTA_ENCODING_VARIANT + payload_bits
   }
@@ -214,7 +218,7 @@ impl DeltaEncoding {
 #[cfg(test)]
 mod tests {
   use crate::bit_writer::BitWriter;
-  use crate::metadata::delta_encoding::{DeltaConsecutiveConfig, DeltaLz77Config};
+  use crate::metadata::delta_encoding::{DeltaConsecutiveConfig, DeltaLookbackConfig};
   use crate::metadata::DeltaEncoding;
 
   fn check_bit_size(encoding: DeltaEncoding) {
@@ -238,10 +242,12 @@ mod tests {
         secondary_uses_delta: false,
       },
     ));
-    check_bit_size(DeltaEncoding::Lz77(DeltaLz77Config {
-      window_n_log: 8,
-      state_n_log: 1,
-      secondary_uses_delta: true,
-    }));
+    check_bit_size(DeltaEncoding::Lookback(
+      DeltaLookbackConfig {
+        window_n_log: 8,
+        state_n_log: 1,
+        secondary_uses_delta: true,
+      },
+    ));
   }
 }

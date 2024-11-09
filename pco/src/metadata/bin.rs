@@ -6,7 +6,6 @@ use crate::data_types::Latent;
 /// Part of [`ChunkLatentVarMeta`][`crate::metadata::ChunkLatentVarMeta`] representing
 /// a numerical range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
 pub struct Bin<L: Latent> {
   /// The number of occurrences of this bin in the asymmetric numeral system
   /// table.
