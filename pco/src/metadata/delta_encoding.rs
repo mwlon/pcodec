@@ -34,14 +34,14 @@ impl DeltaLz77Config {
   }
 }
 
-/// How Pco does
+/// How Pco did
 /// [delta encoding](https://en.wikipedia.org/wiki/Delta_encoding) on this
 /// chunk.
 ///
 /// Delta encoding optionally takes differences between nearby numbers,
 /// greatly reducing the entropy of the data distribution in some cases.
 /// This stage of processing happens after applying the
-/// [`Mode`][crate::metadata::Mode].
+/// [`Mode`][crate::metadata::Mode] during compression.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeltaEncoding {
   /// No delta encoding; the values are encoded as-is.
@@ -51,10 +51,17 @@ pub enum DeltaEncoding {
   /// Encodes the differences between consecutive values (or differences
   /// between those, etc.).
   ///
+  /// This is best if your numbers have high variance overall, but adjacent
+  /// numbers are close in value, e.g. an arithmetic sequence.
+  ///
   /// This order is always positive, between 1 and 7.
+  /// For instance, 2nd order delta encoding is delta-of-deltas.
   Consecutive(DeltaConsecutiveConfig),
   /// Encodes an extra "lookback" latent variable and the differences
   /// `x[i] - x[i - lookback[i]]` between values.
+  ///
+  /// This is best if your numbers have complex repeating patterns
+  /// beyond just adjacent elements.
   ///
   /// The `window_n_log` parameter specifies how large the maximum lookback
   /// can be.

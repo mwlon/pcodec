@@ -23,8 +23,8 @@ macro_rules! build_dtype_macros {
 
         impl $name {
           #[inline]
-          pub fn new<S: $constraint>() -> Option<Self> {
-            let type_id = std::any::TypeId::of::<S>();
+          pub fn new<T: $constraint>() -> Option<Self> {
+            let type_id = std::any::TypeId::of::<T>();
             $(
               if type_id == std::any::TypeId::of::<$t>() {
                 return Some($name::$variant);
@@ -43,8 +43,8 @@ macro_rules! build_dtype_macros {
 
         impl $name {
           #[inline]
-          pub fn new<S: $constraint>() -> Option<Self> {
-            let type_id = std::any::TypeId::of::<S>();
+          pub fn new<T: $constraint>() -> Option<Self> {
+            let type_id = std::any::TypeId::of::<T>();
             $(
               if type_id == std::any::TypeId::of::<$t>() {
                 return Some($name::$variant);
@@ -125,26 +125,26 @@ macro_rules! build_dtype_macros {
             None
           }
 
-          pub fn downcast<S: $constraint>(self) -> Option<$container<S>> {
+          pub fn downcast<T: $constraint>(self) -> Option<$container<T>> {
             match self {
               $(
-                Self::$variant(inner) => inner.downcast::<S>(),
+                Self::$variant(inner) => inner.downcast::<T>(),
               )+
             }
           }
 
-          pub fn downcast_ref<S: $constraint>(&self) -> Option<&$container<S>> {
+          pub fn downcast_ref<T: $constraint>(&self) -> Option<&$container<T>> {
             match self {
               $(
-                Self::$variant(inner) => inner.downcast_ref::<S>(),
+                Self::$variant(inner) => inner.downcast_ref::<T>(),
               )+
             }
           }
 
-          pub fn downcast_mut<S: $constraint>(&mut self) -> Option<&mut $container<S>> {
+          pub fn downcast_mut<T: $constraint>(&mut self) -> Option<&mut $container<T>> {
             match self {
               $(
-                Self::$variant(inner) => inner.downcast_mut::<S>(),
+                Self::$variant(inner) => inner.downcast_mut::<T>(),
               )+
             }
           }

@@ -18,10 +18,7 @@ use crate::metadata::Mode;
 pub struct ChunkMeta {
   /// The formula `pco` used to compress each number at a low level.
   pub mode: Mode,
-  /// How many times delta encoding was applied during compression.
-  /// This is between 0 and 7, inclusive.
-  ///
-  /// See [`ChunkConfig`][crate::ChunkConfig] for more details.
+  /// How delta encoding was applied.
   pub delta_encoding: DeltaEncoding,
   /// Metadata about the interleaved streams needed by `pco` to
   /// compress/decompress the inputs

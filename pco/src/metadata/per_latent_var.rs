@@ -1,13 +1,25 @@
 use std::fmt::Debug;
 use std::iter::Sum;
 
+/// The possible kinds of latent variables present in a chunk.
+///
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LatentVarKey {
+  /// Used by certain types of
+  /// [delta encodings][crate::metadata::DeltaEncoding]. E.g. Lz77 delta uses
+  /// this to store lookbacks.
   Delta,
+  /// The only required latent variable, used by
+  /// [modes][crate::metadata::Mode] to represent number values.
+  ///
+  /// Always has the same precision as the encoded numbers.
   Primary,
+  /// An optional additional latent variable, used by certain
+  /// [modes][crate::metadata::Mode] to represent number values.
   Secondary,
 }
 
+/// A generic container holding a value for each applicable latent variable.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PerLatentVar<T> {
   pub delta: Option<T>,
@@ -63,6 +75,8 @@ impl<T> PerLatentVar<T> {
     }
   }
 
+  /// Returns a new `PerLatentVar` where each entry has been wrapped in a
+  /// reference.
   pub fn as_ref(&self) -> PerLatentVar<&T> {
     PerLatentVar {
       delta: self.delta.as_ref(),
@@ -87,6 +101,9 @@ impl<T> PerLatentVar<T> {
     }
   }
 
+  /// Zips each element of this `PerLatentVar` with each element of the other.
+  ///
+  /// Will panic if either one has a latent variable that the other does not.
   pub fn zip_exact<S>(self, other: PerLatentVar<S>) -> PerLatentVar<(T, S)> {
     let zip_option = |a: Option<T>, b: Option<S>| match (a, b) {
       (Some(a), Some(b)) => Some((a, b)),
@@ -101,6 +118,8 @@ impl<T> PerLatentVar<T> {
     }
   }
 
+  /// Returns a vector of the defined `LatentVarKey`s and values, in order
+  /// of appearance in the file.
   pub fn enumerated(self) -> Vec<(LatentVarKey, T)> {
     let mut res = Vec::with_capacity(3);
     if let Some(value) = self.delta {

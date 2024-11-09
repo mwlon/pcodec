@@ -134,15 +134,16 @@ pub trait Latent:
 
 /// *unstable API* Trait for data types supported for compression/decompression.
 ///
-/// If you have a new data type you would like to add to the library or
-/// implement as custom in your own, these are the questions you need to
-/// answer:
+/// If you have a new data type you would like to add to the library or,
+/// these are the questions you need to answer:
 /// * What is the corresponding latent type? This is probably the
 ///   smallest unsigned integer with enough bits to represent the number.
 /// * How can I convert to this latent representation and back
 ///   in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
 ///   wouldn't preserve ordering and would cause pco to fail. In this example,
 ///   one needs to flip the sign bit and, if negative, the rest of the bits.
+///
+/// Custom data types (defined outside of pco) are not currently supported.
 pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + 'static {
   /// A number from 1-255 that corresponds to the number's data type.
   ///
@@ -157,12 +158,9 @@ pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + '
   /// `pco` data type implementation.
   const NUMBER_TYPE_BYTE: u8;
 
-  /// The latent this type can convert between to do
-  /// bitwise logic and such.
+  /// The latent this type can convert between to do bitwise logic and such.
   type L: Latent;
 
-  /// Returns a `LatentDescriber` for each latent variable in the chunk
-  /// metadata.
   fn get_latent_describers(meta: &ChunkMeta) -> PerLatentVar<LatentDescriber>;
 
   fn mode_is_valid(mode: Mode) -> bool;
