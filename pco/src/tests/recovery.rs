@@ -6,7 +6,7 @@ use crate::chunk_config::{ChunkConfig, DeltaSpec};
 use crate::constants::Bitlen;
 use crate::data_types::Number;
 use crate::errors::PcoResult;
-use crate::metadata::{ChunkMeta, DynLatent, Mode};
+use crate::metadata::{ChunkMeta, DeltaEncoding, DynLatent, Mode};
 use crate::standalone::{simple_compress, simple_decompress, FileCompressor};
 use crate::ModeSpec;
 
@@ -353,6 +353,25 @@ fn test_trivial_first_latent_var() -> PcoResult<()> {
   nums[77] += 0.0001;
   let (compressed, meta) = compress_w_meta(&nums, &ChunkConfig::default())?;
   assert_eq!(meta.mode, Mode::float_mult(1.0_f32));
+  let decompressed = simple_decompress(&compressed)?;
+  assert_nums_eq(&decompressed, &nums, "trivial_first_latent")?;
+  Ok(())
+}
+
+#[test]
+fn test_lz77_delta_encoding() -> PcoResult<()> {
+  let mut nums = Vec::new();
+  for i in 0..100 {
+    nums.push(i % 9);
+  }
+  let (compressed, meta) = compress_w_meta(
+    &nums,
+    &ChunkConfig::default().with_delta_spec(DeltaSpec::TryLz77),
+  )?;
+  assert!(matches!(
+    meta.delta_encoding,
+    DeltaEncoding::Lz77(_)
+  ));
   let decompressed = simple_decompress(&compressed)?;
   assert_nums_eq(&decompressed, &nums, "trivial_first_latent")?;
   Ok(())
