@@ -61,7 +61,7 @@ Pco uses a holistic, 3-step approach:
   splits each number `x` into latent variables `l_0` and
   `l_1` such that `x = 777 * l_0 + l_1`.
   Most natural data uses classic mode, which simply matches `x = l_0`.
-* **delta enoding**.
+* **delta encoding**.
   Pco identifies whether certain latent variables would be better compressed as
   deltas between consecutive elements (or deltas of deltas, or deltas with 
   lookback).

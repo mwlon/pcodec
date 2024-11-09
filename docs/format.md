@@ -21,11 +21,11 @@ header, and possibly multiple pages per chunk.
 [Plate notation](https://en.wikipedia.org/wiki/Plate_notation) for chunk
 metadata component:
 
-<img alt="Pco wrapped chunk meta plate notation" src="../images/wrapped_chunk_meta_plate.svg" />
+<img alt="Pco wrapped chunk meta plate notation" src="../images/wrapped_chunk_meta_plate.svg" width="500px"/>
 
 Plate notation for page component:
 
-<img alt="Pco wrapped page plate notation" src="../images/wrapped_page_plate.svg" />
+<img alt="Pco wrapped page plate notation" src="../images/wrapped_page_plate.svg" width="500px"/>
 
 ### Header
 
@@ -71,12 +71,12 @@ Each chunk meta consists of
   values.
 * [4 bits] `delta_encoding`, using this table:
 
-  | value | mode         | n latent variables | `extra_delta_bits` |
-  |-------|--------------|--------------------|--------------------|
-  | 0     | None         | 0                  | 0                  |
-  | 1     | Consecutive  | 0                  | 4                  |
-  | 2     | Lookback     | 1                  | 10                 |
-  | 3-15  | \<reserved\> |                    |                    |
+  | value | delta encoding | n latent variables | `extra_delta_bits` |
+  |-------|----------------|--------------------|--------------------|
+  | 0     | None           | 0                  | 0                  |
+  | 1     | Consecutive    | 0                  | 4                  |
+  | 2     | Lookback       | 1                  | 10                 |
+  | 3-15  | \<reserved\>   |                    |                    |
 
 * [`extra_delta_bits` bits]
   * for `consecutive`, this is 3 bits for `order` from 1-7, and 1 bit for
@@ -147,8 +147,6 @@ It consists of
 * [8 bits] a magic termination byte (0).
 
 ## Processing Formulas
-
-<img alt="Pco compression and decompression steps" title="compression and decompression steps" src="../images/processing.svg" />
 
 In order of decompression steps in a batch:
 
