@@ -75,8 +75,11 @@ pub(crate) fn decode_consecutive_in_place<L: Latent>(delta_moments: &mut [L], la
 const N_LZ_PROPOSED_LOOKBACKS: usize = 16;
 const BRUTE_LOOKBACKS: usize = 6;
 const REPEATING_LOOKBACKS: usize = 4;
-const N_COARSENESSES: usize = 2;
-const COARSENESSES: [Bitlen; N_COARSENESSES] = [0, 8];
+// To help locate similar latents for lz77 encoding, we hash each latent at
+// different "coarsenesses" and write them into a vector. e.g. a coarseness
+// of 8 means that (l >> 8) gets hashed, so we can lookup recent values by
+// quotient by 256.
+const COARSENESSES: [Bitlen; 2] = [0, 8];
 
 fn lz77_hash_lookup(
   l: u64,
@@ -87,7 +90,6 @@ fn lz77_hash_lookup(
   proposed_lookbacks: &mut [usize; N_LZ_PROPOSED_LOOKBACKS],
 ) {
   let hash_mask = hash_table_n - 1;
-  // TODO comment
   // might be possible to improve this hash fn
   let hash_fn = |mut x: u64| {
     // constant is roughly 2**64 / phi

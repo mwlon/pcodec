@@ -157,6 +157,10 @@ impl<W: Write> BitWriter<W> {
   pub fn into_inner(self) -> W {
     self.dst
   }
+
+  pub fn bit_idx(&self) -> usize {
+    self.stale_byte_idx * 8 + self.bits_past_byte as usize
+  }
 }
 
 #[cfg(test)]

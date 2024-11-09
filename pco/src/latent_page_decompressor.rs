@@ -16,8 +16,8 @@ pub struct BinDecompressionInfo<L: Latent> {
   pub offset_bits: Bitlen,
 }
 
-impl<L: Latent> From<&Bin<L>> for BinDecompressionInfo<L> {
-  fn from(bin: &Bin<L>) -> Self {
+impl<L: Latent> BinDecompressionInfo<L> {
+  fn new(bin: &Bin<L>) -> Self {
     Self {
       lower: bin.lower,
       offset_bits: bin.offset_bits,
@@ -74,7 +74,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
     let u64s_per_offset = read_write_uint::calc_max_u64s(bins::max_offset_bits(bins));
     let infos = bins
       .iter()
-      .map(BinDecompressionInfo::from)
+      .map(BinDecompressionInfo::new)
       .collect::<Vec<_>>();
     let weights = bins::weights(bins);
     let ans_spec = Spec::from_weights(ans_size_log, weights)?;

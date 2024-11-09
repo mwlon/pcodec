@@ -1,7 +1,7 @@
 use crate::constants::{Bitlen, DeltaLookback};
 use crate::data_types::{Float, Latent, Number};
 use crate::metadata::per_latent_var::PerLatentVar;
-use crate::metadata::{ChunkMeta, DeltaEncoding, DynLatent, Mode};
+use crate::metadata::{ChunkMeta, DeltaEncoding, DynLatent, LatentVarKey, Mode};
 use std::marker::PhantomData;
 
 /// Interprets the meaning of latent variables and values from [`ChunkMeta`].
@@ -41,16 +41,15 @@ pub(crate) fn match_classic_mode<T: Number>(
   meta: &ChunkMeta,
   delta_units: &'static str,
 ) -> Option<PerLatentVar<LatentDescriber>> {
-  let primary_describer: Option<LatentDescriber> = match (meta.mode, meta.delta_encoding) {
-    (Mode::Classic, DeltaEncoding::None) => Some(Box::new(ClassicDescriber::<T>::default())),
-    (Mode::Classic, _) => Some(centered_delta_describer::<T::L>(
-      "delta".to_string(),
-      delta_units.to_string(),
-    )),
-    _ => None,
+  let primary: LatentDescriber = match (meta.mode, meta.delta_encoding) {
+    (Mode::Classic, DeltaEncoding::None) => Box::new(ClassicDescriber::<T>::default()),
+    (Mode::Classic, _) => {
+      centered_delta_describer::<T::L>("delta".to_string(), delta_units.to_string())
+    }
+    _ => return None,
   };
 
-  primary_describer.map(|primary| PerLatentVar {
+  Some(PerLatentVar {
     delta: delta_latent_describer(meta.delta_encoding),
     primary,
     secondary: None,
@@ -80,16 +79,28 @@ pub(crate) fn match_int_modes<L: Latent>(
           "x".to_string(),
         )
       };
-      let secondary: Option<LatentDescriber> = Some(Box::new(IntDescriber {
-        description: "adjustment".to_string(),
-        units: "".to_string(),
-        center: adj_center,
-        is_signed: false,
-      }));
+
+      let secondary: LatentDescriber = if meta
+        .delta_encoding
+        .applies_to_latent_var(LatentVarKey::Secondary)
+      {
+        centered_delta_describer::<L>(
+          "adjustment delta".to_string(),
+          "".to_string(),
+        )
+      } else {
+        Box::new(IntDescriber {
+          description: "adjustment".to_string(),
+          units: "".to_string(),
+          center: adj_center,
+          is_signed: false,
+        })
+      };
+
       Some(PerLatentVar {
         delta: delta_latent_describer(meta.delta_encoding),
         primary,
-        secondary,
+        secondary: Some(secondary),
       })
     }
     _ => None,
@@ -116,16 +127,28 @@ pub(crate) fn match_float_modes<F: Float>(
           is_signed: true,
         })
       };
-      let secondary: Option<LatentDescriber> = Some(Box::new(IntDescriber {
-        description: "adjustment".to_string(),
-        units: " ULPs".to_string(),
-        center: F::L::MID,
-        is_signed: true,
-      }));
+
+      let secondary: LatentDescriber = if meta
+        .delta_encoding
+        .applies_to_latent_var(LatentVarKey::Secondary)
+      {
+        centered_delta_describer::<F::L>(
+          "adjustment delta".to_string(),
+          "".to_string(),
+        )
+      } else {
+        Box::new(IntDescriber {
+          description: "adjustment".to_string(),
+          units: " ULPs".to_string(),
+          center: F::L::MID,
+          is_signed: true,
+        })
+      };
+
       Some(PerLatentVar {
         delta: delta_latent_describer(meta.delta_encoding),
         primary,
-        secondary,
+        secondary: Some(secondary),
       })
     }
     Mode::FloatQuant(k) => {
@@ -140,17 +163,28 @@ pub(crate) fn match_float_modes<F: Float>(
           "q".to_string(),
         )
       };
-      let secondary: Option<LatentDescriber> = Some(Box::new(IntDescriber {
-        description: "magnitude adjustment".to_string(),
-        units: " ULPs".to_string(),
-        center: F::L::ZERO,
-        is_signed: false,
-      }));
+
+      let secondary: LatentDescriber = if meta
+        .delta_encoding
+        .applies_to_latent_var(LatentVarKey::Secondary)
+      {
+        centered_delta_describer::<F::L>(
+          "magnitude adjustment delta".to_string(),
+          "".to_string(),
+        )
+      } else {
+        Box::new(IntDescriber {
+          description: "magnitude adjustment".to_string(),
+          units: " ULPs".to_string(),
+          center: F::L::ZERO,
+          is_signed: false,
+        })
+      };
 
       Some(PerLatentVar {
         delta: delta_latent_describer(meta.delta_encoding),
         primary,
-        secondary,
+        secondary: Some(secondary),
       })
     }
     _ => None,

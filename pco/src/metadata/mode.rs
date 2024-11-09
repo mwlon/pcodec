@@ -157,15 +157,9 @@ impl Mode {
       FloatMult(_) | FloatQuant(_) | IntMult(_) => Some(number_latent_type),
     }
   }
-  // pub(crate) fn has_secondary_latent_var(&self) -> bool {
-  //   match self {
-  //     Classic => false,
-  //     FloatMult(_) | IntMult(_) | FloatQuant(_) => true,
-  //   }
-  // }
 
   pub(crate) fn float_mult<F: Float>(base: F) -> Self {
-    Self::FloatMult(DynLatent::new(base.to_latent_ordered()).unwrap())
+    FloatMult(DynLatent::new(base.to_latent_ordered()).unwrap())
   }
 
   pub(crate) fn exact_bit_size(&self) -> Bitlen {
@@ -175,5 +169,35 @@ impl Mode {
       FloatQuant(_) => BITS_TO_ENCODE_QUANTIZE_K,
     };
     BITS_TO_ENCODE_MODE_VARIANT + payload_bits
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::bit_writer::BitWriter;
+  use crate::metadata::{DynLatent, Mode};
+
+  fn check_bit_size(mode: Mode) {
+    let mut bytes = vec![0; 100];
+    let mut writer = BitWriter::new(&mut bytes, 100);
+    unsafe {
+      mode.write_to(&mut writer);
+    }
+    assert_eq!(
+      mode.exact_bit_size() as usize,
+      writer.bit_idx()
+    );
+  }
+
+  #[test]
+  fn test_bit_size() {
+    check_bit_size(Mode::Classic);
+    check_bit_size(Mode::IntMult(
+      DynLatent::new(77_u32).unwrap(),
+    ));
+    check_bit_size(Mode::FloatMult(
+      DynLatent::new(77_u32).unwrap(),
+    ));
+    check_bit_size(Mode::FloatQuant(7));
   }
 }

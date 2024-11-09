@@ -89,7 +89,7 @@ impl DeltaEncoding {
         let order = reader.read_usize(BITS_TO_ENCODE_DELTA_ENCODING_ORDER);
         if order == 0 {
           return Err(PcoError::corruption(
-            "Consecutive delta encoding must not be 0",
+            "Consecutive delta encoding order must not be 0",
           ));
         } else {
           Consecutive(DeltaConsecutiveConfig {
@@ -198,11 +198,44 @@ impl DeltaEncoding {
       // For consecutive and LZ77, we have a +1 bit for whether the
       // secondary latent is delta-encoded or not.
       Consecutive(_) => BITS_TO_ENCODE_DELTA_ENCODING_ORDER + 1,
-      Lz77(_) => {
-        // We encode both (window n log) and (state n log)
-        BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG * 2 + 1
-      }
+      Lz77(_) => BITS_TO_ENCODE_LZ_DELTA_WINDOW_N_LOG + BITS_TO_ENCODE_LZ_DELTA_STATE_N_LOG + 1,
     };
     BITS_TO_ENCODE_DELTA_ENCODING_VARIANT + payload_bits
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::bit_writer::BitWriter;
+  use crate::constants::Bitlen;
+  use crate::metadata::delta_encoding::{DeltaConsecutiveConfig, DeltaLz77Config};
+  use crate::metadata::DeltaEncoding;
+
+  fn check_bit_size(encoding: DeltaEncoding) {
+    let mut bytes = vec![0; 100];
+    let mut writer = BitWriter::new(&mut bytes, 100);
+    unsafe {
+      encoding.write_to(&mut writer);
+    }
+    assert_eq!(
+      encoding.exact_bit_size() as usize,
+      writer.bit_idx(),
+    );
+  }
+
+  #[test]
+  fn test_bit_size() {
+    check_bit_size(DeltaEncoding::None);
+    check_bit_size(DeltaEncoding::Consecutive(
+      DeltaConsecutiveConfig {
+        order: 3,
+        secondary_uses_delta: false,
+      },
+    ));
+    check_bit_size(DeltaEncoding::Lz77(DeltaLz77Config {
+      window_n_log: 8,
+      state_n_log: 1,
+      secondary_uses_delta: true,
+    }));
   }
 }
