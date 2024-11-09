@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![allow(unreachable_patterns)]
 
 /// Produces two macros: an enum definer and an enum matcher.
 ///
@@ -17,6 +18,7 @@ macro_rules! build_dtype_macros {
     macro_rules! $definer {
       (#[$enum_attrs: meta] $vis: vis $name: ident) => {
         #[$enum_attrs]
+        #[non_exhaustive]
         $vis enum $name {
           $($variant,)+
         }
@@ -37,6 +39,7 @@ macro_rules! build_dtype_macros {
       (#[$enum_attrs: meta] #[repr($desc_t: ty)] $vis: vis $name: ident = $desc_val: ident) => {
         #[$enum_attrs]
         #[repr($desc_t)]
+        #[non_exhaustive]
         $vis enum $name {
           $($variant = <$t>::$desc_val,)+
         }
@@ -69,6 +72,7 @@ macro_rules! build_dtype_macros {
         }
 
         #[$enum_attrs]
+        #[non_exhaustive]
         $vis enum $name {
           $($variant($container<$t>),)+
         }
@@ -160,6 +164,7 @@ macro_rules! build_dtype_macros {
             type $generic = $t;
             $block
           })+
+          _ => unreachable!()
         }
       };
       ($value: expr, $enum_: ident<$generic: ident>($inner: ident) => $block: block) => {
@@ -168,6 +173,7 @@ macro_rules! build_dtype_macros {
             type $generic = $t;
             $block
           })+
+          _ => unreachable!()
         }
       };
     }
