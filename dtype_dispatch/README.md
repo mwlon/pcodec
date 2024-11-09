@@ -5,8 +5,54 @@ This is a common problem in numerical libraries (think numpy, torch, polars):
 you have a variety of data types and data structures to hold them, but every
 function involves matching an enum or converting from a generic to an enum.
 
-Consider this simple API of a hypothetical numerical library supporting the
-`length` and `add` functions on arrays, plus `new` and `downcast`:
+Example with `i32` and `f32` data types for dynamically-typed vectors,
+supporting `.length()` and `.add(other)` operations, plus generic
+`new` and `downcast` functions:
+
+```rust
+pub trait Dtype: 'static {}
+impl Dtype for i32 {}
+impl Dtype for f32 {}
+
+// register our two macros, `define_an_enum` and `match_an_enum`, constrained
+// to the `Dtype` trait, with our variant => type mapping:
+dtype_dispatch::build_dtype_macros!(
+  define_an_enum,
+  match_an_enum,
+  Dtype,
+  {
+    I32 => i32,
+    F32 => f32,
+  },
+);
+
+// define any enum holding a Vec of any data type!
+define_an_enum!(
+  #[derive(Clone, Debug)]
+  DynArray(Vec)
+);
+
+impl DynArray {
+  pub fn length(&self) -> usize {
+    match_an_enum!(self, DynArray<T>(inner) => { inner.len() })
+  }
+
+  pub fn add(&self, other: &DynArray) -> DynArray {
+    match_an_enum!(self, DynArray<T>(inner) => {
+      let other_inner = other.downcast_ref::<T>().unwrap();
+      let added = inner.iter().zip(other_inner).map(|(a, b)| a + b).collect::<Vec<_>>();
+      DynArray::new(added).unwrap()
+    })
+  }
+}
+
+// we could also use `DynArray::I32()` here, but just to show we can convert generics:
+let x_dynamic = DynArray::new(vec![1_i32, 2, 3]).unwrap();
+let x_doubled_generic = x_dynamic.add(&x_dynamic).downcast::<i32>().unwrap();
+assert_eq!(x_doubled_generic, vec![2, 4, 6]);
+```
+
+Compare this with the same API written manually:
 
 ```rust
 use std::{any, mem};
@@ -88,48 +134,6 @@ powerful macros for you to use.
 These building blocks can solve almost any dynamic<->generic data type dispatch
 problem:
 
-```rust
-pub trait Dtype: 'static {}
-impl Dtype for i32 {}
-impl Dtype for f32 {}
-
-// register our two macros, `define_an_enum` and `match_an_enum`, constrained
-// to the `Dtype` trait, with our variant => type mapping:
-dtype_dispatch::build_dtype_macros!(
-  define_an_enum,
-  match_an_enum,
-  Dtype,
-  {
-    I32 => i32,
-    F32 => f32,
-  },
-);
-
-// define any enum for any `Vec` of a data type!
-define_an_enum!(
-  #[derive(Clone, Debug)]
-  DynArray(Vec)
-);
-
-impl DynArray {
-  pub fn length(&self) -> usize {
-    match_an_enum!(self, DynArray<T>(inner) => { inner.len() })
-  }
-
-  pub fn add(&self, other: &DynArray) -> DynArray {
-    match_an_enum!(self, DynArray<T>(inner) => {
-      let other_inner = other.downcast_ref::<T>().unwrap();
-      let added = inner.iter().zip(other_inner).map(|(a, b)| a + b).collect::<Vec<_>>();
-      DynArray::new(added).unwrap()
-    })
-  }
-}
-
-// we could also use `DynArray::I32()` here, but just to show we can convert generics:
-let x_dynamic = DynArray::new(vec![1_i32, 2, 3]).unwrap();
-let x_doubled_generic = x_dynamic.add(&x_dynamic).downcast::<i32>().unwrap();
-assert_eq!(x_doubled_generic, vec![2, 4, 6]);
-```
 
 ## Comparisons
 
@@ -150,6 +154,9 @@ which is annoyingly restrictive.
 For instance, traits with generic associated functions can't be put in a
 `Box<dyn>`.
 
+All enums are `#[non_exhaustive]` by default, but the matching macros generated
+handle wildcard cases and can be used safely in downstream crates.
+
 ## Limitations
 
 At present, enum and container type names must always be a single identifier.
@@ -157,5 +164,6 @@ For instance, `Vec` will work, but `std::vec::Vec` and `Vec<Foo>` will not.
 You can satisfy this by `use`ing your type or making a type alias of it,
 e.g. `type MyContainer<T: MyConstraint> = Vec<Foo<T>>`.
 
-It is also mandatory that you place exactly one attribute on each enum, e.g.
-with a `#[derive(Clone, Debug)]`.
+It is also mandatory that you place exactly one attribute when defining each
+enum, e.g. with a `#[derive(Clone, Debug)]`.
+If you don't want any attributes, you can just do `#[derive()]`.

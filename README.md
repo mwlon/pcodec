@@ -1,5 +1,8 @@
 <div style="text-align:center">
-  <img alt="Pco logo: a pico-scale, compressed version of the Pyramid of Khafre in the palm of your hand" src="images/logo.svg" width="160px">
+  <img
+    alt="Pco logo: a pico-scale, compressed version of the Pyramid of Khafre in the palm of your hand" src="images/logo.svg"
+    width="160px"
+  >
 </div>
 
 [![crates.io][crates-badge]][crates-url]
@@ -48,20 +51,21 @@ numerical sequences with
 ## How is Pco so much better than alternatives?
 
 Pco is designed specifically for numerical data, whereas alternatives rely on
-general-purpose (LZ) compressors that were designed for string or binary data.
+general-purpose (LZ) compressors that target string or binary data.
 Pco uses a holistic, 3-step approach:
 
 * **modes**.
   Pco identifies an approximate structure of the numbers called a
-  mode and then applies it to all the numbers.
+  mode and then uses it to split numbers into "latents".
   As an example, if all numbers are approximately multiples of 777, int mult mode
-  decomposes each number `x` into latent variables `l_0` and
+  splits each number `x` into latent variables `l_0` and
   `l_1` such that `x = 777 * l_0 + l_1`.
   Most natural data uses classic mode, which simply matches `x = l_0`.
 * **delta enoding**.
   Pco identifies whether certain latent variables would be better compressed as
-  consecutive deltas (or deltas of deltas, or so forth).
-  If so, it takes consecutive differences.
+  deltas between consecutive elements (or deltas of deltas, or deltas with 
+  lookback).
+  If so, it takes differences.
 * **binning**.
   This is the heart and most novel part of Pco.
   Pco represents each (delta-encoded) latent variable as an approximate,
@@ -79,11 +83,11 @@ entropy.
 
 ### Wrapped or Standalone
 
-Pco is designed to be easily wrapped into another format.
+Pco is designed to embed into wrapping formats.
 It provides a powerful wrapped API with the building blocks to interleave it
 with the wrapping format.
 This is useful if the wrapping format needs to support things like nullability,
-multiple columns, random access or seeking.
+multiple columns, random access, or seeking.
 
 The standalone format is a minimal implementation of a wrapped format.
 It supports batched decompression only with no other niceties.
@@ -102,24 +106,19 @@ multiple chunks per file.
 
 ### Mistakes to Avoid
 
-You will get disappointing results from Pco if your data:
+You may get disappointing results from Pco if your data in a single chunk
 
-* combines semantically different sequences into a single chunk, or
-* contains fewer numbers per chunk or page than recommended (see above table).
+* combines semantically different sequences, or
+* is inherently 2D or higher.
 
-Example: the NYC taxi dataset has `f64` columns for `passenger_base_fare` and
-`tolls`.
-Suppose we assign these as `fare[0...n]` and `tolls[0...n]` respectively, where
+Example: the NYC taxi dataset has `f64` columns for `fare` and
+`trip_miles`.
+Suppose we assign these as `fare[0...n]` and `trip_miles[0...n]` respectively, where
 `n=50,000`.
 
 * separate chunk for each column => good compression
-* single chunk `fare[0], ... fare[n-1], toll[0], ... toll[n-1]` => mediocre
-  compression
-* single chunk `fare[0], toll[0], ... fare[n-1], toll[n-1]` => poor compression
-
-Similarly, we could compress images by making a separate chunk for each
-flattened channel (red, green, blue).
-Though dedicated formats like webp likely compress natural images better.
+* single chunk `fare[0], ... fare[n-1], trip_miles[0], ... trip_miles[n-1]` => bad compression
+* single chunk `fare[0], trip_miles[0], ... fare[n-1], trip_miles[n-1]` => bad compression
 
 ## Extra
 
