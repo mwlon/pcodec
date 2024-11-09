@@ -553,8 +553,12 @@ impl ChunkCompressor {
 
     // worst case trailing bytes after bit packing
     let mut worst_case_body_bit_size = 7 * n_pages;
-    for (key, latent_var_meta) in meta.per_latent_var.as_ref().enumerated() {
-      let bin_counts = bin_counts_per_latent_var.get(key).unwrap();
+    for (_, (latent_var_meta, bin_counts)) in meta
+      .per_latent_var
+      .as_ref()
+      .zip_exact(bin_counts_per_latent_var.as_ref())
+      .enumerated()
+    {
       match_latent_enum!(&latent_var_meta.bins, DynBins<L>(bins) => {
         for (bin, &count) in bins.iter().zip(bin_counts) {
           worst_case_body_bit_size +=

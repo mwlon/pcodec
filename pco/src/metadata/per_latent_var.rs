@@ -7,14 +7,6 @@ pub enum LatentVarKey {
   Primary,
   Secondary,
 }
-//
-// impl LatentVarKey {
-//   pub const ALL: [LatentVarKey; 3] = [
-//     LatentVarKey::Delta,
-//     LatentVarKey::Primary,
-//     LatentVarKey::Secondary,
-//   ];
-// }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PerLatentVar<T> {
@@ -134,26 +126,5 @@ impl<T> PerLatentVar<T> {
       values.push(value);
     }
     T::sum(values.into_iter())
-  }
-  // pub(crate) fn enumerated_mut(&mut self) -> Vec<(LatentVarKey, &mut T)> {
-  //   let mut res = Vec::with_capacity(3);
-  //   if let Some(value) = &mut self.delta {
-  //     res.push((LatentVarKey::Delta, value));
-  //   }
-  //   res.push((LatentVarKey::Primary, &mut self.primary));
-  //   if let Some(value) = &mut self.secondary {
-  //     res.push((LatentVarKey::Secondary, value));
-  //   }
-  //   res
-  // }
-}
-
-impl<T> From<PerLatentVar<T>> for Vec<T> {
-  fn from(value: PerLatentVar<T>) -> Self {
-    let mut res = Vec::with_capacity(3);
-    res.extend(value.delta);
-    res.push(value.primary);
-    res.extend(value.secondary);
-    res
   }
 }

@@ -68,7 +68,8 @@ impl PyDeltaSpec {
     Self(DeltaSpec::TryConsecutive(order))
   }
 
-  /// :returns: a DeltaSpec that tries to LZ77 delta lookbacks, if possible
+  /// :returns: a DeltaSpec that tries to use LZ77 delta lookbacks, if
+  /// possible.
   #[staticmethod]
   fn try_lz77() -> Self {
     Self(DeltaSpec::TryLz77)

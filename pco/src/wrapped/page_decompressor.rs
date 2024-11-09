@@ -169,7 +169,6 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
     let delta_latents = self.delta_scratch.as_ref().map(|scratch| &scratch.dst);
 
     // PRIMARY LATENTS
-    // TODO should primary latents always be L or be flexible?
     self.reader_builder.with_reader(|reader| unsafe {
       let primary_dst = T::transmute_to_latents(dst);
       let dyn_lpd = self

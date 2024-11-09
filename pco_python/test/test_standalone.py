@@ -15,6 +15,7 @@ all_lengths = (
 )
 all_dtypes = ("f2", "f4", "f8", "i2", "i4", "i8", "u2", "u4", "u8")
 
+
 @pytest.mark.parametrize("length", all_lengths)
 @pytest.mark.parametrize("dtype", all_dtypes)
 def test_round_trip_decompress_into(length, dtype):
@@ -96,23 +97,22 @@ def test_compression_options():
 
     # this is mostly just to check that there is no error, but these settings
     # should give worse compression than the defaults
-    assert (
-        len(
-            standalone.simple_compress(
-                data,
-                ChunkConfig(
-                    compression_level=0,
-                    delta_spec=DeltaSpec.try_consecutive(1),
-                    mode_spec=ModeSpec.classic(),
-                    paging_spec=PagingSpec.equal_pages_up_to(77),
-                ),
-            )
+    for delta_spec in [DeltaSpec.try_consecutive(1), DeltaSpec.try_lz77()]:
+        compressed = standalone.simple_compress(
+            data,
+            ChunkConfig(
+                compression_level=0,
+                delta_spec=delta_spec,
+                mode_spec=ModeSpec.classic(),
+                paging_spec=PagingSpec.equal_pages_up_to(77),
+            ),
         )
-        > default_size
-    )
+        assert len(compressed) > default_size
 
 
-@pytest.mark.parametrize("mode_spec", [ModeSpec.auto(), ModeSpec.classic(), ModeSpec.try_int_mult(10)])
+@pytest.mark.parametrize(
+    "mode_spec", [ModeSpec.auto(), ModeSpec.classic(), ModeSpec.try_int_mult(10)]
+)
 def test_compression_int_mode_spec_options(mode_spec):
     data = (np.random.normal(size=100) * 1000).astype(np.int32)
 
@@ -128,7 +128,15 @@ def test_compression_int_mode_spec_options(mode_spec):
     np.testing.assert_array_equal(data, out)
 
 
-@pytest.mark.parametrize("mode_spec", [ModeSpec.auto(), ModeSpec.classic(), ModeSpec.try_float_mult(10.0), ModeSpec.try_float_quant(4)])
+@pytest.mark.parametrize(
+    "mode_spec",
+    [
+        ModeSpec.auto(),
+        ModeSpec.classic(),
+        ModeSpec.try_float_mult(10.0),
+        ModeSpec.try_float_quant(4),
+    ],
+)
 def test_compression_float_mode_spec_options(mode_spec):
     data = (np.random.normal(size=100) * 1000).astype(np.int32) * np.pi
 

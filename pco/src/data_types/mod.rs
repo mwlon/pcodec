@@ -171,8 +171,9 @@ pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + '
   /// Returns
   /// * mode: the [`Mode`] that will be stored alongside the data
   ///   for decompression
-  /// * latents: a list of latent variables, each of which contains a latent per
-  ///   num in `nums`
+  /// * latents: a primary and optionally secondary latent variable, each of
+  ///   which contains a latent per num in `nums`. Primary must be of the same
+  ///   latent type as T.
   fn choose_mode_and_split_latents(
     nums: &[Self],
     config: &ChunkConfig,
