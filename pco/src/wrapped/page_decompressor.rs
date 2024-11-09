@@ -54,6 +54,7 @@ fn convert_from_latents_to_numbers<T: Number>(dst: &mut [T]) {
 }
 
 impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
+  #[inline(never)]
   pub(crate) fn new(mut src: R, chunk_meta: &ChunkMeta, n: usize) -> PcoResult<Self> {
     bit_reader::ensure_buf_read_capacity(&mut src, PERFORMANT_BUF_READ_CAPACITY);
     let mut reader_builder = BitReaderBuilder::new(src, PAGE_PADDING, 0);
@@ -70,6 +71,8 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
       .zip_exact(page_meta.per_latent_var.as_ref())
       .enumerated()
     {
+      let var_delta_encoding = chunk_meta.delta_encoding.for_latent_var(key);
+      let n_in_body = n.saturating_sub(var_delta_encoding.n_latents_per_state());
       let state = match_latent_enum!(
         &chunk_latent_var_meta.bins,
         DynBins<L>(bins) => {
@@ -79,8 +82,6 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
             .unwrap()
             .clone();
 
-          let var_delta_encoding = chunk_meta.delta_encoding.for_latent_var(key);
-          let n_in_body = n.saturating_sub(var_delta_encoding.n_latents_per_state());
           if bins.is_empty() && n_in_body > 0 {
             return Err(PcoError::corruption(format!(
               "unable to decompress chunk with no bins and {} latents",
@@ -88,7 +89,7 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
             )));
           }
 
-          let lpd= LatentPageDecompressor::new(
+          let lpd = LatentPageDecompressor::new(
             chunk_latent_var_meta.ans_size_log,
             bins,
             var_delta_encoding,
@@ -148,13 +149,16 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
     }) = &mut self.delta_scratch
     {
       let dyn_lpd = self.latent_decompressors.delta.as_mut().unwrap();
+      let limit = min(
+        n_remaining.saturating_sub(self.delta_encoding.n_latents_per_state()),
+        batch_n,
+      );
       self.reader_builder.with_reader(|reader| unsafe {
         match_latent_enum!(
           dyn_lpd,
           DynLatentPageDecompressor<L>(lpd) => {
             // Delta latents only line up with pre-delta length of the other
             // latents.
-            let limit = min(n_remaining.saturating_sub(self.delta_encoding.n_latents_per_state()), batch_n);
             // We never apply delta encoding to delta latents, so we just
             // skip straight to the inner LatentBatchDecompressor
             lpd.decompress_batch_pre_delta(

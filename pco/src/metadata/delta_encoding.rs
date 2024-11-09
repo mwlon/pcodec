@@ -212,7 +212,7 @@ mod tests {
   use crate::metadata::DeltaEncoding;
 
   fn check_bit_size(encoding: DeltaEncoding) {
-    let mut bytes = vec![0; 100];
+    let mut bytes = Vec::new();
     let mut writer = BitWriter::new(&mut bytes, 100);
     unsafe {
       encoding.write_to(&mut writer);

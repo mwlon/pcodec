@@ -178,7 +178,7 @@ mod tests {
   use crate::metadata::{DynLatent, Mode};
 
   fn check_bit_size(mode: Mode) {
-    let mut bytes = vec![0; 100];
+    let mut bytes = Vec::new();
     let mut writer = BitWriter::new(&mut bytes, 100);
     unsafe {
       mode.write_to(&mut writer);
