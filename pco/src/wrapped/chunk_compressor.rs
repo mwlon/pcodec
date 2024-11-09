@@ -610,10 +610,10 @@ impl ChunkCompressor {
     let page_info = &page_infos[page_idx];
 
     let per_latent_var = latent_chunk_compressors.as_ref().map(|key, lcc| {
+      let range = page_info.range_for_latent_var(key);
       match_latent_enum!(
         lcc,
         DynLatentChunkCompressor<L>(inner) => {
-          let range = page_info.range_for_latent_var(key);
           inner.dissect_page(range)
         }
       )
@@ -712,7 +712,7 @@ impl ChunkCompressor {
       .as_ref()
       .zip_exact(ans_default_state_and_size_log.as_ref())
       .zip_exact(dissected_page.per_latent_var.as_ref())
-      .map(|_key, tuple| {
+      .map(|_, tuple| {
         let ((page_info_var, (ans_default_state, _)), dissected) = tuple;
         let ans_final_state_idxs = dissected
           .ans_final_states
