@@ -2,11 +2,11 @@ use std::fmt::Debug;
 
 use crate::ans::{AnsState, Spec};
 use crate::bit_reader::BitReader;
-use crate::constants::{Bitlen, ANS_INTERLEAVING, FULL_BATCH_N};
+use crate::constants::{Bitlen, DeltaLookback, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
-use crate::metadata::{bins, Bin};
-use crate::{ans, bit_reader, read_write_uint};
+use crate::metadata::{bins, Bin, DeltaEncoding, DynLatents};
+use crate::{ans, bit_reader, delta, read_write_uint};
 
 // Default here is meaningless and should only be used to fill in empty
 // vectors.
@@ -16,8 +16,8 @@ pub struct BinDecompressionInfo<L: Latent> {
   pub offset_bits: Bitlen,
 }
 
-impl<L: Latent> From<&Bin<L>> for BinDecompressionInfo<L> {
-  fn from(bin: &Bin<L>) -> Self {
+impl<L: Latent> BinDecompressionInfo<L> {
+  fn new(bin: &Bin<L>) -> Self {
     Self {
       lower: bin.lower,
       offset_bits: bin.offset_bits,
@@ -31,7 +31,10 @@ struct State<L: Latent> {
   offset_bits_csum_scratch: [Bitlen; FULL_BATCH_N],
   offset_bits_scratch: [Bitlen; FULL_BATCH_N],
   lowers_scratch: [L; FULL_BATCH_N],
-  state_idxs: [AnsState; ANS_INTERLEAVING],
+
+  ans_state_idxs: [AnsState; ANS_INTERLEAVING],
+  delta_state: Vec<L>,
+  delta_state_pos: usize,
 }
 
 impl<L: Latent> State<L> {
@@ -47,38 +50,50 @@ impl<L: Latent> State<L> {
 
 // LatentBatchDecompressor does the main work of decoding bytes into Latents
 #[derive(Clone, Debug)]
-pub struct LatentBatchDecompressor<L: Latent> {
+pub struct LatentPageDecompressor<L: Latent> {
   // known information about this latent variable
   u64s_per_offset: usize,
   infos: Vec<BinDecompressionInfo<L>>,
   needs_ans: bool,
   decoder: ans::Decoder,
+  delta_encoding: DeltaEncoding,
   pub maybe_constant_value: Option<L>,
 
   // mutable state
   state: State<L>,
 }
 
-impl<L: Latent> LatentBatchDecompressor<L> {
+impl<L: Latent> LatentPageDecompressor<L> {
   pub fn new(
     ans_size_log: Bitlen,
     bins: &[Bin<L>],
+    delta_encoding: DeltaEncoding,
     ans_final_state_idxs: [AnsState; ANS_INTERLEAVING],
+    stored_delta_state: Vec<L>,
   ) -> PcoResult<Self> {
     let u64s_per_offset = read_write_uint::calc_max_u64s(bins::max_offset_bits(bins));
     let infos = bins
       .iter()
-      .map(BinDecompressionInfo::from)
+      .map(BinDecompressionInfo::new)
       .collect::<Vec<_>>();
     let weights = bins::weights(bins);
     let ans_spec = Spec::from_weights(ans_size_log, weights)?;
     let decoder = ans::Decoder::new(&ans_spec);
 
+    let (working_delta_state, delta_state_pos) = match delta_encoding {
+      DeltaEncoding::None | DeltaEncoding::Consecutive(_) => (stored_delta_state, 0),
+      DeltaEncoding::Lookback(config) => {
+        delta::new_lookback_window_buffer_and_pos(config, &stored_delta_state)
+      }
+    };
+
     let mut state = State {
       offset_bits_csum_scratch: [0; FULL_BATCH_N],
       offset_bits_scratch: [0; FULL_BATCH_N],
       lowers_scratch: [L::ZERO; FULL_BATCH_N],
-      state_idxs: ans_final_state_idxs,
+      ans_state_idxs: ans_final_state_idxs,
+      delta_state: working_delta_state,
+      delta_state_pos,
     };
 
     let needs_ans = bins.len() != 1;
@@ -94,17 +109,19 @@ impl<L: Latent> LatentBatchDecompressor<L> {
       }
     }
 
-    let maybe_constant_value = if bins::are_trivial(bins) {
-      bins.first().map(|bin| bin.lower)
-    } else {
-      None
-    };
+    let maybe_constant_value =
+      if bins::are_trivial(bins) && matches!(delta_encoding, DeltaEncoding::None) {
+        bins.first().map(|bin| bin.lower)
+      } else {
+        None
+      };
 
     Ok(Self {
       u64s_per_offset,
       infos,
       needs_ans,
       decoder,
+      delta_encoding,
       maybe_constant_value,
       state,
     })
@@ -123,7 +140,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
     let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
     let [mut state_idx_0, mut state_idx_1, mut state_idx_2, mut state_idx_3] =
-      self.state.state_idxs;
+      self.state.ans_state_idxs;
     let infos = self.infos.as_slice();
     let ans_nodes = self.decoder.nodes.as_slice();
     for base_i in (0..FULL_BATCH_N).step_by(ANS_INTERLEAVING) {
@@ -154,7 +171,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
 
     reader.stale_byte_idx = stale_byte_idx;
     reader.bits_past_byte = bits_past_byte;
-    self.state.state_idxs = [state_idx_0, state_idx_1, state_idx_2, state_idx_3];
+    self.state.ans_state_idxs = [state_idx_0, state_idx_1, state_idx_2, state_idx_3];
   }
 
   // This implementation handles arbitrary batch size and looks simpler, but is
@@ -165,7 +182,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
     let mut stale_byte_idx = reader.stale_byte_idx;
     let mut bits_past_byte = reader.bits_past_byte;
     let mut offset_bit_idx = 0;
-    let mut state_idxs = self.state.state_idxs;
+    let mut state_idxs = self.state.ans_state_idxs;
     for i in 0..batch_n {
       let j = i % 4;
       stale_byte_idx += bits_past_byte as usize / 8;
@@ -182,7 +199,7 @@ impl<L: Latent> LatentBatchDecompressor<L> {
 
     reader.stale_byte_idx = stale_byte_idx;
     reader.bits_past_byte = bits_past_byte;
-    self.state.state_idxs = state_idxs;
+    self.state.ans_state_idxs = state_idxs;
   }
 
   #[inline(never)]
@@ -224,13 +241,9 @@ impl<L: Latent> LatentBatchDecompressor<L> {
 
   // If hits a corruption, it returns an error and leaves reader and self unchanged.
   // May contaminate dst.
-  pub unsafe fn decompress_latent_batch(
-    &mut self,
-    reader: &mut BitReader,
-    dst: &mut [L],
-  ) -> PcoResult<()> {
+  pub unsafe fn decompress_batch_pre_delta(&mut self, reader: &mut BitReader, dst: &mut [L]) {
     if dst.is_empty() {
-      return Ok(());
+      return;
     }
 
     if self.needs_ans {
@@ -258,7 +271,45 @@ impl<L: Latent> LatentBatchDecompressor<L> {
     }
 
     self.add_lowers(dst);
+  }
 
-    Ok(())
+  pub unsafe fn decompress_batch(
+    &mut self,
+    delta_latents: Option<&DynLatents>,
+    n_remaining_in_page: usize,
+    reader: &mut BitReader,
+    dst: &mut [L],
+  ) {
+    let n_remaining_pre_delta =
+      n_remaining_in_page.saturating_sub(self.delta_encoding.n_latents_per_state());
+    let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
+      dst.len()
+    } else {
+      // If we're at the end, this won't initialize the last
+      // few elements before delta decoding them, so we do that manually here to
+      // satisfy MIRI. This step isn't really necessary.
+      dst[n_remaining_pre_delta..].fill(L::default());
+      n_remaining_pre_delta
+    };
+    self.decompress_batch_pre_delta(reader, &mut dst[..pre_delta_len]);
+
+    match self.delta_encoding {
+      DeltaEncoding::None => (),
+      DeltaEncoding::Consecutive(_) => {
+        delta::decode_consecutive_in_place(&mut self.state.delta_state, dst)
+      }
+      DeltaEncoding::Lookback(config) => {
+        delta::decode_with_lookbacks_in_place(
+          config,
+          delta_latents
+            .unwrap()
+            .downcast_ref::<DeltaLookback>()
+            .unwrap(),
+          &mut self.state.delta_state_pos,
+          &mut self.state.delta_state,
+          dst,
+        );
+      }
+    }
   }
 }

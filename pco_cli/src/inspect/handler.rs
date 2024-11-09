@@ -7,7 +7,8 @@ use tabled::settings::{Alignment, Modify, Style};
 use tabled::{Table, Tabled};
 
 use pco::data_types::{Latent, Number};
-use pco::metadata::ChunkMeta;
+use pco::match_latent_enum;
+use pco::metadata::{ChunkMeta, DynBins, DynLatent, LatentVarKey};
 use pco::standalone::{FileDecompressor, MaybeChunkDecompressor};
 
 use crate::core_handlers::CoreHandlerImpl;
@@ -39,8 +40,10 @@ pub struct BinSummary {
 
 #[derive(Serialize)]
 pub struct LatentVarSummary {
+  name: String,
   n_bins: usize,
   ans_size_log: u32,
+  approx_avg_bits: f64,
   bins: String,
 }
 
@@ -75,31 +78,53 @@ fn measure_bytes_read(src: &[u8], prev_src_len: &mut usize) -> usize {
 fn build_latent_var_summaries<T: Number>(meta: &ChunkMeta) -> BTreeMap<String, LatentVarSummary> {
   let describers = T::get_latent_describers(meta);
   let mut summaries = BTreeMap::new();
-  for (latent_var_idx, latent_var_meta) in meta.per_latent_var.iter().enumerate() {
-    let describer = &describers[latent_var_idx];
+  for (key, (latent_var_meta, describer)) in meta
+    .per_latent_var
+    .as_ref()
+    .zip_exact(describers)
+    .enumerated()
+  {
     let unit = describer.latent_units();
 
-    let bins = latent_var_meta.bins.downcast_ref::<T::L>().unwrap();
-    let mut bin_summaries = Vec::new();
-    for bin in bins {
-      bin_summaries.push(BinSummary {
-        weight: bin.weight,
-        lower: format!("{}{}", describer.latent(bin.lower), unit),
-        offset_bits: bin.offset_bits,
-      });
-    }
+    let mut approx_total_bits = 0.0;
+    let bin_summaries = match_latent_enum!(
+      &latent_var_meta.bins,
+      DynBins<L>(bins) => {
+        let mut bin_summaries = Vec::new();
+        for bin in bins {
+          bin_summaries.push(BinSummary {
+            weight: bin.weight,
+            lower: format!("{}{}", describer.latent(DynLatent::new(bin.lower).unwrap()), unit),
+            offset_bits: bin.offset_bits,
+          });
+          let weight = bin.weight as f64;
+          approx_total_bits += weight * (bin.offset_bits as f64 + latent_var_meta.ans_size_log as f64 - weight.log2());
+        }
+        bin_summaries
+      }
+    );
+    let n_bins = bin_summaries.len();
     let bins_table = Table::new(bin_summaries)
       .with(Style::rounded())
       .with(Modify::new(Columns::new(0..3)).with(Alignment::right()))
       .to_string();
+    let total_weight = (1 << latent_var_meta.ans_size_log) as f64;
 
     let summary = LatentVarSummary {
-      n_bins: bins.len(),
+      name: describer.latent_var(),
+      n_bins,
       ans_size_log: latent_var_meta.ans_size_log,
+      approx_avg_bits: approx_total_bits / total_weight,
       bins: bins_table.to_string(),
     };
 
-    summaries.insert(describer.latent_var(), summary);
+    let key_name = match key {
+      LatentVarKey::Delta => "delta",
+      LatentVarKey::Primary => "primary",
+      LatentVarKey::Secondary => "secondary",
+    };
+
+    summaries.insert(key_name.to_string(), summary);
   }
 
   summaries

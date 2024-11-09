@@ -5,7 +5,7 @@ use better_io::BetterBufRead;
 use crate::bit_reader;
 use crate::bit_reader::BitReaderBuilder;
 use crate::constants::{CHUNK_META_PADDING, HEADER_PADDING};
-use crate::data_types::Number;
+use crate::data_types::{LatentType, Number};
 use crate::errors::PcoResult;
 use crate::metadata::chunk::ChunkMeta;
 use crate::metadata::format_version::FormatVersion;
@@ -49,8 +49,14 @@ impl FileDecompressor {
   ) -> PcoResult<(ChunkDecompressor<T>, R)> {
     bit_reader::ensure_buf_read_capacity(&mut src, CHUNK_META_PADDING);
     let mut reader_builder = BitReaderBuilder::new(src, CHUNK_META_PADDING, 0);
-    let chunk_meta =
-      unsafe { ChunkMeta::read_from::<T::L, R>(&mut reader_builder, &self.format_version)? };
+    let latent_type = LatentType::new::<T::L>().unwrap();
+    let chunk_meta = unsafe {
+      ChunkMeta::read_from::<R>(
+        &mut reader_builder,
+        &self.format_version,
+        latent_type,
+      )?
+    };
     let cd = ChunkDecompressor::new(chunk_meta)?;
     Ok((cd, reader_builder.into_inner()))
   }

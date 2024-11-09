@@ -5,7 +5,7 @@ use crate::constants::{
   Bitlen, Weight, ANS_INTERLEAVING, BITS_TO_ENCODE_ANS_SIZE_LOG, BITS_TO_ENCODE_N_BINS,
   FULL_BIN_BATCH_SIZE, MAX_ANS_BITS,
 };
-use crate::data_types::Latent;
+use crate::data_types::{Latent, LatentType};
 use crate::errors::{PcoError, PcoResult};
 use crate::macros::match_latent_enum;
 use crate::metadata::dyn_bins::DynBins;
@@ -75,7 +75,6 @@ unsafe fn write_bins<L: Latent, W: Write>(
 ///
 /// This is mainly useful for inspecting how compression was done.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
 pub struct ChunkLatentVarMeta {
   /// The log2 of the number of the number of states in this chunk's tANS
   /// table.
@@ -88,8 +87,16 @@ pub struct ChunkLatentVarMeta {
 }
 
 impl ChunkLatentVarMeta {
-  pub(crate) unsafe fn read_from<L: Latent, R: BetterBufRead>(
+  pub(crate) fn latent_type(&self) -> LatentType {
+    match_latent_enum!(
+      &self.bins,
+      DynBins<L>(_inner) => { LatentType::new::<L>().unwrap() }
+    )
+  }
+
+  pub(crate) unsafe fn read_from<R: BetterBufRead>(
     reader_builder: &mut BitReaderBuilder<R>,
+    latent_type: LatentType,
   ) -> PcoResult<Self> {
     let (ans_size_log, n_bins) = reader_builder.with_reader(|reader| {
       let ans_size_log = reader.read_bitlen(BITS_TO_ENCODE_ANS_SIZE_LOG);
@@ -116,18 +123,23 @@ impl ChunkLatentVarMeta {
       )));
     }
 
-    let mut bins = Vec::with_capacity(n_bins);
-    while bins.len() < n_bins {
-      let batch_size = min(n_bins - bins.len(), FULL_BIN_BATCH_SIZE);
-      read_bin_batch::<L, R>(
-        reader_builder,
-        ans_size_log,
-        batch_size,
-        &mut bins,
-      )?;
-    }
+    let bins = match_latent_enum!(
+      latent_type,
+      LatentType<L> => {
+        let mut bins = Vec::with_capacity(n_bins);
+        while bins.len() < n_bins {
+          let batch_size = min(n_bins - bins.len(), FULL_BIN_BATCH_SIZE);
+          read_bin_batch::<L, R>(
+            reader_builder,
+            ans_size_log,
+            batch_size,
+            &mut bins,
+          )?;
+        }
 
-    let bins = DynBins::new(bins).unwrap();
+        DynBins::new(bins).unwrap()
+      }
+    );
 
     Ok(Self { bins, ans_size_log })
   }
@@ -155,13 +167,11 @@ impl ChunkLatentVarMeta {
   }
 
   pub(crate) fn exact_page_meta_bit_size(&self, delta_encoding: DeltaEncoding) -> usize {
-    let bits_per_delta = match_latent_enum!(
+    let bits_per_latent = match_latent_enum!(
       &self.bins,
-      DynBins<L>(_bins) => {
-        L::BITS
-      }
+      DynBins<L>(_bins) => { L::BITS }
     );
     self.ans_size_log as usize * ANS_INTERLEAVING
-      + bits_per_delta as usize * delta_encoding.n_latents_per_state()
+      + bits_per_latent as usize * delta_encoding.n_latents_per_state()
   }
 }

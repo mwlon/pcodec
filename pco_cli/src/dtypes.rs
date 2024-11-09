@@ -299,5 +299,9 @@ pub fn to_arrow(dtype: NumberType) -> ArrowDataType {
     NumberType::U16 => ArrowDataType::UInt16,
     NumberType::U32 => ArrowDataType::UInt32,
     NumberType::U64 => ArrowDataType::UInt64,
+    other => panic!(
+      "number type {:?} not yet supported in pco_cli",
+      other
+    ),
   }
 }

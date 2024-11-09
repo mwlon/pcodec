@@ -10,7 +10,8 @@ use crate::data_types::{split_latents_classic, Float, Latent, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
 use crate::float_mult_utils::FloatMultConfig;
-use crate::metadata::{ChunkMeta, Mode};
+use crate::metadata::per_latent_var::PerLatentVar;
+use crate::metadata::{ChunkMeta, DynLatents, Mode};
 use crate::{describers, float_mult_utils, float_quant_utils, sampling, ChunkConfig};
 
 fn filter_sample<F: Float>(num: &F) -> Option<F> {
@@ -28,7 +29,7 @@ fn filter_sample<F: Float>(num: &F) -> Option<F> {
 fn choose_mode_and_split_latents<F: Float>(
   nums: &[F],
   chunk_config: &ChunkConfig,
-) -> PcoResult<ModeAndLatents<F::L>> {
+) -> PcoResult<ModeAndLatents> {
   match chunk_config.mode_spec {
     ModeSpec::Auto => {
       // up to 3 bids: classic, float mult, float quant modes
@@ -318,7 +319,7 @@ macro_rules! impl_float_number {
 
       type L = $latent;
 
-      fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>> {
+      fn get_latent_describers(meta: &ChunkMeta) -> PerLatentVar<LatentDescriber> {
         describers::match_classic_mode::<Self>(meta, " ULPs")
           .or_else(|| describers::match_float_modes::<Self>(meta))
           .expect("invalid mode for float type")
@@ -338,7 +339,7 @@ macro_rules! impl_float_number {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> PcoResult<ModeAndLatents<Self::L>> {
+      ) -> PcoResult<ModeAndLatents> {
         choose_mode_and_split_latents(nums, config)
       }
 
@@ -363,7 +364,7 @@ macro_rules! impl_float_number {
           mem_layout ^ $sign_bit_mask
         }
       }
-      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]) {
+      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: Option<&DynLatents>) {
         match mode {
           Mode::Classic => (),
           Mode::FloatMult(dyn_latent) => {

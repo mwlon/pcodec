@@ -6,10 +6,13 @@ use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING, PAGE_PADDING};
 use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::latent_batch_dissector::LatentBatchDissector;
+use crate::macros::{define_latent_enum, match_latent_enum};
+use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::{bins, Bin};
 use crate::read_write_uint::ReadWriteUint;
 use crate::{ans, bit_reader, bit_writer, read_write_uint, FULL_BATCH_N};
 use std::io::Write;
+use std::ops::Range;
 
 // This would be very hard to combine with write_uints because it makes use of
 // an optimization that only works easily for single-u64 writes of 56 bits or
@@ -79,14 +82,15 @@ pub(crate) struct TrainedBins<L: Latent> {
 pub struct LatentChunkCompressor<L: Latent> {
   table: CompressionTable<L>,
   pub encoder: ans::Encoder,
-  pub avg_bits_per_delta: f64,
+  pub avg_bits_per_latent: f64,
   is_trivial: bool,
   needs_ans: bool,
   max_u64s_per_offset: usize,
+  latents: Vec<L>,
 }
 
 impl<L: Latent> LatentChunkCompressor<L> {
-  pub(crate) fn new(trained: TrainedBins<L>, bins: &[Bin<L>]) -> PcoResult<Self> {
+  pub(crate) fn new(trained: TrainedBins<L>, bins: &[Bin<L>], latents: Vec<L>) -> PcoResult<Self> {
     let needs_ans = bins.len() != 1;
 
     let table = CompressionTable::from(trained.infos);
@@ -100,20 +104,21 @@ impl<L: Latent> LatentChunkCompressor<L> {
     Ok(LatentChunkCompressor {
       table,
       encoder,
-      avg_bits_per_delta: bins::avg_bits_per_latent(bins, trained.ans_size_log),
+      avg_bits_per_latent: bins::avg_bits_per_latent(bins, trained.ans_size_log),
       is_trivial: bins::are_trivial(bins),
       needs_ans,
       max_u64s_per_offset,
+      latents,
     })
   }
 
-  pub fn dissect_page(&self, page_latents: &[L]) -> DissectedPageVar<L> {
+  pub fn dissect_page(&self, page_range: Range<usize>) -> DissectedPageVar {
     let uninit_dissected_page_var = |n, ans_default_state| {
       let ans_final_states = [ans_default_state; ANS_INTERLEAVING];
       DissectedPageVar {
         ans_vals: uninit_vec(n),
         ans_bits: uninit_vec(n),
-        offsets: uninit_vec(n),
+        offsets: DynLatents::new(uninit_vec::<L>(n)).unwrap(),
         offset_bits: uninit_vec(n),
         ans_final_states,
       }
@@ -124,13 +129,17 @@ impl<L: Latent> LatentChunkCompressor<L> {
     }
 
     let mut dissected_page_var = uninit_dissected_page_var(
-      page_latents.len(),
+      page_range.len(),
       self.encoder.default_state(),
     );
 
     // we go through in reverse for ANS!
     let mut lbd = LatentBatchDissector::new(&self.table, &self.encoder);
-    for (batch_idx, batch) in page_latents.chunks(FULL_BATCH_N).enumerate().rev() {
+    for (batch_idx, batch) in self.latents[page_range]
+      .chunks(FULL_BATCH_N)
+      .enumerate()
+      .rev()
+    {
       let base_i = batch_idx * FULL_BATCH_N;
       lbd.dissect_latent_batch(batch, base_i, &mut dissected_page_var)
     }
@@ -139,7 +148,7 @@ impl<L: Latent> LatentChunkCompressor<L> {
 
   pub fn write_dissected_batch<W: Write>(
     &self,
-    dissected_page_var: &DissectedPageVar<L>,
+    dissected_page_var: &DissectedPageVar,
     batch_start: usize,
     writer: &mut BitWriter<W>,
   ) -> PcoResult<()> {
@@ -165,33 +174,43 @@ impl<L: Latent> LatentChunkCompressor<L> {
 
     // write offsets
     (writer.stale_byte_idx, writer.bits_past_byte) = unsafe {
-      match self.max_u64s_per_offset {
-        0 => (writer.stale_byte_idx, writer.bits_past_byte),
-        1 => write_short_uints::<L>(
-          &dissected_page_var.offsets[batch_start..],
-          &dissected_page_var.offset_bits[batch_start..],
-          writer.stale_byte_idx,
-          writer.bits_past_byte,
-          &mut writer.buf,
-        ),
-        2 => write_uints::<L, 2>(
-          &dissected_page_var.offsets[batch_start..],
-          &dissected_page_var.offset_bits[batch_start..],
-          writer.stale_byte_idx,
-          writer.bits_past_byte,
-          &mut writer.buf,
-        ),
-        3 => write_uints::<L, 3>(
-          &dissected_page_var.offsets[batch_start..],
-          &dissected_page_var.offset_bits[batch_start..],
-          writer.stale_byte_idx,
-          writer.bits_past_byte,
-          &mut writer.buf,
-        ),
-        _ => panic!("[ChunkCompressor] data type is too large"),
-      }
+      match_latent_enum!(
+        &dissected_page_var.offsets,
+        DynLatents<L>(offsets) => {
+          match self.max_u64s_per_offset {
+            0 => (writer.stale_byte_idx, writer.bits_past_byte),
+            1 => write_short_uints::<L>(
+              &offsets[batch_start..],
+              &dissected_page_var.offset_bits[batch_start..],
+              writer.stale_byte_idx,
+              writer.bits_past_byte,
+              &mut writer.buf,
+            ),
+            2 => write_uints::<L, 2>(
+              &offsets[batch_start..],
+              &dissected_page_var.offset_bits[batch_start..],
+              writer.stale_byte_idx,
+              writer.bits_past_byte,
+              &mut writer.buf,
+            ),
+            3 => write_uints::<L, 3>(
+              &offsets[batch_start..],
+              &dissected_page_var.offset_bits[batch_start..],
+              writer.stale_byte_idx,
+              writer.bits_past_byte,
+              &mut writer.buf,
+            ),
+            _ => panic!("[ChunkCompressor] data type is too large"),
+          }
+        }
+      )
     };
 
     Ok(())
   }
 }
+
+define_latent_enum!(
+  #[derive(Clone, Debug)]
+  pub DynLatentChunkCompressor(LatentChunkCompressor)
+);

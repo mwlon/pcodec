@@ -1,14 +1,20 @@
 use crate::compression_intermediates::Bid;
 use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::{Float, Latent};
-use crate::metadata::Mode;
+use crate::metadata::{DynLatents, Mode};
 use crate::sampling::{self, PrimaryLatentAndSavings};
+use crate::split_latents::SplitLatents;
 use std::cmp;
 
 const REQUIRED_QUANTIZED_PROPORTION: f64 = 0.95;
 
 #[inline(never)]
-pub(crate) fn join_latents<F: Float>(k: Bitlen, primary: &mut [F::L], secondary: &[F::L]) {
+pub(crate) fn join_latents<F: Float>(
+  k: Bitlen,
+  primary: &mut [F::L],
+  secondary: Option<&DynLatents>,
+) {
+  let secondary = secondary.unwrap().downcast_ref::<F::L>().unwrap();
   // For any float `num` such that `split_latents([num], k) == [[y], [m]]`, we have
   //     num.is_sign_positive() == (y >= sign_cutoff)
   let sign_cutoff = F::L::MID >> k;
@@ -28,7 +34,7 @@ pub(crate) fn join_latents<F: Float>(k: Bitlen, primary: &mut [F::L], secondary:
   }
 }
 
-pub(crate) fn split_latents<F: Float>(page_nums: &[F], k: Bitlen) -> Vec<Vec<F::L>> {
+pub(crate) fn split_latents<F: Float>(page_nums: &[F], k: Bitlen) -> SplitLatents {
   let n = page_nums.len();
   let uninit_vec = || unsafe {
     let mut res = Vec::<F::L>::with_capacity(n);
@@ -55,7 +61,11 @@ pub(crate) fn split_latents<F: Float>(page_nums: &[F], k: Bitlen) -> Vec<Vec<F::
       lowest_k_bits_max - lowest_k_bits
     };
   }
-  vec![primary, secondary]
+
+  SplitLatents {
+    primary: DynLatents::new(primary).unwrap(),
+    secondary: Some(DynLatents::new(secondary).unwrap()),
+  }
 }
 
 pub(crate) fn compute_bid<F: Float>(sample: &[F]) -> Option<Bid<F>> {
@@ -179,16 +189,15 @@ mod test {
     let (nums, (_expected_ys, _expected_ms)): (Vec<_>, (Vec<_>, Vec<_>)) =
       expected.iter().cloned().unzip();
     let k: Bitlen = 5;
-    if let [ref mut ys, ms] = &mut split_latents(&nums, k)[..] {
-      let actual: Vec<_> = nums
-        .iter()
-        .cloned()
-        .zip(ys.iter().cloned().zip(ms.iter().cloned()))
-        .collect();
-      assert_eq!(expected, actual);
-    } else {
-      panic!("Bug: `split_latents` returned data in an unexpected format");
-    }
+    let SplitLatents { primary, secondary } = split_latents(&nums, k);
+    let primary = primary.downcast::<u32>().unwrap();
+    let secondary = secondary.unwrap().downcast::<u32>().unwrap();
+    let actual: Vec<_> = nums
+      .iter()
+      .cloned()
+      .zip(primary.iter().cloned().zip(secondary.iter().cloned()))
+      .collect();
+    assert_eq!(expected, actual);
   }
 
   #[test]
@@ -198,11 +207,12 @@ mod test {
       .iter()
       .map(|&num| num as f64)
       .collect();
-    if let [_, ms] = &split_latents(&nums, k)[..] {
-      assert!(ms.iter().all(|&m| m == 0u64));
-    } else {
-      panic!("Bug: `split_latents` returned data in an unexpected format");
-    }
+    let SplitLatents {
+      primary: _primary,
+      secondary,
+    } = split_latents(&nums, k);
+    let secondary = secondary.unwrap().downcast::<u64>().unwrap();
+    assert!(secondary.iter().all(|&m| m == 0u64));
   }
 
   #[test]
@@ -214,12 +224,10 @@ mod test {
       .collect::<Vec<_>>();
 
     let k: Bitlen = 5;
-    if let [ref mut ys, ms] = &mut split_latents(&nums, k)[..] {
-      join_latents::<f64>(k, ys, &ms);
-      assert_eq!(uints, *ys);
-    } else {
-      panic!("Bug: `split_latents` returned data in an unexpected format");
-    }
+    let SplitLatents { primary, secondary } = split_latents(&nums, k);
+    let mut primary = primary.downcast::<u64>().unwrap();
+    join_latents::<f64>(k, &mut primary, secondary.as_ref());
+    assert_eq!(uints, primary);
   }
 
   #[test]

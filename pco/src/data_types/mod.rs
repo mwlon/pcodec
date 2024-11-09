@@ -5,12 +5,15 @@ use std::ops::{
   Rem, RemAssign, Shl, Shr, Sub, SubAssign,
 };
 
-pub use dynamic::NumberType;
+pub use dynamic::{LatentType, NumberType};
 
 use crate::constants::Bitlen;
 use crate::describers::LatentDescriber;
 use crate::errors::PcoResult;
+use crate::metadata::dyn_latents::DynLatents;
+use crate::metadata::per_latent_var::PerLatentVar;
 use crate::metadata::{ChunkMeta, Mode};
+use crate::split_latents::SplitLatents;
 use crate::ChunkConfig;
 
 mod dynamic;
@@ -18,7 +21,7 @@ mod floats;
 mod signeds;
 mod unsigneds;
 
-pub(crate) type ModeAndLatents<L> = (Mode, Vec<Vec<L>>);
+pub(crate) type ModeAndLatents = (Mode, SplitLatents);
 
 /// This is used internally for compressing and decompressing with
 /// float modes.
@@ -74,7 +77,7 @@ pub(crate) trait Float:
   fn from_latent_numerical(l: Self::L) -> Self;
 }
 
-/// *unstable API* Trait for data types that behave like unsigned integers.
+/// **unstable API** Trait for data types that behave like unsigned integers.
 ///
 /// This is used extensively in `pco` to guarantee that bitwise
 /// operations like `>>` and `|=` are available and that certain properties
@@ -129,17 +132,18 @@ pub trait Latent:
   }
 }
 
-/// *unstable API* Trait for data types supported for compression/decompression.
+/// **unstable API** Trait for data types supported for compression/decompression.
 ///
-/// If you have a new data type you would like to add to the library or
-/// implement as custom in your own, these are the questions you need to
-/// answer:
+/// If you have a new data type you would like to add to the library or,
+/// these are the questions you need to answer:
 /// * What is the corresponding latent type? This is probably the
 ///   smallest unsigned integer with enough bits to represent the number.
 /// * How can I convert to this latent representation and back
 ///   in *a way that preserves ordering*? For instance, transmuting `f32` to `u32`
 ///   wouldn't preserve ordering and would cause pco to fail. In this example,
 ///   one needs to flip the sign bit and, if negative, the rest of the bits.
+///
+/// Custom data types (defined outside of pco) are not currently supported.
 pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + 'static {
   /// A number from 1-255 that corresponds to the number's data type.
   ///
@@ -154,13 +158,10 @@ pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + '
   /// `pco` data type implementation.
   const NUMBER_TYPE_BYTE: u8;
 
-  /// The latent this type can convert between to do
-  /// bitwise logic and such.
+  /// The latent this type can convert between to do bitwise logic and such.
   type L: Latent;
 
-  /// Returns a `LatentDescriber` for each latent variable in the chunk
-  /// metadata.
-  fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>>;
+  fn get_latent_describers(meta: &ChunkMeta) -> PerLatentVar<LatentDescriber>;
 
   fn mode_is_valid(mode: Mode) -> bool;
   /// Breaks the numbers into latent variables for better compression.
@@ -168,21 +169,26 @@ pub trait Number: Copy + Debug + Display + Default + PartialEq + Send + Sync + '
   /// Returns
   /// * mode: the [`Mode`] that will be stored alongside the data
   ///   for decompression
-  /// * latents: a list of latent variables, each of which contains a latent per
-  ///   num in `nums`
+  /// * latents: a primary and optionally secondary latent variable, each of
+  ///   which contains a latent per num in `nums`. Primary must be of the same
+  ///   latent type as T.
   fn choose_mode_and_split_latents(
     nums: &[Self],
     config: &ChunkConfig,
-  ) -> PcoResult<ModeAndLatents<Self::L>>;
+  ) -> PcoResult<ModeAndLatents>;
 
   fn from_latent_ordered(l: Self::L) -> Self;
   fn to_latent_ordered(self) -> Self::L;
-  fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]);
+  fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: Option<&DynLatents>);
 
   fn transmute_to_latents(slice: &mut [Self]) -> &mut [Self::L];
   fn transmute_to_latent(self) -> Self::L;
 }
 
-pub(crate) fn split_latents_classic<T: Number>(nums: &[T]) -> Vec<Vec<T::L>> {
-  vec![nums.iter().map(|&x| x.to_latent_ordered()).collect()]
+pub(crate) fn split_latents_classic<T: Number>(nums: &[T]) -> SplitLatents {
+  let primary = DynLatents::new(nums.iter().map(|&x| x.to_latent_ordered()).collect()).unwrap();
+  SplitLatents {
+    primary,
+    secondary: None,
+  }
 }

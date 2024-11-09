@@ -1,16 +1,16 @@
+use super::ModeAndLatents;
 use crate::constants::Bitlen;
 use crate::data_types::{split_latents_classic, Latent, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::{PcoError, PcoResult};
-use crate::metadata::{ChunkMeta, DynLatent, Mode};
+use crate::metadata::per_latent_var::PerLatentVar;
+use crate::metadata::{ChunkMeta, DynLatent, DynLatents, Mode};
 use crate::{describers, int_mult_utils, ChunkConfig, ModeSpec};
-
-use super::ModeAndLatents;
 
 pub fn choose_mode_and_split_latents<T: Number>(
   nums: &[T],
   config: &ChunkConfig,
-) -> PcoResult<ModeAndLatents<T::L>> {
+) -> PcoResult<ModeAndLatents> {
   match config.mode_spec {
     ModeSpec::Auto => {
       if let Some(base) = int_mult_utils::choose_base(nums) {
@@ -83,9 +83,9 @@ macro_rules! impl_unsigned_number {
 
       type L = Self;
 
-      fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>> {
+      fn get_latent_describers(meta: &ChunkMeta) -> PerLatentVar<LatentDescriber> {
         describers::match_classic_mode::<Self>(meta, "")
-          .or_else(|| describers::match_int_modes(meta, false))
+          .or_else(|| describers::match_int_modes::<Self>(meta, false))
           .expect("invalid mode for unsigned type")
       }
 
@@ -99,7 +99,7 @@ macro_rules! impl_unsigned_number {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> PcoResult<ModeAndLatents<Self::L>> {
+      ) -> PcoResult<ModeAndLatents> {
         choose_mode_and_split_latents(nums, config)
       }
 
@@ -111,7 +111,7 @@ macro_rules! impl_unsigned_number {
       fn to_latent_ordered(self) -> Self::L {
         self
       }
-      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]) {
+      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: Option<&DynLatents>) {
         match mode {
           Mode::Classic => (),
           Mode::IntMult(dyn_latent) => {

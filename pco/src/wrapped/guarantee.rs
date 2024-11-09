@@ -1,5 +1,6 @@
 use crate::data_types::Latent;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
+use crate::metadata::per_latent_var::PerLatentVar;
 use crate::metadata::{Bin, ChunkMeta, DeltaEncoding, DynBins, Mode};
 
 /// Returns the maximum possible byte size of a wrapped header.
@@ -8,26 +9,30 @@ pub fn header_size() -> usize {
 }
 
 pub(crate) fn baseline_chunk_meta<L: Latent>() -> ChunkMeta {
+  let primary = ChunkLatentVarMeta {
+    ans_size_log: 0,
+    bins: DynBins::new(vec![Bin {
+      weight: 1,
+      lower: L::ZERO,
+      offset_bits: L::BITS,
+    }])
+    .unwrap(),
+  };
+
   ChunkMeta {
     mode: Mode::Classic,
     delta_encoding: DeltaEncoding::None,
-    per_latent_var: vec![ChunkLatentVarMeta {
-      ans_size_log: 0,
-      bins: DynBins::new(vec![Bin {
-        weight: 1,
-        lower: L::ZERO,
-        offset_bits: L::BITS,
-      }])
-      .unwrap(),
-    }],
+    per_latent_var: PerLatentVar {
+      delta: None,
+      primary,
+      secondary: None,
+    },
   }
 }
 
 /// Returns the maximum possible byte size of a wrapped chunk for a given
 /// latent type (e.g. u32 or u64) and count of numbers.
 pub fn chunk_size<L: Latent>(n: usize) -> usize {
-  // TODO if we ever add Numbers that are smaller than their Latents, we
-  // may want to make this more generic
   baseline_chunk_meta::<L>().exact_size() + n * L::BITS.div_ceil(8) as usize
 }
 

@@ -441,6 +441,12 @@ impl PcoColumnReader {
       U64 => Arc::new(UInt64Array::from(simple_decompress::<u64>(
         &compressed,
       )?)),
+      other => {
+        return Err(anyhow!(
+          "number type {:?} not yet supported in pco_cli",
+          other
+        ))
+      }
     };
     Ok(array)
   }

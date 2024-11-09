@@ -3,9 +3,9 @@ use std::io::Write;
 use crate::bit_reader::BitReader;
 use crate::bit_writer::BitWriter;
 use crate::constants::Bitlen;
-use crate::data_types::Latent;
 use crate::errors::PcoResult;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
+use crate::metadata::per_latent_var::{PerLatentVar, PerLatentVarBuilder};
 use crate::metadata::ChunkMeta;
 
 // Data page metadata is slightly semantically different from chunk metadata,
@@ -15,37 +15,45 @@ use crate::metadata::ChunkMeta;
 // (wrapped mode).
 #[derive(Clone, Debug)]
 pub struct PageMeta {
-  pub per_latent_var: Vec<PageLatentVarMeta>,
+  pub per_latent_var: PerLatentVar<PageLatentVarMeta>,
 }
 
 impl PageMeta {
-  pub unsafe fn write_to<I: Iterator<Item = Bitlen>, W: Write>(
+  pub unsafe fn write_to<W: Write>(
     &self,
-    ans_size_logs: I,
+    ans_size_logs: PerLatentVar<Bitlen>,
     writer: &mut BitWriter<W>,
   ) {
-    for (latent_idx, ans_size_log) in ans_size_logs.enumerate() {
-      self.per_latent_var[latent_idx].write_to(ans_size_log, writer);
+    for (_, (ans_size_log, latent_var_meta)) in ans_size_logs
+      .zip_exact(self.per_latent_var.as_ref())
+      .enumerated()
+    {
+      latent_var_meta.write_to(ans_size_log, writer);
     }
     writer.finish_byte();
   }
 
-  pub unsafe fn read_from<L: Latent>(
-    reader: &mut BitReader,
-    chunk_meta: &ChunkMeta,
-  ) -> PcoResult<Self> {
-    let mut per_latent_var = Vec::with_capacity(chunk_meta.per_latent_var.len());
-    for (latent_idx, chunk_latent_var_meta) in chunk_meta.per_latent_var.iter().enumerate() {
-      per_latent_var.push(PageLatentVarMeta::read_from::<L>(
-        reader,
-        chunk_meta
-          .delta_encoding_for_latent_var(latent_idx)
-          .n_latents_per_state(),
-        chunk_latent_var_meta.ans_size_log,
-      )?);
+  pub unsafe fn read_from(reader: &mut BitReader, chunk_meta: &ChunkMeta) -> PcoResult<Self> {
+    let mut per_latent_var_builder = PerLatentVarBuilder::default();
+    for (key, chunk_latent_var_meta) in chunk_meta.per_latent_var.as_ref().enumerated() {
+      let n_latents_per_state = chunk_meta
+        .delta_encoding
+        .for_latent_var(key)
+        .n_latents_per_state();
+      per_latent_var_builder.set(
+        key,
+        PageLatentVarMeta::read_from(
+          reader,
+          chunk_latent_var_meta.latent_type(),
+          n_latents_per_state,
+          chunk_latent_var_meta.ans_size_log,
+        ),
+      )
     }
     reader.drain_empty_byte("non-zero bits at end of data page metadata")?;
 
-    Ok(Self { per_latent_var })
+    Ok(Self {
+      per_latent_var: per_latent_var_builder.into(),
+    })
   }
 }

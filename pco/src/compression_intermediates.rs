@@ -1,30 +1,45 @@
 use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING};
 use crate::data_types::{Latent, Number};
-use crate::metadata::Mode;
+use crate::delta::DeltaState;
+use crate::metadata::per_latent_var::{LatentVarKey, PerLatentVar};
+use crate::metadata::{DynLatents, Mode};
+use crate::split_latents::SplitLatents;
+use std::ops::Range;
+
+#[derive(Clone, Debug)]
+pub struct PageInfoVar {
+  pub delta_state: DeltaState,
+  pub range: Range<usize>,
+}
 
 #[derive(Clone, Debug)]
 pub struct PageInfo {
   pub page_n: usize,
-  pub start_idx: usize,
-  pub end_idx_per_var: Vec<usize>,
+  pub per_latent_var: PerLatentVar<PageInfoVar>,
+}
+
+impl PageInfo {
+  pub fn range_for_latent_var(&self, key: LatentVarKey) -> Range<usize> {
+    self.per_latent_var.get(key).unwrap().range.clone()
+  }
 }
 
 #[derive(Clone, Debug)]
-pub struct DissectedPageVar<L: Latent> {
+pub struct DissectedPageVar {
   // These vecs should have the same length.
   pub ans_vals: Vec<AnsState>,
   pub ans_bits: Vec<Bitlen>,
-  pub offsets: Vec<L>,
+  pub offsets: DynLatents,
   pub offset_bits: Vec<Bitlen>,
 
   pub ans_final_states: [AnsState; ANS_INTERLEAVING],
 }
 
 #[derive(Clone, Debug)]
-pub struct DissectedPage<L: Latent> {
+pub struct DissectedPage {
   pub page_n: usize,
-  pub per_latent_var: Vec<DissectedPageVar<L>>, // one per latent variable
+  pub per_latent_var: PerLatentVar<DissectedPageVar>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,5 +73,5 @@ pub(crate) struct Bid<T: Number> {
   // information (inv_base) not captured entirely in the mode.  This extra
   // information is an implementation detail of the compressor, not part of the
   // format itself, and is not / does not need to be known to the decompressor.
-  pub split_fn: Box<dyn FnOnce(&[T]) -> Vec<Vec<T::L>>>,
+  pub split_fn: Box<dyn FnOnce(&[T]) -> SplitLatents>,
 }

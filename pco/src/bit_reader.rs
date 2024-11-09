@@ -149,12 +149,17 @@ impl<'a> BitReader<'a> {
     self.consume(n);
     res
   }
+
   pub unsafe fn read_usize(&mut self, n: Bitlen) -> usize {
     self.read_uint(n)
   }
 
   pub unsafe fn read_bitlen(&mut self, n: Bitlen) -> Bitlen {
     self.read_uint(n)
+  }
+
+  pub unsafe fn read_bool(&mut self) -> bool {
+    self.read_uint::<u32>(1) > 0
   }
 
   // checks in bounds and returns bit idx

@@ -3,7 +3,8 @@ use std::mem;
 use crate::data_types::{unsigneds, ModeAndLatents, Number};
 use crate::describers::LatentDescriber;
 use crate::errors::PcoResult;
-use crate::metadata::{ChunkMeta, Mode};
+use crate::metadata::per_latent_var::PerLatentVar;
+use crate::metadata::{ChunkMeta, DynLatents, Mode};
 use crate::{describers, int_mult_utils, ChunkConfig};
 
 macro_rules! impl_signed {
@@ -13,9 +14,9 @@ macro_rules! impl_signed {
 
       type L = $latent;
 
-      fn get_latent_describers(meta: &ChunkMeta) -> Vec<LatentDescriber<Self::L>> {
+      fn get_latent_describers(meta: &ChunkMeta) -> PerLatentVar<LatentDescriber> {
         describers::match_classic_mode::<Self>(meta, "")
-          .or_else(|| describers::match_int_modes(meta, true))
+          .or_else(|| describers::match_int_modes::<Self::L>(meta, true))
           .expect("invalid mode for signed type")
       }
 
@@ -29,7 +30,7 @@ macro_rules! impl_signed {
       fn choose_mode_and_split_latents(
         nums: &[Self],
         config: &ChunkConfig,
-      ) -> PcoResult<ModeAndLatents<Self::L>> {
+      ) -> PcoResult<ModeAndLatents> {
         unsigneds::choose_mode_and_split_latents(&nums, config)
       }
 
@@ -41,7 +42,7 @@ macro_rules! impl_signed {
       fn to_latent_ordered(self) -> Self::L {
         self.wrapping_sub(Self::MIN) as $latent
       }
-      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: &[Self::L]) {
+      fn join_latents(mode: Mode, primary: &mut [Self::L], secondary: Option<&DynLatents>) {
         match mode {
           Mode::Classic => (),
           Mode::IntMult(dyn_latent) => {

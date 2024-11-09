@@ -12,13 +12,14 @@
 #![deny(clippy::unused_unit)]
 #![deny(dead_code)]
 
-pub use chunk_config::{ChunkConfig, DeltaSpec, ModeSpec, PagingSpec};
-pub use constants::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_MAX_PAGE_N, FULL_BATCH_N};
-pub use progress::Progress;
-
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)]
 struct ReadmeDoctest;
+
+pub use chunk_config::{ChunkConfig, DeltaSpec, ModeSpec, PagingSpec};
+pub use constants::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_MAX_PAGE_N, FULL_BATCH_N};
+pub use progress::Progress;
+pub use split_latents::SplitLatents;
 
 pub mod data_types;
 /// for inspecting certain types of Pco metadata
@@ -45,14 +46,15 @@ mod float_mult_utils;
 mod float_quant_utils;
 mod histograms;
 mod int_mult_utils;
-mod latent_batch_decompressor;
 mod latent_batch_dissector;
 mod latent_chunk_compressor;
+mod latent_page_decompressor;
 mod macros;
 mod progress;
 mod read_write_uint;
 mod sampling;
 mod sort_utils;
+mod split_latents;
 
 #[cfg(test)]
 mod tests;

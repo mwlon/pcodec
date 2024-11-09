@@ -63,6 +63,11 @@ pub enum DeltaSpec {
   /// deltas-of-deltas, etc.
   /// It is legal to use 0th order, but it is identical to `None`.
   TryConsecutive(usize),
+  /// Tries delta encoding according to an extra latent variable of "lookback".
+  ///
+  /// This can improve compression ratio when there are nontrivial patterns in
+  /// your numbers, but reduces compression speed substantially.
+  TryLookback,
 }
 
 // TODO consider adding a "lossiness" spec that allows dropping secondary latent

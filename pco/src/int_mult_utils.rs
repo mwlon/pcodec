@@ -5,14 +5,16 @@ use std::mem;
 
 use crate::constants::MULT_REQUIRED_BITS_SAVED_PER_NUM;
 use crate::data_types::{Latent, Number};
+use crate::metadata::DynLatents;
 use crate::sampling::{self, PrimaryLatentAndSavings};
+use crate::split_latents::SplitLatents;
 
 // riemann zeta function
 const ZETA_OF_2: f64 = PI * PI / 6.0;
 const LCB_RATIO: f64 = 1.0;
 
 #[inline(never)]
-pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
+pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> SplitLatents {
   let n = nums.len();
   let mut mults = Vec::with_capacity(n);
   let mut adjs = Vec::with_capacity(n);
@@ -26,11 +28,16 @@ pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> Vec<Vec<T::L>> {
     *mult_dst = u / base;
     *adj_dst = u % base;
   }
-  vec![mults, adjs]
+
+  SplitLatents {
+    primary: DynLatents::new(mults).unwrap(),
+    secondary: Some(DynLatents::new(adjs).unwrap()),
+  }
 }
 
 #[inline(never)]
-pub(crate) fn join_latents<L: Latent>(base: L, primary: &mut [L], secondary: &[L]) {
+pub(crate) fn join_latents<L: Latent>(base: L, primary: &mut [L], secondary: Option<&DynLatents>) {
+  let secondary = secondary.unwrap().downcast_ref::<L>().unwrap();
   for (mult_and_dst, &adj) in primary.iter_mut().zip(secondary.iter()) {
     *mult_and_dst = (*mult_and_dst * base).wrapping_add(adj);
   }
@@ -249,15 +256,19 @@ mod tests {
     let nums = vec![8_u32, 1, 5];
     let base = 4_u32;
     let latents = split_latents(&nums, base);
-    assert_eq!(latents.len(), 2);
-    assert_eq!(latents[0], vec![2_u32, 0, 1]);
-    assert_eq!(latents[1], vec![0_u32, 1, 1]);
+    let mut primary = latents.primary.downcast::<u32>().unwrap();
+    let secondary = latents.secondary.unwrap().downcast::<u32>().unwrap();
+    assert_eq!(&primary, &vec![2_u32, 0, 1]);
+    assert_eq!(&secondary, &vec![0_u32, 1, 1]);
 
     // JOIN
-    let mut primary_and_dst = latents[0].to_vec();
-    join_latents(base, &mut primary_and_dst, &latents[1]);
+    join_latents(
+      base,
+      &mut primary,
+      DynLatents::new(secondary).as_ref(),
+    );
 
-    assert_eq!(primary_and_dst, nums);
+    assert_eq!(primary, nums);
   }
 
   #[test]

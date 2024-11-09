@@ -5,9 +5,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule};
 use pyo3::{pyclass, pymethods, Bound, PyResult, Python};
 
-use pco::data_types::{Latent, Number, NumberType};
+use pco::data_types::{Number, NumberType};
 use pco::wrapped::{ChunkCompressor, FileCompressor};
-use pco::{match_latent_enum, match_number_enum, ChunkConfig};
+use pco::{match_number_enum, ChunkConfig};
 
 use crate::utils::pco_err_to_py;
 use crate::{utils, PyChunkConfig};
@@ -18,15 +18,10 @@ struct PyFc {
   inner: FileCompressor,
 }
 
-pco::define_latent_enum!(
-  #[derive()]
-  DynCc(ChunkCompressor)
-);
-
 // can't pass inner directly since pyo3 only supports unit variant enums
 /// Holds metadata about a chunk and supports compressing one page at a time.
 #[pyclass(name = "ChunkCompressor")]
-struct PyCc(DynCc);
+struct PyCc(ChunkCompressor);
 
 impl PyFc {
   fn chunk_compressor_generic<T: Number + Element>(
@@ -34,7 +29,7 @@ impl PyFc {
     py: Python,
     arr: &Bound<PyArray1<T>>,
     config: &ChunkConfig,
-  ) -> PyResult<ChunkCompressor<T::L>> {
+  ) -> PyResult<ChunkCompressor> {
     let arr_ro = arr.readonly();
     let src = arr_ro.as_slice()?;
     py.allow_threads(|| self.inner.chunk_compressor(src, config))
@@ -87,7 +82,7 @@ impl PyFc {
       number_type,
       NumberType<T> => {
         let cc = self.chunk_compressor_generic::<T>(py, nums.downcast::<PyArray1<T>>()?, &config)?;
-        Ok(PyCc(DynCc::new(cc).unwrap()))
+        Ok(PyCc(cc))
       }
     )
   }
@@ -99,22 +94,14 @@ impl PyCc {
   ///
   /// :raises: TypeError, RuntimeError
   fn write_chunk_meta<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-    match_latent_enum!(
-      &self.0,
-      DynCc<T>(cc) => {
-        let mut res = Vec::new();
-        cc.write_chunk_meta(&mut res).map_err(pco_err_to_py)?;
-        Ok(PyBytes::new_bound(py, &res))
-      }
-    )
+    let mut res = Vec::new();
+    self.0.write_chunk_meta(&mut res).map_err(pco_err_to_py)?;
+    Ok(PyBytes::new_bound(py, &res))
   }
 
   /// :returns: a list containing the count of numbers in each page.
   fn n_per_page(&self) -> Vec<usize> {
-    match_latent_enum!(
-      &self.0,
-      DynCc<T>(cc) => { cc.n_per_page() }
-    )
+    self.0.n_per_page()
   }
 
   /// :param page_idx: an int for which page you want to write.
@@ -123,15 +110,10 @@ impl PyCc {
   ///
   /// :raises: TypeError, RuntimeError
   fn write_page<'py>(&self, py: Python<'py>, page_idx: usize) -> PyResult<Bound<'py, PyBytes>> {
-    match_latent_enum!(
-      &self.0,
-      DynCc<T>(cc) => {
-        let mut res = Vec::new();
-        py.allow_threads(|| cc.write_page(page_idx, &mut res))
-          .map_err(pco_err_to_py)?;
-        Ok(PyBytes::new_bound(py, &res))
-      }
-    )
+    let mut res = Vec::new();
+    py.allow_threads(|| self.0.write_page(page_idx, &mut res))
+      .map_err(pco_err_to_py)?;
+    Ok(PyBytes::new_bound(py, &res))
   }
 }
 

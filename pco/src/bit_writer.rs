@@ -129,6 +129,10 @@ impl<W: Write> BitWriter<W> {
     self.write_uint(x, n)
   }
 
+  pub unsafe fn write_bool(&mut self, b: bool) {
+    self.write_uint(b as u32, 1)
+  }
+
   pub fn finish_byte(&mut self) {
     self.stale_byte_idx += self.bits_past_byte.div_ceil(8) as usize;
     self.bits_past_byte = 0;
@@ -152,6 +156,11 @@ impl<W: Write> BitWriter<W> {
 
   pub fn into_inner(self) -> W {
     self.dst
+  }
+
+  #[cfg(test)]
+  pub fn bit_idx(&self) -> usize {
+    self.stale_byte_idx * 8 + self.bits_past_byte as usize
   }
 }
 
