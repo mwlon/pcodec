@@ -3,10 +3,10 @@ use std::mem;
 
 use crate::compression_intermediates::Bid;
 use crate::constants::{Bitlen, MULT_REQUIRED_BITS_SAVED_PER_NUM};
+use crate::data_types::SplitLatents;
 use crate::data_types::{Float, Latent};
 use crate::metadata::{DynLatents, Mode};
 use crate::sampling::PrimaryLatentAndSavings;
-use crate::split_latents::SplitLatents;
 use crate::{int_mult_utils, sampling};
 
 #[inline(never)]

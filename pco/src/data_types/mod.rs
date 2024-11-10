@@ -6,6 +6,7 @@ use std::ops::{
 };
 
 pub use dynamic::{LatentType, NumberType};
+pub use split_latents::SplitLatents;
 
 use crate::constants::Bitlen;
 use crate::describers::LatentDescriber;
@@ -13,12 +14,12 @@ use crate::errors::PcoResult;
 use crate::metadata::dyn_latents::DynLatents;
 use crate::metadata::per_latent_var::PerLatentVar;
 use crate::metadata::{ChunkMeta, Mode};
-use crate::split_latents::SplitLatents;
 use crate::ChunkConfig;
 
 mod dynamic;
 mod floats;
 mod signeds;
+mod split_latents;
 mod unsigneds;
 
 pub(crate) type ModeAndLatents = (Mode, SplitLatents);

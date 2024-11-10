@@ -1,10 +1,10 @@
 use crate::ans::{AnsState, Symbol};
 use crate::constants::{Bitlen, Weight, ANS_INTERLEAVING};
+use crate::data_types::SplitLatents;
 use crate::data_types::{Latent, Number};
 use crate::delta::DeltaState;
 use crate::metadata::per_latent_var::{LatentVarKey, PerLatentVar};
 use crate::metadata::{DynLatents, Mode};
-use crate::split_latents::SplitLatents;
 use std::ops::Range;
 
 #[derive(Clone, Debug)]

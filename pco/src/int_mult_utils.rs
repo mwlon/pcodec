@@ -4,10 +4,10 @@ use std::f64::consts::PI;
 use std::mem;
 
 use crate::constants::MULT_REQUIRED_BITS_SAVED_PER_NUM;
+use crate::data_types::SplitLatents;
 use crate::data_types::{Latent, Number};
 use crate::metadata::DynLatents;
 use crate::sampling::{self, PrimaryLatentAndSavings};
-use crate::split_latents::SplitLatents;
 
 // riemann zeta function
 const ZETA_OF_2: f64 = PI * PI / 6.0;

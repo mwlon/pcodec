@@ -6,6 +6,7 @@ use crate::constants::{
   Bitlen, Weight, LIMITED_UNOPTIMIZED_BINS_LOG, MAX_COMPRESSION_LEVEL, MAX_DELTA_ENCODING_ORDER,
   MAX_ENTRIES, OVERSHOOT_PADDING, PAGE_PADDING,
 };
+use crate::data_types::SplitLatents;
 use crate::data_types::{Latent, LatentType, Number};
 use crate::delta::DeltaState;
 use crate::errors::{PcoError, PcoResult};
@@ -22,7 +23,6 @@ use crate::metadata::page::PageMeta;
 use crate::metadata::page_latent_var::PageLatentVarMeta;
 use crate::metadata::per_latent_var::{LatentVarKey, PerLatentVar, PerLatentVarBuilder};
 use crate::metadata::{Bin, ChunkMeta, DeltaEncoding, Mode};
-use crate::split_latents::SplitLatents;
 use crate::wrapped::guarantee;
 use crate::{
   ans, bin_optimization, bits, data_types, delta, ChunkConfig, PagingSpec, FULL_BATCH_N,
