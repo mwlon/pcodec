@@ -77,10 +77,6 @@ pub(crate) fn compute_bid<F: Float>(sample: &[F]) -> Option<Bid<F>> {
     }
   });
   if bits_saved_per_num > QUANT_REQUIRED_BITS_SAVED_PER_NUM {
-    println!(
-      "K {} BITS SAVED {}",
-      k, bits_saved_per_infrequent_primary
-    );
     Some(Bid {
       mode: Mode::FloatQuant(k),
       bits_saved_per_num,
@@ -104,22 +100,21 @@ fn estimate_best_k_and_bits_saved_from_hist(
   // We just want the first one, since later ones are likely to make the
   // distribution of (x >> k) degenerate and easily-memorizable.
   for (k, &occurrences) in cumulative_hist.iter().enumerate().skip(1) {
-    if occurrences == 0 {
+    // Here we borrow the worst case bits saved approach from int mult utils,
+    // taking a lower confidence bound estimate for the number of occurrences.
+    // And then we consider the worst case, where the probability distribution
+    // of adjustments has a spike at 0 and is uniform elsewhere.
+    let occurrences = occurrences as f64;
+    let occurrences = occurrences - int_mult_utils::LCB_RATIO * occurrences.sqrt();
+    if occurrences <= 0.0 {
       continue;
     }
 
-    let freq = occurrences as f64 / sample_len;
-    // Here we borrow the worst case bits saved approach from int mult utils,
-    // assuming the probability distribution of adjustments will have a spike
-    // at 0 and be uniform elsewhere.
+    let freq = occurrences / sample_len;
     let n_categories = (1_u64 << k) - 1;
     let worst_case_bits_per_infrequent_primary =
       int_mult_utils::worse_case_categorical_entropy(freq, n_categories as f64);
     let bits_saved_per_infrequent_primary = k as f64 - worst_case_bits_per_infrequent_primary;
-    println!(
-      "  k {}:  {} {} {}",
-      k, freq, worst_case_bits_per_infrequent_primary, bits_saved_per_infrequent_primary
-    );
     if bits_saved_per_infrequent_primary > best_bits_saved {
       best_k = k as Bitlen;
       best_bits_saved = bits_saved_per_infrequent_primary;
