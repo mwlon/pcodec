@@ -104,12 +104,11 @@ fn estimate_best_k_and_bits_saved_from_hist(
     // taking a lower confidence bound estimate for the number of occurrences.
     // And then we consider the worst case, where the probability distribution
     // of adjustments has a spike at 0 and is uniform elsewhere.
-    let occurrences = occurrences as f64;
-    let occurrences = occurrences - int_mult_utils::LCB_RATIO * occurrences.sqrt();
-    if occurrences <= 0.0 {
+    if occurrences == 0 {
       continue;
     }
 
+    let occurrences = occurrences as f64;
     let freq = occurrences / sample_len;
     let n_categories = (1_u64 << k) - 1;
     let worst_case_bits_per_infrequent_primary =
