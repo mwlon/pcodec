@@ -2,11 +2,10 @@ use crate::compression_intermediates::Bid;
 use crate::constants::{Bitlen, QUANT_REQUIRED_BITS_SAVED_PER_NUM};
 use crate::data_types::SplitLatents;
 use crate::data_types::{Float, Latent};
+use crate::int_mult_utils;
 use crate::metadata::{DynLatents, Mode};
 use crate::sampling::{self, PrimaryLatentAndSavings};
 use std::cmp;
-
-const REQUIRED_QUANTIZED_PROPORTION: f64 = 0.95;
 
 #[inline(never)]
 pub(crate) fn join_latents<F: Float>(
@@ -69,15 +68,7 @@ pub(crate) fn split_latents<F: Float>(page_nums: &[F], k: Bitlen) -> SplitLatent
 }
 
 pub(crate) fn compute_bid<F: Float>(sample: &[F]) -> Option<Bid<F>> {
-  let (k, freq) = estimate_best_k_and_freq(sample);
-  // Nothing fancy, we simply estimate that quantizing by k bits results in
-  // saving k bits per number, whenever possible. This is based on the
-  // assumption that FloatQuant will usually be used on datasets that are
-  // exactly quantized.
-  // TODO one day, if float quant has false positives, we may want a more
-  // precise estimes of bits saved. This one is overly generous when the
-  // secondary latent is nontrivial.
-  let bits_saved_per_infrequent_primary = freq * (k as f64);
+  let (k, bits_saved_per_infrequent_primary) = estimate_best_k_and_bits_saved(sample);
   let bits_saved_per_num = sampling::est_bits_saved_per_num(sample, |x| {
     let primary = x.to_latent_bits() >> k;
     PrimaryLatentAndSavings {
@@ -96,9 +87,45 @@ pub(crate) fn compute_bid<F: Float>(sample: &[F]) -> Option<Bid<F>> {
   }
 }
 
-#[inline(never)]
-pub(crate) fn estimate_best_k_and_freq<F: Float>(sample: &[F]) -> (Bitlen, f64) {
-  let thresh = (REQUIRED_QUANTIZED_PROPORTION * sample.len() as f64) as usize;
+fn estimate_best_k_and_bits_saved_from_hist(
+  cumulative_hist: &[u32],
+  sample_len: usize,
+) -> (Bitlen, f64) {
+  let sample_len = sample_len as f64;
+  let mut best_k = 0;
+  let mut best_bits_saved = 0.0;
+
+  // There may be multiple local maxima in the function from
+  // k -> bits_saved_per_infrequent_primary.
+  // We just want the first one, since later ones are likely to make the
+  // distribution of (x >> k) degenerate and easily-memorizable.
+  for (k, &occurrences) in cumulative_hist.iter().enumerate().skip(1) {
+    // Here we borrow the worst case bits saved approach from int mult utils,
+    // taking a lower confidence bound estimate for the number of occurrences.
+    // And then we consider the worst case, where the probability distribution
+    // of adjustments has a spike at 0 and is uniform elsewhere.
+    if occurrences == 0 {
+      continue;
+    }
+
+    let occurrences = occurrences as f64;
+    let freq = occurrences / sample_len;
+    let n_categories = (1_u64 << k) - 1;
+    let worst_case_bits_per_infrequent_primary =
+      int_mult_utils::worse_case_categorical_entropy(freq, n_categories as f64);
+    let bits_saved_per_infrequent_primary = k as f64 - worst_case_bits_per_infrequent_primary;
+    if bits_saved_per_infrequent_primary > best_bits_saved {
+      best_k = k as Bitlen;
+      best_bits_saved = bits_saved_per_infrequent_primary;
+    } else {
+      break;
+    }
+  }
+
+  (best_k, best_bits_saved)
+}
+
+pub(crate) fn estimate_best_k_and_bits_saved<F: Float>(sample: &[F]) -> (Bitlen, f64) {
   let mut hist = vec![0; (F::PRECISION_BITS + 1) as usize];
   for x in sample {
     // Using the fact that significand bits come last in
@@ -107,18 +134,15 @@ pub(crate) fn estimate_best_k_and_freq<F: Float>(sample: &[F]) -> (Bitlen, f64) 
     hist[trailing_mantissa_zeros as usize] += 1
   }
 
+  // turn it into a cumulative histogram from k -> # of samples with *at least*
+  // k trailing bits
   let mut rev_csum = 0;
-  for (k, &occurrences) in hist.iter().enumerate().rev() {
-    rev_csum += occurrences;
-    if rev_csum >= thresh {
-      return (
-        k as Bitlen,
-        rev_csum as f64 / sample.len() as f64,
-      );
-    }
+  for x in hist.iter_mut().rev() {
+    rev_csum += *x;
+    *x = rev_csum;
   }
 
-  unreachable!("nums should be nonempty")
+  estimate_best_k_and_bits_saved_from_hist(&hist, sample.len())
 }
 
 #[cfg(test)]
@@ -132,22 +156,19 @@ mod test {
     // all but the last of these have 21 out of 23 mantissa bits zeroed
     let mut sample = vec![1.0_f32, 1.25, -1.5, 1.75, -0.875, 0.75, 0.625].repeat(3);
     sample.push(f32::from_bits(1.0_f32.to_bits() + 1));
-    let (k, freq) = estimate_best_k_and_freq(&sample);
+    let (k, bits_saved) = estimate_best_k_and_bits_saved(&sample);
     assert_eq!(k, 21);
-    assert_eq!(
-      freq,
-      (sample.len() - 1) as f64 / (sample.len() as f64)
-    );
-    assert!(freq >= REQUIRED_QUANTIZED_PROPORTION);
+    assert!(bits_saved < 21.0);
+    assert!(bits_saved > 10.0);
   }
 
   #[test]
   fn test_estimate_best_k_full_precision() {
     // all elements have all 52 mantissa bits zeroed
     let sample = vec![1.0_f64; 20];
-    let (k, freq) = estimate_best_k_and_freq(&sample);
+    let (k, bits_saved) = estimate_best_k_and_bits_saved(&sample);
     assert_eq!(k, 52);
-    assert_eq!(freq, 1.0);
+    assert_eq!(bits_saved, 52.0);
   }
 
   #[test]

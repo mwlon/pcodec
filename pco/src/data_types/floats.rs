@@ -17,7 +17,7 @@ use crate::{describers, float_mult_utils, float_quant_utils, sampling, ChunkConf
 fn filter_sample<F: Float>(num: &F) -> Option<F> {
   // We can compress infinities, nans, and baby floats, but we can't learn
   // the mode from them.
-  if num.is_finite_and_normal() {
+  if num.is_normal() {
     let abs = num.abs();
     if abs <= F::MAX_FOR_SAMPLING {
       return Some(abs);
@@ -117,8 +117,8 @@ macro_rules! impl_float {
       }
 
       #[inline]
-      fn is_finite_and_normal(&self) -> bool {
-        self.is_finite() && !self.is_subnormal()
+      fn is_normal(self) -> bool {
+        self.is_normal()
       }
 
       #[inline]
@@ -233,8 +233,8 @@ impl Float for f16 {
   }
 
   #[inline]
-  fn is_finite_and_normal(&self) -> bool {
-    self.is_finite() && self.is_normal()
+  fn is_normal(self) -> bool {
+    self.is_normal()
   }
 
   #[inline]
@@ -330,7 +330,7 @@ macro_rules! impl_float_number {
           Mode::Classic => true,
           Mode::FloatMult(dyn_latent) => {
             let base_latent = *dyn_latent.downcast_ref::<Self::L>().unwrap();
-            Self::from_latent_ordered(base_latent).is_finite_and_normal()
+            Self::from_latent_ordered(base_latent).is_normal()
           }
           Mode::FloatQuant(k) => k <= Self::PRECISION_BITS,
           _ => false,

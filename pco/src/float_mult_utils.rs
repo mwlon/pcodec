@@ -141,7 +141,7 @@ fn approx_pair_gcd<F: Float>(greater: F, lesser: F) -> Option<F> {
 fn choose_config_by_trailing_zeros<F: Float>(sample: &[F]) -> Option<FloatMultConfig<F>> {
   let precision_bits = F::PRECISION_BITS;
   let calc_power_of_2_divisor =
-    |exponent, trailing_zeros| exponent - (precision_bits.saturating_sub(trailing_zeros)) as i32;
+    |exponent, trailing_zeros| exponent - precision_bits.saturating_sub(trailing_zeros) as i32;
 
   // the greatest k such that 2^k divides all the floats exactly
   let mut k = i32::MAX;

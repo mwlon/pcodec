@@ -103,12 +103,17 @@ fn calc_triple_gcd<L: Latent>(triple: &[L]) -> L {
   calc_gcd(b - a, c - a)
 }
 
-fn categorical_entropy(p: f64) -> f64 {
+fn single_category_entropy(p: f64) -> f64 {
   if p == 0.0 || p == 1.0 {
     0.0
   } else {
     -p * p.log2()
   }
+}
+
+pub(crate) fn worse_case_categorical_entropy(concentrated_p: f64, n_categories_m1: f64) -> f64 {
+  single_category_entropy(concentrated_p)
+    + n_categories_m1 * single_category_entropy((1.0 - concentrated_p) / n_categories_m1)
 }
 
 fn filter_score_triple_gcd(gcd: f64, triples_w_gcd: usize, total_triples: usize) -> Option<f64> {
@@ -144,7 +149,7 @@ fn filter_score_triple_gcd(gcd: f64, triples_w_gcd: usize, total_triples: usize)
   let congruence_prob_per_triple_lcb = (ZETA_OF_2 * triples_w_gcd_lcb / total_triples).min(1.0);
 
   // 3. Measure and score by the number of bits saved by using this modulus,
-  // as opposed to just a uniform distribution over [0, GCD)).
+  // as opposed to just a uniform distribution over [0, GCD).
   // If the distribution modulo the GCD has entropy H, this is
   // log_2(GCD) - H.
   // To calculate H, we consider the worst case: the probability is concentrated
@@ -173,8 +178,7 @@ fn filter_score_triple_gcd(gcd: f64, triples_w_gcd: usize, total_triples: usize)
   //   converges annoyingly slowly in some cases.
   // So instead we use the method of false position.
   let concentrated_p = solve_root_by_false_position(f, lb, ub)?;
-  let worst_case_entropy_mod_gcd = categorical_entropy(concentrated_p)
-    + gcd_m1 * categorical_entropy((1.0 - concentrated_p) / gcd_m1);
+  let worst_case_entropy_mod_gcd = worse_case_categorical_entropy(concentrated_p, gcd_m1);
   let worst_case_bits_saved = gcd.log2() - worst_case_entropy_mod_gcd;
   if worst_case_bits_saved < MULT_REQUIRED_BITS_SAVED_PER_NUM {
     return None;
