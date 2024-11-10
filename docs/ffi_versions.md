@@ -15,3 +15,4 @@ from somewhere in between `a.b.c` whatever Rust version follows that.
 | 0.1.1                   | 0.2.5              |
 | 0.2.0                   | 0.3.0              |
 | 0.3.0                   | 0.4.0-alpha        |
+| 0.3.1                   | 0.4.0              |

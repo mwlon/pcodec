@@ -1280,7 +1280,7 @@ dependencies = [
 
 [[package]]
 name = "pco_cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -1305,7 +1305,7 @@ dependencies = [
 
 [[package]]
 name = "pco_python"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "half",
  "numpy",
