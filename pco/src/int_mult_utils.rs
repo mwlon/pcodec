@@ -11,7 +11,7 @@ use crate::sampling::{self, PrimaryLatentAndSavings};
 
 // riemann zeta function
 const ZETA_OF_2: f64 = PI * PI / 6.0;
-pub(crate) const LCB_RATIO: f64 = 1.0;
+const LCB_RATIO: f64 = 1.0;
 
 #[inline(never)]
 pub fn split_latents<T: Number>(nums: &[T], base: T::L) -> SplitLatents {
