@@ -25,7 +25,7 @@ metadata component:
 
 Plate notation for page component:
 
-<img alt="Pco wrapped page plate notation" src="../images/wrapped_page_plate.svg" width="500px"/>
+<img alt="Pco wrapped page plate notation" src="../images/wrapped_page_plate.svg" width="420px"/>
 
 ### Header
 
