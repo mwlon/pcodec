@@ -17,14 +17,14 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.71"
-arrow = { version = "49.0.0", features = ["csv"], default-features = false }
+arrow = { version = "53.0.0", features = ["csv"], default-features = false }
 better_io = { version = "0.1.0", path = "../better_io" }
 blosc-src = { version = "0.3", features = ["zstd"], optional = true }
 bytes = "1.4.0"
 clap = { version = "4.5.3", features = ["derive"] }
 half = { version = "2.1.0", features = ["std"] }
 indicatif = "0.17.8"
-parquet = { version = "49.0.0", features = [
+parquet = { version = "53.0.0", features = [
   "arrow",
   "base64",
   "snap",
