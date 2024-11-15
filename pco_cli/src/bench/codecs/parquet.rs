@@ -115,18 +115,13 @@ impl CodecInternal for ParquetConfig {
     }
 
     let mut res = Vec::with_capacity(n as usize);
-    unsafe {
-      res.set_len(n as usize);
-    }
-    let mut start = 0;
     for i in 0..parquet_meta.num_row_groups() {
       let row_group_reader = reader.get_row_group(i).unwrap();
       let mut col_reader =
         get_typed_column_reader::<T::Parquet>(row_group_reader.get_column_reader(0).unwrap());
-      let (n_records_read, _, _) = col_reader
-        .read_records(usize::MAX, None, None, &mut res[start..])
+      col_reader
+        .read_records(usize::MAX, None, None, &mut res)
         .unwrap();
-      start += n_records_read
     }
 
     T::parquet_to_nums(res)
