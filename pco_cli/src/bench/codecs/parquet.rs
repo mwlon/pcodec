@@ -92,9 +92,14 @@ impl CodecInternal for ParquetConfig {
       let mut row_group_writer = writer.next_row_group().unwrap();
       let mut col_writer = row_group_writer.next_column().unwrap().unwrap();
       let typed = col_writer.typed::<T::Parquet>();
-      typed
-        .write_batch(T::nums_to_parquet(col_chunk), None, None)
-        .unwrap();
+      let parquet_vec;
+      let parquet_slice = if T::TRANSMUTABLE {
+        T::transmute_nums_to_parquet(col_chunk)
+      } else {
+        parquet_vec = T::copy_nums_to_parquet(col_chunk);
+        &parquet_vec
+      };
+      typed.write_batch(parquet_slice, None, None).unwrap();
       col_writer.close().unwrap();
       row_group_writer.close().unwrap();
     }

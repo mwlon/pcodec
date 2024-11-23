@@ -9,6 +9,7 @@ fn unparse_delta_spec(spec: &DeltaSpec) -> String {
     DeltaSpec::Auto => "Auto".to_string(),
     DeltaSpec::None => "None".to_string(),
     DeltaSpec::TryConsecutive(order) => format!("Consecutive@{}", order),
+    DeltaSpec::TryLookback => "Lookback".to_string(),
     _ => "Unknown".to_string(),
   }
 }

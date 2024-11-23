@@ -6,7 +6,11 @@ use crate::data_types::Latent;
 use crate::histograms::HistogramBin;
 use crate::metadata::Bin;
 
+// vec of [start_bin_idx, end_bin_idx], inclusive
+type Partitioning = Vec<(usize, usize)>;
+
 const SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
+const TRIVIAL_OFFSET_SPEEDUP_WORTH_IN_BITS_PER_NUM: f32 = 0.1;
 
 // using f32 instead of f64 because the .log2() is faster
 fn bin_cost<L: Latent>(
@@ -27,6 +31,31 @@ fn bin_cost<L: Latent>(
   bin_meta_cost + (ans_cost + offset_cost) * count
 }
 
+fn calc_trivial_offset_partitioning<L: Latent>(
+  bin_meta_cost: f32,
+  total_count_log2: f32,
+  bins: &[HistogramBin<L>],
+) -> Option<(Partitioning, f32)> {
+  if bins.iter().any(|bin| bin.lower != bin.upper) {
+    return None;
+  }
+
+  let partitioning: Vec<_> = (0..bins.len()).map(|i| (i, i)).collect();
+  let cost = bins
+    .iter()
+    .map(|bin| {
+      bin_cost(
+        bin_meta_cost,
+        bin.lower,
+        bin.upper,
+        bin.count as Weight,
+        total_count_log2,
+      )
+    })
+    .sum();
+  Some((partitioning, cost))
+}
+
 // Combines consecutive unoptimized bins and returns a vec of (j, i) where
 // j and i are the inclusive indices of a group of bins to combine together.
 // This algorithm is exactly optimal, assuming our cost estimates (measured in
@@ -34,7 +63,7 @@ fn bin_cost<L: Latent>(
 fn choose_optimized_partitioning<L: Latent>(
   bins: &[HistogramBin<L>],
   ans_size_log: Bitlen,
-) -> Vec<(usize, usize)> {
+) -> Partitioning {
   let mut c = 0;
   let mut c_counts_and_best_costs = Vec::with_capacity(bins.len() + 1);
   // To keep improve performance a bit, we put cumulative count and best cost
@@ -84,6 +113,8 @@ fn choose_optimized_partitioning<L: Latent>(
     best_partitioning.push((best_j, i));
     best_partitionings.push(best_partitioning);
   }
+  let &(_, best_cost) = c_counts_and_best_costs.last().unwrap();
+  let best_partitioning = best_partitionings.last().unwrap().clone();
 
   let single_bin_partitioning = vec![(0_usize, bins.len() - 1)];
   let single_bin_cost = bin_cost(
@@ -93,12 +124,21 @@ fn choose_optimized_partitioning<L: Latent>(
     total_count,
     total_count_log2,
   );
-  let &(_, best_cost) = c_counts_and_best_costs.last().unwrap();
   if single_bin_cost < best_cost + SINGLE_BIN_SPEEDUP_WORTH_IN_BITS_PER_NUM * total_count as f32 {
-    single_bin_partitioning
-  } else {
-    best_partitionings.last().unwrap().clone()
+    return single_bin_partitioning;
   }
+
+  if let Some((trivial_offset_partitioning, trivial_offset_cost)) =
+    calc_trivial_offset_partitioning(bin_meta_cost, total_count_log2, bins)
+  {
+    if trivial_offset_cost
+      < best_cost + TRIVIAL_OFFSET_SPEEDUP_WORTH_IN_BITS_PER_NUM * total_count as f32
+    {
+      return trivial_offset_partitioning;
+    }
+  }
+
+  best_partitioning
 }
 
 pub fn optimize_bins<L: Latent>(
