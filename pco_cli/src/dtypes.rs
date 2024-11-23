@@ -1,4 +1,4 @@
-use std::mem;
+use std::{any, mem};
 
 use anyhow::anyhow;
 use anyhow::Result;
@@ -13,16 +13,27 @@ use crate::num_vec::NumVec;
 
 pub trait Parquetable: Sized {
   const PARQUET_DTYPE_STR: &'static str;
+  const TRANSMUTABLE: bool = true;
 
   type Parquet: parquet::data_type::DataType;
 
-  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T];
+  fn transmute_nums_to_parquet(
+    nums: &[Self],
+  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T];
+  fn copy_nums_to_parquet(
+    _nums: &[Self],
+  ) -> Vec<<Self::Parquet as parquet::data_type::DataType>::T> {
+    panic!(
+      "conversion for Parquet {} type has not yet been implemented in Pco CLI",
+      any::type_name::<Self>()
+    )
+  }
   fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self>;
 }
 
 #[cfg(feature = "full_bench")]
 pub trait QCompressable: Sized {
-  type Qco: q_compress::data_types::Number;
+  type Qco: q_compress::data_types::NumberLike;
 
   fn nums_to_qco(nums: &[Self]) -> &[Self::Qco];
   fn qco_to_nums(vec: Vec<Self::Qco>) -> Vec<Self>;
@@ -71,7 +82,9 @@ macro_rules! parquetable {
 
       type Parquet = $parq;
 
-      fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+      fn transmute_nums_to_parquet(
+        nums: &[Self],
+      ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
         nums
       }
       fn parquet_to_nums(
@@ -150,56 +163,74 @@ parquetable!(f64, parquet::data_type::DoubleType, "DOUBLE");
 parquetable!(i32, parquet::data_type::Int32Type, "INT32");
 parquetable!(i64, parquet::data_type::Int64Type, "INT64");
 
+// For 16-bit types, we have no way to transmute into parquet types, so we need
+// to copy.
 impl Parquetable for f16 {
   const PARQUET_DTYPE_STR: &'static str = "FLOAT";
+  const TRANSMUTABLE: bool = false;
+  // Would love to use half float representation here, but rust arrow doesn't
+  // have a good one yet.
   type Parquet = parquet::data_type::FloatType;
 
-  // Parquet doesn't have unsigned integer types, so the best zero-copy thing
-  // we can do is transmute to signed ones.
-  fn nums_to_parquet(_nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
-    todo!()
+  fn transmute_nums_to_parquet(
+    _nums: &[Self],
+  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+    unreachable!()
   }
-  fn parquet_to_nums(_vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
-    todo!()
+  fn copy_nums_to_parquet(nums: &[Self]) -> Vec<f32> {
+    nums.iter().map(|x| x.to_f32()).collect()
+  }
+  fn parquet_to_nums(vec: Vec<f32>) -> Vec<Self> {
+    vec.into_iter().map(|x| f16::from_f32(x)).collect()
   }
 }
 
 impl Parquetable for i16 {
   const PARQUET_DTYPE_STR: &'static str = "INT32";
+  const TRANSMUTABLE: bool = false;
   type Parquet = parquet::data_type::Int32Type;
 
-  // Parquet doesn't have unsigned integer types, so the best zero-copy thing
-  // we can do is transmute to signed ones.
-  fn nums_to_parquet(_nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
-    todo!()
+  fn transmute_nums_to_parquet(
+    _nums: &[Self],
+  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+    unreachable!()
   }
-  fn parquet_to_nums(_vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
-    todo!()
+  fn copy_nums_to_parquet(nums: &[Self]) -> Vec<i32> {
+    nums.iter().map(|&x| x as i32).collect()
+  }
+  fn parquet_to_nums(vec: Vec<i32>) -> Vec<Self> {
+    vec.into_iter().map(|x| x as i16).collect()
   }
 }
 
 impl Parquetable for u16 {
   const PARQUET_DTYPE_STR: &'static str = "INT32";
+  const TRANSMUTABLE: bool = false;
   type Parquet = parquet::data_type::Int32Type;
 
-  // Parquet doesn't have unsigned integer types, so the best zero-copy thing
-  // we can do is transmute to signed ones.
-  fn nums_to_parquet(_nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
-    todo!()
+  fn transmute_nums_to_parquet(
+    _nums: &[Self],
+  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+    unreachable!()
   }
-  fn parquet_to_nums(_vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
-    todo!()
+  fn copy_nums_to_parquet(nums: &[Self]) -> Vec<i32> {
+    nums.iter().map(|&x| x as i32).collect()
+  }
+  fn parquet_to_nums(vec: Vec<i32>) -> Vec<Self> {
+    vec.into_iter().map(|x| x as u16).collect()
   }
 }
 
-// TODO: verify implementation
+// Parquet doesn't have unsigned integer types, but to be as fair and fast as
+// possible, we transmute here.
+// Numerical value is not preserved, but Parquet's compression ratio is.
 impl Parquetable for u32 {
   const PARQUET_DTYPE_STR: &'static str = "INT32";
   type Parquet = parquet::data_type::Int32Type;
 
-  // Parquet doesn't have unsigned integer types, so the best zero-copy thing
-  // we can do is transmute to signed ones.
-  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+  fn transmute_nums_to_parquet(
+    nums: &[Self],
+  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
     unsafe { mem::transmute(nums) }
   }
   fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
@@ -211,9 +242,9 @@ impl Parquetable for u64 {
   const PARQUET_DTYPE_STR: &'static str = "INT64";
   type Parquet = parquet::data_type::Int64Type;
 
-  // Parquet doesn't have unsigned integer types, so the best zero-copy thing
-  // we can do is transmute to signed ones.
-  fn nums_to_parquet(nums: &[Self]) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+  fn transmute_nums_to_parquet(
+    nums: &[Self],
+  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
     unsafe { mem::transmute(nums) }
   }
   fn parquet_to_nums(vec: Vec<<Self::Parquet as parquet::data_type::DataType>::T>) -> Vec<Self> {
