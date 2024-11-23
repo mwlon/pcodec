@@ -18,8 +18,13 @@ pub trait Parquetable: Sized {
   type Parquet: parquet::data_type::DataType;
 
   fn transmute_nums_to_parquet(
-    nums: &[Self],
-  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T];
+    _nums: &[Self],
+  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
+    panic!(
+      "transmutation for Parquet {} type has not yet been implemented in Pco CLI",
+      any::type_name::<Self>()
+    )
+  }
   fn copy_nums_to_parquet(
     _nums: &[Self],
   ) -> Vec<<Self::Parquet as parquet::data_type::DataType>::T> {
@@ -172,11 +177,6 @@ impl Parquetable for f16 {
   // have a good one yet.
   type Parquet = parquet::data_type::FloatType;
 
-  fn transmute_nums_to_parquet(
-    _nums: &[Self],
-  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
-    unreachable!()
-  }
   fn copy_nums_to_parquet(nums: &[Self]) -> Vec<f32> {
     nums.iter().map(|x| x.to_f32()).collect()
   }
@@ -190,11 +190,6 @@ impl Parquetable for i16 {
   const TRANSMUTABLE: bool = false;
   type Parquet = parquet::data_type::Int32Type;
 
-  fn transmute_nums_to_parquet(
-    _nums: &[Self],
-  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
-    unreachable!()
-  }
   fn copy_nums_to_parquet(nums: &[Self]) -> Vec<i32> {
     nums.iter().map(|&x| x as i32).collect()
   }
@@ -208,11 +203,6 @@ impl Parquetable for u16 {
   const TRANSMUTABLE: bool = false;
   type Parquet = parquet::data_type::Int32Type;
 
-  fn transmute_nums_to_parquet(
-    _nums: &[Self],
-  ) -> &[<Self::Parquet as parquet::data_type::DataType>::T] {
-    unreachable!()
-  }
   fn copy_nums_to_parquet(nums: &[Self]) -> Vec<i32> {
     nums.iter().map(|&x| x as i32).collect()
   }
