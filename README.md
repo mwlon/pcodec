@@ -26,7 +26,7 @@
   >
 </div>
 
-Pcodec (or Pco, pronounced "pico") losslessly compresses and decompresses
+Pcodec (or Pco) losslessly compresses and decompresses
 numerical sequences with
 [high compression ratio and moderately fast speed](docs/benchmark_results.md).
 
