@@ -1,7 +1,7 @@
 # Results
 
 All speeds and compressed sizes reported below are available in
-[the results CSV](./benchmark_results/mbp_m3_max.csv).
+[the results CSV](./benchmark_results/mbp_m3_max_rust1_82.csv).
 The CSV also includes some codecs not visualized here.
 
 ## Real World

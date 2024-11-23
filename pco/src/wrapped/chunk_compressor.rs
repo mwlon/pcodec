@@ -37,12 +37,12 @@ const N_PER_EXTRA_DELTA_GROUP: usize = 10000;
 const DELTA_GROUP_SIZE: usize = 200;
 const LOOKBACK_MAX_WINDOW_N_LOG: Bitlen = 15;
 const LOOKBACK_MIN_WINDOW_N_LOG: Bitlen = 4;
-const LOOKBACK_REQUIRED_BYTE_SAVINGS_PER_N: f64 = 0.25;
+const LOOKBACK_REQUIRED_BYTE_SAVINGS_PER_N: f32 = 0.25;
 
 // TODO taking deltas of secondary latents has been proven to help slightly
 // in some cases, so we should consider it in the future
 
-fn new_lz_delta_encoding(n: usize) -> DeltaEncoding {
+fn new_lookback_delta_encoding(n: usize) -> DeltaEncoding {
   DeltaEncoding::Lookback(DeltaLookbackConfig {
     window_n_log: bits::bits_to_encode_offset(n as u32 - 1).clamp(
       LOOKBACK_MIN_WINDOW_N_LOG,
@@ -359,7 +359,7 @@ fn calculate_compressed_sample_size(
   sample: &DynLatents,
   unoptimized_bins_log: Bitlen,
   delta_encoding: DeltaEncoding,
-) -> PcoResult<usize> {
+) -> PcoResult<f32> {
   let sample_n = sample.len();
   let (sample_cc, _) = new_candidate_w_split_and_delta_encoding(
     SplitLatents {
@@ -371,7 +371,8 @@ fn calculate_compressed_sample_size(
     delta_encoding,
     unoptimized_bins_log,
   )?;
-  Ok(sample_cc.chunk_meta_size_hint() + sample_cc.page_size_hint_inner(0, 1.0))
+  let size = sample_cc.chunk_meta_size_hint() + sample_cc.page_size_hint_inner(0, 1.0);
+  Ok(size as f32)
 }
 
 #[inline(never)]
@@ -388,20 +389,23 @@ fn choose_delta_encoding(
   let sample_n = sample.len();
 
   let mut best_encoding = DeltaEncoding::None;
-  let mut best_size = calculate_compressed_sample_size(
+  let mut best_cost = calculate_compressed_sample_size(
     &sample,
     unoptimized_bins_log,
     DeltaEncoding::None,
   )?;
 
-  let lz_penalty = (LOOKBACK_REQUIRED_BYTE_SAVINGS_PER_N * sample_n as f64) as usize;
-  if best_size > lz_penalty {
-    let lz_encoding = new_lz_delta_encoding(sample_n);
-    let lz_penalized_size_estimate =
-      calculate_compressed_sample_size(&sample, unoptimized_bins_log, lz_encoding)? + lz_penalty;
-    if lz_penalized_size_estimate < best_size {
-      best_encoding = new_lz_delta_encoding(primary_latents.len());
-      best_size = lz_penalized_size_estimate;
+  let lookback_penalty = LOOKBACK_REQUIRED_BYTE_SAVINGS_PER_N * sample_n as f32;
+  if best_cost > lookback_penalty {
+    let lookback_encoding = new_lookback_delta_encoding(sample_n);
+    let lookback_cost = calculate_compressed_sample_size(
+      &sample,
+      unoptimized_bins_log,
+      lookback_encoding,
+    )? + lookback_penalty;
+    if lookback_cost < best_cost {
+      best_encoding = new_lookback_delta_encoding(primary_latents.len());
+      best_cost = lookback_cost;
     }
   }
 
@@ -410,10 +414,10 @@ fn choose_delta_encoding(
       order: delta_encoding_order,
       secondary_uses_delta: false,
     });
-    let size_estimate = calculate_compressed_sample_size(&sample, unoptimized_bins_log, encoding)?;
-    if size_estimate < best_size {
+    let cost = calculate_compressed_sample_size(&sample, unoptimized_bins_log, encoding)?;
+    if cost < best_cost {
       best_encoding = encoding;
-      best_size = size_estimate;
+      best_cost = cost;
     } else {
       // it's almost always convex
       break;
@@ -452,7 +456,7 @@ fn new_candidate_w_split(
       order,
       secondary_uses_delta: false,
     }),
-    DeltaSpec::TryLookback => new_lz_delta_encoding(n),
+    DeltaSpec::TryLookback => new_lookback_delta_encoding(n),
   };
 
   new_candidate_w_split_and_delta_encoding(
