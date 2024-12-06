@@ -56,6 +56,22 @@ fn calc_trivial_offset_partitioning<L: Latent>(
   Some((partitioning, cost))
 }
 
+fn rewind_best_partitioning(best_js: &[usize], n_bins: usize) -> Partitioning {
+  let mut best_partitioning = Vec::new();
+  let mut i = n_bins - 1;
+  loop {
+    let j = best_js[i];
+    best_partitioning.push((j, i));
+    if j > 0 {
+      i = j - 1;
+    } else {
+      break;
+    }
+  }
+  best_partitioning.reverse();
+  best_partitioning
+}
+
 // Combines consecutive unoptimized bins and returns a vec of (j, i) where
 // j and i are the inclusive indices of a group of bins to combine together.
 // This algorithm is exactly optimal, assuming our cost estimates (measured in
@@ -79,8 +95,7 @@ fn choose_optimized_partitioning<L: Latent>(
   let uppers = bins.iter().map(|bin| bin.upper).collect::<Vec<_>>();
   let total_count_log2 = (c as f32).log2();
 
-  let mut best_partitionings = Vec::with_capacity(bins.len() + 1);
-  best_partitionings.push(Vec::new());
+  let mut best_js = Vec::with_capacity(bins.len());
 
   let bin_meta_cost = Bin::<L>::exact_bit_size(ans_size_log) as f32;
 
@@ -108,13 +123,9 @@ fn choose_optimized_partitioning<L: Latent>(
     }
 
     c_counts_and_best_costs[i + 1].1 = best_cost;
-    let mut best_partitioning = Vec::with_capacity(best_partitionings[best_j].len() + 1);
-    best_partitioning.extend(&best_partitionings[best_j]);
-    best_partitioning.push((best_j, i));
-    best_partitionings.push(best_partitioning);
+    best_js.push(best_j);
   }
   let &(_, best_cost) = c_counts_and_best_costs.last().unwrap();
-  let best_partitioning = best_partitionings.last().unwrap().clone();
 
   let single_bin_partitioning = vec![(0_usize, bins.len() - 1)];
   let single_bin_cost = bin_cost(
@@ -138,7 +149,7 @@ fn choose_optimized_partitioning<L: Latent>(
     }
   }
 
-  best_partitioning
+  rewind_best_partitioning(&best_js, bins.len())
 }
 
 pub fn optimize_bins<L: Latent>(
