@@ -133,7 +133,7 @@ fn lookback_compute_goodness<L: Latent>(
   lookback_counts: &mut [u32],
 ) -> usize {
   let mut best_goodness = 0;
-  let mut best_idx = 0;
+  let mut best_lookback: usize = 0;
   for lookback_idx in 0..PROPOSED_LOOKBACKS {
     let lookback = proposed_lookbacks[lookback_idx];
     let lookback_count = lookback_counts[lookback - 1];
@@ -144,10 +144,10 @@ fn lookback_compute_goodness<L: Latent>(
     let goodness = lookback_goodness + delta_goodness;
     if goodness > best_goodness {
       best_goodness = goodness;
-      best_idx = lookback_idx;
+      best_lookback = lookback;
     }
   }
-  best_idx
+  best_lookback
 }
 
 #[inline(never)]
@@ -186,14 +186,13 @@ fn choose_lookbacks<L: Latent>(config: DeltaLookbackConfig, latents: &[L]) -> Ve
       &mut idx_hash_table,
       &mut proposed_lookbacks,
     );
-    let best_lookback_idx = lookback_compute_goodness(
+    let new_best_lookback = lookback_compute_goodness(
       l,
       i,
       latents,
       &proposed_lookbacks,
       &mut lookback_counts,
     );
-    let new_best_lookback = proposed_lookbacks[best_lookback_idx];
     if new_best_lookback != best_lookback {
       repeating_lookback_idx += 1;
     }
