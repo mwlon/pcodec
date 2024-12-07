@@ -4,6 +4,7 @@ use better_io::BetterBufRead;
 
 use crate::bit_reader::BitReaderBuilder;
 use crate::bit_writer::BitWriter;
+use crate::constants::DeltaLookback;
 use crate::data_types::LatentType;
 use crate::errors::PcoResult;
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
@@ -48,6 +49,20 @@ impl ChunkMeta {
       })
       .sum();
     bit_size.div_ceil(8)
+  }
+
+  pub(crate) fn delta_encoding_is_valid(&self) -> bool {
+    let delta_latent_var = &self.per_latent_var.delta;
+    match (self.delta_encoding, delta_latent_var) {
+      (DeltaEncoding::Lookback(_), Some(latent_var)) => {
+        // Lookback of 0 would point to the current (as yet undefined) element,
+        // so we can't allow that.
+        let bins = latent_var.bins.downcast_ref::<DeltaLookback>().unwrap();
+        bins.iter().all(|bin| bin.lower > 0)
+      }
+      (DeltaEncoding::None, None) | (DeltaEncoding::Consecutive(_), None) => true,
+      _ => false,
+    }
   }
 
   pub(crate) unsafe fn read_from<R: BetterBufRead>(

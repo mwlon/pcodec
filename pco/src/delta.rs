@@ -257,6 +257,7 @@ pub fn new_lookback_window_buffer_and_pos<L: Latent>(
 }
 
 // returns the new position
+#[inline(never)]
 pub fn decode_with_lookbacks_in_place<L: Latent>(
   config: DeltaLookbackConfig,
   lookbacks: &[DeltaLookback],
@@ -271,19 +272,30 @@ pub fn decode_with_lookbacks_in_place<L: Latent>(
   let batch_n = latents.len();
   if pos + batch_n > window_buffer.len() {
     // we need to cycle the buffer
-    for i in 0..window_n {
-      window_buffer[i] = window_buffer[i + pos - window_n];
-    }
+    window_buffer.copy_within(pos - window_n..pos, 0);
     pos = window_n;
   }
 
-  for (i, (&latent, &lookback)) in latents.iter().zip(lookbacks).enumerate() {
-    window_buffer[pos + i] = latent.wrapping_add(window_buffer[pos + i - lookback as usize]);
+  let start_pos = pos;
+  for (&latent, &lookback) in latents.iter().zip(lookbacks) {
+    // Here we assert that lookback is within the correct range because it's
+    // better than the alternatives:
+    // * taking min(lookback, window_n) is slower and silences the problem
+    // * doing a checked set is also slower and get doesn't catch all cases
+    let lookback = lookback as usize;
+    assert!(
+      lookback <= window_n,
+      "Pco corruption: lookback exceeded window"
+    );
+    unsafe {
+      *window_buffer.get_unchecked_mut(pos) =
+        latent.wrapping_add(*window_buffer.get_unchecked(pos - lookback));
+    }
+    pos += 1;
   }
 
-  let new_pos = pos + batch_n;
-  latents.copy_from_slice(&window_buffer[pos - state_n..new_pos - state_n]);
-  *window_buffer_pos = new_pos;
+  latents.copy_from_slice(&window_buffer[start_pos - state_n..pos - state_n]);
+  *window_buffer_pos = pos;
 }
 
 pub fn compute_delta_latent_var(

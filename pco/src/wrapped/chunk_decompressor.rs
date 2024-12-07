@@ -15,7 +15,7 @@ pub struct ChunkDecompressor<T: Number> {
 
 impl<T: Number> ChunkDecompressor<T> {
   pub(crate) fn new(meta: ChunkMeta) -> PcoResult<Self> {
-    if T::mode_is_valid(meta.mode) {
+    if T::mode_is_valid(meta.mode) && meta.delta_encoding_is_valid() {
       Ok(Self {
         meta,
         phantom: PhantomData,
