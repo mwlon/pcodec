@@ -4,7 +4,7 @@ use crate::ans::{AnsState, Spec};
 use crate::bit_reader::BitReader;
 use crate::constants::{Bitlen, DeltaLookback, ANS_INTERLEAVING, FULL_BATCH_N};
 use crate::data_types::Latent;
-use crate::errors::PcoResult;
+use crate::errors::{PcoError, PcoResult};
 use crate::metadata::{bins, Bin, DeltaEncoding, DynLatents};
 use crate::{ans, bit_reader, delta, read_write_uint};
 
@@ -282,7 +282,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
     n_remaining_in_page: usize,
     reader: &mut BitReader,
     dst: &mut [L],
-  ) {
+  ) -> PcoResult<()> {
     let n_remaining_pre_delta =
       n_remaining_in_page.saturating_sub(self.delta_encoding.n_latents_per_state());
     let pre_delta_len = if dst.len() <= n_remaining_pre_delta {
@@ -297,12 +297,13 @@ impl<L: Latent> LatentPageDecompressor<L> {
     self.decompress_batch_pre_delta(reader, &mut dst[..pre_delta_len]);
 
     match self.delta_encoding {
-      DeltaEncoding::None => (),
+      DeltaEncoding::None => Ok(()),
       DeltaEncoding::Consecutive(_) => {
-        delta::decode_consecutive_in_place(&mut self.state.delta_state, dst)
+        delta::decode_consecutive_in_place(&mut self.state.delta_state, dst);
+        Ok(())
       }
       DeltaEncoding::Lookback(config) => {
-        delta::decode_with_lookbacks_in_place(
+        let corrupt = delta::decode_with_lookbacks_in_place(
           config,
           delta_latents
             .unwrap()
@@ -312,6 +313,13 @@ impl<L: Latent> LatentPageDecompressor<L> {
           &mut self.state.delta_state,
           dst,
         );
+        if corrupt {
+          Err(PcoError::corruption(
+            "delta lookback exceeded window n",
+          ))
+        } else {
+          Ok(())
+        }
       }
     }
   }

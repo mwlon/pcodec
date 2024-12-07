@@ -256,15 +256,15 @@ pub fn new_lookback_window_buffer_and_pos<L: Latent>(
   (res, window_n)
 }
 
-// returns the new position
-#[inline(never)]
+// returns whether it was corrupt
+// #[inline(never)]
 pub fn decode_with_lookbacks_in_place<L: Latent>(
   config: DeltaLookbackConfig,
   lookbacks: &[DeltaLookback],
   window_buffer_pos: &mut usize,
   window_buffer: &mut [L],
   latents: &mut [L],
-) {
+) -> bool {
   toggle_center_in_place(latents);
 
   let (window_n, state_n) = (config.window_n(), config.state_n());
@@ -275,6 +275,8 @@ pub fn decode_with_lookbacks_in_place<L: Latent>(
     window_buffer.copy_within(pos - window_n..pos, 0);
     pos = window_n;
   }
+  // let mask = (1 << config.window_n_log) - 1;
+  let mut corrupt = false;
 
   let start_pos = pos;
   for (&latent, &lookback) in latents.iter().zip(lookbacks) {
@@ -282,11 +284,17 @@ pub fn decode_with_lookbacks_in_place<L: Latent>(
     // better than the alternatives:
     // * taking min(lookback, window_n) is slower and silences the problem
     // * doing a checked set is also slower and get doesn't catch all cases
-    let lookback = lookback as usize;
-    assert!(
-      lookback <= window_n,
-      "Pco corruption: lookback exceeded window"
-    );
+    // let lookback = (((lookback - 1) & mask) + 1) as usize;
+    // let lookback = cmp::min(lookback as usize, window_n);
+    // assert!(
+    //   lookback <= window_n,
+    //   "Pco corruption: lookback exceeded window"
+    // );
+    let mut lookback = lookback as usize;
+    if lookback > window_n {
+      corrupt = true;
+      lookback = 1;
+    }
     unsafe {
       *window_buffer.get_unchecked_mut(pos) =
         latent.wrapping_add(*window_buffer.get_unchecked(pos - lookback));
@@ -296,6 +304,7 @@ pub fn decode_with_lookbacks_in_place<L: Latent>(
 
   latents.copy_from_slice(&window_buffer[start_pos - state_n..pos - state_n]);
   *window_buffer_pos = pos;
+  corrupt
 }
 
 pub fn compute_delta_latent_var(
