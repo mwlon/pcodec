@@ -267,17 +267,19 @@ pub fn decode_with_lookbacks_in_place<L: Latent>(
   toggle_center_in_place(latents);
 
   let (window_n, state_n) = (config.window_n(), config.state_n());
-  let mut pos = *window_buffer_pos;
+  let mut start_pos = *window_buffer_pos;
+  // Lookbacks can be shorter than latents in the final batch,
+  // but we always decompress latents.len() numbers
   let batch_n = latents.len();
-  if pos + batch_n > window_buffer.len() {
+  if start_pos + batch_n > window_buffer.len() {
     // we need to cycle the buffer
-    window_buffer.copy_within(pos - window_n..pos, 0);
-    pos = window_n;
+    window_buffer.copy_within(start_pos - window_n..start_pos, 0);
+    start_pos = window_n;
   }
   let mut has_oob_lookbacks = false;
 
-  let start_pos = pos;
-  for (&latent, &lookback) in latents.iter().zip(lookbacks) {
+  for (i, (&latent, &lookback)) in latents.iter().zip(lookbacks).enumerate() {
+    let pos = start_pos + i;
     // Here we return whether the data is corrupt because it's
     // better than the alternatives:
     // * Taking min(lookback, window_n) or modulo is just as slow but silences
@@ -294,11 +296,11 @@ pub fn decode_with_lookbacks_in_place<L: Latent>(
       *window_buffer.get_unchecked_mut(pos) =
         latent.wrapping_add(*window_buffer.get_unchecked(pos - lookback));
     }
-    pos += 1;
   }
 
-  latents.copy_from_slice(&window_buffer[start_pos - state_n..pos - state_n]);
-  *window_buffer_pos = pos;
+  let end_pos = start_pos + batch_n;
+  latents.copy_from_slice(&window_buffer[start_pos - state_n..end_pos - state_n]);
+  *window_buffer_pos = end_pos;
 
   has_oob_lookbacks
 }
@@ -392,6 +394,10 @@ mod tests {
       state_n_log: 1,
       secondary_uses_delta: false,
     };
+    let window_n = config.window_n();
+    assert_eq!(window_n, 16);
+    let state_n = config.state_n();
+    assert_eq!(state_n, 2);
 
     let mut deltas = original_latents.clone();
     let lookbacks = choose_lookbacks(config, &original_latents);
@@ -406,21 +412,22 @@ mod tests {
     // Encoding left junk deltas at the front,
     // but for decoding we need junk deltas at the end.
     let mut deltas_to_decode = Vec::<u32>::new();
-    deltas_to_decode.extend(&deltas[2..]);
-    for _ in 0..2 {
+    deltas_to_decode.extend(&deltas[state_n..]);
+    for _ in 0..state_n {
       deltas_to_decode.push(1337);
     }
 
     let (mut window_buffer, mut pos) = new_lookback_window_buffer_and_pos(config, &state);
-    assert_eq!(pos, 16);
-    decode_with_lookbacks_in_place(
+    assert_eq!(pos, window_n);
+    let has_oob_lookbacks = decode_with_lookbacks_in_place(
       config,
       &lookbacks,
       &mut pos,
       &mut window_buffer,
       &mut deltas_to_decode,
     );
+    assert!(!has_oob_lookbacks);
     assert_eq!(deltas_to_decode, original_latents);
-    assert_eq!(pos, 16 + original_latents.len());
+    assert_eq!(pos, window_n + original_latents.len());
   }
 }
