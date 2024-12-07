@@ -257,7 +257,6 @@ pub fn new_lookback_window_buffer_and_pos<L: Latent>(
 }
 
 // returns whether it was corrupt
-// #[inline(never)]
 pub fn decode_with_lookbacks_in_place<L: Latent>(
   config: DeltaLookbackConfig,
   lookbacks: &[DeltaLookback],
@@ -275,26 +274,22 @@ pub fn decode_with_lookbacks_in_place<L: Latent>(
     window_buffer.copy_within(pos - window_n..pos, 0);
     pos = window_n;
   }
-  // let mask = (1 << config.window_n_log) - 1;
-  let mut corrupt = false;
+  let mut has_oob_lookbacks = false;
 
   let start_pos = pos;
   for (&latent, &lookback) in latents.iter().zip(lookbacks) {
-    // Here we assert that lookback is within the correct range because it's
+    // Here we return whether the data is corrupt because it's
     // better than the alternatives:
-    // * taking min(lookback, window_n) is slower and silences the problem
-    // * doing a checked set is also slower and get doesn't catch all cases
-    // let lookback = (((lookback - 1) & mask) + 1) as usize;
-    // let lookback = cmp::min(lookback as usize, window_n);
-    // assert!(
-    //   lookback <= window_n,
-    //   "Pco corruption: lookback exceeded window"
-    // );
-    let mut lookback = lookback as usize;
-    if lookback > window_n {
-      corrupt = true;
-      lookback = 1;
-    }
+    // * Taking min(lookback, window_n) or modulo is just as slow but silences
+    //   the problem.
+    // * Doing a checked set is slower, panics, and get doesn't catch all
+    //   cases.
+    let lookback = if lookback <= window_n as DeltaLookback {
+      lookback as usize
+    } else {
+      has_oob_lookbacks = true;
+      1
+    };
     unsafe {
       *window_buffer.get_unchecked_mut(pos) =
         latent.wrapping_add(*window_buffer.get_unchecked(pos - lookback));
@@ -304,7 +299,8 @@ pub fn decode_with_lookbacks_in_place<L: Latent>(
 
   latents.copy_from_slice(&window_buffer[start_pos - state_n..pos - state_n]);
   *window_buffer_pos = pos;
-  corrupt
+
+  has_oob_lookbacks
 }
 
 pub fn compute_delta_latent_var(

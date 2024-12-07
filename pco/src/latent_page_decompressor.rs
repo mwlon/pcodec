@@ -303,7 +303,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
         Ok(())
       }
       DeltaEncoding::Lookback(config) => {
-        let corrupt = delta::decode_with_lookbacks_in_place(
+        let has_oob_lookbacks = delta::decode_with_lookbacks_in_place(
           config,
           delta_latents
             .unwrap()
@@ -313,7 +313,7 @@ impl<L: Latent> LatentPageDecompressor<L> {
           &mut self.state.delta_state,
           dst,
         );
-        if corrupt {
+        if has_oob_lookbacks {
           Err(PcoError::corruption(
             "delta lookback exceeded window n",
           ))
