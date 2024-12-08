@@ -6,7 +6,7 @@ use crate::bit_reader::BitReaderBuilder;
 use crate::bit_writer::BitWriter;
 use crate::constants::DeltaLookback;
 use crate::data_types::LatentType;
-use crate::errors::PcoResult;
+use crate::errors::{PcoError, PcoResult};
 use crate::metadata::chunk_latent_var::ChunkLatentVarMeta;
 use crate::metadata::delta_encoding::DeltaEncoding;
 use crate::metadata::format_version::FormatVersion;
@@ -51,17 +51,26 @@ impl ChunkMeta {
     bit_size.div_ceil(8)
   }
 
-  pub(crate) fn delta_encoding_is_valid(&self) -> bool {
+  pub(crate) fn validate_delta_encoding(&self) -> PcoResult<()> {
     let delta_latent_var = &self.per_latent_var.delta;
     match (self.delta_encoding, delta_latent_var) {
-      (DeltaEncoding::Lookback(_), Some(latent_var)) => {
-        // Lookback of 0 would point to the current (as yet undefined) element,
-        // so we can't allow that.
+      (DeltaEncoding::Lookback(config), Some(latent_var)) => {
+        let window_n = config.window_n() as DeltaLookback;
         let bins = latent_var.bins.downcast_ref::<DeltaLookback>().unwrap();
-        bins.iter().all(|bin| bin.lower > 0)
+        let maybe_corrupt_bin = bins
+          .iter()
+          .find(|bin| bin.lower < 1 || bin.lower > window_n);
+        if let Some(corrupt_bin) = maybe_corrupt_bin {
+          Err(PcoError::corruption(format!(
+            "delta lookback bin had invalid lower bound of {} outside window [1, {}]",
+            corrupt_bin.lower, window_n
+          )))
+        } else {
+          Ok(())
+        }
       }
-      (DeltaEncoding::None, None) | (DeltaEncoding::Consecutive(_), None) => true,
-      _ => false,
+      (DeltaEncoding::None, None) | (DeltaEncoding::Consecutive(_), None) => Ok(()),
+      _ => unreachable!(),
     }
   }
 
