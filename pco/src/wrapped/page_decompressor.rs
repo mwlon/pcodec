@@ -202,8 +202,7 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
         n_remaining,
         reader,
         primary_dst,
-      );
-      Ok(())
+      )
     })?;
 
     // SECONDARY LATENTS
@@ -226,8 +225,7 @@ impl<T: Number, R: BetterBufRead> PageDecompressor<T, R> {
               &mut dst.downcast_mut::<L>().unwrap()[..batch_n]
             )
           }
-        );
-        Ok(())
+        )
       })?;
     }
 
