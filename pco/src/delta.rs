@@ -430,4 +430,25 @@ mod tests {
     assert_eq!(deltas_to_decode, original_latents);
     assert_eq!(pos, window_n + original_latents.len());
   }
+
+  #[test]
+  fn test_corrupt_lookbacks_do_not_panic() {
+    let config = DeltaLookbackConfig {
+      state_n_log: 0,
+      window_n_log: 2,
+      secondary_uses_delta: false,
+    };
+    let delta_state = vec![0_u32];
+    let lookbacks = vec![1, 5, 1, 1];
+    let mut latents = vec![1_u32, 2, 3, 4];
+    let (mut window_buffer, mut pos) = new_lookback_window_buffer_and_pos(config, &delta_state);
+    let has_oob_lookbacks = decode_with_lookbacks_in_place(
+      config,
+      &lookbacks,
+      &mut pos,
+      &mut window_buffer,
+      &mut latents,
+    );
+    assert!(has_oob_lookbacks);
+  }
 }
