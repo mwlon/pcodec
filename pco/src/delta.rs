@@ -439,7 +439,7 @@ mod tests {
       secondary_uses_delta: false,
     };
     let delta_state = vec![0_u32];
-    let lookbacks = vec![1, 5, 1, 1];
+    let lookbacks = vec![5, 1, 1, 1];
     let mut latents = vec![1_u32, 2, 3, 4];
     let (mut window_buffer, mut pos) = new_lookback_window_buffer_and_pos(config, &delta_state);
     let has_oob_lookbacks = decode_with_lookbacks_in_place(
