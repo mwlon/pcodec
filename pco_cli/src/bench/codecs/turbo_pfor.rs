@@ -1,7 +1,6 @@
 use std::convert::TryInto;
 use std::mem;
 
-use anyhow::Result;
 use clap::Parser;
 use half::f16;
 

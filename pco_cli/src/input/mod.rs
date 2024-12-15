@@ -82,6 +82,7 @@ impl InputFileOpt {
       Some("parquet") => Format::Parquet,
       Some("pco") => Format::Pco,
       Some("wav") => Format::Wav,
+      Some("bin") => Format::Binary,
       _ => {
         return Err(anyhow!(
           "failed to infer input format; consider passing --input-format"
