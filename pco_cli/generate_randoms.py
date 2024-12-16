@@ -246,7 +246,7 @@ def radians():
 
 
 # 10 interleaved 0th order sequences with different scales
-@datagen("i64")
+@datagen("i64", "i32")
 def interl0():
     bases = 10 ** np.arange(10)
     interleaved = bases[None, :] + np.random.normal(scale=22, size=[n // 10, 10])
@@ -260,14 +260,14 @@ def interl1_helper():
     return bases[None, :] + np.cumsum(deltas, axis=0)
 
 
-@datagen("i64")
+@datagen("i64", "i32")
 def interl1():
     interleaved = interl1_helper()
     return interleaved.reshape(-1)
 
 
 # the same as interleaved, but shuffled within each group of 10
-@datagen("i64")
+@datagen("i64", "i32")
 def interl_scrambl1():
     interleaved = interl1_helper()
     idxs = np.random.rand(*interleaved.shape).argsort(axis=1)
