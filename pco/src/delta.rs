@@ -125,6 +125,7 @@ fn lookback_hash_lookup(
   }
 }
 
+#[inline(never)]
 fn lookback_compute_goodness<L: Latent>(
   l: L,
   i: usize,
@@ -136,8 +137,12 @@ fn lookback_compute_goodness<L: Latent>(
   let mut best_lookback: usize = 0;
   for lookback_idx in 0..PROPOSED_LOOKBACKS {
     let lookback = proposed_lookbacks[lookback_idx];
-    let lookback_count = lookback_counts[lookback - 1];
-    let other = unsafe { *latents.get_unchecked(i - lookback) };
+    let (lookback_count, other) = unsafe {
+      (
+        *lookback_counts.get_unchecked(lookback - 1),
+        *latents.get_unchecked(i - lookback),
+      )
+    };
     let lookback_goodness = Bitlen::BITS - lookback_count.leading_zeros();
     let delta = L::min(l.wrapping_sub(other), other.wrapping_sub(l));
     let delta_goodness = delta.leading_zeros();
