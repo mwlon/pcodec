@@ -15,17 +15,18 @@ pub struct ChunkDecompressor<T: Number> {
 
 impl<T: Number> ChunkDecompressor<T> {
   pub(crate) fn new(meta: ChunkMeta) -> PcoResult<Self> {
-    if T::mode_is_valid(meta.mode) {
-      Ok(Self {
-        meta,
-        phantom: PhantomData,
-      })
-    } else {
-      Err(PcoError::corruption(format!(
+    if !T::mode_is_valid(meta.mode) {
+      return Err(PcoError::corruption(format!(
         "invalid mode for data type: {:?}",
         meta.mode
-      )))
+      )));
     }
+    meta.validate_delta_encoding()?;
+
+    Ok(Self {
+      meta,
+      phantom: PhantomData,
+    })
   }
 
   /// Returns pre-computed information about the chunk.

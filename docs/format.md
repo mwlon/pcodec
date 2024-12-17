@@ -178,6 +178,8 @@ and the deltas `[0, 10, 0]` would decode to the latents `[1, 3, 5, 17, 29]`.
 Letting `lookback` be the delta latent variable.
 Mode latents are decoded via `l[i] += l[i - lookback[i]]`.
 
+The decompressor should error if any lookback exceeds the window.
+
 ### Modes
 
 Based on the mode, latents are joined into the finalized numbers.

@@ -249,34 +249,53 @@ pub fn new_lookback_window_buffer_and_pos<L: Latent>(
   (res, window_n)
 }
 
-// returns the new position
+// returns whether it was corrupt
 pub fn decode_with_lookbacks_in_place<L: Latent>(
   config: DeltaLookbackConfig,
   lookbacks: &[DeltaLookback],
   window_buffer_pos: &mut usize,
   window_buffer: &mut [L],
   latents: &mut [L],
-) {
+) -> bool {
   toggle_center_in_place(latents);
 
   let (window_n, state_n) = (config.window_n(), config.state_n());
-  let mut pos = *window_buffer_pos;
+  let mut start_pos = *window_buffer_pos;
+  // Lookbacks can be shorter than latents in the final batch,
+  // but we always decompress latents.len() numbers
   let batch_n = latents.len();
-  if pos + batch_n > window_buffer.len() {
+  if start_pos + batch_n > window_buffer.len() {
     // we need to cycle the buffer
-    for i in 0..window_n {
-      window_buffer[i] = window_buffer[i + pos - window_n];
-    }
-    pos = window_n;
+    window_buffer.copy_within(start_pos - window_n..start_pos, 0);
+    start_pos = window_n;
   }
+  let mut has_oob_lookbacks = false;
 
   for (i, (&latent, &lookback)) in latents.iter().zip(lookbacks).enumerate() {
-    window_buffer[pos + i] = latent.wrapping_add(window_buffer[pos + i - lookback as usize]);
+    let pos = start_pos + i;
+    // Here we return whether the data is corrupt because it's
+    // better than the alternatives:
+    // * Taking min(lookback, window_n) or modulo is just as slow but silences
+    //   the problem.
+    // * Doing a checked set is slower, panics, and get doesn't catch all
+    //   cases.
+    let lookback = if lookback <= window_n as DeltaLookback {
+      lookback as usize
+    } else {
+      has_oob_lookbacks = true;
+      1
+    };
+    unsafe {
+      *window_buffer.get_unchecked_mut(pos) =
+        latent.wrapping_add(*window_buffer.get_unchecked(pos - lookback));
+    }
   }
 
-  let new_pos = pos + batch_n;
-  latents.copy_from_slice(&window_buffer[pos - state_n..new_pos - state_n]);
-  *window_buffer_pos = new_pos;
+  let end_pos = start_pos + batch_n;
+  latents.copy_from_slice(&window_buffer[start_pos - state_n..end_pos - state_n]);
+  *window_buffer_pos = end_pos;
+
+  has_oob_lookbacks
 }
 
 pub fn compute_delta_latent_var(
@@ -368,6 +387,10 @@ mod tests {
       state_n_log: 1,
       secondary_uses_delta: false,
     };
+    let window_n = config.window_n();
+    assert_eq!(window_n, 16);
+    let state_n = config.state_n();
+    assert_eq!(state_n, 2);
 
     let mut deltas = original_latents.clone();
     let lookbacks = choose_lookbacks(config, &original_latents);
@@ -382,21 +405,43 @@ mod tests {
     // Encoding left junk deltas at the front,
     // but for decoding we need junk deltas at the end.
     let mut deltas_to_decode = Vec::<u32>::new();
-    deltas_to_decode.extend(&deltas[2..]);
-    for _ in 0..2 {
+    deltas_to_decode.extend(&deltas[state_n..]);
+    for _ in 0..state_n {
       deltas_to_decode.push(1337);
     }
 
     let (mut window_buffer, mut pos) = new_lookback_window_buffer_and_pos(config, &state);
-    assert_eq!(pos, 16);
-    decode_with_lookbacks_in_place(
+    assert_eq!(pos, window_n);
+    let has_oob_lookbacks = decode_with_lookbacks_in_place(
       config,
       &lookbacks,
       &mut pos,
       &mut window_buffer,
       &mut deltas_to_decode,
     );
+    assert!(!has_oob_lookbacks);
     assert_eq!(deltas_to_decode, original_latents);
-    assert_eq!(pos, 16 + original_latents.len());
+    assert_eq!(pos, window_n + original_latents.len());
+  }
+
+  #[test]
+  fn test_corrupt_lookbacks_do_not_panic() {
+    let config = DeltaLookbackConfig {
+      state_n_log: 0,
+      window_n_log: 2,
+      secondary_uses_delta: false,
+    };
+    let delta_state = vec![0_u32];
+    let lookbacks = vec![5, 1, 1, 1];
+    let mut latents = vec![1_u32, 2, 3, 4];
+    let (mut window_buffer, mut pos) = new_lookback_window_buffer_and_pos(config, &delta_state);
+    let has_oob_lookbacks = decode_with_lookbacks_in_place(
+      config,
+      &lookbacks,
+      &mut pos,
+      &mut window_buffer,
+      &mut latents,
+    );
+    assert!(has_oob_lookbacks);
   }
 }
