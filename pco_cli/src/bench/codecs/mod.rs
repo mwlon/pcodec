@@ -10,6 +10,7 @@ use clap::{CommandFactory, FromArgMatches};
 
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::blosc::BloscConfig;
+use crate::bench::codecs::brotli::BrotliConfig;
 use crate::bench::codecs::parquet::ParquetConfig;
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::qco::QcoConfig;
@@ -29,6 +30,8 @@ use ::pco::match_number_enum;
 
 #[cfg(feature = "full_bench")]
 mod blosc;
+#[cfg(feature = "full_bench")]
+mod brotli;
 mod parquet;
 mod pco;
 #[cfg(feature = "full_bench")]
@@ -225,6 +228,8 @@ impl FromStr for CodecConfig {
     let codec: Result<Box<dyn CodecSurface>> = match name {
       #[cfg(feature = "full_bench")]
       "blosc" => BloscConfig::from_kv_args(&clap_kv_args),
+      #[cfg(feature = "full_bench")]
+      "brotli" => BrotliConfig::from_kv_args(&clap_kv_args),
       "parquet" => ParquetConfig::from_kv_args(&clap_kv_args),
       "pco" | "pcodec" => ChunkConfigOpt::from_kv_args(&clap_kv_args),
       #[cfg(feature = "full_bench")]
