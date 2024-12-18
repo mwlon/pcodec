@@ -126,7 +126,7 @@ fn lookback_hash_lookup(
 }
 
 #[inline(never)]
-fn lookback_compute_goodness<L: Latent>(
+fn find_best_lookback<L: Latent>(
   l: L,
   i: usize,
   latents: &[L],
@@ -135,8 +135,7 @@ fn lookback_compute_goodness<L: Latent>(
 ) -> usize {
   let mut best_goodness = 0;
   let mut best_lookback: usize = 0;
-  for lookback_idx in 0..PROPOSED_LOOKBACKS {
-    let lookback = proposed_lookbacks[lookback_idx];
+  for &lookback in proposed_lookbacks {
     let (lookback_count, other) = unsafe {
       (
         *lookback_counts.get_unchecked(lookback - 1),
@@ -191,7 +190,7 @@ fn choose_lookbacks<L: Latent>(config: DeltaLookbackConfig, latents: &[L]) -> Ve
       &mut idx_hash_table,
       &mut proposed_lookbacks,
     );
-    let new_best_lookback = lookback_compute_goodness(
+    let new_best_lookback = find_best_lookback(
       l,
       i,
       latents,
