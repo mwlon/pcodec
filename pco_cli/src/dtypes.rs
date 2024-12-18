@@ -181,7 +181,7 @@ impl Parquetable for f16 {
     nums.iter().map(|x| x.to_f32()).collect()
   }
   fn parquet_to_nums(vec: Vec<f32>) -> Vec<Self> {
-    vec.into_iter().map(|x| f16::from_f32(x)).collect()
+    vec.into_iter().map(f16::from_f32).collect()
   }
 }
 
