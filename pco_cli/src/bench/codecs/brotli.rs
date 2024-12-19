@@ -5,7 +5,6 @@ use brotli::BrotliCompress;
 use clap::Parser;
 use std::convert::TryInto;
 use std::default::Default;
-use zstd::zstd_safe::WriteBuf;
 
 #[derive(Clone, Debug, Parser)]
 pub struct BrotliConfig {
@@ -46,7 +45,7 @@ impl CodecInternal for BrotliConfig {
     unsafe {
       res.set_len(len);
       brotli::BrotliDecompress(
-        &mut bytes[4..].as_slice(),
+        &mut &bytes[4..],
         &mut utils::num_slice_to_bytes_mut(res.as_mut_slice()),
       )
       .unwrap();
