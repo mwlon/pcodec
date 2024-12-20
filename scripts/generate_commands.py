@@ -1,9 +1,8 @@
 datasets = [
-#    ('data/contrib/r_place.parquet', 'r/place', 5),
-#    ('data/contrib/taxi.parquet', 'taxi', 5),
-#    ('data/contrib/air_quality.parquet', 'air quality', 31),
-#    ('data/contrib/u64_lomax.parquet', 'lomax', 101),
-    ('data/binary/u64_lomax05_wider.bin', 'lomax', 1),
+    #('data/contrib/reddit_2022_place_numerical.parquet', 'r/place', 5),
+    #('data/contrib/fhvhv_tripdata_2023-04.parquet', 'taxi', 5),
+    ('data/contrib/devinrsmith-air-quality.20220714.zstd.parquet', 'air quality', 31),
+    #('data/contrib/u64_lomax.parquet', 'lomax', 101),
 ]
 
 codecs = []
@@ -21,7 +20,6 @@ for level in range(10):
 codecs.append('snappy')
 codecs.append('tpfor')
 
-i = 0
 for path, dataset, iters in datasets:
     for codec in codecs:
         print(
@@ -32,4 +30,3 @@ for path, dataset, iters in datasets:
             f'-c {codec} '
             f'--results-csv results.csv '
         )
-        i += 1

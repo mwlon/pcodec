@@ -11,6 +11,7 @@ use clap::{CommandFactory, FromArgMatches};
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::blosc::BloscConfig;
 use crate::bench::codecs::brotli::BrotliConfig;
+#[cfg(feature = "full_bench")]
 use crate::bench::codecs::lz4::Lz4Config;
 use crate::bench::codecs::parquet::ParquetConfig;
 #[cfg(feature = "full_bench")]
