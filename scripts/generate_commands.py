@@ -11,7 +11,7 @@ for level in range(13):
 for level in range(1, 14):
     codecs.append(f'parquet:compression=zstd{level}')
     codecs.append(f'parquet:int-encoding=delta:compression=zstd{level}')
-    codecs.append(f'zstd:level={level}')
+    codecs.append(f'zstd:cname=zstd:level={level}')
     codecs.append(f'tpfor:zstd-level={level}')
 for level in range(0, 10):
     codecs.append(f'blosc:cname=zstd:clevel={level}')

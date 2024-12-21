@@ -9,15 +9,10 @@ use crate::dtypes::{PcoNumber, TurboPforable};
 
 #[derive(Clone, Debug, Parser)]
 pub struct TurboPforConfig {
-  #[arg(long)]
-  zstd_level: Option<i32>,
-}
-
-fn optional_int_to_string(x: Option<i32>) -> String {
-  match x {
-    Some(x) => x.to_string(),
-    None => "none".to_string(),
-  }
+  #[arg(long, default_value = "None")]
+  cname: String,
+  #[arg(long, default_value = "3")]
+  level: i32,
 }
 
 impl CodecInternal for TurboPforConfig {
@@ -26,10 +21,10 @@ impl CodecInternal for TurboPforConfig {
   }
 
   fn get_confs(&self) -> Vec<(&'static str, String)> {
-    vec![(
-      "zstd-level",
-      optional_int_to_string(self.zstd_level),
-    )]
+    vec![
+      ("cname", self.cname.to_string()),
+      ("level", self.level.to_string()),
+    ]
   }
 
   fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8> {
@@ -41,20 +36,22 @@ impl CodecInternal for TurboPforConfig {
     let byte_len = unsafe { <T as TurboPforable>::encode(&mut nums, &mut dst[8..]) };
     dst.truncate(byte_len + 8);
 
-    if let Some(zstd_level) = self.zstd_level {
-      zstd::encode_all(dst.as_slice(), zstd_level).unwrap()
-    } else {
-      dst
+    match self.cname.to_lowercase().as_str() {
+      "none" => dst,
+      "zstd" => zstd::encode_all(dst.as_slice(), self.level).unwrap(),
+      _ => panic!("unknown turbo pfor cname: {}", &self.cname),
     }
   }
 
   fn decompress<T: PcoNumber>(&self, src: &[u8]) -> Vec<T> {
     let decompressed_src: Vec<u8>;
-    let src = if self.zstd_level.is_some() {
-      decompressed_src = zstd::decode_all(src).unwrap();
-      &decompressed_src
-    } else {
-      src
+    let src = match self.cname.to_lowercase().as_str() {
+      "none" => src,
+      "zstd" => {
+        decompressed_src = zstd::decode_all(src).unwrap();
+        &decompressed_src
+      }
+      _ => panic!("unknown turbo pfor cname: {}", &self.cname),
     };
 
     let n = u64::from_le_bytes(src[..8].try_into().unwrap()) as usize;
