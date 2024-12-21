@@ -63,6 +63,13 @@ pub struct BenchOpt {
   /// The median duration is kept.
   #[arg(long, default_value = "10")]
   pub iters: usize,
+  /// How many redundant, parallel threads to use for each iteration; i.e. the
+  /// true number of iterations will be `codecs * datasets * iters * threads`.
+  /// Only available with the full_bench feature.
+  /// This is useful for measuring multithreaded performance, which is
+  /// generally worse due to sharing cache and RAM bandwidth.
+  #[arg(long)]
+  pub threads: Option<usize>,
   /// How many numbers to limit each dataset to.
   #[arg(long, short)]
   pub limit: Option<usize>,
@@ -120,11 +127,13 @@ pub struct Precomputed {
 }
 
 fn make_progress_bar(n_columns: usize, opt: &BenchOpt) -> ProgressBar {
-  ProgressBar::new((opt.codecs.len() * n_columns * (opt.iters + 1)) as u64)
-    .with_message("iters")
-    .with_style(
-      ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} {msg} ").unwrap(),
-    )
+  ProgressBar::new(
+    (opt.codecs.len() * n_columns * opt.threads.unwrap_or(1) * (opt.iters + 1)) as u64,
+  )
+  .with_message("iters")
+  .with_style(
+    ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} {msg} ").unwrap(),
+  )
 }
 
 fn median_duration(mut durations: Vec<Duration>) -> Duration {
@@ -200,7 +209,7 @@ fn handle_column(
   schema: &Schema,
   col_idx: usize,
   opt: &BenchOpt,
-  progress_bar: &mut ProgressBar,
+  progress_bar: ProgressBar,
 ) -> Result<Vec<PrintStat>> {
   let field = &schema.fields[col_idx];
   let reader = input::new_column_reader(schema, col_idx, &opt.input)?;
@@ -318,6 +327,12 @@ pub fn bench(mut opt: BenchOpt) -> Result<()> {
       "input-name must be specified when results-csv is"
     ));
   }
+  if opt.threads.is_some() && !cfg!(feature = "full_bench") {
+    return Err(anyhow!(
+      "threads can only be specified when built with the full_bench feature"
+    ));
+  }
+
   let input = &mut opt.input;
   if input.input.is_none() && input.input_format.is_none() {
     input.input = Some(PathBuf::from(DEFAULT_BINARY_DIR));
@@ -338,14 +353,23 @@ pub fn bench(mut opt: BenchOpt) -> Result<()> {
       }
     })
     .collect::<Vec<_>>();
-  let mut progress_bar = make_progress_bar(col_idxs.len(), &opt);
+
+  #[cfg(feature = "full_bench")]
+  if let Some(threads) = opt.threads {
+    use rayon::ThreadPoolBuilder;
+    ThreadPoolBuilder::new()
+      .num_threads(threads)
+      .build_global()?;
+  }
+
+  let progress_bar = make_progress_bar(col_idxs.len(), &opt);
   let mut stats = Vec::new();
   for col_idx in col_idxs {
     stats.extend(handle_column(
       &schema,
       col_idx,
       &opt,
-      &mut progress_bar,
+      progress_bar.clone(),
     )?);
   }
   progress_bar.finish_and_clear();

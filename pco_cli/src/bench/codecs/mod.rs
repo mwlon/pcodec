@@ -5,11 +5,9 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Result};
-use clap::{CommandFactory, FromArgMatches};
-
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::blosc::BloscConfig;
+#[cfg(feature = "full_bench")]
 use crate::bench::codecs::brotli::BrotliConfig;
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::lz4::Lz4Config;
@@ -29,11 +27,14 @@ use crate::dtypes::PcoNumber;
 use crate::num_vec::NumVec;
 use ::pco::data_types::NumberType;
 use ::pco::match_number_enum;
+use anyhow::{anyhow, Result};
+use clap::{CommandFactory, FromArgMatches};
 
 #[cfg(feature = "full_bench")]
 mod blosc;
 #[cfg(feature = "full_bench")]
 mod brotli;
+#[cfg(feature = "full_bench")]
 mod lz4;
 mod parquet;
 mod pco;
@@ -83,7 +84,13 @@ pub trait CodecSurface: Debug + Send + Sync {
     Self: Sized;
   fn details(&self, explicit: bool) -> String;
 
-  fn warmup_iter(&self, nums_vec: &NumVec, dataset: &str, opt: &IterOpt) -> Result<Precomputed>;
+  fn warmup_iter(
+    &self,
+    nums_vec: &NumVec,
+    dataset: &str,
+    opt: &IterOpt,
+    thread_idx: usize,
+  ) -> Result<Precomputed>;
   fn stats_iter(
     &self,
     nums_vec: &NumVec,
@@ -141,7 +148,13 @@ impl<C: CodecInternal> CodecSurface for C {
     res
   }
 
-  fn warmup_iter(&self, num_vec: &NumVec, dataset: &str, opt: &IterOpt) -> Result<Precomputed> {
+  fn warmup_iter(
+    &self,
+    num_vec: &NumVec,
+    dataset: &str,
+    opt: &IterOpt,
+    thread_idx: usize,
+  ) -> Result<Precomputed> {
     let dtype = num_vec.dtype();
 
     // compress
@@ -149,13 +162,15 @@ impl<C: CodecInternal> CodecSurface for C {
 
     // write to disk
     if let Some(dir) = opt.save_dir.as_ref() {
-      let save_path = dir.join(format!(
-        "{}{}.{}",
-        &dataset,
-        self.details(false),
-        self.name(),
-      ));
-      fs::write(save_path, &compressed)?;
+      if thread_idx == 0 {
+        let save_path = dir.join(format!(
+          "{}{}.{}",
+          &dataset,
+          self.details(false),
+          self.name(),
+        ));
+        fs::write(save_path, &compressed)?;
+      }
     }
 
     // decompress

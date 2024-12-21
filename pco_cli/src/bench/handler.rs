@@ -14,23 +14,24 @@ pub trait BenchHandler {
     arrays: &[ArrayRef],
     name: &str,
     opt: &BenchOpt,
-    progress_bar: &mut ProgressBar,
+    progress_bar: ProgressBar,
   ) -> Result<Vec<PrintStat>>;
 }
 
-fn handle_for_codec(
+fn handle_for_codec_thread(
   num_vec: &NumVec,
   name: &str,
   codec: &CodecConfig,
   opt: &BenchOpt,
-  progress_bar: &mut ProgressBar,
+  progress_bar: ProgressBar,
+  thread_idx: usize,
 ) -> Result<PrintStat> {
   let dataset = format!(
     "{}_{}",
     core_dtype_to_str(num_vec.dtype()),
     name,
   );
-  let precomputed = codec.warmup_iter(num_vec, &dataset, &opt.iter_opt)?;
+  let precomputed = codec.warmup_iter(num_vec, &dataset, &opt.iter_opt, thread_idx)?;
   progress_bar.inc(1);
 
   let mut benches = Vec::with_capacity(opt.iters);
@@ -51,7 +52,7 @@ impl<P: ArrowNumber> BenchHandler for ArrowHandlerImpl<P> {
     arrays: &[ArrayRef],
     name: &str,
     opt: &BenchOpt,
-    progress_bar: &mut ProgressBar,
+    progress_bar: ProgressBar,
   ) -> Result<Vec<PrintStat>> {
     let arrow_nums: Vec<P::Native> = arrays
       .iter()
@@ -71,12 +72,47 @@ impl<P: ArrowNumber> BenchHandler for ArrowHandlerImpl<P> {
       }
     }
     for codec in &opt.codecs {
-      stats.push(handle_for_codec(
+      let progress_bar = progress_bar.clone(); // trivial copy of an Arc<>
+
+      #[cfg(feature = "rayon")]
+      if let Some(threads) = opt.threads {
+        // launch the warmup + iters for each thread, then aggregate as median
+        // of medians
+        use rayon::prelude::*;
+        let new_stats = (0..threads)
+          .into_par_iter()
+          .map(move |thread_idx| {
+            handle_for_codec_thread(
+              num_vec_ref,
+              name,
+              codec,
+              opt,
+              progress_bar.clone(),
+              thread_idx,
+            )
+          })
+          .collect::<Result<Vec<_>>>()?;
+
+        let PrintStat { dataset, codec, .. } = new_stats[0].clone();
+        let thread_benches = new_stats
+          .iter()
+          .map(|stat| stat.bench_stat.clone())
+          .collect::<Vec<_>>();
+        stats.push(PrintStat {
+          dataset,
+          codec,
+          bench_stat: BenchStat::aggregate_median(&thread_benches),
+        });
+        continue;
+      }
+
+      stats.push(handle_for_codec_thread(
         num_vec_ref,
         name,
         codec,
         opt,
         progress_bar,
+        0,
       )?);
     }
 
