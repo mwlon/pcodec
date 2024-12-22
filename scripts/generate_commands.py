@@ -26,28 +26,30 @@ codecs.append('tpfor')
 
 for path, dataset, iters in datasets:
     for codec in codecs:
-        if multithread:
-            results_file = 'results_multi.csv'
-        else:
-            results_file = 'results.csv'
-        args = [
-            f'echo {dataset} {codec} &&',
-            f'if ! grep -q "{dataset},{codec}," {results_file}; then',
-            f'./target/release/pcodec bench',
-            f'-i {path}',
-            f'--input-name "{dataset}"',
-            f'-c {codec}',
-            f'--results-csv {results_file}',
-            '--limit 5000000',
-        ]
-        if multithread:
-            args += [
-                '--iters 1',
-                f'--threads {nproc}',
+        for step_skipped in ['compress', 'decompress']:
+            if multithread:
+                results_file = 'results_multi.csv'
+            else:
+                results_file = 'results.csv'
+            args = [
+                f'echo {dataset} {codec} &&',
+                f'if ! grep -q "{dataset},{codec},\d+\.\d*,\d+\.\d*," {results_file}; then',
+                f'./target/release/pcodec bench',
+                f'-i {path}',
+                f'--input-name "{dataset}"',
+                f'-c {codec}',
+                f'--results-csv {results_file}',
+                '--limit 5000000',
+                f'--no-{step_skipped}',
             ]
-        else:
-            args += [
-                f'--iters {iters}',
-            ]
-        args += ['; fi']
-        print(' '.join(args))
+            if multithread:
+                args += [
+                    '--iters 1',
+                    f'--threads {nproc}',
+                ]
+            else:
+                args += [
+                    f'--iters {iters}',
+                ]
+            args += ['; fi']
+            print(' '.join(args))
