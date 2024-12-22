@@ -1,6 +1,7 @@
 #![allow(clippy::uninit_vec)]
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::ops::AddAssign;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -243,16 +244,21 @@ fn update_results_csv(
         continue;
       }
 
-      let mut fields = line.split(',');
-      let dataset = fields.next();
-      let codec = fields.next();
-      let (Some(dataset), Some(codec)) = (dataset, codec) else {
-        continue;
+      let fields: [&str; 5] = line
+        .split(',')
+        .take(5)
+        .collect::<Vec<&str>>()
+        .try_into()
+        .expect("existing results CSV contained fewer than 5 columns");
+      let [dataset, codec, compress_dt, decompress_dt, compressed_size] = fields;
+      let stat = BenchStat {
+        compress_dt: Duration::from_secs_f32(compress_dt.parse()?),
+        decompress_dt: Duration::from_secs_f32(decompress_dt.parse()?),
+        compressed_size: compressed_size.parse()?,
       };
-      let rest = fields.collect::<Vec<_>>().join(",");
       lines.insert(
         (dataset.to_string(), codec.to_string()),
-        rest,
+        stat,
       );
     }
     lines
@@ -261,22 +267,31 @@ fn update_results_csv(
   };
 
   for (codec, stat) in aggregate_by_codec.iter() {
-    lines.insert(
-      (input_name.to_string(), codec.to_string()),
-      format!(
-        "{},{},{}",
-        stat.compress_dt.as_secs_f32(),
-        stat.decompress_dt.as_secs_f32(),
-        stat.compressed_size
-      ),
-    );
+    let key = (input_name.to_string(), codec.to_string());
+    let mut stat = stat.clone();
+    if let Some(existing_stat) = lines.get(&key) {
+      if opt.iter_opt.no_compress {
+        stat.compress_dt = existing_stat.compress_dt;
+      }
+      if opt.iter_opt.no_decompress {
+        stat.decompress_dt = existing_stat.decompress_dt;
+      }
+    }
+    lines.insert(key, stat);
   }
 
   let mut output_lines = vec!["input,codec,compress_dt,decompress_dt,compressed_size".to_string()];
   let mut lines = lines.iter().collect::<Vec<_>>();
   lines.sort_unstable_by_key(|&(key, _)| key);
-  for ((dataset, codec), values) in lines {
-    output_lines.push(format!("{},{},{}", dataset, codec, values));
+  for ((dataset, codec), stat) in lines {
+    output_lines.push(format!(
+      "{},{},{},{},{}",
+      dataset,
+      codec,
+      stat.compress_dt.as_secs_f32(),
+      stat.decompress_dt.as_secs_f32(),
+      stat.compressed_size,
+    ));
   }
   let output = output_lines.join("\n");
   fs::write(results_csv, output)?;

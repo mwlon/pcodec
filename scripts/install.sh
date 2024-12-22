@@ -7,7 +7,7 @@ set -eoux pipefail
 #sudo dnf install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
 sudo dnf update && sudo dnf install git htop vim gcc perf clang parallel
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.bashrc
+source /home/$USER/.bashrc
 python3 -m venv venv
 source venv/bin/activate
 pip install numpy

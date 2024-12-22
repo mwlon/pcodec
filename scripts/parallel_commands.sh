@@ -1,3 +1,3 @@
-#cat commands.txt | parallel --jobs 1 "taskset -c 56 sh -c {}"
-cat commands.txt | parallel --jobs 7 "taskset -c \$(( {%} *  8 )) sh -c {}"
-#cat commands.txt | parallel --jobs 56 "taskset -c {%} sh -c {}"
+#shuf commands.txt | parallel --jobs 1 "taskset -c 48 sh -c {}"
+shuf commands.txt | parallel --jobs 24 "taskset -c \$(( {%} + 23 )) sh -c {}"
+#shuf commands.txt | parallel --jobs 48 "taskset -c {%} sh -c {}"
