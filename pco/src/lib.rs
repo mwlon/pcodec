@@ -16,6 +16,12 @@
 #[cfg(doctest)]
 struct ReadmeDoctest;
 
+// TODO in 1.0 rename some things, e.g.
+// * Latent(Batch|Page|Chunk) => (Batch|Page|Chunk)Latent
+// * make sure unit naming is consistent, e.g. PageLatentDecompressor live for
+//   the scope of a Page, even though its API supports decompressing one batch
+//   at a time.
+
 pub use chunk_config::{ChunkConfig, DeltaSpec, ModeSpec, PagingSpec};
 pub use constants::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_MAX_PAGE_N, FULL_BATCH_N};
 pub use progress::Progress;
