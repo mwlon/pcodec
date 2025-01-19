@@ -26,9 +26,9 @@ palette = {
     'Parquet Delta+Zstd': '#a00',
     'Blosc Shuffle+Zstd': '#63b',
     'SPDP': '#0a0',
-    'Turbo PFor': '#06a',
+    #'Turbo PFor': '#06a',
     'Turbo PFor+Zstd': '#06a',
-    'Snappy': '#aa0',
+    #'Snappy': '#aa0',
 }
 
 @dataclass
@@ -52,9 +52,9 @@ families = pl.DataFrame([
     Codec('parquet:int-encoding=delta', 'Parquet Delta+Zstd', -1),
     Codec('blosc:cname=zstd', 'Blosc Shuffle+Zstd', 9, min_level=2, max_level=9),
     Codec('spdp', 'SPDP', 5),
-    Codec('tpfor', 'Turbo PFor', 0),
+    #Codec('tpfor', 'Turbo PFor', 0),
     Codec('tpfor:cname=zstd', 'Turbo PFor+Zstd', 3),
-    Codec('snappy', 'Snappy', 0),
+    #Codec('snappy', 'Snappy', 0),
 ])
 
 results = (
