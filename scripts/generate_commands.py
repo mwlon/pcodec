@@ -6,8 +6,8 @@ datasets = [
     ('data/contrib/devinrsmith-air-quality.20220714.zstd.parquet', 'air quality', 9),
     ('data/contrib/u64_lomax.bin', 'lomax', 9),
 ]
-multithread = False
-nproc = 24 # multiprocessing.cpu_count()
+multithread = True
+nproc = 48 # multiprocessing.cpu_count()
 
 codecs = []
 for level in range(2, 13):
@@ -33,7 +33,7 @@ for path, dataset, iters in datasets:
                 results_file = 'results.csv'
             args = [
                 f'echo {dataset} {codec} &&',
-                f'if ! grep -q "{dataset},{codec},\d+\.\d*,\d+\.\d*," {results_file}; then',
+                f'if ! grep -q "{dataset},{codec},[0-9]*\.[0-9]*,[0-9]*\.[0-9]*," {results_file}; then',
                 f'./target/release/pcodec bench',
                 f'-i {path}',
                 f'--input-name "{dataset}"',
