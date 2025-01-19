@@ -1,3 +1,6 @@
+# THIS SCRIPT HAS BEEN MOVED TO COLAB!!
+# DO NOT ATTEMPT TO USE THIS SCRIPT!!
+
 import polars as pl
 import numpy as np
 from matplotlib import pyplot as plt
