@@ -392,13 +392,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf4b9d6a944f767f8e5e0db018570623c85f3d925ac718db4e06d0187adb21c1"
 
 [[package]]
-name = "blosc-src"
-version = "0.3.1"
+name = "blosc2-src"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "166e6e60235e4478f1f2b6a0fb06c39c9708532644546a1b87c07665eee51e39"
+checksum = "904532b9f292bdad6a4fba074c515ff74d42069edf6f621a89e5e13b422eb9b0"
 dependencies = [
  "cc",
- "zstd-sys",
+ "libc",
 ]
 
 [[package]]
@@ -1378,7 +1378,7 @@ dependencies = [
  "anyhow",
  "arrow",
  "better_io",
- "blosc-src",
+ "blosc2-src",
  "brotli",
  "bytes",
  "clap",

@@ -245,7 +245,7 @@ impl FromStr for CodecConfig {
 
     let codec: Result<Box<dyn CodecSurface>> = match name {
       #[cfg(feature = "full_bench")]
-      "blosc" => BloscConfig::from_kv_args(&clap_kv_args),
+      "blosc" | "blosc2" => BloscConfig::from_kv_args(&clap_kv_args),
       #[cfg(feature = "full_bench")]
       "brotli" => BrotliConfig::from_kv_args(&clap_kv_args),
       #[cfg(feature = "full_bench")]
