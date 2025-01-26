@@ -244,12 +244,13 @@ fn update_results_csv(
         continue;
       }
 
-      let fields: [&str; 5] = line
-        .split(',')
-        .take(5)
-        .collect::<Vec<&str>>()
-        .try_into()
-        .expect("existing results CSV contained fewer than 5 columns");
+      let fields: Vec<&str> = line.split(',').take(5).collect::<Vec<&str>>();
+      let fields: [&str; 5] = fields.clone().try_into().map_err(|_| {
+        anyhow!(
+          "existing results CSV row contained fewer than 5 fields: {:?}",
+          fields
+        )
+      })?;
       let [dataset, codec, compress_dt, decompress_dt, compressed_size] = fields;
       let stat = BenchStat {
         compress_dt: Duration::from_secs_f32(compress_dt.parse()?),
