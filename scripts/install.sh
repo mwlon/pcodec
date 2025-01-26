@@ -17,11 +17,14 @@ cd pcodec
 
 mkdir -p data/contrib
 pushd data/contrib
-wget "https://pcodec-public.s3.amazonaws.com/reddit_2022_place_numerical.parquet"
-wget "https://pcodec-public.s3.amazonaws.com/fhvhv_tripdata_2023-04.parquet"
-wget "https://pcodec-public.s3.amazonaws.com/devinrsmith-air-quality.20220714.zstd.parquet"
-wget "https://pcodec-public.s3.amazonaws.com/u64_lomax.bin"
+#wget "https://pcodec-public.s3.amazonaws.com/reddit_2022_place_numerical.parquet"
+#wget "https://pcodec-public.s3.amazonaws.com/fhvhv_tripdata_2023-04.parquet"
+#wget "https://pcodec-public.s3.amazonaws.com/devinrsmith-air-quality.20220714.zstd.parquet"
+wget "https://pcodec-public.s3.amazonaws.com/california_housing.parquet"
+wget "https://pcodec-public.s3.amazonaws.com/cms_open_payments.parquet"
+wget "https://pcodec-public.s3.amazonaws.com/twitter.csv"
+#wget "https://pcodec-public.s3.amazonaws.com/u64_lomax.bin"
 popd
 
 cargo build --release --features full_bench -p pco_cli
-taskset -c 14 ./target/release/pcodec bench --iters 1 -i data/contrib/devinrsmith-air-quality.20220714.zstd.parquet
+#taskset -c 14 ./target/release/pcodec bench --iters 1 -i data/contrib/devinrsmith-air-quality.20220714.zstd.parquet
