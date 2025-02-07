@@ -2,13 +2,13 @@ import multiprocessing
 import sys
 
 datasets = [
-    # ('data/contrib/reddit_2022_place_numerical.parquet', 'r/place', 3),
-    # ('data/contrib/fhvhv_tripdata_2023-04.parquet', 'taxi', 3),
-    # ('data/contrib/devinrsmith-air-quality.20220714.zstd.parquet', 'air quality', 9),
-    # ('data/contrib/cms_open_payments.parquet', 'payments', 5),
+    ('data/contrib/reddit_2022_place_numerical.parquet', 'r/place', 3),
+    ('data/contrib/fhvhv_tripdata_2023-04.parquet', 'taxi', 3),
+    ('data/contrib/devinrsmith-air-quality.20220714.zstd.parquet', 'air quality', 9),
+    ('data/contrib/cms_open_payments.parquet', 'payments', 5),
     ('data/contrib/california_housing.parquet', 'housing', 39),
-    # ('data/contrib/twitter.csv', 'twitter', 5),
-    # ('data/contrib/u64_lomax.bin', 'lomax', 9),
+    ('data/contrib/twitter.csv', 'twitter', 5),
+    ('data/contrib/u64_lomax.bin', 'lomax', 9),
 ]
 multithread = sys.argv[1].lower() in ['t', 'true', 'y']
 nproc = 48 # multiprocessing.cpu_count()
@@ -25,8 +25,6 @@ for level in range(2, 10):
     codecs.append(f'blosc:clevel={level}:cname=zstd')
 for level in range(10):
     codecs.append(f'spdp:level={level}')
-codecs.append('snappy')
-codecs.append('tpfor')
 
 for path, dataset, iters in datasets:
     for codec in codecs:
@@ -43,7 +41,7 @@ for path, dataset, iters in datasets:
                 f'--input-name "{dataset}"',
                 f'-c {codec}',
                 f'--results-csv {results_file}',
-                '--limit 5000000',
+                '--limit 2000000',
                 f'--no-{step_skipped}',
             ]
             if multithread:

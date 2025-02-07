@@ -10,16 +10,16 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source /home/$USER/.bashrc
 python3 -m venv venv
 source venv/bin/activate
-pip install numpy
+pip install numpy polars
 git clone https://github.com/mwlon/pcodec.git -b paper-benchmarks
 cd pcodec
 #python bench/generate_randoms.py
 
 mkdir -p data/contrib
 pushd data/contrib
-#wget "https://pcodec-public.s3.amazonaws.com/reddit_2022_place_numerical.parquet"
-#wget "https://pcodec-public.s3.amazonaws.com/fhvhv_tripdata_2023-04.parquet"
-#wget "https://pcodec-public.s3.amazonaws.com/devinrsmith-air-quality.20220714.zstd.parquet"
+wget "https://pcodec-public.s3.amazonaws.com/reddit_2022_place_numerical.parquet"
+wget "https://pcodec-public.s3.amazonaws.com/fhvhv_tripdata_2023-04.parquet"
+wget "https://pcodec-public.s3.amazonaws.com/devinrsmith-air-quality.20220714.zstd.parquet"
 wget "https://pcodec-public.s3.amazonaws.com/california_housing.parquet"
 wget "https://pcodec-public.s3.amazonaws.com/cms_open_payments.parquet"
 wget "https://pcodec-public.s3.amazonaws.com/twitter.csv"

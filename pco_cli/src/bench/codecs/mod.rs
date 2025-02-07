@@ -58,8 +58,6 @@ trait CodecInternal: Clone + CommandFactory + Debug + FromArgMatches + Send + Sy
   fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8>;
   fn decompress<T: PcoNumber>(&self, compressed: &[u8]) -> Vec<T>;
 
-  // sad manual dynamic dispatch, but at least we don't need all combinations
-  // of (dtype x codec)
   fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
     match_number_enum!(
       num_vec,
