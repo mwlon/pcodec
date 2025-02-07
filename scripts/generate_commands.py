@@ -2,13 +2,12 @@ import multiprocessing
 import sys
 
 datasets = [
-    ('data/contrib/reddit_2022_place_numerical.parquet', 'r/place', 3),
-    ('data/contrib/fhvhv_tripdata_2023-04.parquet', 'taxi', 3),
+    ('data/contrib/reddit_2022_place_numerical.parquet', 'r/place', 5),
+    ('data/contrib/fhvhv_tripdata_2023-04.parquet', 'taxi', 5),
     ('data/contrib/devinrsmith-air-quality.20220714.zstd.parquet', 'air quality', 9),
-    ('data/contrib/cms_open_payments.parquet', 'payments', 5),
-    ('data/contrib/california_housing.parquet', 'housing', 39),
-    ('data/contrib/twitter.csv', 'twitter', 5),
-    ('data/contrib/u64_lomax.bin', 'lomax', 9),
+    ('data/contrib/cms_open_payments.parquet', 'payments', 9),
+    ('data/contrib/california_housing.parquet', 'housing', 19),
+    ('data/contrib/twitter.csv', 'twitter', 9),
 ]
 multithread = sys.argv[1].lower() in ['t', 'true', 'y']
 nproc = 48 # multiprocessing.cpu_count()
@@ -46,7 +45,7 @@ for path, dataset, iters in datasets:
             ]
             if multithread:
                 args += [
-                    '--iters 1',
+                    '--iters 3',
                     f'--threads {nproc}',
                 ]
             else:
