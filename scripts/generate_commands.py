@@ -9,7 +9,6 @@ datasets = [
     ('data/contrib/california_housing.parquet', 'housing', 19),
     ('data/contrib/twitter.csv', 'twitter', 9),
 ]
-multithread = sys.argv[1].lower() in ['t', 'true', 'y']
 nproc = 48 # multiprocessing.cpu_count()
 
 codecs = []
@@ -25,32 +24,26 @@ for level in range(2, 10):
 for level in range(10):
     codecs.append(f'spdp:level={level}')
 
+commands_single = open('commands_single.sh', 'w')
+commands_multi = open('commands_multi.sh', 'w')
+codec_str = ','.join(codecs)
 for path, dataset, iters in datasets:
-    for codec in codecs:
-        for step_skipped in ['compress', 'decompress']:
-            if multithread:
-                results_file = 'results_multi.csv'
-            else:
-                results_file = 'results.csv'
+    for step_skipped in ['compress', 'decompress']:
+        for command_file, results_file, threads in [
+            (commands_single, 'results.csv', 1),
+            (commands_multi, 'results_multi.csv', nproc),
+        ]:
             args = [
-                f'echo {dataset} {codec} &&',
-                f'if ! grep -q "{dataset},{codec},[0-9]*\.[0-9]*,[0-9]*\.[0-9]*," {results_file}; then',
+                f'echo {dataset} &&',
                 f'./target/release/pcodec bench',
                 f'-i {path}',
                 f'--input-name "{dataset}"',
-                f'-c {codec}',
+                f'-c {codec_str}',
                 f'--results-csv {results_file}',
                 '--limit 2000000',
                 f'--no-{step_skipped}',
+                f'--iters {iters}',
             ]
-            if multithread:
-                args += [
-                    '--iters 3',
-                    f'--threads {nproc}',
-                ]
-            else:
-                args += [
-                    f'--iters {iters}',
-                ]
-            args += ['; fi']
+            if threads > 1:
+                args += [f'--threads {threads}']
             print(' '.join(args))
