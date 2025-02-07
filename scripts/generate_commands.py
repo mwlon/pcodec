@@ -46,4 +46,4 @@ for path, dataset, iters in datasets:
             ]
             if threads > 1:
                 args += [f'--threads {threads}']
-            print(' '.join(args))
+            command_file.write(' '.join(args) + '\n')
