@@ -39,6 +39,8 @@ pub fn from_dtype(dtype: &DataType) -> Result<Box<dyn ArrowHandler>> {
     Timestamp(TimeUnit::Millisecond, _) => TimestampMillisecondType,
     Timestamp(TimeUnit::Microsecond, _) => TimestampMicrosecondType,
     Timestamp(TimeUnit::Nanosecond, _) => TimestampNanosecondType,
+    Date32 => Date32Type,
+    Date64 => Date64Type,
   )
 }
 

@@ -1,6 +1,7 @@
 #![allow(clippy::uninit_vec)]
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::ops::AddAssign;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -63,6 +64,13 @@ pub struct BenchOpt {
   /// The median duration is kept.
   #[arg(long, default_value = "10")]
   pub iters: usize,
+  /// How many redundant, parallel threads to use for each iteration; i.e. the
+  /// true number of iterations will be `codecs * datasets * iters * threads`.
+  /// Only available with the full_bench feature.
+  /// This is useful for measuring multithreaded performance, which is
+  /// generally worse due to sharing cache and RAM bandwidth.
+  #[arg(long)]
+  pub threads: Option<usize>,
   /// How many numbers to limit each dataset to.
   #[arg(long, short)]
   pub limit: Option<usize>,
@@ -120,11 +128,13 @@ pub struct Precomputed {
 }
 
 fn make_progress_bar(n_columns: usize, opt: &BenchOpt) -> ProgressBar {
-  ProgressBar::new((opt.codecs.len() * n_columns * (opt.iters + 1)) as u64)
-    .with_message("iters")
-    .with_style(
-      ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} {msg} ").unwrap(),
-    )
+  ProgressBar::new(
+    (opt.codecs.len() * n_columns * opt.threads.unwrap_or(1) * (opt.iters + 1)) as u64,
+  )
+  .with_message("iters")
+  .with_style(
+    ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} {msg} ").unwrap(),
+  )
 }
 
 fn median_duration(mut durations: Vec<Duration>) -> Duration {
@@ -200,7 +210,7 @@ fn handle_column(
   schema: &Schema,
   col_idx: usize,
   opt: &BenchOpt,
-  progress_bar: &mut ProgressBar,
+  progress_bar: ProgressBar,
 ) -> Result<Vec<PrintStat>> {
   let field = &schema.fields[col_idx];
   let reader = input::new_column_reader(schema, col_idx, &opt.input)?;
@@ -234,16 +244,22 @@ fn update_results_csv(
         continue;
       }
 
-      let mut fields = line.split(',');
-      let dataset = fields.next();
-      let codec = fields.next();
-      let (Some(dataset), Some(codec)) = (dataset, codec) else {
-        continue;
+      let fields: Vec<&str> = line.split(',').take(5).collect::<Vec<&str>>();
+      let fields: [&str; 5] = fields.clone().try_into().map_err(|_| {
+        anyhow!(
+          "existing results CSV row contained fewer than 5 fields: {:?}",
+          fields
+        )
+      })?;
+      let [dataset, codec, compress_dt, decompress_dt, compressed_size] = fields;
+      let stat = BenchStat {
+        compress_dt: Duration::from_secs_f32(compress_dt.parse()?),
+        decompress_dt: Duration::from_secs_f32(decompress_dt.parse()?),
+        compressed_size: compressed_size.parse()?,
       };
-      let rest = fields.collect::<Vec<_>>().join(",");
       lines.insert(
         (dataset.to_string(), codec.to_string()),
-        rest,
+        stat,
       );
     }
     lines
@@ -252,22 +268,31 @@ fn update_results_csv(
   };
 
   for (codec, stat) in aggregate_by_codec.iter() {
-    lines.insert(
-      (input_name.to_string(), codec.to_string()),
-      format!(
-        "{},{},{}",
-        stat.compress_dt.as_secs_f32(),
-        stat.decompress_dt.as_secs_f32(),
-        stat.compressed_size
-      ),
-    );
+    let key = (input_name.to_string(), codec.to_string());
+    let mut stat = stat.clone();
+    if let Some(existing_stat) = lines.get(&key) {
+      if opt.iter_opt.no_compress {
+        stat.compress_dt = existing_stat.compress_dt;
+      }
+      if opt.iter_opt.no_decompress {
+        stat.decompress_dt = existing_stat.decompress_dt;
+      }
+    }
+    lines.insert(key, stat);
   }
 
   let mut output_lines = vec!["input,codec,compress_dt,decompress_dt,compressed_size".to_string()];
   let mut lines = lines.iter().collect::<Vec<_>>();
   lines.sort_unstable_by_key(|&(key, _)| key);
-  for ((dataset, codec), values) in lines {
-    output_lines.push(format!("{},{},{}", dataset, codec, values));
+  for ((dataset, codec), stat) in lines {
+    output_lines.push(format!(
+      "{},{},{},{},{}",
+      dataset,
+      codec,
+      stat.compress_dt.as_secs_f32(),
+      stat.decompress_dt.as_secs_f32(),
+      stat.compressed_size,
+    ));
   }
   let output = output_lines.join("\n");
   fs::write(results_csv, output)?;
@@ -318,6 +343,12 @@ pub fn bench(mut opt: BenchOpt) -> Result<()> {
       "input-name must be specified when results-csv is"
     ));
   }
+  if opt.threads.is_some() && !cfg!(feature = "full_bench") {
+    return Err(anyhow!(
+      "threads can only be specified when built with the full_bench feature"
+    ));
+  }
+
   let input = &mut opt.input;
   if input.input.is_none() && input.input_format.is_none() {
     input.input = Some(PathBuf::from(DEFAULT_BINARY_DIR));
@@ -338,14 +369,23 @@ pub fn bench(mut opt: BenchOpt) -> Result<()> {
       }
     })
     .collect::<Vec<_>>();
-  let mut progress_bar = make_progress_bar(col_idxs.len(), &opt);
+
+  #[cfg(feature = "full_bench")]
+  if let Some(threads) = opt.threads {
+    use rayon::ThreadPoolBuilder;
+    ThreadPoolBuilder::new()
+      .num_threads(threads)
+      .build_global()?;
+  }
+
+  let progress_bar = make_progress_bar(col_idxs.len(), &opt);
   let mut stats = Vec::new();
   for col_idx in col_idxs {
     stats.extend(handle_column(
       &schema,
       col_idx,
       &opt,
-      &mut progress_bar,
+      progress_bar.clone(),
     )?);
   }
   progress_bar.finish_and_clear();

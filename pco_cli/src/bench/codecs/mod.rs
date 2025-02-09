@@ -5,11 +5,12 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Result};
-use clap::{CommandFactory, FromArgMatches};
-
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::blosc::BloscConfig;
+#[cfg(feature = "full_bench")]
+use crate::bench::codecs::brotli::BrotliConfig;
+#[cfg(feature = "full_bench")]
+use crate::bench::codecs::lz4::Lz4Config;
 use crate::bench::codecs::parquet::ParquetConfig;
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::qco::QcoConfig;
@@ -26,9 +27,15 @@ use crate::dtypes::PcoNumber;
 use crate::num_vec::NumVec;
 use ::pco::data_types::NumberType;
 use ::pco::match_number_enum;
+use anyhow::{anyhow, Result};
+use clap::{CommandFactory, FromArgMatches};
 
 #[cfg(feature = "full_bench")]
 mod blosc;
+#[cfg(feature = "full_bench")]
+mod brotli;
+#[cfg(feature = "full_bench")]
+mod lz4;
 mod parquet;
 mod pco;
 #[cfg(feature = "full_bench")]
@@ -51,8 +58,6 @@ trait CodecInternal: Clone + CommandFactory + Debug + FromArgMatches + Send + Sy
   fn compress<T: PcoNumber>(&self, nums: &[T]) -> Vec<u8>;
   fn decompress<T: PcoNumber>(&self, compressed: &[u8]) -> Vec<T>;
 
-  // sad manual dynamic dispatch, but at least we don't need all combinations
-  // of (dtype x codec)
   fn compress_dynamic(&self, num_vec: &NumVec) -> Vec<u8> {
     match_number_enum!(
       num_vec,
@@ -77,7 +82,13 @@ pub trait CodecSurface: Debug + Send + Sync {
     Self: Sized;
   fn details(&self, explicit: bool) -> String;
 
-  fn warmup_iter(&self, nums_vec: &NumVec, dataset: &str, opt: &IterOpt) -> Result<Precomputed>;
+  fn warmup_iter(
+    &self,
+    nums_vec: &NumVec,
+    dataset: &str,
+    opt: &IterOpt,
+    thread_idx: usize,
+  ) -> Result<Precomputed>;
   fn stats_iter(
     &self,
     nums_vec: &NumVec,
@@ -135,7 +146,13 @@ impl<C: CodecInternal> CodecSurface for C {
     res
   }
 
-  fn warmup_iter(&self, num_vec: &NumVec, dataset: &str, opt: &IterOpt) -> Result<Precomputed> {
+  fn warmup_iter(
+    &self,
+    num_vec: &NumVec,
+    dataset: &str,
+    opt: &IterOpt,
+    thread_idx: usize,
+  ) -> Result<Precomputed> {
     let dtype = num_vec.dtype();
 
     // compress
@@ -143,13 +160,15 @@ impl<C: CodecInternal> CodecSurface for C {
 
     // write to disk
     if let Some(dir) = opt.save_dir.as_ref() {
-      let save_path = dir.join(format!(
-        "{}{}.{}",
-        &dataset,
-        self.details(false),
-        self.name(),
-      ));
-      fs::write(save_path, &compressed)?;
+      if thread_idx == 0 {
+        let save_path = dir.join(format!(
+          "{}{}.{}",
+          &dataset,
+          self.details(false),
+          self.name(),
+        ));
+        fs::write(save_path, &compressed)?;
+      }
     }
 
     // decompress
@@ -224,7 +243,11 @@ impl FromStr for CodecConfig {
 
     let codec: Result<Box<dyn CodecSurface>> = match name {
       #[cfg(feature = "full_bench")]
-      "blosc" => BloscConfig::from_kv_args(&clap_kv_args),
+      "blosc" | "blosc2" => BloscConfig::from_kv_args(&clap_kv_args),
+      #[cfg(feature = "full_bench")]
+      "brotli" => BrotliConfig::from_kv_args(&clap_kv_args),
+      #[cfg(feature = "full_bench")]
+      "lz4" => Lz4Config::from_kv_args(&clap_kv_args),
       "parquet" => ParquetConfig::from_kv_args(&clap_kv_args),
       "pco" | "pcodec" => ChunkConfigOpt::from_kv_args(&clap_kv_args),
       #[cfg(feature = "full_bench")]

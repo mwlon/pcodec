@@ -3,8 +3,8 @@ use std::{any, mem};
 use anyhow::anyhow;
 use anyhow::Result;
 use arrow::datatypes as arrow_dtypes;
+use arrow::datatypes::DataType as ArrowDataType;
 use arrow::datatypes::{ArrowPrimitiveType, DataType};
-use arrow::datatypes::{DataType as ArrowDataType, Float16Type};
 use half::f16;
 
 use pco::data_types::{Number, NumberType};
@@ -255,9 +255,9 @@ impl QCompressable for f16 {
 }
 
 impl PcoNumber for f16 {
-  const ARROW_DTYPE: DataType = Float16Type::DATA_TYPE;
+  const ARROW_DTYPE: DataType = arrow_dtypes::Float16Type::DATA_TYPE;
 
-  type Arrow = Float16Type;
+  type Arrow = arrow_dtypes::Float16Type;
 
   fn to_arrow_native(self) -> <Self::Arrow as ArrowPrimitiveType>::Native {
     self as Self
@@ -286,6 +286,8 @@ extra_arrow!(i64, arrow_dtypes::TimestampSecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampMillisecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampMicrosecondType);
 extra_arrow!(i64, arrow_dtypes::TimestampNanosecondType);
+extra_arrow!(i32, arrow_dtypes::Date32Type);
+extra_arrow!(i64, arrow_dtypes::Date64Type);
 
 pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<NumberType> {
   let res = match arrow_dtype {
@@ -299,6 +301,8 @@ pub fn from_arrow(arrow_dtype: &ArrowDataType) -> Result<NumberType> {
     ArrowDataType::UInt32 => NumberType::U32,
     ArrowDataType::UInt64 => NumberType::U64,
     ArrowDataType::Timestamp(_, _) => NumberType::I64,
+    ArrowDataType::Date32 => NumberType::I32,
+    ArrowDataType::Date64 => NumberType::I64,
     _ => {
       return Err(anyhow!(
         "unable to convert arrow dtype {:?} to pco",

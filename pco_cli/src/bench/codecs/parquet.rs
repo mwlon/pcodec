@@ -24,6 +24,16 @@ pub struct ParquetConfig {
   // Based on experiments with zstd compression, 2^20 seems like a good default.
   #[arg(long, default_value = "1048576")]
   group_size: usize,
+  #[arg(long, value_parser=str_to_encoding, default_value = "dictionary")]
+  int_encoding: Encoding,
+  #[arg(long, value_parser=str_to_encoding, default_value = "dictionary")]
+  float_encoding: Encoding,
+}
+
+#[derive(Clone, Debug)]
+struct Encoding {
+  dictionary: bool,
+  basic: Option<parquet::basic::Encoding>,
 }
 
 fn str_to_compression(s: &str) -> Result<Compression> {
@@ -55,6 +65,43 @@ fn compression_to_string(compression: &Compression) -> String {
   }
 }
 
+fn str_to_encoding(s: &str) -> Result<Encoding> {
+  let res = match s.to_lowercase().as_str() {
+    "plain" => Encoding {
+      dictionary: false,
+      basic: Some(parquet::basic::Encoding::PLAIN),
+    },
+    "delta" => Encoding {
+      dictionary: false,
+      basic: Some(parquet::basic::Encoding::DELTA_BINARY_PACKED),
+    },
+    "byte_stream_split" => Encoding {
+      dictionary: false,
+      basic: Some(parquet::basic::Encoding::BYTE_STREAM_SPLIT),
+    },
+    "dictionary" => Encoding {
+      dictionary: true,
+      basic: None,
+    },
+    _ => return Err(anyhow!("unknown parquet encoding {}", s)),
+  };
+  Ok(res)
+}
+
+fn encoding_to_string(encoding: &Encoding) -> String {
+  if encoding.dictionary {
+    return "dictionary".to_string();
+  }
+
+  let s = match encoding.basic {
+    Some(parquet::basic::Encoding::PLAIN) => "plain",
+    Some(parquet::basic::Encoding::DELTA_BINARY_PACKED) => "delta",
+    Some(parquet::basic::Encoding::BYTE_STREAM_SPLIT) => "byte_stream_split",
+    _ => unreachable!(),
+  };
+  s.to_string()
+}
+
 // This approach compresses the vector as
 impl CodecInternal for ParquetConfig {
   fn name(&self) -> &'static str {
@@ -68,6 +115,14 @@ impl CodecInternal for ParquetConfig {
         compression_to_string(&self.compression),
       ),
       ("group-size", self.group_size.to_string()),
+      (
+        "int-encoding",
+        encoding_to_string(&self.int_encoding),
+      ),
+      (
+        "float-encoding",
+        encoding_to_string(&self.float_encoding),
+      ),
     ]
   }
 
@@ -78,9 +133,21 @@ impl CodecInternal for ParquetConfig {
       T::PARQUET_DTYPE_STR
     );
     let schema = Arc::new(parse_message_type(&message_type).unwrap());
-    let properties_builder = WriterProperties::builder()
+
+    let encoding = if T::PARQUET_DTYPE_STR.contains("INT") {
+      &self.int_encoding
+    } else {
+      &self.float_encoding
+    };
+
+    let mut properties_builder = WriterProperties::builder()
       .set_writer_version(WriterVersion::PARQUET_2_0)
-      .set_compression(self.compression);
+      .set_compression(self.compression)
+      .set_dictionary_enabled(encoding.dictionary);
+    if let Some(basic) = encoding.basic {
+      properties_builder = properties_builder.set_encoding(basic);
+    }
+
     let mut writer = SerializedFileWriter::new(
       &mut res,
       schema,
