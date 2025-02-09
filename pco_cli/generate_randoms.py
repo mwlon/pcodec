@@ -62,13 +62,6 @@ def write_i64(arr, name, base_dir):
     full_name = f"i64_{name}"
     write_generic(strs, arr, full_name, base_dir)
 
-@writer
-def write_u64(arr, name, base_dir):
-    if arr.dtype != np.uint64:
-        arr = np.floor(arr).astype(np.uint64)
-    strs = [str(x) for x in arr]
-    full_name = f"u64_{name}"
-    write_generic(strs, arr, full_name, base_dir)
 
 @writer
 def write_f16(arr, name, base_dir):
@@ -129,11 +122,6 @@ def fixed_median_lomax(a, median):
 @datagen("i32", "u32", "i64")
 def lomax05():
     return fixed_median_lomax(0.5, 1000)
-
-
-@datagen("u64")
-def lomax05_wider():
-    return fixed_median_lomax(0.5, 3000)
 
 
 @datagen("i64")
