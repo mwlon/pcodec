@@ -97,6 +97,7 @@ It is mainly recommended for quick proofs of concept and benchmarking.
 
 Pco has a hierarchy of multiple batches per page; multiple pages per chunk; and
 multiple chunks per file.
+By default Pco uses up to 2^18 (~262k) numbers per chunk if available.
 
 |       | unit of ___                     | size for good compression |
 |-------|---------------------------------|---------------------------|
