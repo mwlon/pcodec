@@ -1,9 +1,9 @@
-<div style="text-align:center">
+<p align="center">
   <img
     alt="Pco logo: a pico-scale, compressed version of the Pyramid of Khafre in the palm of your hand" src="images/logo.svg"
     width="160px"
   >
-</div>
+</p>
 
 [![crates.io][crates-badge]][crates-url]
 [![pypi.org][pypi-badge]][pypi-url]
@@ -18,13 +18,13 @@
 
 # Pcodec
 
-<div style="text-align:center">
+<p align="center">
   <img
     alt="bar charts showing better compression for Pco than zstd parquet or blosc"
     src="images/real_world_compression_ratio.svg"
     width="700px"
   >
-</div>
+</p>
 
 Pcodec (or Pco) losslessly compresses and decompresses
 numerical sequences with
@@ -109,6 +109,7 @@ multiple chunks per file.
 You may get disappointing results from Pco if your data in a single chunk
 
 * combines semantically different sequences, or
+* contains to few numbers (see above section),
 * is inherently 2D or higher.
 
 Example: the NYC taxi dataset has `f64` columns for `fare` and
@@ -117,8 +118,8 @@ Suppose we assign these as `fare[0...n]` and `trip_miles[0...n]` respectively, w
 `n=50,000`.
 
 * separate chunk for each column => good compression
-* single chunk `fare[0], ... fare[n-1], trip_miles[0], ... trip_miles[n-1]` => bad compression
-* single chunk `fare[0], trip_miles[0], ... fare[n-1], trip_miles[n-1]` => bad compression
+* single chunk `fare[0], ... fare[n-1], trip_miles[0], ..., trip_miles[n-1]` => bad compression
+* single chunk `fare[0], trip_miles[0], ..., fare[n-1], trip_miles[n-1]` => bad compression
 
 ## Extra
 
