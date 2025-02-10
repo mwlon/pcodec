@@ -9,8 +9,6 @@ use std::time::{Duration, Instant};
 use crate::bench::codecs::blosc::BloscConfig;
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::brotli::BrotliConfig;
-#[cfg(feature = "full_bench")]
-use crate::bench::codecs::lz4::Lz4Config;
 use crate::bench::codecs::parquet::ParquetConfig;
 #[cfg(feature = "full_bench")]
 use crate::bench::codecs::qco::QcoConfig;
@@ -34,8 +32,6 @@ use clap::{CommandFactory, FromArgMatches};
 mod blosc;
 #[cfg(feature = "full_bench")]
 mod brotli;
-#[cfg(feature = "full_bench")]
-mod lz4;
 mod parquet;
 mod pco;
 #[cfg(feature = "full_bench")]
@@ -246,8 +242,6 @@ impl FromStr for CodecConfig {
       "blosc" | "blosc2" => BloscConfig::from_kv_args(&clap_kv_args),
       #[cfg(feature = "full_bench")]
       "brotli" => BrotliConfig::from_kv_args(&clap_kv_args),
-      #[cfg(feature = "full_bench")]
-      "lz4" => Lz4Config::from_kv_args(&clap_kv_args),
       "parquet" => ParquetConfig::from_kv_args(&clap_kv_args),
       "pco" | "pcodec" => ChunkConfigOpt::from_kv_args(&clap_kv_args),
       #[cfg(feature = "full_bench")]
