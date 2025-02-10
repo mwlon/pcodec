@@ -109,7 +109,7 @@ multiple chunks per file.
 You may get disappointing results from Pco if your data in a single chunk
 
 * combines semantically different sequences, or
-* contains to few numbers (see above section),
+* contains too few numbers (see above section),
 * is inherently 2D or higher.
 
 Example: the NYC taxi dataset has `f64` columns for `fare` and
