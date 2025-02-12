@@ -1381,7 +1381,7 @@ dependencies = [
 
 [[package]]
 name = "pco_python"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "half",
  "numpy",
