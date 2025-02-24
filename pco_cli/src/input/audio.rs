@@ -40,7 +40,7 @@ pub fn get_wav_schema(path: &Path) -> Result<Schema> {
 }
 
 pub struct WavColumnReader {
-  col_path: PathBuf,
+  path: PathBuf,
   dtype: DataType,
   channel_idx: usize,
   did_read: bool,
@@ -50,7 +50,7 @@ impl WavColumnReader {
   pub fn new(schema: &Schema, path: &Path, col_idx: usize) -> Result<Self> {
     let dtype = schema.field(col_idx).data_type().clone();
     Ok(WavColumnReader {
-      col_path: PathBuf::from(path),
+      path: PathBuf::from(path),
       dtype,
       channel_idx: col_idx,
       did_read: false,
@@ -68,7 +68,7 @@ fn filter_to_channel<T>(data: Vec<T>, channel_idx: usize, channel_count: u16) ->
 
 impl WavColumnReader {
   fn get_array(&self) -> Result<ArrayRef> {
-    let mut inp_file = File::open(&self.col_path)?;
+    let mut inp_file = File::open(&self.path)?;
     let (header, data) = wav::read(&mut inp_file)?;
 
     macro_rules! make_channel_array {
